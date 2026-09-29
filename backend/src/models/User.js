@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
 /**
  * Sub-schema: Citizen Profile (Embedded)
@@ -23,6 +24,39 @@ const citizenSchema = new mongoose.Schema(
     },
   },
   { _id: false }
+);
+
+/**
+ * Sub-schema: Session (Embedded)
+ * Quản lý phiên trong users.sessions: lưu hash refresh token, hạn dùng, thiết bị
+ */
+const sessionSchema = new mongoose.Schema(
+  {
+    refreshTokenHash: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    userAgent: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    ipAddress: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    expiresAt: {
+      type: Date,
+      required: true,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: true }
 );
 
 /**
@@ -128,11 +162,18 @@ const userSchema = new mongoose.Schema(
   {
     phone: {
       type: String,
-      required: [true, 'Số điện thoại là bắt buộc'],
+      required: [
+        function () {
+          return !this.googleId;
+        },
+        'Số điện thoại là bắt buộc',
+      ],
       unique: true,
+      sparse: true,
       trim: true,
       validate: {
         validator: function (v) {
+          if (!v) return true;
           // Hỗ trợ số điện thoại VN (10 số, đầu 0 hoặc +84) và quốc tế (E.164: 9-15 chữ số)
           return /^(?:\+84|0)(?:3|5|7|8|9)\d{8}$|^\+?[1-9]\d{8,14}$/.test(v);
         },
@@ -152,9 +193,20 @@ const userSchema = new mongoose.Schema(
         message: props => `${props.value} không phải là định dạng email hợp lệ!`,
       },
     },
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+    },
     passwordHash: {
       type: String,
-      required: [true, 'Mật khẩu băm (passwordHash) là bắt buộc'],
+      required: [
+        function () {
+          return !this.googleId;
+        },
+        'Mật khẩu băm (passwordHash) là bắt buộc',
+      ],
     },
     fullName: {
       type: String,
@@ -227,6 +279,17 @@ const userSchema = new mongoose.Schema(
       type: authoritySchema,
       default: () => ({}),
     },
+    sessions: {
+      type: [sessionSchema],
+      default: [],
+    },
+    resetPasswordTokenHash: {
+      type: String,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      default: null,
+    },
     lastLoginAt: {
       type: Date,
       default: null,
@@ -240,6 +303,8 @@ const userSchema = new mongoose.Schema(
 
 // Indexes
 userSchema.index({ roles: 1 });
+userSchema.index({ 'sessions.refreshTokenHash': 1 });
+userSchema.index({ resetPasswordTokenHash: 1 }, { sparse: true });
 userSchema.index({ 'rescuer.verificationStatus': 1 });
 userSchema.index({ 'rescuer.availabilityStatus': 1 });
 userSchema.index({
@@ -263,6 +328,26 @@ userSchema.pre('validate', function () {
     }
   }
 });
+
+/**
+ * Helper: So sánh mật khẩu ứng viên với mật khẩu đã băm
+ */
+userSchema.methods.comparePassword = async function (candidatePassword) {
+  if (!this.passwordHash) return false;
+  return bcrypt.compare(candidatePassword, this.passwordHash);
+};
+
+/**
+ * Helper: Trả về object an toàn, ẩn passwordHash và session/reset tokens
+ */
+userSchema.methods.toSafeObject = function () {
+  const obj = this.toObject ? this.toObject() : { ...this };
+  delete obj.passwordHash;
+  delete obj.sessions;
+  delete obj.resetPasswordTokenHash;
+  delete obj.resetPasswordExpires;
+  return obj;
+};
 
 /**
  * Instance Helper Method:
