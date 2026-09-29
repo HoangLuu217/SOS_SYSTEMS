@@ -11,9 +11,11 @@ const safeLocationRoutes = require('./safeLocation.routes');
 const alertRoutes = require('./alert.routes');
 const auditRoutes = require('./audit.routes');
 const adminRoutes = require('./admin.routes');
+const configRoutes = require('./config.routes');
 
 // Mount routes theo đúng đặc tả API Nhóm A và các nhóm khác
 router.use('/auth', authRoutes);
+router.use('/config', configRoutes);
 router.use('/users', userRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/rescuer', rescuerRoutes);

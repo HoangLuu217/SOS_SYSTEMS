@@ -55,11 +55,15 @@ class AuthController {
     try {
       const userAgent = req.headers['user-agent'];
       const ipAddress = req.ip;
-      const { idToken, credential } = req.body;
+      const { idToken, credential, googleId, email, fullName, avatarUrl } = req.body;
 
       const result = await authService.loginWithGoogle({
         idToken,
         credential,
+        googleId,
+        email,
+        fullName,
+        avatarUrl,
         userAgent,
         ipAddress,
       });

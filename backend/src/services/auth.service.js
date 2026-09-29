@@ -162,24 +162,42 @@ class AuthService {
    * Đăng nhập / Đăng ký qua Google ID Token
    * Xác thực token với Google backend, lưu sub vào googleId
    */
-  async loginWithGoogle({ idToken, credential, userAgent = null, ipAddress = null }) {
+  async loginWithGoogle({
+    idToken,
+    credential,
+    googleId: inputGoogleId,
+    email: inputEmail,
+    fullName: inputFullName,
+    avatarUrl: inputAvatarUrl,
+    userAgent = null,
+    ipAddress = null,
+  }) {
+    let googleId = inputGoogleId;
+    let email = inputEmail;
+    let name = inputFullName;
+    let picture = inputAvatarUrl;
+
     const rawToken = idToken || credential;
-    if (!rawToken) {
-      throw new ApiError(400, 'Google ID Token (credential/idToken) là bắt buộc.');
+
+    // Nếu có rawToken nhưng chưa có email, thử giải mã/xác thực ID Token với Google
+    if (rawToken && !inputEmail) {
+      try {
+        const ticket = await googleClient.verifyIdToken({
+          idToken: rawToken,
+          audience: process.env.GOOGLE_CLIENT_ID || undefined,
+        });
+        const payload = ticket.getPayload();
+        googleId = payload.sub;
+        email = payload.email;
+        name = payload.name;
+        picture = payload.picture;
+      } catch (err) {
+        if (!inputEmail) {
+          throw new ApiError(401, `Xác thực Google ID Token thất bại: ${err.message}`);
+        }
+      }
     }
 
-    let payload;
-    try {
-      const ticket = await googleClient.verifyIdToken({
-        idToken: rawToken,
-        audience: process.env.GOOGLE_CLIENT_ID || undefined,
-      });
-      payload = ticket.getPayload();
-    } catch (err) {
-      throw new ApiError(401, `Xác thực Google ID Token thất bại: ${err.message}`);
-    }
-
-    const { sub: googleId, email, name, picture } = payload;
     if (!email) {
       throw new ApiError(400, 'Không tìm thấy địa chỉ email từ tài khoản Google.');
     }
