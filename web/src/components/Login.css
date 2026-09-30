@@ -1,462 +1,414 @@
-/* SOS Connect - Exact Split/Overlay Layout matching user mockup */
+/* Light Glassmorphism Centered Login Layout - Exact match to user screenshot */
 
-.sos-login-page {
+.sos-page-wrapper {
   position: relative;
   width: 100vw;
   height: 100vh;
   min-height: 100vh;
   overflow: hidden;
   display: flex;
-  background-color: #0b1120;
-  background-image: url('/backgroudWeb.jpg');
-  background-size: cover;
-  background-position: center right;
-  background-repeat: no-repeat;
-  color: #ffffff;
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-}
-
-/* Smooth Gradient from Left to Right (Blending Dark Form into Landscape) */
-.sos-login-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    90deg,
-    rgba(10, 16, 30, 0.97) 0%,
-    rgba(10, 16, 30, 0.93) 32%,
-    rgba(10, 16, 30, 0.75) 45%,
-    rgba(10, 16, 30, 0.25) 58%,
-    rgba(10, 16, 30, 0.05) 75%,
-    transparent 100%
-  );
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* Left Form Container */
-.sos-login-sidebar {
-  position: relative;
-  z-index: 10;
-  width: 520px;
-  max-width: 100%;
-  height: 100vh;
-  padding: 44px 56px 36px 64px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  overflow-y: auto;
-}
-
-/* Top Brand: Logo + SOS CONNECT */
-.sos-brand-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.sos-brand-logo-img {
-  width: 44px;
-  height: auto;
-  max-height: 40px;
-  object-fit: contain;
-  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
-  transition: transform 0.2s ease, filter 0.2s ease;
-}
-
-.sos-brand-logo-img:hover {
-  transform: scale(1.08);
-  filter: drop-shadow(0 6px 14px rgba(2, 132, 199, 0.5));
-}
-
-
-
-.sos-brand-name {
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: 0.8px;
-  color: #ffffff;
-  text-transform: uppercase;
-}
-
-/* Form Central Area */
-.sos-form-body {
-  width: 100%;
-  max-width: 400px;
-  margin: auto 0;
-  padding: 20px 0;
-}
-
-.sos-title {
-  font-size: 32px;
-  font-weight: 800;
-  color: #ffffff;
-  margin-bottom: 8px;
-  letter-spacing: -0.4px;
-  line-height: 1.25;
-}
-
-.sos-subtitle {
-  font-size: 14px;
-  color: #94a3b8;
-  line-height: 1.5;
-  margin-bottom: 28px;
-}
-
-/* Form Fields */
-.sos-field {
-  margin-bottom: 20px;
-}
-
-.sos-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: #e2e8f0;
-  margin-bottom: 8px;
-}
-
-.sos-input-box {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.sos-input-icon {
-  position: absolute;
-  left: 15px;
-  color: #94a3b8;
-  pointer-events: none;
-}
-
-.sos-input {
-  width: 100%;
-  height: 48px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 8px;
-  padding: 0 44px 0 44px;
-  color: #ffffff;
-  font-size: 14px;
-  font-family: inherit;
-  outline: none;
-  transition: all 0.2s ease;
-}
-
-.sos-input::placeholder {
-  color: #64748b;
-}
-
-.sos-input:focus {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: #38bdf8;
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
-}
-
-.sos-toggle-btn {
-  position: absolute;
-  right: 12px;
-  background: transparent;
-  border: none;
-  color: #94a3b8;
-  cursor: pointer;
-  padding: 6px;
-  display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  transition: color 0.2s;
+  background-color: #0b1120;
+  /* Fallback image while video loads */
+  background-image: url('/backgroudWeb.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  padding: 20px;
 }
 
-.sos-toggle-btn:hover {
-  color: #ffffff;
+/* Background Video styling */
+.sos-bg-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+  pointer-events: none;
 }
 
-/* Forgot password link */
-.sos-forgot-wrap {
-  text-align: right;
-  margin-top: -8px;
+/* Ambient overlay for high visual clarity and card contrast */
+.sos-video-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(15, 23, 42, 0.12) 0%, rgba(15, 23, 42, 0.35) 100%);
+  z-index: 2;
+  pointer-events: none;
+}
+
+
+/* Floating Light Glassmorphic Card (Translucent Frosted Glass) */
+.sos-glass-card {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 440px;
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 28px;
+  padding: 38px 36px 30px 36px;
+  box-shadow: 
+    0 30px 60px -15px rgba(0, 0, 0, 0.38),
+    0 0 0 1px rgba(255, 255, 255, 0.45) inset;
+  animation: cardFadeIn 0.35s ease-out;
+}
+
+
+@keyframes cardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Card Header */
+.sos-card-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
   margin-bottom: 22px;
 }
 
-.sos-forgot-link {
-  font-size: 13px;
-  color: #60a5fa;
-  text-decoration: none;
-  transition: color 0.2s;
-  cursor: pointer;
+.sos-card-logo {
+  width: 82px;
+  height: auto;
+  max-height: 58px;
+  object-fit: contain;
+  margin-bottom: 14px;
+  filter: drop-shadow(0 4px 10px rgba(0, 102, 245, 0.25));
+  transition: transform 0.2s ease;
 }
 
-.sos-forgot-link:hover {
-  color: #93c5fd;
-  text-decoration: underline;
+.sos-card-logo:hover {
+  transform: scale(1.06);
 }
 
-/* Primary Button: Solid Coral-Red */
-.sos-btn-primary {
+.sos-card-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.4px;
+  margin-bottom: 6px;
+}
+
+.sos-card-subtitle {
+  font-size: 13.5px;
+  color: #64748b;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+/* Form Styling */
+.sos-card-form {
   width: 100%;
-  height: 48px;
-  background: #f04438;
+}
+
+.sos-input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 52px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1.5px solid rgba(255, 255, 255, 0.65);
+  border-radius: 14px;
+  padding: 0 16px;
+  margin-bottom: 14px;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.sos-input-group:focus-within {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: #0066f5;
+  box-shadow: 0 0 0 3px rgba(0, 102, 245, 0.18);
+}
+
+
+.sos-input-group.has-error {
+  border-color: #ef4444;
+}
+
+.sos-group-icon {
+  color: #94a3b8;
+  margin-right: 12px;
+  flex-shrink: 0;
+  transition: color 0.2s ease;
+}
+
+.sos-input-group:focus-within .sos-group-icon {
+  color: #0066f5;
+}
+
+.sos-card-input {
+  width: 100%;
+  height: 100%;
   border: none;
-  border-radius: 8px;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14.5px;
+  color: #0f172a;
+  font-weight: 500;
+}
+
+.sos-card-input::placeholder {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.sos-card-toggle-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  border-radius: 6px;
+  transition: color 0.2s ease;
+}
+
+.sos-card-toggle-btn:hover {
+  color: #475569;
+}
+
+/* Ghi nhớ mật khẩu (Remember Me) */
+.sos-options-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: -2px;
+  margin-bottom: 18px;
+  padding: 0 4px;
+}
+
+.sos-remember-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  color: #475569;
+  font-weight: 500;
+}
+
+.sos-remember-checkbox {
+  width: 17px;
+  height: 17px;
+  cursor: pointer;
+  accent-color: #0066f5;
+  border-radius: 4px;
+}
+
+/* Submit Button - Vibrant Royal Blue with Arrow */
+.sos-card-submit {
+  width: 100%;
+  height: 50px;
+  background: #0066f5;
+  border: none;
+  border-radius: 14px;
   color: #ffffff;
+  font-family: inherit;
   font-size: 15px;
   font-weight: 700;
+  letter-spacing: 0.2px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 14px rgba(240, 68, 56, 0.35);
+  box-shadow: 0 8px 20px rgba(0, 102, 245, 0.32);
 }
 
-.sos-btn-primary:hover:not(:disabled) {
-  background: #e0382c;
-  box-shadow: 0 6px 18px rgba(240, 68, 56, 0.5);
+.sos-card-submit:hover:not(:disabled) {
+  background: #0056d6;
+  box-shadow: 0 10px 24px rgba(0, 102, 245, 0.45);
   transform: translateY(-1px);
 }
 
-.sos-btn-primary:active:not(:disabled) {
+.sos-card-submit:active:not(:disabled) {
   transform: translateY(0);
 }
 
-.sos-btn-primary:disabled {
+.sos-card-submit:disabled {
   opacity: 0.65;
   cursor: not-allowed;
 }
 
-/* Divider: "hoặc" */
-.sos-divider {
-  display: flex;
-  align-items: center;
-  margin: 18px 0;
+/* Forgot password link below button */
+.sos-forgot-center {
+  text-align: center;
+  margin-top: 18px;
 }
 
-.sos-divider-line {
-  flex: 1;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.sos-divider-text {
-  padding: 0 14px;
-  font-size: 13px;
-  color: #94a3b8;
-}
-
-/* Google Button */
-.sos-btn-google {
-  width: 100%;
-  height: 48px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  color: #ffffff;
-  font-size: 14.5px;
+.sos-forgot-text {
+  font-size: 13.5px;
   font-weight: 600;
+  color: #0066f5;
+  text-decoration: none;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, text-decoration 0.2s ease;
 }
 
-.sos-btn-google:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.35);
+.sos-forgot-text:hover {
+  color: #004dc7;
+  text-decoration: underline;
 }
 
-/* Error / Notice Alert */
-.sos-alert {
+/* Alert Notification */
+.sos-card-alert {
   padding: 12px 14px;
-  border-radius: 8px;
-  margin-bottom: 18px;
+  border-radius: 12px;
+  margin-bottom: 16px;
   font-size: 13px;
   line-height: 1.45;
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  animation: fadeIn 0.3s ease;
+  animation: cardFadeIn 0.25s ease;
 }
 
-.sos-alert.error {
-  background: rgba(240, 68, 56, 0.15);
-  border: 1px solid rgba(240, 68, 56, 0.45);
-  color: #fca5a5;
+.sos-card-alert.error {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #b91c1c;
 }
 
-.sos-alert.success {
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.45);
-  color: #6ee7b7;
+
+
+/* Logged-In User Dashboard Card */
+.sos-user-card {
+  text-align: center;
 }
 
-/* Bottom Footer */
-.sos-footer-text {
-  font-size: 12.5px;
-  color: #64748b;
-  margin-top: 16px;
-}
-
-/* Test Accounts Dropdown / Floating Helper */
-.sos-test-helper {
-  margin-top: 18px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px dashed rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-}
-
-.sos-test-helper-title {
-  font-size: 11px;
-  color: #94a3b8;
-  font-weight: 600;
-  text-transform: uppercase;
-  margin-bottom: 8px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.sos-test-buttons {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.sos-test-btn {
-  padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  color: #cbd5e1;
-  font-size: 11.5px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.sos-test-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+.sos-user-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #0066f5, #0052cc);
   color: #ffffff;
-}
-
-.sos-test-btn.authority {
-  color: #38bdf8;
-  border-color: rgba(56, 189, 248, 0.3);
-}
-
-.sos-test-btn.admin {
-  color: #f87171;
-  border-color: rgba(248, 113, 113, 0.3);
-}
-
-.sos-test-btn.citizen {
-  color: #fbbf24;
-  border-color: rgba(251, 191, 36, 0.3);
-}
-
-/* Logged-In User View (Dashboard Overlay) */
-.sos-dashboard-box {
-  background: rgba(15, 23, 42, 0.85);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 12px;
-  padding: 28px;
-  width: 100%;
-  max-width: 440px;
-  margin: auto 0;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
-}
-
-.sos-dash-user-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.sos-dash-avatar {
-  width: 52px;
-  height: 52px;
-  border-radius: 12px;
-  background: #f04438;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 26px;
   font-weight: 800;
-  color: #ffffff;
+  margin: 0 auto 14px auto;
+  box-shadow: 0 8px 20px rgba(0, 102, 245, 0.35);
 }
 
-.sos-dash-name {
-  font-size: 18px;
-  font-weight: 700;
-  color: #ffffff;
+.sos-user-name {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
   margin-bottom: 4px;
 }
 
-.sos-dash-role {
-  display: inline-block;
-  font-size: 11px;
+.sos-user-email {
+  font-size: 13.5px;
+  color: #64748b;
+  margin-bottom: 12px;
+}
+
+.sos-user-role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
   font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 12px;
   text-transform: uppercase;
+  margin-bottom: 20px;
 }
 
-.sos-dash-role.admin {
-  background: rgba(240, 68, 56, 0.2);
-  color: #fca5a5;
-  border: 1px solid rgba(240, 68, 56, 0.4);
+.sos-user-role-badge.admin {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
 }
 
-.sos-dash-role.authority {
-  background: rgba(56, 189, 248, 0.2);
-  color: #7dd3fc;
-  border: 1px solid rgba(56, 189, 248, 0.4);
+.sos-user-role-badge.authority {
+  background: #e0f2fe;
+  color: #0284c7;
+  border: 1px solid #bae6fd;
 }
 
-.sos-dash-info-list {
+.sos-user-info-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px;
+  text-align: left;
   font-size: 13px;
-  color: #94a3b8;
+  color: #475569;
   line-height: 1.8;
-  margin-bottom: 24px;
-  background: rgba(0, 0, 0, 0.25);
-  padding: 14px;
-  border-radius: 8px;
+  margin-bottom: 20px;
 }
 
-.sos-dash-info-list strong {
-  color: #f1f5f9;
+.sos-user-info-box strong {
+  color: #0f172a;
+}
+
+.sos-btn-logout {
+  width: 100%;
+  height: 46px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.sos-btn-logout:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
 }
 
 /* Spinner */
-.sos-spinner {
+.sos-btn-spinner {
   width: 18px;
   height: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  border: 2.5px solid rgba(255, 255, 255, 0.35);
   border-top-color: #ffffff;
   border-radius: 50%;
-  animation: radarSweep 0.8s linear infinite;
+  animation: spin 0.8s linear infinite;
 }
 
-@keyframes radarSweep {
-  to { transform: rotate(360deg); }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Responsive */
-@media (max-width: 768px) {
-  .sos-login-sidebar {
-    width: 100%;
-    padding: 32px 24px;
+@media (max-width: 480px) {
+  .sos-glass-card {
+    padding: 30px 22px 24px 22px;
+    border-radius: 22px;
   }
-  .sos-login-overlay {
-    background: rgba(10, 16, 30, 0.94);
+  .sos-card-title {
+    font-size: 23px;
   }
 }
