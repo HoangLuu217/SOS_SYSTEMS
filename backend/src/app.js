@@ -1,12 +1,33 @@
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const routes = require('./routes');
 const errorHandler = require('./middlewares/errorHandler');
 
 const app = express();
 
 // Middlewares
-app.use(cors());
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://localhost:8081',
+].filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Cho phép requests không có origin (mobile apps, Postman) hoặc origin hợp lệ / development
+      if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
+        return callback(null, true);
+      }
+      return callback(new Error('Chặn bởi CORS'));
+    },
+    credentials: true,
+  })
+);
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -15,8 +36,9 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// API Routes
+// API Routes (Hỗ trợ cả tiền tố /api và truy cập trực tiếp theo đặc tả REST)
 app.use('/api', routes);
+app.use('/', routes);
 
 // 404 Handler
 app.use((req, res, next) => {
@@ -30,3 +52,4 @@ app.use((req, res, next) => {
 app.use(errorHandler);
 
 module.exports = app;
+
