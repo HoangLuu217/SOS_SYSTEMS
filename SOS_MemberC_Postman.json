@@ -1,0 +1,375 @@
+{
+	"info": {
+		"name": "SOS System - Member C",
+		"description": "Postman Collection cho Domain C (SOS Requests, Status History, Files)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "SOS Requests",
+			"item": [
+				{
+					"name": "1. Tạo mới SOS Request",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"location\": {\n    \"type\": \"Point\",\n    \"coordinates\": [106.6297, 10.8231]\n  },\n  \"areaId\": \"64abc123def4567890123456\",\n  \"address\": \"Quận 1, TP.HCM\",\n  \"emergencyType\": \"MEDICAL\",\n  \"priority\": \"HIGH\",\n  \"people\": 2,\n  \"description\": \"Có người bị thương nặng cần cấp cứu.\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/sos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"sos"
+							]
+						}
+					}
+				},
+				{
+					"name": "2. Lấy danh sách SOS (Có query search)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/sos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"sos"
+							]
+						}
+					}
+				},
+				{
+					"name": "3. Xem chi tiết 1 SOS",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/sos/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"sos",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "YOUR_SOS_ID_HERE"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "4. Cập nhật SOS (Patch)",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"people\": 3,\n  \"description\": \"Cập nhật: Có thêm người bị mắc kẹt\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/sos/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"sos",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "YOUR_SOS_ID_HERE"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "5. Hủy SOS (Cancel)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"note\": \"Báo nhầm, gia đình đã sơ tán an toàn\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/sos/:id/cancel",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"sos",
+								":id",
+								"cancel"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "YOUR_SOS_ID_HERE"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "6. Hoàn thành SOS",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"note\": \"Đội cứu hộ đã đưa nạn nhân ra ngoài an toàn\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/sos/:id/complete",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"sos",
+								":id",
+								"complete"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "YOUR_SOS_ID_HERE"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "7. Lấy lịch sử thay đổi trạng thái SOS",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/sos/:id/history",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"sos",
+								":id",
+								"history"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "YOUR_SOS_ID_HERE"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "8. (Authority) Xác minh SOS",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"priority\": \"CRITICAL\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/sos/:id/verify",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"sos",
+								":id",
+								"verify"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "YOUR_SOS_ID_HERE"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Files (Photos & Videos)",
+			"item": [
+				{
+					"name": "1. Tải lên File hiện trường",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"sosId\": \"YOUR_SOS_ID_HERE\",\n  \"type\": \"IMAGE\",\n  \"url\": \"https://example.com/hien-truong-bao.jpg\",\n  \"fileName\": \"hien_truong.jpg\",\n  \"fileSize\": 1024000\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/files",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files"
+							]
+						}
+					}
+				},
+				{
+					"name": "2. Xem chi tiết 1 File",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/files/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "YOUR_FILE_ID_HERE"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "3. Lấy toàn bộ File của 1 SOS",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/sos/:id/files",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"sos",
+								":id",
+								"files"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "YOUR_SOS_ID_HERE"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "4. Xóa File đính kèm",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/files/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "YOUR_FILE_ID_HERE"
+								}
+							]
+						}
+					}
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000/api",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "JWT_TOKEN_CUA_BAN_O_DAY",
+			"type": "string"
+		}
+	]
+}
