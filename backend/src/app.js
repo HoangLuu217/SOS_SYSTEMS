@@ -15,8 +15,9 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// API Routes
+// API Routes (Hỗ trợ cả tiền tố /api và truy cập trực tiếp theo đặc tả REST)
 app.use('/api', routes);
+app.use('/', routes);
 
 // 404 Handler
 app.use((req, res, next) => {
