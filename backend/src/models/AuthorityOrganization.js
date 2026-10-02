@@ -8,14 +8,6 @@ const authorityOrganizationSchema = new mongoose.Schema(
       trim: true,
       maxlength: [200, 'Tên không được vượt quá 200 ký tự'],
     },
-    type: {
-      type: String,
-      required: [true, 'Loại cơ quan/tổ chức là bắt buộc'],
-      enum: {
-        values: ['PROVINCE', 'DISTRICT', 'WARD', 'RESCUE_CENTER', 'OTHER'],
-        message: 'Loại tổ chức {VALUE} không hợp lệ',
-      },
-    },
     code: {
       type: String,
       required: [true, 'Mã cơ quan/tổ chức là bắt buộc'],
@@ -23,45 +15,56 @@ const authorityOrganizationSchema = new mongoose.Schema(
       uppercase: true,
       trim: true,
     },
-    areaId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'AdministrativeArea',
-      required: [true, 'Khu vực quản lý (areaId) là bắt buộc'],
-    },
-    address: {
+    type: {
       type: String,
-      trim: true,
-      default: null,
+      required: [true, 'Loại cơ quan/tổ chức là bắt buộc'],
+      enum: {
+        values: [
+          'POLICE',
+          'FIRE_DEPARTMENT',
+          'MEDICAL',
+          'DISASTER_RESPONSE',
+          'MILITARY',
+          'LOCAL_AUTHORITY',
+          'OTHER',
+          'PROVINCE',
+          'DISTRICT',
+          'WARD',
+          'RESCUE_CENTER',
+        ],
+        message: 'Loại tổ chức {VALUE} không hợp lệ',
+      },
     },
     phone: {
       type: String,
       trim: true,
       default: null,
-      validate: {
-        validator: function (v) {
-          if (!v) return true;
-          return /^(?:\+84|0)(?:3|5|7|8|9)\d{8}$|^\+?[1-9]\d{8,14}$/.test(v);
-        },
-        message: 'Số điện thoại liên hệ cơ quan không hợp lệ',
-      },
     },
     email: {
       type: String,
       trim: true,
       lowercase: true,
       default: null,
-      validate: {
-        validator: function (v) {
-          if (!v) return true;
-          return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-        },
-        message: 'Email cơ quan không đúng định dạng',
-      },
+    },
+    address: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    administrativeAreaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AdministrativeArea',
+      default: null,
+    },
+    areaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AdministrativeArea',
+      default: null,
     },
     status: {
       type: String,
       enum: {
-        values: ['ACTIVE', 'INACTIVE', 'SUSPENDED'],
+        values: ['ACTIVE', 'INACTIVE'],
         message: 'Trạng thái {VALUE} không hợp lệ',
       },
       default: 'ACTIVE',
@@ -73,7 +76,17 @@ const authorityOrganizationSchema = new mongoose.Schema(
   }
 );
 
+// Đồng bộ 2 chiều giữa administrativeAreaId và areaId
+authorityOrganizationSchema.pre('save', function () {
+  if (this.administrativeAreaId && !this.areaId) {
+    this.areaId = this.administrativeAreaId;
+  } else if (this.areaId && !this.administrativeAreaId) {
+    this.administrativeAreaId = this.areaId;
+  }
+});
+
 // Indexes
+authorityOrganizationSchema.index({ administrativeAreaId: 1 });
 authorityOrganizationSchema.index({ areaId: 1 });
 authorityOrganizationSchema.index({ type: 1 });
 authorityOrganizationSchema.index({ status: 1 });

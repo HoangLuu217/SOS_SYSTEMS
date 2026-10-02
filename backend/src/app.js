@@ -45,7 +45,7 @@ const healthHandler = (req, res) => {
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 
-// API Routes (Hỗ trợ cả tiền tố /api/... và gọi trực tiếp /...)
+// API Routes (Hỗ trợ cả tiền tố /api và truy cập trực tiếp theo đặc tả REST)
 app.use('/api', routes);
 app.use('/', routes);
 
