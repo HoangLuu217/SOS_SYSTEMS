@@ -12,6 +12,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { CustomInput } from '../components/CustomInput';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { GoogleButton } from '../components/GoogleButton';
@@ -119,7 +120,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                   delayLongPress={1500}
                 >
                   <Image
-                    source={require('../../assets/logoSOS.jpg')}
+                    source={require('../../assets/logoSOS.png')}
                     style={styles.logoImage}
                     resizeMode="contain"
                   />
@@ -235,52 +236,52 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     paddingBottom: 4,
   },
-  /* Card lơ lửng bo tròn 4 góc với hiệu ứng kính mờ (Frosted Glass) chuẩn Hình 2 */
+  /* Card lơ lửng bo tròn 4 góc với hiệu ứng kính mờ (Frosted Glass) trong suốt */
   floatingCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    backgroundColor: 'rgba(255, 255, 255, 0.42)',
     borderRadius: 32,
     marginHorizontal: 16,
     marginBottom: Platform.OS === 'ios' ? 24 : 18,
     paddingHorizontal: 20,
     paddingTop: 24,
     paddingBottom: 22,
-    borderWidth: 1.2,
-    borderColor: 'rgba(255, 255, 255, 0.75)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.70)',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.16,
+        shadowOpacity: 0.20,
         shadowRadius: 20,
       },
       android: {
-        elevation: 8,
+        elevation: 6,
       },
     }),
   },
   logoWrapper: {
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   logoImage: {
-    width: 62,
-    height: 62,
-    borderRadius: 16,
+    width: 82,
+    height: 57,
   },
   title: {
     fontSize: 24,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: '900',
+    color: '#000000',
     textAlign: 'center',
     marginTop: 6,
   },
   subtitle: {
-    fontSize: 13,
-    color: '#64748B',
+    fontSize: 13.5,
+    color: '#000000',
     textAlign: 'center',
     marginTop: 4,
     marginBottom: 20,
     lineHeight: 18,
+    fontWeight: '700',
   },
   form: {
     width: '100%',
@@ -292,14 +293,14 @@ const styles = StyleSheet.create({
   },
   dividerLine: {
     flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(226, 232, 240, 0.9)',
+    height: 1.5,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
   },
   dividerText: {
     paddingHorizontal: 12,
-    fontSize: 13,
-    color: '#94A3B8',
-    fontWeight: '500',
+    fontSize: 13.5,
+    color: '#000000',
+    fontWeight: '800',
   },
   footerRow: {
     flexDirection: 'row',
@@ -309,21 +310,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   forgotPasswordText: {
-    color: '#0066FF',
-    fontSize: 13,
-    fontWeight: '500',
+    color: '#000000',
+    fontSize: 13.5,
+    fontWeight: '800',
+    textDecorationLine: 'underline',
   },
   signupLinkWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   signupPrompt: {
-    color: '#64748B',
-    fontSize: 13,
+    color: '#000000',
+    fontSize: 13.5,
+    fontWeight: '600',
   },
   signupLink: {
-    color: '#0066FF',
-    fontSize: 13,
-    fontWeight: '700',
+    color: '#000000',
+    fontSize: 13.5,
+    fontWeight: '900',
+    textDecorationLine: 'underline',
   },
 });

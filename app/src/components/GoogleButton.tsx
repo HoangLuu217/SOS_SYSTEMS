@@ -46,9 +46,9 @@ export const GoogleButton: React.FC<GoogleButtonProps> = ({
 
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.2,
-    borderColor: '#E5E7EB',
+    backgroundColor: 'rgba(255, 255, 255, 0.48)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.70)',
     height: 52,
     borderRadius: 14,
     justifyContent: 'center',
@@ -56,9 +56,9 @@ const styles = StyleSheet.create({
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 3,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 4,
       },
       android: {
         elevation: 1,
@@ -74,9 +74,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   text: {
-    color: '#1F2937',
+    color: '#000000',
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '800',
     marginLeft: 10,
     letterSpacing: 0.1,
   },

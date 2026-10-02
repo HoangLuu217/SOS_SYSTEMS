@@ -1,3 +1,4 @@
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -5,6 +6,12 @@ const routes = require('./routes');
 const errorHandler = require('./middlewares/errorHandler');
 
 const app = express();
+
+// Tin tưởng proxy đầu tiên (Hỗ trợ devtunnels, ngrok, reverse proxy cho express-rate-limit)
+app.set('trust proxy', 1);
+
+// Phục vụ file tĩnh (logo, assets)
+app.use('/assets', express.static(path.join(__dirname, '../assets')));
 
 // Middlewares
 const allowedOrigins = [
@@ -32,9 +39,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+const healthHandler = (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
-});
+};
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 // API Routes (Hỗ trợ cả tiền tố /api/... và gọi trực tiếp /...)
 app.use('/api', routes);

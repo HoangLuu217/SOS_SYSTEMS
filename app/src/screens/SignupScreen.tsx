@@ -17,6 +17,7 @@ import { CustomInput } from '../components/CustomInput';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { GoogleButton } from '../components/GoogleButton';
 import { AlertModal } from '../components/AlertModal';
+import { OtpModal } from './OtpModal';
 import { useAuth } from '../context/AuthContext';
 
 interface SignupScreenProps {
@@ -28,13 +29,15 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
   onNavigateToLogin,
   onOpenSettings,
 }) => {
-  const { signup, loginWithGoogle, isLoading } = useAuth();
+  const { signup, loginWithGoogle, sendOtp, isLoading } = useAuth();
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [otpModalVisible, setOtpModalVisible] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
 
   const [alertInfo, setAlertInfo] = useState<{
     visible: boolean;
@@ -107,11 +110,29 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
   const handleSignup = async () => {
     if (!validate()) return;
 
+    setSendingOtp(true);
+    const res = await sendOtp(email.trim());
+    setSendingOtp(false);
+
+    if (res.success) {
+      setOtpModalVisible(true);
+    } else {
+      setAlertInfo({
+        visible: true,
+        type: 'error',
+        title: 'Lỗi gửi mã OTP',
+        message: res.message,
+      });
+    }
+  };
+
+  const handleVerifyAndSignup = async (otpCode: string) => {
     const res = await signup({
       fullName: fullName.trim(),
       phone: phone.trim(),
       email: email.trim(),
       password,
+      otp: otpCode,
     });
 
     if (res.success) {
@@ -119,18 +140,14 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
         visible: true,
         type: 'success',
         title: 'Đăng ký thành công',
-        message: res.message || 'Tài khoản của bạn đã được khởi tạo thành công!',
-        onAction: () => {
-          setAlertInfo(prev => ({ ...prev, visible: false }));
-        },
+        message: 'Tài khoản của bạn đã được xác thực và tạo thành công!',
       });
+      return { success: true };
     } else {
-      setAlertInfo({
-        visible: true,
-        type: 'error',
-        title: 'Đăng ký không thành công',
-        message: res.message,
-      });
+      return {
+        success: false,
+        message: res.message || 'Mã OTP không chính xác hoặc đã hết hạn.',
+      };
     }
   };
 
@@ -187,7 +204,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
                   delayLongPress={1500}
                 >
                   <Image
-                    source={require('../../assets/logoSOS.jpg')}
+                    source={require('../../assets/logoSOS.png')}
                     style={styles.logoImage}
                     resizeMode="contain"
                   />
@@ -248,7 +265,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
                   <PrimaryButton
                     title="Đăng ký"
                     onPress={handleSignup}
-                    loading={isLoading}
+                    loading={isLoading || sendingOtp}
                   />
 
                   <View style={styles.dividerRow}>
@@ -260,7 +277,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
                   <GoogleButton
                     title="Đăng ký với Google"
                     onPress={handleGoogleSignup}
-                    disabled={isLoading}
+                    disabled={isLoading || sendingOtp}
                   />
 
                   {/* Chuyển sang Đăng nhập */}
@@ -281,6 +298,14 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
           </KeyboardAvoidingView>
         </SafeAreaView>
       </ImageBackground>
+
+      {/* Modal Xác thực Email Đăng ký bằng mã OTP */}
+      <OtpModal
+        visible={otpModalVisible}
+        email={email.trim()}
+        onClose={() => setOtpModalVisible(false)}
+        onVerify={handleVerifyAndSignup}
+      />
 
       <AlertModal
         visible={alertInfo.visible}
@@ -330,50 +355,50 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   floatingCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    backgroundColor: 'rgba(255, 255, 255, 0.42)',
     borderRadius: 32,
     marginHorizontal: 16,
     marginBottom: Platform.OS === 'ios' ? 24 : 18,
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 20,
-    borderWidth: 1.2,
-    borderColor: 'rgba(255, 255, 255, 0.75)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.70)',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.16,
+        shadowOpacity: 0.20,
         shadowRadius: 20,
       },
       android: {
-        elevation: 8,
+        elevation: 6,
       },
     }),
   },
   logoWrapper: {
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   logoImage: {
-    width: 58,
-    height: 58,
-    borderRadius: 14,
+    width: 78,
+    height: 54,
   },
   title: {
     fontSize: 22,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontWeight: '900',
+    color: '#000000',
     textAlign: 'center',
     marginTop: 4,
   },
   subtitle: {
-    fontSize: 13,
-    color: '#64748B',
+    fontSize: 13.5,
+    color: '#000000',
     textAlign: 'center',
     marginTop: 4,
     marginBottom: 16,
     lineHeight: 18,
+    fontWeight: '700',
   },
   form: {
     width: '100%',
@@ -385,14 +410,14 @@ const styles = StyleSheet.create({
   },
   dividerLine: {
     flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(226, 232, 240, 0.9)',
+    height: 1.5,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
   },
   dividerText: {
     paddingHorizontal: 12,
-    fontSize: 13,
-    color: '#94A3B8',
-    fontWeight: '500',
+    fontSize: 13.5,
+    color: '#000000',
+    fontWeight: '800',
   },
   footerRow: {
     flexDirection: 'row',
@@ -405,12 +430,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loginPrompt: {
-    color: '#64748B',
-    fontSize: 13,
+    color: '#000000',
+    fontSize: 13.5,
+    fontWeight: '600',
   },
   loginLink: {
-    color: '#0066FF',
-    fontSize: 13,
-    fontWeight: '700',
+    color: '#000000',
+    fontSize: 13.5,
+    fontWeight: '900',
+    textDecorationLine: 'underline',
   },
 });

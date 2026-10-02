@@ -25,4 +25,13 @@ router.post('/forgot-password', authLimiter, authController.forgotPassword);
 // Đặt lại mật khẩu bằng token
 router.post('/reset-password', authController.resetPassword);
 
+// Xác thực mã OTP khôi phục mật khẩu
+router.post('/verify-reset-otp', authController.verifyResetOtp);
+
+// Gửi mã OTP qua Email (Resend)
+router.post('/send-otp', authController.sendOtp);
+
+// Xác thực mã OTP và đăng nhập
+router.post('/verify-otp', authController.verifyOtp);
+
 module.exports = router;

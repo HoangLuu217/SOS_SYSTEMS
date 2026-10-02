@@ -11,7 +11,7 @@ import { ConfigModal } from './src/screens/ConfigModal';
 import { AlertModal } from './src/components/AlertModal';
 
 function MainNavigator() {
-  const { user, isLoading } = useAuth();
+  const { user, isInitializing } = useAuth();
   const [currentScreen, setCurrentScreen] = useState<'login' | 'signup'>('login');
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
   const [configVisible, setConfigVisible] = useState(false);
@@ -27,7 +27,7 @@ function MainNavigator() {
     message: '',
   });
 
-  if (isLoading) {
+  if (isInitializing) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#0066FF" />
@@ -62,7 +62,7 @@ function MainNavigator() {
           setToast({
             visible: true,
             type: 'success',
-            title: 'Đã gửi yêu cầu',
+            title: 'Khôi phục mật khẩu',
             message: msg,
           });
         }}

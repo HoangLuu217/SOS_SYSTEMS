@@ -143,3 +143,49 @@ export const signInWithGoogleOAuth = async () => {
     throw error;
   }
 };
+
+/**
+ * Gửi mã OTP 6 số qua Email người dùng bằng Supabase
+ */
+export const sendOtpEmail = async (email: string) => {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Chưa cấu hình Supabase URL và Anon Key.');
+  }
+
+  const client = getSupabaseClient();
+  const { data, error } = await client.auth.signInWithOtp({
+    email: email.trim().toLowerCase(),
+    options: {
+      shouldCreateUser: true, // Tự động tạo user nếu chưa có
+    },
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+};
+
+/**
+ * Xác thực mã OTP 6 số do người dùng nhập
+ */
+export const verifyOtpEmail = async (email: string, token: string) => {
+  if (!isSupabaseConfigured()) {
+    throw new Error('Chưa cấu hình Supabase URL và Anon Key.');
+  }
+
+  const client = getSupabaseClient();
+  const { data, error } = await client.auth.verifyOtp({
+    email: email.trim().toLowerCase(),
+    token: token.trim(),
+    type: 'email',
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+};
+
