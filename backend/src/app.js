@@ -1,3 +1,4 @@
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -6,9 +7,11 @@ const errorHandler = require('./middlewares/errorHandler');
 
 const app = express();
 
-// Trust reverse proxy (VD: VS Code Tunnel, Ngrok) để sửa lỗi express-rate-limit ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+// Tin tưởng proxy đầu tiên (Hỗ trợ devtunnels, ngrok, reverse proxy cho express-rate-limit)
 app.set('trust proxy', 1);
 
+// Phục vụ file tĩnh (logo, assets)
+app.use('/assets', express.static(path.join(__dirname, '../assets')));
 // Middlewares
 const allowedOrigins = [
   process.env.CLIENT_URL,
@@ -31,13 +34,15 @@ app.use(
   })
 );
 app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+const healthHandler = (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
-});
+};
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 // API Routes (Hỗ trợ cả tiền tố /api và truy cập trực tiếp theo đặc tả REST)
 app.use('/api', routes);

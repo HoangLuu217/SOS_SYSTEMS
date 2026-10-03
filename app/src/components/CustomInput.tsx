@@ -36,7 +36,7 @@ export const CustomInput: React.FC<CustomInputProps> = ({
         <Feather
           name={iconName}
           size={19}
-          color={isFocused ? '#0066FF' : '#9CA3AF'}
+          color={isFocused ? '#0066FF' : '#334155'}
         />
       </View>
 
@@ -45,7 +45,7 @@ export const CustomInput: React.FC<CustomInputProps> = ({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#9CA3AF"
+        placeholderTextColor="#475569"
         secureTextEntry={isPassword && !showPassword}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
@@ -64,7 +64,7 @@ export const CustomInput: React.FC<CustomInputProps> = ({
           <Feather
             name={showPassword ? 'eye' : 'eye-off'}
             size={18}
-            color="#9CA3AF"
+            color="#334155"
           />
         </TouchableOpacity>
       )}
@@ -76,39 +76,17 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.2,
-    borderColor: '#E5E7EB',
-    borderRadius: 14,
-    height: 52,
+    backgroundColor: 'rgba(255, 255, 255, 0.58)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.85)',
+    borderRadius: 16,
+    height: 48,
     paddingHorizontal: 14,
-    marginBottom: 14,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.04,
-        shadowRadius: 3,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
+    marginBottom: 10,
   },
   containerFocused: {
     borderColor: '#0066FF',
-    backgroundColor: '#F8FAFF',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#0066FF',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.12,
-        shadowRadius: 5,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    backgroundColor: 'rgba(255, 255, 255, 0.80)',
   },
   iconContainer: {
     marginRight: 10,
@@ -119,7 +97,8 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 15,
-    color: '#111827',
+    color: '#0F172A',
+    fontWeight: '600',
     paddingVertical: 0,
   },
   eyeButton: {

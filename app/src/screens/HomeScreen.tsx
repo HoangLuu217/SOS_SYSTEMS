@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   Modal,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -73,7 +74,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenSettings }) => {
         {/* User Card */}
         <View style={styles.userCard}>
           <View style={styles.avatarCircle}>
-            <Text style={styles.avatarText}>{getInitials(user?.fullName)}</Text>
+            {user?.avatarUrl ? (
+              <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>{getInitials(user?.fullName)}</Text>
+            )}
           </View>
 
           <View style={styles.userInfo}>
@@ -250,6 +255,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#0066FF',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
   },
   avatarText: {
     color: '#FFFFFF',

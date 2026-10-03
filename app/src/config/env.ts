@@ -35,6 +35,16 @@ export const ENV = {
   // App Scheme (đồng bộ với app.json: "scheme": "sosapp")
   AUTH_REDIRECT_SCHEME: 'sosapp',
 
+  // Cấu hình Firebase Phone Auth (đọc từ .env hoặc đồng bộ từ backend)
+  FIREBASE: {
+    apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || '',
+    authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
+    projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || '',
+    storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
+    messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
+    appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || '',
+    measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID || '',
+  },
 
   // Storage Keys
   STORAGE_KEYS: {
@@ -69,6 +79,17 @@ export const syncConfigFromBackend = async (baseUrl?: string): Promise<boolean> 
         }
         if (json.data.googleClientId) {
           ENV.GOOGLE_WEB_CLIENT_ID = json.data.googleClientId;
+        }
+        if (json.data.firebase) {
+          ENV.FIREBASE = {
+            apiKey: json.data.firebase.apiKey || ENV.FIREBASE.apiKey,
+            authDomain: json.data.firebase.authDomain || ENV.FIREBASE.authDomain,
+            projectId: json.data.firebase.projectId || ENV.FIREBASE.projectId,
+            storageBucket: json.data.firebase.storageBucket || ENV.FIREBASE.storageBucket,
+            messagingSenderId: json.data.firebase.messagingSenderId || ENV.FIREBASE.messagingSenderId,
+            appId: json.data.firebase.appId || ENV.FIREBASE.appId,
+            measurementId: json.data.firebase.measurementId || ENV.FIREBASE.measurementId,
+          };
         }
         return true;
       }

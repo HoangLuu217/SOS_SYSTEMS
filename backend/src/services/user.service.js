@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const bcrypt = require('bcryptjs');
 const { User } = require('../models');
 const ApiError = require('../utils/apiError');
@@ -24,7 +26,7 @@ class UserService {
       throw new ApiError(404, 'Không tìm thấy thông tin tài khoản.');
     }
 
-    const { fullName, dateOfBirth, gender, address } = data;
+    const { fullName, dateOfBirth, gender, address, phone } = data;
 
     if (fullName !== undefined) {
       if (typeof fullName !== 'string' || fullName.trim().length < 2) {
@@ -34,7 +36,21 @@ class UserService {
     }
 
     if (dateOfBirth !== undefined) {
-      user.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
+      if (!dateOfBirth) {
+        user.dateOfBirth = null;
+      } else if (typeof dateOfBirth === 'string' && dateOfBirth.includes('/')) {
+        const parts = dateOfBirth.split('/');
+        if (parts.length === 3) {
+          user.dateOfBirth = new Date(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`);
+        } else {
+          user.dateOfBirth = new Date(dateOfBirth);
+        }
+      } else {
+        user.dateOfBirth = new Date(dateOfBirth);
+      }
+      if (isNaN(user.dateOfBirth?.getTime())) {
+        user.dateOfBirth = null;
+      }
     }
 
     if (gender !== undefined) {
@@ -46,6 +62,20 @@ class UserService {
 
     if (address !== undefined) {
       user.address = address ? address.trim() : null;
+    }
+
+    if (phone !== undefined) {
+      if (phone) {
+        const cleanPhone = phone.trim();
+        if (!isValidPhone(cleanPhone)) {
+          throw new ApiError(400, 'Số điện thoại không hợp lệ (hỗ trợ định dạng VN 10 số hoặc E.164).');
+        }
+        const existing = await User.findOne({ phone: cleanPhone, _id: { $ne: userId } });
+        if (existing) {
+          throw new ApiError(409, 'Số điện thoại này đã được sử dụng bởi tài khoản khác.');
+        }
+        user.phone = cleanPhone;
+      }
     }
 
     await user.save();
@@ -66,7 +96,29 @@ class UserService {
       throw new ApiError(404, 'Không tìm thấy thông tin tài khoản.');
     }
 
-    user.avatarUrl = avatarUrl.trim();
+    let finalUrl = avatarUrl.trim();
+
+    // Nếu là base64 data URI, lưu thành file ảnh thực tế trên máy chủ vào thư mục assets/avatars
+    if (finalUrl.startsWith('data:image/')) {
+      try {
+        const matches = finalUrl.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
+        if (matches) {
+          const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+          const buffer = Buffer.from(matches[2], 'base64');
+          const avatarsDir = path.join(__dirname, '../../assets/avatars');
+          if (!fs.existsSync(avatarsDir)) {
+            fs.mkdirSync(avatarsDir, { recursive: true });
+          }
+          const fileName = `avatar-${userId}.${ext}`;
+          const filePath = path.join(avatarsDir, fileName);
+          fs.writeFileSync(filePath, buffer);
+        }
+      } catch (err) {
+        console.warn('Lỗi ghi file avatar:', err.message);
+      }
+    }
+
+    user.avatarUrl = finalUrl;
     await user.save();
 
     return {
@@ -135,8 +187,9 @@ class UserService {
     }
 
     const { name, phone, relation } = contactData || {};
+    const cleanPhone = phone ? phone.replace(/\s+/g, '') : null;
 
-    if (phone && !isValidPhone(phone)) {
+    if (cleanPhone && !isValidPhone(cleanPhone)) {
       throw new ApiError(400, 'Số điện thoại người liên hệ khẩn cấp không hợp lệ.');
     }
 
@@ -146,7 +199,7 @@ class UserService {
 
     user.citizen.emergencyContact = {
       name: name ? name.trim() : user.citizen.emergencyContact?.name || null,
-      phone: phone ? phone.trim() : user.citizen.emergencyContact?.phone || null,
+      phone: cleanPhone || user.citizen.emergencyContact?.phone || null,
       relation: relation ? relation.trim() : user.citizen.emergencyContact?.relation || null,
     };
 

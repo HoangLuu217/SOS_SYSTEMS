@@ -139,13 +139,68 @@ class AuthController {
    */
   async resetPassword(req, res, next) {
     try {
-      const { token, newPassword } = req.body;
-      const result = await authService.resetPassword({ token, newPassword });
+      const { email, token, newPassword } = req.body;
+      const result = await authService.resetPassword({ email, token, newPassword });
 
       // Đảm bảo xóa mọi phiên cookie cũ
       clearAuthCookies(res);
 
       return sendSuccess(res, 200, result.message);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /auth/verify-reset-otp
+   */
+  async verifyResetOtp(req, res, next) {
+    try {
+      const { email, token } = req.body;
+      const result = await authService.verifyResetOtp({ email, token });
+      return sendSuccess(res, 200, result.message, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /auth/send-otp
+   * Gửi mã OTP qua email dùng Resend
+   */
+  async sendOtp(req, res, next) {
+    try {
+      const { email } = req.body;
+      const result = await authService.sendOtp(email);
+      return sendSuccess(res, 200, result.message, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /auth/verify-otp
+   * Xác thực mã OTP và cấp token
+   */
+  async verifyOtp(req, res, next) {
+    try {
+      const userAgent = req.headers['user-agent'];
+      const ipAddress = req.ip;
+      const { email, otp, verifyOnly } = req.body;
+
+      const result = await authService.verifyOtp({
+        email,
+        otp,
+        verifyOnly: !!verifyOnly,
+        userAgent,
+        ipAddress,
+      });
+
+      if (result.accessToken) {
+        setAuthCookies(res, result.accessToken, result.refreshToken);
+      }
+
+      return sendSuccess(res, 200, result.message || 'Xác thực OTP thành công!', result);
     } catch (error) {
       next(error);
     }

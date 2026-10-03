@@ -6,12 +6,57 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { SignupScreen } from './src/screens/SignupScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
+import { MapScreen } from './src/screens/MapScreen';
+import { SosScreen } from './src/screens/SosScreen';
+import { NewsScreen } from './src/screens/NewsScreen';
+import { ProfileScreen } from './src/screens/ProfileScreen';
 import { ForgotPasswordModal } from './src/screens/ForgotPasswordModal';
 import { ConfigModal } from './src/screens/ConfigModal';
 import { AlertModal } from './src/components/AlertModal';
+import { BottomNav, TabName } from './src/components/BottomNav';
+
+function AuthenticatedApp() {
+  const [activeTab, setActiveTab] = useState<TabName>('home');
+  const [configVisible, setConfigVisible] = useState(false);
+
+  const renderScreen = () => {
+    switch (activeTab) {
+      case 'home':
+        return <HomeScreen onOpenSettings={() => setConfigVisible(true)} />;
+      case 'map':
+        return <MapScreen />;
+      case 'sos':
+        return <SosScreen />;
+      case 'news':
+        return <NewsScreen />;
+      case 'profile':
+        return (
+          <ProfileScreen
+            onNavigateToTab={(tab) => setActiveTab(tab as TabName)}
+          />
+        );
+      default:
+        return <HomeScreen onOpenSettings={() => setConfigVisible(true)} />;
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.screenContainer}>
+        {renderScreen()}
+      </View>
+      <BottomNav activeTab={activeTab} onTabPress={setActiveTab} />
+
+      <ConfigModal
+        visible={configVisible}
+        onClose={() => setConfigVisible(false)}
+      />
+    </View>
+  );
+}
 
 function MainNavigator() {
-  const { user, isLoading } = useAuth();
+  const { user, isInitializing } = useAuth();
   const [currentScreen, setCurrentScreen] = useState<'login' | 'signup'>('login');
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
   const [configVisible, setConfigVisible] = useState(false);
@@ -27,7 +72,7 @@ function MainNavigator() {
     message: '',
   });
 
-  if (isLoading) {
+  if (isInitializing) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#0066FF" />
@@ -40,7 +85,7 @@ function MainNavigator() {
       <StatusBar style="auto" />
 
       {user ? (
-        <HomeScreen onOpenSettings={() => setConfigVisible(true)} />
+        <AuthenticatedApp />
       ) : currentScreen === 'login' ? (
         <LoginScreen
           onNavigateToSignup={() => setCurrentScreen('signup')}
@@ -62,7 +107,7 @@ function MainNavigator() {
           setToast({
             visible: true,
             type: 'success',
-            title: 'Đã gửi yêu cầu',
+            title: 'Khôi phục mật khẩu',
             message: msg,
           });
         }}
@@ -99,7 +144,10 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
+  screenContainer: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
