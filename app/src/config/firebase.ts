@@ -1,15 +1,16 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { initializeAuth, getAuth, Auth } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ENV } from './env';
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyDa2PYcfXGjj8tm6NQO1LIR9sMnoLX-IFY",
-  authDomain: "rescuesos-8f204.firebaseapp.com",
-  projectId: "rescuesos-8f204",
-  storageBucket: "rescuesos-8f204.firebasestorage.app",
-  messagingSenderId: "21470436300",
-  appId: "1:21470436300:web:bcee6041bbdf98c3c09b69",
-  measurementId: "G-6BYFH1N462",
+  apiKey: ENV.FIREBASE.apiKey || process.env.EXPO_PUBLIC_FIREBASE_API_KEY || '',
+  authDomain: ENV.FIREBASE.authDomain || process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || '',
+  projectId: ENV.FIREBASE.projectId || process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || '',
+  storageBucket: ENV.FIREBASE.storageBucket || process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: ENV.FIREBASE.messagingSenderId || process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: ENV.FIREBASE.appId || process.env.EXPO_PUBLIC_FIREBASE_APP_ID || '',
+  measurementId: ENV.FIREBASE.measurementId || process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID || '',
 };
 
 // Khởi tạo Firebase App (tránh khởi tạo lại khi Fast Refresh trong Expo)
