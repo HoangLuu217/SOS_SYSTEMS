@@ -6,6 +6,9 @@ const errorHandler = require('./middlewares/errorHandler');
 
 const app = express();
 
+// Trust reverse proxy (VD: VS Code Tunnel, Ngrok) để sửa lỗi express-rate-limit ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+app.set('trust proxy', 1);
+
 // Middlewares
 const allowedOrigins = [
   process.env.CLIENT_URL,
