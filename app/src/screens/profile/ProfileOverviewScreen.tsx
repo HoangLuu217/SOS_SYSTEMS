@@ -8,6 +8,7 @@ export interface ProfileOverviewScreenProps {
   onNavigateToEmergencyContact: () => void;
   onNavigateToProfessional: () => void;
   onNavigateToSecurity: () => void;
+  onNavigateToNotificationSettings: () => void;
   onNavigateToNotifications: () => void;
   unreadNotificationsCount?: number;
 }
@@ -17,6 +18,7 @@ export const ProfileOverviewScreen: React.FC<ProfileOverviewScreenProps> = ({
   onNavigateToEmergencyContact,
   onNavigateToProfessional,
   onNavigateToSecurity,
+  onNavigateToNotificationSettings,
   onNavigateToNotifications,
   unreadNotificationsCount = 3,
 }) => {
@@ -33,6 +35,7 @@ export const ProfileOverviewScreen: React.FC<ProfileOverviewScreenProps> = ({
         onNavigateToEditProfile={onNavigateToEditProfile}
         onNavigateToProfessional={onNavigateToProfessional}
         onNavigateToSecurity={onNavigateToSecurity}
+        onNavigateToNotificationSettings={onNavigateToNotificationSettings}
         onNavigateToNotifications={onNavigateToNotifications}
         unreadNotificationsCount={unreadNotificationsCount}
       />
@@ -44,6 +47,7 @@ export const ProfileOverviewScreen: React.FC<ProfileOverviewScreenProps> = ({
       onNavigateToEditProfile={onNavigateToEditProfile}
       onNavigateToEmergencyContact={onNavigateToEmergencyContact}
       onNavigateToSecurity={onNavigateToSecurity}
+      onNavigateToNotificationSettings={onNavigateToNotificationSettings}
       onNavigateToNotifications={onNavigateToNotifications}
       unreadNotificationsCount={unreadNotificationsCount}
     />

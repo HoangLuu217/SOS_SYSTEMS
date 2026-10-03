@@ -16,6 +16,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { CustomInput } from '../components/CustomInput';
 import { useAuth } from '../context/AuthContext';
+import { LogoSOS } from '../components/LogoSOS';
 
 interface ForgotPasswordModalProps {
   visible: boolean;
@@ -172,8 +173,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                 {/* Header Row: Logo SOS & Close Button */}
                 <View style={styles.headerRow}>
                   <View style={styles.logoBadge}>
-                    <Image
-                      source={require('../../assets/logoSOS.png')}
+                    <LogoSOS
                       style={styles.logoImage}
                       resizeMode="contain"
                     />

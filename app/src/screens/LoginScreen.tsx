@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ImageBackground,
   Image,
   TouchableOpacity,
   KeyboardAvoidingView,
@@ -19,6 +18,7 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { GoogleButton } from '../components/GoogleButton';
 import { AlertModal } from '../components/AlertModal';
 import { useAuth } from '../context/AuthContext';
+import { LogoSOS } from '../components/LogoSOS';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -33,11 +33,18 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   onNavigateToForgotPassword,
   onOpenSettings,
 }) => {
-  const { login, loginWithGoogle, isLoading } = useAuth();
+  const { login, loginWithGoogle, isLoading, user } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+
+  // Tự động làm sạch mật khẩu khi đăng xuất
+  useEffect(() => {
+    if (!user) {
+      setPassword('');
+    }
+  }, [user]);
   const [alertInfo, setAlertInfo] = useState<{
     visible: boolean;
     type: 'success' | 'error' | 'info' | 'warning';
@@ -100,12 +107,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Ảnh nền trực thăng cứu hộ & bầu trời mưa bão */}
-      <ImageBackground
-        source={require('../../assets/backgroudApp.jpg')}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
+      {/* Vùng hiển thị form đăng nhập với nền trong suốt (nền ảnh duy trì tại cấp cha) */}
+      <View style={styles.backgroundImage}>
         <SafeAreaView style={styles.safeArea} edges={['bottom']}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -143,8 +146,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                         activeOpacity={0.9}
                         delayLongPress={1500}
                       >
-                        <Image
-                          source={require('../../assets/logoSOS.png')}
+                        <LogoSOS
                           style={styles.logoImage}
                           resizeMode="contain"
                         />
@@ -238,7 +240,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             </ScrollView>
           </KeyboardAvoidingView>
         </SafeAreaView>
-      </ImageBackground>
+      </View>
 
       {/* Modal thông báo */}
       <AlertModal
@@ -255,12 +257,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: 'transparent',
   },
   backgroundImage: {
     flex: 1,
     width: '100%',
     height: '100%',
+    backgroundColor: 'transparent',
   },
   safeArea: {
     flex: 1,

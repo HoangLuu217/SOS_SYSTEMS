@@ -3,7 +3,7 @@ const router = express.Router();
 
 /**
  * GET /api/config
- * Cung cấp thông tin cấu hình công khai cho ứng dụng mobile/web từ file .env của backend
+ * Cung cấp thông tin cấu hình công khai cho ứng dụng mobile/web từ file .env của backend (bao gồm Firebase, Supabase)
  */
 router.get('/', (req, res) => {
   res.json({
