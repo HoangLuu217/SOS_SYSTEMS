@@ -20,6 +20,7 @@ import { GoogleButton } from '../components/GoogleButton';
 import { AlertModal } from '../components/AlertModal';
 import { OtpModal } from './OtpModal';
 import { useAuth } from '../context/AuthContext';
+import { sendPhoneOtpFirebase, verifyPhoneOtpFirebase } from '../services/phoneAuthService';
 
 interface SignupScreenProps {
   onNavigateToLogin: () => void;
@@ -40,6 +41,8 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [otpModalVisible, setOtpModalVisible] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyMethod, setVerifyMethod] = useState<'phone' | 'email'>('phone');
+  const [phoneSessionInfo, setPhoneSessionInfo] = useState('');
 
   const [alertInfo, setAlertInfo] = useState<{
     visible: boolean;
@@ -113,43 +116,138 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
     if (!validate()) return;
 
     setSendingOtp(true);
-    const res = await sendOtp(email.trim());
-    setSendingOtp(false);
 
-    if (res.success) {
-      setOtpModalVisible(true);
+    if (verifyMethod === 'phone') {
+      const res = await sendPhoneOtpFirebase(phone.trim());
+      setSendingOtp(false);
+      if (res.success && res.sessionInfo) {
+        setPhoneSessionInfo(res.sessionInfo);
+        setOtpModalVisible(true);
+      } else {
+        setAlertInfo({
+          visible: true,
+          type: 'error',
+          title: 'Lỗi gửi mã OTP qua SMS',
+          message: res.message || 'Không thể gửi mã xác thực qua số điện thoại.',
+        });
+      }
     } else {
-      setAlertInfo({
-        visible: true,
-        type: 'error',
-        title: 'Lỗi gửi mã OTP',
-        message: res.message,
-      });
+      const res = await sendOtp(email.trim());
+      setSendingOtp(false);
+      if (res.success) {
+        setOtpModalVisible(true);
+      } else {
+        setAlertInfo({
+          visible: true,
+          type: 'error',
+          title: 'Lỗi gửi mã OTP qua Email',
+          message: res.message,
+        });
+      }
     }
   };
 
   const handleVerifyAndSignup = async (otpCode: string) => {
-    const res = await signup({
-      fullName: fullName.trim(),
-      phone: phone.trim(),
-      email: email.trim(),
-      password,
-      otp: otpCode,
-    });
+    if (verifyMethod === 'phone') {
+      const verifyRes = await verifyPhoneOtpFirebase(phoneSessionInfo, otpCode);
+      if (!verifyRes.success) {
+        return {
+          success: false,
+          message: verifyRes.message || 'Mã OTP số điện thoại không chính xác.',
+        };
+      }
 
-    if (res.success) {
-      setAlertInfo({
-        visible: true,
-        type: 'success',
-        title: 'Đăng ký thành công',
-        message: 'Tài khoản của bạn đã được xác thực và tạo thành công!',
+      // Đăng ký với số điện thoại đã xác thực
+      const res = await signup({
+        fullName: fullName.trim(),
+        phone: phone.trim(),
+        email: email.trim(),
+        password,
       });
-      return { success: true };
+
+      if (res.success) {
+        setAlertInfo({
+          visible: true,
+          type: 'success',
+          title: 'Đăng ký thành công',
+          message: 'Tài khoản của bạn đã được xác thực số điện thoại và tạo thành công!',
+        });
+        return { success: true };
+      } else {
+        return {
+          success: false,
+          message: res.message || 'Đăng ký tài khoản thất bại.',
+        };
+      }
     } else {
-      return {
-        success: false,
-        message: res.message || 'Mã OTP không chính xác hoặc đã hết hạn.',
-      };
+      // Xác thực qua Email OTP
+      const res = await signup({
+        fullName: fullName.trim(),
+        phone: phone.trim(),
+        email: email.trim(),
+        password,
+        otp: otpCode,
+      });
+
+      if (res.success) {
+        setAlertInfo({
+          visible: true,
+          type: 'success',
+          title: 'Đăng ký thành công',
+          message: 'Tài khoản của bạn đã được xác thực email và tạo thành công!',
+        });
+        return { success: true };
+      } else {
+        return {
+          success: false,
+          message: res.message || 'Mã OTP không chính xác hoặc đã hết hạn.',
+        };
+      }
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (verifyMethod === 'phone') {
+      const res = await sendPhoneOtpFirebase(phone.trim());
+      if (res.success && res.sessionInfo) {
+        setPhoneSessionInfo(res.sessionInfo);
+        return { success: true, message: 'Đã gửi lại mã OTP qua SMS.' };
+      }
+      return { success: false, message: res.message };
+    } else {
+      const res = await sendOtp(email.trim());
+      return res;
+    }
+  };
+
+  const handleChangeVerifyMethod = async () => {
+    const nextMethod = verifyMethod === 'phone' ? 'email' : 'phone';
+    setVerifyMethod(nextMethod);
+    setSendingOtp(true);
+    if (nextMethod === 'phone') {
+      const res = await sendPhoneOtpFirebase(phone.trim());
+      setSendingOtp(false);
+      if (res.success && res.sessionInfo) {
+        setPhoneSessionInfo(res.sessionInfo);
+      } else {
+        setAlertInfo({
+          visible: true,
+          type: 'error',
+          title: 'Lỗi gửi mã OTP qua SMS',
+          message: res.message || 'Không thể gửi mã xác thực qua số điện thoại.',
+        });
+      }
+    } else {
+      const res = await sendOtp(email.trim());
+      setSendingOtp(false);
+      if (!res.success) {
+        setAlertInfo({
+          visible: true,
+          type: 'error',
+          title: 'Lỗi gửi mã OTP qua Email',
+          message: res.message,
+        });
+      }
     }
   };
 
@@ -289,6 +387,60 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
                           onSubmitEditing={handleSignup}
                         />
 
+                        {/* Phương thức nhận mã xác thực OTP: SĐT hoặc Email */}
+                        <View style={styles.methodSelectorWrap}>
+                          <Text style={styles.methodSelectorLabel}>Nhận mã OTP qua:</Text>
+                          <View style={styles.methodPillsRow}>
+                            <TouchableOpacity
+                              style={[
+                                styles.methodPill,
+                                verifyMethod === 'phone' && styles.methodPillActive,
+                              ]}
+                              onPress={() => setVerifyMethod('phone')}
+                              activeOpacity={0.8}
+                            >
+                              <Feather
+                                name="phone"
+                                size={13}
+                                color={verifyMethod === 'phone' ? '#0066FF' : '#475569'}
+                                style={{ marginRight: 4 }}
+                              />
+                              <Text
+                                style={[
+                                  styles.methodPillText,
+                                  verifyMethod === 'phone' && styles.methodPillTextActive,
+                                ]}
+                              >
+                                Số điện thoại
+                              </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={[
+                                styles.methodPill,
+                                verifyMethod === 'email' && styles.methodPillActive,
+                              ]}
+                              onPress={() => setVerifyMethod('email')}
+                              activeOpacity={0.8}
+                            >
+                              <Feather
+                                name="mail"
+                                size={13}
+                                color={verifyMethod === 'email' ? '#0066FF' : '#475569'}
+                                style={{ marginRight: 4 }}
+                              />
+                              <Text
+                                style={[
+                                  styles.methodPillText,
+                                  verifyMethod === 'email' && styles.methodPillTextActive,
+                                ]}
+                              >
+                                Email
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
                         {/* Nút Đăng ký màu xanh với mũi tên */}
                         <PrimaryButton
                           title="Đăng ký"
@@ -332,12 +484,16 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
         </SafeAreaView>
       </ImageBackground>
 
-      {/* Modal Xác thực Email Đăng ký bằng mã OTP */}
+      {/* Modal Xác thực OTP Đăng ký (Hỗ trợ cả SĐT và Email) */}
       <OtpModal
         visible={otpModalVisible}
+        type={verifyMethod}
+        phone={phone.trim()}
         email={email.trim()}
         onClose={() => setOtpModalVisible(false)}
         onVerify={handleVerifyAndSignup}
+        onResend={handleResendOtp}
+        onChangeMethod={handleChangeVerifyMethod}
       />
 
       <AlertModal
@@ -457,6 +613,51 @@ const styles = StyleSheet.create({
   },
   form: {
     width: '100%',
+  },
+  /* Selector phương thức OTP */
+  methodSelectorWrap: {
+    marginBottom: 10,
+    marginTop: 2,
+  },
+  methodSelectorLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 6,
+    paddingLeft: 2,
+  },
+  methodPillsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  methodPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.65)',
+    borderRadius: 12,
+    paddingVertical: 8,
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.9)',
+  },
+  methodPillActive: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#0066FF',
+    shadowColor: '#0066FF',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  methodPillText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  methodPillTextActive: {
+    color: '#0066FF',
+    fontWeight: '700',
   },
   dividerRow: {
     flexDirection: 'row',

@@ -17,6 +17,7 @@ import { PROFILE_THEME } from './theme';
 import { useAuth } from '../../context/AuthContext';
 import { backendApi } from '../../services/backendApi';
 import { ForgotPasswordModal } from '../ForgotPasswordModal';
+import { sendPhoneOtpFirebase, verifyPhoneOtpFirebase } from '../../services/phoneAuthService';
 
 interface AccountSecurityScreenProps {
   onBack: () => void;
@@ -29,7 +30,7 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
   onBack,
   onOpenForgotPassword,
 }) => {
-  const { user, supabaseUser } = useAuth();
+  const { user, supabaseUser, updateUserProfile } = useAuth();
 
   // Xác định tài khoản Google mặc định
   const isDefaultGoogle = Boolean(
@@ -41,6 +42,18 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
   const [accountMode, setAccountMode] = useState<SecurityAccountMode>(
     isDefaultGoogle ? 'google' : 'password'
   );
+
+  // States cho tính năng xác thực Số điện thoại (Firebase)
+  const [phoneInput, setPhoneInput] = useState(user?.phone || '');
+  const [phoneOtpCode, setPhoneOtpCode] = useState('');
+  const [phoneSessionInfo, setPhoneSessionInfo] = useState('');
+  const [isSendingPhoneOtp, setIsSendingPhoneOtp] = useState(false);
+  const [isVerifyingPhoneOtp, setIsVerifyingPhoneOtp] = useState(false);
+  const [phoneOtpSent, setPhoneOtpSent] = useState(false);
+  const [phoneCountdown, setPhoneCountdown] = useState(0);
+  const [phoneSuccessMsg, setPhoneSuccessMsg] = useState<string | null>(null);
+  const [phoneErrorMsg, setPhoneErrorMsg] = useState<string | null>(null);
+  const [isEditingPhone, setIsEditingPhone] = useState(!user?.phone);
 
   // Form states cho tài khoản có mật khẩu
   const [currentPassword, setCurrentPassword] = useState('');
@@ -64,6 +77,99 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
 
   // Modal quên mật khẩu
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
+
+  // Effect đếm ngược thời gian chờ gửi lại mã OTP (60s)
+  React.useEffect(() => {
+    if (phoneCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setPhoneCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [phoneCountdown]);
+
+  // Cập nhật phoneInput khi user.phone thay đổi từ backend
+  React.useEffect(() => {
+    if (user?.phone && !isEditingPhone) {
+      setPhoneInput(user.phone);
+    }
+  }, [user?.phone, isEditingPhone]);
+
+  // Xử lý gửi mã xác thực SMS OTP qua Firebase
+  const handleSendPhoneOtp = async () => {
+    setPhoneErrorMsg(null);
+    setPhoneSuccessMsg(null);
+    const cleanPhone = phoneInput.trim().replace(/\s+/g, '');
+    if (!cleanPhone) {
+      setPhoneErrorMsg('Vui lòng nhập số điện thoại');
+      return;
+    }
+
+    const phoneRegex = /^(?:\+84|0)(?:3|5|7|8|9)\d{8}$|^\+?[1-9]\d{8,14}$/;
+    if (!phoneRegex.test(cleanPhone)) {
+      setPhoneErrorMsg('Số điện thoại không hợp lệ (hỗ trợ 10 số VN 03x, 05x, 07x, 08x, 09x hoặc +84...)');
+      return;
+    }
+
+    setIsSendingPhoneOtp(true);
+    try {
+      const res = await sendPhoneOtpFirebase(cleanPhone);
+      if (res.success && res.sessionInfo) {
+        setPhoneSessionInfo(res.sessionInfo);
+        setPhoneOtpSent(true);
+        setPhoneCountdown(60);
+        setPhoneSuccessMsg(`Mã OTP 6 số đã được gửi qua SMS đến ${cleanPhone}`);
+      } else {
+        setPhoneErrorMsg(res.message || 'Không thể gửi mã OTP qua SMS. Vui lòng kiểm tra lại số điện thoại.');
+      }
+    } catch (err: any) {
+      setPhoneErrorMsg(err?.message || 'Có lỗi xảy ra khi gửi mã OTP qua SMS.');
+    } finally {
+      setIsSendingPhoneOtp(false);
+    }
+  };
+
+  // Xử lý xác minh mã OTP và cập nhật số điện thoại vào hồ sơ người dùng
+  const handleVerifyPhoneOtp = async () => {
+    setPhoneErrorMsg(null);
+    setPhoneSuccessMsg(null);
+    const cleanCode = phoneOtpCode.trim();
+    if (!cleanCode || cleanCode.length < 6) {
+      setPhoneErrorMsg('Vui lòng nhập đủ 6 chữ số mã OTP');
+      return;
+    }
+
+    setIsVerifyingPhoneOtp(true);
+    try {
+      const verifyRes = await verifyPhoneOtpFirebase(phoneSessionInfo, cleanCode);
+      if (!verifyRes.success) {
+        setPhoneErrorMsg(verifyRes.message || 'Mã OTP không chính xác hoặc đã hết hạn.');
+        setIsVerifyingPhoneOtp(false);
+        return;
+      }
+
+      // Xác thực SMS thành công -> Cập nhật số điện thoại vào tài khoản Backend
+      const cleanPhone = phoneInput.trim().replace(/\s+/g, '');
+      const updateRes = await updateUserProfile({ phone: cleanPhone });
+      if (updateRes.success) {
+        setPhoneSuccessMsg('Xác thực số điện thoại thành công và đã lưu vào hồ sơ cứu nạn!');
+        setPhoneOtpSent(false);
+        setPhoneOtpCode('');
+        setIsEditingPhone(false);
+      } else {
+        setPhoneErrorMsg(updateRes.message || 'Xác thực OTP thành công nhưng không thể cập nhật SĐT vào hồ sơ.');
+      }
+    } catch (err: any) {
+      setPhoneErrorMsg(err?.message || 'Lỗi khi xác thực mã OTP.');
+    } finally {
+      setIsVerifyingPhoneOtp(false);
+    }
+  };
 
   const handleResetForm = () => {
     setCurrentPassword('');
@@ -519,6 +625,234 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
             </View>
           )}
 
+          {/* ========================================================
+              CARD XÁC THỰC SỐ ĐIỆN THOẠI (Firebase SMS OTP)
+             ======================================================== */}
+          <View style={[styles.card, { marginTop: 16 }]}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={[styles.sectionIconWrap, { backgroundColor: '#F0F9FF' }]}>
+                <Feather name="phone-call" size={18} color="#0284C7" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionTitle}>Xác thực số điện thoại</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Liên lạc khẩn cấp khi gửi tín hiệu SOS & bảo mật tài khoản
+                </Text>
+              </View>
+            </View>
+
+            {/* Thông báo thành công nếu có */}
+            {phoneSuccessMsg && (
+              <View style={styles.phoneSuccessBanner}>
+                <Feather name="check-circle" size={16} color="#059669" />
+                <Text style={styles.phoneSuccessText}>{phoneSuccessMsg}</Text>
+              </View>
+            )}
+
+            {/* Thông báo lỗi nếu có */}
+            {phoneErrorMsg && (
+              <View style={styles.phoneErrorBanner}>
+                <Feather name="alert-circle" size={16} color="#DC2626" />
+                <Text style={styles.phoneErrorText}>{phoneErrorMsg}</Text>
+              </View>
+            )}
+
+            {/* Trường hợp 1: Đã có SĐT và không trong chế độ sửa */}
+            {user?.phone && !isEditingPhone ? (
+              <View style={styles.verifiedPhoneContainer}>
+                <View style={styles.verifiedPhoneHeader}>
+                  <View style={styles.verifiedBadge}>
+                    <Feather name="check" size={12} color="#059669" />
+                    <Text style={styles.verifiedBadgeText}>Đã xác thực qua SMS</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.editPhoneBtn}
+                    onPress={() => {
+                      setIsEditingPhone(true);
+                      setPhoneInput(user.phone || '');
+                      setPhoneOtpSent(false);
+                      setPhoneOtpCode('');
+                      setPhoneErrorMsg(null);
+                      setPhoneSuccessMsg(null);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="edit-2" size={13} color="#0284C7" />
+                    <Text style={styles.editPhoneBtnText}>Thay đổi SĐT</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.phoneDisplayBox}>
+                  <Feather name="smartphone" size={20} color="#0284C7" />
+                  <Text style={styles.phoneDisplayText}>{user.phone}</Text>
+                </View>
+
+                <Text style={styles.phoneHintMuted}>
+                  Số điện thoại này được dùng để đội cứu hộ gọi xác nhận vị trí khi bạn bấm gửi SOS khẩn cấp.
+                </Text>
+              </View>
+            ) : (
+              /* Trường hợp 2: Chưa có SĐT hoặc đang bấm thay đổi */
+              <View style={styles.phoneInputSection}>
+                {!user?.phone && (
+                  <View style={styles.phoneWarningBox}>
+                    <Feather name="alert-triangle" size={16} color="#D97706" style={{ marginTop: 2 }} />
+                    <Text style={styles.phoneWarningText}>
+                      Tài khoản Google của bạn chưa liên kết số điện thoại. Hãy xác thực ngay để sẵn sàng liên lạc khi gặp sự cố thiên tai.
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    Số điện thoại liên hệ <Text style={styles.requiredStar}>*</Text>
+                  </Text>
+                  <View style={styles.inputContainer}>
+                    <Feather name="phone" size={18} color="#64748B" style={{ marginRight: 10 }} />
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="VD: 0912345678 hoặc +84..."
+                      placeholderTextColor={PROFILE_THEME.colors.textMuted}
+                      value={phoneInput}
+                      onChangeText={(val) => {
+                        setPhoneInput(val);
+                        if (phoneErrorMsg) setPhoneErrorMsg(null);
+                      }}
+                      keyboardType="phone-pad"
+                      editable={!phoneOtpSent || phoneCountdown <= 0}
+                    />
+                    {phoneInput.length > 0 && !phoneOtpSent && (
+                      <TouchableOpacity
+                        onPress={() => setPhoneInput('')}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Feather name="x-circle" size={16} color="#94A3B8" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+
+                {/* Nút gửi mã OTP */}
+                {!phoneOtpSent ? (
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    {user?.phone && (
+                      <TouchableOpacity
+                        style={styles.cancelEditBtn}
+                        onPress={() => {
+                          setIsEditingPhone(false);
+                          setPhoneErrorMsg(null);
+                          setPhoneSuccessMsg(null);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.cancelEditBtnText}>Hủy</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={[
+                        styles.sendOtpButton,
+                        isSendingPhoneOtp && styles.buttonDisabled,
+                        user?.phone ? { flex: 1 } : { width: '100%' },
+                      ]}
+                      onPress={handleSendPhoneOtp}
+                      disabled={isSendingPhoneOtp}
+                      activeOpacity={0.8}
+                    >
+                      {isSendingPhoneOtp ? (
+                        <View style={styles.buttonInner}>
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                          <Text style={styles.sendOtpButtonText}>Đang gửi OTP...</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.buttonInner}>
+                          <Feather name="send" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
+                          <Text style={styles.sendOtpButtonText}>Gửi mã OTP (SMS)</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  /* Khi đã gửi OTP -> Hiện ô nhập mã OTP & nút Xác nhận */
+                  <View style={styles.otpVerifyWrap}>
+                    <View style={styles.inputGroup}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <Text style={styles.label}>
+                          Nhập mã OTP 6 số <Text style={styles.requiredStar}>*</Text>
+                        </Text>
+                        <TouchableOpacity
+                          onPress={handleSendPhoneOtp}
+                          disabled={phoneCountdown > 0 || isSendingPhoneOtp}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Text
+                            style={[
+                              styles.resendCodeText,
+                              phoneCountdown > 0 && { color: '#94A3B8' },
+                            ]}
+                          >
+                            {phoneCountdown > 0 ? `Gửi lại sau (${phoneCountdown}s)` : 'Gửi lại mã'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      <View style={styles.inputContainer}>
+                        <Feather name="key" size={18} color="#64748B" style={{ marginRight: 10 }} />
+                        <TextInput
+                          style={[styles.textInput, { letterSpacing: 4, fontWeight: '700' }]}
+                          placeholder="••••••"
+                          placeholderTextColor={PROFILE_THEME.colors.textMuted}
+                          value={phoneOtpCode}
+                          onChangeText={(val) => {
+                            setPhoneOtpCode(val);
+                            if (phoneErrorMsg) setPhoneErrorMsg(null);
+                          }}
+                          keyboardType="number-pad"
+                          maxLength={6}
+                        />
+                      </View>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                      <TouchableOpacity
+                        style={styles.cancelEditBtn}
+                        onPress={() => {
+                          setPhoneOtpSent(false);
+                          setPhoneOtpCode('');
+                          if (user?.phone) setIsEditingPhone(false);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.cancelEditBtnText}>Hủy</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.verifySubmitBtn,
+                          (isVerifyingPhoneOtp || phoneOtpCode.length < 6) && styles.buttonDisabled,
+                        ]}
+                        onPress={handleVerifyPhoneOtp}
+                        disabled={isVerifyingPhoneOtp || phoneOtpCode.length < 6}
+                        activeOpacity={0.8}
+                      >
+                        {isVerifyingPhoneOtp ? (
+                          <View style={styles.buttonInner}>
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                            <Text style={styles.primaryButtonText}>Đang xác thực...</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.buttonInner}>
+                            <Feather name="check" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                            <Text style={styles.primaryButtonText}>Xác nhận & Lưu SĐT</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+
           {/* Khoảng cách đáy an toàn tránh đè lên Bottom Navbar */}
           <View style={{ height: 48 }} />
         </ScrollView>
@@ -949,5 +1283,183 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     color: PROFILE_THEME.colors.textMuted,
     flex: 1,
+  },
+
+  /* Phone Verification Card Styles */
+  sectionSubtitle: {
+    fontSize: 12.5,
+    color: PROFILE_THEME.colors.textSecondary,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  phoneSuccessBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+    gap: 8,
+  },
+  phoneSuccessText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#065F46',
+    fontWeight: '600',
+  },
+  phoneErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+    gap: 8,
+  },
+  phoneErrorText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#DC2626',
+    fontWeight: '500',
+  },
+  verifiedPhoneContainer: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  verifiedPhoneHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  verifiedBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#059669',
+  },
+  editPhoneBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  editPhoneBtnText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#0284C7',
+  },
+  phoneDisplayBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 8,
+  },
+  phoneDisplayText: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: 0.5,
+  },
+  phoneHintMuted: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 16,
+  },
+  phoneInputSection: {
+    marginTop: 4,
+  },
+  phoneWarningBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 10,
+    padding: 12,
+    gap: 8,
+    marginBottom: 14,
+  },
+  phoneWarningText: {
+    flex: 1,
+    fontSize: 12.5,
+    color: '#B45309',
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  sendOtpButton: {
+    backgroundColor: '#0284C7',
+    borderRadius: PROFILE_THEME.radius.button,
+    minHeight: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sendOtpButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14.5,
+    fontWeight: '700',
+  },
+  cancelEditBtn: {
+    width: 80,
+    minHeight: 46,
+    borderRadius: PROFILE_THEME.radius.button,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  cancelEditBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  otpVerifyWrap: {
+    marginTop: 4,
+  },
+  resendCodeText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#0284C7',
+  },
+  verifySubmitBtn: {
+    flex: 1,
+    backgroundColor: '#0284C7',
+    borderRadius: PROFILE_THEME.radius.button,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   },
 });

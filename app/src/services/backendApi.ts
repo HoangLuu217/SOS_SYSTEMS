@@ -335,6 +335,7 @@ class BackendApiService {
     dateOfBirth?: string;
     gender?: string;
     address?: string;
+    phone?: string;
   }): Promise<ApiResponse<UserProfile>> {
     const res = await this.request<UserProfile>('/users/me', {
       method: 'PATCH',

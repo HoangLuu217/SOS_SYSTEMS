@@ -38,6 +38,7 @@ export interface AuthContextType {
     dateOfBirth?: string;
     gender?: string;
     address?: string;
+    phone?: string;
   }) => Promise<{ success: boolean; message: string }>;
   updateUserAvatar: (avatarUrl: string) => Promise<{ success: boolean; message: string }>;
   logout: () => Promise<void>;
@@ -522,6 +523,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     dateOfBirth?: string;
     gender?: string;
     address?: string;
+    phone?: string;
   }) => {
     try {
       const res = await backendApi.updateProfile(data);

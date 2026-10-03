@@ -313,6 +313,26 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
           </View>
         </View>
 
+        {/* Banner nhắc nhở xác thực số điện thoại cho tài khoản Google */}
+        {!user?.phone && (
+          <TouchableOpacity
+            style={styles.unverifiedPhoneCard}
+            onPress={onNavigateToSecurity}
+            activeOpacity={0.8}
+          >
+            <View style={styles.unverifiedPhoneIconBox}>
+              <Feather name="alert-triangle" size={18} color="#D97706" />
+            </View>
+            <View style={styles.unverifiedPhoneTextBox}>
+              <Text style={styles.unverifiedPhoneTitle}>Chưa xác thực số điện thoại</Text>
+              <Text style={styles.unverifiedPhoneDesc}>
+                Nhấn vào đây để xác thực SĐT qua SMS phục vụ điều phối cứu hộ
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={18} color="#D97706" />
+          </TouchableOpacity>
+        )}
+
         {/* 3. Availability Card (Trạng thái sẵn sàng tác chiến) */}
         <View style={styles.availabilityCard}>
           <View style={styles.availHeader}>
@@ -1248,5 +1268,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  unverifiedPhoneCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    gap: 12,
+  },
+  unverifiedPhoneIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unverifiedPhoneTextBox: {
+    flex: 1,
+  },
+  unverifiedPhoneTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#92400E',
+    marginBottom: 2,
+  },
+  unverifiedPhoneDesc: {
+    fontSize: 12,
+    color: '#B45309',
+    lineHeight: 16,
   },
 });

@@ -17,18 +17,26 @@ import { useAuth } from '../context/AuthContext';
 
 interface OtpModalProps {
   visible: boolean;
-  email: string;
+  email?: string;
+  phone?: string;
+  type?: 'email' | 'phone';
   onClose: () => void;
   onSuccess?: () => void;
   onVerify?: (otpCode: string) => Promise<{ success: boolean; message?: string }>;
+  onResend?: () => Promise<{ success: boolean; message?: string }>;
+  onChangeMethod?: () => void;
 }
 
 export const OtpModal: React.FC<OtpModalProps> = ({
   visible,
   email,
+  phone,
+  type = 'email',
   onClose,
   onSuccess,
   onVerify,
+  onResend,
+  onChangeMethod,
 }) => {
   const { verifyOtp, sendOtp } = useAuth();
 
@@ -49,7 +57,7 @@ export const OtpModal: React.FC<OtpModalProps> = ({
         otpInputRef.current?.focus();
       }, 350);
     }
-  }, [visible]);
+  }, [visible, type]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
@@ -86,14 +94,19 @@ export const OtpModal: React.FC<OtpModalProps> = ({
       return;
     }
 
-    const res = await verifyOtp(email, code);
-    setLoading(false);
+    if (email) {
+      const res = await verifyOtp(email, code);
+      setLoading(false);
 
-    if (res.success) {
-      onClose();
-      if (onSuccess) onSuccess();
+      if (res.success) {
+        onClose();
+        if (onSuccess) onSuccess();
+      } else {
+        setError(res.message);
+      }
     } else {
-      setError(res.message);
+      setLoading(false);
+      setError('Thiếu thông tin xác thực.');
     }
   };
 
@@ -102,7 +115,14 @@ export const OtpModal: React.FC<OtpModalProps> = ({
     setError('');
     setLoading(true);
 
-    const res = await sendOtp(email);
+    let res: { success: boolean; message?: string };
+    if (onResend) {
+      res = await onResend();
+    } else if (email) {
+      res = await sendOtp(email);
+    } else {
+      res = { success: false, message: 'Không thể gửi lại mã.' };
+    }
     setLoading(false);
 
     if (res.success) {
@@ -112,9 +132,11 @@ export const OtpModal: React.FC<OtpModalProps> = ({
         otpInputRef.current?.focus();
       }, 200);
     } else {
-      setError(res.message);
+      setError(res.message || 'Gửi lại mã không thành công.');
     }
   };
+
+  const targetDisplay = type === 'phone' ? (phone || '') : (email || '');
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -144,12 +166,35 @@ export const OtpModal: React.FC<OtpModalProps> = ({
                 </View>
 
                 {/* Tiêu đề & Phụ đề */}
-                <Text style={styles.title}>Xác thực Email đăng ký</Text>
-                <Text style={styles.subtitle}>
-                  Mã OTP 6 số đã được gửi đến:{' '}
-                  <Text style={styles.highlightEmail}>{email}</Text>
-                  {'\n'}Vui lòng nhập mã để hoàn tất đăng ký tài khoản SOS.
+                <Text style={styles.title}>
+                  {type === 'phone' ? 'Xác thực Số điện thoại' : 'Xác thực Email'}
                 </Text>
+                <Text style={styles.subtitle}>
+                  Mã OTP 6 số đã được gửi {type === 'phone' ? 'qua SMS đến:' : 'đến:'}{' '}
+                  <Text style={styles.highlightEmail}>{targetDisplay}</Text>
+                  {'\n'}Vui lòng nhập mã để hoàn tất xác thực tài khoản SOS.
+                </Text>
+
+                {/* Tùy chọn chuyển đổi phương thức nếu có */}
+                {onChangeMethod && (
+                  <TouchableOpacity
+                    onPress={onChangeMethod}
+                    style={styles.switchMethodButton}
+                    activeOpacity={0.7}
+                  >
+                    <Feather
+                      name={type === 'phone' ? 'mail' : 'phone'}
+                      size={13}
+                      color="#0066FF"
+                      style={{ marginRight: 5 }}
+                    />
+                    <Text style={styles.switchMethodText}>
+                      {type === 'phone'
+                        ? 'Đổi sang xác thực qua Email'
+                        : 'Đổi sang xác thực qua Số điện thoại'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
 
                 {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -300,6 +345,24 @@ const styles = StyleSheet.create({
   highlightEmail: {
     fontWeight: '700',
     color: '#0066FF',
+  },
+  switchMethodButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    marginBottom: 12,
+    marginTop: -6,
+  },
+  switchMethodText: {
+    color: '#0066FF',
+    fontSize: 12.5,
+    fontWeight: '600',
   },
   errorText: {
     color: '#EF4444',

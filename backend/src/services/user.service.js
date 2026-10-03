@@ -26,7 +26,7 @@ class UserService {
       throw new ApiError(404, 'Không tìm thấy thông tin tài khoản.');
     }
 
-    const { fullName, dateOfBirth, gender, address } = data;
+    const { fullName, dateOfBirth, gender, address, phone } = data;
 
     if (fullName !== undefined) {
       if (typeof fullName !== 'string' || fullName.trim().length < 2) {
@@ -62,6 +62,20 @@ class UserService {
 
     if (address !== undefined) {
       user.address = address ? address.trim() : null;
+    }
+
+    if (phone !== undefined) {
+      if (phone) {
+        const cleanPhone = phone.trim();
+        if (!isValidPhone(cleanPhone)) {
+          throw new ApiError(400, 'Số điện thoại không hợp lệ (hỗ trợ định dạng VN 10 số hoặc E.164).');
+        }
+        const existing = await User.findOne({ phone: cleanPhone, _id: { $ne: userId } });
+        if (existing) {
+          throw new ApiError(409, 'Số điện thoại này đã được sử dụng bởi tài khoản khác.');
+        }
+        user.phone = cleanPhone;
+      }
     }
 
     await user.save();
