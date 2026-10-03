@@ -33,6 +33,13 @@ export interface AuthContextType {
   forgotPassword: (email: string) => Promise<{ success: boolean; message: string; resetToken?: string }>;
   verifyResetOtp: (email: string, otp: string) => Promise<{ success: boolean; message: string }>;
   resetPassword: (email: string, otp: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
+  updateUserProfile: (data: {
+    fullName?: string;
+    dateOfBirth?: string;
+    gender?: string;
+    address?: string;
+  }) => Promise<{ success: boolean; message: string }>;
+  updateUserAvatar: (avatarUrl: string) => Promise<{ success: boolean; message: string }>;
   logout: () => Promise<void>;
   checkSession: () => Promise<void>;
 }
@@ -510,18 +517,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateUserProfile = async (data: {
+    fullName?: string;
+    dateOfBirth?: string;
+    gender?: string;
+    address?: string;
+  }) => {
+    try {
+      const res = await backendApi.updateProfile(data);
+      if (res.success && res.data) {
+        setUser(res.data);
+        return { success: true, message: 'Cập nhật hồ sơ thành công' };
+      }
+      return { success: false, message: res.message || 'Cập nhật thất bại.' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Lỗi khi cập nhật hồ sơ.' };
+    }
+  };
+
+  const updateUserAvatar = async (avatarUrl: string) => {
+    try {
+      const res = await backendApi.updateAvatar(avatarUrl);
+      const finalAvatar = res.data?.avatarUrl || avatarUrl;
+
+      if (user) {
+        const updatedUser = { ...user, avatarUrl: finalAvatar };
+        setUser(updatedUser);
+        await AsyncStorage.setItem(ENV.STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
+      }
+
+      if (res.success) {
+        return { success: true, message: 'Cập nhật ảnh đại diện thành công' };
+      } else {
+        return {
+          success: true,
+          message: 'Đã lưu ảnh đại diện trên thiết bị của bạn.',
+        };
+      }
+    } catch (err: any) {
+      if (user) {
+        const updatedUser = { ...user, avatarUrl };
+        setUser(updatedUser);
+        await AsyncStorage.setItem(ENV.STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
+        return { success: true, message: 'Đã lưu ảnh đại diện trên thiết bị.' };
+      }
+      return { success: false, message: err.message || 'Lỗi khi cập nhật ảnh đại diện.' };
+    }
+  };
+
   /**
    * Đăng xuất
    */
   const logout = async () => {
     setIsLoading(true);
     try {
-      await backendApi.logout();
-      if (isSupabaseConfigured()) {
-        await supabase.auth.signOut();
-      }
+      // 1. Luôn cập nhật trạng thái user về null ngay lập tức để chuyển về LoginScreen
       setUser(null);
       setSupabaseUser(null);
+
+      // 2. Xóa sạch token và dữ liệu trong AsyncStorage
+      await backendApi.clearStorage();
+      await AsyncStorage.multiRemove(['@sos_emergency_contact']);
+
+      // 3. Gửi tín hiệu hủy phiên tới backend và Supabase (không chặn UI)
+      backendApi.logout().catch(() => {});
+      if (isSupabaseConfigured()) {
+        supabase.auth.signOut().catch(() => {});
+      }
     } catch (err) {
       console.warn('Lỗi đăng xuất:', err);
     } finally {
@@ -546,6 +608,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         forgotPassword,
         verifyResetOtp,
         resetPassword,
+        updateUserProfile,
+        updateUserAvatar,
         logout,
         checkSession,
       }}

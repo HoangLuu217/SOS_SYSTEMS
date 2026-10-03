@@ -36,7 +36,7 @@ export const GoogleButton: React.FC<GoogleButtonProps> = ({
         <ActivityIndicator color="#4285F4" size="small" />
       ) : (
         <View style={styles.content}>
-          <GoogleIcon size={20} />
+          <GoogleIcon size={19} />
           <Text style={styles.text}>{title}</Text>
         </View>
       )}
@@ -46,24 +46,13 @@ export const GoogleButton: React.FC<GoogleButtonProps> = ({
 
 const styles = StyleSheet.create({
   button: {
-    backgroundColor: 'rgba(255, 255, 255, 0.48)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.70)',
-    height: 52,
-    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.9)',
+    height: 48,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -74,9 +63,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   text: {
-    color: '#000000',
+    color: '#0F172A',
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '700',
     marginLeft: 10,
     letterSpacing: 0.1,
   },

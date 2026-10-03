@@ -2,6 +2,22 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ENV } from '../config/env';
 
+export interface EmergencyContact {
+  name: string;
+  phone: string;
+  relation: string;
+}
+
+export interface NotificationItem {
+  _id: string;
+  type: 'ALERT' | 'RESCUE' | 'WEATHER' | 'SYSTEM' | string;
+  title: string;
+  content: string;
+  isRead: boolean;
+  createdAt: string;
+  actionUrl?: string;
+}
+
 export interface UserProfile {
   _id: string;
   fullName: string;
@@ -12,6 +28,12 @@ export interface UserProfile {
   roles: string[];
   status: string;
   isVerified: boolean;
+  dateOfBirth?: string;
+  gender?: 'MALE' | 'FEMALE' | 'OTHER' | string;
+  address?: string;
+  citizen?: {
+    emergencyContact?: EmergencyContact;
+  };
   createdAt?: string;
   updatedAt?: string;
 }
@@ -57,11 +79,11 @@ class BackendApiService {
     if (current) list.push(current);
 
     const candidates = [
-      'https://p324hxtt-5000.asse.devtunnels.ms/api',
       'http://10.12.56.76:5000/api',
-      'http://10.0.2.2:5000/api',
       'http://localhost:5000/api',
       'http://127.0.0.1:5000/api',
+      'http://10.0.2.2:5000/api',
+      'https://p324hxtt-5000.asse.devtunnels.ms/api',
     ];
 
     for (const url of candidates) {
@@ -303,6 +325,127 @@ class BackendApiService {
     } finally {
       await this.clearStorage();
     }
+  }
+
+  /**
+   * Cập nhật thông tin cá nhân
+   */
+  async updateProfile(data: {
+    fullName?: string;
+    dateOfBirth?: string;
+    gender?: string;
+    address?: string;
+  }): Promise<ApiResponse<UserProfile>> {
+    const res = await this.request<UserProfile>('/users/me', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    if (res.success && res.data) {
+      await this.saveUser(res.data);
+    }
+    return res;
+  }
+
+  /**
+   * Cập nhật ảnh đại diện (Avatar)
+   */
+  async updateAvatar(avatarUrl: string): Promise<ApiResponse<{ userId: string; avatarUrl: string }>> {
+    const res = await this.request<{ userId: string; avatarUrl: string }>('/users/me/avatar', {
+      method: 'PATCH',
+      body: JSON.stringify({ avatarUrl }),
+    });
+    if (res.success && res.data?.avatarUrl) {
+      const stored = await this.getStoredUser();
+      if (stored) {
+        stored.avatarUrl = res.data.avatarUrl;
+        await this.saveUser(stored);
+      }
+    }
+    return res;
+  }
+
+  /**
+   * Đổi mật khẩu
+   */
+  async changePassword(oldPassword: string, newPassword: string): Promise<ApiResponse> {
+    return await this.request('/users/me/password', {
+      method: 'PATCH',
+      body: JSON.stringify({ oldPassword, newPassword }),
+    });
+  }
+
+  /**
+   * Lấy thông tin hồ sơ Citizen (kèm người liên hệ khẩn cấp)
+   */
+  async getCitizenProfile(): Promise<ApiResponse<{ citizen?: { emergencyContact?: EmergencyContact } }>> {
+    return await this.request('/users/me/citizen', {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Cập nhật người liên hệ khẩn cấp
+   */
+  async updateEmergencyContact(contact: EmergencyContact): Promise<ApiResponse> {
+    return await this.request('/users/me/citizen/emergency-contact', {
+      method: 'PATCH',
+      body: JSON.stringify(contact),
+    });
+  }
+
+  /**
+   * Lấy danh sách thông báo
+   */
+  async getNotifications(): Promise<ApiResponse<NotificationItem[]>> {
+    return await this.request<NotificationItem[]>('/notifications', {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Đánh dấu tất cả thông báo đã đọc
+   */
+  async markAllNotificationsAsRead(): Promise<ApiResponse> {
+    return await this.request('/notifications/read-all', {
+      method: 'PATCH',
+    });
+  }
+
+  /**
+   * Đánh dấu 1 thông báo là đã đọc
+   */
+  async markNotificationAsRead(id: string): Promise<ApiResponse> {
+    return await this.request(`/notifications/${id}/read`, {
+      method: 'PATCH',
+    });
+  }
+
+  /**
+   * Xóa thông báo
+   */
+  async deleteNotification(id: string): Promise<ApiResponse> {
+    return await this.request(`/notifications/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Lấy thông tin hồ sơ cứu hộ của chính user đang đăng nhập
+   */
+  async getRescuerProfile(): Promise<ApiResponse<any>> {
+    return await this.request('/rescuer/me', {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Cập nhật trạng thái sẵn sàng tác chiến
+   */
+  async updateRescuerAvailability(availabilityStatus: string): Promise<ApiResponse> {
+    return await this.request('/rescuer/me/availability', {
+      method: 'PATCH',
+      body: JSON.stringify({ availabilityStatus }),
+    });
   }
 
   async saveTokens(accessToken: string, refreshToken?: string) {

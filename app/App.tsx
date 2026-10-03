@@ -30,7 +30,11 @@ function AuthenticatedApp() {
       case 'news':
         return <NewsScreen />;
       case 'profile':
-        return <ProfileScreen />;
+        return (
+          <ProfileScreen
+            onNavigateToTab={(tab) => setActiveTab(tab as TabName)}
+          />
+        );
       default:
         return <HomeScreen onOpenSettings={() => setConfigVisible(true)} />;
     }

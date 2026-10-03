@@ -11,8 +11,9 @@ import {
   ScrollView,
   StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { CustomInput } from '../components/CustomInput';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { GoogleButton } from '../components/GoogleButton';
@@ -30,6 +31,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
   onOpenSettings,
 }) => {
   const { signup, loginWithGoogle, sendOtp, isLoading } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -167,13 +169,14 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
+      {/* Ảnh nền trực thăng cứu hộ & mưa bão */}
       <ImageBackground
         source={require('../../assets/backgroudApp.jpg')}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
         <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-          {/* Top Bar: Chỉ giữ nút Back tinh tế */}
+          {/* Top Bar: Nút Back tròn tinh tế */}
           <View style={styles.topBar}>
             <TouchableOpacity
               style={styles.roundButton}
@@ -190,108 +193,138 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
             style={styles.keyboardView}
           >
             <ScrollView
-              contentContainerStyle={styles.scrollContent}
+              contentContainerStyle={[
+                styles.scrollContent,
+                { paddingBottom: Math.max(20, insets.bottom + 12) },
+              ]}
               bounces={false}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
-              {/* Card Form Đăng ký lơ lửng bo tròn 4 góc */}
-              <View style={styles.floatingCard}>
-                <TouchableOpacity
-                  style={styles.logoWrapper}
-                  onLongPress={onOpenSettings}
-                  activeOpacity={0.9}
-                  delayLongPress={1500}
-                >
-                  <Image
-                    source={require('../../assets/logoSOS.png')}
-                    style={styles.logoImage}
-                    resizeMode="contain"
-                  />
-                </TouchableOpacity>
+              <View style={styles.centerContainer}>
+                {/* Khung đăng ký kính mờ xanh xám (Frosted Glass Card) */}
+                <View style={styles.cardShadow}>
+                  <View style={styles.cardInner}>
+                    {/* Hiệu ứng làm mờ nền mạnh mẽ */}
+                    <BlurView
+                      intensity={Platform.OS === 'ios' ? 85 : 75}
+                      tint="light"
+                      style={StyleSheet.absoluteFill}
+                    />
 
-                <Text style={styles.title}>Đăng ký</Text>
-                <Text style={styles.subtitle}>
-                  Cùng nhau chủ động – An toàn hơn trước thiên tai
-                </Text>
+                    {/* Lớp phủ màu xanh xám rgba(210, 225, 240, 0.65) */}
+                    <View style={styles.cardContent}>
+                      {/* Logo RescueSOS - Bấm giữ 2s mở cấu hình IP */}
+                      <TouchableOpacity
+                        style={styles.logoWrapper}
+                        onLongPress={onOpenSettings}
+                        activeOpacity={0.9}
+                        delayLongPress={1500}
+                      >
+                        <Image
+                          source={require('../../assets/logoSOS.png')}
+                          style={styles.logoImage}
+                          resizeMode="contain"
+                        />
+                      </TouchableOpacity>
 
-                <View style={styles.form}>
-                  <CustomInput
-                    iconName="user"
-                    placeholder="Họ và tên"
-                    value={fullName}
-                    onChangeText={setFullName}
-                    returnKeyType="next"
-                  />
+                      {/* Tiêu đề: Đăng ký */}
+                      <Text style={styles.title}>Đăng ký</Text>
 
-                  <CustomInput
-                    iconName="phone"
-                    placeholder="Số điện thoại"
-                    value={phone}
-                    onChangeText={setPhone}
-                    keyboardType="phone-pad"
-                    returnKeyType="next"
-                  />
+                      {/* Phụ đề: Tối đa hai dòng, chữ xanh navy */}
+                      <Text style={styles.subtitle} numberOfLines={2}>
+                        Cùng nhau chủ động – An toàn hơn trước{'\n'}thiên tai
+                      </Text>
 
-                  <CustomInput
-                    iconName="mail"
-                    placeholder="Địa chỉ Email"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    returnKeyType="next"
-                  />
+                      {/* Form fields: 5 ô nhập */}
+                      <View style={styles.form}>
+                        {/* 1. Họ và tên */}
+                        <CustomInput
+                          iconName="user"
+                          placeholder="Họ và tên"
+                          value={fullName}
+                          onChangeText={setFullName}
+                          returnKeyType="next"
+                        />
 
-                  <CustomInput
-                    iconName="lock"
-                    placeholder="Mật khẩu (tối thiểu 6 ký tự)"
-                    value={password}
-                    onChangeText={setPassword}
-                    isPassword
-                    returnKeyType="next"
-                  />
+                        {/* 2. Số điện thoại */}
+                        <CustomInput
+                          iconName="phone"
+                          placeholder="Số điện thoại"
+                          value={phone}
+                          onChangeText={setPhone}
+                          keyboardType="phone-pad"
+                          returnKeyType="next"
+                        />
 
-                  <CustomInput
-                    iconName="shield"
-                    placeholder="Xác nhận mật khẩu"
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    isPassword
-                    returnKeyType="done"
-                    onSubmitEditing={handleSignup}
-                  />
+                        {/* 3. Địa chỉ Email */}
+                        <CustomInput
+                          iconName="mail"
+                          placeholder="Địa chỉ Email"
+                          value={email}
+                          onChangeText={setEmail}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          returnKeyType="next"
+                        />
 
-                  <PrimaryButton
-                    title="Đăng ký"
-                    onPress={handleSignup}
-                    loading={isLoading || sendingOtp}
-                  />
+                        {/* 4. Mật khẩu (tối thiểu 6 ký tự) */}
+                        <CustomInput
+                          iconName="lock"
+                          placeholder="Mật khẩu (tối thiểu 6 ký tự)"
+                          value={password}
+                          onChangeText={setPassword}
+                          isPassword
+                          returnKeyType="next"
+                        />
 
-                  <View style={styles.dividerRow}>
-                    <View style={styles.dividerLine} />
-                    <Text style={styles.dividerText}>Hoặc</Text>
-                    <View style={styles.dividerLine} />
+                        {/* 5. Xác nhận mật khẩu */}
+                        <CustomInput
+                          iconName="shield"
+                          placeholder="Xác nhận mật khẩu"
+                          value={confirmPassword}
+                          onChangeText={setConfirmPassword}
+                          isPassword
+                          returnKeyType="done"
+                          onSubmitEditing={handleSignup}
+                        />
+
+                        {/* Nút Đăng ký màu xanh với mũi tên */}
+                        <PrimaryButton
+                          title="Đăng ký"
+                          onPress={handleSignup}
+                          loading={isLoading || sendingOtp}
+                        />
+
+                        {/* Divider Hoặc */}
+                        <View style={styles.dividerRow}>
+                          <View style={styles.dividerLine} />
+                          <Text style={styles.dividerText}>Hoặc</Text>
+                          <View style={styles.dividerLine} />
+                        </View>
+
+                        {/* Nút trắng: Đăng ký với Google */}
+                        <GoogleButton
+                          title="Đăng ký với Google"
+                          onPress={handleGoogleSignup}
+                          disabled={isLoading || sendingOtp}
+                        />
+                      </View>
+                    </View>
                   </View>
+                </View>
 
-                  <GoogleButton
-                    title="Đăng ký với Google"
-                    onPress={handleGoogleSignup}
-                    disabled={isLoading || sendingOtp}
-                  />
-
-                  {/* Chuyển sang Đăng nhập */}
-                  <View style={styles.footerRow}>
-                    <TouchableOpacity
-                      onPress={onNavigateToLogin}
-                      activeOpacity={0.7}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      style={styles.loginLinkWrapper}
-                    >
-                      <Text style={styles.loginPrompt}>Đã có tài khoản? </Text>
-                      <Text style={styles.loginLink}>Đăng nhập</Text>
-                    </TouchableOpacity>
-                  </View>
+                {/* Liên kết bên ngoài dưới khung: Đã có tài khoản? Đăng nhập */}
+                <View style={styles.outsideLinkContainer}>
+                  <TouchableOpacity
+                    onPress={onNavigateToLogin}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 16, right: 16 }}
+                    style={styles.outsideLoginRow}
+                  >
+                    <Text style={styles.outsideLoginPrompt}>Đã có tài khoản? </Text>
+                    <Text style={styles.outsideLoginLink}>Đăng nhập</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             </ScrollView>
@@ -335,40 +368,43 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
-    paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingHorizontal: '5%',
+    paddingTop: 6,
+    paddingBottom: 6,
   },
   roundButton: {
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
-    padding: 8,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.25)',
   },
   keyboardView: {
     flex: 1,
-    justifyContent: 'flex-end',
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'flex-end',
-    paddingBottom: 4,
+    alignItems: 'center',
+    paddingHorizontal: '5%',
+    paddingTop: 6,
   },
-  floatingCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.42)',
-    borderRadius: 32,
-    marginHorizontal: 16,
-    marginBottom: Platform.OS === 'ios' ? 24 : 18,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 20,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.70)',
+  centerContainer: {
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  /* Bóng đổ mềm cho khung */
+  cardShadow: {
+    width: '100%',
+    borderRadius: 28,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: '#0B192C',
         shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.20,
+        shadowOpacity: 0.16,
         shadowRadius: 20,
       },
       android: {
@@ -376,29 +412,48 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  /* Viền trắng mảnh và bo góc 28px */
+  cardInner: {
+    width: '100%',
+    borderRadius: 28,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.75)',
+  },
+  /* Lớp phủ kính mờ xanh xám: rgba(210, 225, 240, 0.65) */
+  cardContent: {
+    backgroundColor: 'rgba(210, 225, 240, 0.65)',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 16,
+    alignItems: 'center',
+  },
   logoWrapper: {
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   logoImage: {
-    width: 78,
-    height: 54,
+    width: 74,
+    height: 48,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#000000',
+    fontSize: 23,
+    fontWeight: '800',
+    color: '#0F172A',
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 2,
+    marginBottom: 2,
   },
   subtitle: {
-    fontSize: 13.5,
-    color: '#000000',
+    fontSize: 12.5,
+    color: '#0F172A',
     textAlign: 'center',
     marginTop: 4,
-    marginBottom: 16,
-    lineHeight: 18,
+    marginBottom: 14,
+    lineHeight: 17,
     fontWeight: '700',
+    letterSpacing: -0.2,
+    paddingHorizontal: 8,
   },
   form: {
     width: '100%',
@@ -406,38 +461,63 @@ const styles = StyleSheet.create({
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 14,
+    marginVertical: 10,
   },
   dividerLine: {
     flex: 1,
-    height: 1.5,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    height: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.20)',
   },
   dividerText: {
     paddingHorizontal: 12,
-    fontSize: 13.5,
-    color: '#000000',
-    fontWeight: '800',
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '700',
   },
-  footerRow: {
+  /* Liên kết ngoài dưới khung */
+  outsideLinkContainer: {
+    marginTop: 20,
+    alignItems: 'center',
+    width: '100%',
+  },
+  outsideLoginRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 16,
   },
-  loginLinkWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  loginPrompt: {
-    color: '#000000',
+  outsideLoginPrompt: {
+    color: '#FFFFFF',
     fontSize: 13.5,
-    fontWeight: '600',
+    fontWeight: '500',
+    ...Platform.select({
+      ios: {
+        textShadowColor: 'rgba(0, 0, 0, 0.9)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
+      },
+      android: {
+        textShadowColor: 'rgba(0, 0, 0, 0.9)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
+      },
+    }),
   },
-  loginLink: {
-    color: '#000000',
+  outsideLoginLink: {
+    color: '#FFFFFF',
     fontSize: 13.5,
-    fontWeight: '900',
+    fontWeight: '800',
     textDecorationLine: 'underline',
+    ...Platform.select({
+      ios: {
+        textShadowColor: 'rgba(0, 0, 0, 0.9)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
+      },
+      android: {
+        textShadowColor: 'rgba(0, 0, 0, 0.9)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
+      },
+    }),
   },
 });

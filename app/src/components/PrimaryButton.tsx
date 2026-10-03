@@ -56,22 +56,11 @@ export const PrimaryButton: React.FC<PrimaryButtonProps> = ({
 const styles = StyleSheet.create({
   button: {
     backgroundColor: '#0066FF',
-    height: 52,
-    borderRadius: 14,
+    height: 48,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 6,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#0066FF',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
+    marginTop: 2,
   },
   buttonDisabled: {
     backgroundColor: '#93C5FD',

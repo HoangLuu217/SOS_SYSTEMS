@@ -1,223 +1,119 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  StatusBar,
-  Platform,
-  Alert,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../context/AuthContext';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, BackHandler } from 'react-native';
+import { ProfileOverviewScreen } from './profile/ProfileOverviewScreen';
+import { EditProfileScreen } from './profile/EditProfileScreen';
+import { EmergencyContactScreen } from './profile/EmergencyContactScreen';
+import { ProfessionalProfileScreen } from './profile/ProfessionalProfileScreen';
+import { AccountSecurityScreen } from './profile/AccountSecurityScreen';
+import { NotificationsScreen } from './profile/NotificationsScreen';
+import { backendApi } from '../services/backendApi';
 
-export const ProfileScreen: React.FC = () => {
-  const { user, logout } = useAuth();
+export type ProfileSubScreen =
+  | 'overview'
+  | 'edit_profile'
+  | 'emergency_contact'
+  | 'professional_profile'
+  | 'security'
+  | 'notifications';
 
-  const handleLogout = () => {
-    Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản?', [
-      { text: 'Hủy', style: 'cancel' },
-      { text: 'Đăng xuất', style: 'destructive', onPress: logout },
-    ]);
-  };
+interface ProfileScreenProps {
+  initialScreen?: ProfileSubScreen;
+  onNavigateToTab?: (tab: string) => void;
+}
 
-  const getInitials = (name?: string) => {
-    if (!name) return 'U';
-    const parts = name.trim().split(' ');
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({
+  initialScreen = 'overview',
+  onNavigateToTab,
+}) => {
+  const [currentScreen, setCurrentScreen] = useState<ProfileSubScreen>(initialScreen);
+  const [unreadCount, setUnreadCount] = useState<number>(3);
+
+  // Tự động đồng bộ khi initialScreen từ bên ngoài thay đổi (ví dụ: chuyển tab)
+  useEffect(() => {
+    if (initialScreen) {
+      setCurrentScreen(initialScreen);
     }
-    return name.substring(0, 2).toUpperCase();
+  }, [initialScreen]);
+
+  // Tải số lượng thông báo chưa đọc
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const notifRes = await backendApi.getNotifications();
+        if (notifRes.success && Array.isArray(notifRes.data)) {
+          const unread = notifRes.data.filter((n) => !n.isRead).length;
+          setUnreadCount(unread > 0 ? unread : 3);
+        }
+      } catch {
+        // Fallback giữ nguyên 3 thông báo mẫu
+      }
+    };
+
+    fetchData();
+  }, [currentScreen]);
+
+  // Xử lý nút Back phần cứng của Android
+  useEffect(() => {
+    const onBackPress = () => {
+      if (currentScreen !== 'overview') {
+        setCurrentScreen('overview');
+        return true;
+      }
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => backHandler.remove();
+  }, [currentScreen]);
+
+  // Điều hướng màn hình
+  const handleBackToOverview = () => {
+    setCurrentScreen('overview');
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+    <View style={styles.container}>
+      {currentScreen === 'overview' && (
+        <ProfileOverviewScreen
+          onNavigateToEditProfile={() => setCurrentScreen('edit_profile')}
+          onNavigateToEmergencyContact={() => setCurrentScreen('emergency_contact')}
+          onNavigateToProfessional={() => setCurrentScreen('professional_profile')}
+          onNavigateToSecurity={() => setCurrentScreen('security')}
+          onNavigateToNotifications={() => setCurrentScreen('notifications')}
+          unreadNotificationsCount={unreadCount}
+        />
+      )}
 
-      <View style={styles.header}>
-        <Text style={styles.appBadge}>HỆ THỐNG CỨU HỘ SOS</Text>
-        <Text style={styles.title}>Cá nhân</Text>
-      </View>
+      {currentScreen === 'edit_profile' && (
+        <EditProfileScreen onBack={handleBackToOverview} />
+      )}
 
-      <View style={styles.body}>
-        {/* Avatar */}
-        <View style={styles.avatarCircle}>
-          <Text style={styles.avatarText}>{getInitials(user?.fullName)}</Text>
-        </View>
-        <Text style={styles.userName}>{user?.fullName || 'Chưa cập nhật tên'}</Text>
-        <Text style={styles.userEmail}>{user?.email}</Text>
+      {currentScreen === 'emergency_contact' && (
+        <EmergencyContactScreen onBack={handleBackToOverview} />
+      )}
 
-        {user?.phone ? (
-          <View style={styles.infoRow}>
-            <Ionicons name="call-outline" size={16} color="#64748B" />
-            <Text style={styles.infoText}>{user.phone}</Text>
-          </View>
-        ) : null}
+      {currentScreen === 'professional_profile' && (
+        <ProfessionalProfileScreen onBack={handleBackToOverview} />
+      )}
 
-        <View style={styles.roleBadge}>
-          <Text style={styles.roleText}>{user?.roles?.[0] || 'CITIZEN'}</Text>
-        </View>
+      {currentScreen === 'security' && (
+        <AccountSecurityScreen onBack={handleBackToOverview} />
+      )}
 
-        {/* Menu items */}
-        <View style={styles.menuSection}>
-          <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
-            <Ionicons name="create-outline" size={20} color="#334155" />
-            <Text style={styles.menuText}>Chỉnh sửa thông tin</Text>
-            <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
-            <Ionicons name="shield-checkmark-outline" size={20} color="#334155" />
-            <Text style={styles.menuText}>Bảo mật & Mật khẩu</Text>
-            <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
-            <Ionicons name="notifications-outline" size={20} color="#334155" />
-            <Text style={styles.menuText}>Cài đặt thông báo</Text>
-            <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Logout */}
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={handleLogout}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="log-out-outline" size={18} color="#EF4444" />
-          <Text style={styles.logoutButtonText}>Đăng xuất khỏi hệ thống</Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+      {currentScreen === 'notifications' && (
+        <NotificationsScreen
+          onBack={handleBackToOverview}
+          onNavigateToTab={onNavigateToTab}
+          onNavigateToProfile={handleBackToOverview}
+        />
+      )}
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? 36 : 10,
-    paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  appBadge: {
-    fontSize: 11,
-    color: '#0066FF',
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 2,
-  },
-  body: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 24,
-  },
-  avatarCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: '#0066FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 12,
-  },
-  avatarText: {
-    color: '#FFFFFF',
-    fontSize: 32,
-    fontWeight: '700',
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  userEmail: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 4,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
-  },
-  infoText: {
-    fontSize: 13,
-    color: '#64748B',
-  },
-  roleBadge: {
-    marginTop: 10,
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginBottom: 24,
-  },
-  roleText: {
-    color: '#0066FF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  menuSection: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: { elevation: 2 },
-    }),
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  menuText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#334155',
-    fontWeight: '500',
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.2,
-    borderColor: '#FEE2E2',
-    paddingVertical: 14,
-    borderRadius: 14,
-    marginTop: 8,
-  },
-  logoutButtonText: {
-    color: '#EF4444',
-    fontSize: 14,
-    fontWeight: '600',
+    backgroundColor: '#F6F7F9',
   },
 });
