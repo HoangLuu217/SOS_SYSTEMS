@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,14 @@ import {
   StatusBar,
   Platform,
   Alert,
+  Modal,
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { isSupabaseConfigured } from '../config/supabase';
+import { SOSMapScreen } from './SOSMapScreen';
 
 interface HomeScreenProps {
   onOpenSettings: () => void;
@@ -21,6 +23,7 @@ interface HomeScreenProps {
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenSettings }) => {
   const { user, supabaseUser, authMode, logout, isLoading } = useAuth();
+  const [showMap, setShowMap] = useState(false);
 
   const handleLogout = () => {
     Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản?', [
@@ -108,7 +111,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenSettings }) => {
           </View>
           <TouchableOpacity
             style={styles.sosButton}
-            onPress={() => Alert.alert('Tín hiệu SOS', 'Hệ thống đã sẵn sàng kết nối với trung tâm cứu hộ SOS.')}
+            onPress={() => setShowMap(true)}
             activeOpacity={0.85}
           >
             <Text style={styles.sosButtonText}>GỬI TÍN HIỆU SOS</Text>
@@ -160,7 +163,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenSettings }) => {
           </View>
         </View>
 
-        {/* Logout Button */}
         <TouchableOpacity
           style={styles.logoutButton}
           onPress={handleLogout}
@@ -171,6 +173,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenSettings }) => {
           <Text style={styles.logoutButtonText}>Đăng xuất khỏi hệ thống</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Modal hiển thị Bản đồ Cứu nạn SOS */}
+      <Modal visible={showMap} animationType="slide" onRequestClose={() => setShowMap(false)}>
+        <SOSMapScreen onClose={() => setShowMap(false)} />
+      </Modal>
     </SafeAreaView>
   );
 };
