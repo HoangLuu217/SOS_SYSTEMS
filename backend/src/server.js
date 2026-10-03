@@ -10,8 +10,8 @@ const startServer = async () => {
     await mongoose.connect(MONGODB_URI);
     console.log(' Kết nối MongoDB thành công');
 
-    app.listen(PORT, () => {
-      console.log(` Server đang chạy tại http://localhost:${PORT}`);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(` Server đang chạy tại http://0.0.0.0:${PORT} (tất cả IP mạng LAN)`);
     });
   } catch (error) {
     console.error('❌ Lỗi kết nối CSDL hoặc khởi động Server:', error);

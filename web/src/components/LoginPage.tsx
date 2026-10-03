@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
 import type { FormEvent } from 'react';
 import { 
-  Mail, 
+  User as UserIcon, 
   Lock, 
   Eye, 
   EyeOff, 
   AlertTriangle, 
+  ArrowRight, 
   LogOut, 
-  ArrowRight 
+  ShieldCheck, 
+  Radio 
 } from 'lucide-react';
-
 import { loginApi, logoutApi } from '../services/api';
 import type { User } from '../types/auth';
 import './Login.css';
@@ -18,24 +19,37 @@ export const LoginPage = () => {
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberPassword, setRememberPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
 
-  // Restore session from localStorage if valid
+  // Restore saved session or remembered password on mount
   useEffect(() => {
+    // 1. Check if user already logged in
     const savedUser = localStorage.getItem('sos_auth_user');
     if (savedUser) {
       try {
         const parsed = JSON.parse(savedUser) as User;
         if (hasAuthorizedRole(parsed.roles)) {
           setUser(parsed);
+          return;
         } else {
           localStorage.removeItem('sos_auth_user');
         }
       } catch {
         localStorage.removeItem('sos_auth_user');
       }
+    }
+
+    // 2. Check remembered credentials
+    const isRemembered = localStorage.getItem('sos_remember_password') === 'true';
+    if (isRemembered) {
+      setRememberPassword(true);
+      const savedAcc = localStorage.getItem('sos_saved_account');
+      const savedPass = localStorage.getItem('sos_saved_password');
+      if (savedAcc) setAccount(savedAcc);
+      if (savedPass) setPassword(savedPass);
     }
   }, []);
 
@@ -50,7 +64,7 @@ export const LoginPage = () => {
     setErrorMsg(null);
 
     if (!account.trim() || !password) {
-      setErrorMsg('Vui lòng nhập đầy đủ Email và Mật khẩu.');
+      setErrorMsg('Vui lòng nhập đầy đủ số điện thoại/email và mật khẩu.');
       return;
     }
 
@@ -70,6 +84,17 @@ export const LoginPage = () => {
           );
           setLoading(false);
           return;
+        }
+
+        // Xử lý ghi nhớ mật khẩu
+        if (rememberPassword) {
+          localStorage.setItem('sos_remember_password', 'true');
+          localStorage.setItem('sos_saved_account', account.trim());
+          localStorage.setItem('sos_saved_password', password);
+        } else {
+          localStorage.removeItem('sos_remember_password');
+          localStorage.removeItem('sos_saved_account');
+          localStorage.removeItem('sos_saved_password');
         }
 
         // Đăng nhập hợp lệ
@@ -95,78 +120,71 @@ export const LoginPage = () => {
     localStorage.removeItem('sos_auth_user');
     localStorage.removeItem('sos_access_token');
     setUser(null);
-    setAccount('');
-    setPassword('');
+    if (!rememberPassword) {
+      setAccount('');
+      setPassword('');
+    }
     setErrorMsg(null);
     setLoading(false);
   };
 
-  const fillQuickTest = (emailVal: string, passVal: string) => {
-    setAccount(emailVal);
-    setPassword(passVal);
-    setErrorMsg(null);
-  };
-
   return (
-    <div className="sos-login-page">
-      {/* Background Gradient Overlay */}
-      <div className="sos-login-overlay" />
 
-      {/* Left Form Sidebar */}
-      <div className="sos-login-sidebar">
-        {/* Top Brand Header: logoSOS.png + SOS CONNECT */}
-        <div className="sos-brand-header">
-          <img src="/logoSOS.png" alt="SOS Logo" className="sos-brand-logo-img" />
-          <span className="sos-brand-name">SOS CONNECT</span>
-        </div>
+    <div className="sos-page-wrapper">
+      {/* Background Video (Auto-looping) */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="sos-bg-video"
+        poster="/backgroudWeb.jpg"
+      >
+        <source src="/backgroudWebv2.mp4" type="video/mp4" />
+      </video>
 
+      {/* Ambient Overlay for card contrast */}
+      <div className="sos-video-overlay" />
 
-
-        {/* Central Content */}
+      <div className="sos-glass-card">
         {user ? (
-          /* LOGGED IN VIEW */
-          <div className="sos-dashboard-box">
-            <div className="sos-dash-user-row">
-              <div className="sos-dash-avatar">
-                {user.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}
-              </div>
-              <div>
-                <div className="sos-dash-name">{user.fullName || 'Cán bộ điều phối'}</div>
-                <div style={{ fontSize: '13px', color: '#94a3b8' }}>{user.email}</div>
-                <div style={{ marginTop: '6px' }}>
-                  {user.roles.includes('ADMIN') ? (
-                    <span className="sos-dash-role admin">Quản Trị Viên (ADMIN)</span>
-                  ) : (
-                    <span className="sos-dash-role authority">Cơ Quan Chức Năng (LOCAL_AUTHORITY)</span>
-                  )}
-                </div>
-              </div>
+
+          /* LOGGED IN USER VIEW */
+          <div className="sos-user-card">
+            <div className="sos-user-avatar">
+              {user.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}
+            </div>
+            <h2 className="sos-user-name">{user.fullName || 'Cán bộ điều hành'}</h2>
+            <p className="sos-user-email">{user.email} {user.phone && `• ${user.phone}`}</p>
+
+            <div>
+              {user.roles.includes('ADMIN') ? (
+                <span className="sos-user-role-badge admin">
+                  <ShieldCheck size={14} /> Quản Trị Viên (ADMIN)
+                </span>
+              ) : (
+                <span className="sos-user-role-badge authority">
+                  <Radio size={14} /> Cán Bộ Chính Quyền (LOCAL_AUTHORITY)
+                </span>
+              )}
             </div>
 
-            <div className="sos-dash-info-list">
-              <div>
-                Trạng thái tài khoản: <strong>{user.status || 'ACTIVE'}</strong>
-              </div>
+            <div className="sos-user-info-box">
+              <div>Trạng thái: <strong>{user.status || 'ACTIVE'}</strong></div>
               {user.authority?.position && (
-                <div>
-                  Chức vụ: <strong>{user.authority.position}</strong>
-                </div>
+                <div>Chức vụ: <strong>{user.authority.position}</strong></div>
               )}
               {user.authority?.department && (
-                <div>
-                  Đơn vị: <strong>{user.authority.department}</strong>
-                </div>
+                <div>Đơn vị: <strong>{user.authority.department}</strong></div>
               )}
-              <div>
-                Cổng tác chiến: <strong style={{ color: '#38bdf8' }}>Trung Tâm Điều Phối Cứu Hộ</strong>
-              </div>
+              <div>Cổng điều hành: <strong style={{ color: '#0066f5' }}>Trung Tâm Tác Chiến SOS</strong></div>
             </div>
 
             <button
               type="button"
-              className="sos-btn-primary"
+              className="sos-card-submit"
               style={{ marginBottom: 12 }}
-              onClick={() => alert('Chuyển hướng vào hệ thống tác chiến cứu nạn...')}
+              onClick={() => alert('Đang chuyển hướng vào Trung tâm tác chiến điều hành cứu nạn...')}
             >
               <span>Vào Bảng Điều Phối Tác Chiến</span>
               <ArrowRight size={18} />
@@ -174,7 +192,7 @@ export const LoginPage = () => {
 
             <button
               type="button"
-              className="sos-btn-google"
+              className="sos-btn-logout"
               onClick={handleLogout}
               disabled={loading}
             >
@@ -183,162 +201,108 @@ export const LoginPage = () => {
             </button>
           </div>
         ) : (
-          /* LOGIN FORM (EXACT MATCH TO USER SCREENSHOT) */
-          <div className="sos-form-body">
-            <h1 className="sos-title">Đăng nhập hệ thống</h1>
-            <p className="sos-subtitle">Cổng điều phối cứu hộ dành cho cơ quan chức năng</p>
+          /* LOGIN FORM - EXACT MATCH TO USER SCREENSHOT */
+          <>
+            {/* Header: Logo, Title, Subtitle */}
+            <div className="sos-card-header">
+              <img src="/logoSOS.png" alt="SOS Logo" className="sos-card-logo" />
+              <h1 className="sos-card-title">Đăng nhập</h1>
+              <p className="sos-card-subtitle">
+                Cùng nhau chủ động – An toàn hơn trước thiên tai
+              </p>
+            </div>
 
+            {/* Error Notification */}
             {errorMsg && (
-              <div className="sos-alert error">
+              <div className="sos-card-alert error">
                 <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
                 <div>{errorMsg}</div>
               </div>
             )}
 
-            <form onSubmit={handleSubmit}>
-              {/* Field: Email */}
-              <div className="sos-field">
-                <label className="sos-label" htmlFor="emailInput">
-                  Email
-                </label>
-                <div className="sos-input-box">
-                  <Mail size={18} className="sos-input-icon" />
-                  <input
-                    id="emailInput"
-                    type="text"
-                    className="sos-input"
-                    placeholder="name@organization.gov.vn"
-                    value={account}
-                    onChange={(e) => setAccount(e.target.value)}
-                    autoComplete="username"
-                    required
-                  />
-                </div>
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="sos-card-form">
+              {/* Field 1: Số điện thoại hoặc email */}
+              <div className="sos-input-group">
+                <UserIcon size={20} className="sos-group-icon" />
+                <input
+                  type="text"
+                  className="sos-card-input"
+                  placeholder="Số điện thoại hoặc email"
+                  value={account}
+                  onChange={(e) => setAccount(e.target.value)}
+                  autoComplete="username"
+                  required
+                />
               </div>
 
-              {/* Field: Mật khẩu */}
-              <div className="sos-field">
-                <label className="sos-label" htmlFor="passwordInput">
-                  Mật khẩu
-                </label>
-                <div className="sos-input-box">
-                  <Lock size={18} className="sos-input-icon" />
-                  <input
-                    id="passwordInput"
-                    type={showPassword ? 'text' : 'password'}
-                    className="sos-input"
-                    placeholder="••••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    autoComplete="current-password"
-                    required
-                  />
-                  <button
-                    type="button"
-                    className="sos-toggle-btn"
-                    onClick={() => setShowPassword(!showPassword)}
-                    tabIndex={-1}
-                    aria-label="Toggle password"
-                  >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
+              {/* Field 2: Mật khẩu */}
+              <div className="sos-input-group">
+                <Lock size={20} className="sos-group-icon" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className="sos-card-input"
+                  placeholder="Mật khẩu"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  className="sos-card-toggle-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  tabIndex={-1}
+                  aria-label="Toggle password visibility"
+                >
+                  {showPassword ? <Eye size={20} /> : <EyeOff size={20} />}
+                </button>
               </div>
 
-              {/* Quên mật khẩu? */}
-              <div className="sos-forgot-wrap">
+              {/* Ghi nhớ mật khẩu */}
+              <div className="sos-options-row">
+                <label className="sos-remember-label">
+                  <input
+                    type="checkbox"
+                    checked={rememberPassword}
+                    onChange={(e) => setRememberPassword(e.target.checked)}
+                    className="sos-remember-checkbox"
+                  />
+                  <span>Ghi nhớ mật khẩu</span>
+                </label>
+              </div>
+
+              {/* Button: Đăng nhập -> */}
+              <button
+                type="submit"
+                className="sos-card-submit"
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <div className="sos-btn-spinner" />
+                    <span>Đang đăng nhập...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Đăng nhập</span>
+                    <ArrowRight size={18} />
+                  </>
+                )}
+              </button>
+
+              {/* Link: Quên mật khẩu? */}
+              <div className="sos-forgot-center">
                 <span
-                  className="sos-forgot-link"
-                  onClick={() => alert('Vui lòng liên hệ Quản trị viên hệ thống để khôi phục mật khẩu công vụ.')}
+                  className="sos-forgot-text"
+                  onClick={() => alert('Vui lòng liên hệ Quản trị viên để đặt lại mật khẩu của bạn.')}
                 >
                   Quên mật khẩu?
                 </span>
               </div>
-
-              {/* Nút Đăng nhập */}
-              <button type="submit" className="sos-btn-primary" disabled={loading}>
-                {loading ? (
-                  <>
-                    <div className="sos-spinner" />
-                    <span>Đang xác thực...</span>
-                  </>
-                ) : (
-                  <span>Đăng nhập</span>
-                )}
-              </button>
-
-              {/* Divider: hoặc */}
-              <div className="sos-divider">
-                <div className="sos-divider-line" />
-                <span className="sos-divider-text">hoặc</span>
-                <div className="sos-divider-line" />
-              </div>
-
-              {/* Google Button */}
-              <button
-                type="button"
-                className="sos-btn-google"
-                onClick={() => alert('Tính năng đăng nhập Google dành cho tài khoản công vụ đang được kích hoạt.')}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                  />
-                </svg>
-                <span>Tiếp tục với Google</span>
-              </button>
             </form>
-
-            {/* Quick Demo Test Buttons */}
-            <div className="sos-test-helper">
-              <div className="sos-test-helper-title">
-                <span>Điền nhanh tài khoản kiểm thử:</span>
-              </div>
-              <div className="sos-test-buttons">
-                <button
-                  type="button"
-                  className="sos-test-btn authority"
-                  onClick={() => fillQuickTest('authority@sos.vn', 'Password@123')}
-                >
-                  🛡️ Cơ quan chức năng
-                </button>
-                <button
-                  type="button"
-                  className="sos-test-btn admin"
-                  onClick={() => fillQuickTest('admin@sos.vn', 'Password@123')}
-                >
-                  ⚙️ Quản trị viên
-                </button>
-                <button
-                  type="button"
-                  className="sos-test-btn citizen"
-                  onClick={() => fillQuickTest('nguyenvantest@sos.vn', 'Password@123')}
-                  title="Tài khoản thường - Hệ thống sẽ chặn quyền"
-                >
-                  🚫 Thử chặn vai trò khác
-                </button>
-              </div>
-            </div>
-          </div>
+          </>
         )}
-
-        {/* Bottom Footer Note */}
-        <div className="sos-footer-text">
-          Hệ thống hỗ trợ điều phối cứu hộ khẩn cấp
-        </div>
       </div>
     </div>
   );

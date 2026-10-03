@@ -15,7 +15,8 @@ const citizenSchema = new mongoose.Schema(
         validate: {
           validator: function (v) {
             if (!v) return true;
-            return /^(?:\+84|0)(?:3|5|7|8|9)\d{8}$|^\+?[1-9]\d{8,14}$/.test(v);
+            const clean = v.replace(/\s+/g, '');
+            return /^(?:\+84|0)(?:3|5|7|8|9)\d{8}$|^\+?[1-9]\d{8,14}$/.test(clean);
           },
           message: 'Số điện thoại người liên hệ khẩn cấp không hợp lệ',
         },

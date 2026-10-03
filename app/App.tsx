@@ -30,7 +30,11 @@ function AuthenticatedApp() {
       case 'news':
         return <NewsScreen />;
       case 'profile':
-        return <ProfileScreen />;
+        return (
+          <ProfileScreen
+            onNavigateToTab={(tab) => setActiveTab(tab as TabName)}
+          />
+        );
       default:
         return <HomeScreen onOpenSettings={() => setConfigVisible(true)} />;
     }
@@ -52,7 +56,7 @@ function AuthenticatedApp() {
 }
 
 function MainNavigator() {
-  const { user, isLoading } = useAuth();
+  const { user, isInitializing } = useAuth();
   const [currentScreen, setCurrentScreen] = useState<'login' | 'signup'>('login');
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
   const [configVisible, setConfigVisible] = useState(false);
@@ -68,7 +72,7 @@ function MainNavigator() {
     message: '',
   });
 
-  if (isLoading) {
+  if (isInitializing) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#0066FF" />
@@ -103,7 +107,7 @@ function MainNavigator() {
           setToast({
             visible: true,
             type: 'success',
-            title: 'Đã gửi yêu cầu',
+            title: 'Khôi phục mật khẩu',
             message: msg,
           });
         }}

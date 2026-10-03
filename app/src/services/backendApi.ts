@@ -2,6 +2,22 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ENV } from '../config/env';
 
+export interface EmergencyContact {
+  name: string;
+  phone: string;
+  relation: string;
+}
+
+export interface NotificationItem {
+  _id: string;
+  type: 'ALERT' | 'RESCUE' | 'WEATHER' | 'SYSTEM' | string;
+  title: string;
+  content: string;
+  isRead: boolean;
+  createdAt: string;
+  actionUrl?: string;
+}
+
 export interface UserProfile {
   _id: string;
   fullName: string;
@@ -12,6 +28,12 @@ export interface UserProfile {
   roles: string[];
   status: string;
   isVerified: boolean;
+  dateOfBirth?: string;
+  gender?: 'MALE' | 'FEMALE' | 'OTHER' | string;
+  address?: string;
+  citizen?: {
+    emergencyContact?: EmergencyContact;
+  };
   createdAt?: string;
   updatedAt?: string;
 }
@@ -54,16 +76,19 @@ class BackendApiService {
   private async getCandidateUrls(): Promise<string[]> {
     const list: string[] = [];
     const current = await this.getBaseUrl();
-    list.push(current);
+    if (current) list.push(current);
 
-    if (Platform.OS === 'android') {
-      const emu = 'http://10.0.2.2:5000/api';
-      if (!list.includes(emu)) list.push(emu);
-      const lan = 'http://192.168.1.14:5000/api';
-      if (!list.includes(lan)) list.push(lan);
+    const candidates = [
+      'http://10.12.56.76:5000/api',
+      'http://localhost:5000/api',
+      'http://127.0.0.1:5000/api',
+      'http://10.0.2.2:5000/api',
+      'https://p324hxtt-5000.asse.devtunnels.ms/api',
+    ];
+
+    for (const url of candidates) {
+      if (!list.includes(url)) list.push(url);
     }
-    const local = 'http://localhost:5000/api';
-    if (!list.includes(local)) list.push(local);
 
     return list;
   }
@@ -78,6 +103,7 @@ class BackendApiService {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
+      'Bypass-Tunnel-Reminder': 'true',
       ...(options.headers as Record<string, string>),
     };
 
@@ -149,6 +175,7 @@ class BackendApiService {
     phone: string;
     password: string;
     address?: string;
+    otp?: string;
   }): Promise<ApiResponse<AuthResponseData>> {
     const res = await this.request<AuthResponseData>('/auth/register', {
       method: 'POST',
@@ -210,6 +237,40 @@ class BackendApiService {
   }
 
   /**
+   * Gửi mã OTP xác thực qua Email (sử dụng Resend)
+   */
+  async sendOtp(email: string): Promise<ApiResponse> {
+    return await this.request('/auth/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+    });
+  }
+
+  /**
+   * Xác thực mã OTP và đăng nhập
+   */
+  async verifyOtp(
+    email: string,
+    otp: string,
+    verifyOnly: boolean = false
+  ): Promise<ApiResponse<AuthResponseData>> {
+    const res = await this.request<AuthResponseData>('/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: email.trim().toLowerCase(),
+        otp: otp.trim(),
+        verifyOnly,
+      }),
+    });
+
+    if (!verifyOnly && res.success && res.data?.accessToken) {
+      await this.saveTokens(res.data.accessToken, res.data.refreshToken);
+      await this.saveUser(res.data.user);
+    }
+    return res;
+  }
+
+  /**
    * Quên mật khẩu
    */
   async forgotPassword(email: string): Promise<ApiResponse<{ message: string; resetToken?: string }>> {
@@ -220,12 +281,32 @@ class BackendApiService {
   }
 
   /**
-   * Đặt lại mật khẩu
+   * Xác thực mã OTP khôi phục mật khẩu trước khi nhập mật khẩu mới
    */
-  async resetPassword(token: string, newPassword: string): Promise<ApiResponse> {
+  async verifyResetOtp(email: string, otp: string): Promise<ApiResponse> {
+    return await this.request('/auth/verify-reset-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email: email.trim().toLowerCase(), token: otp.trim() }),
+    });
+  }
+
+  /**
+   * Đặt lại mật khẩu bằng mã OTP và mật khẩu mới
+   */
+  async resetPassword(
+    param1: string | { email?: string; token: string; newPassword: string },
+    param2?: string,
+    param3?: string
+  ): Promise<ApiResponse> {
+    let payload: { email?: string; token: string; newPassword: string };
+    if (typeof param1 === 'object') {
+      payload = param1;
+    } else {
+      payload = { token: param1, newPassword: param2 || '', email: param3 };
+    }
     return await this.request('/auth/reset-password', {
       method: 'POST',
-      body: JSON.stringify({ token, newPassword }),
+      body: JSON.stringify(payload),
     });
   }
 
@@ -244,6 +325,128 @@ class BackendApiService {
     } finally {
       await this.clearStorage();
     }
+  }
+
+  /**
+   * Cập nhật thông tin cá nhân
+   */
+  async updateProfile(data: {
+    fullName?: string;
+    dateOfBirth?: string;
+    gender?: string;
+    address?: string;
+    phone?: string;
+  }): Promise<ApiResponse<UserProfile>> {
+    const res = await this.request<UserProfile>('/users/me', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+    if (res.success && res.data) {
+      await this.saveUser(res.data);
+    }
+    return res;
+  }
+
+  /**
+   * Cập nhật ảnh đại diện (Avatar)
+   */
+  async updateAvatar(avatarUrl: string): Promise<ApiResponse<{ userId: string; avatarUrl: string }>> {
+    const res = await this.request<{ userId: string; avatarUrl: string }>('/users/me/avatar', {
+      method: 'PATCH',
+      body: JSON.stringify({ avatarUrl }),
+    });
+    if (res.success && res.data?.avatarUrl) {
+      const stored = await this.getStoredUser();
+      if (stored) {
+        stored.avatarUrl = res.data.avatarUrl;
+        await this.saveUser(stored);
+      }
+    }
+    return res;
+  }
+
+  /**
+   * Đổi mật khẩu
+   */
+  async changePassword(oldPassword: string, newPassword: string): Promise<ApiResponse> {
+    return await this.request('/users/me/password', {
+      method: 'PATCH',
+      body: JSON.stringify({ oldPassword, newPassword }),
+    });
+  }
+
+  /**
+   * Lấy thông tin hồ sơ Citizen (kèm người liên hệ khẩn cấp)
+   */
+  async getCitizenProfile(): Promise<ApiResponse<{ citizen?: { emergencyContact?: EmergencyContact } }>> {
+    return await this.request('/users/me/citizen', {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Cập nhật người liên hệ khẩn cấp
+   */
+  async updateEmergencyContact(contact: EmergencyContact): Promise<ApiResponse> {
+    return await this.request('/users/me/citizen/emergency-contact', {
+      method: 'PATCH',
+      body: JSON.stringify(contact),
+    });
+  }
+
+  /**
+   * Lấy danh sách thông báo
+   */
+  async getNotifications(): Promise<ApiResponse<NotificationItem[]>> {
+    return await this.request<NotificationItem[]>('/notifications', {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Đánh dấu tất cả thông báo đã đọc
+   */
+  async markAllNotificationsAsRead(): Promise<ApiResponse> {
+    return await this.request('/notifications/read-all', {
+      method: 'PATCH',
+    });
+  }
+
+  /**
+   * Đánh dấu 1 thông báo là đã đọc
+   */
+  async markNotificationAsRead(id: string): Promise<ApiResponse> {
+    return await this.request(`/notifications/${id}/read`, {
+      method: 'PATCH',
+    });
+  }
+
+  /**
+   * Xóa thông báo
+   */
+  async deleteNotification(id: string): Promise<ApiResponse> {
+    return await this.request(`/notifications/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * Lấy thông tin hồ sơ cứu hộ của chính user đang đăng nhập
+   */
+  async getRescuerProfile(): Promise<ApiResponse<any>> {
+    return await this.request('/rescuer/me', {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Cập nhật trạng thái sẵn sàng tác chiến
+   */
+  async updateRescuerAvailability(availabilityStatus: string): Promise<ApiResponse> {
+    return await this.request('/rescuer/me/availability', {
+      method: 'PATCH',
+      body: JSON.stringify({ availabilityStatus }),
+    });
   }
 
   async saveTokens(accessToken: string, refreshToken?: string) {

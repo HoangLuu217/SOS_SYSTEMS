@@ -1,7 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { backendApi, UserProfile } from '../services/backendApi';
-import { supabase, signInWithGoogleOAuth, isSupabaseConfigured } from '../config/supabase';
+import {
+  supabase,
+  signInWithGoogleOAuth,
+  isSupabaseConfigured,
+  sendOtpEmail,
+  verifyOtpEmail,
+} from '../config/supabase';
 import { ENV, syncConfigFromBackend } from '../config/env';
 
 export type AuthMode = 'backend' | 'supabase' | 'hybrid';
@@ -9,6 +15,7 @@ export type AuthMode = 'backend' | 'supabase' | 'hybrid';
 export interface AuthContextType {
   user: UserProfile | null;
   supabaseUser: any | null;
+  isInitializing: boolean;
   isLoading: boolean;
   authMode: AuthMode;
   setAuthMode: (mode: AuthMode) => void;
@@ -18,9 +25,22 @@ export interface AuthContextType {
     email: string;
     phone: string;
     password: string;
+    otp?: string;
   }) => Promise<{ success: boolean; message: string }>;
   loginWithGoogle: () => Promise<{ success: boolean; message: string }>;
+  sendOtp: (email: string) => Promise<{ success: boolean; message: string }>;
+  verifyOtp: (email: string, token: string, verifyOnly?: boolean) => Promise<{ success: boolean; message: string }>;
   forgotPassword: (email: string) => Promise<{ success: boolean; message: string; resetToken?: string }>;
+  verifyResetOtp: (email: string, otp: string) => Promise<{ success: boolean; message: string }>;
+  resetPassword: (email: string, otp: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
+  updateUserProfile: (data: {
+    fullName?: string;
+    dateOfBirth?: string;
+    gender?: string;
+    address?: string;
+    phone?: string;
+  }) => Promise<{ success: boolean; message: string }>;
+  updateUserAvatar: (avatarUrl: string) => Promise<{ success: boolean; message: string }>;
   logout: () => Promise<void>;
   checkSession: () => Promise<void>;
 }
@@ -30,7 +50,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [supabaseUser, setSupabaseUser] = useState<any | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isInitializing, setIsInitializing] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [authMode, setAuthModeState] = useState<AuthMode>('hybrid');
 
   const setAuthMode = async (mode: AuthMode) => {
@@ -81,6 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       console.warn('Lỗi khi khôi phục phiên đăng nhập:', err);
     } finally {
+      setIsInitializing(false);
       setIsLoading(false);
     }
   };
@@ -161,6 +183,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string;
     phone: string;
     password: string;
+    otp?: string;
   }) => {
     setIsLoading(true);
     try {
@@ -290,7 +313,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
    * Quên mật khẩu
    */
   const forgotPassword = async (email: string) => {
-    setIsLoading(true);
     try {
       if (!email.trim() || !email.includes('@')) {
         return { success: false, message: 'Vui lòng nhập địa chỉ email hợp lệ.' };
@@ -308,13 +330,240 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return {
         success: res.success,
-        message: res.message || 'Hướng dẫn đặt lại mật khẩu đã được gửi đến email của bạn.',
+        message: res.message || 'Mã OTP đặt lại mật khẩu đã được gửi đến email của bạn.',
         resetToken: res.data?.resetToken,
       };
     } catch (err: any) {
       return { success: false, message: err.message || 'Không thể gửi yêu cầu đặt lại mật khẩu.' };
+    }
+  };
+
+  /**
+   * Xác thực mã OTP khôi phục mật khẩu trước khi nhập mật khẩu mới
+   */
+  const verifyResetOtp = async (email: string, otp: string) => {
+    try {
+      if (!otp.trim() || otp.trim().length !== 6) {
+        return { success: false, message: 'Vui lòng nhập đủ 6 chữ số mã OTP.' };
+      }
+
+      const res = await backendApi.verifyResetOtp(email.trim().toLowerCase(), otp.trim());
+      return {
+        success: res.success,
+        message: res.message || 'Mã OTP xác thực thành công.',
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Lỗi khi xác thực mã OTP.' };
+    }
+  };
+
+  /**
+   * Đặt lại mật khẩu mới bằng mã OTP
+   */
+  const resetPassword = async (email: string, otp: string, newPassword: string) => {
+    try {
+      if (!otp.trim()) {
+        return { success: false, message: 'Vui lòng nhập mã OTP xác thực.' };
+      }
+      if (!newPassword || newPassword.length < 6) {
+        return { success: false, message: 'Mật khẩu mới phải có ít nhất 6 ký tự.' };
+      }
+
+      const res = await backendApi.resetPassword({
+        email: email.trim().toLowerCase(),
+        token: otp.trim(),
+        newPassword,
+      });
+
+      return {
+        success: res.success,
+        message: res.message || 'Đặt lại mật khẩu thành công! Vui lòng đăng nhập lại.',
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Lỗi khi đặt lại mật khẩu.' };
+    }
+  };
+
+  /**
+   * Gửi mã OTP xác thực qua Email
+   * Ưu tiên gửi qua Backend SOS (kết nối Resend SMTP trực tiếp), dự phòng Supabase
+   */
+  const sendOtp = async (email: string) => {
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        return { success: false, message: 'Vui lòng nhập địa chỉ email hợp lệ.' };
+      }
+
+      // 1. Thử gửi qua Backend SOS trước (Resend SMTP trực tiếp)
+      try {
+        const backendRes = await backendApi.sendOtp(cleanEmail);
+        if (backendRes.success) {
+          return {
+            success: true,
+            message: `Mã OTP đã được gửi đến ${cleanEmail}. Vui lòng kiểm tra hộp thư!`,
+          };
+        } else if (backendRes.message && !backendRes.message.includes('Không thể kết nối')) {
+          return {
+            success: false,
+            message: backendRes.message,
+          };
+        }
+      } catch (backendErr) {
+        console.warn('[Backend sendOtp Warning, falling back to Supabase]:', backendErr);
+      }
+
+      // 2. Dự phòng qua Supabase nếu backend chưa phản hồi
+      await sendOtpEmail(cleanEmail);
+      return {
+        success: true,
+        message: `Mã OTP đã được gửi đến ${cleanEmail}. Vui lòng kiểm tra hộp thư!`,
+      };
+    } catch (err: any) {
+      console.warn('[sendOtp Error]:', err);
+      let errMsg = err.message || 'Không thể gửi mã OTP. Vui lòng thử lại sau.';
+      if (errMsg.includes('rate limit') || errMsg.includes('over_email_send_rate_limit')) {
+        errMsg = 'Hệ thống đang bận. Vui lòng đợi 1 phút trước khi yêu cầu lại.';
+      }
+      return { success: false, message: errMsg };
+    }
+  };
+
+  /**
+   * Xác thực mã OTP 6 số và đăng nhập/lưu vào MongoDB backend
+   */
+  const verifyOtp = async (email: string, token: string, verifyOnly: boolean = false) => {
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanToken = token.trim();
+
+      if (!cleanToken || cleanToken.length < 6) {
+        return { success: false, message: 'Vui lòng nhập đủ 6 chữ số mã OTP.' };
+      }
+
+      // 1. Thử xác thực trực tiếp với Backend SOS (MongoDB)
+      try {
+        const backendRes = await backendApi.verifyOtp(cleanEmail, cleanToken, verifyOnly);
+        if (backendRes.success) {
+          if (!verifyOnly && backendRes.data?.user) {
+            setUser(backendRes.data.user);
+          }
+          return { success: true, message: backendRes.message || 'Xác thực OTP thành công!' };
+        } else {
+          return { success: false, message: backendRes.message || 'Mã OTP không chính xác.' };
+        }
+      } catch (backendErr: any) {
+        console.warn('[Backend verifyOtp fallback to Supabase]:', backendErr);
+      }
+
+      // 2. Xác thực với Supabase nếu mã do Supabase phát hành
+      const res = await verifyOtpEmail(cleanEmail, cleanToken);
+
+      if (res && res.user) {
+        setSupabaseUser(res.user);
+
+        const fullName =
+          res.user.user_metadata?.full_name ||
+          res.user.user_metadata?.name ||
+          cleanEmail.split('@')[0];
+        const accessToken = res.session?.access_token;
+        const googleId = 'otp_' + res.user.id;
+
+        // Đồng bộ lưu thông tin người dùng vào backend SOS (MongoDB)
+        try {
+          const syncRes = await backendApi.loginWithGoogle({
+            idToken: accessToken,
+            credential: accessToken,
+            googleId,
+            email: res.user.email || cleanEmail,
+            fullName,
+          });
+
+          if (syncRes.success && syncRes.data?.user) {
+            setUser(syncRes.data.user);
+            return { success: true, message: 'Đăng nhập bằng mã OTP thành công!' };
+          }
+        } catch (syncErr) {
+          console.warn('[Backend OTP Sync Warning]:', syncErr);
+        }
+
+        const userObj: UserProfile = {
+          _id: res.user.id,
+          fullName,
+          email: res.user.email || cleanEmail,
+          roles: ['CITIZEN'],
+          status: 'ACTIVE',
+          isVerified: true,
+        };
+        setUser(userObj);
+        await backendApi.saveUser(userObj);
+        return { success: true, message: 'Đăng nhập OTP thành công!' };
+      }
+
+      return {
+        success: false,
+        message: 'Mã OTP không chính xác hoặc đã hết hạn. Vui lòng thử lại.',
+      };
+    } catch (err: any) {
+      console.warn('[verifyOtp Error]:', err);
+      let errMsg = err.message || 'Xác thực OTP thất bại. Vui lòng kiểm tra lại mã.';
+      if (errMsg.includes('Token has expired') || errMsg.includes('otp_expired')) {
+        errMsg = 'Mã OTP đã hết hạn. Vui lòng yêu cầu mã mới.';
+      } else if (errMsg.includes('invalid') || errMsg.includes('Token is invalid')) {
+        errMsg = 'Mã OTP không chính xác. Vui lòng kiểm tra lại 6 chữ số.';
+      }
+      return { success: false, message: errMsg };
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const updateUserProfile = async (data: {
+    fullName?: string;
+    dateOfBirth?: string;
+    gender?: string;
+    address?: string;
+    phone?: string;
+  }) => {
+    try {
+      const res = await backendApi.updateProfile(data);
+      if (res.success && res.data) {
+        setUser(res.data);
+        return { success: true, message: 'Cập nhật hồ sơ thành công' };
+      }
+      return { success: false, message: res.message || 'Cập nhật thất bại.' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Lỗi khi cập nhật hồ sơ.' };
+    }
+  };
+
+  const updateUserAvatar = async (avatarUrl: string) => {
+    try {
+      const res = await backendApi.updateAvatar(avatarUrl);
+      const finalAvatar = res.data?.avatarUrl || avatarUrl;
+
+      if (user) {
+        const updatedUser = { ...user, avatarUrl: finalAvatar };
+        setUser(updatedUser);
+        await AsyncStorage.setItem(ENV.STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
+      }
+
+      if (res.success) {
+        return { success: true, message: 'Cập nhật ảnh đại diện thành công' };
+      } else {
+        return {
+          success: true,
+          message: 'Đã lưu ảnh đại diện trên thiết bị của bạn.',
+        };
+      }
+    } catch (err: any) {
+      if (user) {
+        const updatedUser = { ...user, avatarUrl };
+        setUser(updatedUser);
+        await AsyncStorage.setItem(ENV.STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
+        return { success: true, message: 'Đã lưu ảnh đại diện trên thiết bị.' };
+      }
+      return { success: false, message: err.message || 'Lỗi khi cập nhật ảnh đại diện.' };
     }
   };
 
@@ -324,12 +573,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     setIsLoading(true);
     try {
-      await backendApi.logout();
-      if (isSupabaseConfigured()) {
-        await supabase.auth.signOut();
-      }
+      // 1. Luôn cập nhật trạng thái user về null ngay lập tức để chuyển về LoginScreen
       setUser(null);
       setSupabaseUser(null);
+
+      // 2. Xóa sạch token và dữ liệu trong AsyncStorage
+      await backendApi.clearStorage();
+      await AsyncStorage.multiRemove(['@sos_emergency_contact']);
+
+      // 3. Gửi tín hiệu hủy phiên tới backend và Supabase (không chặn UI)
+      backendApi.logout().catch(() => {});
+      if (isSupabaseConfigured()) {
+        supabase.auth.signOut().catch(() => {});
+      }
     } catch (err) {
       console.warn('Lỗi đăng xuất:', err);
     } finally {
@@ -342,13 +598,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         supabaseUser,
+        isInitializing,
         isLoading,
         authMode,
         setAuthMode,
         login,
         signup,
         loginWithGoogle,
+        sendOtp,
+        verifyOtp,
         forgotPassword,
+        verifyResetOtp,
+        resetPassword,
+        updateUserProfile,
+        updateUserAvatar,
         logout,
         checkSession,
       }}
