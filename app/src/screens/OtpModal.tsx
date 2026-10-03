@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { LogoSOS } from '../components/LogoSOS';
 
 interface OtpModalProps {
   visible: boolean;
@@ -151,8 +152,7 @@ export const OtpModal: React.FC<OtpModalProps> = ({
                 {/* Header Row: Logo SOS & Close Button */}
                 <View style={styles.headerRow}>
                   <View style={styles.logoBadge}>
-                    <Image
-                      source={require('../../assets/logoSOS.png')}
+                    <LogoSOS
                       style={styles.logoImage}
                       resizeMode="contain"
                     />

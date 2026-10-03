@@ -19,6 +19,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { PROFILE_THEME } from './theme';
 import { useAuth } from '../../context/AuthContext';
+import { LogoSOS } from '../../components/LogoSOS';
 
 export type RescuerAvailability =
   | 'OFFLINE'      // Ngoại tuyến
@@ -31,6 +32,7 @@ export interface RescuerProfileOverviewScreenProps {
   onNavigateToEditProfile: () => void;
   onNavigateToProfessional: () => void;
   onNavigateToSecurity: () => void;
+  onNavigateToNotificationSettings: () => void;
   onNavigateToNotifications: () => void;
   unreadNotificationsCount?: number;
 }
@@ -39,6 +41,7 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
   onNavigateToEditProfile,
   onNavigateToProfessional,
   onNavigateToSecurity,
+  onNavigateToNotificationSettings,
   onNavigateToNotifications,
   unreadNotificationsCount = 3,
 }) => {
@@ -221,9 +224,10 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
       {/* 1. Header: RescueSOS Branding + Notification Bell */}
       <View style={styles.header}>
         <View style={styles.brandRow}>
-          <View style={styles.logoBadge}>
-            <MaterialCommunityIcons name="lifebuoy" size={20} color="#FFFFFF" />
-          </View>
+          <LogoSOS
+            style={styles.brandLogo}
+            resizeMode="contain"
+          />
           <View>
             <Text style={styles.brandTitle}>RescueSOS</Text>
             <Text style={styles.brandSubtitle}>Hệ thống Điều phối Cứu hộ</Text>
@@ -437,6 +441,24 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
             </View>
             <Feather name="chevron-right" size={18} color="#94A3B8" />
           </TouchableOpacity>
+
+          <View style={styles.menuDivider} />
+
+          {/* Item 4: Cài đặt thông báo */}
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={onNavigateToNotificationSettings}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconBox, { backgroundColor: '#FFFBEB' }]}>
+              <Feather name="bell" size={18} color="#D97706" />
+            </View>
+            <View style={styles.menuTextBox}>
+              <Text style={styles.menuTitle}>Cài đặt thông báo</Text>
+              <Text style={styles.menuDesc}>Cảnh báo SOS, vị trí an toàn, tin tức</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color="#94A3B8" />
+          </TouchableOpacity>
         </View>
 
         {/* 5. Logout Button */}
@@ -445,7 +467,7 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
           onPress={() => setLogoutDialogVisible(true)}
           activeOpacity={0.8}
         >
-          <Feather name="log-out" size={16} color="#DC2626" />
+          <Feather name="log-out" size={16} color="#0066FF" />
           <Text style={styles.logoutButtonText}>Đăng xuất tài khoản</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -637,7 +659,7 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
         <View style={styles.modalOverlay}>
           <View style={styles.confirmDialogCard}>
             <View style={styles.alertIconWrap}>
-              <Feather name="log-out" size={24} color="#DC2626" />
+              <Feather name="log-out" size={24} color="#0066FF" />
             </View>
             <Text style={styles.confirmDialogTitle}>Đăng xuất khỏi tài khoản?</Text>
             <Text style={styles.confirmDialogSubtitle}>
@@ -691,13 +713,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  logoBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#2563EB',
-    justifyContent: 'center',
-    alignItems: 'center',
+  brandLogo: {
+    width: 38,
+    height: 38,
   },
   brandTitle: {
     fontSize: 16,
@@ -741,7 +759,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     right: 4,
-    backgroundColor: '#DC2626',
+    backgroundColor: '#0066FF',
     borderRadius: 8,
     minWidth: 16,
     height: 16,
@@ -1029,9 +1047,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#EFF6FF',
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: '#BFDBFE',
     borderRadius: PROFILE_THEME.radius.button,
     paddingVertical: 14,
     minHeight: 48,
@@ -1039,7 +1057,7 @@ const styles = StyleSheet.create({
   logoutButtonText: {
     fontSize: 14.5,
     fontWeight: '700',
-    color: '#DC2626',
+    color: '#0066FF',
   },
   modalOverlay: {
     flex: 1,
@@ -1238,7 +1256,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: '#EFF6FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
@@ -1261,7 +1279,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: '#DC2626',
+    backgroundColor: '#0066FF',
     alignItems: 'center',
   },
   logoutConfirmText: {

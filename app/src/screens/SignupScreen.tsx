@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ImageBackground,
   Image,
   TouchableOpacity,
   KeyboardAvoidingView,
@@ -21,6 +20,7 @@ import { AlertModal } from '../components/AlertModal';
 import { OtpModal } from './OtpModal';
 import { useAuth } from '../context/AuthContext';
 import { sendPhoneOtpFirebase, verifyPhoneOtpFirebase } from '../services/phoneAuthService';
+import { LogoSOS } from '../components/LogoSOS';
 
 interface SignupScreenProps {
   onNavigateToLogin: () => void;
@@ -31,7 +31,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
   onNavigateToLogin,
   onOpenSettings,
 }) => {
-  const { signup, loginWithGoogle, sendOtp, isLoading } = useAuth();
+  const { signup, loginWithGoogle, sendOtp, isLoading, user } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [fullName, setFullName] = useState('');
@@ -39,6 +39,14 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Tự động làm sạch mật khẩu khi đăng xuất
+  useEffect(() => {
+    if (!user) {
+      setPassword('');
+      setConfirmPassword('');
+    }
+  }, [user]);
   const [otpModalVisible, setOtpModalVisible] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
   const [verifyMethod, setVerifyMethod] = useState<'phone' | 'email'>('phone');
@@ -267,12 +275,8 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Ảnh nền trực thăng cứu hộ & mưa bão */}
-      <ImageBackground
-        source={require('../../assets/backgroudApp.jpg')}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
+      {/* Vùng hiển thị form đăng ký với nền trong suốt (nền ảnh duy trì tại cấp cha) */}
+      <View style={styles.backgroundImage}>
         <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
           {/* Top Bar: Nút Back tròn tinh tế */}
           <View style={styles.topBar}>
@@ -319,8 +323,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
                         activeOpacity={0.9}
                         delayLongPress={1500}
                       >
-                        <Image
-                          source={require('../../assets/logoSOS.png')}
+                        <LogoSOS
                           style={styles.logoImage}
                           resizeMode="contain"
                         />
@@ -482,7 +485,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
             </ScrollView>
           </KeyboardAvoidingView>
         </SafeAreaView>
-      </ImageBackground>
+      </View>
 
       {/* Modal Xác thực OTP Đăng ký (Hỗ trợ cả SĐT và Email) */}
       <OtpModal
@@ -511,12 +514,13 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: 'transparent',
   },
   backgroundImage: {
     flex: 1,
     width: '100%',
     height: '100%',
+    backgroundColor: 'transparent',
   },
   safeArea: {
     flex: 1,
