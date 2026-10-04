@@ -7,11 +7,11 @@ export const PROFILE_THEME = {
     textMuted: '#64748B',
     textDim: '#94A3B8',
     
-    // Coral red primary
-    primary: '#EF4444',
-    primaryLight: '#FEF2F2',
-    primaryBorder: '#FEE2E2',
-    primaryDark: '#DC2626',
+    // Brand Blue Primary
+    primary: '#0066FF',
+    primaryLight: '#EFF6FF',
+    primaryBorder: '#BFDBFE',
+    primaryDark: '#0052CC',
 
     // Success & Verification
     success: '#10B981',
@@ -44,10 +44,10 @@ export const PROFILE_THEME = {
     // Borders & Backgrounds
     border: '#E2E8F0',
     borderLight: '#F1F5F9',
-    borderFocus: '#EF4444',
+    borderFocus: '#0066FF',
     inputBg: '#FFFFFF',
     inputBorder: '#CBD5E1',
-    inputBorderActive: '#EF4444',
+    inputBorderActive: '#0066FF',
     readOnlyBg: '#F8FAFC',
     readOnlyBorder: '#E2E8F0',
     overlay: 'rgba(15, 23, 42, 0.55)',

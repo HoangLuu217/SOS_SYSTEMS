@@ -24,23 +24,17 @@ interface AccountSecurityScreenProps {
   onOpenForgotPassword?: () => void;
 }
 
-export type SecurityAccountMode = 'password' | 'google';
-
 export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
   onBack,
   onOpenForgotPassword,
 }) => {
   const { user, supabaseUser, updateUserProfile } = useAuth();
 
-  // Xác định tài khoản Google mặc định
-  const isDefaultGoogle = Boolean(
-    (user?.googleId && !user?.phone) ||
-    (supabaseUser?.app_metadata?.provider === 'google' && !user?.phone)
-  );
-
-  // Cho phép chuyển đổi linh hoạt giữa 2 trạng thái màn hình
-  const [accountMode, setAccountMode] = useState<SecurityAccountMode>(
-    isDefaultGoogle ? 'google' : 'password'
+  // Xác định người dùng đăng nhập qua Google OAuth hay tài khoản mật khẩu (SĐT / Email)
+  const isGoogleUser = Boolean(
+    user?.googleId ||
+    supabaseUser?.app_metadata?.provider === 'google' ||
+    supabaseUser?.identities?.some((id: any) => id.provider === 'google')
   );
 
   // States cho tính năng xác thực Số điện thoại (Firebase)
@@ -277,78 +271,19 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Trình chọn trạng thái mẫu: Có mật khẩu vs Tài khoản Google */}
-          <View style={styles.stateSelectorCard}>
-            <View style={styles.stateSelectorHeader}>
-              <Feather name="sliders" size={14} color={PROFILE_THEME.colors.primary} />
-              <Text style={styles.stateSelectorTitle}>Kiểu tài khoản đăng nhập:</Text>
-            </View>
-            <View style={styles.statePillsRow}>
-              <TouchableOpacity
-                style={[
-                  styles.statePill,
-                  accountMode === 'password' && styles.statePillActive,
-                ]}
-                onPress={() => {
-                  setAccountMode('password');
-                  setErrors({});
-                  setSuccessMessage(null);
-                }}
-                activeOpacity={0.7}
-              >
-                <Feather
-                  name="lock"
-                  size={13}
-                  color={accountMode === 'password' ? '#FFFFFF' : PROFILE_THEME.colors.textSecondary}
-                />
-                <Text
-                  style={[
-                    styles.statePillText,
-                    accountMode === 'password' && styles.statePillTextActive,
-                  ]}
-                >
-                  Có mật khẩu
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.statePill,
-                  accountMode === 'google' && styles.statePillActive,
-                ]}
-                onPress={() => {
-                  setAccountMode('google');
-                  setErrors({});
-                  setSuccessMessage(null);
-                }}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name="logo-google"
-                  size={13}
-                  color={accountMode === 'google' ? '#FFFFFF' : '#4285F4'}
-                />
-                <Text
-                  style={[
-                    styles.statePillText,
-                    accountMode === 'google' && styles.statePillTextActive,
-                  ]}
-                >
-                  Tài khoản Google
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
           {/* Security Banner with Shield Icon */}
           <View style={styles.securityBanner}>
             <View style={styles.securityBannerIconContainer}>
               <Feather name="shield" size={22} color={PROFILE_THEME.colors.primary} />
             </View>
             <View style={styles.securityBannerTextContainer}>
-              <Text style={styles.securityBannerTitle}>Bảo mật hệ thống cứu nạn</Text>
+              <Text style={styles.securityBannerTitle}>
+                {isGoogleUser ? 'Bảo mật tài khoản Google' : 'Bảo mật hệ thống cứu nạn'}
+              </Text>
               <Text style={styles.securityBannerDesc}>
-                Bảo vệ tài khoản cứu hộ của bạn bằng thông tin đăng nhập an toàn, ngăn chặn truy cập trái phép.
+                {isGoogleUser
+                  ? 'Tài khoản của bạn được bảo vệ bởi cơ chế đăng nhập OAuth2 an toàn của Google.'
+                  : 'Bảo vệ tài khoản cứu hộ của bạn bằng thông tin đăng nhập an toàn, ngăn chặn truy cập trái phép.'}
               </Text>
             </View>
           </View>
@@ -378,59 +313,291 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
           )}
 
           {/* ========================================================
-              TRẠNG THÁI 1: TÀI KHOẢN GOOGLE (Không có mật khẩu)
+              TRƯỜNG HỢP 1: TÀI KHOẢN GOOGLE
+              - Không có phần đổi mật khẩu
+              - Có card thông tin Google & Xác thực số điện thoại
              ======================================================== */}
-          {accountMode === 'google' ? (
-            <View style={styles.card}>
-              <View style={styles.googleAccountHeader}>
-                <View style={styles.googleIconBox}>
-                  <Ionicons name="logo-google" size={26} color="#4285F4" />
+          {isGoogleUser ? (
+            <>
+              {/* Card 1: Thông tin tài khoản Google (Không có phần đổi mật khẩu) */}
+              <View style={styles.card}>
+                <View style={styles.googleAccountHeader}>
+                  <View style={styles.googleIconBox}>
+                    <Ionicons name="logo-google" size={26} color="#4285F4" />
+                  </View>
+                  <View style={styles.googleHeaderTextWrap}>
+                    <Text style={styles.googleHeaderTitle}>Tài khoản liên kết Google</Text>
+                    <Text style={styles.googleEmailText}>
+                      {user?.email || supabaseUser?.email || ''}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.googleHeaderTextWrap}>
-                  <Text style={styles.googleHeaderTitle}>Tài khoản liên kết Google</Text>
-                  <Text style={styles.googleEmailText}>
-                    {user?.email || 'nguyenminhan.rescuer@gmail.com'}
+
+                <View style={styles.googleDivider} />
+
+                {/* Lời giải thích bắt buộc theo yêu cầu */}
+                <View style={styles.googleExplanationBox}>
+                  <View style={styles.googleNoticeIconWrap}>
+                    <Feather name="info" size={18} color="#0284C7" />
+                  </View>
+                  <Text style={styles.googleExplanationText}>
+                    Bạn đang đăng nhập bằng Google. Quản lý mật khẩu trong tài khoản Google của bạn.
                   </Text>
+                </View>
+
+                {/* Thông tin phụ trợ bảo mật của Google */}
+                <View style={styles.googleFeaturesList}>
+                  <View style={styles.googleFeatureRow}>
+                    <Feather name="check-circle" size={16} color={PROFILE_THEME.colors.success} />
+                    <Text style={styles.googleFeatureText}>
+                      Đăng nhập an toàn một chạm qua OAuth2
+                    </Text>
+                  </View>
+                  <View style={styles.googleFeatureRow}>
+                    <Feather name="shield" size={16} color={PROFILE_THEME.colors.success} />
+                    <Text style={styles.googleFeatureText}>
+                      Bảo vệ bởi hệ thống chống xâm nhập Google Guard
+                    </Text>
+                  </View>
+                  <View style={styles.googleFeatureRow}>
+                    <Feather name="lock" size={16} color="#64748B" />
+                    <Text style={styles.googleFeatureTextMuted}>
+                      Không lưu trữ mật khẩu trực tiếp trên hệ thống RescueSOS
+                    </Text>
+                  </View>
                 </View>
               </View>
 
-              <View style={styles.googleDivider} />
+              {/* Card 2: Xác thực số điện thoại (Bổ sung cho tài khoản Google) */}
+              <View style={[styles.card, { marginTop: 16 }]}>
+                <View style={styles.sectionHeaderRow}>
+                  <View style={[styles.sectionIconWrap, { backgroundColor: '#F0F9FF' }]}>
+                    <Feather name="phone-call" size={18} color="#0284C7" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.sectionTitle}>Xác thực số điện thoại</Text>
+                    <Text style={styles.sectionSubtitle}>
+                      Liên lạc khẩn cấp khi gửi tín hiệu SOS & bảo mật tài khoản
+                    </Text>
+                  </View>
+                </View>
 
-              {/* Lời giải thích bắt buộc theo yêu cầu */}
-              <View style={styles.googleExplanationBox}>
-                <View style={styles.googleNoticeIconWrap}>
-                  <Feather name="info" size={18} color="#0284C7" />
-                </View>
-                <Text style={styles.googleExplanationText}>
-                  Bạn đang đăng nhập bằng Google. Quản lý mật khẩu trong tài khoản Google của bạn.
-                </Text>
-              </View>
+                {/* Thông báo thành công nếu có */}
+                {phoneSuccessMsg && (
+                  <View style={styles.phoneSuccessBanner}>
+                    <Feather name="check-circle" size={16} color="#059669" />
+                    <Text style={styles.phoneSuccessText}>{phoneSuccessMsg}</Text>
+                  </View>
+                )}
 
-              {/* Thông tin phụ trợ bảo mật của Google */}
-              <View style={styles.googleFeaturesList}>
-                <View style={styles.googleFeatureRow}>
-                  <Feather name="check-circle" size={16} color={PROFILE_THEME.colors.success} />
-                  <Text style={styles.googleFeatureText}>
-                    Đăng nhập an toàn một chạm qua OAuth2
-                  </Text>
-                </View>
-                <View style={styles.googleFeatureRow}>
-                  <Feather name="shield" size={16} color={PROFILE_THEME.colors.success} />
-                  <Text style={styles.googleFeatureText}>
-                    Bảo vệ bởi hệ thống chống xâm nhập Google Guard
-                  </Text>
-                </View>
-                <View style={styles.googleFeatureRow}>
-                  <Feather name="lock" size={16} color="#64748B" />
-                  <Text style={styles.googleFeatureTextMuted}>
-                    Không lưu trữ mật khẩu trực tiếp trên hệ thống RescueSOS
-                  </Text>
-                </View>
+                {/* Thông báo lỗi nếu có */}
+                {phoneErrorMsg && (
+                  <View style={styles.phoneErrorBanner}>
+                    <Feather name="alert-circle" size={16} color="#DC2626" />
+                    <Text style={styles.phoneErrorText}>{phoneErrorMsg}</Text>
+                  </View>
+                )}
+
+                {/* Trường hợp 1: Đã có SĐT và không trong chế độ sửa */}
+                {user?.phone && !isEditingPhone ? (
+                  <View style={styles.verifiedPhoneContainer}>
+                    <View style={styles.verifiedPhoneHeader}>
+                      <View style={styles.verifiedBadge}>
+                        <Feather name="check" size={12} color="#059669" />
+                        <Text style={styles.verifiedBadgeText}>Đã xác thực qua SMS</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.editPhoneBtn}
+                        onPress={() => {
+                          setIsEditingPhone(true);
+                          setPhoneInput(user.phone || '');
+                          setPhoneOtpSent(false);
+                          setPhoneOtpCode('');
+                          setPhoneErrorMsg(null);
+                          setPhoneSuccessMsg(null);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name="edit-2" size={13} color="#0284C7" />
+                        <Text style={styles.editPhoneBtnText}>Thay đổi SĐT</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.phoneDisplayBox}>
+                      <Feather name="smartphone" size={20} color="#0284C7" />
+                      <Text style={styles.phoneDisplayText}>{user.phone}</Text>
+                    </View>
+
+                    <Text style={styles.phoneHintMuted}>
+                      Số điện thoại này được dùng để đội cứu hộ gọi xác nhận vị trí khi bạn bấm gửi SOS khẩn cấp.
+                    </Text>
+                  </View>
+                ) : (
+                  /* Trường hợp 2: Chưa có SĐT hoặc đang bấm thay đổi */
+                  <View style={styles.phoneInputSection}>
+                    {!user?.phone && (
+                      <View style={styles.phoneWarningBox}>
+                        <Feather name="alert-triangle" size={16} color="#D97706" style={{ marginTop: 2 }} />
+                        <Text style={styles.phoneWarningText}>
+                          Tài khoản Google của bạn chưa liên kết số điện thoại. Hãy xác thực ngay để sẵn sàng liên lạc khi gặp sự cố thiên tai.
+                        </Text>
+                      </View>
+                    )}
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.label}>
+                        Số điện thoại liên hệ <Text style={styles.requiredStar}>*</Text>
+                      </Text>
+                      <View style={styles.inputContainer}>
+                        <Feather name="phone" size={18} color="#64748B" style={{ marginRight: 10 }} />
+                        <TextInput
+                          style={styles.textInput}
+                          placeholder="VD: 0912345678 hoặc +84..."
+                          placeholderTextColor={PROFILE_THEME.colors.textMuted}
+                          value={phoneInput}
+                          onChangeText={(val) => {
+                            setPhoneInput(val);
+                            if (phoneErrorMsg) setPhoneErrorMsg(null);
+                          }}
+                          keyboardType="phone-pad"
+                          editable={!phoneOtpSent || phoneCountdown <= 0}
+                        />
+                        {phoneInput.length > 0 && !phoneOtpSent && (
+                          <TouchableOpacity
+                            onPress={() => setPhoneInput('')}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Feather name="x-circle" size={16} color="#94A3B8" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Nút gửi mã OTP */}
+                    {!phoneOtpSent ? (
+                      <View style={{ flexDirection: 'row', gap: 10 }}>
+                        {user?.phone && (
+                          <TouchableOpacity
+                            style={styles.cancelEditBtn}
+                            onPress={() => {
+                              setIsEditingPhone(false);
+                              setPhoneErrorMsg(null);
+                              setPhoneSuccessMsg(null);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.cancelEditBtnText}>Hủy</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          style={[
+                            styles.sendOtpButton,
+                            isSendingPhoneOtp && styles.buttonDisabled,
+                            user?.phone ? { flex: 1 } : { width: '100%' },
+                          ]}
+                          onPress={handleSendPhoneOtp}
+                          disabled={isSendingPhoneOtp}
+                          activeOpacity={0.8}
+                        >
+                          {isSendingPhoneOtp ? (
+                            <View style={styles.buttonInner}>
+                              <ActivityIndicator size="small" color="#FFFFFF" />
+                              <Text style={styles.sendOtpButtonText}>Đang gửi OTP...</Text>
+                            </View>
+                          ) : (
+                            <View style={styles.buttonInner}>
+                              <Feather name="send" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
+                              <Text style={styles.sendOtpButtonText}>Gửi mã OTP (SMS)</Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      /* Khi đã gửi OTP -> Hiện ô nhập mã OTP & nút Xác nhận */
+                      <View style={styles.otpVerifyWrap}>
+                        <View style={styles.inputGroup}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <Text style={styles.label}>
+                              Nhập mã OTP 6 số <Text style={styles.requiredStar}>*</Text>
+                            </Text>
+                            <TouchableOpacity
+                              onPress={handleSendPhoneOtp}
+                              disabled={phoneCountdown > 0 || isSendingPhoneOtp}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                              <Text
+                                style={[
+                                  styles.resendCodeText,
+                                  phoneCountdown > 0 && { color: '#94A3B8' },
+                                ]}
+                              >
+                                {phoneCountdown > 0 ? `Gửi lại sau (${phoneCountdown}s)` : 'Gửi lại mã'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          <View style={styles.inputContainer}>
+                            <Feather name="key" size={18} color="#64748B" style={{ marginRight: 10 }} />
+                            <TextInput
+                              style={[styles.textInput, { letterSpacing: 4, fontWeight: '700' }]}
+                              placeholder="••••••"
+                              placeholderTextColor={PROFILE_THEME.colors.textMuted}
+                              value={phoneOtpCode}
+                              onChangeText={(val) => {
+                                setPhoneOtpCode(val);
+                                if (phoneErrorMsg) setPhoneErrorMsg(null);
+                              }}
+                              keyboardType="number-pad"
+                              maxLength={6}
+                            />
+                          </View>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                          <TouchableOpacity
+                            style={styles.cancelEditBtn}
+                            onPress={() => {
+                              setPhoneOtpSent(false);
+                              setPhoneOtpCode('');
+                              if (user?.phone) setIsEditingPhone(false);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.cancelEditBtnText}>Hủy</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[
+                              styles.verifySubmitBtn,
+                              (isVerifyingPhoneOtp || phoneOtpCode.length < 6) && styles.buttonDisabled,
+                            ]}
+                            onPress={handleVerifyPhoneOtp}
+                            disabled={isVerifyingPhoneOtp || phoneOtpCode.length < 6}
+                            activeOpacity={0.8}
+                          >
+                            {isVerifyingPhoneOtp ? (
+                              <View style={styles.buttonInner}>
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                                <Text style={styles.primaryButtonText}>Đang xác thực...</Text>
+                              </View>
+                            ) : (
+                              <View style={styles.buttonInner}>
+                                <Feather name="check" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                                <Text style={styles.primaryButtonText}>Xác nhận & Lưu SĐT</Text>
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                )}
               </View>
-            </View>
+            </>
           ) : (
             /* ========================================================
-                TRẠNG THÁI 2: TÀI KHOẢN CÓ MẬT KHẨU
+                TRƯỜNG HỢP 2: TÀI KHOẢN CÓ MẬT KHẨU (Đăng nhập SĐT hoặc Gmail)
+                Chỉ có duy nhất 1 tab là Đổi mật khẩu
                ======================================================== */
             <View style={styles.card}>
               <View style={styles.sectionHeaderRow}>
@@ -624,234 +791,6 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
               </View>
             </View>
           )}
-
-          {/* ========================================================
-              CARD XÁC THỰC SỐ ĐIỆN THOẠI (Firebase SMS OTP)
-             ======================================================== */}
-          <View style={[styles.card, { marginTop: 16 }]}>
-            <View style={styles.sectionHeaderRow}>
-              <View style={[styles.sectionIconWrap, { backgroundColor: '#F0F9FF' }]}>
-                <Feather name="phone-call" size={18} color="#0284C7" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.sectionTitle}>Xác thực số điện thoại</Text>
-                <Text style={styles.sectionSubtitle}>
-                  Liên lạc khẩn cấp khi gửi tín hiệu SOS & bảo mật tài khoản
-                </Text>
-              </View>
-            </View>
-
-            {/* Thông báo thành công nếu có */}
-            {phoneSuccessMsg && (
-              <View style={styles.phoneSuccessBanner}>
-                <Feather name="check-circle" size={16} color="#059669" />
-                <Text style={styles.phoneSuccessText}>{phoneSuccessMsg}</Text>
-              </View>
-            )}
-
-            {/* Thông báo lỗi nếu có */}
-            {phoneErrorMsg && (
-              <View style={styles.phoneErrorBanner}>
-                <Feather name="alert-circle" size={16} color="#DC2626" />
-                <Text style={styles.phoneErrorText}>{phoneErrorMsg}</Text>
-              </View>
-            )}
-
-            {/* Trường hợp 1: Đã có SĐT và không trong chế độ sửa */}
-            {user?.phone && !isEditingPhone ? (
-              <View style={styles.verifiedPhoneContainer}>
-                <View style={styles.verifiedPhoneHeader}>
-                  <View style={styles.verifiedBadge}>
-                    <Feather name="check" size={12} color="#059669" />
-                    <Text style={styles.verifiedBadgeText}>Đã xác thực qua SMS</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.editPhoneBtn}
-                    onPress={() => {
-                      setIsEditingPhone(true);
-                      setPhoneInput(user.phone || '');
-                      setPhoneOtpSent(false);
-                      setPhoneOtpCode('');
-                      setPhoneErrorMsg(null);
-                      setPhoneSuccessMsg(null);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Feather name="edit-2" size={13} color="#0284C7" />
-                    <Text style={styles.editPhoneBtnText}>Thay đổi SĐT</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.phoneDisplayBox}>
-                  <Feather name="smartphone" size={20} color="#0284C7" />
-                  <Text style={styles.phoneDisplayText}>{user.phone}</Text>
-                </View>
-
-                <Text style={styles.phoneHintMuted}>
-                  Số điện thoại này được dùng để đội cứu hộ gọi xác nhận vị trí khi bạn bấm gửi SOS khẩn cấp.
-                </Text>
-              </View>
-            ) : (
-              /* Trường hợp 2: Chưa có SĐT hoặc đang bấm thay đổi */
-              <View style={styles.phoneInputSection}>
-                {!user?.phone && (
-                  <View style={styles.phoneWarningBox}>
-                    <Feather name="alert-triangle" size={16} color="#D97706" style={{ marginTop: 2 }} />
-                    <Text style={styles.phoneWarningText}>
-                      Tài khoản Google của bạn chưa liên kết số điện thoại. Hãy xác thực ngay để sẵn sàng liên lạc khi gặp sự cố thiên tai.
-                    </Text>
-                  </View>
-                )}
-
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>
-                    Số điện thoại liên hệ <Text style={styles.requiredStar}>*</Text>
-                  </Text>
-                  <View style={styles.inputContainer}>
-                    <Feather name="phone" size={18} color="#64748B" style={{ marginRight: 10 }} />
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="VD: 0912345678 hoặc +84..."
-                      placeholderTextColor={PROFILE_THEME.colors.textMuted}
-                      value={phoneInput}
-                      onChangeText={(val) => {
-                        setPhoneInput(val);
-                        if (phoneErrorMsg) setPhoneErrorMsg(null);
-                      }}
-                      keyboardType="phone-pad"
-                      editable={!phoneOtpSent || phoneCountdown <= 0}
-                    />
-                    {phoneInput.length > 0 && !phoneOtpSent && (
-                      <TouchableOpacity
-                        onPress={() => setPhoneInput('')}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Feather name="x-circle" size={16} color="#94A3B8" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-
-                {/* Nút gửi mã OTP */}
-                {!phoneOtpSent ? (
-                  <View style={{ flexDirection: 'row', gap: 10 }}>
-                    {user?.phone && (
-                      <TouchableOpacity
-                        style={styles.cancelEditBtn}
-                        onPress={() => {
-                          setIsEditingPhone(false);
-                          setPhoneErrorMsg(null);
-                          setPhoneSuccessMsg(null);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.cancelEditBtnText}>Hủy</Text>
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      style={[
-                        styles.sendOtpButton,
-                        isSendingPhoneOtp && styles.buttonDisabled,
-                        user?.phone ? { flex: 1 } : { width: '100%' },
-                      ]}
-                      onPress={handleSendPhoneOtp}
-                      disabled={isSendingPhoneOtp}
-                      activeOpacity={0.8}
-                    >
-                      {isSendingPhoneOtp ? (
-                        <View style={styles.buttonInner}>
-                          <ActivityIndicator size="small" color="#FFFFFF" />
-                          <Text style={styles.sendOtpButtonText}>Đang gửi OTP...</Text>
-                        </View>
-                      ) : (
-                        <View style={styles.buttonInner}>
-                          <Feather name="send" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
-                          <Text style={styles.sendOtpButtonText}>Gửi mã OTP (SMS)</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  /* Khi đã gửi OTP -> Hiện ô nhập mã OTP & nút Xác nhận */
-                  <View style={styles.otpVerifyWrap}>
-                    <View style={styles.inputGroup}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <Text style={styles.label}>
-                          Nhập mã OTP 6 số <Text style={styles.requiredStar}>*</Text>
-                        </Text>
-                        <TouchableOpacity
-                          onPress={handleSendPhoneOtp}
-                          disabled={phoneCountdown > 0 || isSendingPhoneOtp}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Text
-                            style={[
-                              styles.resendCodeText,
-                              phoneCountdown > 0 && { color: '#94A3B8' },
-                            ]}
-                          >
-                            {phoneCountdown > 0 ? `Gửi lại sau (${phoneCountdown}s)` : 'Gửi lại mã'}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      <View style={styles.inputContainer}>
-                        <Feather name="key" size={18} color="#64748B" style={{ marginRight: 10 }} />
-                        <TextInput
-                          style={[styles.textInput, { letterSpacing: 4, fontWeight: '700' }]}
-                          placeholder="••••••"
-                          placeholderTextColor={PROFILE_THEME.colors.textMuted}
-                          value={phoneOtpCode}
-                          onChangeText={(val) => {
-                            setPhoneOtpCode(val);
-                            if (phoneErrorMsg) setPhoneErrorMsg(null);
-                          }}
-                          keyboardType="number-pad"
-                          maxLength={6}
-                        />
-                      </View>
-                    </View>
-
-                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
-                      <TouchableOpacity
-                        style={styles.cancelEditBtn}
-                        onPress={() => {
-                          setPhoneOtpSent(false);
-                          setPhoneOtpCode('');
-                          if (user?.phone) setIsEditingPhone(false);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.cancelEditBtnText}>Hủy</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[
-                          styles.verifySubmitBtn,
-                          (isVerifyingPhoneOtp || phoneOtpCode.length < 6) && styles.buttonDisabled,
-                        ]}
-                        onPress={handleVerifyPhoneOtp}
-                        disabled={isVerifyingPhoneOtp || phoneOtpCode.length < 6}
-                        activeOpacity={0.8}
-                      >
-                        {isVerifyingPhoneOtp ? (
-                          <View style={styles.buttonInner}>
-                            <ActivityIndicator size="small" color="#FFFFFF" />
-                            <Text style={styles.primaryButtonText}>Đang xác thực...</Text>
-                          </View>
-                        ) : (
-                          <View style={styles.buttonInner}>
-                            <Feather name="check" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                            <Text style={styles.primaryButtonText}>Xác nhận & Lưu SĐT</Text>
-                          </View>
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-              </View>
-            )}
-          </View>
 
           {/* Khoảng cách đáy an toàn tránh đè lên Bottom Navbar */}
           <View style={{ height: 48 }} />
