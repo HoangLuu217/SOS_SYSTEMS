@@ -19,6 +19,7 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { GoogleButton } from '../components/GoogleButton';
 import { AlertModal } from '../components/AlertModal';
 import { useAuth } from '../context/AuthContext';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -93,6 +94,26 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     }
   };
 
+  const handleOpenTerms = (type: 'terms' | 'privacy') => {
+    if (type === 'terms') {
+      setAlertInfo({
+        visible: true,
+        type: 'info',
+        title: 'Điều khoản dịch vụ',
+        message:
+          'Cổng cứu nạn SOS được thiết lập nhằm tiếp nhận và hỗ trợ khẩn cấp người dân trong thiên tai, bão lũ.\n\nNgười dùng có trách nhiệm cung cấp thông tin trung thực, chính xác và không báo động sai lệch.',
+      });
+    } else {
+      setAlertInfo({
+        visible: true,
+        type: 'info',
+        title: 'Chính sách bảo mật',
+        message:
+          'Hệ thống cam kết bảo mật tuyệt đối dữ liệu định vị GPS, danh tính và thông tin cuộc gọi cứu hộ của người dân.\n\nDữ liệu chỉ được phục vụ độc quyền cho các lực lượng cứu nạn thực địa.',
+      });
+    }
+  };
+
   // Mép trên bắt đầu khoảng 32% chiều cao màn hình từ đỉnh máy
   const topPadding = Math.max(16, SCREEN_HEIGHT * 0.32);
 
@@ -127,14 +148,33 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                 {/* Khung đăng nhập kính mờ xanh xám (Frosted Glass Card) */}
                 <View style={styles.cardShadow}>
                   <View style={styles.cardInner}>
-                    {/* Hiệu ứng làm mờ nền mạnh mẽ */}
+                    {/* Hiệu ứng làm mờ nền kính */}
                     <BlurView
-                      intensity={Platform.OS === 'ios' ? 85 : 75}
+                      intensity={Platform.OS === 'ios' ? 75 : 65}
                       tint="light"
                       style={StyleSheet.absoluteFill}
                     />
 
-                    {/* Lớp phủ màu xanh xám rgba(210, 225, 240, 0.65) */}
+                    {/* Hiệu ứng trong suốt từ trong ra ngoài: trung tâm trắng rõ, lan ra viền siêu trong suốt */}
+                    <Svg height="100%" width="100%" style={StyleSheet.absoluteFill}>
+                      <Defs>
+                        <RadialGradient
+                          id="cardRadialGrad"
+                          cx="50%"
+                          cy="48%"
+                          rx="56%"
+                          ry="52%"
+                        >
+                          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.90" />
+                          <Stop offset="42%" stopColor="#FFFFFF" stopOpacity="0.70" />
+                          <Stop offset="75%" stopColor="#FFFFFF" stopOpacity="0.20" />
+                          <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.03" />
+                        </RadialGradient>
+                      </Defs>
+                      <Rect x="0" y="0" width="100%" height="100%" fill="url(#cardRadialGrad)" />
+                    </Svg>
+
+                    {/* Nội dung form */}
                     <View style={styles.cardContent}>
                       {/* Logo RescueSOS - Bấm giữ 2s mở cấu hình IP */}
                       <TouchableOpacity
@@ -207,32 +247,51 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
                           onPress={handleGoogleLogin}
                           disabled={isLoading}
                         />
+
+                        {/* Quên mật khẩu & Đăng ký gọn gàng ngay dưới Google Login */}
+                        <View style={styles.formLinksContainer}>
+                          <TouchableOpacity
+                            onPress={onNavigateToForgotPassword}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}
+                          >
+                            <Text style={styles.formForgotPasswordText}>Quên mật khẩu?</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            onPress={onNavigateToSignup}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}
+                            style={styles.formSignupRow}
+                          >
+                            <Text style={styles.formSignupPrompt}>Chưa có tài khoản? </Text>
+                            <Text style={styles.formSignupLink}>Đăng ký</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
                   </View>
                 </View>
 
-                {/* Các liên kết bên ngoài card: 2 dòng riêng biệt căn giữa */}
-                <View style={styles.outsideLinksContainer}>
-                  {/* Dòng 1: Quên mật khẩu? */}
-                  <TouchableOpacity
-                    onPress={onNavigateToForgotPassword}
-                    activeOpacity={0.7}
-                    hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}
-                  >
-                    <Text style={styles.outsideForgotPasswordText}>Quên mật khẩu?</Text>
-                  </TouchableOpacity>
-
-                  {/* Dòng 2: Chưa có tài khoản? Đăng ký */}
-                  <TouchableOpacity
-                    onPress={onNavigateToSignup}
-                    activeOpacity={0.7}
-                    hitSlop={{ top: 8, bottom: 10, left: 16, right: 16 }}
-                    style={styles.outsideSignupRow}
-                  >
-                    <Text style={styles.outsideSignupPrompt}>Chưa có tài khoản? </Text>
-                    <Text style={styles.outsideSignupLink}>Đăng ký</Text>
-                  </TouchableOpacity>
+                {/* Điều khoản & chính sách nằm dưới cùng */}
+                <View style={styles.termsContainer}>
+                  <Text style={styles.termsText}>
+                    Bằng việc đăng nhập, bạn đồng ý tuân thủ{' '}
+                    <Text
+                      style={styles.termsLink}
+                      onPress={() => handleOpenTerms('terms')}
+                    >
+                      Điều khoản dịch vụ
+                    </Text>
+                    {' & '}
+                    <Text
+                      style={styles.termsLink}
+                      onPress={() => handleOpenTerms('privacy')}
+                    >
+                      Chính sách bảo mật
+                    </Text>
+                    {' của Hệ thống Cứu nạn SOS.'}
+                  </Text>
                 </View>
               </View>
             </ScrollView>
@@ -271,43 +330,43 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
   },
   centerContainer: {
     width: '100%',
-    maxWidth: 390,
+    maxWidth: 400,
     alignItems: 'center',
   },
-  /* Bóng đổ mềm cho khung */
+  /* Bóng đổ mềm cho khung kính */
   cardShadow: {
     width: '100%',
     borderRadius: 30,
     ...Platform.select({
       ios: {
         shadowColor: '#0B192C',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.16,
-        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.12,
+        shadowRadius: 16,
       },
       android: {
-        elevation: 6,
+        elevation: 4,
       },
     }),
   },
-  /* Viền trắng mảnh và góc bo tròn 30px */
+  /* Viền kính mờ trong suốt và góc bo tròn 30px */
   cardInner: {
     width: '100%',
     borderRadius: 30,
     overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.75)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.20)',
   },
-  /* Lớp phủ kính mờ xanh xám theo yêu cầu: rgba(210, 225, 240, 0.65) */
+  /* Lớp phủ kính mờ trong suốt từ trong ra ngoài */
   cardContent: {
-    backgroundColor: 'rgba(210, 225, 240, 0.65)',
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 18,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 14,
+    paddingTop: 16,
+    paddingBottom: 16,
     alignItems: 'center',
   },
   logoWrapper: {
@@ -355,70 +414,67 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontWeight: '700',
   },
-  /* Liên kết ngoài card: 2 dòng tách biệt căn giữa */
-  outsideLinksContainer: {
-    marginTop: 18,
+  /* Liên kết trong form: gọn gàng ngay dưới Google Button */
+  formLinksContainer: {
+    marginTop: 12,
     alignItems: 'center',
     width: '100%',
   },
-  outsideForgotPasswordText: {
-    color: '#FFFFFF',
-    fontSize: 13.5,
+  formForgotPasswordText: {
+    color: '#0F172A',
+    fontSize: 13,
     fontWeight: '700',
     textDecorationLine: 'underline',
     textAlign: 'center',
-    ...Platform.select({
-      ios: {
-        textShadowColor: 'rgba(0, 0, 0, 0.9)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 3,
-      },
-      android: {
-        textShadowColor: 'rgba(0, 0, 0, 0.9)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 3,
-      },
-    }),
+    paddingVertical: 2,
   },
-  outsideSignupRow: {
+  formSignupRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
+    marginTop: 8,
+    paddingVertical: 2,
   },
-  outsideSignupPrompt: {
-    color: '#FFFFFF',
+  formSignupPrompt: {
+    color: '#334155',
     fontSize: 13,
-    fontWeight: '500',
-    ...Platform.select({
-      ios: {
-        textShadowColor: 'rgba(0, 0, 0, 0.9)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 3,
-      },
-      android: {
-        textShadowColor: 'rgba(0, 0, 0, 0.9)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 3,
-      },
-    }),
+    fontWeight: '600',
   },
-  outsideSignupLink: {
-    color: '#FFFFFF',
+  formSignupLink: {
+    color: '#0066F5',
     fontSize: 13,
     fontWeight: '800',
     textDecorationLine: 'underline',
+  },
+  /* Điều khoản & chính sách nằm dưới cùng */
+  termsContainer: {
+    marginTop: 16,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    width: '100%',
+  },
+  termsText: {
+    color: 'rgba(255, 255, 255, 0.90)',
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
+    fontWeight: '500',
     ...Platform.select({
       ios: {
-        textShadowColor: 'rgba(0, 0, 0, 0.9)',
+        textShadowColor: 'rgba(0, 0, 0, 0.95)',
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 3,
       },
       android: {
-        textShadowColor: 'rgba(0, 0, 0, 0.9)',
+        textShadowColor: 'rgba(0, 0, 0, 0.95)',
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 3,
       },
     }),
+  },
+  termsLink: {
+    color: '#60A5FA',
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
 });
