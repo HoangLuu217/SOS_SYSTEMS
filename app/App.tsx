@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, ImageBackground, Keyboard, Image } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -14,38 +14,48 @@ import { ForgotPasswordModal } from './src/screens/ForgotPasswordModal';
 import { ConfigModal } from './src/screens/ConfigModal';
 import { AlertModal } from './src/components/AlertModal';
 import { BottomNav, TabName } from './src/components/BottomNav';
+import { LogoSOS } from './src/components/LogoSOS';
+import { BACKGROUND_APP_SOURCE } from './src/constants/backgroundBase64';
 
 function AuthenticatedApp() {
   const [activeTab, setActiveTab] = useState<TabName>('home');
   const [configVisible, setConfigVisible] = useState(false);
 
-  const renderScreen = () => {
-    switch (activeTab) {
-      case 'home':
-        return <HomeScreen onOpenSettings={() => setConfigVisible(true)} />;
-      case 'map':
-        return <MapScreen />;
-      case 'sos':
-        return <SosScreen />;
-      case 'news':
-        return <NewsScreen />;
-      case 'profile':
-        return (
+  return (
+    <View style={styles.container}>
+      {/* Các màn hình Tab luôn được giữ trong bộ nhớ (Pre-warmed Tab Layer) */}
+      <View style={styles.screenContainer}>
+        {/* Tab Trang chủ */}
+        <View style={[styles.tabScreenWrap, activeTab !== 'home' && styles.hiddenTabScreen]}>
+          <HomeScreen onOpenSettings={() => setConfigVisible(true)} />
+        </View>
+
+        {/* Tab Bản đồ */}
+        <View style={[styles.tabScreenWrap, activeTab !== 'map' && styles.hiddenTabScreen]}>
+          <MapScreen />
+        </View>
+
+        {/* Tab Cứu hộ SOS */}
+        <View style={[styles.tabScreenWrap, activeTab !== 'sos' && styles.hiddenTabScreen]}>
+          <SosScreen />
+        </View>
+
+        {/* Tab Tin tức */}
+        <View style={[styles.tabScreenWrap, activeTab !== 'news' && styles.hiddenTabScreen]}>
+          <NewsScreen />
+        </View>
+
+        {/* Tab Hồ sơ người dùng - Đảm bảo logo và thông tin luôn duy trì trong RAM */}
+        <View style={[styles.tabScreenWrap, activeTab !== 'profile' && styles.hiddenTabScreen]}>
           <ProfileScreen
             onNavigateToTab={(tab) => setActiveTab(tab as TabName)}
           />
-        );
-      default:
-        return <HomeScreen onOpenSettings={() => setConfigVisible(true)} />;
-    }
-  };
-
-  return (
-    <View style={styles.container}>
-      <View style={styles.screenContainer}>
-        {renderScreen()}
+        </View>
       </View>
-      <BottomNav activeTab={activeTab} onTabPress={setActiveTab} />
+
+      <View style={styles.bottomNavWrapper}>
+        <BottomNav activeTab={activeTab} onTabPress={setActiveTab} />
+      </View>
 
       <ConfigModal
         visible={configVisible}
@@ -72,6 +82,13 @@ function MainNavigator() {
     message: '',
   });
 
+  // Tự động chuyển về màn hình đăng nhập khi đăng xuất
+  React.useEffect(() => {
+    if (!user) {
+      setCurrentScreen('login');
+    }
+  }, [user]);
+
   if (isInitializing) {
     return (
       <View style={styles.loadingContainer}>
@@ -84,20 +101,70 @@ function MainNavigator() {
     <View style={styles.container}>
       <StatusBar style="auto" />
 
-      {user ? (
-        <AuthenticatedApp />
-      ) : currentScreen === 'login' ? (
-        <LoginScreen
-          onNavigateToSignup={() => setCurrentScreen('signup')}
-          onNavigateToForgotPassword={() => setForgotPasswordVisible(true)}
-          onOpenSettings={() => setConfigVisible(true)}
+      {/* Lớp Authentication: Luôn được giữ trong bộ nhớ (pre-warmed), nền và logo không bao giờ bị unmount kể cả khi đăng nhập / đăng xuất */}
+      <View
+        style={[
+          styles.authContainer,
+          user ? styles.hiddenAuthContainer : styles.visibleAuthContainer,
+        ]}
+        pointerEvents={user ? 'none' : 'auto'}
+      >
+        <ImageBackground
+          source={BACKGROUND_APP_SOURCE}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+          fadeDuration={0}
         />
-      ) : (
-        <SignupScreen
-          onNavigateToLogin={() => setCurrentScreen('login')}
-          onOpenSettings={() => setConfigVisible(true)}
-        />
+
+        {/* Màn hình Đăng nhập (giữ nguyên trong bộ nhớ, chuyển đổi tức thì không chớp tắt) */}
+        <View
+          style={[
+            styles.authScreenWrap,
+            currentScreen === 'login' ? styles.visibleAuthLayer : styles.hiddenAuthLayer,
+          ]}
+          pointerEvents={currentScreen === 'login' ? 'auto' : 'none'}
+        >
+          <LoginScreen
+            onNavigateToSignup={() => {
+              Keyboard.dismiss();
+              setCurrentScreen('signup');
+            }}
+            onNavigateToForgotPassword={() => setForgotPasswordVisible(true)}
+            onOpenSettings={() => setConfigVisible(true)}
+          />
+        </View>
+
+        {/* Màn hình Đăng ký (giữ nguyên trong bộ nhớ, chuyển đổi tức thì không chớp tắt) */}
+        <View
+          style={[
+            styles.authScreenWrap,
+            currentScreen === 'signup' ? styles.visibleAuthLayer : styles.hiddenAuthLayer,
+          ]}
+          pointerEvents={currentScreen === 'signup' ? 'auto' : 'none'}
+        >
+          <SignupScreen
+            onNavigateToLogin={() => {
+              Keyboard.dismiss();
+              setCurrentScreen('login');
+            }}
+            onOpenSettings={() => setConfigVisible(true)}
+          />
+        </View>
+      </View>
+
+      {/* Lớp Ứng dụng đã đăng nhập */}
+      {user && (
+        <View style={styles.authenticatedAppLayer}>
+          <AuthenticatedApp />
+        </View>
       )}
+
+      {/* Pre-warm logoSOS ngay từ gốc app */}
+      <View style={styles.prewarmLayer} pointerEvents="none">
+        <LogoSOS
+          style={styles.prewarmImage}
+        />
+      </View>
 
       {/* Modal Quên mật khẩu */}
       <ForgotPasswordModal
@@ -154,5 +221,54 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#0F172A',
+  },
+  authContainer: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#0F172A',
+  },
+  authenticatedAppLayer: {
+    ...StyleSheet.absoluteFill,
+  },
+  authScreenWrap: {
+    ...StyleSheet.absoluteFill,
+  },
+  visibleAuthLayer: {
+    opacity: 1,
+    zIndex: 2,
+  },
+  hiddenAuthLayer: {
+    opacity: 0,
+    zIndex: 1,
+  },
+  visibleAuthContainer: {
+    opacity: 1,
+    zIndex: 2,
+  },
+  hiddenAuthContainer: {
+    opacity: 0,
+    zIndex: 0,
+  },
+  tabScreenWrap: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  hiddenTabScreen: {
+    display: 'none',
+  },
+  bottomNavWrapper: {
+    zIndex: 100,
+    elevation: 20,
+  },
+  prewarmLayer: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    opacity: 0.001,
+    zIndex: -9999,
+  },
+  prewarmImage: {
+    width: 1,
+    height: 1,
   },
 });

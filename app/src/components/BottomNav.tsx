@@ -115,6 +115,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabPress }) =
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#FFFFFF',
+    zIndex: 100,
+    elevation: 20,
     ...Platform.select({
       ios: {
         shadowColor: '#000',

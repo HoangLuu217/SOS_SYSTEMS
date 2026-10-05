@@ -9,7 +9,10 @@ import {
   ArrowRight, 
   LogOut, 
   ShieldCheck, 
-  Radio 
+  Radio,
+  FileText,
+  X,
+  CheckCircle2
 } from 'lucide-react';
 import { loginApi, logoutApi } from '../services/api';
 import type { User } from '../types/auth';
@@ -23,6 +26,7 @@ export const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [termsModal, setTermsModal] = useState<'terms' | 'privacy' | null>(null);
 
   // Restore saved session or remembered password on mount
   useEffect(() => {
@@ -224,7 +228,7 @@ export const LoginPage = () => {
             <form onSubmit={handleSubmit} className="sos-card-form">
               {/* Field 1: Số điện thoại hoặc email */}
               <div className="sos-input-group">
-                <UserIcon size={20} className="sos-group-icon" />
+                <UserIcon size={22} className="sos-group-icon" />
                 <input
                   type="text"
                   className="sos-card-input"
@@ -238,7 +242,7 @@ export const LoginPage = () => {
 
               {/* Field 2: Mật khẩu */}
               <div className="sos-input-group">
-                <Lock size={20} className="sos-group-icon" />
+                <Lock size={22} className="sos-group-icon" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   className="sos-card-input"
@@ -255,7 +259,7 @@ export const LoginPage = () => {
                   tabIndex={-1}
                   aria-label="Toggle password visibility"
                 >
-                  {showPassword ? <Eye size={20} /> : <EyeOff size={20} />}
+                  {showPassword ? <Eye size={22} /> : <EyeOff size={22} />}
                 </button>
               </div>
 
@@ -286,7 +290,7 @@ export const LoginPage = () => {
                 ) : (
                   <>
                     <span>Đăng nhập</span>
-                    <ArrowRight size={18} />
+                    <ArrowRight size={20} />
                   </>
                 )}
               </button>
@@ -300,10 +304,111 @@ export const LoginPage = () => {
                   Quên mật khẩu?
                 </span>
               </div>
+
+              {/* Dòng điều khoản & chính sách */}
+              <div className="sos-terms-divider" />
+              <div className="sos-terms-box">
+                <p className="sos-terms-text">
+                  Bằng việc đăng nhập, bạn đồng ý tuân thủ{' '}
+                  <span
+                    className="sos-terms-link"
+                    onClick={() => setTermsModal('terms')}
+                  >
+                    Điều khoản dịch vụ
+                  </span>{' '}
+                  &amp;{' '}
+                  <span
+                    className="sos-terms-link"
+                    onClick={() => setTermsModal('privacy')}
+                  >
+                    Chính sách bảo mật
+                  </span>{' '}
+                  của Hệ thống Cứu nạn SOS.
+                </p>
+                <div className="sos-footer-secure">
+                  <ShieldCheck size={14} className="sos-secure-icon" />
+                  <span>Dữ liệu điều hành được mã hóa tác chiến 256-bit</span>
+                </div>
+              </div>
             </form>
           </>
         )}
       </div>
+
+      {/* Modal Điều Khoản & Chính Sách */}
+      {termsModal && (
+        <div className="sos-modal-backdrop" onClick={() => setTermsModal(null)}>
+          <div className="sos-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="sos-modal-header">
+              <div className="sos-modal-title">
+                <FileText size={20} color="#0066f5" />
+                <span>
+                  {termsModal === 'terms'
+                    ? 'Điều khoản dịch vụ & Quy chuẩn tác chiến'
+                    : 'Chính sách bảo mật dữ liệu cứu nạn SOS'}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="sos-modal-close-btn"
+                onClick={() => setTermsModal(null)}
+                aria-label="Đóng"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="sos-modal-body">
+              {termsModal === 'terms' ? (
+                <>
+                  <h4>1. Mục đích sử dụng cổng điều hành</h4>
+                  <p>
+                    Cổng điều hành tác chiến SOS dành riêng cho Quản trị viên (ADMIN) và Cán bộ Chính quyền địa phương (LOCAL_AUTHORITY) thực hiện nhiệm vụ tiếp nhận, điều phối và ứng cứu khẩn cấp người dân trong thiên tai, lũ lụt.
+                  </p>
+
+                  <h4>2. Trách nhiệm của cán bộ được cấp quyền</h4>
+                  <p>
+                    Cán bộ chịu trách nhiệm bảo mật thông tin đăng nhập, không bàn giao tài khoản cho bên thứ ba. Mọi hành động duyệt cấp, điều động tàu thuyền, trực thăng hay cập nhật trạng thái cứu nạn đều được ghi nhận vào nhật ký hệ thống (Audit Logs).
+                  </p>
+
+                  <h4>3. Nghiêm cấm vi phạm tác chiến</h4>
+                  <p>
+                    Nghiêm cấm làm sai lệch dữ liệu vị trí người gặp nạn, tiết lộ thông tin cá nhân của người dân ra ngoài phạm vi cứu trợ hoặc sử dụng tài nguyên hệ thống vào mục đích phi nhân đạo.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h4>1. Thu thập dữ liệu vị trí cứu nạn</h4>
+                  <p>
+                    Hệ thống chỉ thu thập tọa độ GPS, mức độ ngập lụt, hình ảnh khẩn cấp và danh sách người mắc kẹt nhằm phục vụ công tác điều phối lực lượng cứu hộ nhanh chóng và chính xác nhất.
+                  </p>
+
+                  <h4>2. Tiêu chuẩn mã hóa thông tin</h4>
+                  <p>
+                    Toàn bộ đường truyền và dữ liệu lưu trữ được mã hóa theo tiêu chuẩn cấp quân sự (AES-256 / TLS 1.3), ngăn chặn truy cập trái phép và rò rỉ dữ liệu chỉ huy.
+                  </p>
+
+                  <h4>3. Quyền hạn lưu trữ và chia sẻ</h4>
+                  <p>
+                    Dữ liệu được chia sẻ độc quyền giữa các lực lượng cứu nạn thực địa, đội bay trực thăng và ban chỉ đạo phòng chống thiên tai có thẩm quyền.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="sos-modal-footer">
+              <button
+                type="button"
+                className="sos-modal-btn-confirm"
+                onClick={() => setTermsModal(null)}
+              >
+                <CheckCircle2 size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: -2 }} />
+                Đã hiểu và đồng ý
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

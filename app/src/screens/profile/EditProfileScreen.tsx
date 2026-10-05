@@ -37,7 +37,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
   const roleName = isRescuer
     ? (user?.roles?.includes('LEADER') ? 'Đội trưởng cứu hộ' : 'Nhân viên cứu hộ')
     : 'Người dân';
-  const roleColor = isRescuer ? '#2563EB' : '#EF4444';
+  const roleColor = isRescuer ? '#2563EB' : '#0066FF';
   const roleIcon = isRescuer ? ('shield-account' as const) : ('account' as const);
 
   const initialName = user?.fullName || '';
@@ -390,7 +390,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
           {/* Card: Editable Personal Information */}
           <View style={styles.card}>
             <View style={styles.cardTitleRow}>
-              <Feather name="user" size={17} color="#EF4444" />
+              <Feather name="user" size={17} color="#0066FF" />
               <Text style={styles.cardTitle}>Thông tin cơ bản</Text>
             </View>
 
@@ -484,7 +484,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
                 testID="btn-select-province"
               >
                 <View style={styles.selectContentLeft}>
-                  <Feather name="map-pin" size={17} color="#EF4444" style={styles.fieldIcon} />
+                  <Feather name="map-pin" size={17} color="#0066FF" style={styles.fieldIcon} />
                   <Text style={[styles.selectText, !province && styles.selectTextPlaceholder]}>
                     {province || 'Chọn Tỉnh / Thành phố...'}
                   </Text>
@@ -674,7 +674,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
 
                 {loadingProvinces ? (
                   <View style={styles.pickerLoadingWrap}>
-                    <ActivityIndicator size="small" color="#EF4444" />
+                    <ActivityIndicator size="small" color="#0066FF" />
                     <Text style={styles.pickerLoadingText}>Đang tải danh sách tỉnh thành...</Text>
                   </View>
                 ) : (
@@ -700,7 +700,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
                           >
                             {item.name}
                           </Text>
-                          {isSelected && <Feather name="check" size={18} color="#EF4444" />}
+                          {isSelected && <Feather name="check" size={18} color="#0066FF" />}
                         </TouchableOpacity>
                       );
                     }}
@@ -875,8 +875,8 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
                 <Text style={styles.sheetTitle}>Ảnh đại diện cứu hộ</Text>
 
                 <TouchableOpacity style={styles.sheetItem} onPress={handleTakeAvatar}>
-                  <View style={[styles.sheetIconCircle, { backgroundColor: '#FEF2F2' }]}>
-                    <Feather name="camera" size={18} color="#EF4444" />
+                  <View style={[styles.sheetIconCircle, { backgroundColor: '#EFF6FF' }]}>
+                    <Feather name="camera" size={18} color="#0066FF" />
                   </View>
                   <Text style={styles.sheetItemText}>Chụp ảnh mới</Text>
                 </TouchableOpacity>
@@ -959,7 +959,7 @@ const styles = StyleSheet.create({
     height: 84,
     borderRadius: 42,
     borderWidth: 3,
-    borderColor: '#EF4444',
+    borderColor: '#0066FF',
   },
   avatarPlaceholder: {
     width: 84,
@@ -969,7 +969,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#EF4444',
+    borderColor: '#0066FF',
   },
   avatarInitial: {
     fontSize: 34,
@@ -994,7 +994,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#0066FF',
     borderWidth: 2,
     borderColor: '#FFFFFF',
     justifyContent: 'center',
@@ -1167,8 +1167,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   genderOptionActive: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#EF4444',
+    backgroundColor: '#EFF6FF',
+    borderColor: '#0066FF',
   },
   radioCircle: {
     width: 16,
@@ -1180,13 +1180,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   radioCircleActive: {
-    borderColor: '#EF4444',
+    borderColor: '#0066FF',
   },
   radioDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#0066FF',
   },
   genderText: {
     fontSize: 13,
@@ -1194,7 +1194,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   genderTextActive: {
-    color: '#EF4444',
+    color: '#0066FF',
   },
 
   // Read-only Account Card
@@ -1270,12 +1270,12 @@ const styles = StyleSheet.create({
 
   // Save Button
   saveButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#0066FF',
     borderRadius: 16,
     height: 52,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#EF4444',
+    shadowColor: '#0066FF',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -1371,7 +1371,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F1F5F9',
   },
   pickerItemActive: {
-    backgroundColor: '#FFF8F8',
+    backgroundColor: '#EFF6FF',
     paddingHorizontal: 8,
     borderRadius: 8,
   },
@@ -1382,7 +1382,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   pickerItemTextActive: {
-    color: '#EF4444',
+    color: '#0066FF',
     fontWeight: '700',
   },
   pickerLoadingWrap: {
@@ -1457,7 +1457,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   dialogButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#0066FF',
     borderRadius: 12,
     width: '100%',
     height: 44,
@@ -1491,7 +1491,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#0066FF',
     justifyContent: 'center',
     alignItems: 'center',
   },
