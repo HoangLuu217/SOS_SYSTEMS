@@ -199,7 +199,7 @@ class BackendApiService {
       const url = `${baseUrl}${cleanEndpoint}`;
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s cho upload file
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // Tăng lên 60s cho upload file nặng qua tunnel
 
         const response = await fetch(url, {
           ...options,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Image, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
@@ -15,16 +15,24 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
   const [loadingMsg, setLoadingMsg] = useState('Đang lấy vị trí GPS từ điện thoại...');
   const [sending, setSending] = useState(false);
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
+
+  // Form State
+  const [people, setPeople] = useState('1');
+  const [description, setDescription] = useState('');
+  const [emergencyType, setEmergencyType] = useState('MEDICAL');
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images, // Chấp nhận hình ảnh
-      allowsEditing: true, // Cho phép crop ảnh
-      quality: 0.6, // Bóp dung lượng ảnh để upload cho nhanh
+      mediaTypes: ['images'], 
+      allowsEditing: true, 
+      quality: 0.2, // Giảm mạnh dung lượng ảnh để up qua mạng LAN/Tunnel không bị timeout
+      base64: true, // Quan trọng: Lấy mã base64 để gửi qua JSON
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
       setImageUri(result.assets[0].uri);
+      setImageBase64(result.assets[0].base64 || null);
     }
   };
 
@@ -60,31 +68,25 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
           type: "Point",
           coordinates: [location.coords.longitude, location.coords.latitude]
         },
-        address: "Khu vực Đà Nẵng (Lấy tự động từ GPS)", // Thêm địa chỉ giả lập để qua ải validation
-        areaId: "650c1f1e1c9d440000a1b1c1", // 24-ký tự hex ID giả lập cho Khu vực hành chính
+        address: "Khu vực Đà Nẵng (Lấy tự động từ GPS)",
+        areaId: "650c1f1e1c9d440000a1b1c1",
         priority: "HIGH",
-        emergencyType: "MEDICAL",
-        description: "Báo nạn khẩn cấp từ Mobile App",
+        emergencyType: emergencyType,
+        description: description || "Báo nạn khẩn cấp từ Mobile App",
         reportedByRole: "CITIZEN",
-        people: 1 // Đổi numberOfVictims thành people cho đúng model
+        people: parseInt(people) || 1
       });
 
       if (response.success && response.data?._id) {
         const sosId = response.data._id;
         
-        // 2. Nếu nạn nhân có đính kèm ảnh thì gửi ảnh lên
-        if (imageUri) {
-          const formData = new FormData();
-          const filename = imageUri.split('/').pop() || 'sos_image.jpg';
+        // 2. Sử dụng JSON Base64 thay vì FormData để vượt rào Tunnel 100%
+        if (imageBase64) {
+          const uploadRes = await backendApi.post('/files', {
+            sosId: sosId,
+            base64File: imageBase64
+          });
           
-          formData.append('file', {
-            uri: imageUri,
-            name: filename,
-            type: 'image/jpeg'
-          } as any);
-          formData.append('sosId', sosId);
-
-          const uploadRes = await backendApi.postFormData('/files', formData);
           if (!uploadRes.success) {
             Alert.alert('Cảnh báo', 'Gửi SOS thành công nhưng up ảnh bị lỗi: ' + uploadRes.message);
             setSending(false);
@@ -118,67 +120,61 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
     );
   }
 
-  // HTML chứa Bản đồ Leaflet (KHÔNG CẦN API KEY)
-  const mapHtml = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-      <style>
-        body { padding: 0; margin: 0; }
-        html, body, #map { height: 100%; width: 100%; }
-        .sos-icon { font-size: 26px; background: white; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 2px solid #e74c3c; }
-      </style>
-    </head>
-    <body>
-      <div id="map"></div>
-      <script>
-        var map = L.map('map').setView([${location.coords.latitude}, ${location.coords.longitude}], 15);
-        
-        // Dùng bản đồ nền của chính Google Maps (Chuẩn xác 100% giống app Google Maps)
-        L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
-          attribution: '© Google Maps',
-          maxZoom: 20
-        }).addTo(map);
-
-        var sosIcon = L.divIcon({
-          html: '<div class="sos-icon">🚑</div>',
-          className: 'custom-sos-icon',
-          iconSize: [40, 40],
-          iconAnchor: [20, 20]
-        });
-
-        L.marker([${location.coords.latitude}, ${location.coords.longitude}], { icon: sosIcon }).addTo(map);
-        
-        L.circle([${location.coords.latitude}, ${location.coords.longitude}], {
-          color: '#EF4444',
-          fillColor: '#EF4444',
-          fillOpacity: 0.2,
-          radius: 500
-        }).addTo(map);
-      </script>
-    </body>
-    </html>
-  `;
-
   return (
     <View style={styles.container}>
-      {/* Nút Back ẩn góc trái trên */}
-      <TouchableOpacity style={styles.backButton} onPress={onClose}>
-        <Feather name="arrow-left" size={24} color="#0F172A" />
-      </TouchableOpacity>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={onClose}>
+          <Feather name="arrow-left" size={24} color="#0F172A" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Báo nạn khẩn cấp</Text>
+        <View style={{ width: 44 }} />
+      </View>
 
-      {/* Thay thế react-native-maps bằng WebView load Leaflet */}
-      <WebView 
-        source={{ html: mapHtml }} 
-        style={styles.map} 
-        scrollEnabled={false}
-      />
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        style={styles.formContainer}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-      <View style={styles.bottomSheet}>
-        {/* Nút chọn ảnh */}
+          <Text style={styles.label}>Loại khẩn cấp:</Text>
+          <View style={styles.typeRow}>
+            {[
+              { id: 'MEDICAL', icon: '🚑', label: 'Y tế' },
+              { id: 'FIRE', icon: '🔥', label: 'Cháy' },
+              { id: 'POLICE', icon: '🚓', label: 'An ninh' },
+              { id: 'RESCUE', icon: '🛟', label: 'Cứu hộ' }
+            ].map(t => (
+              <TouchableOpacity 
+                key={t.id} 
+                onPress={() => setEmergencyType(t.id)} 
+                style={[styles.typeBtn, emergencyType === t.id && styles.typeBtnActive]}
+              >
+                <Text style={styles.typeEmoji}>{t.icon}</Text>
+                <Text style={[styles.typeText, emergencyType === t.id && styles.typeTextActive]}>{t.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={styles.label}>Số người gặp nạn:</Text>
+          <TextInput 
+            style={styles.input} 
+            keyboardType="numeric" 
+            value={people} 
+            onChangeText={setPeople} 
+            placeholder="Ví dụ: 1"
+          />
+
+          <Text style={styles.label}>Mô tả tình trạng (Tùy chọn):</Text>
+          <TextInput 
+            style={[styles.input, { height: 80, textAlignVertical: 'top' }]} 
+            multiline
+            placeholder="Vết thương, đặc điểm người bệnh..."
+            value={description} 
+            onChangeText={setDescription} 
+          />
+
+          {/* Nút chọn ảnh */}
         <TouchableOpacity style={styles.imagePickerBtn} onPress={pickImage}>
           <Feather name="camera" size={20} color="#0F172A" />
           <Text style={styles.imagePickerText}>
@@ -205,7 +201,8 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
             <Text style={styles.sendButtonText}>XÁC NHẬN GỬI TÍN HIỆU CỨU NẠN</Text>
           )}
         </TouchableOpacity>
-      </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 };
@@ -213,39 +210,34 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' },
-  map: { flex: 1 },
-  backButton: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
-    zIndex: 10,
-    backgroundColor: 'white',
-    padding: 10,
-    borderRadius: 20,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'android' ? 40 : 20,
+    paddingBottom: 15,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#0F172A' },
+  backButton: { padding: 10, marginLeft: -10 },
   closeBtn: { marginTop: 25, paddingHorizontal: 20, paddingVertical: 12, backgroundColor: '#64748B', borderRadius: 8 },
-  bottomSheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'white',
-    padding: 24,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -5 },
-    shadowOpacity: 0.1,
-  },
-  warningText: { color: '#EF4444', fontWeight: 'bold', marginBottom: 15, textAlign: 'center', fontSize: 13 },
-  sendButton: { backgroundColor: '#EF4444', paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  formContainer: { flex: 1, backgroundColor: '#FFFFFF' },
+  scrollContent: { padding: 20 },
+  label: { fontSize: 14, fontWeight: '600', color: '#475569', marginBottom: 8, marginTop: 10 },
+  input: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 12, marginBottom: 5, fontSize: 15, color: '#0F172A' },
+  typeRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
+  typeBtn: { flex: 1, alignItems: 'center', backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, paddingVertical: 10, marginHorizontal: 4 },
+  typeBtnActive: { backgroundColor: '#FEE2E2', borderColor: '#EF4444' },
+  typeEmoji: { fontSize: 20, marginBottom: 4 },
+  typeText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
+  typeTextActive: { color: '#EF4444' },
+  warningText: { color: '#EF4444', fontWeight: 'bold', marginBottom: 15, textAlign: 'center', fontSize: 13, marginTop: 20 },
+  sendButton: { backgroundColor: '#EF4444', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginBottom: 30 },
   sendButtonText: { color: 'white', fontWeight: 'bold', fontSize: 15 },
-  imagePickerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, backgroundColor: '#F1F5F9', borderRadius: 12, marginBottom: 15 },
+  imagePickerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, backgroundColor: '#F1F5F9', borderRadius: 12, marginTop: 15, marginBottom: 15 },
   imagePickerText: { marginLeft: 10, fontWeight: '600', color: '#0F172A' },
-  previewImage: { width: '100%', height: 120, borderRadius: 12, marginBottom: 15, resizeMode: 'cover' }
+  previewImage: { width: '100%', height: 200, borderRadius: 12, marginBottom: 15, resizeMode: 'cover' }
 });
