@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Image } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
 import { backendApi } from '../services/backendApi';
 
@@ -13,6 +14,19 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [loadingMsg, setLoadingMsg] = useState('Đang lấy vị trí GPS từ điện thoại...');
   const [sending, setSending] = useState(false);
+  const [imageUri, setImageUri] = useState<string | null>(null);
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, // Chấp nhận hình ảnh
+      allowsEditing: true, // Cho phép crop ảnh
+      quality: 0.6, // Bóp dung lượng ảnh để upload cho nhanh
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setImageUri(result.assets[0].uri);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -40,6 +54,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
     if (!location) return;
     setSending(true);
     try {
+      // 1. Tạo SOS Request trước
       const response = await backendApi.post('/sos', {
         location: {
           type: "Point",
@@ -54,8 +69,30 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
         people: 1 // Đổi numberOfVictims thành people cho đúng model
       });
 
-      if (response.success) {
-        Alert.alert('Thành công', 'Tín hiệu cầu cứu đã được gửi đến trung tâm!', [
+      if (response.success && response.data?._id) {
+        const sosId = response.data._id;
+        
+        // 2. Nếu nạn nhân có đính kèm ảnh thì gửi ảnh lên
+        if (imageUri) {
+          const formData = new FormData();
+          const filename = imageUri.split('/').pop() || 'sos_image.jpg';
+          
+          formData.append('file', {
+            uri: imageUri,
+            name: filename,
+            type: 'image/jpeg'
+          } as any);
+          formData.append('sosId', sosId);
+
+          const uploadRes = await backendApi.postFormData('/files', formData);
+          if (!uploadRes.success) {
+            Alert.alert('Cảnh báo', 'Gửi SOS thành công nhưng up ảnh bị lỗi: ' + uploadRes.message);
+            setSending(false);
+            return;
+          }
+        }
+
+        Alert.alert('Thành công', 'Tín hiệu cầu cứu và hình ảnh đã được gửi đến trung tâm!', [
           { text: 'Đóng', onPress: onClose }
         ]);
       } else {
@@ -141,6 +178,19 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
       />
 
       <View style={styles.bottomSheet}>
+        {/* Nút chọn ảnh */}
+        <TouchableOpacity style={styles.imagePickerBtn} onPress={pickImage}>
+          <Feather name="camera" size={20} color="#0F172A" />
+          <Text style={styles.imagePickerText}>
+            {imageUri ? 'Đổi ảnh khác' : '📸 Đính kèm ảnh hiện trường (Khuyên dùng)'}
+          </Text>
+        </TouchableOpacity>
+        
+        {/* Hiển thị ảnh thu nhỏ nếu đã chọn */}
+        {imageUri && (
+          <Image source={{ uri: imageUri }} style={styles.previewImage} />
+        )}
+
         <Text style={styles.warningText}>
           ⚠️ Đội cứu hộ sẽ được điều động đến vị trí này ngay lập tức!
         </Text>
@@ -194,5 +244,8 @@ const styles = StyleSheet.create({
   },
   warningText: { color: '#EF4444', fontWeight: 'bold', marginBottom: 15, textAlign: 'center', fontSize: 13 },
   sendButton: { backgroundColor: '#EF4444', paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
-  sendButtonText: { color: 'white', fontWeight: 'bold', fontSize: 15 }
+  sendButtonText: { color: 'white', fontWeight: 'bold', fontSize: 15 },
+  imagePickerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, backgroundColor: '#F1F5F9', borderRadius: 12, marginBottom: 15 },
+  imagePickerText: { marginLeft: 10, fontWeight: '600', color: '#0F172A' },
+  previewImage: { width: '100%', height: 120, borderRadius: 12, marginBottom: 15, resizeMode: 'cover' }
 });

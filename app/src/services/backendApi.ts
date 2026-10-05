@@ -179,6 +179,56 @@ class BackendApiService {
     });
   }
 
+  // Phương thức chuyên dụng để gửi file ảnh/video (không dùng JSON)
+  async postFormData<T = any>(endpoint: string, formData: FormData, options: RequestInit = {}): Promise<ApiResponse<T>> {
+    const candidates = await this.getCandidateUrls();
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+
+    // Không set Content-Type để trình duyệt/fetch tự động tạo multipart/form-data boundary
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      'Bypass-Tunnel-Reminder': 'true',
+      ...(options.headers as Record<string, string>),
+    };
+
+    const token = await AsyncStorage.getItem(ENV.STORAGE_KEYS.ACCESS_TOKEN);
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    let lastError = '';
+    for (const baseUrl of candidates) {
+      const url = `${baseUrl}${cleanEndpoint}`;
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s cho upload file
+
+        const response = await fetch(url, {
+          ...options,
+          method: 'POST',
+          headers,
+          body: formData,
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+        const json = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          return {
+            success: false,
+            message: json?.message || `Yêu cầu thất bại với mã lỗi ${response.status}`,
+            error: json?.error,
+          };
+        }
+
+        if (baseUrl !== this.customBaseUrl) this.setBaseUrl(baseUrl);
+        return json || { success: true, message: 'Thành công' };
+      } catch (err: any) {
+        lastError = err.message || '';
+      }
+    }
+    return { success: false, message: 'Không thể kết nối đến server để upload file', error: lastError };
+  }
+
   async put<T = any>(endpoint: string, body: any, options: RequestInit = {}): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       ...options,

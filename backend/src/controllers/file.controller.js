@@ -2,9 +2,20 @@ const fileService = require('../services/file.service');
 
 const uploadFile = async (req, res, next) => {
   try {
-    // Trong thực tế, middleware như multer sẽ xử lý lưu file lên S3/Cloudinary 
-    // và gán URL vào req.body. Ở đây giả định client đã cung cấp URL.
-    const uploadedFile = await fileService.uploadFile(req.user._id, req.body);
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Vui lòng đính kèm một file' });
+    }
+
+    // Multer-Cloudinary gán URL vào req.file.path
+    const fileData = {
+      sosId: req.body.sosId || null,
+      type: req.file.mimetype.startsWith('video') ? 'VIDEO' : 'IMAGE',
+      url: req.file.path, 
+      fileName: req.file.originalname || req.file.filename,
+      fileSize: req.file.size || 0
+    };
+
+    const uploadedFile = await fileService.uploadFile(req.user._id, fileData);
     res.status(201).json({ success: true, data: uploadedFile });
   } catch (error) {
     next(error);
