@@ -12,7 +12,6 @@ app.set('trust proxy', 1);
 
 // Phục vụ file tĩnh (logo, assets)
 app.use('/assets', express.static(path.join(__dirname, '../assets')));
-
 // Middlewares
 const allowedOrigins = [
   process.env.CLIENT_URL,
