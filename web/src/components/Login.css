@@ -15,28 +15,27 @@
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Be Vietnam Pro', 'Outfit', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   padding: 20px;
 }
 
-/* Background Video styling */
-.sos-bg-video {
+/* Background Video & Image styling */
+.sos-bg-video,
+.sos-bg-image {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: fill; /* Chiếu trọn vẹn 100% khung hình video không bị cắt góc */
   z-index: 1;
   pointer-events: none;
+  filter: brightness(1.08) contrast(1.02);
 }
 
-/* Ambient overlay for high visual clarity and card contrast */
+/* Ambient overlay - removed dark shading for a clear bright view */
 .sos-video-overlay {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at center, rgba(15, 23, 42, 0.12) 0%, rgba(15, 23, 42, 0.35) 100%);
-  z-index: 2;
-  pointer-events: none;
+  display: none;
 }
 
 
@@ -45,16 +44,15 @@
   position: relative;
   z-index: 10;
   width: 100%;
-  max-width: 440px;
-  background: rgba(255, 255, 255, 0.22);
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
-  border: 1.5px solid rgba(255, 255, 255, 0.45);
-  border-radius: 28px;
-  padding: 38px 36px 30px 36px;
-  box-shadow: 
-    0 30px 60px -15px rgba(0, 0, 0, 0.45),
-    0 0 0 1px rgba(255, 255, 255, 0.35) inset;
+  max-width: 480px;
+  /* Hiệu ứng trong suốt từ trong ra ngoài: trung tâm trắng sáng, viền tan biến trong suốt hoàn toàn */
+  background: radial-gradient(ellipse at 50% 50%, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.72) 42%, rgba(255, 255, 255, 0.2) 75%, rgba(255, 255, 255, 0) 100%);
+  backdrop-filter: blur(16px) saturate(170%);
+  -webkit-backdrop-filter: blur(16px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 32px;
+  padding: 42px 40px 36px 40px;
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.12);
   animation: cardFadeIn 0.35s ease-out;
 }
 
@@ -76,37 +74,39 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  margin-bottom: 22px;
+  margin-bottom: 26px;
 }
 
 .sos-card-logo {
-  width: 82px;
+  width: 106px;
   height: auto;
-  max-height: 58px;
+  max-height: 72px;
   object-fit: contain;
-  margin-bottom: 14px;
-  filter: drop-shadow(0 4px 10px rgba(0, 102, 245, 0.25));
-  transition: transform 0.2s ease;
+  margin-bottom: 16px;
+  filter: none; /* Giữ nguyên màu gốc của logo */
+  transition: opacity 0.2s ease;
 }
 
 .sos-card-logo:hover {
-  transform: scale(1.06);
+  /* Giữ nguyên kích thước và màu sắc khi hover */
+  transform: none;
+  opacity: 0.92;
 }
 
 .sos-card-title {
-  font-size: 26px;
-  font-weight: 900;
-  color: #000000;
-  letter-spacing: -0.4px;
-  margin-bottom: 6px;
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.6);
+  font-size: 32px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.5px;
+  margin-bottom: 8px;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
 }
 
 .sos-card-subtitle {
-  font-size: 14px;
-  color: #000000;
-  font-weight: 700;
-  line-height: 1.45;
+  font-size: 16px;
+  color: #1e293b;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 /* Form Styling */
@@ -118,22 +118,22 @@
   position: relative;
   display: flex;
   align-items: center;
-  height: 52px;
-  background: rgba(255, 255, 255, 0.35);
+  height: 58px;
+  background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1.5px solid rgba(255, 255, 255, 0.55);
-  border-radius: 14px;
-  padding: 0 16px;
-  margin-bottom: 14px;
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  padding: 0 18px;
+  margin-bottom: 16px;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .sos-input-group:focus-within {
-  background: rgba(255, 255, 255, 0.55);
-  border-color: #000000;
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.15);
+  background: #ffffff;
+  border-color: #0066f5;
+  box-shadow: 0 0 0 3.5px rgba(0, 102, 245, 0.22);
 }
 
 
@@ -142,14 +142,14 @@
 }
 
 .sos-group-icon {
-  color: #000000;
-  margin-right: 12px;
+  color: #334155;
+  margin-right: 14px;
   flex-shrink: 0;
   transition: color 0.2s ease;
 }
 
 .sos-input-group:focus-within .sos-group-icon {
-  color: #000000;
+  color: #0066f5;
 }
 
 .sos-card-input {
@@ -159,33 +159,35 @@
   outline: none;
   background: transparent;
   font-family: inherit;
-  font-size: 15px;
-  color: #000000;
-  font-weight: 800;
+  font-size: 16.5px;
+  color: #0f172a;
+  font-weight: 600;
 }
 
 .sos-card-input::placeholder {
-  color: #000000;
-  opacity: 0.75;
-  font-weight: 700;
+  color: #64748b;
+  opacity: 0.85;
+  font-weight: 500;
+  font-size: 15.5px;
 }
 
 .sos-card-toggle-btn {
   background: none;
   border: none;
-  color: #000000;
+  color: #475569;
   cursor: pointer;
-  padding: 4px;
+  padding: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-left: 6px;
-  border-radius: 6px;
-  transition: opacity 0.2s ease;
+  border-radius: 8px;
+  transition: all 0.2s ease;
 }
 
 .sos-card-toggle-btn:hover {
-  opacity: 0.7;
+  color: #0066f5;
+  background: rgba(0, 102, 245, 0.08);
 }
 
 /* Ghi nhớ mật khẩu (Remember Me) */
@@ -193,54 +195,54 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: -2px;
-  margin-bottom: 18px;
+  margin-top: 2px;
+  margin-bottom: 20px;
   padding: 0 4px;
 }
 
 .sos-remember-label {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   cursor: pointer;
   user-select: none;
-  font-size: 14px;
-  color: #000000;
-  font-weight: 800;
+  font-size: 15.5px;
+  color: #0f172a;
+  font-weight: 700;
 }
 
 .sos-remember-checkbox {
-  width: 17px;
-  height: 17px;
+  width: 19px;
+  height: 19px;
   cursor: pointer;
   accent-color: #0066f5;
-  border-radius: 4px;
+  border-radius: 5px;
 }
 
 /* Submit Button - Vibrant Royal Blue with Arrow */
 .sos-card-submit {
   width: 100%;
-  height: 50px;
+  height: 54px;
   background: #0066f5;
   border: none;
-  border-radius: 14px;
+  border-radius: 15px;
   color: #ffffff;
   font-family: inherit;
-  font-size: 15px;
+  font-size: 17.5px;
   font-weight: 700;
   letter-spacing: 0.2px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
   transition: all 0.2s ease;
-  box-shadow: 0 8px 20px rgba(0, 102, 245, 0.32);
+  box-shadow: 0 8px 24px rgba(0, 102, 245, 0.38);
 }
 
 .sos-card-submit:hover:not(:disabled) {
   background: #0056d6;
-  box-shadow: 0 10px 24px rgba(0, 102, 245, 0.45);
+  box-shadow: 0 10px 28px rgba(0, 102, 245, 0.5);
   transform: translateY(-1px);
 }
 
@@ -256,21 +258,21 @@
 /* Forgot password link below button */
 .sos-forgot-center {
   text-align: center;
-  margin-top: 18px;
+  margin-top: 20px;
 }
 
 .sos-forgot-text {
-  font-size: 14px;
-  font-weight: 800;
-  color: #000000;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
   text-decoration: underline;
   cursor: pointer;
   transition: color 0.2s ease, opacity 0.2s ease;
 }
 
 .sos-forgot-text:hover {
-  color: #1e293b;
-  opacity: 0.8;
+  color: #0066f5;
+  opacity: 1;
 }
 
 /* Alert Notification */
@@ -315,25 +317,25 @@
 }
 
 .sos-user-name {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 800;
   color: #0f172a;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .sos-user-email {
-  font-size: 13.5px;
+  font-size: 15px;
   color: #334155;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .sos-user-role-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px;
+  padding: 6px 14px;
   border-radius: 20px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
   margin-bottom: 20px;
@@ -352,14 +354,14 @@
 }
 
 .sos-user-info-box {
-  background: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.5);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 14px;
-  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 16px;
+  padding: 18px;
   text-align: left;
-  font-size: 13px;
+  font-size: 14.5px;
   color: #1e293b;
   line-height: 1.8;
   margin-bottom: 20px;
@@ -406,6 +408,169 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Terms & Policy Section below form */
+.sos-terms-divider {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(15, 23, 42, 0.12), transparent);
+  margin: 22px 0 16px 0;
+}
+
+.sos-terms-box {
+  text-align: center;
+}
+
+.sos-terms-text {
+  font-size: 13.5px;
+  color: #475569;
+  line-height: 1.55;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.sos-terms-link {
+  color: #0066f5;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.sos-terms-link:hover {
+  color: #004dc7;
+}
+
+.sos-footer-secure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: -0.1px;
+}
+
+.sos-secure-icon {
+  color: #10b981;
+}
+
+/* Terms / Privacy Modal Dialog */
+.sos-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: modalFadeIn 0.25s ease-out;
+}
+
+.sos-modal-content {
+  background: #ffffff;
+  border-radius: 24px;
+  max-width: 580px;
+  width: 100%;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  animation: modalSlideUp 0.3s ease-out;
+}
+
+.sos-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.sos-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.sos-modal-close-btn {
+  background: #f1f5f9;
+  border: none;
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sos-modal-close-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.sos-modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: #334155;
+}
+
+.sos-modal-body h4 {
+  color: #0f172a;
+  font-weight: 700;
+  margin: 14px 0 6px 0;
+}
+
+.sos-modal-body h4:first-child {
+  margin-top: 0;
+}
+
+.sos-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #f1f5f9;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.sos-modal-btn-confirm {
+  background: #0066f5;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 22px;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.sos-modal-btn-confirm:hover {
+  background: #0052cc;
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalSlideUp {
+  from { transform: translateY(20px) scale(0.96); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
 }
 
 /* Responsive */
