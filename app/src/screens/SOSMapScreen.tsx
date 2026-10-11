@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Image, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { backendApi } from '../services/backendApi';
 
 interface SOSMapScreenProps {
@@ -140,17 +139,22 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
           <Text style={styles.label}>Loại khẩn cấp:</Text>
           <View style={styles.typeRow}>
             {[
-              { id: 'MEDICAL', icon: '🚑', label: 'Y tế' },
-              { id: 'FIRE', icon: '🔥', label: 'Cháy' },
-              { id: 'POLICE', icon: '🚓', label: 'An ninh' },
-              { id: 'RESCUE', icon: '🛟', label: 'Cứu hộ' }
+              { id: 'MEDICAL', iconName: 'ambulance', label: 'Y tế' },
+              { id: 'FIRE', iconName: 'fire', label: 'Hỏa hoạn' },
+              { id: 'POLICE', iconName: 'shield-account', label: 'An ninh' },
+              { id: 'RESCUE', iconName: 'lifebuoy', label: 'Cứu hộ' }
             ].map(t => (
               <TouchableOpacity 
                 key={t.id} 
                 onPress={() => setEmergencyType(t.id)} 
                 style={[styles.typeBtn, emergencyType === t.id && styles.typeBtnActive]}
+                activeOpacity={0.7}
               >
-                <Text style={styles.typeEmoji}>{t.icon}</Text>
+                <MaterialCommunityIcons 
+                  name={t.iconName as any} 
+                  size={24} 
+                  color={emergencyType === t.id ? '#EF4444' : '#64748B'} 
+                />
                 <Text style={[styles.typeText, emergencyType === t.id && styles.typeTextActive]}>{t.label}</Text>
               </TouchableOpacity>
             ))}
@@ -175,32 +179,41 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
           />
 
           {/* Nút chọn ảnh */}
-        <TouchableOpacity style={styles.imagePickerBtn} onPress={pickImage}>
-          <Feather name="camera" size={20} color="#0F172A" />
-          <Text style={styles.imagePickerText}>
-            {imageUri ? 'Đổi ảnh khác' : '📸 Đính kèm ảnh hiện trường (Khuyên dùng)'}
-          </Text>
-        </TouchableOpacity>
-        
-        {/* Hiển thị ảnh thu nhỏ nếu đã chọn */}
-        {imageUri && (
-          <Image source={{ uri: imageUri }} style={styles.previewImage} />
-        )}
-
-        <Text style={styles.warningText}>
-          ⚠️ Đội cứu hộ sẽ được điều động đến vị trí này ngay lập tức!
-        </Text>
-        <TouchableOpacity 
-          style={styles.sendButton} 
-          onPress={handleSendSOS}
-          disabled={sending}
-        >
-          {sending ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text style={styles.sendButtonText}>XÁC NHẬN GỬI TÍN HIỆU CỨU NẠN</Text>
+          <TouchableOpacity style={styles.imagePickerBtn} onPress={pickImage} activeOpacity={0.8}>
+            <Feather name="camera" size={20} color="#0284C7" />
+            <Text style={styles.imagePickerText}>
+              {imageUri ? 'Thay đổi ảnh khác' : 'Đính kèm hình ảnh hiện trường (Khuyên dùng)'}
+            </Text>
+          </TouchableOpacity>
+          
+          {/* Hiển thị ảnh thu nhỏ nếu đã chọn */}
+          {imageUri && (
+            <Image source={{ uri: imageUri }} style={styles.previewImage} />
           )}
-        </TouchableOpacity>
+
+          {/* Cảnh báo chuyên nghiệp */}
+          <View style={styles.warningBox}>
+            <Feather name="alert-triangle" size={18} color="#EF4444" style={{ marginRight: 8 }} />
+            <Text style={styles.warningText}>
+              Đội cứu hộ sẽ được điều động đến vị trí này ngay lập tức!
+            </Text>
+          </View>
+
+          <TouchableOpacity 
+            style={styles.sendButton} 
+            onPress={handleSendSOS}
+            disabled={sending}
+            activeOpacity={0.85}
+          >
+            {sending ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <View style={styles.sendButtonContent}>
+                <MaterialCommunityIcons name="broadcast" size={20} color="white" style={{ marginRight: 8 }} />
+                <Text style={styles.sendButtonText}>XÁC NHẬN GỬI TÍN HIỆU CỨU NẠN</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -231,13 +244,25 @@ const styles = StyleSheet.create({
   typeRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
   typeBtn: { flex: 1, alignItems: 'center', backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, paddingVertical: 10, marginHorizontal: 4 },
   typeBtnActive: { backgroundColor: '#FEE2E2', borderColor: '#EF4444' },
-  typeEmoji: { fontSize: 20, marginBottom: 4 },
-  typeText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
+  typeText: { fontSize: 12, fontWeight: '600', color: '#64748B', marginTop: 4 },
   typeTextActive: { color: '#EF4444' },
-  warningText: { color: '#EF4444', fontWeight: 'bold', marginBottom: 15, textAlign: 'center', fontSize: 13, marginTop: 20 },
-  sendButton: { backgroundColor: '#EF4444', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginBottom: 30 },
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF2F2',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    marginTop: 15,
+    marginBottom: 20,
+  },
+  warningText: { color: '#DC2626', fontWeight: 'bold', fontSize: 13, flexShrink: 1 },
+  sendButton: { backgroundColor: '#EF4444', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginBottom: 30, elevation: 3, shadowColor: '#EF4444', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 6 },
+  sendButtonContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   sendButtonText: { color: 'white', fontWeight: 'bold', fontSize: 15 },
-  imagePickerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, backgroundColor: '#F1F5F9', borderRadius: 12, marginTop: 15, marginBottom: 15 },
-  imagePickerText: { marginLeft: 10, fontWeight: '600', color: '#0F172A' },
+  imagePickerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, backgroundColor: '#F0F9FF', borderRadius: 12, borderWidth: 1, borderColor: '#BAE6FD', marginTop: 15, marginBottom: 15 },
+  imagePickerText: { marginLeft: 10, fontWeight: '600', color: '#0284C7', fontSize: 14 },
   previewImage: { width: '100%', height: 200, borderRadius: 12, marginBottom: 15, resizeMode: 'cover' }
 });

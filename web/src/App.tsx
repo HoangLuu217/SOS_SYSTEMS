@@ -10,8 +10,8 @@ function App() {
   return (
     <div>
       <div style={{ textAlign: 'center', padding: '10px', backgroundColor: '#333' }}>
-        <button 
-          onClick={() => setShowMap(!showMap)} 
+        <button
+          onClick={() => setShowMap(!showMap)}
           style={{ padding: '10px 20px', cursor: 'pointer', fontWeight: 'bold' }}
         >
           🔄 Chuyển sang trang: {showMap ? 'LOGIN' : 'TEST MAP'}
