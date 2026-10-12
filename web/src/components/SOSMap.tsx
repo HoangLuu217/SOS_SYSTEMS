@@ -94,7 +94,7 @@ const MapController: React.FC<MapControllerProps> = ({
 
     // Bắt sự kiện click: CHỈ KHI BẬT CHẾ ĐỘ THẢ GHIM MỚI NHẬN TỌA ĐỘ
     useMapEvents({
-        click(e) {
+        click(e: L.LeafletMouseEvent) {
             if (!isPinMode) return; // Nếu đang ở chế độ xem bình thường -> Không làm gì cả!
             setPosition([e.latlng.lat, e.latlng.lng]);
             map.flyTo(e.latlng, 16);

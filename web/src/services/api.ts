@@ -13,6 +13,21 @@ import type {
 const API_BASE = '/api';
 const DIRECT_BACKEND = 'http://127.0.0.1:5000/api';
 
+async function safeParseResponse(res: Response): Promise<any> {
+  const text = await res.text();
+  if (!text || !text.trim()) {
+    if (!res.ok) {
+      throw new Error(`Máy chủ không phản hồi nội dung (HTTP ${res.status}). Vui lòng kiểm tra Backend server.`);
+    }
+    return {};
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`Phản hồi máy chủ không hợp lệ (HTTP ${res.status}). Vui lòng kiểm tra Backend server.`);
+  }
+}
+
 /**
  * Helper gọi API kèm Header Authorization token tự động và xử lý fallback URL
  */
@@ -35,16 +50,19 @@ async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Pr
 
   try {
     const res = await fetch(`${API_BASE}${endpoint}`, mergedOptions);
-    const data = await res.json();
+    if (!res.ok && res.status >= 500) {
+      throw new Error(`Proxy error HTTP ${res.status}`);
+    }
+    const data = await safeParseResponse(res);
     if (!res.ok) {
       throw new Error(data.message || 'Lỗi xử lý yêu cầu máy chủ');
     }
     return data;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : '';
-    if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
+    if (message.includes('Failed to fetch') || message.includes('NetworkError') || message.includes('Proxy error') || message.includes('không phản hồi')) {
       const directRes = await fetch(`${DIRECT_BACKEND}${endpoint}`, mergedOptions);
-      const directData = await directRes.json();
+      const directData = await safeParseResponse(directRes);
       if (!directRes.ok) {
         throw new Error(directData.message || 'Lỗi xử lý yêu cầu máy chủ');
       }
@@ -70,25 +88,37 @@ export async function loginApi(account: string, password: string): Promise<Login
       body: JSON.stringify(payload),
     });
 
-    const data = await res.json();
+    if (!res.ok && res.status >= 500) {
+      throw new Error(`Proxy error HTTP ${res.status}`);
+    }
+
+    const data = await safeParseResponse(res);
     if (!res.ok) {
       throw new Error(data.message || 'Đăng nhập không thành công');
     }
     return data;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : '';
-    if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
-      const directRes = await fetch(`${DIRECT_BACKEND}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
-      const directData = await directRes.json();
-      if (!directRes.ok) {
-        throw new Error(directData.message || 'Đăng nhập không thành công');
+    if (message.includes('Failed to fetch') || message.includes('NetworkError') || message.includes('Proxy error') || message.includes('không phản hồi')) {
+      try {
+        const directRes = await fetch(`${DIRECT_BACKEND}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        });
+        const directData = await safeParseResponse(directRes);
+        if (!directRes.ok) {
+          throw new Error(directData.message || 'Đăng nhập không thành công');
+        }
+        return directData;
+      } catch (fallbackErr: unknown) {
+        const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : '';
+        if (fallbackMsg.includes('Failed to fetch') || fallbackMsg.includes('NetworkError')) {
+          throw new Error('Không thể kết nối đến máy chủ Backend (Port 5000). Vui lòng đảm bảo Backend server đang chạy.');
+        }
+        throw fallbackErr;
       }
-      return directData;
     }
     throw err;
   }
@@ -96,8 +126,13 @@ export async function loginApi(account: string, password: string): Promise<Login
 
 export async function logoutApi(): Promise<void> {
   try {
+    const token = localStorage.getItem('sos_access_token');
     await fetch(`${API_BASE}/auth/logout`, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
       credentials: 'include',
     });
   } catch {
@@ -198,7 +233,18 @@ export async function fetchAdminUsers(params: Record<string, string> = {}): Prom
 }> {
   const query = new URLSearchParams(params).toString();
   const endpoint = query ? `/admin/users?${query}` : '/admin/users';
-  return fetchWithAuth(endpoint, { method: 'GET' });
+  const raw = await fetchWithAuth<any>(endpoint, { method: 'GET' });
+  // Chuẩn hóa response: Nếu backend trả về raw.data dạng mảng users
+  if (Array.isArray(raw.data)) {
+    return {
+      success: raw.success,
+      data: {
+        users: raw.data,
+        pagination: raw.meta || { total: raw.data.length, page: 1, limit: 50, totalPages: 1 },
+      },
+    };
+  }
+  return raw;
 }
 
 export async function updateUserStatus(userId: string, status: string): Promise<{ success: boolean }> {
@@ -262,5 +308,53 @@ export async function fetchAuthorityOrganizations(): Promise<{ success: boolean;
 // ─── AUDIT LOGS (CƠ SỞ DỮ LIỆU THẬT) ─────────────────────────────────────────
 
 export async function fetchAuditLogs(): Promise<{ success: boolean; data: { logs: AuditLogItem[] } }> {
-  return fetchWithAuth('/audit-logs', { method: 'GET' });
+  const raw = await fetchWithAuth<any>('/audit-logs', { method: 'GET' });
+  // Chuẩn hóa response: Nếu backend trả về raw.data dạng mảng logs
+  if (Array.isArray(raw.data)) {
+    return {
+      success: raw.success,
+      data: { logs: raw.data },
+    };
+  }
+  return raw;
+}
+
+// ─── SOS ASSIGNMENTS (ĐIỀU PHỐI CỨU HỘ) ──────────────────────────────────────
+
+export async function assignSosApi(sosId: string, payload: {
+  rescueTeamId: string;
+  rescuerId: string;
+  vehicleId?: string;
+  note?: string;
+}): Promise<{ success: boolean; data: any }> {
+  return fetchWithAuth(`/sos/${sosId}/assign`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAssignmentStatusApi(assignmentId: string, status: string): Promise<{ success: boolean; data: any }> {
+  return fetchWithAuth(`/assignments/${assignmentId}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function cancelAssignmentApi(assignmentId: string, reason: string): Promise<{ success: boolean; data: any }> {
+  return fetchWithAuth(`/assignments/${assignmentId}/cancel`, {
+    method: 'PATCH',
+    body: JSON.stringify({ reason }),
+  });
+}
+
+export async function reassignMissionApi(assignmentId: string, payload: {
+  rescueTeamId: string;
+  rescuerId: string;
+  vehicleId?: string;
+  reason?: string;
+}): Promise<{ success: boolean; data: any }> {
+  return fetchWithAuth(`/assignments/${assignmentId}/reassign`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
 }

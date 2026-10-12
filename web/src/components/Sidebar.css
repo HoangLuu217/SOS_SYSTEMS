@@ -27,6 +27,29 @@
   min-width: 80px;
 }
 
+.sos-sidebar.collapsed .sos-sidebar-header {
+  padding: 12px 6px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.sos-sidebar.collapsed .sos-brand {
+  justify-content: center;
+  width: 100%;
+}
+
+.sos-sidebar.collapsed .sos-brand-logo {
+  width: 34px;
+  height: 34px;
+}
+
+.sos-sidebar.collapsed .sos-collapse-toggle {
+  width: 26px;
+  height: 26px;
+}
+
 /* SIDEBAR HEADER */
 .sos-sidebar-header {
   padding: 18px 16px;
@@ -444,3 +467,140 @@
   background: linear-gradient(135deg, #dc2626, #b91c1c);
   transform: translateY(-1px);
 }
+
+/* ============================================================
+   LIGHT THEME SYNCHRONIZATION FOR SIDEBAR & MAIN CONTAINER
+   ============================================================ */
+[data-theme="light"] .sos-dashboard-container {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-sidebar {
+  background: #ffffff;
+  border-right: 1px solid #e2e8f0;
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .sos-sidebar-header {
+  border-bottom: 1px solid #f1f5f9;
+}
+
+[data-theme="light"] .sos-brand-title {
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-brand-subtitle {
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-collapse-toggle {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-collapse-toggle:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-role-banner.authority {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+  color: #0284c7;
+}
+
+[data-theme="light"] .sos-role-banner.admin {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+[data-theme="light"] .sos-nav-group-title {
+  color: #94a3b8;
+}
+
+[data-theme="light"] .sos-nav-item {
+  color: #475569;
+}
+
+[data-theme="light"] .sos-nav-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-nav-item.authority-active.active {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #7dd3fc;
+  box-shadow: none;
+}
+
+[data-theme="light"] .sos-nav-item.active {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #fca5a5;
+  box-shadow: none;
+}
+
+[data-theme="light"] .sos-sidebar-footer {
+  border-top: 1px solid #f1f5f9;
+  background: #f8fafc;
+}
+
+[data-theme="light"] .sos-user-profile-bar {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme="light"] .sos-user-fullname {
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-user-dept {
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-btn-sidebar-logout {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-btn-sidebar-logout:hover {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+[data-theme="light"] .sos-main-content {
+  background-color: #f8fafc !important;
+}
+
+[data-theme="light"] .sos-main-header {
+  background: #ffffff !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
+}
+
+[data-theme="light"] .sos-page-title {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .sos-page-desc {
+  color: #64748b !important;
+}
+
+[data-theme="light"] .sos-header-logout-btn {
+  background-color: #ffffff !important;
+  color: #475569 !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+[data-theme="light"] .sos-header-logout-btn:hover {
+  background-color: #fee2e2 !important;
+  color: #dc2626 !important;
+  border-color: #fca5a5 !important;
+}
+

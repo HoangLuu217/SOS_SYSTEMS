@@ -16,9 +16,17 @@ import {
 } from 'lucide-react';
 import { loginApi, logoutApi } from '../services/api';
 import type { User } from '../types/auth';
+import { domainDService } from '../services/domainDService';
+import { useApp } from '../context/AppContext';
 import './Login.css';
 
-export const LoginPage = () => {
+interface LoginPageProps {
+  onEnterConsole?: (targetPortal?: 'admin' | 'author') => void;
+  onLoginSuccess?: (user: User) => void;
+}
+
+export const LoginPage = ({ onEnterConsole, onLoginSuccess }: LoginPageProps = {}) => {
+  const { lang, toggleLang, theme, toggleTheme } = useApp();
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -101,11 +109,25 @@ export const LoginPage = () => {
           localStorage.removeItem('sos_saved_password');
         }
 
-        // Đăng nhập hợp lệ
+        // Đăng nhập hợp lệ - Tự động đồng bộ và định vị khu vực quản lý
         setUser(loggedInUser);
         localStorage.setItem('sos_auth_user', JSON.stringify(loggedInUser));
+        domainDService.syncLoggedInUser(loggedInUser);
         if (res.data.accessToken) {
           localStorage.setItem('sos_access_token', res.data.accessToken);
+        }
+
+        // Tự động chuyển hướng ngay lập tức vào giao diện điều hành tương ứng
+        const isAuth = loggedInUser.roles.includes('LOCAL_AUTHORITY') && !loggedInUser.roles.includes('ADMIN');
+        const target = isAuth ? 'author' : 'admin';
+        const targetPath = isAuth ? '/localauthority/map' : '/admin/map';
+        localStorage.setItem('sos_active_portal', target);
+        window.history.replaceState(null, '', targetPath);
+        if (onLoginSuccess) {
+          onLoginSuccess(loggedInUser);
+        }
+        if (onEnterConsole) {
+          onEnterConsole(target);
         }
       } else {
         setErrorMsg(res.message || 'Đăng nhập không thành công.');
@@ -123,6 +145,8 @@ export const LoginPage = () => {
     await logoutApi();
     localStorage.removeItem('sos_auth_user');
     localStorage.removeItem('sos_access_token');
+    localStorage.removeItem('sos_active_portal');
+    window.history.replaceState(null, '', '/login');
     setUser(null);
     if (!rememberPassword) {
       setAccount('');
@@ -149,6 +173,63 @@ export const LoginPage = () => {
 
       {/* Ambient Overlay for card contrast */}
       <div className="sos-video-overlay" />
+
+      {/* Top right language & theme quick switcher */}
+      <div style={{
+        position: 'absolute',
+        top: 20,
+        right: 24,
+        zIndex: 10,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+      }}>
+        <button
+          type="button"
+          onClick={toggleLang}
+          style={{
+            background: 'rgba(255, 255, 255, 0.9)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(226, 232, 240, 0.8)',
+            borderRadius: 8,
+            padding: '6px 14px',
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            color: '#0f172a',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          }}
+          title={lang === 'vi' ? 'Chuyển sang Tiếng Anh' : 'Switch to Vietnamese'}
+        >
+          {lang === 'vi' ? '🇻🇳 VI' : '🇬🇧 EN'}
+        </button>
+
+        <button
+          type="button"
+          onClick={toggleTheme}
+          style={{
+            background: 'rgba(255, 255, 255, 0.9)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(226, 232, 240, 0.8)',
+            borderRadius: 8,
+            padding: '6px 14px',
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            color: '#0f172a',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          }}
+          title={theme === 'light' ? 'Chuyển sang Chế độ Tối' : 'Switch to Light Mode'}
+        >
+          {theme === 'light' ? '☀️ Sáng' : '🌙 Tối'}
+        </button>
+      </div>
 
       <div className="sos-glass-card">
         {user ? (
@@ -189,10 +270,23 @@ export const LoginPage = () => {
               className="sos-card-submit"
               style={{ marginBottom: 12 }}
               onClick={() => {
-                window.location.hash = '#map';
+                if (user) {
+                  domainDService.syncLoggedInUser(user);
+                }
+                const isAuth = user?.roles.includes('LOCAL_AUTHORITY') && !user?.roles.includes('ADMIN');
+                const target = isAuth ? 'author' : 'admin';
+                const targetPath = isAuth ? '/localauthority/map' : '/admin/map';
+                localStorage.setItem('sos_active_portal', target);
+                window.history.replaceState(null, '', targetPath);
+                if (onLoginSuccess && user) {
+                  onLoginSuccess(user);
+                }
+                if (onEnterConsole) {
+                  onEnterConsole(target);
+                }
               }}
             >
-              <span>Vào Bảng Điều Phối Tác Chiến</span>
+              <span>Vào Cổng {user.roles.includes('ADMIN') ? 'Quản Trị ADMIN' : 'Tác Chiến AUTHOR'}</span>
               <ArrowRight size={18} />
             </button>
 
@@ -203,7 +297,7 @@ export const LoginPage = () => {
               disabled={loading}
             >
               <LogOut size={16} />
-              <span>Đăng xuất tài khoản</span>
+              <span>Đổi tài khoản khác (Đăng xuất)</span>
             </button>
           </div>
         ) : (
@@ -296,7 +390,6 @@ export const LoginPage = () => {
                   </>
                 )}
               </button>
-
               {/* Link: Quên mật khẩu? */}
               <div className="sos-forgot-center">
                 <span

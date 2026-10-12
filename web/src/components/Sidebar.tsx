@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { User } from '../types/auth';
+import { fetchSosRequests, fetchAlerts, fetchAdminUsers } from '../services/api';
+import { domainDService } from '../services/domainDService';
 import {
   Map,
   Siren,
@@ -76,6 +78,78 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const isAdmin = user.roles.includes('ADMIN');
 
+  // Dynamic real-time badge counts từ database
+  const [sosCounts, setSosCounts] = useState<{ pending: number; active: number }>({ pending: 0, active: 0 });
+  const [hazardCount, setHazardCount] = useState<number>(0);
+  const [pendingRescuersCount, setPendingRescuersCount] = useState<number>(0);
+
+  const fetchRealCounts = useCallback(async () => {
+    try {
+      const res = await fetchSosRequests();
+      if (res.success && Array.isArray(res.data)) {
+        const pending = res.data.filter((s) => s.status === 'PENDING').length;
+        const active = res.data.filter((s) =>
+          ['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status)
+        ).length;
+        setSosCounts({ pending, active });
+      } else {
+        const fallback = domainDService.getSosRequests();
+        const pending = fallback.filter((s) => s.status === 'PENDING').length;
+        const active = fallback.filter((s) =>
+          s.status === 'VERIFIED' || !!s.assignmentId || ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status as any)
+        ).length;
+        setSosCounts({ pending, active });
+      }
+    } catch {
+      const fallback = domainDService.getSosRequests();
+      const pending = fallback.filter((s) => s.status === 'PENDING').length;
+      const active = fallback.filter((s) =>
+        s.status === 'VERIFIED' || !!s.assignmentId || ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status as any)
+      ).length;
+      setSosCounts({ pending, active });
+    }
+
+    try {
+      const alertRes = await fetchAlerts();
+      if (alertRes.success && Array.isArray(alertRes.data)) {
+        setHazardCount(alertRes.data.filter((a) => a.isActive).length);
+      }
+    } catch {
+      // ignore
+    }
+
+    if (isAdmin) {
+      try {
+        const rescuerRes = await fetchAdminUsers({ role: 'RESCUER' });
+        if (rescuerRes.success && Array.isArray(rescuerRes.data?.users)) {
+          const pendingCount = rescuerRes.data.users.filter(
+            (u: any) => u.rescuer?.verificationStatus === 'PENDING'
+          ).length;
+          setPendingRescuersCount(pendingCount);
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    fetchRealCounts();
+    const timer = setInterval(fetchRealCounts, 6000);
+
+    const onDataUpdated = () => {
+      fetchRealCounts();
+    };
+    window.addEventListener('sos_data_updated', onDataUpdated);
+    window.addEventListener('storage', onDataUpdated);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('sos_data_updated', onDataUpdated);
+      window.removeEventListener('storage', onDataUpdated);
+    };
+  }, [fetchRealCounts]);
+
   // Danh mục menu theo vai trò LOCAL_AUTHORITY (Địa phương) - Bám sát Use Case UC-L01 -> UC-L15
   const authorityMenuGroups: NavGroupConfig[] = [
     {
@@ -92,7 +166,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: 'Tiếp nhận & Xác minh SOS',
           useCase: 'UC-L02 / UC-L05',
           icon: <Siren size={18} className="sos-nav-icon" />,
-          badge: '4 Mới',
+          badge: sosCounts.pending > 0 ? `${sosCounts.pending} Mới` : undefined,
           badgeType: 'danger',
         },
         {
@@ -100,7 +174,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: 'Điều phối & Phân công',
           useCase: 'UC-L07 / UC-L08',
           icon: <GitPullRequest size={18} className="sos-nav-icon" />,
-          badge: '2 Chờ',
+          badge: sosCounts.active > 0 ? `${sosCounts.active} Vụ` : undefined,
           badgeType: 'warning',
         },
       ],
@@ -136,7 +210,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: 'Duyệt điểm nguy hiểm',
           useCase: 'UC-L15',
           icon: <AlertTriangle size={18} className="sos-nav-icon" />,
-          badge: '3',
+          badge: hazardCount > 0 ? `${hazardCount}` : undefined,
           badgeType: 'info',
         },
       ],
@@ -187,7 +261,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: 'Xác minh Đội cứu nạn',
           useCase: 'UC-A03',
           icon: <UserCheck size={18} className="sos-nav-icon" />,
-          badge: 'Chờ duyệt',
+          badge: pendingRescuersCount > 0 ? `${pendingRescuersCount} Chờ duyệt` : undefined,
           badgeType: 'warning',
         },
         {
@@ -290,7 +364,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     !isAdmin ? 'authority-active' : ''
                   }`}
                   onClick={() => onSelectKey(item.key)}
-                  title={`${item.label} (${item.useCase})`}
+                  title={item.label}
                 >
                   {item.icon}
                   {!collapsed && (

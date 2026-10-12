@@ -75,12 +75,14 @@ const sosRequestSchema = new mongoose.Schema(
       required: [true, 'Loại tình huống khẩn cấp là bắt buộc'],
       enum: {
         values: [
-          'FLOOD',
+          'MEDICAL',
           'FIRE',
+          'POLICE',
+          'RESCUE',
+          'FLOOD',
           'LANDSLIDE',
           'STORM',
           'ACCIDENT',
-          'MEDICAL',
           'MISSING_PERSON',
           'OTHER',
         ],
@@ -107,6 +109,10 @@ const sosRequestSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    images: [{
+      type: String,
+      trim: true,
+    }],
     status: {
       type: String,
       required: [true, 'Trạng thái cứu hộ là bắt buộc'],
