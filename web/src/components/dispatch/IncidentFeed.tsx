@@ -1,0 +1,366 @@
+import { useState, useMemo } from 'react';
+import { Search, MapPin, ChevronLeft } from 'lucide-react';
+import type { SosRequest, AuthorityOfficer } from '../../types/domainD';
+import { useApp } from '../../context/AppContext';
+
+interface Props {
+  sosRequests: SosRequest[];
+  selectedSos: SosRequest;
+  onSelectSos: (sos: SosRequest) => void;
+  activeOfficer?: AuthorityOfficer;
+  onOpenCitizenModal?: () => void;
+  onToggleCollapse?: () => void;
+}
+
+export const IncidentFeed = ({
+  sosRequests,
+  selectedSos,
+  onSelectSos,
+  activeOfficer,
+  onOpenCitizenModal,
+  onToggleCollapse,
+}: Props) => {
+  const { t, lang } = useApp();
+  const isAdmin = activeOfficer?.role === 'ADMIN';
+  const officerDistrictId = activeOfficer?.jurisdictionAreaId || 'area-hc';
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [adminDistrictFilter, setAdminDistrictFilter] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'UNASSIGNED' | 'URGENT' | 'ACTIVE' | 'RESOLVED'>('ALL');
+
+  // Baseline scoped incidents for this officer (before status/search filter)
+  const scopedIncidents = useMemo(() => {
+    return sosRequests.filter((s) => {
+      if (!isAdmin) {
+        const keyword = activeOfficer?.jurisdictionAreaName
+          ? activeOfficer.jurisdictionAreaName
+              .toLowerCase()
+              .replace('phường ', '')
+              .replace('quận ', '')
+              .replace('huyện ', '')
+              .replace('xã ', '')
+              .trim()
+          : '';
+
+        const matchesDistrict =
+          s.districtId === officerDistrictId ||
+          s.wardId === officerDistrictId ||
+          (keyword && s.wardName.toLowerCase().includes(keyword));
+
+        return matchesDistrict;
+      } else {
+        if (adminDistrictFilter !== 'ALL') {
+          return s.districtId === adminDistrictFilter;
+        }
+        return true;
+      }
+    });
+  }, [sosRequests, isAdmin, officerDistrictId, adminDistrictFilter, activeOfficer]);
+
+  // Tab counts based on current scoped jurisdiction
+  const tabCounts = useMemo(() => {
+    let unassigned = 0;
+    let urgent = 0;
+    let active = 0;
+    let resolved = 0;
+
+    scopedIncidents.forEach((s) => {
+      const isAssigned = Boolean(s.assignmentId && s.status !== 'CANCELLED');
+      if (!isAssigned && s.status !== 'COMPLETED') unassigned++;
+      if ((s.priority === 'CRITICAL' || s.priority === 'HIGH') && s.status !== 'COMPLETED') urgent++;
+      if (isAssigned && s.status !== 'COMPLETED') active++;
+      if (s.status === 'COMPLETED') resolved++;
+    });
+
+    return {
+      all: scopedIncidents.length,
+      unassigned,
+      urgent,
+      active,
+      resolved,
+    };
+  }, [scopedIncidents]);
+
+  // Filter incidents based on search query & selected status tab
+  const filteredIncidents = useMemo(() => {
+    return scopedIncidents.filter((s) => {
+      // 1. Search query matching
+      const matchSearch =
+        searchQuery.trim() === '' ||
+        s.sosCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.citizenName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.wardName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.locationName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.title.toLowerCase().includes(searchQuery.toLowerCase());
+
+      if (!matchSearch) return false;
+
+      // 2. Status tabs
+      const isAssigned = Boolean(s.assignmentId && s.status !== 'CANCELLED');
+      if (statusFilter === 'UNASSIGNED') {
+        return !isAssigned && s.status !== 'COMPLETED';
+      }
+      if (statusFilter === 'URGENT') {
+        return s.priority === 'CRITICAL' || s.priority === 'HIGH';
+      }
+      if (statusFilter === 'ACTIVE') {
+        return isAssigned && s.status !== 'COMPLETED';
+      }
+      if (statusFilter === 'RESOLVED') {
+        return s.status === 'COMPLETED';
+      }
+
+      return true;
+    });
+  }, [scopedIncidents, searchQuery, statusFilter]);
+
+  // District options for Admin filter
+  const DISTRICT_OPTIONS = [
+    { id: 'ALL', name: 'Toàn TP' },
+    { id: 'area-hc', name: 'Hải Châu' },
+    { id: 'area-cl', name: 'Cẩm Lệ' },
+    { id: 'area-st', name: 'Sơn Trà' },
+    { id: 'area-tk', name: 'Thanh Khê' },
+    { id: 'area-nhs', name: 'Ngũ Hành Sơn' },
+    { id: 'area-lc', name: 'Liên Chiểu' },
+    { id: 'area-hv', name: 'Hòa Vang' },
+  ];
+
+  return (
+    <div className="dispatch-left-col">
+      {/* 1. Feed Header Section */}
+      <div className="feed-header-section">
+        <div className="feed-title-row">
+          <div className="feed-title-left">
+            <span className="live-radar-dot" />
+            <h2 className="feed-title">
+              {isAdmin
+                ? (lang === 'vi' ? 'SOS Toàn TP' : 'City-wide SOS')
+                : (lang === 'vi' ? `SOS ${activeOfficer?.jurisdictionAreaName || 'Địa Bàn'}` : `SOS ${activeOfficer?.jurisdictionAreaName || 'District'}`)}
+            </h2>
+            <span className="feed-total-pill" title="Tổng số tín hiệu SOS trong địa bàn">
+              {filteredIncidents.length}
+            </span>
+          </div>
+
+          <div className="feed-title-actions">
+            {onOpenCitizenModal && (
+              <button
+                type="button"
+                className="btn-feed-citizen-sos"
+                onClick={onOpenCitizenModal}
+                title={lang === 'vi' ? 'Mô phỏng người dân gửi SOS' : 'Simulate Citizen SOS'}
+              >
+                <span>📱</span>
+                <span>+ SOS Dân</span>
+              </button>
+            )}
+
+            {onToggleCollapse && (
+              <button
+                type="button"
+                className="btn-feed-collapse"
+                onClick={onToggleCollapse}
+                title={lang === 'vi' ? 'Thu gọn danh sách để phóng to bản đồ' : 'Collapse feed'}
+              >
+                <ChevronLeft size={16} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Admin District Selector Tabs (If logged in as Admin) */}
+        {isAdmin && (
+          <div
+            style={{
+              display: 'flex',
+              gap: 4,
+              overflowX: 'auto',
+              paddingBottom: 4,
+              marginBottom: 8,
+              scrollbarWidth: 'none',
+            }}
+          >
+            {DISTRICT_OPTIONS.map((dist) => (
+              <button
+                key={dist.id}
+                type="button"
+                onClick={() => setAdminDistrictFilter(dist.id)}
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  padding: '3px 8px',
+                  borderRadius: 5,
+                  border: '1px solid',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  background: adminDistrictFilter === dist.id ? '#2563eb' : 'var(--sos-surface-subtle)',
+                  color: adminDistrictFilter === dist.id ? '#ffffff' : 'var(--sos-text-secondary)',
+                  borderColor: adminDistrictFilter === dist.id ? '#1d4ed8' : 'var(--sos-border)',
+                }}
+              >
+                {dist.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* 2. Search Bar */}
+        <div className="sos-search-bar-clean">
+          <Search size={14} className="sos-search-icon" />
+          <input
+            type="text"
+            placeholder={t('dispatch.searchPlaceholder') || (lang === 'vi' ? 'Tìm mã SOS, vị trí, người dân...' : 'Search SOS code, location, citizen...')}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="sos-search-clear"
+              onClick={() => setSearchQuery('')}
+              title="Xóa tìm kiếm"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        {/* 3. Horizontal Scrollable Filter Tabs (No broken line wrap!) */}
+        <div className="feed-filter-tabs-pills">
+          {[
+            { id: 'ALL', label: 'Tất cả', count: tabCounts.all },
+            { id: 'UNASSIGNED', label: '🚨 Chưa gán', count: tabCounts.unassigned },
+            { id: 'URGENT', label: '⚠️ Khẩn cấp', count: tabCounts.urgent },
+            { id: 'ACTIVE', label: '🚤 Đang cứu', count: tabCounts.active },
+            { id: 'RESOLVED', label: '✅ Hoàn thành', count: tabCounts.resolved },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`feed-filter-pill ${statusFilter === tab.id ? 'active' : ''} ${tab.id.toLowerCase()}`}
+              onClick={() => setStatusFilter(tab.id as any)}
+            >
+              <span>{tab.label}</span>
+              <span className="pill-count">{tab.count}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 4. Incident Cards List */}
+      <div className="feed-card-list">
+        {filteredIncidents.map((sos) => {
+          const isSelected = selectedSos.id === sos.id;
+          const priorityClass =
+            sos.priority === 'CRITICAL' ? 'critical' : sos.priority === 'HIGH' ? 'high' : 'medium';
+
+          const typeIconMap: Record<string, { icon: string; labelVi: string; labelEn: string; color: string; bg: string }> = {
+            MEDICAL: { icon: '🚑', labelVi: 'Y Tế', labelEn: 'Medical', color: '#dc2626', bg: 'rgba(220, 38, 38, 0.1)' },
+            FIRE: { icon: '🔥', labelVi: 'Cháy', labelEn: 'Fire', color: '#ea580c', bg: 'rgba(234, 88, 12, 0.1)' },
+            POLICE: { icon: '🚓', labelVi: 'An Ninh', labelEn: 'Police', color: '#2563eb', bg: 'rgba(37, 99, 235, 0.1)' },
+            RESCUE: { icon: '🛟', labelVi: 'Cứu Hộ', labelEn: 'Rescue', color: '#0284c7', bg: 'rgba(2, 132, 199, 0.1)' },
+          };
+
+          const typeInfo = typeIconMap[sos.emergencyType] || {
+            icon: '🛟',
+            labelVi: sos.emergencyType,
+            labelEn: sos.emergencyType,
+            color: '#dc2626',
+            bg: 'rgba(220, 38, 38, 0.1)',
+          };
+
+          const isAssigned = Boolean(sos.assignmentId && sos.status !== 'CANCELLED');
+
+          return (
+            <div
+              key={sos.id}
+              className={`compact-incident-card ${priorityClass} ${isSelected ? 'selected' : ''}`}
+              onClick={() => onSelectSos(sos)}
+            >
+              {/* Card Top: Code + Priority Pill + Time Elapsed */}
+              <div className="compact-card-top">
+                <div className="code-beacon-wrapper">
+                  <span className={`beacon-dot ${sos.priority === 'CRITICAL' ? 'pulse-red' : ''}`} />
+                  <span className="card-code-mono">{sos.sosCode}</span>
+                </div>
+
+                <div className="card-meta-top">
+                  <span className={`compact-priority-badge ${priorityClass}`}>
+                    {sos.priority}
+                  </span>
+                  <span className="compact-time-ago">{sos.timeAgo}</span>
+                </div>
+              </div>
+
+              {/* Card Middle: Title + Chips + (Side Thumbnail) */}
+              <div className="compact-card-content">
+                <div className="compact-card-text">
+                  <h3 className="compact-card-title" title={sos.title}>
+                    {sos.title}
+                  </h3>
+
+                  <div className="compact-chips-row">
+                    <span
+                      className="compact-type-chip"
+                      style={{ color: typeInfo.color, background: typeInfo.bg, borderColor: `${typeInfo.color}33` }}
+                    >
+                      <span>{typeInfo.icon}</span>
+                      <span>{lang === 'vi' ? typeInfo.labelVi : typeInfo.labelEn}</span>
+                    </span>
+
+                    {!isAssigned ? (
+                      <span className="compact-status-chip unassigned">
+                        🚨 {lang === 'vi' ? 'Chưa phân công' : 'Unassigned'}
+                      </span>
+                    ) : sos.status === 'COMPLETED' ? (
+                      <span className="compact-status-chip completed">
+                        ✅ {lang === 'vi' ? 'Hoàn thành' : 'Completed'}
+                      </span>
+                    ) : (
+                      <span className="compact-status-chip enroute">
+                        🚤 {lang === 'vi' ? 'Đang cứu nạn' : 'Active'}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="compact-card-location" title={sos.locationName}>
+                    <MapPin size={11} className="compact-pin-icon" style={{ flexShrink: 0 }} />
+                    <span className="compact-location-text">{sos.locationName}</span>
+                  </div>
+                </div>
+
+                {/* Elegant 50x50 Thumbnail on the right */}
+                {sos.imageUrl && (
+                  <div className="compact-card-thumb" title={lang === 'vi' ? 'Xem ảnh hiện trường' : 'Scene Photo'}>
+                    <img src={sos.imageUrl} alt="Hiện trường" />
+                    <span className="thumb-cam-pill">📷</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Card Footer: Citizen name & Victim count */}
+              <div className="compact-card-footer">
+                <span className="compact-citizen-name">
+                  👤 {sos.citizenName}
+                </span>
+                <span className="compact-affected-count">
+                  👥 {sos.affectedPeople} {lang === 'vi' ? 'người gặp nạn' : 'victims'}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+
+        {filteredIncidents.length === 0 && (
+          <div className="feed-empty-state">
+            <div style={{ fontSize: 28, marginBottom: 8 }}>🛡️</div>
+            <p style={{ margin: 0, fontWeight: 600 }}>
+              {lang === 'vi' ? 'Không có tín hiệu SOS nào phù hợp với bộ lọc.' : 'No SOS incidents match current filter.'}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};

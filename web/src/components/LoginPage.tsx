@@ -16,9 +16,16 @@ import {
 } from 'lucide-react';
 import { loginApi, logoutApi } from '../services/api';
 import type { User } from '../types/auth';
+import { domainDService } from '../services/domainDService';
+import { useApp } from '../context/AppContext';
 import './Login.css';
 
-export const LoginPage = () => {
+interface LoginPageProps {
+  onEnterConsole?: (targetPortal?: 'admin' | 'author') => void;
+}
+
+export const LoginPage = ({ onEnterConsole }: LoginPageProps = {}) => {
+  const { lang, toggleLang, theme, toggleTheme } = useApp();
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -101,9 +108,10 @@ export const LoginPage = () => {
           localStorage.removeItem('sos_saved_password');
         }
 
-        // Đăng nhập hợp lệ
+        // Đăng nhập hợp lệ - Tự động đồng bộ và định vị khu vực quản lý
         setUser(loggedInUser);
         localStorage.setItem('sos_auth_user', JSON.stringify(loggedInUser));
+        domainDService.syncLoggedInUser(loggedInUser);
         if (res.data.accessToken) {
           localStorage.setItem('sos_access_token', res.data.accessToken);
         }
@@ -150,6 +158,63 @@ export const LoginPage = () => {
       {/* Ambient Overlay for card contrast */}
       <div className="sos-video-overlay" />
 
+      {/* Top right language & theme quick switcher */}
+      <div style={{
+        position: 'absolute',
+        top: 20,
+        right: 24,
+        zIndex: 10,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+      }}>
+        <button
+          type="button"
+          onClick={toggleLang}
+          style={{
+            background: 'rgba(255, 255, 255, 0.9)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(226, 232, 240, 0.8)',
+            borderRadius: 8,
+            padding: '6px 14px',
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            color: '#0f172a',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          }}
+          title={lang === 'vi' ? 'Chuyển sang Tiếng Anh' : 'Switch to Vietnamese'}
+        >
+          {lang === 'vi' ? '🇻🇳 VI' : '🇬🇧 EN'}
+        </button>
+
+        <button
+          type="button"
+          onClick={toggleTheme}
+          style={{
+            background: 'rgba(255, 255, 255, 0.9)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid rgba(226, 232, 240, 0.8)',
+            borderRadius: 8,
+            padding: '6px 14px',
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            color: '#0f172a',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          }}
+          title={theme === 'light' ? 'Chuyển sang Chế độ Tối' : 'Switch to Light Mode'}
+        >
+          {theme === 'light' ? '☀️ Sáng' : '🌙 Tối'}
+        </button>
+      </div>
+
       <div className="sos-glass-card">
         {user ? (
 
@@ -188,9 +253,17 @@ export const LoginPage = () => {
               type="button"
               className="sos-card-submit"
               style={{ marginBottom: 12 }}
-              onClick={() => alert('Đang chuyển hướng vào Trung tâm tác chiến điều hành cứu nạn...')}
+              onClick={() => {
+                if (user) {
+                  domainDService.syncLoggedInUser(user);
+                }
+                const target = user?.roles.includes('ADMIN') ? 'admin' : 'author';
+                if (onEnterConsole) {
+                  onEnterConsole(target);
+                }
+              }}
             >
-              <span>Vào Bảng Điều Phối Tác Chiến</span>
+              <span>Vào Cổng {user.roles.includes('ADMIN') ? 'Quản Trị ADMIN' : 'Tác Chiến AUTHOR'}</span>
               <ArrowRight size={18} />
             </button>
 
@@ -294,6 +367,66 @@ export const LoginPage = () => {
                   </>
                 )}
               </button>
+
+              {/* Quick direct flow buttons for evaluation / demonstration */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--sos-text-muted)', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                  — HOẶC TRUY CẬP NHANH THEO LUỒNG —
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      domainDService.setActiveOfficer('officer-admin-01');
+                      if (onEnterConsole) onEnterConsole('admin');
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      background: 'rgba(245, 158, 11, 0.1)',
+                      border: '1px solid rgba(245, 158, 11, 0.35)',
+                      color: '#b45309',
+                      borderRadius: 8,
+                      padding: '8px 10px',
+                      fontSize: 11,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                    }}
+                    title="Vào thẳng trang quản trị dành cho Tổng Chỉ Huy TP (Admin)"
+                  >
+                    <span>👑 Cổng ADMIN</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      domainDService.setActiveOfficer('officer-hc-htd');
+                      if (onEnterConsole) onEnterConsole('author');
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      background: 'rgba(220, 38, 38, 0.1)',
+                      border: '1px solid rgba(220, 38, 38, 0.35)',
+                      color: '#dc2626',
+                      borderRadius: 8,
+                      padding: '8px 10px',
+                      fontSize: 11,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                    }}
+                    title="Vào thẳng trang tác chiến dành cho Cán bộ Hòa Cường (Author)"
+                  >
+                    <span>🛡️ Cổng AUTHOR</span>
+                  </button>
+                </div>
+              </div>
 
               {/* Link: Quên mật khẩu? */}
               <div className="sos-forgot-center">

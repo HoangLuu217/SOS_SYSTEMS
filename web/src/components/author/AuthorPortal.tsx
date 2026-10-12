@@ -1,0 +1,356 @@
+import { useState, useEffect, useMemo } from 'react';
+import type {
+  AdministrativeArea,
+  AuthorityOrganization,
+  AuthorityOfficer,
+  SosRequest,
+  RescueTeam,
+  Vehicle,
+  AssignmentStatus,
+} from '../../types/domainD';
+import { domainDService } from '../../services/domainDService';
+import { MissionDispatch } from '../dispatch/MissionDispatch';
+import {
+  ShieldAlert,
+  LogOut,
+  Sun,
+  Moon,
+  Map as MapIcon,
+  Layers,
+} from 'lucide-react';
+import { useApp } from '../../context/AppContext';
+import { isSosInOfficerJurisdiction } from '../../services/mapboxConfig';
+import '../RescueSos.css';
+
+interface ToastState {
+  id: number;
+  message: string;
+  type: 'success' | 'error';
+}
+
+interface Props {
+  onSwitchToAdmin?: () => void;
+  onLogout?: () => void;
+}
+
+export const AuthorPortal = ({ onSwitchToAdmin: _onSwitchToAdmin, onLogout }: Props) => {
+  const { theme, setTheme, mapMode, setMapMode } = useApp();
+
+  // Domain D data
+  const [areas, setAreas] = useState<AdministrativeArea[]>([]);
+  const [authorities, setAuthorities] = useState<AuthorityOrganization[]>([]);
+  const [sosRequests, setSosRequests] = useState<SosRequest[]>([]);
+  const [rescueTeams, setRescueTeams] = useState<RescueTeam[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+
+  // Local Author Officers
+  const allOfficers = useMemo(() => domainDService.getOfficers(), []);
+  const authorOfficers = useMemo(() => allOfficers.filter((o) => o.role !== 'ADMIN'), [allOfficers]);
+
+  // Current Active Author (defaults to Phường Hòa Cường)
+  const [activeOfficer] = useState<AuthorityOfficer>(() => {
+    return (
+      authorOfficers.find((o) => o.jurisdictionAreaId === 'area-htd') ||
+      authorOfficers[0] || {
+        id: 'officer-hc-htd',
+        fullName: 'Trần Văn Cường',
+        role: 'AUTHOR',
+        email: 'cuong.tran@hoacuong.danang.gov.vn',
+        phone: '0905114116',
+        position: 'Author Quản Lý Phường Hòa Cường',
+        department: 'Ban Chỉ Huy PCTT Phường Hòa Cường',
+        jurisdictionAreaId: 'area-htd',
+        jurisdictionAreaName: 'Phường Hòa Cường',
+        districtName: 'Quận Hải Châu',
+      }
+    );
+  });
+
+  // Selection states
+  const [selectedSosId, setSelectedSosId] = useState<string>('sos-8924'); // Default to Hoa Cuong SOS
+  const [toasts, setToasts] = useState<ToastState[]>([]);
+
+  useEffect(() => {
+    loadAllData(activeOfficer.id);
+  }, [activeOfficer.id]);
+
+  const loadAllData = (officerId: string) => {
+    domainDService.setActiveOfficer(officerId);
+    const loadedAreas = domainDService.getAreas();
+    const loadedSos = domainDService.getSosRequests();
+
+    setAreas(loadedAreas);
+    setAuthorities(domainDService.getAuthorities());
+    setSosRequests(loadedSos);
+    setRescueTeams(domainDService.getRescueTeams());
+    setVehicles(domainDService.getVehicles());
+
+    // Find local SOS for this officer
+    const matchSos = loadedSos.find(
+      (s) => s.wardId === activeOfficer.jurisdictionAreaId || s.districtId === activeOfficer.jurisdictionAreaId
+    );
+    if (matchSos) {
+      setSelectedSosId(matchSos.id);
+    }
+  };
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3800);
+  };
+
+  // Strictly scope areas to ONLY the ward managed by this Author account
+  const authorScopedAreas = useMemo(() => {
+    const targetArea = areas.find(
+      (a) =>
+        a.id === activeOfficer.jurisdictionAreaId ||
+        a.code === activeOfficer.jurisdictionAreaId ||
+        (activeOfficer.jurisdictionAreaName &&
+          a.name.toLowerCase().includes(activeOfficer.jurisdictionAreaName.replace('Phường ', '').toLowerCase()))
+    );
+    return targetArea ? [targetArea] : (areas.length > 0 ? [areas[0]] : []);
+  }, [areas, activeOfficer.jurisdictionAreaId, activeOfficer.jurisdictionAreaName]);
+
+  // Strictly filter SOS requests to ONLY those occurring within this Author officer's managed ward
+  const authorScopedSosRequests = useMemo(() => {
+    const managedWard = authorScopedAreas[0];
+    return sosRequests.filter((s) => isSosInOfficerJurisdiction(s, activeOfficer, managedWard));
+  }, [sosRequests, activeOfficer, authorScopedAreas]);
+
+  const selectedSos = useMemo(() => {
+    return (
+      authorScopedSosRequests.find((s) => s.id === selectedSosId) ||
+      authorScopedSosRequests[0] ||
+      ({} as SosRequest)
+    );
+  }, [authorScopedSosRequests, selectedSosId]);
+
+  const currentAssignment = useMemo(() => {
+    if (!selectedSos || !selectedSos.id) return null;
+    return domainDService.getAssignmentBySosId(selectedSos.id);
+  }, [selectedSos]);
+
+  // Urgent local count
+  const localUrgentCount = useMemo(() => {
+    return authorScopedSosRequests.filter(
+      (s) => (s.priority === 'CRITICAL' || s.priority === 'HIGH') && s.status !== 'COMPLETED'
+    ).length;
+  }, [authorScopedSosRequests]);
+
+  // Compute officer initials for avatar badge (e.g. "TC" for Trần Văn Cường)
+  const officerInitials = useMemo(() => {
+    if (!activeOfficer?.fullName) return 'CB';
+    const parts = activeOfficer.fullName.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }, [activeOfficer?.fullName]);
+
+  const handleConfirmAssign = (params: {
+    authorityOrganizationId: string;
+    authorityOrganizationName: string;
+    rescueTeamId: string;
+    rescueTeamName: string;
+    rescuerId: string;
+    rescuerName: string;
+    rescuerRole: string;
+    vehicleId: string;
+    vehicleName: string;
+    vehicleCapacity: string;
+  }) => {
+    if (!selectedSos) return;
+    domainDService.assignSos(selectedSos.id, params);
+    setSosRequests(domainDService.getSosRequests());
+    showToast(`Đã xuất kích ${params.rescueTeamName} ứng cứu ca ${selectedSos.sosCode}!`, 'success');
+  };
+
+  const handleUpdateAssignmentStatus = (assignmentId: string, nextStatus: AssignmentStatus) => {
+    domainDService.updateAssignmentStatus(assignmentId, nextStatus);
+    setSosRequests(domainDService.getSosRequests());
+  };
+
+  const handleReassignMission = (
+    assignmentId: string,
+    params: {
+      rescueTeamId: string;
+      rescueTeamName: string;
+      rescuerId: string;
+      rescuerName: string;
+      rescuerRole: string;
+      vehicleId: string;
+      vehicleName: string;
+      vehicleCapacity: string;
+    }
+  ) => {
+    domainDService.reassignMission(assignmentId, params);
+    setSosRequests(domainDService.getSosRequests());
+  };
+
+  const handleCancelAssignment = (assignmentId: string, reason: string) => {
+    domainDService.cancelAssignment(assignmentId, reason);
+    setSosRequests(domainDService.getSosRequests());
+  };
+
+  const handleCreateCitizenSos = (
+    data: Omit<SosRequest, 'id' | 'sosCode' | 'timeAgo' | 'createdAt' | 'status' | 'assignmentId'>
+  ) => {
+    const created = domainDService.createSosRequest(data);
+    setSosRequests(domainDService.getSosRequests());
+    setSelectedSosId(created.id);
+    showToast(`🚨 Nhận báo cáo cứu nạn: ${created.sosCode}!`, 'error');
+  };
+
+  return (
+    <div className="rescuesos-app author-portal-wrapper">
+      {/* Ultra-modern Author Command Center Header */}
+      <header className="author-command-nav">
+        {/* Left: Brand & Local Sector Identity */}
+        <div className="author-brand-group">
+          <div className="author-brand-badge" title="Trung tâm Tác chiến Khẩn cấp Cấp Cơ Sở">
+            <ShieldAlert size={19} />
+          </div>
+          <div className="author-brand-text">
+            <div className="author-brand-row">
+              <span className="author-brand-title">SOS SYSTEMS</span>
+              <span className="author-brand-tag">
+                {activeOfficer.jurisdictionAreaName}
+              </span>
+            </div>
+            <div className="author-brand-sub">
+              Ban Chỉ Huy PCTT & TKCN • Cấp Cơ Sở
+            </div>
+          </div>
+        </div>
+
+        {/* Center: Live Tactical Status HUD */}
+        <div className="author-center-hud">
+          {localUrgentCount > 0 ? (
+            <div className="author-hud-pill urgent" title="Có sự cố khẩn cấp đang diễn ra trên địa bàn">
+              <span className="author-radar-dot" />
+              <span>ĐANG XỬ LÝ:</span>
+              <span className="author-urgent-count-badge">{localUrgentCount} KHẨN CẤP</span>
+            </div>
+          ) : (
+            <div className="author-hud-pill safe" title="Toàn bộ địa bàn an toàn, sẵn sàng trực chiến">
+              <span className="author-safe-dot" />
+              <span>ĐỊA BÀN ỔN ĐỊNH • TRỰC CHIẾN 24/7</span>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Map Mode, Theme, Officer Profile, Logout */}
+        <div className="author-right-controls">
+          {/* Map Mode Segmented Control */}
+          <div className="author-segmented-map" title="Chế độ hiển thị bản đồ tác chiến">
+            <button
+              type="button"
+              onClick={() => setMapMode('street')}
+              className={`author-map-btn ${mapMode === 'street' ? 'active' : ''}`}
+              title="Bản đồ đường phố"
+            >
+              <MapIcon size={12} />
+              <span>Đường phố</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMapMode('satellite')}
+              className={`author-map-btn ${mapMode === 'satellite' ? 'active' : ''}`}
+              title="Bản đồ vệ tinh"
+            >
+              <Layers size={12} />
+              <span>Vệ tinh</span>
+            </button>
+          </div>
+
+          {/* Theme Switcher */}
+          <button
+            type="button"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="author-icon-action-btn"
+            title={theme === 'dark' ? 'Chuyển sang Chế độ Sáng' : 'Chuyển sang Chế độ Tối'}
+          >
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+
+          {/* Officer Profile Badge */}
+          <div className="author-officer-chip" title={`${activeOfficer.fullName} • ${activeOfficer.jurisdictionAreaName}`}>
+            <div className="author-officer-avatar">
+              <span>{officerInitials}</span>
+              <span className="author-officer-online-dot" title="Đang trực tuyến" />
+            </div>
+            <div className="author-officer-meta">
+              <div className="author-officer-name">{activeOfficer.fullName}</div>
+              <div className="author-officer-role">
+                {activeOfficer.position?.replace(` ${activeOfficer.jurisdictionAreaName}`, '') || 'Chỉ Huy Trực Ban'}
+              </div>
+            </div>
+          </div>
+
+          {/* Logout Button */}
+          {onLogout && (
+            <button
+              type="button"
+              onClick={onLogout}
+              className="author-logout-btn"
+              title="Đăng xuất khỏi phiên trực"
+            >
+              <LogOut size={15} />
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* Mission Dispatch for AUTHOR (Scoped to Local Sector) */}
+      <main style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        {authorScopedSosRequests.length > 0 && selectedSos ? (
+          <MissionDispatch
+            sosRequests={authorScopedSosRequests}
+            selectedSos={selectedSos}
+            onSelectSos={(sos) => setSelectedSosId(sos.id)}
+            assignment={currentAssignment}
+            authorities={authorities}
+            rescueTeams={rescueTeams}
+            vehicles={vehicles}
+            onConfirmAssign={handleConfirmAssign}
+            onUpdateStatus={handleUpdateAssignmentStatus}
+            onReassign={handleReassignMission}
+            onCancelAssignment={handleCancelAssignment}
+            onCreateCitizenSos={handleCreateCitizenSos}
+            showToast={showToast}
+            activeOfficer={activeOfficer}
+            areas={authorScopedAreas}
+          />
+        ) : (
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'var(--sos-surface)',
+              color: 'var(--sos-text-secondary)',
+            }}
+          >
+            <span style={{ fontSize: 48, marginBottom: 12 }}>🛡️</span>
+            <h3 style={{ margin: '0 0 6px', fontSize: 18, color: 'var(--sos-text-primary)' }}>
+              Địa Bàn An Toàn - Không Có Tín Hiệu SOS
+            </h3>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--sos-text-muted)' }}>
+              Khu vực {activeOfficer.jurisdictionAreaName} hiện không có sự cố khẩn cấp nào cần điều phối.
+            </p>
+          </div>
+        )}
+      </main>
+
+      {/* Toast Notifications */}
+      {toasts.map((toast) => (
+        <div key={toast.id} className={`sos-toast ${toast.type}`}>
+          <span>{toast.message}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
