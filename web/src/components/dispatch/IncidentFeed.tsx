@@ -17,7 +17,7 @@ export const IncidentFeed = ({
   selectedSos,
   onSelectSos,
   activeOfficer,
-  onOpenCitizenModal,
+  onOpenCitizenModal: _onOpenCitizenModal,
   onToggleCollapse,
 }: Props) => {
   const { t, lang } = useApp();
@@ -133,7 +133,7 @@ export const IncidentFeed = ({
         <div className="feed-title-row">
           <div className="feed-title-left">
             <span className="live-radar-dot" />
-            <h2 className="feed-title">
+            <h2 className="feed-title" title={isAdmin ? 'SOS Toàn TP' : `SOS ${activeOfficer?.jurisdictionAreaName || 'Địa Bàn'}`}>
               {isAdmin
                 ? (lang === 'vi' ? 'SOS Toàn TP' : 'City-wide SOS')
                 : (lang === 'vi' ? `SOS ${activeOfficer?.jurisdictionAreaName || 'Địa Bàn'}` : `SOS ${activeOfficer?.jurisdictionAreaName || 'District'}`)}
@@ -144,18 +144,6 @@ export const IncidentFeed = ({
           </div>
 
           <div className="feed-title-actions">
-            {onOpenCitizenModal && (
-              <button
-                type="button"
-                className="btn-feed-citizen-sos"
-                onClick={onOpenCitizenModal}
-                title={lang === 'vi' ? 'Mô phỏng người dân gửi SOS' : 'Simulate Citizen SOS'}
-              >
-                <span>📱</span>
-                <span>+ SOS Dân</span>
-              </button>
-            )}
-
             {onToggleCollapse && (
               <button
                 type="button"
@@ -226,14 +214,14 @@ export const IncidentFeed = ({
           )}
         </div>
 
-        {/* 3. Horizontal Scrollable Filter Tabs (No broken line wrap!) */}
+        {/* 3. Horizontal Scrollable Filter Tabs */}
         <div className="feed-filter-tabs-pills">
           {[
             { id: 'ALL', label: 'Tất cả', count: tabCounts.all },
-            { id: 'UNASSIGNED', label: '🚨 Chưa gán', count: tabCounts.unassigned },
-            { id: 'URGENT', label: '⚠️ Khẩn cấp', count: tabCounts.urgent },
-            { id: 'ACTIVE', label: '🚤 Đang cứu', count: tabCounts.active },
-            { id: 'RESOLVED', label: '✅ Hoàn thành', count: tabCounts.resolved },
+            { id: 'UNASSIGNED', label: 'Chưa gán', count: tabCounts.unassigned },
+            { id: 'URGENT', label: 'Khẩn cấp', count: tabCounts.urgent },
+            { id: 'ACTIVE', label: 'Đang cứu', count: tabCounts.active },
+            { id: 'RESOLVED', label: 'Hoàn thành', count: tabCounts.resolved },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -360,6 +348,17 @@ export const IncidentFeed = ({
             </p>
           </div>
         )}
+      </div>
+
+      {/* 5. Sleek Realtime Footer */}
+      <div className="feed-footer-summary">
+        <div className="feed-footer-live">
+          <span className="live-dot-pulse" />
+          <span>{lang === 'vi' ? 'Trực chiến 24/7' : 'Live Operations'}</span>
+        </div>
+        <span className="feed-footer-count">
+          {filteredIncidents.length} {lang === 'vi' ? 'sự cố đang theo dõi' : 'active incidents'}
+        </span>
       </div>
     </div>
   );

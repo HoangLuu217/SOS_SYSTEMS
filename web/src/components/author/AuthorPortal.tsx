@@ -19,7 +19,8 @@ import {
   Layers,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { isSosInOfficerJurisdiction } from '../../services/mapboxConfig';
+import { isSosInOfficerJurisdiction } from '../../services/mapGeoService';
+import { navigateTo, getCurrentSosIdFromUrl } from '../../services/appRouter';
 import '../RescueSos.css';
 
 interface ToastState {
@@ -28,12 +29,16 @@ interface ToastState {
   type: 'success' | 'error';
 }
 
+import type { User } from '../../types/auth';
+
 interface Props {
+  user?: User | null;
   onSwitchToAdmin?: () => void;
   onLogout?: () => void;
+  embedded?: boolean;
 }
 
-export const AuthorPortal = ({ onSwitchToAdmin: _onSwitchToAdmin, onLogout }: Props) => {
+export const AuthorPortal = ({ user, onSwitchToAdmin: _onSwitchToAdmin, onLogout, embedded = false }: Props) => {
   const { theme, setTheme, mapMode, setMapMode } = useApp();
 
   // Domain D data
@@ -47,8 +52,12 @@ export const AuthorPortal = ({ onSwitchToAdmin: _onSwitchToAdmin, onLogout }: Pr
   const allOfficers = useMemo(() => domainDService.getOfficers(), []);
   const authorOfficers = useMemo(() => allOfficers.filter((o) => o.role !== 'ADMIN'), [allOfficers]);
 
-  // Current Active Author (defaults to Phường Hòa Cường)
-  const [activeOfficer] = useState<AuthorityOfficer>(() => {
+  // Current Active Author (dynamically resolved from logged-in user or defaults to Hoa Cuong)
+  const activeOfficer = useMemo<AuthorityOfficer>(() => {
+    if (user) {
+      const synced = domainDService.syncLoggedInUser(user);
+      if (synced) return synced;
+    }
     return (
       authorOfficers.find((o) => o.jurisdictionAreaId === 'area-htd') ||
       authorOfficers[0] || {
@@ -64,15 +73,42 @@ export const AuthorPortal = ({ onSwitchToAdmin: _onSwitchToAdmin, onLogout }: Pr
         districtName: 'Quận Hải Châu',
       }
     );
-  });
+  }, [user, authorOfficers]);
 
   // Selection states
   const [selectedSosId, setSelectedSosId] = useState<string>('sos-8924'); // Default to Hoa Cuong SOS
   const [toasts, setToasts] = useState<ToastState[]>([]);
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     loadAllData(activeOfficer.id);
   }, [activeOfficer.id]);
+
+  // Lắng nghe URL pathname để đồng bộ SOS được chọn (ví dụ: /localauthor/map/sos-8924)
+  useEffect(() => {
+    const syncSosFromUrl = () => {
+      const sosId = getCurrentSosIdFromUrl();
+      if (sosId) {
+        setSelectedSosId(sosId);
+      }
+    };
+    syncSosFromUrl();
+    window.addEventListener('popstate', syncSosFromUrl);
+    return () => window.removeEventListener('popstate', syncSosFromUrl);
+  }, []);
 
   const loadAllData = (officerId: string) => {
     domainDService.setActiveOfficer(officerId);
@@ -85,12 +121,20 @@ export const AuthorPortal = ({ onSwitchToAdmin: _onSwitchToAdmin, onLogout }: Pr
     setRescueTeams(domainDService.getRescueTeams());
     setVehicles(domainDService.getVehicles());
 
-    // Find local SOS for this officer
-    const matchSos = loadedSos.find(
-      (s) => s.wardId === activeOfficer.jurisdictionAreaId || s.districtId === activeOfficer.jurisdictionAreaId
-    );
-    if (matchSos) {
-      setSelectedSosId(matchSos.id);
+    // Ưu tiên SOS ID từ URL pathname (/localauthor/map/:id) nếu có
+    const urlSosId = getCurrentSosIdFromUrl();
+
+    if (urlSosId && loadedSos.some((s) => s.id === urlSosId)) {
+      setSelectedSosId(urlSosId);
+    } else {
+      // Find local SOS for this officer
+      const matchSos = loadedSos.find(
+        (s) => s.wardId === activeOfficer.jurisdictionAreaId || s.districtId === activeOfficer.jurisdictionAreaId
+      );
+      if (matchSos) {
+        setSelectedSosId(matchSos.id);
+        navigateTo('map', user ?? null, matchSos.id, true);
+      }
     }
   };
 
@@ -203,7 +247,30 @@ export const AuthorPortal = ({ onSwitchToAdmin: _onSwitchToAdmin, onLogout }: Pr
   };
 
   return (
-    <div className="rescuesos-app author-portal-wrapper">
+    <div className={`rescuesos-app author-portal-wrapper ${embedded ? 'embedded-dashboard' : ''}`}>
+      {/* Network Disconnect Alert Banner */}
+      {!isOnline && (
+        <div
+          style={{
+            background: '#dc2626',
+            color: '#ffffff',
+            textAlign: 'center',
+            padding: '7px 16px',
+            fontSize: 12,
+            fontWeight: 800,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            letterSpacing: '0.4px',
+            zIndex: 100,
+          }}
+        >
+          <ShieldAlert size={16} />
+          <span>MẤT KẾT NỐI MẠNG - ĐANG THỬ KẾT NỐI LẠI...</span>
+        </div>
+      )}
+
       {/* Ultra-modern Author Command Center Header */}
       <header className="author-command-nav">
         {/* Left: Brand & Local Sector Identity */}
@@ -213,7 +280,7 @@ export const AuthorPortal = ({ onSwitchToAdmin: _onSwitchToAdmin, onLogout }: Pr
           </div>
           <div className="author-brand-text">
             <div className="author-brand-row">
-              <span className="author-brand-title">SOS SYSTEMS</span>
+              <span className="author-brand-title">{embedded ? 'ĐIỀU HÀNH TÁC CHIẾN' : 'SOS SYSTEMS'}</span>
               <span className="author-brand-tag">
                 {activeOfficer.jurisdictionAreaName}
               </span>
@@ -274,30 +341,33 @@ export const AuthorPortal = ({ onSwitchToAdmin: _onSwitchToAdmin, onLogout }: Pr
             {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
           </button>
 
-          {/* Officer Profile Badge */}
-          <div className="author-officer-chip" title={`${activeOfficer.fullName} • ${activeOfficer.jurisdictionAreaName}`}>
-            <div className="author-officer-avatar">
-              <span>{officerInitials}</span>
-              <span className="author-officer-online-dot" title="Đang trực tuyến" />
-            </div>
-            <div className="author-officer-meta">
-              <div className="author-officer-name">{activeOfficer.fullName}</div>
-              <div className="author-officer-role">
-                {activeOfficer.position?.replace(` ${activeOfficer.jurisdictionAreaName}`, '') || 'Chỉ Huy Trực Ban'}
+          {/* Officer Profile Badge & Logout (Only if not embedded in main dashboard sidebar) */}
+          {!embedded && (
+            <>
+              <div className="author-officer-chip" title={`${activeOfficer.fullName} • ${activeOfficer.jurisdictionAreaName}`}>
+                <div className="author-officer-avatar">
+                  <span>{officerInitials}</span>
+                  <span className="author-officer-online-dot" title="Đang trực tuyến" />
+                </div>
+                <div className="author-officer-meta">
+                  <div className="author-officer-name">{activeOfficer.fullName}</div>
+                  <div className="author-officer-role">
+                    {activeOfficer.position?.replace(` ${activeOfficer.jurisdictionAreaName}`, '') || 'Chỉ Huy Trực Ban'}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          {/* Logout Button */}
-          {onLogout && (
-            <button
-              type="button"
-              onClick={onLogout}
-              className="author-logout-btn"
-              title="Đăng xuất khỏi phiên trực"
-            >
-              <LogOut size={15} />
-            </button>
+              {onLogout && (
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="author-logout-btn"
+                  title="Đăng xuất khỏi phiên trực"
+                >
+                  <LogOut size={15} />
+                </button>
+              )}
+            </>
           )}
         </div>
       </header>
@@ -308,7 +378,10 @@ export const AuthorPortal = ({ onSwitchToAdmin: _onSwitchToAdmin, onLogout }: Pr
           <MissionDispatch
             sosRequests={authorScopedSosRequests}
             selectedSos={selectedSos}
-            onSelectSos={(sos) => setSelectedSosId(sos.id)}
+            onSelectSos={(sos) => {
+              setSelectedSosId(sos.id);
+              navigateTo('map', user ?? null, sos.id);
+            }}
             assignment={currentAssignment}
             authorities={authorities}
             rescueTeams={rescueTeams}
@@ -354,3 +427,6 @@ export const AuthorPortal = ({ onSwitchToAdmin: _onSwitchToAdmin, onLogout }: Pr
     </div>
   );
 };
+
+export { LocalAuthorityDashboard } from './LocalAuthorityDashboard';
+

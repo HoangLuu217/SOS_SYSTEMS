@@ -220,3 +220,172 @@
   font-size: 13px;
   color: #f1f5f9;
 }
+
+/* FORM CONTROLS & MODALS */
+.sos-form-label {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.sos-form-input,
+.sos-form-select,
+.sos-form-textarea {
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.18s ease;
+}
+
+.sos-form-input:focus,
+.sos-form-select:focus,
+.sos-form-textarea:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+.sos-btn-refresh {
+  background: #1e293b;
+  color: #f1f5f9;
+  border: 1px solid #475569;
+}
+
+.sos-btn-refresh:hover {
+  background: #334155;
+  color: #ffffff;
+}
+
+.sos-modal-card {
+  background: #0f172a;
+  border: 1px solid #334155;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.sos-modal-title {
+  color: #f8fafc;
+}
+
+/* ============================================================
+   LIGHT THEME SYNCHRONIZATION FOR ALL DASHBOARD VIEWS
+   ============================================================ */
+[data-theme="light"] .sos-view-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .sos-view-card-header {
+  border-bottom: 1px solid #f1f5f9;
+}
+
+[data-theme="light"] .sos-view-card-title {
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-stat-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .sos-stat-value {
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-stat-label {
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-table-wrapper {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+[data-theme="light"] .sos-table th {
+  background: #f8fafc;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+[data-theme="light"] .sos-table td {
+  color: #1e293b;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+[data-theme="light"] .sos-table tr:hover td {
+  background: #f8fafc;
+}
+
+[data-theme="light"] .sos-form-label {
+  color: #475569;
+}
+
+[data-theme="light"] .sos-form-input,
+[data-theme="light"] .sos-form-select,
+[data-theme="light"] .sos-form-textarea {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-form-input:focus,
+[data-theme="light"] .sos-form-select:focus,
+[data-theme="light"] .sos-form-textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+[data-theme="light"] .sos-btn-refresh {
+  background: #ffffff;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+[data-theme="light"] .sos-btn-refresh:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-modal-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .sos-modal-title {
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-timeline-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme="light"] .sos-timeline-text {
+  color: #1e293b;
+}
+
+[data-theme="light"] .sos-timeline-time {
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-badge.pending {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+}
+
+[data-theme="light"] .sos-badge.verified {
+  background: #e0f2fe;
+  color: #0284c7;
+  border: 1px solid #bae6fd;
+}
+
+[data-theme="light"] .sos-badge.active {
+  background: #dcfce7;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}

@@ -174,33 +174,8 @@ export const MissionDispatch = ({
   };
 
   return (
-    <div className="dispatch-screen" style={{ position: 'relative' }}>
-      {/* 1. Left Column: Incident Feed (Collapsible) */}
-      <div
-        style={{
-          width: isLeftPanelOpen ? 340 : 0,
-          minWidth: isLeftPanelOpen ? 340 : 0,
-          maxWidth: isLeftPanelOpen ? 340 : 0,
-          overflow: 'hidden',
-          transition: 'width 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          borderRight: isLeftPanelOpen ? '1px solid var(--sos-border)' : 'none',
-          zIndex: 10,
-        }}
-      >
-        <IncidentFeed
-          sosRequests={sosRequests}
-          selectedSos={selectedSos}
-          onSelectSos={onSelectSos}
-          activeOfficer={activeOfficer}
-          onOpenCitizenModal={() => setIsCitizenSosOpen(true)}
-          onToggleCollapse={toggleLeftPanel}
-        />
-      </div>
-
-      {/* 2. Center Column: Tactical Map (Takes remaining width) */}
+    <div className="dispatch-screen" style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', overflow: 'hidden' }}>
+      {/* 1. Tactical Map (Takes FULL width from sidebar to right dispatch panel) */}
       <div style={{ flex: 1, position: 'relative', display: 'flex', overflow: 'hidden', height: '100%' }}>
         <TacticalMap
           selectedSos={selectedSos}
@@ -211,16 +186,64 @@ export const MissionDispatch = ({
           onSelectSos={onSelectSos}
         />
 
-        {/* Floating Toggle Button for Left Panel when Collapsed */}
-        {!isLeftPanelOpen && (
+        {/* Floating Incident Queue Overlaid on Map */}
+        {isLeftPanelOpen ? (
+          <div
+            className="floating-incident-overlay-card"
+            style={{
+              position: 'absolute',
+              top: 14,
+              left: 14,
+              maxHeight: 'calc(100% - 28px)',
+              width: 365,
+              maxWidth: 'calc(100% - 28px)',
+              zIndex: 450,
+              display: 'flex',
+              flexDirection: 'column',
+              background: 'var(--sos-surface)',
+              borderRadius: 14,
+              boxShadow: '0 10px 32px rgba(15, 23, 42, 0.2), 0 0 0 1px var(--sos-border)',
+              overflow: 'hidden',
+              animation: 'fadeIn 0.18s ease-out',
+            }}
+          >
+            <IncidentFeed
+              sosRequests={sosRequests}
+              selectedSos={selectedSos}
+              onSelectSos={onSelectSos}
+              activeOfficer={activeOfficer}
+              onOpenCitizenModal={() => setIsCitizenSosOpen(true)}
+              onToggleCollapse={toggleLeftPanel}
+            />
+          </div>
+        ) : (
+          /* Floating Re-open Button when Incident Queue is collapsed */
           <button
             type="button"
             onClick={toggleLeftPanel}
             className="floating-dock-feed-btn"
-            title="Mở danh sách tín hiệu SOS"
+            title="Mở danh sách tín hiệu SOS địa bàn"
+            style={{
+              position: 'absolute',
+              top: 14,
+              left: 14,
+              zIndex: 450,
+              background: 'var(--sos-surface)',
+              border: '1px solid var(--sos-border)',
+              boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
+              borderRadius: 8,
+              padding: '7px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              cursor: 'pointer',
+              fontWeight: 700,
+              fontSize: 12,
+              color: 'var(--sos-text-primary)',
+            }}
           >
             <Radio size={14} color="#dc2626" />
-            <span>Danh Sách SOS ({sosRequests.length})</span>
+            <span>SOS Địa Bàn ({sosRequests.length})</span>
             <ChevronRight size={14} />
           </button>
         )}
@@ -231,7 +254,7 @@ export const MissionDispatch = ({
             type="button"
             onClick={toggleRightPanel}
             className="floating-dock-open-btn"
-            title="Mở rộng bảng phân công cứu hộ (kéo ra kéo vào)"
+            title="Mở rộng bảng phân công cứu hộ"
           >
             <ChevronLeft size={16} color="#dc2626" />
             <span>Bảng Phân Công & Tác Chiến</span>

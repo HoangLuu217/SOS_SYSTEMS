@@ -4,13 +4,12 @@ import SOSMap from './components/SOSMap';
 import { Sidebar } from './components/Sidebar';
 import type { NavItemKey } from './components/Sidebar';
 import { DashboardViews } from './components/DashboardViews';
-import { AdminPortal } from './components/admin/AdminPortal';
 import { AuthorPortal } from './components/author/AuthorPortal';
 import { AppProvider } from './context/AppContext';
 import { domainDService } from './services/domainDService';
 import { logoutApi } from './services/api';
+import { parseRoute, buildRouteUrl, navigateTo } from './services/appRouter';
 import type { User } from './types/auth';
-import { ArrowLeft } from 'lucide-react';
 import './App.css';
 
 // Kiểm tra quyền hạn hợp lệ: Chỉ ADMIN hoặc LOCAL_AUTHORITY
@@ -40,127 +39,128 @@ const navTitles: Record<NavItemKey, { title: string; desc: string }> = {
     desc: 'Trung tâm giám sát thời gian thực & hỗ trợ ứng cứu khẩn cấp người dân',
   },
   sos_requests: {
-    title: 'TIẾP NHẬN & XÁC MINH YÊU CẦU SOS (UC-L02, UC-L05, UC-L06)',
+    title: 'TIẾP NHẬN & XÁC MINH YÊU CẦU SOS',
     desc: 'Tiếp nhận dữ liệu từ App & cuộc gọi Hotline, xác minh và đánh giá mức độ khẩn cấp',
   },
   coordination: {
-    title: 'ĐIỀU PHỐI & PHÂN CÔNG CỨU HỘ (UC-L07, UC-L08, UC-L13)',
+    title: 'ĐIỀU PHỐI & PHÂN CÔNG CỨU HỘ',
     desc: 'Phân công đội cứu nạn, theo dõi tiến trình thực địa và đóng yêu cầu hoàn thành',
   },
   rescuers: {
-    title: 'ĐỘI NGŨ CỨU NẠN ĐỊA PHƯƠNG (UC-L10)',
+    title: 'ĐỘI NGŨ CỨU NẠN ĐỊA PHƯƠNG',
     desc: 'Quản lý lực lượng cứu hộ, trạng thái sẵn sàng và khu vực hoạt động',
   },
   resources: {
-    title: 'NGUỒN LỰC & PHƯƠNG TIỆN CỨU HỘ (UC-L11)',
+    title: 'NGUỒN LỰC & PHƯƠNG TIỆN CỨU HỘ',
     desc: 'Quản lý thuyền cano, xe cấp cứu, trang thiết bị ứng phó thiên tai lũ lụt',
   },
   alerts: {
-    title: 'PHÁT CẢNH BÁO & TRẠM TRÚ ẨN (UC-L12)',
+    title: 'PHÁT CẢNH BÁO & TRẠM TRÚ ẨN',
     desc: 'Phát thông báo nguy cấp đến người dân vùng ngập lụt và điểm sơ tán an toàn',
   },
   hazard_reports: {
-    title: 'DUYỆT ĐIỂM NGUY HIỂM TỪ NGƯỜI DÂN (UC-L15)',
+    title: 'DUYỆT ĐIỂM NGUY HIỂM TỪ NGƯỜI DÂN',
     desc: 'Thẩm định và xác nhận các vị trí sạt lở, nước dâng sâu do cộng đồng đóng góp',
   },
   reports: {
-    title: 'BÁO CÁO & THỐNG KÊ ĐỊA PHƯƠNG (UC-L14)',
+    title: 'BÁO CÁO & THỐNG KÊ ĐỊA PHƯƠNG',
     desc: 'Phân tích số liệu cứu hộ, thời gian phản hồi và tỷ lệ hỗ trợ người dân',
   },
   admin_overview: {
-    title: 'TỔNG QUAN & GIÁM SÁT TOÀN DIỆN (UC-A07, UC-A08)',
+    title: 'TỔNG QUAN & GIÁM SÁT TOÀN DIỆN',
     desc: 'Bảng điều khiển trung tâm giám sát hoạt động hệ thống SOS trên toàn quốc',
   },
   citizens: {
-    title: 'QUẢN TRỊ TÀI KHOẢN NGƯỜI DÂN (UC-A02)',
+    title: 'QUẢN TRỊ TÀI KHOẢN NGƯỜI DÂN',
     desc: 'Quản lý danh sách, thông tin liên lạc và trạng thái tài khoản người dân',
   },
   rescuers_admin: {
-    title: 'XÁC MINH LỰC LƯỢNG CỨU NẠN (UC-A03)',
+    title: 'XÁC MINH LỰC LƯỢNG CỨU NẠN',
     desc: 'Kiểm tra hồ sơ chứng chỉ, cấp phép và quản lý tài khoản đội cứu hộ',
   },
   authorities: {
-    title: 'QUẢN LÝ CÁN BỘ & ĐỊA PHƯƠNG (UC-A04)',
+    title: 'QUẢN LÝ CÁN BỘ & ĐỊA PHƯƠNG',
     desc: 'Khởi tạo và quản lý quyền hạn của các Ban chỉ huy PCTT & TKCN cấp tỉnh/huyện/xã',
   },
   areas: {
-    title: 'KHU VỰC HÀNH CHÍNH & RANH GIỚI (UC-A05)',
+    title: 'KHU VỰC HÀNH CHÍNH & RANH GIỚI',
     desc: 'Quản lý danh mục địa giới hành chính, phạm vi quản lý và ranh giới bản đồ',
   },
   rbac: {
-    title: 'PHÂN QUYỀN TRUY CẬP VAI TRÒ (UC-A06)',
+    title: 'PHÂN QUYỀN TRUY CẬP VAI TRÒ',
     desc: 'Cấu hình và kiểm soát ma trận quyền hạn theo từng Actor trong hệ thống',
   },
   audit_logs: {
-    title: 'NHẬT KÝ HỆ THỐNG & KIỂM TOÁN (UC-A09)',
+    title: 'NHẬT KÝ HỆ THỐNG & KIỂM TOÁN',
     desc: 'Theo dõi chi tiết nhật ký thao tác: Ai? Làm gì? Khi nào? Đối tượng nào?',
   },
 };
 
-type PortalView = 'admin' | 'author' | 'login';
-
 function MainRouter() {
-  const [currentHash, setCurrentHash] = useState(window.location.hash);
   const [authUser, setAuthUser] = useState<User | null>(() => getAuthorizedUser());
-  const [activeNavKey, setActiveNavKey] = useState<NavItemKey>('map');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [currentView, setCurrentView] = useState<PortalView>(() => {
-    const saved = localStorage.getItem('sos_active_portal');
-    if (saved === 'admin' || saved === 'author' || saved === 'login') return saved;
-    const storedUser = localStorage.getItem('sos_auth_user');
-    if (storedUser) {
-      try {
-        const parsed = JSON.parse(storedUser);
-        if (parsed.roles?.includes('ADMIN')) return 'admin';
-        return 'author';
-      } catch {
-        // Fallback
-      }
-    }
-    return 'login';
+  const [activeNavKey, setActiveNavKey] = useState<NavItemKey>(() => {
+    const user = getAuthorizedUser();
+    return parseRoute(window.location.pathname, window.location.hash, user).navKey;
   });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  // Điều hướng tab và cập nhật URL sạch (e.g. /localauthor/sos_requests hoặc /admin/map)
+  const handleNavSelect = (key: NavItemKey) => {
+    setActiveNavKey(key);
+    navigateTo(key, authUser);
+  };
+
+  // Route Guard: Kiểm tra phiên và quyền hạn
   const checkRouteAccess = useCallback(() => {
     const user = getAuthorizedUser();
     setAuthUser(user);
 
-    if (window.location.hash === '#map') {
-      if (!user) {
-        window.location.hash = '';
-        setCurrentHash('');
-        return;
+    if (!user) {
+      if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
+        window.history.replaceState(null, '', '/login');
       }
     }
-    setCurrentHash(window.location.hash);
   }, []);
 
   useEffect(() => {
-    checkRouteAccess();
-
-    const handleHashChange = () => {
+    const handlePopState = () => {
       checkRouteAccess();
+      const user = getAuthorizedUser();
+      const parsed = parseRoute(window.location.pathname, window.location.hash, user);
+      setActiveNavKey(parsed.navKey);
     };
 
-    const handleStorageChange = () => {
-      checkRouteAccess();
-    };
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('storage', checkRouteAccess);
 
-    window.addEventListener('hashchange', handleHashChange);
-    window.addEventListener('storage', handleStorageChange);
+    // Initial check: đồng bộ URL sạch không có hash
+    const user = getAuthorizedUser();
+    if (user) {
+      const parsed = parseRoute(window.location.pathname, window.location.hash, user);
+      setActiveNavKey(parsed.navKey);
+      const expectedUrl = buildRouteUrl(parsed.navKey, user, parsed.subPath);
+      // Nếu còn hash cũ hoặc URL chưa đúng định dạng thì chuẩn hóa
+      if (window.location.hash || window.location.pathname !== expectedUrl) {
+        window.history.replaceState({ navKey: parsed.navKey, subPath: parsed.subPath }, '', expectedUrl);
+      }
+    } else {
+      if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
+        window.history.replaceState(null, '', '/login');
+      }
+    }
+
     return () => {
-      window.removeEventListener('hashchange', handleHashChange);
-      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('storage', checkRouteAccess);
     };
   }, [checkRouteAccess]);
 
-  const handleSwitchPortal = (target: PortalView) => {
-    setCurrentView(target);
-    localStorage.setItem('sos_active_portal', target);
-    if (target === 'admin') {
-      domainDService.setActiveOfficer('officer-admin-01');
-    } else if (target === 'author') {
-      domainDService.setActiveOfficer('officer-hc-htd');
-    }
+  const handleLoginSuccess = (user: User) => {
+    setAuthUser(user);
+    domainDService.syncLoggedInUser(user);
+    const initialKey: NavItemKey = 'map';
+    setActiveNavKey(initialKey);
+    navigateTo(initialKey, user, undefined, true);
   };
 
   const handleLogout = async () => {
@@ -169,116 +169,95 @@ function MainRouter() {
     localStorage.removeItem('sos_access_token');
     localStorage.removeItem('sos_active_portal');
     setAuthUser(null);
-    window.location.hash = '';
-    setCurrentHash('');
-    setCurrentView('login');
+    window.history.replaceState(null, '', '/login');
   };
 
-  // Route Guard: Khi đã xác thực role ADMIN hoặc LOCAL_AUTHORITY và URL có #map
-  if (currentHash === '#map' && authUser && hasAuthorizedRole(authUser.roles)) {
+  // 1. KHI ĐÃ ĐĂNG NHẬP VÀ XÁC THỰC ROLE HỢP LỆ (ADMIN hoặc LOCAL_AUTHORITY)
+  if (authUser && hasAuthorizedRole(authUser.roles)) {
+    const isAuthority = authUser.roles.includes('LOCAL_AUTHORITY') && !authUser.roles.includes('ADMIN');
     const currentMeta = navTitles[activeNavKey] || navTitles.map;
 
     return (
       <div className="sos-dashboard-container">
-        {/* 1. THANH SIDEBAR BÊN TRÁI PHÂN BIỆT THEO ROLE (LOCAL_AUTHORITY & ADMIN) */}
+        {/* 1. THANH SIDEBAR BÊN TRÁI PHÂN BIỆT THEO ROLE (LOCAL_AUTHORITY HOẶC ADMIN) */}
         <Sidebar
           user={authUser}
           activeKey={activeNavKey}
-          onSelectKey={(key) => setActiveNavKey(key)}
+          onSelectKey={handleNavSelect}
           onLogout={handleLogout}
           collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onToggleCollapse={() => {
+            setSidebarCollapsed(!sidebarCollapsed);
+            setTimeout(() => window.dispatchEvent(new Event('resize')), 120);
+          }}
         />
 
         {/* 2. KHÔNG GIAN NỘI DUNG CHÍNH (MAIN DASHBOARD CONTENT) */}
-        <main className="sos-main-content">
-          {/* Header thanh điều hướng phía trên */}
-          <header className="sos-main-header">
-            <div className="sos-page-title-wrap">
-              <div>
-                <h1 className="sos-page-title">{currentMeta.title}</h1>
-                <p className="sos-page-desc">{currentMeta.desc}</p>
-              </div>
-            </div>
-
-            <div className="sos-header-actions">
-              <span className="sos-live-pill">
-                <span className="sos-live-dot" />
-                <span>TRỰC BAN REALTIME</span>
-              </span>
-
-              {/* Nút quay lại màn hình điều hành tác chiến portal */}
-              <button
-                type="button"
-                onClick={() => {
-                  window.location.hash = '';
-                  const target = authUser.roles.includes('ADMIN') ? 'admin' : 'author';
-                  handleSwitchPortal(target);
-                }}
-                style={{
-                  padding: '7px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #475569',
-                  backgroundColor: '#1e293b',
-                  color: '#f1f5f9',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <ArrowLeft size={14} />
-                <span>Cổng Tác Chiến</span>
-              </button>
-            </div>
-          </header>
-
-          {/* Vùng nội dung nghiệp vụ */}
-          <div className="sos-page-body">
-            {activeNavKey === 'map' ? (
-              <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
-                <SOSMap />
-              </div>
+        <main
+          className="sos-main-content"
+          style={{
+            overflow: activeNavKey === 'map' && isAuthority ? 'hidden' : 'auto',
+            height: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          {activeNavKey === 'map' ? (
+            isAuthority ? (
+              /* Giao diện Tác Chiến Cấp Cơ Sở (3 Cột: Tin SOS • Bản đồ Google Maps • Phân công cứu hộ) */
+              <AuthorPortal
+                user={authUser}
+                embedded={true}
+                onLogout={handleLogout}
+              />
             ) : (
-              <div style={{ maxWidth: '1280px', margin: '0 auto' }}>
-                <DashboardViews
-                  activeKey={activeNavKey}
-                  onOpenMap={() => setActiveNavKey('map')}
-                />
+              /* Giao diện Giám sát Bản đồ cho ADMIN */
+              <>
+                <header className="sos-main-header">
+                  <div className="sos-page-title-wrap">
+                    <div>
+                      <h1 className="sos-page-title">{currentMeta.title}</h1>
+                      <p className="sos-page-desc">{currentMeta.desc}</p>
+                    </div>
+                  </div>
+                </header>
+
+                <div className="sos-page-body" style={{ padding: '16px 20px', maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
+                  <SOSMap />
+                </div>
+              </>
+            )
+          ) : (
+            /* Các màn hình quản trị nghiệp vụ khác */
+            <>
+              <header className="sos-main-header">
+                <div className="sos-page-title-wrap">
+                  <div>
+                    <h1 className="sos-page-title">{currentMeta.title}</h1>
+                    <p className="sos-page-desc">{currentMeta.desc}</p>
+                  </div>
+                </div>
+              </header>
+
+              <div className="sos-page-body">
+                <div style={{ maxWidth: '1360px', margin: '0 auto' }}>
+                  <DashboardViews
+                    activeKey={activeNavKey}
+                    onOpenMap={() => handleNavSelect('map')}
+                  />
+                </div>
               </div>
-            )}
-          </div>
+            </>
+          )}
         </main>
       </div>
     );
   }
 
-  // Nếu không ở #map: Điều hướng theo PortalView
-  if (currentView === 'login') {
-    return (
-      <LoginPage
-        onEnterConsole={(targetPortal) => {
-          handleSwitchPortal(targetPortal || 'author');
-        }}
-      />
-    );
-  }
-
-  if (currentView === 'admin') {
-    return (
-      <AdminPortal
-        onSwitchToAuthor={() => handleSwitchPortal('author')}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
+  // 2. MẶC ĐỊNH KHI CHƯA ĐĂNG NHẬP: Hiển thị trang Login
   return (
-    <AuthorPortal
-      onSwitchToAdmin={() => handleSwitchPortal('admin')}
-      onLogout={handleLogout}
+    <LoginPage
+      onLoginSuccess={handleLoginSuccess}
     />
   );
 }

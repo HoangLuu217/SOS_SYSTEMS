@@ -22,9 +22,10 @@ import './Login.css';
 
 interface LoginPageProps {
   onEnterConsole?: (targetPortal?: 'admin' | 'author') => void;
+  onLoginSuccess?: (user: User) => void;
 }
 
-export const LoginPage = ({ onEnterConsole }: LoginPageProps = {}) => {
+export const LoginPage = ({ onEnterConsole, onLoginSuccess }: LoginPageProps = {}) => {
   const { lang, toggleLang, theme, toggleTheme } = useApp();
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
@@ -115,6 +116,19 @@ export const LoginPage = ({ onEnterConsole }: LoginPageProps = {}) => {
         if (res.data.accessToken) {
           localStorage.setItem('sos_access_token', res.data.accessToken);
         }
+
+        // Tự động chuyển hướng ngay lập tức vào giao diện điều hành tương ứng
+        const isAuth = loggedInUser.roles.includes('LOCAL_AUTHORITY') && !loggedInUser.roles.includes('ADMIN');
+        const target = isAuth ? 'author' : 'admin';
+        const targetPath = isAuth ? '/localauthority/map' : '/admin/map';
+        localStorage.setItem('sos_active_portal', target);
+        window.history.replaceState(null, '', targetPath);
+        if (onLoginSuccess) {
+          onLoginSuccess(loggedInUser);
+        }
+        if (onEnterConsole) {
+          onEnterConsole(target);
+        }
       } else {
         setErrorMsg(res.message || 'Đăng nhập không thành công.');
       }
@@ -131,6 +145,8 @@ export const LoginPage = ({ onEnterConsole }: LoginPageProps = {}) => {
     await logoutApi();
     localStorage.removeItem('sos_auth_user');
     localStorage.removeItem('sos_access_token');
+    localStorage.removeItem('sos_active_portal');
+    window.history.replaceState(null, '', '/login');
     setUser(null);
     if (!rememberPassword) {
       setAccount('');
@@ -257,11 +273,16 @@ export const LoginPage = ({ onEnterConsole }: LoginPageProps = {}) => {
                 if (user) {
                   domainDService.syncLoggedInUser(user);
                 }
-                const target = user?.roles.includes('ADMIN') ? 'admin' : 'author';
+                const isAuth = user?.roles.includes('LOCAL_AUTHORITY') && !user?.roles.includes('ADMIN');
+                const target = isAuth ? 'author' : 'admin';
+                const targetPath = isAuth ? '/localauthority/map' : '/admin/map';
+                localStorage.setItem('sos_active_portal', target);
+                window.history.replaceState(null, '', targetPath);
+                if (onLoginSuccess && user) {
+                  onLoginSuccess(user);
+                }
                 if (onEnterConsole) {
                   onEnterConsole(target);
-                } else {
-                  window.location.hash = '#map';
                 }
               }}
             >
@@ -276,7 +297,7 @@ export const LoginPage = ({ onEnterConsole }: LoginPageProps = {}) => {
               disabled={loading}
             >
               <LogOut size={16} />
-              <span>Đăng xuất tài khoản</span>
+              <span>Đổi tài khoản khác (Đăng xuất)</span>
             </button>
           </div>
         ) : (
@@ -369,67 +390,6 @@ export const LoginPage = ({ onEnterConsole }: LoginPageProps = {}) => {
                   </>
                 )}
               </button>
-
-              {/* Quick direct flow buttons for evaluation / demonstration */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--sos-text-muted)', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                  — HOẶC TRUY CẬP NHANH THEO LUỒNG —
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      domainDService.setActiveOfficer('officer-admin-01');
-                      if (onEnterConsole) onEnterConsole('admin');
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                      background: 'rgba(245, 158, 11, 0.1)',
-                      border: '1px solid rgba(245, 158, 11, 0.35)',
-                      color: '#b45309',
-                      borderRadius: 8,
-                      padding: '8px 10px',
-                      fontSize: 11,
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                    }}
-                    title="Vào thẳng trang quản trị dành cho Tổng Chỉ Huy TP (Admin)"
-                  >
-                    <span>👑 Cổng ADMIN</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      domainDService.setActiveOfficer('officer-hc-htd');
-                      if (onEnterConsole) onEnterConsole('author');
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                      background: 'rgba(220, 38, 38, 0.1)',
-                      border: '1px solid rgba(220, 38, 38, 0.35)',
-                      color: '#dc2626',
-                      borderRadius: 8,
-                      padding: '8px 10px',
-                      fontSize: 11,
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                    }}
-                    title="Vào thẳng trang tác chiến dành cho Cán bộ Hòa Cường (Author)"
-                  >
-                    <span>🛡️ Cổng AUTHOR</span>
-                  </button>
-                </div>
-              </div>
-
               {/* Link: Quên mật khẩu? */}
               <div className="sos-forgot-center">
                 <span

@@ -64,6 +64,110 @@ async function seedAuthorityUser() {
     { upsert: true }
   );
 
+  // 1c. LOCAL_AUTHORITY account 3: Võ Văn Kiệt (Quận Ngũ Hành Sơn)
+  const nhsArea = await db.collection('administrative_areas').findOne({ name: /Ngũ Hành Sơn/i }) || area;
+  const kietUser = {
+    phone: '0905114119',
+    email: 'kiet.vo@nguhanhson.danang.gov.vn',
+    passwordHash: passwordHash,
+    fullName: 'Võ Văn Kiệt',
+    roles: ['LOCAL_AUTHORITY'],
+    status: 'ACTIVE',
+    gender: 'MALE',
+    authority: {
+      organizationId: org ? org._id : null,
+      areaId: nhsArea ? nhsArea._id : null,
+      position: 'Chỉ Huy Trực Ban Ngũ Hành Sơn',
+      department: 'Ban Chỉ Huy PCTT Phường Ngũ Hành Sơn',
+    },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  await db.collection('users').updateOne(
+    { phone: '0905114119' },
+    { $set: kietUser },
+    { upsert: true }
+  );
+
+  // 1d. LOCAL_AUTHORITY account 4: Lê Hoàng Nam (Phường Sơn Trà)
+  const sonTraArea = await db.collection('administrative_areas').findOne({ name: /Sơn Trà/i }) || area;
+  const sonTraUser = {
+    phone: '0905114117',
+    email: 'nam.le@sontra.danang.gov.vn',
+    passwordHash: passwordHash,
+    fullName: 'Lê Hoàng Nam',
+    roles: ['LOCAL_AUTHORITY'],
+    status: 'ACTIVE',
+    gender: 'MALE',
+    authority: {
+      organizationId: org ? org._id : null,
+      areaId: sonTraArea ? sonTraArea._id : null,
+      position: 'Chỉ Huy Trực Ban Sơn Trà',
+      department: 'Ban Chỉ Huy PCTT Phường Sơn Trà',
+    },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  await db.collection('users').updateOne(
+    { phone: '0905114117' },
+    { $set: sonTraUser },
+    { upsert: true }
+  );
+
+  // 1e. LOCAL_AUTHORITY account 5: Lê Văn Nam (Phường Cẩm Lệ)
+  const camLeArea = await db.collection('administrative_areas').findOne({ name: /Cẩm Lệ/i }) || area;
+  const camLeUser = {
+    phone: '0905777888',
+    email: 'nam.le@camle.danang.gov.vn',
+    passwordHash: passwordHash,
+    fullName: 'Lê Văn Nam',
+    roles: ['LOCAL_AUTHORITY'],
+    status: 'ACTIVE',
+    gender: 'MALE',
+    authority: {
+      organizationId: org ? org._id : null,
+      areaId: camLeArea ? camLeArea._id : null,
+      position: 'Chỉ Huy Trực Ban Cẩm Lệ',
+      department: 'Ban Chỉ Huy PCTT Phường Cẩm Lệ',
+    },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  await db.collection('users').updateOne(
+    { phone: '0905777888' },
+    { $set: camLeUser },
+    { upsert: true }
+  );
+
+  // 1f. LOCAL_AUTHORITY account 6: Phạm Minh Đức (Phường Thanh Khê)
+  const thanhKheArea = await db.collection('administrative_areas').findOne({ name: /Thanh Khê/i }) || area;
+  const thanhKheUser = {
+    phone: '0905114118',
+    email: 'duc.pham@thanhkhe.danang.gov.vn',
+    passwordHash: passwordHash,
+    fullName: 'Phạm Minh Đức',
+    roles: ['LOCAL_AUTHORITY'],
+    status: 'ACTIVE',
+    gender: 'MALE',
+    authority: {
+      organizationId: org ? org._id : null,
+      areaId: thanhKheArea ? thanhKheArea._id : null,
+      position: 'Chỉ Huy Trực Ban Thanh Khê',
+      department: 'Ban Chỉ Huy PCTT Phường Thanh Khê',
+    },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  await db.collection('users').updateOne(
+    { phone: '0905114118' },
+    { $set: thanhKheUser },
+    { upsert: true }
+  );
+
   // 2. ADMIN account
   const adminUser = {
     phone: '0905999999',

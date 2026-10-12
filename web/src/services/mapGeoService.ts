@@ -1,145 +1,46 @@
-import type { Style } from 'mapbox-gl';
 import type { FeatureCollection, Feature } from 'geojson';
 import type { AdministrativeArea, SosRequest, SosAssignment, AuthorityOfficer } from '../types/domainD';
+import { getRegionColor } from './geoapifyBoundariesService';
 
-// Free public Mapbox access token or token from env/localStorage
-const ENV_TOKEN = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_MAPBOX_TOKEN) || '';
-const PUBLIC_DEMO_TOKEN = 'pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4M29iazA2Z2gycXA4N2pmbDZmangifQ.-g_vE53SD2WrJ6tFX7QHmA';
-
-export function getMapboxToken(): string {
-  const custom = localStorage.getItem('rescuesos_mapbox_token');
-  if (custom && custom.trim().length > 10) return custom.trim();
-  if (ENV_TOKEN && ENV_TOKEN.trim().length > 10) return ENV_TOKEN.trim();
-  return PUBLIC_DEMO_TOKEN;
-}
-
-export function setMapboxToken(token: string) {
-  if (token && token.trim()) {
-    localStorage.setItem('rescuesos_mapbox_token', token.trim());
-  } else {
-    localStorage.removeItem('rescuesos_mapbox_token');
-  }
-}
-
-// Fallback OSM raster style if custom Mapbox token fails or is offline
-export const OSM_RASTER_STYLE: Style = {
-  version: 8,
-  sources: {
-    'osm-tiles': {
-      type: 'raster',
-      tiles: [
-        'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      ],
-      tileSize: 256,
-      attribution: '© OpenStreetMap Contributors • Chủ quyền biển đảo Việt Nam',
-    },
-  },
-  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-  layers: [
-    {
-      id: 'osm-tiles-layer',
-      type: 'raster',
-      source: 'osm-tiles',
-      minzoom: 0,
-      maxzoom: 19,
-    },
-  ],
+// Google Maps Tile Server URLs (Miễn phí, tốc độ cao, hỗ trợ tiếng Việt đầy đủ)
+export const GOOGLE_MAP_TILES = {
+  STREETS: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+  SATELLITE: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+  TERRAIN: 'https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
+  TRAFFIC: 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}',
 };
 
-export const SATELLITE_RASTER_STYLE: Style = {
-  version: 8,
-  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-  sources: {
-    'satellite-tiles': {
-      type: 'raster',
-      tiles: [
-        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      ],
-      tileSize: 256,
-      attribution: '© Esri, Maxar, Earthstar Geographics • Biển Đông Việt Nam',
-    },
-  },
-  layers: [
-    {
-      id: 'satellite-tiles-layer',
-      type: 'raster',
-      source: 'satellite-tiles',
-      minzoom: 0,
-      maxzoom: 19,
-    },
-  ],
-};
-
-export const DARK_RASTER_STYLE: Style = {
-  version: 8,
-  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-  sources: {
-    'dark-tiles': {
-      type: 'raster',
-      tiles: [
-        'https://a.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png',
-        'https://b.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png',
-        'https://c.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png',
-      ],
-      tileSize: 256,
-      attribution: '© CARTO, OpenStreetMap Contributors • Chủ quyền biển đảo Việt Nam',
-    },
-  },
-  layers: [
-    {
-      id: 'dark-tiles-layer',
-      type: 'raster',
-      source: 'dark-tiles',
-      minzoom: 0,
-      maxzoom: 19,
-    },
-  ],
-};
-
-export function getMapStyle(
-  mode: 'street' | 'satellite',
-  useDirectMapbox: boolean = true,
-  theme: 'light' | 'dark' = 'light'
-): string | Style {
-  const token = getMapboxToken();
-  if (useDirectMapbox && token && token.startsWith('pk.')) {
-    if (mode === 'satellite') return 'mapbox://styles/mapbox/satellite-streets-v12';
-    return theme === 'dark'
-      ? 'mapbox://styles/mapbox/dark-v11'
-      : 'mapbox://styles/mapbox/streets-v12';
-  }
-  if (mode === 'satellite') return SATELLITE_RASTER_STYLE;
-  return theme === 'dark' ? DARK_RASTER_STYLE : OSM_RASTER_STYLE;
+export function getGoogleTileUrl(mode: 'street' | 'satellite' | 'streets' = 'street'): string {
+  if (mode === 'satellite') return GOOGLE_MAP_TILES.SATELLITE;
+  return GOOGLE_MAP_TILES.STREETS;
 }
 
-// Quick View Presets
+// Quick View Presets cho bản đồ Đà Nẵng và Biển Đảo Việt Nam
 export const MAP_PRESETS = {
   DANANG: {
     label: 'Toàn cảnh 8 Quận / Huyện Đà Nẵng',
-    center: [108.1600, 16.0600] as [number, number],
-    zoom: 10.4,
+    center: [16.0600, 108.1600] as [number, number],
+    zoom: 11,
   },
   URBAN: {
     label: 'Khu vực Đô thị Trung tâm',
-    center: [108.2238, 16.068] as [number, number],
-    zoom: 12.8,
+    center: [16.0680, 108.2238] as [number, number],
+    zoom: 13,
   },
   HOANG_SA: {
     label: 'Quần đảo Hoàng Sa (Đà Nẵng)',
-    center: [112.0, 16.5] as [number, number],
+    center: [16.5, 112.0] as [number, number],
     zoom: 8.5,
   },
   TRUONG_SA: {
     label: 'Quần đảo Trường Sa (Khánh Hòa)',
-    center: [113.8, 10.0] as [number, number],
+    center: [10.0, 113.8] as [number, number],
     zoom: 7.2,
   },
   BIEN_DONG: {
     label: 'Toàn cảnh Biển Đông (VN)',
-    center: [111.5, 13.2] as [number, number],
-    zoom: 5.6,
+    center: [13.2, 111.5] as [number, number],
+    zoom: 6,
   },
 };
 
@@ -149,7 +50,7 @@ export interface SovereignIsland {
   name: string;
   subname: string;
   archipelago: 'Hoàng Sa' | 'Trường Sa';
-  coordinates: [number, number];
+  coordinates: [number, number]; // [lng, lat]
   isCapital?: boolean;
 }
 
@@ -252,8 +153,6 @@ export const SOVEREIGN_ISLANDS: SovereignIsland[] = [
     coordinates: [113.30, 8.17],
   },
 ];
-
-import { getRegionColor } from './geoapifyBoundariesService';
 
 // District & Major Ward Metadata & Cartographic Color Palette
 export const DISTRICT_METADATA: Record<string, {
@@ -398,15 +297,15 @@ export const DISTRICT_METADATA: Record<string, {
     borderColor: '#065f46',
     icon: '🚠',
     center: [108.0596, 16.0411],
-    zoom: 12.5,
+    zoom: 13.0,
   },
   'area-htien': {
     name: 'Xã Hòa Tiến',
     shortName: 'Hòa Tiến',
-    fillColor: '#16a34a',
+    fillColor: '#15803d',
     borderColor: '#166534',
     icon: '🌾',
-    center: [108.1255, 15.9576],
+    center: [108.1500, 15.9550],
     zoom: 13.0,
   },
   'area-hs': {
@@ -420,7 +319,7 @@ export const DISTRICT_METADATA: Record<string, {
   },
 };
 
-// GeoJSON conversion for administrative areas (Geoapify Boundary Features)
+// GeoJSON conversion for administrative areas
 export function buildWardsGeoJSON(areas: AdministrativeArea[]): FeatureCollection {
   const validAreas = areas.filter(
     (a) => a.boundary?.coordinates && a.boundary.coordinates.length > 0 && a.type !== 'PROVINCE'
@@ -478,7 +377,7 @@ export function buildTacticalRouteGeoJSON(
   const rescuerLat = assignment.rescuerLocation?.lat ?? (sos.coordinates.lat - 0.007);
 
   const midLng = (rescuerLng + sos.coordinates.lng) / 2 + 0.002;
-  const midLat = (rescuerLat + sos.coordinates.lat) / 2 + 0.001;
+  const midLat = (rescuerLat + sos.coordinates.lat) / 2 - 0.001;
 
   return {
     type: 'FeatureCollection',
@@ -486,8 +385,9 @@ export function buildTacticalRouteGeoJSON(
       {
         type: 'Feature',
         properties: {
-          assignmentId: assignment.id,
-          status: assignment.status,
+          teamName: assignment.rescueTeamName,
+          etaMinutes: assignment.etaMinutes,
+          vehicleType: (assignment as any).vehicleType || assignment.vehicleName,
         },
         geometry: {
           type: 'LineString',
@@ -591,4 +491,3 @@ export function isSosInOfficerJurisdiction(
 
   return !!matchesWard;
 }
-
