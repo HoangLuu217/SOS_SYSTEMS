@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import type { FormEvent } from 'react';
-import { 
-  User as UserIcon, 
-  Lock, 
-  Eye, 
-  EyeOff, 
-  AlertTriangle, 
-  ArrowRight, 
-  LogOut, 
-  ShieldCheck, 
+import {
+  User as UserIcon,
+  Lock,
+  Eye,
+  EyeOff,
+  AlertTriangle,
+  ArrowRight,
+  LogOut,
+  ShieldCheck,
   Radio,
   FileText,
   X,
@@ -260,6 +260,8 @@ export const LoginPage = ({ onEnterConsole }: LoginPageProps = {}) => {
                 const target = user?.roles.includes('ADMIN') ? 'admin' : 'author';
                 if (onEnterConsole) {
                   onEnterConsole(target);
+                } else {
+                  window.location.hash = '#map';
                 }
               }}
             >
