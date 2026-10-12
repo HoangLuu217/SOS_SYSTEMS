@@ -55,6 +55,8 @@ class BackendApiService {
   private customBaseUrl: string | null = null;
 
   async getBaseUrl(): Promise<string> {
+    // Luôn ưu tiên biến môi trường EXPO_PUBLIC_API_URL trong .env nếu có
+    if (ENV.API_BASE_URL) return ENV.API_BASE_URL;
     if (this.customBaseUrl) return this.customBaseUrl;
     try {
       const stored = await AsyncStorage.getItem(ENV.STORAGE_KEYS.CUSTOM_API_URL);
@@ -104,12 +106,19 @@ class BackendApiService {
       'Content-Type': 'application/json',
       Accept: 'application/json',
       'Bypass-Tunnel-Reminder': 'true',
+      'X-Tunnel-Skip-Anti-Phishing-Page': 'true',
+      'ngrok-skip-browser-warning': 'true',
       ...(options.headers as Record<string, string>),
     };
 
     const token = await AsyncStorage.getItem(ENV.STORAGE_KEYS.ACCESS_TOKEN);
     if (token && !headers['Authorization']) {
       headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const storedUser = await this.getStoredUser();
+    if (storedUser?._id && !headers['x-user-id']) {
+      headers['x-user-id'] = storedUser._id;
     }
 
     let lastError = '';
@@ -131,25 +140,29 @@ class BackendApiService {
 
         const json = await response.json().catch(() => null);
 
-        if (!response.ok) {
-          const errorMsg =
-            json?.message ||
-            (response.status === 404
-              ? `Không tìm thấy endpoint API (${url})`
-              : `Yêu cầu thất bại với mã lỗi ${response.status}`);
-          return {
-            success: false,
-            message: errorMsg,
-            error: json?.error,
-          };
+        // 1. Nếu phản hồi KHÔNG phải JSON hợp lệ (ví dụ: trang web HTML cảnh báo của Dev Tunnel)
+        if (!json || typeof json !== 'object') {
+          lastError = `Phản hồi từ ${url} không phải dữ liệu JSON hợp lệ.`;
+          continue; // Thử candidate tiếp theo
         }
 
-        // Nếu URL này thành công, tự động lưu làm baseUrl chính
+        // 2. Server đã trả về JSON thành công hoặc lỗi nghiệp vụ (200, 400, 401, 500...)
+        // Tự động lưu server này làm baseUrl chính vì kết nối thực tế thành công
         if (baseUrl !== this.customBaseUrl) {
           this.setBaseUrl(baseUrl);
         }
 
-        return json || { success: true, message: 'Thành công' };
+        // Nếu HTTP status lỗi (400, 401, 403, 500...), trả về trực tiếp thông báo lỗi từ server
+        if (!response.ok) {
+          return {
+            success: false,
+            message: json?.message || `Yêu cầu thất bại với mã lỗi ${response.status}`,
+            data: json?.data,
+            error: json?.error,
+          };
+        }
+
+        return json;
       } catch (err: any) {
         lastError = err.message || '';
         // Tiếp tục thử candidate tiếp theo

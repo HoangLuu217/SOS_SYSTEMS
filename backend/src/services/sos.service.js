@@ -1,18 +1,38 @@
-const { SosRequest, SosStatusHistory } = require('../models');
+const { SosRequest, SosStatusHistory, AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
 
 const createSosRequest = async (citizenId, sosData) => {
   // Extract fields
   const { location, areaId, address, emergencyType, priority, people, description } = sosData;
+
+  // Tự động gán areaId mặc định nếu app gửi placeholder hoặc thiếu areaId
+  let assignedAreaId = areaId;
+  const isPlaceholder = !assignedAreaId || assignedAreaId === '650c1f1e1c9d440000a1b1c1';
+  if (isPlaceholder && AdministrativeArea) {
+    let defaultArea = await AdministrativeArea.findOne({ status: 'ACTIVE' });
+    if (!defaultArea) {
+      defaultArea = await AdministrativeArea.findOne();
+    }
+    if (!defaultArea) {
+      defaultArea = await AdministrativeArea.create({
+        name: 'Khu vực cứu hộ trung tâm',
+        code: 'AREA_DANANG_DEFAULT',
+        type: 'DISTRICT',
+        status: 'ACTIVE',
+      });
+    }
+    assignedAreaId = defaultArea._id;
+  }
+
   const newSos = await SosRequest.create({
     citizenId,
     location,
-    areaId,
-    address,
-    emergencyType,
-    priority,
-    people,
-    description,
+    areaId: assignedAreaId,
+    address: address || 'Khu vực Đà Nẵng (Định vị GPS)',
+    emergencyType: emergencyType || 'FLOOD',
+    priority: priority || 'HIGH',
+    people: parseInt(people) || 1,
+    description: description || null,
     status: 'PENDING'
   });
 

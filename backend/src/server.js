@@ -20,4 +20,4 @@ const startServer = async () => {
 };
 
 startServer();
-// trigger restart
+// trigger restart with updated env
