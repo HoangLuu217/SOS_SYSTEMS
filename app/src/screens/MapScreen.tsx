@@ -35,7 +35,21 @@ export const MapScreen: React.FC = () => {
       <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
       <style>
         body { padding: 0; margin: 0; }
-        html, body, #map { height: 100%; width: 100%; }
+        html, body, #map {
+          height: 100%;
+          width: 100%;
+          margin: 0;
+          padding: 0;
+          overflow: hidden;
+          background-color: #f1f5f9;
+        }
+        .leaflet-container {
+          background-color: #f1f5f9;
+        }
+        .leaflet-tile {
+          -webkit-backface-visibility: hidden;
+          backface-visibility: hidden;
+        }
         @keyframes pulseWave {
           0% { transform: scale(0.6); opacity: 0.95; }
           70% { transform: scale(1.6); opacity: 0; }
@@ -77,12 +91,19 @@ export const MapScreen: React.FC = () => {
     <body>
       <div id="map"></div>
       <script>
-        var map = L.map('map', { zoomControl: false }).setView([${location.coords.latitude}, ${location.coords.longitude}], 15);
+        var map = L.map('map', {
+          zoomControl: false,
+          preferCanvas: true
+        }).setView([${location.coords.latitude}, ${location.coords.longitude}], 15);
         
         L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
           subdomains: ['0', '1', '2', '3'],
           attribution: '© Google Maps',
-          maxZoom: 20
+          maxZoom: 20,
+          keepBuffer: 6,
+          tileSize: 256,
+          updateWhenIdle: false,
+          updateWhenZooming: false
         }).addTo(map);
 
         var myIcon = L.divIcon({
@@ -102,6 +123,21 @@ export const MapScreen: React.FC = () => {
           weight: 2,
           dashArray: '6, 6'
         }).addTo(map);
+
+        // Khắc phục triệt để lỗi ô xám / bể khung trên WebView:
+        function fixMapSize() {
+          if (map) {
+            map.invalidateSize();
+          }
+        }
+        window.addEventListener('load', function() {
+          setTimeout(fixMapSize, 100);
+          setTimeout(fixMapSize, 350);
+          setTimeout(fixMapSize, 800);
+        });
+        window.addEventListener('resize', fixMapSize);
+        setTimeout(fixMapSize, 150);
+        setTimeout(fixMapSize, 500);
       </script>
     </body>
     </html>
@@ -127,7 +163,15 @@ export const MapScreen: React.FC = () => {
         ) : (
           <WebView 
             source={{ html: mapHtml }} 
-            style={{ flex: 1, width: '100%' }} 
+            style={{ flex: 1, width: '100%', backgroundColor: '#F1F5F9' }}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            androidHardwareAccelerationDisabled={false}
+            androidLayerType="hardware"
+            cacheEnabled={true}
+            originWhitelist={['*']}
+            scalesPageToFit={false}
+            scrollEnabled={false}
           />
         )}
       </View>

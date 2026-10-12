@@ -188,7 +188,9 @@ export const LoginPage = () => {
               type="button"
               className="sos-card-submit"
               style={{ marginBottom: 12 }}
-              onClick={() => alert('Đang chuyển hướng vào Trung tâm tác chiến điều hành cứu nạn...')}
+              onClick={() => {
+                window.location.hash = '#map';
+              }}
             >
               <span>Vào Bảng Điều Phối Tác Chiến</span>
               <ArrowRight size={18} />

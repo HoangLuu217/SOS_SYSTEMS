@@ -14,7 +14,10 @@ import {
     CheckCircle2, 
     Siren,
     MapPin,
-    Radio
+    Radio,
+    GraduationCap,
+    Landmark,
+    Shield
 } from 'lucide-react';
 
 // Fix lỗi tàng hình Icon mặc định của Leaflet khi build bằng React/Vite
@@ -115,7 +118,8 @@ const MapController: React.FC<MapControllerProps> = ({
                         <Popup>
                             <div style={{ textAlign: 'center', padding: '4px' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', color: '#DC2626', fontWeight: 'bold', fontSize: '15px' }}>
-                                    <span>🚨</span> TÍN HIỆU CỨU HỘ SOS
+                                    <Siren size={18} color="#DC2626" />
+                                    <span>TÍN HIỆU CỨU HỘ SOS</span>
                                 </div>
                                 <p style={{ margin: '6px 0 0', fontSize: '13px', color: '#475569' }}>
                                     Tọa độ: [{position[0].toFixed(5)}, {position[1].toFixed(5)}]<br />
@@ -566,23 +570,27 @@ const SOSMap: React.FC<SOSMapProps> = ({
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px', alignItems: 'center' }}>
                     <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold' }}>Từ khóa nhanh:</span>
                     {[
-                        { label: '🏥 Bệnh viện', query: 'bệnh viện' },
-                        { label: '⚠️ Vùng ngập lụt', query: 'ngập lụt' },
-                        { label: '🏫 Trạm sơ tán', query: 'sơ tán' },
-                        { label: '🎓 FPT City', query: 'fpt' },
-                        { label: '🌉 Cầu Rồng', query: 'cầu rồng' },
-                        { label: '📍 Trà Khê', query: 'trà khê' }
+                        { label: 'Bệnh viện', query: 'bệnh viện', icon: <Hospital size={14} color="#059669" /> },
+                        { label: 'Vùng ngập lụt', query: 'ngập lụt', icon: <AlertTriangle size={14} color="#dc2626" /> },
+                        { label: 'Trạm sơ tán', query: 'sơ tán', icon: <Shield size={14} color="#0284c7" /> },
+                        { label: 'FPT City', query: 'fpt', icon: <GraduationCap size={14} color="#7c3aed" /> },
+                        { label: 'Cầu Rồng', query: 'cầu rồng', icon: <Landmark size={14} color="#d97706" /> },
+                        { label: 'Trà Khê', query: 'trà khê', icon: <MapPin size={14} color="#e11d48" /> }
                     ].map((k, i) => (
                         <button
                             key={i}
                             type="button"
                             onClick={() => handleQuickKeyword(k.query)}
                             style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
                                 padding: '4px 10px',
                                 backgroundColor: '#f1f5f9',
                                 border: '1px solid #cbd5e1',
                                 borderRadius: '14px',
                                 fontSize: '12px',
+                                fontWeight: '500',
                                 color: '#1e293b',
                                 cursor: 'pointer',
                                 transition: 'all 0.2s'
@@ -596,7 +604,8 @@ const SOSMap: React.FC<SOSMapProps> = ({
                                 e.currentTarget.style.borderColor = '#cbd5e1';
                             }}
                         >
-                            {k.label}
+                            {k.icon}
+                            <span>{k.label}</span>
                         </button>
                     ))}
                 </div>
@@ -882,7 +891,10 @@ const SOSMap: React.FC<SOSMapProps> = ({
                             }}
                         >
                             <Popup>
-                                <b style={{ color: '#DC2626' }}>⚠️ VÙNG NGẬP LỤT NGUY HIỂM CẤP ĐỘ 3</b><br />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#DC2626', fontWeight: 'bold', marginBottom: '4px' }}>
+                                    <AlertTriangle size={15} color="#DC2626" />
+                                    <span>VÙNG NGẬP LỤT NGUY HIỂM CẤP ĐỘ 3</span>
+                                </div>
                                 Mực nước dâng cao trên 1.5m. Đang cô lập cục bộ.
                             </Popup>
                         </Polygon>
@@ -892,8 +904,11 @@ const SOSMap: React.FC<SOSMapProps> = ({
                     {showShelters && (
                         <Marker position={[16.068, 108.212]} icon={safeShelterIcon}>
                             <Popup>
-                                <b style={{ color: '#059669' }}>🏥 TRẠM SƠ TÁN & Y TẾ AN TOÀN</b><br />
-                                Sức chứa: 250 người. Có sẵn lương thực & nước sạch.
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#059669', fontWeight: 'bold', marginBottom: '4px' }}>
+                                    <Hospital size={15} color="#059669" />
+                                    <span>TRẠM SƠ TÁN &amp; Y TẾ AN TOÀN</span>
+                                </div>
+                                Sức chứa: 250 người. Có sẵn lương thực &amp; nước sạch.
                             </Popup>
                         </Marker>
                     )}
