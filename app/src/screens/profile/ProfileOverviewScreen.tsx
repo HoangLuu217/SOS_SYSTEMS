@@ -7,6 +7,7 @@ export interface ProfileOverviewScreenProps {
   onNavigateToEditProfile: () => void;
   onNavigateToEmergencyContact: () => void;
   onNavigateToProfessional: () => void;
+  onNavigateToSosHistory: () => void;
   onNavigateToSecurity: () => void;
   onNavigateToNotificationSettings: () => void;
   onNavigateToNotifications: () => void;
@@ -17,6 +18,7 @@ export const ProfileOverviewScreen: React.FC<ProfileOverviewScreenProps> = ({
   onNavigateToEditProfile,
   onNavigateToEmergencyContact,
   onNavigateToProfessional,
+  onNavigateToSosHistory,
   onNavigateToSecurity,
   onNavigateToNotificationSettings,
   onNavigateToNotifications,
@@ -46,6 +48,7 @@ export const ProfileOverviewScreen: React.FC<ProfileOverviewScreenProps> = ({
     <CitizenProfileOverviewScreen
       onNavigateToEditProfile={onNavigateToEditProfile}
       onNavigateToEmergencyContact={onNavigateToEmergencyContact}
+      onNavigateToSosHistory={onNavigateToSosHistory}
       onNavigateToSecurity={onNavigateToSecurity}
       onNavigateToNotificationSettings={onNavigateToNotificationSettings}
       onNavigateToNotifications={onNavigateToNotifications}
