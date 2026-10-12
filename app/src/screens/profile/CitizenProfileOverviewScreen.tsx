@@ -24,6 +24,7 @@ import { LogoSOS } from '../../components/LogoSOS';
 export interface CitizenProfileOverviewScreenProps {
   onNavigateToEditProfile: () => void;
   onNavigateToEmergencyContact: () => void;
+  onNavigateToSosHistory: () => void;
   onNavigateToSecurity: () => void;
   onNavigateToNotificationSettings: () => void;
   onNavigateToNotifications: () => void;
@@ -33,6 +34,7 @@ export interface CitizenProfileOverviewScreenProps {
 export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreenProps> = ({
   onNavigateToEditProfile,
   onNavigateToEmergencyContact,
+  onNavigateToSosHistory,
   onNavigateToSecurity,
   onNavigateToNotificationSettings,
   onNavigateToNotifications,
@@ -288,6 +290,24 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
 
         {/* 3. Menu Items for Citizen */}
         <View style={styles.menuCard}>
+          {/* Item 1.5: Lịch sử báo nạn (SOS History) */}
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={onNavigateToSosHistory}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconBox, { backgroundColor: '#FEF2F2' }]}>
+              <Feather name="clock" size={18} color="#DC2626" />
+            </View>
+            <View style={styles.menuTextBox}>
+              <Text style={styles.menuTitle}>Lịch sử báo nạn</Text>
+              <Text style={styles.menuDesc}>Theo dõi trạng thái các SOS đã gửi</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+
+          <View style={styles.menuDivider} />
+
           {/* Item 1: Thông tin cá nhân (Edit Profile with Vietnam Provinces API) */}
           <TouchableOpacity
             style={styles.menuItem}

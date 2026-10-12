@@ -3,6 +3,7 @@ import { View, StyleSheet, BackHandler } from 'react-native';
 import { ProfileOverviewScreen } from './profile/ProfileOverviewScreen';
 import { EditProfileScreen } from './profile/EditProfileScreen';
 import { EmergencyContactScreen } from './profile/EmergencyContactScreen';
+import { SosHistoryScreen } from './profile/SosHistoryScreen';
 import { ProfessionalProfileScreen } from './profile/ProfessionalProfileScreen';
 import { AccountSecurityScreen } from './profile/AccountSecurityScreen';
 import { NotificationSettingsScreen } from './profile/NotificationSettingsScreen';
@@ -13,6 +14,7 @@ export type ProfileSubScreen =
   | 'overview'
   | 'edit_profile'
   | 'emergency_contact'
+  | 'sos_history'
   | 'professional_profile'
   | 'security'
   | 'notification_settings'
@@ -86,6 +88,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           onNavigateToEditProfile={() => setCurrentScreen('edit_profile')}
           onNavigateToEmergencyContact={() => setCurrentScreen('emergency_contact')}
           onNavigateToProfessional={() => setCurrentScreen('professional_profile')}
+          onNavigateToSosHistory={() => setCurrentScreen('sos_history')}
           onNavigateToSecurity={() => setCurrentScreen('security')}
           onNavigateToNotificationSettings={() => setCurrentScreen('notification_settings')}
           onNavigateToNotifications={() => setCurrentScreen('notifications')}
@@ -99,6 +102,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
       {currentScreen === 'emergency_contact' && (
         <EmergencyContactScreen onBack={handleBackToOverview} />
+      )}
+
+      {currentScreen === 'sos_history' && (
+        <SosHistoryScreen onBack={handleBackToOverview} />
       )}
 
       {currentScreen === 'professional_profile' && (

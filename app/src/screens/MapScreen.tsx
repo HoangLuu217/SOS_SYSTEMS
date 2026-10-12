@@ -35,35 +35,109 @@ export const MapScreen: React.FC = () => {
       <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
       <style>
         body { padding: 0; margin: 0; }
-        html, body, #map { height: 100%; width: 100%; }
-        .sos-icon { font-size: 26px; background: white; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 2px solid #3b82f6; }
+        html, body, #map {
+          height: 100%;
+          width: 100%;
+          margin: 0;
+          padding: 0;
+          overflow: hidden;
+          background-color: #f1f5f9;
+        }
+        .leaflet-container {
+          background-color: #f1f5f9;
+        }
+        .leaflet-tile {
+          -webkit-backface-visibility: hidden;
+          backface-visibility: hidden;
+        }
+        @keyframes pulseWave {
+          0% { transform: scale(0.6); opacity: 0.95; }
+          70% { transform: scale(1.6); opacity: 0; }
+          100% { transform: scale(1.8); opacity: 0; }
+        }
+        .sos-radar-container {
+          position: relative;
+          width: 50px;
+          height: 50px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .sos-radar-wave {
+          position: absolute;
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          background-color: rgba(220, 38, 38, 0.45);
+          border: 2px solid #DC2626;
+          animation: pulseWave 1.6s ease-out infinite;
+        }
+        .sos-radar-core {
+          position: relative;
+          width: 36px;
+          height: 36px;
+          background: #DC2626;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          box-shadow: 0 0 14px rgba(220, 38, 38, 0.8), 0 3px 6px rgba(0,0,0,0.3);
+          border: 2px solid white;
+          z-index: 2;
+        }
       </style>
     </head>
     <body>
       <div id="map"></div>
       <script>
-        var map = L.map('map').setView([${location.coords.latitude}, ${location.coords.longitude}], 15);
+        var map = L.map('map', {
+          zoomControl: false,
+          preferCanvas: true
+        }).setView([${location.coords.latitude}, ${location.coords.longitude}], 15);
         
-        L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+        L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+          subdomains: ['0', '1', '2', '3'],
           attribution: '© Google Maps',
-          maxZoom: 20
+          maxZoom: 20,
+          keepBuffer: 6,
+          tileSize: 256,
+          updateWhenIdle: false,
+          updateWhenZooming: false
         }).addTo(map);
 
         var myIcon = L.divIcon({
-          html: '<div class="sos-icon">📍</div>',
-          className: 'custom-sos-icon',
-          iconSize: [40, 40],
-          iconAnchor: [20, 20]
+          html: '<div class="sos-radar-container"><div class="sos-radar-wave"></div><div class="sos-radar-core"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M7 12a5 5 0 0 1 5-5v0a5 5 0 0 1 5 5v6H7v-6Z"/><path d="M5 20a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v2H5v-2Z"/><path d="M21 12h1"/><path d="M18.5 4.5 19 4"/><path d="M2 12h1"/><path d="M12 2v1"/><path d="M4.5 4.5 5 4"/><path d="M12 11v3"/></svg></div></div>',
+          className: 'custom-sos-radar-wrapper',
+          iconSize: [50, 50],
+          iconAnchor: [25, 25]
         });
 
         L.marker([${location.coords.latitude}, ${location.coords.longitude}], { icon: myIcon }).addTo(map);
         
         L.circle([${location.coords.latitude}, ${location.coords.longitude}], {
-          color: '#3b82f6',
-          fillColor: '#3b82f6',
-          fillOpacity: 0.15,
-          radius: 600
+          color: '#DC2626',
+          fillColor: '#EF4444',
+          fillOpacity: 0.2,
+          radius: 500,
+          weight: 2,
+          dashArray: '6, 6'
         }).addTo(map);
+
+        // Khắc phục triệt để lỗi ô xám / bể khung trên WebView:
+        function fixMapSize() {
+          if (map) {
+            map.invalidateSize();
+          }
+        }
+        window.addEventListener('load', function() {
+          setTimeout(fixMapSize, 100);
+          setTimeout(fixMapSize, 350);
+          setTimeout(fixMapSize, 800);
+        });
+        window.addEventListener('resize', fixMapSize);
+        setTimeout(fixMapSize, 150);
+        setTimeout(fixMapSize, 500);
       </script>
     </body>
     </html>
@@ -89,7 +163,15 @@ export const MapScreen: React.FC = () => {
         ) : (
           <WebView 
             source={{ html: mapHtml }} 
-            style={{ flex: 1, width: '100%' }} 
+            style={{ flex: 1, width: '100%', backgroundColor: '#F1F5F9' }}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            androidHardwareAccelerationDisabled={false}
+            androidLayerType="hardware"
+            cacheEnabled={true}
+            originWhitelist={['*']}
+            scalesPageToFit={false}
+            scrollEnabled={false}
           />
         )}
       </View>
