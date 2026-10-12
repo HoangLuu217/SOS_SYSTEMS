@@ -14,7 +14,6 @@ import {
     CheckCircle2, 
     Siren,
     MapPin,
-    Radio,
     GraduationCap,
     Landmark,
     Shield
