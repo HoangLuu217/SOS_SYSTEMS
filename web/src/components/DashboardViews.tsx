@@ -1143,7 +1143,17 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                             <div className="citizen-avatar">{initials}</div>
                             <div className="citizen-meta">
                               <span className="citizen-name">{citizenName}</span>
-                              {citizenPhone ? (
+                              {sos.contactPhone ? (
+                                <a
+                                  href={`tel:${sos.contactPhone}`}
+                                  className="citizen-phone-link"
+                                  title="SĐT liên hệ trực tiếp tại điểm ngập"
+                                  style={{ color: '#0284c7', fontWeight: 700 }}
+                                >
+                                  <Phone size={10} />
+                                  <span>{sos.contactPhone} (Hiện trường)</span>
+                                </a>
+                              ) : citizenPhone ? (
                                 <a href={`tel:${citizenPhone}`} className="citizen-phone-link">
                                   <Phone size={10} />
                                   <span>{citizenPhone}</span>
@@ -1187,6 +1197,26 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                             <Users size={12} />
                             <span>{sos.people} người</span>
                           </div>
+                          {sos.priorityGroups && sos.priorityGroups.length > 0 && (
+                            <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                              {sos.priorityGroups.map((grp, gIdx) => (
+                                <span
+                                  key={gIdx}
+                                  style={{
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    padding: '1px 5px',
+                                    borderRadius: 4,
+                                    backgroundColor: '#fee2e2',
+                                    color: '#b91c1c',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {grp}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </td>
 
                         {/* 5. Mức độ */}

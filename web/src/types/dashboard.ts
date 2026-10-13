@@ -21,6 +21,8 @@ export interface SosRequestItem {
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   people: number;
   description?: string;
+  contactPhone?: string;
+  priorityGroups?: string[];
   images?: string[];
   imageUrl?: string;
   status:

@@ -3,7 +3,7 @@ const ApiError = require('../utils/apiError');
 
 const createSosRequest = async (citizenId, sosData) => {
   // Extract fields matching citizen mobile app form
-  const { location, areaId, address, emergencyType, priority, people, description, images, imageUrl } = sosData;
+  const { location, areaId, address, emergencyType, priority, people, description, images, imageUrl, contactPhone, priorityGroups } = sosData;
 
   const normalizedImages = Array.isArray(images)
     ? images
@@ -39,6 +39,8 @@ const createSosRequest = async (citizenId, sosData) => {
     priority: priority || 'HIGH',
     people: people ? Number(people) : 1,
     description: description || null,
+    contactPhone: contactPhone || null,
+    priorityGroups: Array.isArray(priorityGroups) ? priorityGroups : [],
     images: normalizedImages,
     status: 'PENDING'
   });

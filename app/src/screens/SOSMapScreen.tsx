@@ -19,6 +19,15 @@ import * as ImagePicker from 'expo-image-picker';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { backendApi } from '../services/backendApi';
 
+// Danh sách đối tượng ưu tiên đặc biệt trong cứu hộ
+const PRIORITY_OPTIONS = [
+  { id: 'TRE_NHO', label: 'Trẻ sơ sinh / Trẻ nhỏ', emoji: '👶' },
+  { id: 'NGUOI_GIA', label: 'Người cao tuổi (>65t)', emoji: '👵' },
+  { id: 'PHU_NU_MANG_THAI', label: 'Phụ nữ mang thai', emoji: '🤰' },
+  { id: 'NGUOI_BENH', label: 'Người bệnh / Khuyết tật', emoji: '♿' },
+  { id: 'BI_THUONG', label: 'Đang bị thương tích', emoji: '🩹' },
+];
+
 interface SOSMapScreenProps {
   onClose?: () => void;
   initialEmergencyType?: string;
@@ -33,20 +42,31 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
   const [locating, setLocating] = useState(true);
   const [sending, setSending] = useState(false);
 
+  // Chế độ vị trí cứu hộ: GPS hiện tại của tôi HOẶC Báo hộ người thân / Nơi khác
+  const [locationMode, setLocationMode] = useState<'current_gps' | 'custom_location'>('current_gps');
+  const [customAddress, setCustomAddress] = useState<string>('');
+
+  // SĐT liên hệ tại hiện trường điểm ngập
+  const [contactPhone, setContactPhone] = useState<string>('');
+
+  // Đối tượng ưu tiên đặc biệt
+  const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
+
   // Ảnh chụp thực địa
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
 
-  // Dữ liệu người dân nhập (Khớp 1:1 với Schema CSDL: people, description)
+  // Dữ liệu người dân nhập: số người, mô tả tình trạng
   const [peopleText, setPeopleText] = useState<string>('1');
   const [description, setDescription] = useState<string>('');
 
-  // Ref cho ô nhập mô tả tình trạng
+  // Ref cho ô nhập
   const descInputRef = useRef<TextInput>(null);
+  const customAddressInputRef = useRef<TextInput>(null);
 
-  // Popup xác thực form sang trọng & đẹp mắt
+  // Popup xác thực form
   const [validationModalVisible, setValidationModalVisible] = useState(false);
-  const [validationType, setValidationType] = useState<'desc' | 'people' | 'gps'>('desc');
+  const [validationType, setValidationType] = useState<'desc' | 'people' | 'gps' | 'address'>('desc');
 
   // Trạng thái tiếp nhận thành công
   const [successData, setSuccessData] = useState<{
@@ -56,6 +76,8 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
     isQuickDispatch: boolean;
     description: string;
     hasImage: boolean;
+    contactPhone?: string;
+    priorities?: string[];
   } | null>(null);
 
   // Lấy vị trí GPS thực tế của thiết bị
@@ -110,6 +132,13 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
   useEffect(() => {
     fetchLocation();
   }, []);
+
+  // Bật/tắt đối tượng ưu tiên
+  const togglePriority = (id: string) => {
+    setSelectedPriorities((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
 
   // Tăng giảm số người
   const handleAdjustPeople = (delta: number) => {
@@ -170,12 +199,18 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
     setImageBase64(null);
   };
 
-  // Gửi yêu cầu cứu hộ lên Backend (Lưu trực tiếp vào MongoDB)
+  // Gửi yêu cầu cứu hộ lên Backend
   const submitSOS = async () => {
-    if (!location) {
+    if (locationMode === 'current_gps' && !location) {
       setValidationType('gps');
       setValidationModalVisible(true);
       fetchLocation();
+      return;
+    }
+
+    if (locationMode === 'custom_location' && !customAddress.trim()) {
+      setValidationType('address');
+      setValidationModalVisible(true);
       return;
     }
 
@@ -196,31 +231,58 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
     setSending(true);
     try {
       const finalAddress =
-        address && address !== 'Đang định vị GPS...' && address !== 'Không thể truy cập GPS'
+        locationMode === 'custom_location'
+          ? `${customAddress.trim()} (Báo hộ người thân)`
+          : address && address !== 'Đang định vị GPS...' && address !== 'Không thể truy cập GPS'
           ? address
-          : `Tọa độ GPS [${location.coords.latitude.toFixed(5)}, ${location.coords.longitude.toFixed(5)}]`;
+          : location
+          ? `Tọa độ GPS [${location.coords.latitude.toFixed(5)}, ${location.coords.longitude.toFixed(5)}]`
+          : 'Khu vực cứu nạn khẩn cấp';
 
-      const finalDescription = description.trim();
+      const priorityLabels = selectedPriorities.map(
+        (id) => PRIORITY_OPTIONS.find((opt) => opt.id === id)?.label || id
+      );
 
-      // Tự động phân loại mức độ nguy cấp ngầm theo từ khóa
+      // Ghép thông tin bổ sung vào mô tả để các màn hình luôn hiển thị trọn vẹn
+      const prefixParts: string[] = [];
+      if (contactPhone.trim()) {
+        prefixParts.push(`[SĐT liên hệ: ${contactPhone.trim()}]`);
+      }
+      if (priorityLabels.length > 0) {
+        prefixParts.push(`[Ưu tiên: ${priorityLabels.join(', ')}]`);
+      }
+      if (locationMode === 'custom_location') {
+        prefixParts.push(`[Báo hộ người thân tại: ${customAddress.trim()}]`);
+      }
+
+      const fullDescription =
+        prefixParts.length > 0
+          ? `${prefixParts.join(' ')}\n${description.trim()}`
+          : description.trim();
+
+      // Tự động phân loại mức độ nguy cấp
       const isCritical =
-        finalDescription.toLowerCase().includes('mái nhà') ||
-        finalDescription.toLowerCase().includes('nóc nhà') ||
-        finalDescription.toLowerCase().includes('chảy xiết') ||
-        finalDescription.toLowerCase().includes('nguy kịch') ||
-        finalDescription.toLowerCase().includes('ngang ngực');
+        selectedPriorities.length > 0 ||
+        fullDescription.toLowerCase().includes('mái nhà') ||
+        fullDescription.toLowerCase().includes('nóc nhà') ||
+        fullDescription.toLowerCase().includes('chảy xiết') ||
+        fullDescription.toLowerCase().includes('nguy kịch') ||
+        fullDescription.toLowerCase().includes('ngang ngực');
 
-      // Payload gửi lên server - Khớp 100% với MongoDB Model
       const payload = {
         location: {
           type: 'Point',
-          coordinates: [location.coords.longitude, location.coords.latitude],
+          coordinates: location
+            ? [location.coords.longitude, location.coords.latitude]
+            : [108.26054, 15.96836],
         },
         address: finalAddress,
         priority: isCritical ? 'CRITICAL' : 'HIGH',
         emergencyType: 'FLOOD',
-        description: finalDescription,
+        description: fullDescription,
         people: peopleNumber,
+        contactPhone: contactPhone.trim() || undefined,
+        priorityGroups: priorityLabels,
         images: imageBase64 ? [`data:image/jpeg;base64,${imageBase64}`] : [],
       };
 
@@ -246,8 +308,10 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
           people: payload.people,
           address: finalAddress,
           isQuickDispatch: false,
-          description: finalDescription,
+          description: description.trim(),
           hasImage: Boolean(imageBase64),
+          contactPhone: contactPhone.trim(),
+          priorities: priorityLabels,
         });
       } else {
         Alert.alert('Không thể gửi', response.message || 'Chưa gửi được tín hiệu. Vui lòng thử lại!');
@@ -255,7 +319,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
     } catch (err: any) {
       Alert.alert(
         'Lỗi kết nối',
-        'Không thể kết nối máy chủ cứu nạn. Vui lòng gọi trực tiếp 114 hoặc 115!\n' + (err.message || '')
+        'Không thể kết nối máy chủ cứu nạn. Vui lòng kiểm tra mạng hoặc thử lại!\n' + (err.message || '')
       );
     } finally {
       setSending(false);
@@ -264,25 +328,18 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
 
   // MÀN HÌNH BÁO THÀNH CÔNG
   if (successData) {
-    const isQuick = successData.isQuickDispatch;
     return (
       <View style={styles.successContainer}>
         <View style={styles.successCard}>
           <View style={styles.successIconOuter}>
-            {isQuick ? (
-              <Ionicons name="flash" size={72} color="#DC2626" />
-            ) : (
-              <Ionicons name="checkmark-circle" size={76} color="#0284C7" />
-            )}
+            <Ionicons name="checkmark-circle" size={72} color="#0284C7" />
           </View>
 
-          <Text style={[styles.successTitle, isQuick && { color: '#DC2626' }]}>
-            {isQuick ? '⚡ ĐÃ TIẾP NHẬN CỨU NẠN 1-CHẠM!' : '📋 ĐÃ TIẾP NHẬN BIỂU MẪU CỨU HỘ!'}
+          <Text style={styles.successTitle}>
+            📋 ĐÃ TIẾP NHẬN YÊU CẦU CỨU HỘ!
           </Text>
           <Text style={styles.successSub}>
-            {isQuick
-              ? 'Tín hiệu NGUY KỊCH đã được phát tới Đội ca-nô/xuồng cứu hộ và Trung tâm điều phối khẩn cấp.'
-              : 'Thông tin khai báo chi tiết và tọa độ của bạn đã được chuyển tới Đội cứu nạn gần nhất.'}
+            Thông tin khai báo và địa điểm cứu nạn đã được chuyển tới Đội ca-nô & Trung tâm điều phối khẩn cấp.
           </Text>
 
           <View style={styles.successDetailsBox}>
@@ -292,11 +349,20 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
             </View>
 
             <View style={styles.successDetailRow}>
-              <Text style={styles.successDetailLabel}>Chế độ gửi:</Text>
-              <Text style={[styles.successDetailValue, { color: isQuick ? '#DC2626' : '#0284C7', fontWeight: '800' }]}>
-                {isQuick ? '⚡ CỨU NẠN 1-CHẠM (CRITICAL)' : '📋 BIỂU MẪU CHI TIẾT (HIGH)'}
+              <Text style={styles.successDetailLabel}>Vị trí cứu nạn:</Text>
+              <Text style={styles.successDetailValue} numberOfLines={2}>
+                {successData.address}
               </Text>
             </View>
+
+            {successData.contactPhone ? (
+              <View style={styles.successDetailRow}>
+                <Text style={styles.successDetailLabel}>SĐT liên hệ hiện trường:</Text>
+                <Text style={[styles.successDetailValue, { color: '#0284C7', fontWeight: '800' }]}>
+                  {successData.contactPhone}
+                </Text>
+              </View>
+            ) : null}
 
             <View style={styles.successDetailRow}>
               <Text style={styles.successDetailLabel}>Số người cần cứu:</Text>
@@ -305,56 +371,31 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
               </Text>
             </View>
 
-            {!isQuick && (
+            {successData.priorities && successData.priorities.length > 0 ? (
               <View style={styles.successDetailRow}>
-                <Text style={styles.successDetailLabel}>Tình trạng khai báo:</Text>
-                <Text style={styles.successDetailValue} numberOfLines={2}>
-                  {successData.description}
+                <Text style={styles.successDetailLabel}>Đối tượng ưu tiên:</Text>
+                <Text style={[styles.successDetailValue, { color: '#DC2626', fontWeight: '700' }]}>
+                  {successData.priorities.join(', ')}
                 </Text>
               </View>
-            )}
-
-            {!isQuick && (
-              <View style={styles.successDetailRow}>
-                <Text style={styles.successDetailLabel}>Ảnh hiện trường:</Text>
-                <Text style={[styles.successDetailValue, { color: successData.hasImage ? '#10B981' : '#64748B' }]}>
-                  {successData.hasImage ? '✓ Đã đính kèm ảnh' : 'Không có ảnh'}
-                </Text>
-              </View>
-            )}
+            ) : null}
 
             <View style={styles.successDetailRow}>
-              <Text style={styles.successDetailLabel}>Vị trí GPS:</Text>
+              <Text style={styles.successDetailLabel}>Tình trạng khai báo:</Text>
               <Text style={styles.successDetailValue} numberOfLines={2}>
-                {successData.address}
+                {successData.description}
+              </Text>
+            </View>
+
+            <View style={styles.successDetailRow}>
+              <Text style={styles.successDetailLabel}>Ảnh hiện trường:</Text>
+              <Text style={[styles.successDetailValue, { color: successData.hasImage ? '#10B981' : '#64748B' }]}>
+                {successData.hasImage ? '✓ Đã đính kèm ảnh' : 'Không có ảnh'}
               </Text>
             </View>
           </View>
 
-          <View style={styles.emergencyCallGroup}>
-            <Text style={styles.emergencyCallGroupTitle}>TRƯỜNG HỢP NƯỚC DÂNG QUÁ NHANH - GỌI NGAY:</Text>
-            <View style={styles.callRow}>
-              <TouchableOpacity
-                style={[styles.callActionBtn, { backgroundColor: '#DC2626' }]}
-                onPress={() => Linking.openURL('tel:114')}
-                activeOpacity={0.8}
-              >
-                <Feather name="phone-call" size={16} color="#FFFFFF" />
-                <Text style={styles.callActionText}>Gọi 114 (Cứu nạn)</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.callActionBtn, { backgroundColor: '#0284C7' }]}
-                onPress={() => Linking.openURL('tel:115')}
-                activeOpacity={0.8}
-              >
-                <Feather name="phone-call" size={16} color="#FFFFFF" />
-                <Text style={styles.callActionText}>Gọi 115 (Cấp cứu)</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={{ flexDirection: 'row', gap: 10, width: '100%', marginTop: 14 }}>
+          <View style={{ flexDirection: 'row', gap: 10, width: '100%', marginTop: 18 }}>
             <TouchableOpacity
               style={[styles.doneBtn, { flex: 1, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1' }]}
               onPress={() => {
@@ -362,6 +403,10 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
                 setDescription('');
                 setImageUri(null);
                 setImageBase64(null);
+                setContactPhone('');
+                setSelectedPriorities([]);
+                setCustomAddress('');
+                setLocationMode('current_gps');
               }}
               activeOpacity={0.85}
             >
@@ -387,7 +432,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
       <View style={styles.header}>
         {onClose ? (
           <TouchableOpacity style={styles.backButton} onPress={onClose} activeOpacity={0.7}>
-            <Feather name={isTab ? "home" : "x"} size={22} color="#0F172A" />
+            <Feather name={isTab ? 'home' : 'x'} size={22} color="#0F172A" />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 36 }} />
@@ -396,7 +441,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
           <Text style={styles.headerTitle}>CỨU HỘ NGẬP LỤT KHẨN CẤP</Text>
           <Text style={styles.headerSubTitle}>Gửi trực tiếp tới Đội cứu hộ & Ca-nô/Xuồng</Text>
         </View>
-        <TouchableOpacity style={styles.reloadGpsBtn} onPress={fetchLocation} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.reloadGpsBtn} onPress={fetchLocation} activeOpacity={0.7} title="Lấy lại GPS">
           <Feather name="refresh-cw" size={18} color="#0284C7" />
         </TouchableOpacity>
       </View>
@@ -410,82 +455,229 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* VỊ TRÍ GPS HIỆN TẠI (TỰ ĐỘNG LẤY TỪ ĐIỆN THOẠI) */}
+          {/* MỤC: CHỌN VỊ TRÍ CỨU HỘ (GPS HIỆN TẠI HOẶC BÁO HỘ NGƯỜI THÂN) */}
           <View style={styles.gpsCard}>
-            <View style={styles.gpsHeader}>
-              <View style={styles.gpsTitleRow}>
-                <Ionicons name="location" size={18} color="#EF4444" />
-                <Text style={styles.gpsSectionTitle}>Vị trí GPS của bạn (Tự động)</Text>
-              </View>
-              {locating ? (
-                <ActivityIndicator size="small" color="#0284C7" />
-              ) : (
-                <View style={styles.gpsBadge}>
-                  <View style={styles.gpsDot} />
-                  <Text style={styles.gpsBadgeText}>Đã định vị</Text>
-                </View>
-              )}
+            <View style={styles.locationSwitcherWrap}>
+              <TouchableOpacity
+                style={[
+                  styles.switcherTabBtn,
+                  locationMode === 'current_gps' && styles.switcherTabBtnActive,
+                ]}
+                onPress={() => setLocationMode('current_gps')}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="navigate"
+                  size={14}
+                  color={locationMode === 'current_gps' ? '#0284C7' : '#64748B'}
+                />
+                <Text
+                  style={[
+                    styles.switcherTabText,
+                    locationMode === 'current_gps' && styles.switcherTabTextActive,
+                  ]}
+                >
+                  Vị trí của tôi (GPS)
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.switcherTabBtn,
+                  locationMode === 'custom_location' && styles.switcherTabBtnActive,
+                ]}
+                onPress={() => {
+                  setLocationMode('custom_location');
+                  setTimeout(() => customAddressInputRef.current?.focus(), 200);
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="people"
+                  size={14}
+                  color={locationMode === 'custom_location' ? '#0284C7' : '#64748B'}
+                />
+                <Text
+                  style={[
+                    styles.switcherTabText,
+                    locationMode === 'custom_location' && styles.switcherTabTextActive,
+                  ]}
+                >
+                  Báo hộ người thân / Nơi khác
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            <Text style={styles.gpsAddressText}>{address}</Text>
+            {locationMode === 'current_gps' ? (
+              <View style={styles.gpsDetailsBlock}>
+                <View style={styles.gpsHeader}>
+                  <View style={styles.gpsTitleRow}>
+                    <Ionicons name="location" size={17} color="#EF4444" />
+                    <Text style={styles.gpsSectionTitle}>Vị trí GPS của bạn (Tự động)</Text>
+                  </View>
+                  {locating ? (
+                    <ActivityIndicator size="small" color="#0284C7" />
+                  ) : (
+                    <View style={styles.gpsBadge}>
+                      <View style={styles.gpsDot} />
+                      <Text style={styles.gpsBadgeText}>Đã định vị</Text>
+                    </View>
+                  )}
+                </View>
 
-            {location && (
-              <Text style={styles.gpsCoordsText}>
-                Tọa độ: {location.coords.latitude.toFixed(5)}, {location.coords.longitude.toFixed(5)} (±{Math.round(location.coords.accuracy || 10)}m)
-              </Text>
+                <Text style={styles.gpsAddressText}>{address}</Text>
+
+                {location && (
+                  <Text style={styles.gpsCoordsText}>
+                    Tọa độ: {location.coords.latitude.toFixed(5)}, {location.coords.longitude.toFixed(5)} (±{Math.round(location.coords.accuracy || 10)}m)
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <View style={styles.customAddressBlock}>
+                <View style={styles.customAddressHeader}>
+                  <Ionicons name="home-outline" size={16} color="#0284C7" />
+                  <Text style={styles.customAddressLabel}>
+                    Địa chỉ nơi người thân/bạn bè đang gặp nạn:
+                  </Text>
+                </View>
+                <TextInput
+                  ref={customAddressInputRef}
+                  style={styles.customAddressInput}
+                  multiline
+                  numberOfLines={2}
+                  placeholder="Ví dụ: Số 45 Hoàng Diệu, P. Hòa Thuận Tây, Q. Hải Châu, Đà Nẵng..."
+                  placeholderTextColor="#94A3B8"
+                  value={customAddress}
+                  onChangeText={setCustomAddress}
+                />
+                <Text style={styles.customAddressHint}>
+                  💡 Dùng khi bạn đang ở nơi an toàn nhưng cần báo cứu nạn khẩn cấp cho người thân tại điểm ngập.
+                </Text>
+              </View>
             )}
           </View>
 
-          {/* MỤC 1: SỐ LƯỢNG NGƯỜI CẦN CỨU */}
+          {/* MỤC: SỐ ĐIỆN THOẠI LIÊN HỆ TẠI ĐIỂM NGẬP */}
           <View style={styles.formCard}>
             <View style={styles.cardHeaderRow}>
-              <MaterialCommunityIcons name="account-group" size={20} color="#0284C7" />
+              <Feather name="phone-call" size={17} color="#0284C7" />
+              <Text style={styles.cardHeading}>Số điện thoại liên hệ người gặp nạn</Text>
+            </View>
+            <Text style={styles.cardSubText}>
+              Nhập SĐT người gặp nạn hoặc người thân tại hiện trường để Chính quyền & Đội cứu hộ gọi lại trực tiếp:
+            </Text>
+
+            <View style={styles.phoneInputWrap}>
+              <Feather name="phone" size={16} color="#64748B" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.phoneInput}
+                keyboardType="phone-pad"
+                placeholder="Ví dụ: 0912 345 678"
+                placeholderTextColor="#94A3B8"
+                value={contactPhone}
+                onChangeText={setContactPhone}
+                maxLength={15}
+              />
+            </View>
+          </View>
+
+          {/* MỤC 1: SỐ LƯỢNG NGƯỜI CẦN CỨU (Thu nhỏ nút bấm tỉ lệ hài hòa) */}
+          <View style={styles.formCard}>
+            <View style={styles.cardHeaderRow}>
+              <MaterialCommunityIcons name="account-group" size={18} color="#0284C7" />
               <Text style={styles.cardHeading}>1. Số người cần cứu</Text>
             </View>
             <Text style={styles.cardSubText}>
-              Nhập số lượng người cần cứu:
+              Nhập số lượng người cần ca-nô/xuồng ứng cứu:
             </Text>
 
-            {/* Ô nhập số người có nút trừ / cộng */}
-            <View style={styles.peopleInputRow}>
+            {/* Bộ đếm số người nhỏ gọn, cân đối */}
+            <View style={styles.peopleInputRowCompact}>
               <TouchableOpacity
-                style={styles.counterActionBtn}
+                style={styles.counterBtnCompact}
                 onPress={() => handleAdjustPeople(-1)}
                 activeOpacity={0.7}
               >
-                <Feather name="minus" size={22} color="#0F172A" />
+                <Feather name="minus" size={17} color="#0F172A" />
               </TouchableOpacity>
 
-              <View style={styles.peopleDirectInputBox}>
+              <View style={styles.peopleBoxCompact}>
                 <TextInput
-                  style={styles.peopleDirectInput}
+                  style={styles.peopleInputCompact}
                   keyboardType="numeric"
                   value={peopleText}
                   onChangeText={setPeopleText}
                   selectTextOnFocus
                   maxLength={4}
                 />
-                <Text style={styles.peopleDirectUnit}>người</Text>
+                <Text style={styles.peopleUnitCompact}>người</Text>
               </View>
 
               <TouchableOpacity
-                style={styles.counterActionBtn}
+                style={styles.counterBtnCompact}
                 onPress={() => handleAdjustPeople(1)}
                 activeOpacity={0.7}
               >
-                <Feather name="plus" size={22} color="#0F172A" />
+                <Feather name="plus" size={17} color="#0F172A" />
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* MỤC 2: MÔ TẢ TÌNH TRẠNG CỤ THỂ CỦA BẠN */}
+          {/* MỤC 2: ĐỐI TƯỢNG CẦN ƯU TIÊN ĐẶC BIỆT */}
           <View style={styles.formCard}>
             <View style={styles.cardHeaderRow}>
-              <MaterialCommunityIcons name="comment-text-outline" size={20} color="#EF4444" />
-              <Text style={styles.cardHeading}>2. Tình trạng ngập lụt thực tế</Text>
+              <Ionicons name="shield-checkmark-outline" size={18} color="#DC2626" />
+              <Text style={styles.cardHeading}>2. Đối tượng cần ưu tiên (nếu có)</Text>
             </View>
             <Text style={styles.cardSubText}>
-              Mô tả tình trạng cụ thể của bạn:
+              Chọn các trường hợp dễ tổn thương để lực lượng cứu hộ ưu tiên điều phối trước:
+            </Text>
+
+            <View style={styles.priorityChipsWrap}>
+              {PRIORITY_OPTIONS.map((opt) => {
+                const isSelected = selectedPriorities.includes(opt.id);
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    style={[
+                      styles.priorityChip,
+                      isSelected && styles.priorityChipSelected,
+                    ]}
+                    onPress={() => togglePriority(opt.id)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.priorityChipEmoji}>{opt.emoji}</Text>
+                    <Text
+                      style={[
+                        styles.priorityChipText,
+                        isSelected && styles.priorityChipTextSelected,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                    {isSelected && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={14}
+                        color="#DC2626"
+                        style={{ marginLeft: 4 }}
+                      />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* MỤC 3: MÔ TẢ TÌNH TRẠNG CỤ THỂ CỦA BẠN */}
+          <View style={styles.formCard}>
+            <View style={styles.cardHeaderRow}>
+              <MaterialCommunityIcons name="comment-text-outline" size={18} color="#EF4444" />
+              <Text style={styles.cardHeading}>3. Tình trạng ngập lụt thực tế</Text>
+            </View>
+            <Text style={styles.cardSubText}>
+              Mô tả tình trạng cụ thể (mức nước ngập, vị trí đứng trú ẩn...):
             </Text>
 
             <TextInput
@@ -500,11 +692,11 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
             />
           </View>
 
-          {/* MỤC 3: ẢNH HIỆN TRƯỜNG THỰC TẾ (Không bắt buộc) */}
+          {/* MỤC 4: ẢNH HIỆN TRƯỜNG THỰC TẾ (Không bắt buộc) */}
           <View style={styles.formCard}>
             <View style={styles.cardHeaderRow}>
-              <MaterialCommunityIcons name="camera" size={20} color="#059669" />
-              <Text style={styles.cardHeading}>3. Ảnh hiện trường (Không bắt buộc)</Text>
+              <MaterialCommunityIcons name="camera" size={18} color="#059669" />
+              <Text style={styles.cardHeading}>4. Ảnh hiện trường (Không bắt buộc)</Text>
             </View>
             <Text style={styles.cardSubText}>
               Chụp ảnh mức nước ngập (bỏ qua nếu nước đang chảy xiết):
@@ -512,12 +704,12 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
 
             <View style={styles.photoActionsRow}>
               <TouchableOpacity style={styles.photoBtn} onPress={takePhoto} activeOpacity={0.75}>
-                <Feather name="camera" size={18} color="#0284C7" />
+                <Feather name="camera" size={16} color="#0284C7" />
                 <Text style={styles.photoBtnText}>Chụp ảnh nước ngập</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.photoBtn} onPress={pickImage} activeOpacity={0.75}>
-                <Feather name="image" size={18} color="#0284C7" />
+                <Feather name="image" size={16} color="#0284C7" />
                 <Text style={styles.photoBtnText}>Chọn ảnh từ máy</Text>
               </TouchableOpacity>
             </View>
@@ -546,71 +738,15 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
               </View>
             ) : (
               <View style={styles.sendingRow}>
-                <MaterialCommunityIcons name="waves" size={24} color="#FFFFFF" />
+                <MaterialCommunityIcons name="waves" size={22} color="#FFFFFF" />
                 <Text style={styles.mainSendBtnText}>GỬI YÊU CẦU CỨU HỘ NGẬP LỤT</Text>
               </View>
             )}
           </TouchableOpacity>
-
-          {/* SỐ ĐIỆN THOẠI KHẨN CẤP QUỐC GIA (BẤM ĐỂ GỌI TRỰC TIẾP) */}
-          <View style={styles.contactsCard}>
-            <Text style={styles.contactsTitle}>Số điện thoại khẩn cấp quốc gia (Bấm để gọi ngay)</Text>
-
-            <View style={styles.contactRow}>
-              <View style={[styles.contactIcon, { backgroundColor: '#DC2626' }]}>
-                <Ionicons name="flame" size={18} color="#FFFFFF" />
-              </View>
-              <View style={styles.contactInfo}>
-                <Text style={styles.contactName}>Cứu nạn & Cứu hỏa</Text>
-                <Text style={styles.contactNumber}>114 (Miễn phí cước)</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.callBtn}
-                onPress={() => Linking.openURL('tel:114').catch(() => {})}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="call" size={16} color="#DC2626" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.contactRow}>
-              <View style={[styles.contactIcon, { backgroundColor: '#10B981' }]}>
-                <Ionicons name="medical" size={18} color="#FFFFFF" />
-              </View>
-              <View style={styles.contactInfo}>
-                <Text style={styles.contactName}>Cấp cứu y tế</Text>
-                <Text style={styles.contactNumber}>115 (Miễn phí cước)</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.callBtn}
-                onPress={() => Linking.openURL('tel:115').catch(() => {})}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="call" size={16} color="#10B981" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.contactRow}>
-              <View style={[styles.contactIcon, { backgroundColor: '#3B82F6' }]}>
-                <Ionicons name="shield" size={18} color="#FFFFFF" />
-              </View>
-              <View style={styles.contactInfo}>
-                <Text style={styles.contactName}>Cảnh sát phản ứng nhanh</Text>
-                <Text style={styles.contactNumber}>113 (Miễn phí cước)</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.callBtn}
-                onPress={() => Linking.openURL('tel:113').catch(() => {})}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="call" size={16} color="#3B82F6" />
-              </TouchableOpacity>
-            </View>
-          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* POPUP XÁC THỰC NHẬP FORM HIỆN ĐẠI & ĐẸP MẮT */}
+      {/* POPUP XÁC THỰC NHẬP FORM */}
       <Modal
         visible={validationModalVisible}
         transparent
@@ -619,7 +755,6 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
       >
         <View style={styles.valModalBackdrop}>
           <View style={styles.valModalCard}>
-            {/* ICON BADGE */}
             <View
               style={[
                 styles.valBadgeWrap,
@@ -632,43 +767,33 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
                 <MaterialCommunityIcons name="comment-alert" size={36} color="#0284C7" />
               ) : validationType === 'people' ? (
                 <MaterialCommunityIcons name="account-alert" size={36} color="#D97706" />
+              ) : validationType === 'address' ? (
+                <MaterialCommunityIcons name="home-alert" size={36} color="#D97706" />
               ) : (
                 <MaterialCommunityIcons name="crosshairs-gps" size={36} color="#D97706" />
               )}
             </View>
 
-            {/* TIÊU ĐỀ POPUP */}
             <Text style={styles.valTitle}>
               {validationType === 'desc'
                 ? 'Chưa Nhập Tình Trạng Ngập'
                 : validationType === 'people'
                 ? 'Chưa Nhập Số Người Cần Cứu'
+                : validationType === 'address'
+                ? 'Chưa Nhập Địa Chỉ Người Thân'
                 : 'Chưa Xác Định Tọa Độ GPS'}
             </Text>
 
-            {/* NỘI DUNG MÔ TẢ HƯỚNG DẪN */}
             <Text style={styles.valDesc}>
               {validationType === 'desc'
-                ? 'Vui lòng mô tả tình hình thực tế (mức nước ngập, có người già, trẻ nhỏ...) ở Mục 2 để Đội cứu nạn chuẩn bị đúng phương tiện ứng cứu chính xác.'
+                ? 'Vui lòng mô tả tình hình thực tế (mức nước ngập, vị trí đứng trú ẩn...) ở Mục 3 để Đội cứu nạn chuẩn bị đúng phương tiện ứng cứu chính xác.'
                 : validationType === 'people'
                 ? 'Vui lòng nhập số người đang gặp nạn (tối thiểu 1 người) để lực lượng cứu hộ bố trí xuồng hoặc ca-nô đủ chỗ đón.'
+                : validationType === 'address'
+                ? 'Vui lòng nhập rõ số nhà, ngõ, tên đường, phường/xã nơi người thân đang gặp nạn để lực lượng cứu hộ tiếp cận chính xác.'
                 : 'Hệ thống đang dò GPS của bạn. Vui lòng bật vị trí để Đội cứu hộ định vị chính xác địa điểm ngập.'}
             </Text>
 
-            {/* HỘP CẢNH BÁO TÌNH THẾ NGUY CẤP (Dành cho trường hợp đang ngập xiết không kịp gõ chữ) */}
-            {validationType === 'desc' && (
-              <View style={styles.valEmergencyCallout}>
-                <View style={styles.valEmergencyHeader}>
-                  <Ionicons name="call" size={15} color="#DC2626" />
-                  <Text style={styles.valEmergencyTitle}>TÌNH THẾ NGUY CẤP?</Text>
-                </View>
-                <Text style={styles.valEmergencyText}>
-                  Nếu nước đang dâng xiết, nguy kịch không kịp gõ chữ, hãy bấm "Gọi cứu nạn 114" để kết nối điện thoại trực tiếp ngay!
-                </Text>
-              </View>
-            )}
-
-            {/* CÁC NÚT HÀNH ĐỘNG */}
             {validationType === 'desc' ? (
               <View style={styles.valActionsCol}>
                 <TouchableOpacity
@@ -676,25 +801,11 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
                   activeOpacity={0.85}
                   onPress={() => {
                     setValidationModalVisible(false);
-                    setTimeout(() => {
-                      descInputRef.current?.focus();
-                    }, 200);
+                    setTimeout(() => descInputRef.current?.focus(), 200);
                   }}
                 >
                   <Feather name="edit-3" size={16} color="#FFFFFF" />
                   <Text style={styles.valActionPrimaryText}>Điền mô tả tình trạng ngay</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.valActionEmergency}
-                  activeOpacity={0.85}
-                  onPress={() => {
-                    setValidationModalVisible(false);
-                    Linking.openURL('tel:114').catch(() => {});
-                  }}
-                >
-                  <Ionicons name="call" size={16} color="#FFFFFF" />
-                  <Text style={styles.valActionEmergencyText}>📞 Gọi cứu nạn 114 khẩn cấp</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -703,6 +814,20 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
                   onPress={() => setValidationModalVisible(false)}
                 >
                   <Text style={styles.valDismissText}>Đóng lại</Text>
+                </TouchableOpacity>
+              </View>
+            ) : validationType === 'address' ? (
+              <View style={styles.valActionsCol}>
+                <TouchableOpacity
+                  style={styles.valActionPrimary}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    setValidationModalVisible(false);
+                    setTimeout(() => customAddressInputRef.current?.focus(), 200);
+                  }}
+                >
+                  <Feather name="map-pin" size={16} color="#FFFFFF" />
+                  <Text style={styles.valActionPrimaryText}>Nhập địa chỉ cứu nạn ngay</Text>
                 </TouchableOpacity>
               </View>
             ) : validationType === 'people' ? (
@@ -740,86 +865,61 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F1F5F9',
-  },
-  keyboardContainer: {
-    flex: 1,
+    backgroundColor: '#F8FAFC',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 36 : 14,
+    paddingTop: Platform.OS === 'android' ? 42 : 54,
     paddingBottom: 14,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
   backButton: {
-    padding: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
   },
   headerTitleWrap: {
     flex: 1,
     alignItems: 'center',
+    marginHorizontal: 8,
   },
   headerTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    color: '#0284C7',
-    letterSpacing: 0.5,
+    color: '#0F172A',
+    letterSpacing: 0.2,
   },
   headerSubTitle: {
     fontSize: 11,
     color: '#64748B',
     marginTop: 2,
+    fontWeight: '500',
   },
   reloadGpsBtn: {
-    padding: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFF6FF',
+  },
+  keyboardContainer: {
+    flex: 1,
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 110, // Đảm bảo cuộn qua khỏi Bottom Navigation Bar
   },
-  quickSosBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#DC2626',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 16,
-    shadowColor: '#DC2626',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  quickSosLeft: {
-    marginRight: 12,
-  },
-  quickSosPulse: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quickSosBody: {
-    flex: 1,
-  },
-  quickSosTitle: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-  quickSosDesc: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 11,
-    marginTop: 3,
-    lineHeight: 15,
-  },
+
+  // THẺ VỊ TRÍ & BỘ CHUYỂN ĐỔI CHẾ ĐỘ
   gpsCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -827,6 +927,43 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+  },
+  locationSwitcherWrap: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 12,
+  },
+  switcherTabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+    gap: 5,
+  },
+  switcherTabBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  switcherTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  switcherTabTextActive: {
+    color: '#0284C7',
+    fontWeight: '700',
+  },
+  gpsDetailsBlock: {
+    paddingTop: 2,
   },
   gpsHeader: {
     flexDirection: 'row',
@@ -865,16 +1002,52 @@ const styles = StyleSheet.create({
     color: '#059669',
   },
   gpsAddressText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#1E293B',
-    lineHeight: 20,
+    lineHeight: 19,
   },
   gpsCoordsText: {
     fontSize: 11,
     color: '#64748B',
     marginTop: 4,
   },
+
+  // KHỐI NHẬP ĐỊA CHỈ NGƯỜI THÂN
+  customAddressBlock: {
+    paddingTop: 2,
+  },
+  customAddressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+    gap: 6,
+  },
+  customAddressLabel: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  customAddressInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#BAE6FD',
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 13.5,
+    color: '#0F172A',
+    minHeight: 65,
+    textAlignVertical: 'top',
+    lineHeight: 19,
+  },
+  customAddressHint: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 6,
+    lineHeight: 16,
+  },
+
+  // THẺ FORM CHUNG
   formCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -886,84 +1059,136 @@ const styles = StyleSheet.create({
   cardHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
   },
   cardHeading: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#0F172A',
-    marginLeft: 6,
   },
   cardSubText: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#64748B',
     marginTop: 3,
     marginBottom: 10,
-    lineHeight: 17,
+    lineHeight: 16,
   },
 
-  // STYLES CHO MỤC 1: SỐ NGƯỜI
-  peopleInputRow: {
+  // Ô NHẬP SĐT LIÊN HỆ
+  phoneInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+  },
+  phoneInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+
+  // BỘ ĐẾM SỐ NGƯỜI NHỎ GỌN, HÀI HÒA
+  peopleInputRowCompact: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 4,
+    marginVertical: 2,
   },
-  counterActionBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+  counterBtnCompact: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#CBD5E1',
   },
-  peopleDirectInputBox: {
+  peopleBoxCompact: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#EFF6FF',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#0284C7',
-    borderRadius: 14,
-    paddingHorizontal: 20,
-    paddingVertical: 6,
-    marginHorizontal: 14,
-    minWidth: 140,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    marginHorizontal: 12,
+    minWidth: 100,
   },
-  peopleDirectInput: {
-    fontSize: 26,
-    fontWeight: '900',
+  peopleInputCompact: {
+    fontSize: 20,
+    fontWeight: '800',
     color: '#0284C7',
     textAlign: 'center',
-    minWidth: 60,
+    minWidth: 40,
   },
-  peopleDirectUnit: {
-    fontSize: 15,
+  peopleUnitCompact: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#0284C7',
     marginLeft: 4,
   },
 
-  // STYLES MÔ TẢ
+  // CHIPS ĐỐI TƯỢNG ƯU TIÊN
+  priorityChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  priorityChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 20,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+  },
+  priorityChipSelected: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#EF4444',
+    borderWidth: 1.5,
+  },
+  priorityChipEmoji: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  priorityChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  priorityChipTextSelected: {
+    color: '#DC2626',
+    fontWeight: '700',
+  },
+
+  // Ô NHẬP MÔ TẢ
   descInput: {
     backgroundColor: '#F8FAFC',
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 12,
-    fontSize: 14,
+    fontSize: 13.5,
     color: '#0F172A',
-    minHeight: 85,
+    minHeight: 80,
     textAlignVertical: 'top',
-    lineHeight: 20,
+    lineHeight: 19,
   },
 
-  // STYLES ẢNH
+  // NÚT CHỤP / CHỌN ẢNH
   photoActionsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
+    gap: 10,
   },
   photoBtn: {
     flex: 1,
@@ -975,108 +1200,111 @@ const styles = StyleSheet.create({
     borderColor: '#BAE6FD',
     borderRadius: 10,
     paddingVertical: 10,
-    marginHorizontal: 4,
+    gap: 6,
   },
   photoBtnText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#0284C7',
-    marginLeft: 6,
   },
   imagePreviewWrap: {
     position: 'relative',
-    marginBottom: 10,
-    alignSelf: 'center',
+    marginTop: 10,
+    borderRadius: 10,
+    overflow: 'hidden',
   },
   previewImage: {
-    width: 220,
-    height: 140,
+    width: '100%',
+    height: 160,
     borderRadius: 10,
   },
   removeImgBtn: {
     position: 'absolute',
-    top: -8,
-    right: -8,
+    top: 6,
+    right: 6,
     backgroundColor: '#FFFFFF',
-    borderRadius: 13,
+    borderRadius: 14,
   },
 
+  // NÚT GỬI CỨU HỘ
   mainSendBtn: {
     backgroundColor: '#0284C7',
     borderRadius: 14,
     paddingVertical: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
+    marginTop: 4,
     shadowColor: '#0284C7',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
   sendingRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   mainSendBtnText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '800',
-    letterSpacing: 0.5,
-    marginLeft: 8,
+    letterSpacing: 0.3,
   },
 
-  // SUCCESS STYLES
+  // MÀN HÌNH THÀNH CÔNG
   successContainer: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.7)',
-    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 20,
   },
   successCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
-    padding: 24,
+    padding: 22,
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 420,
     alignItems: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
   successIconOuter: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   successTitle: {
     fontSize: 17,
     fontWeight: '900',
     color: '#0F172A',
     textAlign: 'center',
-    letterSpacing: 0.3,
+    marginBottom: 6,
   },
   successSub: {
-    fontSize: 12,
+    fontSize: 12.5,
     color: '#64748B',
     textAlign: 'center',
-    marginTop: 6,
-    lineHeight: 17,
+    lineHeight: 18,
+    marginBottom: 16,
   },
   successDetailsBox: {
+    width: '100%',
     backgroundColor: '#F8FAFC',
     borderRadius: 12,
-    padding: 14,
-    width: '100%',
-    marginVertical: 16,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    gap: 8,
   },
   successDetailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginVertical: 4,
+    alignItems: 'center',
   },
   successDetailLabel: {
     fontSize: 12,
@@ -1084,139 +1312,70 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   successDetailCode: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
-    color: '#DC2626',
+    color: '#0284C7',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   successDetailValue: {
-    fontSize: 12,
-    color: '#0F172A',
+    fontSize: 12.5,
     fontWeight: '600',
-    maxWidth: '65%',
+    color: '#0F172A',
+    flex: 1,
     textAlign: 'right',
   },
-  emergencyCallGroup: {
-    width: '100%',
-    backgroundColor: '#FEF2F2',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-  },
-  emergencyCallGroupTitle: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#DC2626',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  callRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  callActionBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 9,
-    borderRadius: 8,
-    marginHorizontal: 3,
-  },
-  callActionText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-    marginLeft: 4,
-  },
   doneBtn: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#0284C7',
     borderRadius: 12,
     paddingVertical: 13,
-    width: '100%',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   doneBtnText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
   },
 
-  // STYLES CHO POPUP VALIDATION FORM SANG TRỌNG
+  // POPUP VALIDATION
   valModalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.72)',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     alignItems: 'center',
-    padding: 20,
+    justifyContent: 'center',
+    padding: 24,
   },
   valModalCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 18,
+    borderRadius: 20,
+    padding: 22,
     width: '100%',
-    maxWidth: 370,
+    maxWidth: 380,
     alignItems: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 18,
-    elevation: 10,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
   },
   valBadgeWrap: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
-    justifyContent: 'center',
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     alignItems: 'center',
-    marginBottom: 14,
-    borderWidth: 3,
+    justifyContent: 'center',
+    borderWidth: 2,
+    marginBottom: 12,
   },
   valTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
     textAlign: 'center',
-    marginBottom: 8,
-    letterSpacing: 0.2,
+    marginBottom: 6,
   },
   valDesc: {
-    fontSize: 13,
+    fontSize: 12.5,
     color: '#475569',
     textAlign: 'center',
-    lineHeight: 19,
-    marginBottom: 14,
-    paddingHorizontal: 4,
-  },
-  valEmergencyCallout: {
-    backgroundColor: '#FEF2F2',
-    borderRadius: 12,
-    padding: 12,
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
+    lineHeight: 18,
     marginBottom: 16,
-  },
-  valEmergencyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  valEmergencyTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#DC2626',
-    marginLeft: 4,
-  },
-  valEmergencyText: {
-    fontSize: 11,
-    color: '#991B1B',
-    lineHeight: 16,
+    paddingHorizontal: 4,
   },
   valActionsCol: {
     width: '100%',
@@ -1224,109 +1383,26 @@ const styles = StyleSheet.create({
   valActionPrimary: {
     backgroundColor: '#0284C7',
     borderRadius: 12,
-    paddingVertical: 13,
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 9,
-    shadowColor: '#0284C7',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.28,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  valActionPrimaryText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-    marginLeft: 6,
-  },
-  valActionEmergency: {
-    backgroundColor: '#DC2626',
-    borderRadius: 12,
     paddingVertical: 12,
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
-    shadowColor: '#DC2626',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 2,
+    gap: 6,
   },
-  valActionEmergencyText: {
+  valActionPrimaryText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '800',
-    marginLeft: 6,
   },
   valDismissBtn: {
-    paddingVertical: 7,
+    paddingVertical: 8,
     alignItems: 'center',
+    marginTop: 4,
   },
   valDismissText: {
     fontSize: 12,
     color: '#64748B',
     fontWeight: '600',
-  },
-  contactsCard: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginTop: 18,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  contactsTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 12,
-  },
-  contactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  contactIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  contactInfo: {
-    flex: 1,
-  },
-  contactName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  contactNumber: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  callBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F1F5F9',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 });
