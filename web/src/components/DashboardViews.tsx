@@ -342,6 +342,10 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   // State chuyển tab trong mục Phương tiện & Vật tư
   const [resourceTab, setResourceTab] = useState<'VEHICLES' | 'SUPPLIES'>('VEHICLES');
 
+  // State lọc và tìm kiếm khu vực hành chính Đà Nẵng
+  const [areaTypeFilter, setAreaTypeFilter] = useState<'ALL' | 'DISTRICT' | 'WARD' | 'PROVINCE'>('ALL');
+  const [areaSearchQuery, setAreaSearchQuery] = useState('');
+
   // State Cấu hình Hệ thống (Settings) lưu trong localStorage
   const [systemSettings, setSystemSettings] = useState<SystemSettingsConfig>(() => {
     try {
@@ -5030,32 +5034,184 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
    * 12. ADMIN: KHU VỰC HÀNH CHÍNH (UC-A05)
    * ------------------------------------------------------------- */
   if (activeKey === 'areas') {
+    const districtsCount = areas.filter((a) => a.type === 'DISTRICT').length;
+    const wardsCount = areas.filter((a) => a.type === 'WARD').length;
+    const provinceCount = areas.filter((a) => a.type === 'PROVINCE').length;
+
+    const filteredAreas = areas.filter((ar) => {
+      if (areaTypeFilter !== 'ALL' && ar.type !== areaTypeFilter) return false;
+      if (areaSearchQuery.trim()) {
+        const q = areaSearchQuery.toLowerCase();
+        const matchesName = (ar.name || '').toLowerCase().includes(q);
+        const matchesCode = (ar.code || '').toLowerCase().includes(q);
+        return matchesName || matchesCode;
+      }
+      return true;
+    });
+
     return (
       <div className="sos-views-container">
-        <div className="sos-view-card">
-          <div className="sos-view-card-title" style={{ marginBottom: 16 }}>
-            <Globe2 size={18} color="#0284c7" />
-            <span>Danh Mục Đơn Vị Hành Chính Phụ Trách ({areas.length} khu vực)</span>
+        {/* THỐNG KÊ NHANH CÁC CẤP HÀNH CHÍNH ĐÀ NẴNG */}
+        <div className="sos-stats-grid">
+          <div className="sos-stat-box">
+            <div className="sos-stat-icon blue">
+              <Globe2 size={22} />
+            </div>
+            <div className="sos-stat-meta">
+              <span className="sos-stat-value">{areas.length}</span>
+              <span className="sos-stat-label">Tổng Đơn Vị Đà Nẵng</span>
+            </div>
           </div>
+          <div className="sos-stat-box">
+            <div className="sos-stat-icon yellow">
+              <Building2 size={22} />
+            </div>
+            <div className="sos-stat-meta">
+              <span className="sos-stat-value">{districtsCount}</span>
+              <span className="sos-stat-label">Quận / Huyện Trực Thuộc</span>
+            </div>
+          </div>
+          <div className="sos-stat-box">
+            <div className="sos-stat-icon green">
+              <Home size={22} />
+            </div>
+            <div className="sos-stat-meta">
+              <span className="sos-stat-value">{wardsCount}</span>
+              <span className="sos-stat-label">Phường / Xã Quản Lý</span>
+            </div>
+          </div>
+          <div className="sos-stat-box">
+            <div className="sos-stat-icon purple">
+              <Shield size={22} />
+            </div>
+            <div className="sos-stat-meta">
+              <span className="sos-stat-value">100%</span>
+              <span className="sos-stat-label">Độ Phủ Cứu Nạn GIS</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="sos-view-card">
+          <div className="sos-view-card-header">
+            <div className="sos-view-card-title">
+              <Globe2 size={18} color="#0284c7" />
+              <span>Danh Mục Địa Giới Hành Chính Thành Phố Đà Nẵng ({filteredAreas.length}/{areas.length} đơn vị)</span>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Nút lọc nhanh dạng Pill */}
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  type="button"
+                  className={`sos-btn-filter-pill ${areaTypeFilter === 'ALL' ? 'active' : ''}`}
+                  onClick={() => setAreaTypeFilter('ALL')}
+                >
+                  Tất cả ({areas.length})
+                </button>
+                <button
+                  type="button"
+                  className={`sos-btn-filter-pill ${areaTypeFilter === 'DISTRICT' ? 'active-yellow' : ''}`}
+                  onClick={() => setAreaTypeFilter('DISTRICT')}
+                >
+                  Quận / Huyện ({districtsCount})
+                </button>
+                <button
+                  type="button"
+                  className={`sos-btn-filter-pill ${areaTypeFilter === 'WARD' ? 'active-green' : ''}`}
+                  onClick={() => setAreaTypeFilter('WARD')}
+                >
+                  Phường / Xã ({wardsCount})
+                </button>
+                <button
+                  type="button"
+                  className={`sos-btn-filter-pill ${areaTypeFilter === 'PROVINCE' ? 'active-blue' : ''}`}
+                  onClick={() => setAreaTypeFilter('PROVINCE')}
+                >
+                  Cấp TP ({provinceCount})
+                </button>
+              </div>
+
+              {/* Thanh tìm kiếm */}
+              <div style={{ position: 'relative' }}>
+                <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <input
+                  type="text"
+                  placeholder="Tìm quận, phường, mã..."
+                  value={areaSearchQuery}
+                  onChange={(e) => setAreaSearchQuery(e.target.value)}
+                  style={{
+                    padding: '6px 12px 6px 30px',
+                    borderRadius: '20px',
+                    fontSize: '12.5px',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    color: '#f8fafc',
+                    outline: 'none',
+                    minWidth: '200px',
+                  }}
+                />
+              </div>
+
+              <button onClick={() => setRefreshIndex((p) => p + 1)} className="sos-btn-refresh">
+                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                <span>Làm mới</span>
+              </button>
+            </div>
+          </div>
+
           <div className="sos-table-wrapper">
             <table className="sos-table">
               <thead>
                 <tr>
-                  <th>Tên đơn vị</th>
-                  <th>Mã định danh</th>
-                  <th>Cấp hành chính</th>
-                  <th>Trạng thái</th>
+                  <th style={{ width: '32%' }}>Tên đơn vị hành chính</th>
+                  <th style={{ width: '22%' }}>Mã định danh tác chiến</th>
+                  <th style={{ width: '22%' }}>Cấp hành chính</th>
+                  <th style={{ width: '24%' }}>Trạng thái vận hành</th>
                 </tr>
               </thead>
               <tbody>
-                {areas.map((ar) => (
-                  <tr key={ar._id}>
-                    <td><strong>{ar.name}</strong></td>
-                    <td><code>{ar.code}</code></td>
-                    <td>{ar.type}</td>
-                    <td><span className="sos-badge active">{ar.status}</span></td>
+                {filteredAreas.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
+                      Không tìm thấy đơn vị hành chính nào phù hợp với điều kiện lọc.
+                    </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredAreas.map((ar) => {
+                    const isProvince = ar.type === 'PROVINCE';
+                    const isDistrict = ar.type === 'DISTRICT';
+                    const typeLabel = isProvince ? 'Cấp Tỉnh / Thành Phố' : isDistrict ? 'Quận / Huyện' : 'Phường / Xã';
+                    const typeBadgeClass = isProvince ? 'purple' : isDistrict ? 'yellow' : 'green';
+
+                    return (
+                      <tr key={ar._id}>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {isProvince ? <Globe2 size={16} color="#8b5cf6" /> : isDistrict ? <Building2 size={16} color="#f59e0b" /> : <Home size={15} color="#10b981" />}
+                            <strong style={{ color: isProvince ? '#c084fc' : isDistrict ? '#fcd34d' : '#f8fafc', fontSize: isProvince ? '13.5px' : '13px' }}>
+                              {ar.name}
+                            </strong>
+                          </div>
+                        </td>
+                        <td>
+                          <code style={{ background: 'rgba(255, 255, 255, 0.06)', padding: '2px 6px', borderRadius: '4px', fontSize: '11.5px', color: '#38bdf8' }}>
+                            {ar.code}
+                          </code>
+                        </td>
+                        <td>
+                          <span className={`sos-badge ${typeBadgeClass}`}>
+                            {typeLabel}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="sos-badge active" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} />
+                            ĐANG ỨNG TRỰC
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
