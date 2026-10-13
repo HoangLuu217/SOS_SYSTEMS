@@ -3,7 +3,7 @@ const crypto = require('crypto');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'sos_system_jwt_secret_key_2026';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'sos_system_refresh_secret_key_2026';
-const ACCESS_TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '15m';
+const ACCESS_TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 const REFRESH_TOKEN_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 const REFRESH_TOKEN_DAYS = 7;
 
@@ -85,7 +85,7 @@ const setAuthCookies = (res, accessToken, refreshToken) => {
   if (accessToken) {
     res.cookie('accessToken', accessToken, {
       ...cookieOptions,
-      maxAge: 15 * 60 * 1000, // 15 phút
+      maxAge: 24 * 60 * 60 * 1000, // 24 giờ (thay vì 15 phút)
     });
   }
 

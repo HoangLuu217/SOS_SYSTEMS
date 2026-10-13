@@ -8,6 +8,8 @@ import type {
   AuditLogItem,
   AdministrativeAreaItem,
   AuthorityOrgItem,
+  HazardReportItem,
+  SafeLocationItem,
 } from '../types/dashboard';
 
 const API_BASE = '/api';
@@ -28,11 +30,48 @@ async function safeParseResponse(res: Response): Promise<any> {
   }
 }
 
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = localStorage.getItem('sos_refresh_token');
+  if (!refreshToken) return null;
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ refreshToken }),
+    });
+
+    const data = await safeParseResponse(res);
+    if (res.ok && data.success && data.data?.accessToken) {
+      const newAccessToken = data.data.accessToken;
+      localStorage.setItem('sos_access_token', newAccessToken);
+      if (data.data.refreshToken) {
+        localStorage.setItem('sos_refresh_token', data.data.refreshToken);
+      }
+      return newAccessToken;
+    }
+  } catch (e) {
+    console.warn('Lỗi tự động làm mới token:', e);
+  }
+  return null;
+}
+
 /**
- * Helper gọi API kèm Header Authorization token tự động và xử lý fallback URL
+ * Helper gọi API kèm Header Authorization token tự động và xử lý fallback URL & Silent Refresh Token
  */
 async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('sos_access_token');
+  let token = localStorage.getItem('sos_access_token');
+  const userStr = localStorage.getItem('sos_auth_user');
+  let userId = '';
+  if (userStr) {
+    try {
+      const u = JSON.parse(userStr);
+      userId = u._id || u.id || '';
+    } catch {}
+  }
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {}),
@@ -40,6 +79,9 @@ async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Pr
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (userId) {
+    headers['x-user-id'] = userId;
   }
 
   const mergedOptions: RequestInit = {
@@ -49,7 +91,26 @@ async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Pr
   };
 
   try {
-    const res = await fetch(`${API_BASE}${endpoint}`, mergedOptions);
+    let res = await fetch(`${API_BASE}${endpoint}`, mergedOptions);
+
+    // Xử lý khi Token hết hạn (HTTP 401): Tự động làm mới bằng Refresh Token mà không gián đoạn người dùng
+    if (!res.ok && res.status === 401 && endpoint !== '/auth/refresh' && endpoint !== '/auth/login') {
+      if (!refreshPromise) {
+        refreshPromise = refreshAccessToken().finally(() => {
+          refreshPromise = null;
+        });
+      }
+      const newToken = await refreshPromise;
+      if (newToken) {
+        token = newToken;
+        headers['Authorization'] = `Bearer ${newToken}`;
+        res = await fetch(`${API_BASE}${endpoint}`, {
+          ...mergedOptions,
+          headers,
+        });
+      }
+    }
+
     if (!res.ok && res.status >= 500) {
       throw new Error(`Proxy error HTTP ${res.status}`);
     }
@@ -358,3 +419,120 @@ export async function reassignMissionApi(assignmentId: string, payload: {
     body: JSON.stringify(payload),
   });
 }
+
+// ─── HAZARD REPORTS (ĐÓNG GÓP & DUYỆT ĐIỂM NGUY HIỂM UC-L15) ─────────────────
+
+export async function fetchHazardReports(
+  params: Record<string, string> = {}
+): Promise<{
+  success: boolean;
+  data: {
+    reports: HazardReportItem[];
+    counts: {
+      TOTAL: number;
+      PENDING: number;
+      APPROVED: number;
+      REJECTED: number;
+      RESOLVED: number;
+    };
+    pagination: { page: number; limit: number; total: number; totalPages: number };
+  };
+}> {
+  const mergedParams = { all: 'true', limit: '100', ...params };
+  const query = new URLSearchParams(mergedParams).toString();
+  const endpoint = query ? `/hazard-reports?${query}` : '/hazard-reports';
+  return fetchWithAuth(endpoint, { method: 'GET' });
+}
+
+export async function reviewHazardReport(
+  id: string,
+  status: 'APPROVED' | 'REJECTED' | 'RESOLVED',
+  reviewNote?: string,
+  extraData?: Partial<HazardReportItem>
+): Promise<{ success: boolean; data: HazardReportItem }> {
+  return fetchWithAuth(`/hazard-reports/${id}/review`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status, reviewNote, ...(extraData || {}) }),
+  });
+}
+
+export async function createHazardReport(payload: {
+  title: string;
+  description: string;
+  hazardType: string;
+  severity: string;
+  location: { type: 'Point'; coordinates: [number, number] };
+  address: string;
+  areaId?: string;
+  images?: string[];
+}): Promise<{ success: boolean; data: HazardReportItem }> {
+  return fetchWithAuth('/hazard-reports', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteHazardReport(id: string): Promise<{ success: boolean; message: string }> {
+  return fetchWithAuth(`/hazard-reports/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * Đăng ký lắng nghe sự kiện Server-Sent Events (SSE) theo thời gian thực cho điểm nguy hiểm
+ */
+export function subscribeHazardEvents(onEvent: (payload: { action: 'CREATED' | 'REVIEWED' | 'DELETED'; data: any }) => void): () => void {
+  let eventSource: EventSource | null = null;
+  try {
+    eventSource = new EventSource('/api/hazard-reports/stream');
+    eventSource.onmessage = (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        if (payload && payload.action) {
+          onEvent(payload);
+        }
+      } catch (err) {
+        console.warn('[SSE] Lỗi giải mã gói tin thời gian thực:', err);
+      }
+    };
+    eventSource.onerror = () => {
+      // EventSource tự động reconnect khi mất kết nối
+    };
+  } catch (err) {
+    console.warn('[SSE] Không thể kết nối EventSource:', err);
+  }
+
+  return () => {
+    if (eventSource) {
+      eventSource.close();
+    }
+  };
+}
+
+// ─── SAFE LOCATIONS (ĐIỂM TRÚ ẨN & TRẠM Y TẾ AN TOÀN) ─────────────────────────
+
+export async function fetchSafeLocations(params: Record<string, string> = {}): Promise<{ success: boolean; data: SafeLocationItem[] }> {
+  const query = new URLSearchParams(params).toString();
+  const endpoint = query ? `/safe-locations?${query}` : '/safe-locations';
+  const raw = await fetchWithAuth<any>(endpoint, { method: 'GET' });
+  if (Array.isArray(raw.data)) {
+    return { success: raw.success, data: raw.data };
+  }
+  return raw;
+}
+
+export async function createSafeLocation(payload: {
+  name: string;
+  type: string;
+  address: string;
+  capacity: number;
+  currentOccupancy?: number;
+  areaId: string;
+  location: { type: 'Point'; coordinates: [number, number] };
+}): Promise<{ success: boolean; data: SafeLocationItem }> {
+  return fetchWithAuth('/safe-locations', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+

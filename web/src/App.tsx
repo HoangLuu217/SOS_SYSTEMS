@@ -55,8 +55,12 @@ const navTitles: Record<NavItemKey, { title: string; desc: string }> = {
     desc: 'Quản lý thuyền cano, xe cấp cứu, trang thiết bị ứng phó thiên tai lũ lụt',
   },
   alerts: {
-    title: 'PHÁT CẢNH BÁO & TRẠM TRÚ ẨN',
-    desc: 'Phát thông báo nguy cấp đến người dân vùng ngập lụt và điểm sơ tán an toàn',
+    title: 'PHÁT CẢNH BÁO ĐỊA PHƯƠNG',
+    desc: 'Cán bộ phát cảnh báo thiên tai khẩn cấp tới toàn thể người dân trong cùng địa bàn quản lý',
+  },
+  shelters: {
+    title: 'ĐIỂM TRÚ ẨN & TRẠM Y TẾ AN TOÀN',
+    desc: 'Quản lý các trạm sơ tán, điểm tránh lũ và năng lực tiếp nhận người dân trong địa bàn',
   },
   hazard_reports: {
     title: 'DUYỆT ĐIỂM NGUY HIỂM TỪ NGƯỜI DÂN',
@@ -167,6 +171,7 @@ function MainRouter() {
     await logoutApi();
     localStorage.removeItem('sos_auth_user');
     localStorage.removeItem('sos_access_token');
+    localStorage.removeItem('sos_refresh_token');
     localStorage.removeItem('sos_active_portal');
     setAuthUser(null);
     window.history.replaceState(null, '', '/login');
@@ -240,10 +245,11 @@ function MainRouter() {
               </header>
 
               <div className="sos-page-body">
-                <div style={{ maxWidth: '1360px', margin: '0 auto' }}>
+                <div style={{ width: '100%' }}>
                   <DashboardViews
                     activeKey={activeNavKey}
                     onOpenMap={() => handleNavSelect('map')}
+                    user={authUser || undefined}
                   />
                 </div>
               </div>

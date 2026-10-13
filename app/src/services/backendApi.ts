@@ -18,6 +18,95 @@ export interface NotificationItem {
   actionUrl?: string;
 }
 
+export type SafeLocationType =
+  | 'EVACUATION_CENTER'
+  | 'HOSPITAL'
+  | 'RESCUE_STATION'
+  | 'SHELTER'
+  | 'MEETING_POINT';
+
+export type SafeLocationStatus = 'ACTIVE' | 'INACTIVE' | 'FULL' | 'MAINTENANCE';
+
+export interface SafeLocation {
+  _id: string;
+  name: string;
+  type: SafeLocationType;
+  location: {
+    type: 'Point';
+    coordinates: [number, number]; // [lng, lat]
+  };
+  address: string;
+  capacity: number;
+  currentOccupancy: number;
+  status: SafeLocationStatus;
+  areaId?: {
+    _id: string;
+    name: string;
+    code: string;
+    type: string;
+  };
+  createdBy?: {
+    fullName?: string;
+    phone?: string;
+    email?: string;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type AlertType =
+  | 'FLOOD'
+  | 'LANDSLIDE'
+  | 'STORM'
+  | 'FIRE'
+  | 'DANGEROUS_AREA'
+  | 'OTHER';
+
+export type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+export interface AlertItem {
+  _id: string;
+  title: string;
+  content: string;
+  type: AlertType;
+  severity: AlertSeverity;
+  startTime: string;
+  endTime?: string | null;
+  isActive: boolean;
+  location?: {
+    type: 'Point';
+    coordinates: [number, number]; // [lng, lat]
+  };
+  radius?: number; // bán kính cảnh báo (mét)
+  areaId?: {
+    _id: string;
+    name: string;
+    code: string;
+    type: string;
+    boundary?: {
+      type: 'Polygon';
+      coordinates: number[][][]; // [[[lng, lat], ...]]
+    };
+  };
+  targetArea?: {
+    _id: string;
+    name: string;
+    code: string;
+    type: string;
+    boundary?: {
+      type: 'Polygon';
+      coordinates: number[][][];
+    };
+  };
+  createdBy?: {
+    fullName?: string;
+    phone?: string;
+    email?: string;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface UserProfile {
   _id: string;
   fullName: string;
@@ -48,6 +137,8 @@ export interface ApiResponse<T = any> {
   success: boolean;
   message: string;
   data?: T;
+  urls?: string[];
+  url?: string;
   error?: any;
 }
 
@@ -55,52 +146,44 @@ class BackendApiService {
   private customBaseUrl: string | null = null;
 
   async getBaseUrl(): Promise<string> {
-    // Luôn ưu tiên biến môi trường EXPO_PUBLIC_API_URL trong .env nếu có
+    // 1. Ưu tiên cao nhất: Biến môi trường EXPO_PUBLIC_API_URL từ file .env
+    if (process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_API_URL.trim()) {
+      return process.env.EXPO_PUBLIC_API_URL.trim();
+    }
     if (ENV.API_BASE_URL) return ENV.API_BASE_URL;
     if (this.customBaseUrl) return this.customBaseUrl;
+
+    // 2. Nếu người dùng lưu URL tùy chỉnh trong Storage
     try {
       const stored = await AsyncStorage.getItem(ENV.STORAGE_KEYS.CUSTOM_API_URL);
-      if (stored) {
-        this.customBaseUrl = stored;
-        return stored;
+      if (stored && stored.trim()) {
+        this.customBaseUrl = stored.trim();
+        return stored.trim();
       }
     } catch {
       // Fallback
     }
+
     return ENV.API_BASE_URL;
   }
 
   async setBaseUrl(url: string) {
-    this.customBaseUrl = url;
-    await AsyncStorage.setItem(ENV.STORAGE_KEYS.CUSTOM_API_URL, url);
+    this.customBaseUrl = url.trim();
+    await AsyncStorage.setItem(ENV.STORAGE_KEYS.CUSTOM_API_URL, url.trim());
   }
 
-  private async getCandidateUrls(): Promise<string[]> {
-    const list: string[] = [];
-    const current = await this.getBaseUrl();
-    if (current) list.push(current);
-
-    const candidates = [
-      'http://10.12.56.76:5000/api',
-      'http://localhost:5000/api',
-      'http://127.0.0.1:5000/api',
-      'http://10.0.2.2:5000/api',
-      'https://p324hxtt-5000.asse.devtunnels.ms/api',
-    ];
-
-    for (const url of candidates) {
-      if (!list.includes(url)) list.push(url);
-    }
-
-    return list;
+  async clearCustomBaseUrl() {
+    this.customBaseUrl = null;
+    await AsyncStorage.removeItem(ENV.STORAGE_KEYS.CUSTOM_API_URL);
   }
 
   private async request<T = any>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
-    const candidates = await this.getCandidateUrls();
+    const baseUrl = await this.getBaseUrl();
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${baseUrl}${cleanEndpoint}`;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -121,62 +204,42 @@ class BackendApiService {
       headers['x-user-id'] = storedUser._id;
     }
 
-    let lastError = '';
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
 
-    for (const baseUrl of candidates) {
-      const url = `${baseUrl}${cleanEndpoint}`;
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      });
 
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4500); // 4.5s per candidate
+      clearTimeout(timeoutId);
 
-        const response = await fetch(url, {
-          ...options,
-          headers,
-          signal: controller.signal,
-        });
+      const json = await response.json().catch(() => null);
 
-        clearTimeout(timeoutId);
-
-        const json = await response.json().catch(() => null);
-
-        // 1. Nếu phản hồi KHÔNG phải JSON hợp lệ (ví dụ: trang web HTML cảnh báo của Dev Tunnel)
-        if (!json || typeof json !== 'object') {
-          lastError = `Phản hồi từ ${url} không phải dữ liệu JSON hợp lệ.`;
-          continue; // Thử candidate tiếp theo
-        }
-
-        // 2. Server đã trả về JSON thành công hoặc lỗi nghiệp vụ (200, 400, 401, 500...)
-        // Tự động lưu server này làm baseUrl chính vì kết nối thực tế thành công
-        if (baseUrl !== this.customBaseUrl) {
-          this.setBaseUrl(baseUrl);
-        }
-
-        // Nếu HTTP status lỗi (400, 401, 403, 500...), trả về trực tiếp thông báo lỗi từ server
-        if (!response.ok) {
-          return {
-            success: false,
-            message: json?.message || `Yêu cầu thất bại với mã lỗi ${response.status}`,
-            data: json?.data,
-            error: json?.error,
-          };
-        }
-
-        return json;
-      } catch (err: any) {
-        lastError = err.message || '';
-        // Tiếp tục thử candidate tiếp theo
+      if (!response.ok) {
+        const errorMsg =
+          json?.message ||
+          (response.status === 404
+            ? `Không tìm thấy endpoint API (${url})`
+            : `Yêu cầu thất bại với mã lỗi ${response.status}`);
+        return {
+          success: false,
+          message: errorMsg,
+          data: json?.data,
+          error: json?.error,
+        };
       }
-    }
 
-    return {
-      success: false,
-      message:
-        'Không thể kết nối đến máy chủ backend SOS (đã thử qua ' +
-        candidates.join(', ') +
-        '). Vui lòng kiểm tra backend server đang chạy.',
-      error: lastError,
-    };
+      return json || { success: true, message: 'Thành công' };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: `Không thể kết nối đến máy chủ backend SOS (${url}). Vui lòng kiểm tra backend server đang chạy hoặc kiểm tra kết nối mạng.`,
+        error: err.message || '',
+      };
+    }
   }
 
   // --- PUBLIC HTTP METHODS ---
@@ -194,8 +257,9 @@ class BackendApiService {
 
   // Phương thức chuyên dụng để gửi file ảnh/video (không dùng JSON)
   async postFormData<T = any>(endpoint: string, formData: FormData, options: RequestInit = {}): Promise<ApiResponse<T>> {
-    const candidates = await this.getCandidateUrls();
+    const baseUrl = await this.getBaseUrl();
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${baseUrl}${cleanEndpoint}`;
 
     // Không set Content-Type để trình duyệt/fetch tự động tạo multipart/form-data boundary
     const headers: Record<string, string> = {
@@ -207,39 +271,37 @@ class BackendApiService {
     const token = await AsyncStorage.getItem(ENV.STORAGE_KEYS.ACCESS_TOKEN);
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    let lastError = '';
-    for (const baseUrl of candidates) {
-      const url = `${baseUrl}${cleanEndpoint}`;
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000); // Tăng lên 60s cho upload file nặng qua tunnel
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s cho upload file nặng
 
-        const response = await fetch(url, {
-          ...options,
-          method: 'POST',
-          headers,
-          body: formData,
-          signal: controller.signal,
-        });
+      const response = await fetch(url, {
+        ...options,
+        method: 'POST',
+        headers,
+        body: formData,
+        signal: controller.signal,
+      });
 
-        clearTimeout(timeoutId);
-        const json = await response.json().catch(() => null);
+      clearTimeout(timeoutId);
+      const json = await response.json().catch(() => null);
 
-        if (!response.ok) {
-          return {
-            success: false,
-            message: json?.message || `Yêu cầu thất bại với mã lỗi ${response.status}`,
-            error: json?.error,
-          };
-        }
-
-        if (baseUrl !== this.customBaseUrl) this.setBaseUrl(baseUrl);
-        return json || { success: true, message: 'Thành công' };
-      } catch (err: any) {
-        lastError = err.message || '';
+      if (!response.ok) {
+        return {
+          success: false,
+          message: json?.message || `Yêu cầu thất bại với mã lỗi ${response.status}`,
+          error: json?.error,
+        };
       }
+
+      return json || { success: true, message: 'Thành công' };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: `Không thể kết nối đến server (${url}) để upload file.`,
+        error: err.message || '',
+      };
     }
-    return { success: false, message: 'Không thể kết nối đến server để upload file', error: lastError };
   }
 
   async put<T = any>(endpoint: string, body: any, options: RequestInit = {}): Promise<ApiResponse<T>> {
@@ -534,6 +596,83 @@ class BackendApiService {
     return await this.request('/rescuer/me/availability', {
       method: 'PATCH',
       body: JSON.stringify({ availabilityStatus }),
+    });
+  }
+
+  /**
+   * Lấy danh sách điểm an toàn (Safe Locations)
+   */
+  async getSafeLocations(params: {
+    type?: string;
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  } = {}): Promise<ApiResponse<SafeLocation[]>> {
+    const queryParts: string[] = [];
+    if (params.type) queryParts.push(`type=${encodeURIComponent(params.type)}`);
+    if (params.status) queryParts.push(`status=${encodeURIComponent(params.status)}`);
+    if (params.search) queryParts.push(`search=${encodeURIComponent(params.search)}`);
+    if (params.page) queryParts.push(`page=${params.page}`);
+    queryParts.push(`limit=${params.limit || 100}`);
+    const qs = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+    return await this.request<SafeLocation[]>(`/safe-locations${qs}`, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Lấy danh sách điểm an toàn gần nhất theo tọa độ
+   */
+  async getNearbySafeLocations(
+    lng: number,
+    lat: number,
+    maxDistance: number = 20000,
+    limit: number = 50
+  ): Promise<ApiResponse<SafeLocation[]>> {
+    return await this.request<SafeLocation[]>(
+      `/safe-locations/nearby?lng=${lng}&lat=${lat}&maxDistance=${maxDistance}&limit=${limit}`,
+      { method: 'GET' }
+    );
+  }
+
+  /**
+   * Lấy danh sách cảnh báo đang hoạt động (Active Alerts)
+   */
+  async getActiveAlerts(params: {
+    type?: string;
+    severity?: string;
+    limit?: number;
+  } = {}): Promise<ApiResponse<AlertItem[]>> {
+    const queryParts: string[] = [];
+    if (params.type) queryParts.push(`type=${encodeURIComponent(params.type)}`);
+    if (params.severity) queryParts.push(`severity=${encodeURIComponent(params.severity)}`);
+    queryParts.push(`limit=${params.limit || 100}`);
+    const qs = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+    return await this.request<AlertItem[]>(`/alerts/active${qs}`, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Lấy tất cả cảnh báo (Alerts)
+   */
+  async getAlerts(params: {
+    type?: string;
+    severity?: string;
+    isActive?: boolean;
+    page?: number;
+    limit?: number;
+  } = {}): Promise<ApiResponse<AlertItem[]>> {
+    const queryParts: string[] = [];
+    if (params.type) queryParts.push(`type=${encodeURIComponent(params.type)}`);
+    if (params.severity) queryParts.push(`severity=${encodeURIComponent(params.severity)}`);
+    if (params.isActive !== undefined) queryParts.push(`isActive=${params.isActive}`);
+    if (params.page) queryParts.push(`page=${params.page}`);
+    queryParts.push(`limit=${params.limit || 100}`);
+    const qs = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+    return await this.request<AlertItem[]>(`/alerts${qs}`, {
+      method: 'GET',
     });
   }
 

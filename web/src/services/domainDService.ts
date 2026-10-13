@@ -25,6 +25,109 @@ const STORAGE_AUTHORITIES = 'rescuesos_authorities_v25_all_15_official_merged_da
 const STORAGE_SOS = 'rescuesos_sos_v25_all_15_official_merged_danang_wards';
 const STORAGE_ASSIGNMENTS = 'rescuesos_assignments_v25_all_15_official_merged_danang_wards';
 const STORAGE_ACTIVE_OFFICER = 'rescuesos_active_officer_v25_all_15_official_merged_danang_wards';
+export const STORAGE_JURISDICTION_KEY = 'sos_selected_jurisdiction_key';
+
+export interface JurisdictionConfig {
+  name: string;
+  district: string;
+  areaId: string;
+  keywords: string[];
+  bounds?: { minLat: number; maxLat: number; minLng: number; maxLng: number };
+}
+
+export const JURISDICTION_CONFIGS: Record<string, JurisdictionConfig> = {
+  ngu_hanh_son: {
+    name: 'Quận Ngũ Hành Sơn',
+    district: 'Quận Ngũ Hành Sơn',
+    areaId: 'area-nhs',
+    keywords: [
+      'ngũ hành sơn', 'ngu hanh son', 'khuê mỹ', 'khue my', 'mỹ an', 'my an',
+      'hòa hải', 'hoa hai', 'hòa quý', 'hoa quy', 'nguyễn thức tự', 'nguyen thuc tu',
+      'non nước', 'non nuoc', 'cầu nguyễn văn trỗi', 'nguyễn văn trỗi', 'chân cầu nguyễn văn trỗi'
+    ],
+    bounds: { minLat: 15.93, maxLat: 16.065, minLng: 108.23, maxLng: 108.31 },
+  },
+  hai_chau: {
+    name: 'Quận Hải Châu',
+    district: 'Quận Hải Châu',
+    areaId: 'area-hc',
+    keywords: [
+      'hải châu', 'hai chau', 'hòa cường', 'hoa cuong', 'thuận phước', 'thuan phuoc',
+      'thạch thang', 'thach thang', 'nam dương', 'nam duong', 'bình hiên', 'binh hien',
+      'bình thuận', 'binh thuan', 'hòa thuận', 'hoa thuan', 'thanh bình', 'thanh binh',
+      'nguyễn văn linh', 'bạch đằng', 'trần phú', 'tiểu la', '2 tháng 9', 'lê đình lý'
+    ],
+    bounds: { minLat: 16.02, maxLat: 16.095, minLng: 108.20, maxLng: 108.235 },
+  },
+  son_tra: {
+    name: 'Quận Sơn Trà',
+    district: 'Quận Sơn Trà',
+    areaId: 'area-st',
+    keywords: [
+      'sơn trà', 'son tra', 'phước mỹ', 'phuoc my', 'an hải', 'an hai',
+      'mân thái', 'man thai', 'nại hiên đông', 'nai hien dong', 'thọ quang', 'tho quang',
+      'linh ứng', 'linh ung', 'bán đảo sơn trà', 'hoàng sa'
+    ],
+    bounds: { minLat: 16.05, maxLat: 16.16, minLng: 108.23, maxLng: 108.33 },
+  },
+  thanh_khe: {
+    name: 'Quận Thanh Khê',
+    district: 'Quận Thanh Khê',
+    areaId: 'area-tk',
+    keywords: [
+      'thanh khê', 'thanh khe', 'an khê', 'an khe', 'tam thuận', 'tam thuan',
+      'xuân hà', 'xuan ha', 'chính gián', 'chinh gian', 'vĩnh trung', 'vinh trung',
+      'tân chính', 'tan chinh', 'thạc gián', 'thac gian', 'điện biên phủ', 'hà huy tập'
+    ],
+    bounds: { minLat: 16.045, maxLat: 16.085, minLng: 108.17, maxLng: 108.21 },
+  },
+  cam_le: {
+    name: 'Quận Cẩm Lệ',
+    district: 'Quận Cẩm Lệ',
+    areaId: 'area-cl',
+    keywords: [
+      'cẩm lệ', 'cam le', 'hòa xuân', 'hoa xuan', 'khuê trung', 'khue trung',
+      'hòa phát', 'hoa phat', 'hòa thọ đông', 'hòa thọ tây', 'hòa an', 'hoa an',
+      'cách mạng tháng 8', 'văn tiến dũng'
+    ],
+    bounds: { minLat: 15.985, maxLat: 16.045, minLng: 108.18, maxLng: 108.245 },
+  },
+  lien_chieu: {
+    name: 'Quận Liên Chiểu',
+    district: 'Quận Liên Chiểu',
+    areaId: 'area-lc',
+    keywords: [
+      'liên chiểu', 'lien chieu', 'hòa khánh', 'hoa khanh', 'hải vân', 'hai van',
+      'hòa minh', 'hoa minh', 'hòa hiệp', 'hoa hiep', 'ngã ba huế', 'nga ba hue',
+      'tôn đức thắng', 'nguyễn lương bằng'
+    ],
+    bounds: { minLat: 16.045, maxLat: 16.17, minLng: 108.09, maxLng: 108.195 },
+  },
+  hoa_vang: {
+    name: 'Huyện Hòa Vang',
+    district: 'Huyện Hòa Vang',
+    areaId: 'area-hv',
+    keywords: [
+      'hòa vang', 'hoa vang', 'bà nà', 'ba na', 'hòa tiến', 'hoa tien',
+      'hòa phong', 'hoa phong', 'hòa khương', 'hoa khuong', 'hòa nhơn', 'hoa nhon',
+      'hòa ninh', 'hòa bắc', 'hòa sơn', 'hòa liên', 'hòa châu', 'hòa phước'
+    ],
+    bounds: { minLat: 15.88, maxLat: 16.20, minLng: 107.88, maxLng: 108.18 },
+  },
+  hoang_sa: {
+    name: 'Huyện Hoàng Sa',
+    district: 'Huyện Hoàng Sa',
+    areaId: 'area-hs',
+    keywords: ['hoàng sa', 'hoang sa'],
+    bounds: { minLat: 15.0, maxLat: 17.5, minLng: 111.0, maxLng: 113.0 },
+  },
+  toan_thanh_pho: {
+    name: 'Toàn TP Đà Nẵng',
+    district: 'Thành phố Đà Nẵng',
+    areaId: 'area-dn',
+    keywords: ['đà nẵng', 'da nang'],
+  },
+};
 
 class DomainDService {
   private areas: AdministrativeArea[];
@@ -397,6 +500,37 @@ class DomainDService {
     return this.getActiveOfficer();
   }
 
+  setJurisdictionKey(key: string): AuthorityOfficer {
+    const cfg = JURISDICTION_CONFIGS[key];
+    const officer = this.getActiveOfficer();
+    if (cfg && officer) {
+      officer.jurisdictionAreaId = cfg.areaId;
+      officer.jurisdictionAreaName = cfg.name;
+      officer.districtName = cfg.district;
+      this.save(STORAGE_ACTIVE_OFFICER, officer.id);
+      try {
+        localStorage.setItem(STORAGE_JURISDICTION_KEY, key);
+      } catch {}
+    }
+    return officer;
+  }
+
+  getJurisdictionKey(): string {
+    try {
+      const stored = localStorage.getItem(STORAGE_JURISDICTION_KEY);
+      if (stored && JURISDICTION_CONFIGS[stored]) return stored;
+    } catch {}
+    const officer = this.getActiveOfficer();
+    if (officer?.role === 'ADMIN' || officer?.jurisdictionAreaId === 'area-dn') return 'toan_thanh_pho';
+    const nameLower = (officer?.jurisdictionAreaName || '').toLowerCase();
+    for (const [key, cfg] of Object.entries(JURISDICTION_CONFIGS)) {
+      if (key !== 'toan_thanh_pho' && nameLower.includes(cfg.name.toLowerCase().replace(/^(quận|huyện)\s+/i, ''))) {
+        return key;
+      }
+    }
+    return 'ngu_hanh_son';
+  }
+
   syncFromStoredAuthUser() {
     try {
       const stored = localStorage.getItem('sos_auth_user');
@@ -412,6 +546,8 @@ class DomainDService {
   syncLoggedInUser(user: any): AuthorityOfficer {
     if (!user) return this.getActiveOfficer();
 
+    const storedJurKey = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_JURISDICTION_KEY) : null;
+
     // Check if matching officer already exists
     const matched = this.officers.find(
       (o) =>
@@ -422,56 +558,52 @@ class DomainDService {
     );
 
     if (matched) {
+      if (storedJurKey && JURISDICTION_CONFIGS[storedJurKey]) {
+        const cfg = JURISDICTION_CONFIGS[storedJurKey];
+        matched.jurisdictionAreaId = cfg.areaId;
+        matched.jurisdictionAreaName = cfg.name;
+        matched.districtName = cfg.district;
+      }
       this.activeOfficerId = matched.id;
       this.save(STORAGE_ACTIVE_OFFICER, matched.id);
       return matched;
     }
 
-    // Determine managed area from user authority department or position
+    // Determine managed area from stored key or user authority department/position
     const dept = (user.authority?.department || '').toLowerCase();
     const pos = (user.authority?.position || '').toLowerCase();
 
-    let areaId = 'area-hc';
-    let areaName = 'Quận Hải Châu';
-    let districtName = 'Quận Hải Châu';
+    let jurKey = storedJurKey && JURISDICTION_CONFIGS[storedJurKey] ? storedJurKey : '';
 
-    if (user.roles?.includes('ADMIN')) {
-      areaId = 'area-dn';
-      areaName = 'Toàn TP Đà Nẵng';
-      districtName = 'Thành phố Đà Nẵng';
-    } else if (dept.includes('cẩm lệ') || pos.includes('cẩm lệ')) {
-      areaId = 'area-cl';
-      areaName = 'Quận Cẩm Lệ';
-      districtName = 'Quận Cẩm Lệ';
-    } else if (dept.includes('sơn trà') || pos.includes('sơn trà')) {
-      areaId = 'area-st';
-      areaName = 'Quận Sơn Trà';
-      districtName = 'Quận Sơn Trà';
-    } else if (dept.includes('thanh khê') || pos.includes('thanh khê')) {
-      areaId = 'area-tk';
-      areaName = 'Quận Thanh Khê';
-      districtName = 'Quận Thanh Khê';
-    } else if (dept.includes('ngũ hành sơn') || pos.includes('ngũ hành sơn')) {
-      areaId = 'area-nhs';
-      areaName = 'Quận Ngũ Hành Sơn';
-      districtName = 'Quận Ngũ Hành Sơn';
-    } else if (dept.includes('liên chiểu') || pos.includes('liên chiểu')) {
-      areaId = 'area-lc';
-      areaName = 'Quận Liên Chiểu';
-      districtName = 'Quận Liên Chiểu';
-    } else if (dept.includes('hòa vang') || pos.includes('hòa vang')) {
-      areaId = 'area-hv';
-      areaName = 'Huyện Hòa Vang';
-      districtName = 'Huyện Hòa Vang';
-    } else if (dept.includes('hoàng sa') || pos.includes('hoàng sa')) {
-      areaId = 'area-hs';
-      areaName = 'Huyện Hoàng Sa';
-      districtName = 'Huyện Hoàng Sa';
-    } else if (dept.includes('hải châu') || pos.includes('hải châu')) {
-      areaId = 'area-hc';
-      areaName = 'Quận Hải Châu';
-      districtName = 'Quận Hải Châu';
+    if (!jurKey) {
+      if (user.roles?.includes('ADMIN')) {
+        jurKey = 'toan_thanh_pho';
+      } else if (dept.includes('ngũ hành sơn') || pos.includes('ngũ hành sơn')) {
+        jurKey = 'ngu_hanh_son';
+      } else if (dept.includes('hải châu') || pos.includes('hải châu')) {
+        jurKey = 'hai_chau';
+      } else if (dept.includes('sơn trà') || pos.includes('sơn trà')) {
+        jurKey = 'son_tra';
+      } else if (dept.includes('thanh khê') || pos.includes('thanh khê')) {
+        jurKey = 'thanh_khe';
+      } else if (dept.includes('cẩm lệ') || pos.includes('cẩm lệ')) {
+        jurKey = 'cam_le';
+      } else if (dept.includes('liên chiểu') || pos.includes('liên chiểu')) {
+        jurKey = 'lien_chieu';
+      } else if (dept.includes('hòa vang') || pos.includes('hòa vang')) {
+        jurKey = 'hoa_vang';
+      } else if (dept.includes('hoàng sa') || pos.includes('hoàng sa')) {
+        jurKey = 'hoang_sa';
+      } else {
+        // Mặc định địa bàn Ngũ Hành Sơn (nơi tiếp nhận các tin báo đóng góp từ App)
+        jurKey = 'ngu_hanh_son';
+      }
     }
+
+    const cfg = JURISDICTION_CONFIGS[jurKey] || JURISDICTION_CONFIGS.ngu_hanh_son;
+    const areaId = cfg.areaId;
+    const areaName = cfg.name;
+    const districtName = cfg.district;
 
     const newOfficer: AuthorityOfficer = {
       id: `off-${Date.now()}`,

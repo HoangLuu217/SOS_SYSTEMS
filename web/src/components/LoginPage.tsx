@@ -116,6 +116,9 @@ export const LoginPage = ({ onEnterConsole, onLoginSuccess }: LoginPageProps = {
         if (res.data.accessToken) {
           localStorage.setItem('sos_access_token', res.data.accessToken);
         }
+        if (res.data.refreshToken) {
+          localStorage.setItem('sos_refresh_token', res.data.refreshToken);
+        }
 
         // Tự động chuyển hướng ngay lập tức vào giao diện điều hành tương ứng
         const isAuth = loggedInUser.roles.includes('LOCAL_AUTHORITY') && !loggedInUser.roles.includes('ADMIN');
@@ -145,6 +148,7 @@ export const LoginPage = ({ onEnterConsole, onLoginSuccess }: LoginPageProps = {
     await logoutApi();
     localStorage.removeItem('sos_auth_user');
     localStorage.removeItem('sos_access_token');
+    localStorage.removeItem('sos_refresh_token');
     localStorage.removeItem('sos_active_portal');
     window.history.replaceState(null, '', '/login');
     setUser(null);

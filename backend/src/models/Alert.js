@@ -1,5 +1,39 @@
 const mongoose = require('mongoose');
 
+/**
+ * GeoJSON Point Schema for Alert Location
+ */
+const pointLocationSchema = new mongoose.Schema(
+  {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point',
+      required: true,
+    },
+    coordinates: {
+      type: [Number], // [longitude, latitude]
+      required: [true, 'Tọa độ [kinh độ, vĩ độ] là bắt buộc'],
+      validate: {
+        validator: function (coords) {
+          if (!Array.isArray(coords) || coords.length !== 2) return false;
+          const [lng, lat] = coords;
+          return (
+            typeof lng === 'number' &&
+            typeof lat === 'number' &&
+            lng >= -180 &&
+            lng <= 180 &&
+            lat >= -90 &&
+            lat <= 90
+          );
+        },
+        message: 'Tọa độ không hợp lệ. Định dạng [kinh độ (-180..180), vĩ độ (-90..90)].',
+      },
+    },
+  },
+  { _id: false }
+);
+
 const alertSchema = new mongoose.Schema(
   {
     createdBy: {
@@ -40,6 +74,15 @@ const alertSchema = new mongoose.Schema(
       },
       default: 'MEDIUM',
     },
+    location: {
+      type: pointLocationSchema,
+      default: undefined,
+    },
+    radius: {
+      type: Number,
+      min: [0, 'Bán kính ảnh hưởng không được âm'],
+      default: 500, // bán kính vùng ảnh hưởng (mét)
+    },
     targetArea: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'AdministrativeArea',
@@ -73,6 +116,7 @@ const alertSchema = new mongoose.Schema(
 );
 
 // Indexes
+alertSchema.index({ location: '2dsphere' }, { sparse: true });
 alertSchema.index({ areaId: 1 });
 alertSchema.index({ isActive: 1 });
 alertSchema.index({ startTime: 1 });

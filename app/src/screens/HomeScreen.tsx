@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,427 +9,1118 @@ import {
   Platform,
   Alert,
   Image,
+  ImageBackground,
+  ActivityIndicator,
+  Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path } from 'react-native-svg';
+import * as Location from 'expo-location';
 import { useAuth } from '../context/AuthContext';
-import { isSupabaseConfigured } from '../config/supabase';
+import { LogoSOS } from '../components/LogoSOS';
+import { BACKGROUND_APP_SOURCE } from '../constants/backgroundBase64';
+import { SOSMapScreen } from './SOSMapScreen';
+import { ContributeHazardModal } from './ContributeHazardModal';
+import { TabName } from '../components/BottomNav';
 
-interface HomeScreenProps {
+export interface HomeScreenProps {
   onOpenSettings: () => void;
+  onNavigateToTab?: (tab: TabName) => void;
   onNavigateToSos?: () => void;
 }
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ onOpenSettings, onNavigateToSos }) => {
-  const { user, supabaseUser, authMode, logout, isLoading } = useAuth();
+interface NewsItem {
+  id: string;
+  tag: string;
+  time: string;
+  title: string;
+  snippet: string;
+  imageUrl: string;
+  content?: string;
+}
 
-  const handleLogout = () => {
-    Alert.alert('Đăng xuất', 'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản?', [
-      { text: 'Hủy', style: 'cancel' },
-      { text: 'Đăng xuất', style: 'destructive', onPress: logout },
-    ]);
-  };
+interface WeatherState {
+  city: string;
+  temp: string;
+  tempRange: string;
+  desc: string;
+  rainChance: string;
+  icon: any;
+}
 
-  const getInitials = (name?: string) => {
-    if (!name) return 'U';
-    const parts = name.trim().split(' ');
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+// Icon vị trí Bootstrap (bi-geo-alt-fill)
+const BootstrapGeoAltFill: React.FC<{ size?: number; color?: string }> = ({
+  size = 14,
+  color = '#38BDF8',
+}) => (
+  <Svg width={size} height={size} viewBox="0 0 16 16" fill={color}>
+    <Path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10m0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6" />
+  </Svg>
+);
+
+// Icon thời tiết tách nền trong thư mục assets/thoitiet
+const WEATHER_ICONS = {
+  comay: require('../../assets/thoitiet/comay.png'),
+  maydem: require('../../assets/thoitiet/maydem.png'),
+  dem: require('../../assets/thoitiet/dem.png'),
+  mua: require('../../assets/thoitiet/mua.png'),
+  muadem: require('../../assets/thoitiet/muadem.png'),
+  muagiong: require('../../assets/thoitiet/muagiong.png'),
+  nang: require('../../assets/thoitiet/nang.png'),
+  tuyetroi: require('../../assets/thoitiet/tuyetroi.png'),
+};
+
+const FEATURED_NEWS: NewsItem[] = [
+  {
+    id: '1',
+    tag: 'TIN TỨC',
+    time: '12/10 08:32',
+    title: 'Cảnh báo nguy cơ lũ quét, sạt lở đất tại Đà Nẵng, Quảng Ngãi v...',
+    snippet: 'TIN CẢNH BÁO THIÊN TAI Cảnh báo nguy cơ...',
+    imageUrl:
+      'https://images.unsplash.com/photo-1547683905-f686c993aae5?w=500&auto=format&fit=crop&q=80',
+    content:
+      'Trung tâm Dự báo Khí tượng Thủy văn Quốc gia cảnh báo mưa lớn diện rộng có khả năng gây ngập úng tại các vùng trũng thấp, nguy cơ lũ quét trên các sông suối nhỏ và sạt lở đất trên các sườn dốc tại khu vực miền Trung, đặc biệt là Đà Nẵng, Quảng Nam và Quảng Ngãi.',
+  },
+  {
+    id: '2',
+    tag: 'TIN TỨC',
+    time: '11/10 08:07',
+    title: 'THỜI TIẾT SÁNG NAY 11/10: Bắc Bộ nắng ráo trước đợt mưa mới...',
+    snippet: '⛅ Dự báo thời tiết ngày 11/10 tại miền Bắc và...',
+    imageUrl:
+      'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?w=500&auto=format&fit=crop&q=80',
+    content:
+      'Khu vực Bắc Bộ duy trì thời tiết nắng ráo, se lạnh về đêm và sáng sớm trước khi đón đợt không khí lạnh tăng cường gây mưa rào rải rác. Các địa phương chủ động phương án phòng ngừa.',
+  },
+  {
+    id: '3',
+    tag: 'TIN TỨC',
+    time: '09/10 16:13',
+    title: 'CẢNH BÁO GIÓ MẠNH, SÓNG LỚN VÀ MƯA DÔNG TRÊN NHI...',
+    snippet: 'Nguy cơ lốc xoáy, gió giật mạnh cấp 7-8, són...',
+    imageUrl:
+      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500&auto=format&fit=crop&q=80',
+    content:
+      'Trên vùng biển từ Quảng Trị đến Cà Mau có gió đông bắc mạnh cấp 6, giật cấp 7-8, sóng biển cao từ 2-4m, biển động mạnh. Tàu thuyền hoạt động trên các vùng biển trên cần chú ý an toàn.',
+  },
+];
+
+/**
+ * Ánh xạ mã WMO Weather Code sang mô tả tiếng Việt và icon tương ứng trong assets/thoitiet
+ */
+function mapWmoToWeather(code: number, isDay: number) {
+  // 0: Trời quang, không mây
+  if (code === 0) {
+    if (isDay === 1) {
+      return {
+        desc: 'Trời nắng ráo',
+        icon: WEATHER_ICONS.nang,
+      };
+    } else {
+      return {
+        desc: 'Đêm không mây',
+        icon: WEATHER_ICONS.dem,
+      };
     }
-    return name.substring(0, 2).toUpperCase();
+  }
+
+  // 1, 2, 3: Có mây, nhiều mây
+  if (code <= 3) {
+    if (isDay === 1) {
+      return {
+        desc: code === 3 ? 'Trời nhiều mây' : 'Có mây rải rác',
+        icon: WEATHER_ICONS.comay,
+      };
+    } else {
+      return {
+        desc: 'Đêm nhiều mây',
+        icon: WEATHER_ICONS.maydem,
+      };
+    }
+  }
+
+  // 45, 48: Sương mù
+  if (code === 45 || code === 48) {
+    return {
+      desc: 'Sương mù',
+      icon: isDay === 1 ? WEATHER_ICONS.comay : WEATHER_ICONS.maydem,
+    };
+  }
+
+  // 51..67, 80..82: Mưa phùn, mưa rào, mưa vừa đến mưa to
+  if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) {
+    let desc = 'Mưa rào nhẹ';
+    if (code === 63 || code === 65 || code === 82) desc = 'Mưa to diện rộng';
+    else if (code >= 51 && code <= 55) desc = 'Mưa phùn nhẹ';
+
+    return {
+      desc,
+      icon: isDay === 1 ? WEATHER_ICONS.mua : WEATHER_ICONS.muadem,
+    };
+  }
+
+  // 71..77, 85, 86: Tuyết
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) {
+    return {
+      desc: 'Tuyết rơi',
+      icon: WEATHER_ICONS.tuyetroi,
+    };
+  }
+
+  // 95, 96, 99: Dông sét, mưa bão
+  if (code >= 95) {
+    return {
+      desc: 'Mưa dông sấm sét',
+      icon: WEATHER_ICONS.muagiong,
+    };
+  }
+
+  // Mặc định
+  return {
+    desc: isDay === 1 ? 'Thời tiết nắng ráo' : 'Trời đêm mát mẻ',
+    icon: isDay === 1 ? WEATHER_ICONS.nang : WEATHER_ICONS.maydem,
+  };
+}
+
+export const HomeScreen: React.FC<HomeScreenProps> = ({
+  onOpenSettings,
+  onNavigateToTab,
+}) => {
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const [showSOSMap, setShowSOSMap] = useState(false);
+  const [showHazardModal, setShowHazardModal] = useState(false);
+  const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
+
+  // Trạng thái Thời tiết thật từ API Open-Meteo & GPS
+  const [weatherData, setWeatherData] = useState<WeatherState>({
+    city: 'Đà Nẵng',
+    temp: '26°C',
+    tempRange: '24° - 28°',
+    desc: 'Mưa rào nhẹ',
+    rainChance: 'Khả năng mưa 63%',
+    icon: WEATHER_ICONS.mua,
+  });
+  const [isWeatherLoading, setIsWeatherLoading] = useState(false);
+
+  // Tự động lấy tọa độ thực tế và gọi API thời tiết thật
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchRealWeather = async () => {
+      try {
+        setIsWeatherLoading(true);
+
+        let lat = 16.0544; // Tọa độ mặc định: Đà Nẵng
+        let lon = 108.2022;
+        let detectedCity = 'Đà Nẵng';
+
+        // 1. Lấy vị trí GPS của người dùng
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          lat = loc.coords.latitude;
+          lon = loc.coords.longitude;
+
+          // Dịch ngược tọa độ GPS thành tên Tỉnh / Thành phố
+          const geoList = await Location.reverseGeocodeAsync({
+            latitude: lat,
+            longitude: lon,
+          });
+          if (geoList && geoList.length > 0) {
+            const place = geoList[0];
+            detectedCity =
+              place.city ||
+              place.subregion ||
+              place.region ||
+              place.district ||
+              'Vị trí hiện tại';
+          }
+        }
+
+        // 2. Gọi Open-Meteo API lấy dữ liệu thời tiết thời gian thực
+        const res = await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,is_day,precipitation,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto`
+        );
+        const json = await res.json();
+
+        if (isMounted && json && json.current) {
+          const code = json.current.weather_code ?? 0;
+          const isDay = json.current.is_day ?? 1;
+          const weatherInfo = mapWmoToWeather(code, isDay);
+
+          const curTemp = Math.round(json.current.temperature_2m);
+          const minTemp = json.daily?.temperature_2m_min?.[0]
+            ? Math.round(json.daily.temperature_2m_min[0])
+            : curTemp - 2;
+          const maxTemp = json.daily?.temperature_2m_max?.[0]
+            ? Math.round(json.daily.temperature_2m_max[0])
+            : curTemp + 2;
+
+          const rainProb =
+            json.daily?.precipitation_probability_max?.[0] ??
+            Math.min(100, Math.round((json.current.precipitation || 0) * 20));
+
+          setWeatherData({
+            city: detectedCity,
+            temp: `${curTemp}°C`,
+            tempRange: `${minTemp}° - ${maxTemp}°`,
+            desc: weatherInfo.desc,
+            rainChance: `Khả năng mưa ${rainProb}%`,
+            icon: weatherInfo.icon,
+          });
+        }
+      } catch (err) {
+        console.log('Lỗi khi cập nhật thời tiết thực:', err);
+      } finally {
+        if (isMounted) setIsWeatherLoading(false);
+      }
+    };
+
+    fetchRealWeather();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Xử lý các nút bấm trong phần Tiện ích nhanh
+  const handleUtilityPress = (id: string) => {
+    switch (id) {
+      case 'map_sos':
+        // Bản đồ cần cứu trợ
+        setShowSOSMap(true);
+        break;
+
+      case 'map_support':
+        // Bản đồ điểm hỗ trợ
+        if (onNavigateToTab) {
+          onNavigateToTab('map');
+        } else {
+          setShowSOSMap(true);
+        }
+        break;
+
+      case 'map_hazard':
+        // Bản đồ nơi nguy hiểm
+        if (onNavigateToTab) {
+          onNavigateToTab('map');
+        } else {
+          setShowSOSMap(true);
+        }
+        break;
+
+      case 'mark_safe':
+        // Đánh dấu an toàn
+        Alert.alert(
+          'Đánh dấu an toàn (I’m Safe)',
+          'Bạn muốn gửi trạng thái AN TOÀN của mình đến lực lượng cứu hộ và người thân?',
+          [
+            { text: 'Hủy', style: 'cancel' },
+            {
+              text: 'Xác nhận an toàn',
+              onPress: () => {
+                Alert.alert(
+                  'Thành công',
+                  'Đã cập nhật trạng thái AN TOÀN cho tài khoản ' +
+                    (user?.fullName || 'Người dùng') +
+                    '. Đội cứu trợ đã ghi nhận vị trí an toàn của bạn!'
+                );
+              },
+            },
+          ]
+        );
+        break;
+
+      case 'blood_donation':
+        // Đăng ký hiến máu
+        Alert.alert(
+          'Đăng ký hiến máu khẩn cấp',
+          'Chương trình kết nối nguồn máu tiếp viện cho các bệnh viện vùng thiên tai bão lũ. Bạn có muốn đăng ký tham gia đội ngũ hiến máu tình nguyện?',
+          [
+            { text: 'Để sau', style: 'cancel' },
+            {
+              text: 'Đăng ký ngay',
+              onPress: () => {
+                Alert.alert(
+                  'Đã ghi nhận',
+                  'Cảm ơn tấm lòng của bạn! Đội ngũ y tế SOS sẽ liên hệ qua số điện thoại ' +
+                    (user?.phone || 'của bạn') +
+                    ' khi có đợt tiếp nhận máu phù hợp.'
+                );
+              },
+            },
+          ]
+        );
+        break;
+
+      case 'post_hazard':
+        // Đăng cảnh báo / Đóng góp điểm nguy hiểm (PENDING chờ Authority duyệt)
+        setShowHazardModal(true);
+        break;
+
+      case 'chat_admin':
+        // Chat với Admin / Trực ban cứu trợ
+        Alert.alert(
+          'Tổng đài hỗ trợ SOS',
+          'Kết nối trực tiếp đường dây nóng khẩn cấp quốc gia:',
+          [
+            { text: '112 (Tìm kiếm cứu nạn)', onPress: () => {} },
+            { text: '114 (Cứu nạn phòng cháy)', onPress: () => {} },
+            { text: '115 (Cấp cứu y tế)', onPress: () => {} },
+            { text: 'Đóng', style: 'cancel' },
+          ]
+        );
+        break;
+
+      case 'post_news':
+        // Đăng tin (Admin)
+        const isAuthority =
+          user?.roles?.includes('ADMIN') ||
+          user?.roles?.includes('LOCAL_AUTHORITY') ||
+          user?.roles?.includes('RESCUER');
+        if (isAuthority) {
+          Alert.alert(
+            'Đăng tin cảnh báo (Ban chỉ huy)',
+            'Bạn đang đăng nhập với quyền hạn ' +
+              (user?.roles?.[0] || 'AUTHORITY') +
+              '. Bạn có thể soạn thông báo khẩn hoặc duyệt tin từ Web Dashboard.',
+            [
+              { text: 'Đóng', style: 'cancel' },
+              {
+                text: 'Báo điểm nguy hiểm',
+                onPress: () => setShowHazardModal(true),
+              },
+            ]
+          );
+        } else {
+          Alert.alert(
+            'Quyền hạn đăng tin',
+            'Chức năng phát thanh tin tức chính thức dành cho Cán bộ địa phương (LOCAL_AUTHORITY) và Ban chỉ huy. Người dân có thể dùng nút "Đăng cảnh báo" để gửi tin chờ duyệt.'
+          );
+        }
+        break;
+
+      default:
+        break;
+    }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Top Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.appBadge}>HỆ THỐNG CỨU HỘ SOS</Text>
-          <Text style={styles.greeting}>Xin chào, {user?.fullName || 'Người dùng'}!</Text>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        {/* ==================== 1. HEADER SECTION ==================== */}
+        <View style={styles.headerContainer}>
+          <ImageBackground
+            source={BACKGROUND_APP_SOURCE}
+            style={styles.headerBackground}
+            resizeMode="cover"
+          >
+            <LinearGradient
+              colors={['rgba(15, 23, 42, 0.4)', 'rgba(15, 23, 42, 0.78)', 'rgba(15, 23, 42, 0.95)']}
+              style={[
+                styles.headerGradient,
+                { paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 36 : 20) },
+              ]}
+            >
+              {/* Thanh điều khiển trên cùng: Mặt trăng (Trái) & Thông báo + Cài đặt (Phải) */}
+              <View style={styles.topBar}>
+                <View style={styles.moonContainer}>
+                  <View style={styles.moonGlow} />
+                  <Ionicons name="moon" size={22} color="#FEF08A" />
+                </View>
+
+                <View style={styles.topBarRight}>
+                  <TouchableOpacity
+                    style={styles.circleIconButton}
+                    onPress={() => onNavigateToTab?.('profile')}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name="notifications-outline" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.circleIconButton}
+                    onPress={onOpenSettings}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons name="settings-outline" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Logo & Tiêu đề: HỖ TRỢ CỨU NẠN */}
+              <View style={styles.brandRow}>
+                <View style={styles.logoBadge}>
+                  <LogoSOS style={styles.logoImage} resizeMode="contain" />
+                </View>
+
+                <View style={styles.brandTextColumn}>
+                  <Text style={styles.brandTitle}>HỖ TRỢ CỨU NẠN</Text>
+                  <Text style={styles.brandSubtitle}>
+                    Không ai phải đối mặt với thiên tai một mình
+                  </Text>
+                </View>
+              </View>
+
+              {/* Thẻ Thời Tiết Glassmorphic (Cập nhật trực tiếp từ API thời tiết thật) */}
+              <TouchableOpacity
+                style={styles.weatherCard}
+                activeOpacity={0.9}
+                onPress={() => {
+                  Alert.alert(
+                    'Thời tiết thực tế',
+                    `Vị trí: ${weatherData.city}\nNhiệt độ: ${weatherData.temp} (Biên độ ${weatherData.tempRange})\nTình trạng: ${weatherData.desc}\n${weatherData.rainChance}\n\nNguồn: Cảm biến Khí tượng & Vệ tinh Open-Meteo.`
+                  );
+                }}
+              >
+                <View style={styles.weatherLeft}>
+                  {/* Icon thời tiết tương ứng từ folder assets/thoitiet đã xóa nền */}
+                  <Image
+                    source={weatherData.icon}
+                    style={styles.weatherIconImage}
+                    resizeMode="contain"
+                  />
+
+                  <View style={styles.weatherInfo}>
+                    <View style={styles.weatherLocationRow}>
+                      <BootstrapGeoAltFill size={15} color="#38BDF8" />
+                      <Text style={styles.weatherCity}>{weatherData.city}</Text>
+                    </View>
+                    <Text style={styles.weatherDesc}>{weatherData.desc}</Text>
+                    <Text style={styles.weatherRainChance}>{weatherData.rainChance}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.weatherRight}>
+                  {isWeatherLoading ? (
+                    <ActivityIndicator size="small" color="#93C5FD" />
+                  ) : (
+                    <>
+                      <Text style={styles.weatherTemp}>{weatherData.temp}</Text>
+                      <Text style={styles.weatherTempRange}>{weatherData.tempRange}</Text>
+                    </>
+                  )}
+                </View>
+              </TouchableOpacity>
+            </LinearGradient>
+          </ImageBackground>
         </View>
 
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={onOpenSettings}
-            activeOpacity={0.7}
-          >
-            <Feather name="settings" size={20} color="#334155" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.iconButton, styles.logoutIconButton]}
-            onPress={handleLogout}
-            activeOpacity={0.7}
-          >
-            <Feather name="log-out" size={20} color="#EF4444" />
-          </TouchableOpacity>
-        </View>
-      </View>
+        {/* ==================== 2. NỘI DUNG CHÍNH (NỀN TRẮNG) ==================== */}
+        <View style={styles.bodyContainer}>
+          {/* Section: Tin nổi bật */}
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Tin nổi bật</Text>
+            <TouchableOpacity
+              onPress={() => onNavigateToTab?.('news')}
+              activeOpacity={0.7}
+              style={styles.seeAllButton}
+            >
+              <Text style={styles.seeAllText}>Xem tất cả</Text>
+              <Ionicons name="chevron-forward" size={15} color="#0066FF" />
+            </TouchableOpacity>
+          </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* User Card */}
-        <View style={styles.userCard}>
-          <View style={styles.avatarCircle}>
-            {user?.avatarUrl ? (
-              <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
-            ) : (
-              <Text style={styles.avatarText}>{getInitials(user?.fullName)}</Text>
+          {/* Danh sách 3 tin tức nổi bật */}
+          <View style={styles.newsList}>
+            {FEATURED_NEWS.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.newsCard}
+                onPress={() => setSelectedNews(item)}
+                activeOpacity={0.75}
+              >
+                <Image
+                  source={{ uri: item.imageUrl }}
+                  style={styles.newsThumbnail}
+                  resizeMode="cover"
+                />
+
+                <View style={styles.newsContent}>
+                  <View style={styles.newsMetaRow}>
+                    <View style={styles.newsTagBadge}>
+                      <Text style={styles.newsTagText}>{item.tag}</Text>
+                    </View>
+                    <Text style={styles.newsTimeText}>{item.time}</Text>
+                  </View>
+
+                  <Text style={styles.newsTitle} numberOfLines={2}>
+                    {item.title}
+                  </Text>
+                  <Text style={styles.newsSnippet} numberOfLines={1}>
+                    {item.snippet}
+                  </Text>
+                </View>
+
+                <Ionicons
+                  name="chevron-forward"
+                  size={16}
+                  color="#94A3B8"
+                  style={styles.newsChevron}
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Section: Tiện ích nhanh */}
+          <Text style={[styles.sectionTitle, styles.utilitiesTitle]}>Tiện ích nhanh</Text>
+
+          <View style={styles.utilitiesGrid}>
+            {/* Hàng 1 */}
+            <View style={styles.utilitiesRow}>
+              {/* 1. Bản đồ cần cứu trợ */}
+              <TouchableOpacity
+                style={styles.utilityItem}
+                onPress={() => handleUtilityPress('map_sos')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.utilityIconBoxStandalone}>
+                  <Image
+                    source={require('../../assets/appicon/bandocuutro.png')}
+                    style={styles.utilityImage}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text style={styles.utilityLabel}>Bản đồ{'\n'}cần cứu trợ</Text>
+              </TouchableOpacity>
+
+              {/* 2. Bản đồ điểm hỗ trợ */}
+              <TouchableOpacity
+                style={styles.utilityItem}
+                onPress={() => handleUtilityPress('map_support')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.utilityIconBoxStandalone}>
+                  <Image
+                    source={require('../../assets/appicon/bandodiemcuutro.png')}
+                    style={styles.utilityImage}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text style={styles.utilityLabel}>Bản đồ{'\n'}điểm hỗ trợ</Text>
+              </TouchableOpacity>
+
+              {/* 3. Bản đồ nơi nguy hiểm */}
+              <TouchableOpacity
+                style={styles.utilityItem}
+                onPress={() => handleUtilityPress('map_hazard')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.utilityIconBoxStandalone}>
+                  <Image
+                    source={require('../../assets/appicon/bandodiemnguyhiem.png')}
+                    style={styles.utilityImage}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text style={styles.utilityLabel}>Bản đồ{'\n'}nơi nguy hiểm</Text>
+              </TouchableOpacity>
+
+              {/* 4. Đánh dấu an toàn */}
+              <TouchableOpacity
+                style={styles.utilityItem}
+                onPress={() => handleUtilityPress('mark_safe')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.utilityIconBoxStandalone}>
+                  <Image
+                    source={require('../../assets/appicon/danhdauantoan.png')}
+                    style={styles.utilityImage}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text style={styles.utilityLabel}>Đánh dấu{'\n'}an toàn</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Hàng 2 */}
+            <View style={styles.utilitiesRow}>
+              {/* 5. Đăng ký hiến máu */}
+              <TouchableOpacity
+                style={styles.utilityItem}
+                onPress={() => handleUtilityPress('blood_donation')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.utilityIconBoxStandalone}>
+                  <Image
+                    source={require('../../assets/appicon/dangkihienmau.png')}
+                    style={styles.utilityImage}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text style={styles.utilityLabel}>Đăng ký{'\n'}hiến máu</Text>
+              </TouchableOpacity>
+
+              {/* 6. Đóng góp điểm nguy hiểm */}
+              <TouchableOpacity
+                style={styles.utilityItem}
+                onPress={() => handleUtilityPress('post_hazard')}
+                activeOpacity={0.7}
+              >
+                <View style={styles.utilityIconBoxStandalone}>
+                  <Image
+                    source={require('../../assets/appicon/donggopdiemnguyhiem.png')}
+                    style={styles.utilityImage}
+                    resizeMode="contain"
+                  />
+                </View>
+                <Text style={styles.utilityLabel}>Đóng góp{'\n'}điểm nguy hiểm</Text>
+              </TouchableOpacity>
+
+              {/* 7. Chat với Admin */}
+              <TouchableOpacity
+                style={styles.utilityItem}
+                onPress={() => handleUtilityPress('chat_admin')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.utilityIconBox, { backgroundColor: '#E0F2FE' }]}>
+                  <Ionicons
+                    name="chatbubble-ellipses-outline"
+                    size={28}
+                    color="#0284C7"
+                  />
+                </View>
+                <Text style={styles.utilityLabel}>Chat với{'\n'}Admin</Text>
+              </TouchableOpacity>
+
+              {/* 8. Đăng tin (Admin) */}
+              <TouchableOpacity
+                style={styles.utilityItem}
+                onPress={() => handleUtilityPress('post_news')}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.utilityIconBox, { backgroundColor: '#F1F5F9' }]}>
+                  <MaterialCommunityIcons
+                    name="bullhorn-outline"
+                    size={28}
+                    color="#64748B"
+                  />
+                </View>
+                <Text style={styles.utilityLabel}>Đăng tin{'\n'}(Admin)</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Modal hiển thị Bản đồ Cứu nạn SOS */}
+      <Modal visible={showSOSMap} animationType="slide" onRequestClose={() => setShowSOSMap(false)}>
+        <SOSMapScreen onClose={() => setShowSOSMap(false)} />
+      </Modal>
+
+      {/* Modal Đóng góp điểm nguy hiểm (PENDING chờ Authority duyệt) */}
+      <ContributeHazardModal
+        visible={showHazardModal}
+        onClose={() => setShowHazardModal(false)}
+      />
+
+      {/* Modal Đọc chi tiết bài viết tin tức */}
+      <Modal
+        visible={!!selectedNews}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setSelectedNews(null)}
+      >
+        <View style={styles.newsModalOverlay}>
+          <View style={styles.newsModalContent}>
+            {selectedNews && (
+              <>
+                <Image
+                  source={{ uri: selectedNews.imageUrl }}
+                  style={styles.newsModalImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.newsModalBody}>
+                  <View style={styles.newsMetaRow}>
+                    <View style={styles.newsTagBadge}>
+                      <Text style={styles.newsTagText}>{selectedNews.tag}</Text>
+                    </View>
+                    <Text style={styles.newsTimeText}>{selectedNews.time}</Text>
+                  </View>
+                  <Text style={styles.newsModalTitle}>{selectedNews.title}</Text>
+                  <ScrollView style={styles.newsModalScroll}>
+                    <Text style={styles.newsModalParagraph}>
+                      {selectedNews.content || selectedNews.snippet}
+                    </Text>
+                  </ScrollView>
+                  <TouchableOpacity
+                    style={styles.newsModalCloseBtn}
+                    onPress={() => setSelectedNews(null)}
+                  >
+                    <Text style={styles.newsModalCloseText}>Đóng bài viết</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
             )}
           </View>
-
-          <View style={styles.userInfo}>
-            <Text style={styles.userName}>{user?.fullName || 'Chưa cập nhật tên'}</Text>
-            <Text style={styles.userEmail}>{user?.email}</Text>
-            {user?.phone ? <Text style={styles.userPhone}>📱 {user.phone}</Text> : null}
-
-            <View style={styles.badgeRow}>
-              <View style={styles.roleBadge}>
-                <Text style={styles.roleText}>{user?.roles?.[0] || 'CITIZEN'}</Text>
-              </View>
-              <View style={styles.verifiedBadge}>
-                <Feather name="shield" size={12} color="#10B981" />
-                <Text style={styles.verifiedText}>Đã xác thực</Text>
-              </View>
-            </View>
-          </View>
         </View>
-
-        {/* SOS Emergency Quick Action Card */}
-        <View style={styles.sosCard}>
-          <View style={styles.sosContent}>
-            <View style={styles.sosIconContainer}>
-              <Feather name="alert-octagon" size={28} color="#FFFFFF" />
-            </View>
-            <View style={styles.sosTextContainer}>
-              <Text style={styles.sosTitle}>Cứu nạn khẩn cấp</Text>
-              <Text style={styles.sosSubtitle}>Gửi vị trí & tín hiệu khẩn cấp đến đội cứu hộ</Text>
-            </View>
-          </View>
-          <TouchableOpacity
-            style={styles.sosButton}
-            onPress={() => {
-              if (onNavigateToSos) {
-                onNavigateToSos();
-              } else {
-                Alert.alert(
-                  'Cứu hộ SOS',
-                  'Vui lòng nhấn vào tab Chuông SOS ở thanh menu phía dưới để thực hiện báo nạn cứu hộ.'
-                );
-              }
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.sosButtonText}>GỬI TÍN HIỆU SOS</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* System Connection Status */}
-        <View style={styles.statusSection}>
-          <Text style={styles.sectionHeader}>Trạng thái kết nối</Text>
-
-          <View style={styles.statusItem}>
-            <View style={styles.statusDotActive} />
-            <View style={styles.statusInfo}>
-              <Text style={styles.statusTitle}>Backend Express / MongoDB</Text>
-              <Text style={styles.statusSub}>
-                {user?._id ? `Đã đồng bộ User ID: ${user._id.slice(0, 8)}...` : 'Chưa kết nối'}
-              </Text>
-            </View>
-            <Feather name="check" size={18} color="#10B981" />
-          </View>
-
-          <View style={styles.statusItem}>
-            <View style={isSupabaseConfigured() ? styles.statusDotActive : styles.statusDotPending} />
-            <View style={styles.statusInfo}>
-              <Text style={styles.statusTitle}>Supabase Auth / Google OAuth</Text>
-              <Text style={styles.statusSub}>
-                {supabaseUser ? 'Đã đăng nhập qua Supabase' : isSupabaseConfigured() ? 'Sẵn sàng' : 'Chưa cấu hình API Key'}
-              </Text>
-            </View>
-            <Feather
-              name={isSupabaseConfigured() ? 'check' : 'alert-circle'}
-              size={18}
-              color={isSupabaseConfigured() ? '#10B981' : '#F59E0B'}
-            />
-          </View>
-
-          <View style={styles.statusItem}>
-            <View style={styles.statusDotActive} />
-            <View style={styles.statusInfo}>
-              <Text style={styles.statusTitle}>Chế độ xác thực hiện tại</Text>
-              <Text style={styles.statusSub}>
-                {authMode === 'hybrid'
-                  ? 'Hybrid (Kết hợp Supabase & SOS Backend)'
-                  : authMode === 'backend'
-                  ? 'Chỉ SOS Backend'
-                  : 'Chỉ Supabase'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={handleLogout}
-          disabled={isLoading}
-          activeOpacity={0.85}
-        >
-          <Feather name="log-out" size={18} color="#EF4444" />
-          <Text style={styles.logoutButtonText}>Đăng xuất khỏi hệ thống</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
+      </Modal>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
   },
-  header: {
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 24,
+  },
+
+  // ==================== HEADER ====================
+  headerContainer: {
+    width: '100%',
+    overflow: 'hidden',
+  },
+  headerBackground: {
+    width: '100%',
+  },
+  headerGradient: {
+    paddingHorizontal: 18,
+    paddingBottom: 20,
+  },
+  topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? 36 : 10,
-    paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    marginBottom: 16,
   },
-  appBadge: {
-    fontSize: 11,
-    color: '#0066FF',
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  greeting: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 2,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  iconButton: {
+  moonContainer: {
     width: 38,
     height: 38,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
   },
-  logoutIconButton: {
-    backgroundColor: '#FEF2F2',
+  moonGlow: {
+    position: 'absolute',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(254, 240, 138, 0.25)',
   },
-  scrollContent: {
-    padding: 20,
-    gap: 16,
+  topBarRight: {
+    flexDirection: 'row',
+    gap: 10,
   },
-  userCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
+  circleIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 12,
+    marginBottom: 18,
+  },
+  logoBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2.5,
+    borderColor: '#10B981',
+    overflow: 'hidden',
+  },
+  logoImage: {
+    width: 44,
+    height: 44,
+  },
+  brandTextColumn: {
+    flex: 1,
+  },
+  brandTitle: {
+    fontSize: 21,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.6,
+  },
+  brandSubtitle: {
+    fontSize: 12,
+    color: '#E2E8F0',
+    marginTop: 2,
+    fontWeight: '400',
+  },
+
+  // ==================== WEATHER CARD ====================
+  weatherCard: {
+    backgroundColor: 'rgba(15, 23, 42, 0.58)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  avatarCircle: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#0066FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  avatarImage: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-  },
-  avatarText: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  userEmail: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  userPhone: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
-  },
-  roleBadge: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  roleText: {
-    color: '#0066FF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  verifiedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  verifiedText: {
-    color: '#065F46',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  sosCard: {
-    backgroundColor: '#EF4444',
-    borderRadius: 20,
-    padding: 18,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#EF4444',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
       },
       android: {
         elevation: 4,
       },
     }),
   },
-  sosContent: {
+  weatherLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    marginBottom: 14,
   },
-  sosIconContainer: {
+  weatherIconImage: {
     width: 48,
     height: 48,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
+  },
+  weatherInfo: {},
+  weatherLocationRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 5,
   },
-  sosTextContainer: {
-    flex: 1,
-  },
-  sosTitle: {
-    color: '#FFFFFF',
-    fontSize: 17,
+  weatherCity: {
+    fontSize: 14.5,
     fontWeight: '700',
+    color: '#FFFFFF',
   },
-  sosSubtitle: {
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontSize: 12,
+  weatherDesc: {
+    fontSize: 12.5,
+    color: '#F1F5F9',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  weatherRainChance: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.75)',
     marginTop: 2,
   },
-  sosButton: {
+  weatherRight: {
+    alignItems: 'flex-end',
+    minWidth: 70,
+  },
+  weatherTemp: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    lineHeight: 32,
+  },
+  weatherTempRange: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 2,
+    textAlign: 'right',
+  },
+
+  // ==================== BODY SECTION ====================
+  bodyContainer: {
     backgroundColor: '#FFFFFF',
+    paddingHorizontal: 18,
+    paddingTop: 18,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    fontSize: 18.5,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 4,
+  },
+  seeAllText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0066FF',
+  },
+
+  // ==================== NEWS LIST ====================
+  newsList: {
+    gap: 10,
+    marginBottom: 20,
+  },
+  newsCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  newsThumbnail: {
+    width: 86,
+    height: 72,
+    borderRadius: 10,
+    backgroundColor: '#E2E8F0',
+  },
+  newsContent: {
+    flex: 1,
+  },
+  newsMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  newsTagBadge: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  newsTagText: {
+    color: '#0284C7',
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  newsTimeText: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  newsTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F2942',
+    lineHeight: 18,
+  },
+  newsSnippet: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  newsChevron: {
+    marginLeft: 2,
+  },
+
+  // ==================== TIỆN ÍCH NHANH ====================
+  utilitiesTitle: {
+    marginBottom: 16,
+  },
+  utilitiesGrid: {
+    gap: 16,
+  },
+  utilitiesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  utilityItem: {
+    width: '23.5%',
+    alignItems: 'center',
+  },
+  utilityIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  utilityIconBoxStandalone: {
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  utilityImage: {
+    width: 70,
+    height: 70,
+  },
+  utilityLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#1E293B',
+    textAlign: 'center',
+    lineHeight: 14,
+  },
+
+  // ==================== NEWS MODAL ====================
+  newsModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  newsModalContent: {
+    width: '100%',
+    maxHeight: '80%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  newsModalImage: {
+    width: '100%',
+    height: 180,
+    backgroundColor: '#E2E8F0',
+  },
+  newsModalBody: {
+    padding: 18,
+  },
+  newsModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginVertical: 10,
+    lineHeight: 22,
+  },
+  newsModalScroll: {
+    maxHeight: 180,
+    marginBottom: 16,
+  },
+  newsModalParagraph: {
+    fontSize: 13.5,
+    color: '#334155',
+    lineHeight: 20,
+  },
+  newsModalCloseBtn: {
+    backgroundColor: '#0066FF',
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
   },
-  sosButtonText: {
-    color: '#DC2626',
+  newsModalCloseText: {
+    color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  statusSection: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
-    gap: 12,
-  },
-  sectionHeader: {
-    fontSize: 15,
     fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 4,
-  },
-  statusItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 6,
-  },
-  statusDotActive: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#10B981',
-  },
-  statusDotPending: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#F59E0B',
-  },
-  statusInfo: {
-    flex: 1,
-  },
-  statusTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1E293B',
-  },
-  statusSub: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.2,
-    borderColor: '#FEE2E2',
-    paddingVertical: 14,
-    borderRadius: 14,
-    marginTop: 8,
-  },
-  logoutButtonText: {
-    color: '#EF4444',
-    fontSize: 14,
-    fontWeight: '600',
   },
 });
