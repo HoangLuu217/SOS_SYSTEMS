@@ -170,7 +170,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
   };
 
   // Gửi yêu cầu cứu hộ lên Backend (Lưu trực tiếp vào MongoDB)
-  const submitSOS = async (isQuickDispatch: boolean = false) => {
+  const submitSOS = async () => {
     if (!location) {
       setValidationType('gps');
       setValidationModalVisible(true);
@@ -179,14 +179,14 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
     }
 
     const peopleNumber = parseInt(peopleText, 10);
-    if (!isQuickDispatch && (isNaN(peopleNumber) || peopleNumber < 1)) {
+    if (isNaN(peopleNumber) || peopleNumber < 1) {
       setValidationType('people');
       setValidationModalVisible(true);
       return;
     }
 
-    // NÚT XANH: Bắt buộc người dân phải điền mô tả tình trạng thực tế vào form (hiển thị popup tùy chỉnh đẹp mắt)
-    if (!isQuickDispatch && !description.trim()) {
+    // Bắt buộc người dân phải điền mô tả tình trạng thực tế vào form
+    if (!description.trim()) {
       setValidationType('desc');
       setValidationModalVisible(true);
       return;
@@ -199,13 +199,10 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
           ? address
           : `Tọa độ GPS [${location.coords.latitude.toFixed(5)}, ${location.coords.longitude.toFixed(5)}]`;
 
-      const finalDescription = isQuickDispatch
-        ? '⚡ BÁO NẠN 1-CHẠM: Tình huống nguy kịch! Nước ngập khẩn cấp, cô lập, cần ca-nô/xuồng cứu hộ ngay lập tức!'
-        : description.trim();
+      const finalDescription = description.trim();
 
-      // Tự động phân loại mức độ nguy cấp ngầm
+      // Tự động phân loại mức độ nguy cấp ngầm theo từ khóa
       const isCritical =
-        isQuickDispatch ||
         finalDescription.toLowerCase().includes('mái nhà') ||
         finalDescription.toLowerCase().includes('nóc nhà') ||
         finalDescription.toLowerCase().includes('chảy xiết') ||
@@ -222,7 +219,8 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
         priority: isCritical ? 'CRITICAL' : 'HIGH',
         emergencyType: 'FLOOD',
         description: finalDescription,
-        people: isQuickDispatch ? 1 : peopleNumber,
+        people: peopleNumber,
+        images: imageBase64 ? [`data:image/jpeg;base64,${imageBase64}`] : [],
       };
 
       const response = await backendApi.post('/sos', payload);
@@ -246,7 +244,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
           sosCode: code,
           people: payload.people,
           address: finalAddress,
-          isQuickDispatch,
+          isQuickDispatch: false,
           description: finalDescription,
           hasImage: Boolean(imageBase64),
         });
@@ -388,25 +386,6 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* BANNER BÁO NẠN SIÊU TỐC (Dành cho tình huống nguy cấp ngập nóc nhà) */}
-          <TouchableOpacity
-            style={styles.quickSosBanner}
-            onPress={() => submitSOS(true)}
-            activeOpacity={0.88}
-          >
-            <View style={styles.quickSosLeft}>
-              <View style={styles.quickSosPulse}>
-                <MaterialCommunityIcons name="alarm-light" size={28} color="#FFFFFF" />
-              </View>
-            </View>
-            <View style={styles.quickSosBody}>
-              <Text style={styles.quickSosTitle}>NGẬP NGUY KỊCH</Text>
-              <Text style={styles.quickSosDesc}>
-                Nước dâng nhanh, không kịp nhập chữ? Bấm ngay để truyền GPS khẩn cấp!
-              </Text>
-            </View>
-          </TouchableOpacity>
-
           {/* VỊ TRÍ GPS HIỆN TẠI (TỰ ĐỘNG LẤY TỪ ĐIỆN THOẠI) */}
           <View style={styles.gpsCard}>
             <View style={styles.gpsHeader}>
@@ -532,7 +511,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
           {/* NÚT GỬI CỨU HỘ TO RÕ RÀNG */}
           <TouchableOpacity
             style={styles.mainSendBtn}
-            onPress={() => submitSOS(false)}
+            onPress={() => submitSOS()}
             disabled={sending}
             activeOpacity={0.85}
           >
@@ -596,15 +575,15 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
                 : 'Hệ thống đang dò GPS của bạn. Vui lòng bật vị trí để Đội cứu hộ định vị chính xác địa điểm ngập.'}
             </Text>
 
-            {/* HỘP CẢNH BÁO TÌNH THẾ NGUY CẤP (Dành cho trường hợp đang ngập xiết) */}
+            {/* HỘP CẢNH BÁO TÌNH THẾ NGUY CẤP (Dành cho trường hợp đang ngập xiết không kịp gõ chữ) */}
             {validationType === 'desc' && (
               <View style={styles.valEmergencyCallout}>
                 <View style={styles.valEmergencyHeader}>
-                  <MaterialCommunityIcons name="alarm-light" size={16} color="#DC2626" />
+                  <Ionicons name="call" size={15} color="#DC2626" />
                   <Text style={styles.valEmergencyTitle}>TÌNH THẾ NGUY CẤP?</Text>
                 </View>
                 <Text style={styles.valEmergencyText}>
-                  Nếu nước đang dâng xiết, nguy kịch không kịp gõ chữ, hãy bấm "Báo ngập nguy kịch" để đội cứu hộ xuất kích ca-nô ngay!
+                  Nếu nước đang dâng xiết, nguy kịch không kịp gõ chữ, hãy bấm "Gọi cứu nạn 114" để kết nối điện thoại trực tiếp ngay!
                 </Text>
               </View>
             )}
@@ -631,11 +610,11 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
                   activeOpacity={0.85}
                   onPress={() => {
                     setValidationModalVisible(false);
-                    submitSOS(true);
+                    Linking.openURL('tel:114').catch(() => {});
                   }}
                 >
-                  <MaterialCommunityIcons name="alarm-light" size={16} color="#FFFFFF" />
-                  <Text style={styles.valActionEmergencyText}>Báo ngập nguy kịch ngay</Text>
+                  <Ionicons name="call" size={16} color="#FFFFFF" />
+                  <Text style={styles.valActionEmergencyText}>📞 Gọi cứu nạn 114 khẩn cấp</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity

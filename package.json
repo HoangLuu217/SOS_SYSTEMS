@@ -1,0 +1,13 @@
+{
+  "name": "sos-systems",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RescueSOS - Emergency Rescue Dispatch & Territorial Governance System",
+  "scripts": {
+    "dev": "npm --prefix web run dev",
+    "dev:web": "npm --prefix web run dev",
+    "dev:backend": "npm --prefix backend run dev",
+    "build": "npm --prefix web run build",
+    "start": "npm --prefix backend run start"
+  }
+}

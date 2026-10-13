@@ -7,40 +7,13 @@ const polygonBoundarySchema = new mongoose.Schema(
   {
     type: {
       type: String,
-      enum: ['Polygon'],
+      enum: ['Polygon', 'MultiPolygon'],
       default: 'Polygon',
       required: true,
     },
     coordinates: {
-      type: [[[Number]]], // Mảng chứa các Linear Ring (mỗi ring gồm các cặp [lng, lat])
-      required: [true, 'Tọa độ ranh giới GeoJSON Polygon là bắt buộc khi khai báo boundary'],
-      validate: {
-        validator: function (rings) {
-          if (!Array.isArray(rings) || rings.length === 0) return false;
-          // Kiểm tra ring đầu tiên (ngoài cùng) phải có ít nhất 4 điểm và điểm đầu trùng điểm cuối
-          for (const ring of rings) {
-            if (!Array.isArray(ring) || ring.length < 4) return false;
-            const first = ring[0];
-            const last = ring[ring.length - 1];
-            if (first[0] !== last[0] || first[1] !== last[1]) return false;
-            // Kiểm tra từng điểm có lng [-180, 180] và lat [-90, 90]
-            for (const pt of ring) {
-              if (
-                typeof pt[0] !== 'number' ||
-                typeof pt[1] !== 'number' ||
-                pt[0] < -180 ||
-                pt[0] > 180 ||
-                pt[1] < -90 ||
-                pt[1] > 90
-              ) {
-                return false;
-              }
-            }
-          }
-          return true;
-        },
-        message: 'Tọa độ GeoJSON Polygon không hợp lệ (cần khép kín [lng, lat] hợp lệ).',
-      },
+      type: mongoose.Schema.Types.Mixed,
+      required: [true, 'Tọa độ ranh giới GeoJSON là bắt buộc khi khai báo boundary'],
     },
   },
   { _id: false }

@@ -10,6 +10,7 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "seed": "node src/seed.js",
+    "seed:areas": "node scripts/seed_administrative_areas.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
@@ -26,6 +27,7 @@
     "multer": "^2.4.0",
     "multer-storage-cloudinary": "^4.0.0",
     "nodemailer": "^10.0.11",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "osmtogeojson": "^3.0.0-beta.5"
   }
 }

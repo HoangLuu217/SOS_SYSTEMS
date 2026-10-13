@@ -2,8 +2,14 @@ const { SosRequest, SosStatusHistory, AdministrativeArea } = require('../models'
 const ApiError = require('../utils/apiError');
 
 const createSosRequest = async (citizenId, sosData) => {
-  // Extract fields
-  const { location, areaId, address, emergencyType, priority, people, description } = sosData;
+  // Extract fields matching citizen mobile app form
+  const { location, areaId, address, emergencyType, priority, people, description, images, imageUrl } = sosData;
+
+  const normalizedImages = Array.isArray(images)
+    ? images
+    : imageUrl
+    ? [imageUrl]
+    : [];
 
   // Tự động gán areaId mặc định nếu app gửi placeholder hoặc thiếu areaId
   let assignedAreaId = areaId;
@@ -28,11 +34,12 @@ const createSosRequest = async (citizenId, sosData) => {
     citizenId,
     location,
     areaId: assignedAreaId,
-    address: address || 'Khu vực Đà Nẵng (Định vị GPS)',
+    address: address || 'Khu vực cứu nạn (Định vị GPS)',
     emergencyType: emergencyType || 'FLOOD',
     priority: priority || 'HIGH',
-    people: parseInt(people) || 1,
+    people: people ? Number(people) : 1,
     description: description || null,
+    images: normalizedImages,
     status: 'PENDING'
   });
 
@@ -92,7 +99,7 @@ const updateSosRequest = async (id, updateData, userId) => {
   
   // Bỏ qua update trạng thái ở đây để dùng hàm changeStatus riêng,
   // chỉ cập nhật các thông tin cơ bản
-  const allowedUpdates = ['location', 'address', 'emergencyType', 'priority', 'people', 'description'];
+  const allowedUpdates = ['location', 'address', 'emergencyType', 'priority', 'people', 'description', 'images'];
   
   let isModified = false;
   allowedUpdates.forEach(field => {

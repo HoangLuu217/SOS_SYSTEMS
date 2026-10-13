@@ -1,4 +1,4 @@
-const { File } = require('../models');
+const { File, SosRequest } = require('../models');
 const ApiError = require('../utils/apiError');
 
 const uploadFile = async (uploadedBy, fileData) => {
@@ -11,6 +11,17 @@ const uploadFile = async (uploadedBy, fileData) => {
     fileName,
     fileSize
   });
+
+  if (sosId && url && SosRequest) {
+    try {
+      await SosRequest.findByIdAndUpdate(sosId, {
+        $addToSet: { images: url }
+      });
+    } catch (err) {
+      console.warn('Lỗi cập nhật ảnh vào SosRequest:', err);
+    }
+  }
+
   return newFile;
 };
 
