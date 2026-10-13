@@ -64,7 +64,6 @@ import {
   ChevronRight,
   ArrowUp,
   Search,
-  MapPin,
   Camera,
   X,
   Compass,
