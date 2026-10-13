@@ -48,6 +48,8 @@ export interface ApiResponse<T = any> {
   success: boolean;
   message: string;
   data?: T;
+  urls?: string[];
+  url?: string;
   error?: any;
 }
 
@@ -55,50 +57,45 @@ class BackendApiService {
   private customBaseUrl: string | null = null;
 
   async getBaseUrl(): Promise<string> {
+    // 1. Ưu tiên cao nhất: Biến môi trường EXPO_PUBLIC_API_URL từ file .env
+    if (process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_API_URL.trim()) {
+      return process.env.EXPO_PUBLIC_API_URL.trim();
+    }
+
+    // 2. Nếu trong phiên chạy có gán customBaseUrl
     if (this.customBaseUrl) return this.customBaseUrl;
+
+    // 3. Nếu người dùng lưu URL tùy chỉnh trong Storage
     try {
       const stored = await AsyncStorage.getItem(ENV.STORAGE_KEYS.CUSTOM_API_URL);
-      if (stored) {
-        this.customBaseUrl = stored;
-        return stored;
+      if (stored && stored.trim()) {
+        this.customBaseUrl = stored.trim();
+        return stored.trim();
       }
     } catch {
       // Fallback
     }
+
     return ENV.API_BASE_URL;
   }
 
   async setBaseUrl(url: string) {
-    this.customBaseUrl = url;
-    await AsyncStorage.setItem(ENV.STORAGE_KEYS.CUSTOM_API_URL, url);
+    this.customBaseUrl = url.trim();
+    await AsyncStorage.setItem(ENV.STORAGE_KEYS.CUSTOM_API_URL, url.trim());
   }
 
-  private async getCandidateUrls(): Promise<string[]> {
-    const list: string[] = [];
-    const current = await this.getBaseUrl();
-    if (current) list.push(current);
-
-    const candidates = [
-      'http://10.12.56.76:5000/api',
-      'http://localhost:5000/api',
-      'http://127.0.0.1:5000/api',
-      'http://10.0.2.2:5000/api',
-      'https://p324hxtt-5000.asse.devtunnels.ms/api',
-    ];
-
-    for (const url of candidates) {
-      if (!list.includes(url)) list.push(url);
-    }
-
-    return list;
+  async clearCustomBaseUrl() {
+    this.customBaseUrl = null;
+    await AsyncStorage.removeItem(ENV.STORAGE_KEYS.CUSTOM_API_URL);
   }
 
   private async request<T = any>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
-    const candidates = await this.getCandidateUrls();
+    const baseUrl = await this.getBaseUrl();
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${baseUrl}${cleanEndpoint}`;
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -112,58 +109,41 @@ class BackendApiService {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    let lastError = '';
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
 
-    for (const baseUrl of candidates) {
-      const url = `${baseUrl}${cleanEndpoint}`;
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      });
 
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4500); // 4.5s per candidate
+      clearTimeout(timeoutId);
 
-        const response = await fetch(url, {
-          ...options,
-          headers,
-          signal: controller.signal,
-        });
+      const json = await response.json().catch(() => null);
 
-        clearTimeout(timeoutId);
-
-        const json = await response.json().catch(() => null);
-
-        if (!response.ok) {
-          const errorMsg =
-            json?.message ||
-            (response.status === 404
-              ? `Không tìm thấy endpoint API (${url})`
-              : `Yêu cầu thất bại với mã lỗi ${response.status}`);
-          return {
-            success: false,
-            message: errorMsg,
-            error: json?.error,
-          };
-        }
-
-        // Nếu URL này thành công, tự động lưu làm baseUrl chính
-        if (baseUrl !== this.customBaseUrl) {
-          this.setBaseUrl(baseUrl);
-        }
-
-        return json || { success: true, message: 'Thành công' };
-      } catch (err: any) {
-        lastError = err.message || '';
-        // Tiếp tục thử candidate tiếp theo
+      if (!response.ok) {
+        const errorMsg =
+          json?.message ||
+          (response.status === 404
+            ? `Không tìm thấy endpoint API (${url})`
+            : `Yêu cầu thất bại với mã lỗi ${response.status}`);
+        return {
+          success: false,
+          message: errorMsg,
+          error: json?.error,
+        };
       }
-    }
 
-    return {
-      success: false,
-      message:
-        'Không thể kết nối đến máy chủ backend SOS (đã thử qua ' +
-        candidates.join(', ') +
-        '). Vui lòng kiểm tra backend server đang chạy.',
-      error: lastError,
-    };
+      return json || { success: true, message: 'Thành công' };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: `Không thể kết nối đến máy chủ backend SOS (${url}). Vui lòng kiểm tra backend server đang chạy hoặc kiểm tra kết nối mạng.`,
+        error: err.message || '',
+      };
+    }
   }
 
   // --- PUBLIC HTTP METHODS ---
@@ -181,8 +161,9 @@ class BackendApiService {
 
   // Phương thức chuyên dụng để gửi file ảnh/video (không dùng JSON)
   async postFormData<T = any>(endpoint: string, formData: FormData, options: RequestInit = {}): Promise<ApiResponse<T>> {
-    const candidates = await this.getCandidateUrls();
+    const baseUrl = await this.getBaseUrl();
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const url = `${baseUrl}${cleanEndpoint}`;
 
     // Không set Content-Type để trình duyệt/fetch tự động tạo multipart/form-data boundary
     const headers: Record<string, string> = {
@@ -194,39 +175,37 @@ class BackendApiService {
     const token = await AsyncStorage.getItem(ENV.STORAGE_KEYS.ACCESS_TOKEN);
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    let lastError = '';
-    for (const baseUrl of candidates) {
-      const url = `${baseUrl}${cleanEndpoint}`;
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000); // Tăng lên 60s cho upload file nặng qua tunnel
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s cho upload file nặng
 
-        const response = await fetch(url, {
-          ...options,
-          method: 'POST',
-          headers,
-          body: formData,
-          signal: controller.signal,
-        });
+      const response = await fetch(url, {
+        ...options,
+        method: 'POST',
+        headers,
+        body: formData,
+        signal: controller.signal,
+      });
 
-        clearTimeout(timeoutId);
-        const json = await response.json().catch(() => null);
+      clearTimeout(timeoutId);
+      const json = await response.json().catch(() => null);
 
-        if (!response.ok) {
-          return {
-            success: false,
-            message: json?.message || `Yêu cầu thất bại với mã lỗi ${response.status}`,
-            error: json?.error,
-          };
-        }
-
-        if (baseUrl !== this.customBaseUrl) this.setBaseUrl(baseUrl);
-        return json || { success: true, message: 'Thành công' };
-      } catch (err: any) {
-        lastError = err.message || '';
+      if (!response.ok) {
+        return {
+          success: false,
+          message: json?.message || `Yêu cầu thất bại với mã lỗi ${response.status}`,
+          error: json?.error,
+        };
       }
+
+      return json || { success: true, message: 'Thành công' };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: `Không thể kết nối đến server (${url}) để upload file.`,
+        error: err.message || '',
+      };
     }
-    return { success: false, message: 'Không thể kết nối đến server để upload file', error: lastError };
   }
 
   async put<T = any>(endpoint: string, body: any, options: RequestInit = {}): Promise<ApiResponse<T>> {

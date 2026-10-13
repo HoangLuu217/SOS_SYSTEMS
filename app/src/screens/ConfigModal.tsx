@@ -73,6 +73,17 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ visible, onClose }) =>
     }
   };
 
+  const handleResetToEnv = async () => {
+    await backendApi.clearCustomBaseUrl();
+    const defaultUrl = ENV.API_BASE_URL;
+    setApiUrl(defaultUrl);
+    setTestStatus({
+      testing: false,
+      success: true,
+      message: `Đã khôi phục địa chỉ backend chuẩn từ .env:\n${defaultUrl}`,
+    });
+  };
+
   const handleSave = async () => {
     if (apiUrl.trim()) {
       await backendApi.setBaseUrl(apiUrl.trim());
@@ -111,34 +122,48 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ visible, onClose }) =>
                 {/* 1. Backend Server API */}
                 <Text style={styles.sectionTitle}>1. Địa chỉ Backend SOS (Express/Node.js)</Text>
                 <Text style={styles.sectionDesc}>
-                  - Android Emulator: http://10.0.2.2:5000/api{'\n'}
-                  - iOS Simulator/Web: http://localhost:5000/api{'\n'}
-                  - Điện thoại thật: Thay bằng IP WiFi máy tính (VD: http://192.168.1.15:5000/api)
+                  - Đọc trực tiếp từ file app/.env (EXPO_PUBLIC_API_URL){'\n'}
+                  - Đồng bộ thống nhất trên cả Android và iOS
                 </Text>
 
                 <CustomInput
                   iconName="server"
-                  placeholder="http://localhost:5000/api"
+                  placeholder="https://.../api hoặc http://...:5000/api"
                   value={apiUrl}
                   onChangeText={setApiUrl}
                   autoCapitalize="none"
                 />
 
-                <TouchableOpacity
-                  style={styles.testButton}
-                  onPress={handleTestBackend}
-                  disabled={testStatus.testing}
-                  activeOpacity={0.8}
-                >
-                  {testStatus.testing ? (
-                    <ActivityIndicator size="small" color="#0066FF" />
-                  ) : (
-                    <>
-                      <Feather name="activity" size={16} color="#0066FF" />
-                      <Text style={styles.testButtonText}>Kiểm tra kết nối Backend</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                  <TouchableOpacity
+                    style={[styles.testButton, { flex: 1 }]}
+                    onPress={handleTestBackend}
+                    disabled={testStatus.testing}
+                    activeOpacity={0.8}
+                  >
+                    {testStatus.testing ? (
+                      <ActivityIndicator size="small" color="#0066FF" />
+                    ) : (
+                      <>
+                        <Feather name="activity" size={15} color="#0066FF" />
+                        <Text style={styles.testButtonText}>Kiểm tra kết nối</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.testButton,
+                      { flex: 1, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' },
+                    ]}
+                    onPress={handleResetToEnv}
+                    disabled={testStatus.testing}
+                    activeOpacity={0.8}
+                  >
+                    <Feather name="refresh-cw" size={15} color="#475569" />
+                    <Text style={[styles.testButtonText, { color: '#475569' }]}>Dùng link từ .env</Text>
+                  </TouchableOpacity>
+                </View>
 
                 {testStatus.message ? (
                   <View

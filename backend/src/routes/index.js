@@ -21,6 +21,7 @@ const alertRoutes = require('./alert.routes');
 const auditRoutes = require('./audit.routes');
 const adminRoutes = require('./admin.routes');
 const configRoutes = require('./config.routes');
+const hazardReportRoutes = require('./hazardReport.routes');
 
 // Mount routes theo đúng đặc tả API Nhóm A và các nhóm khác
 router.use('/auth', authRoutes);
@@ -40,6 +41,7 @@ router.use('/safe-locations', safeLocationRoutes);
 router.use('/alerts', alertRoutes);
 router.use('/audit-logs', auditRoutes);
 router.use('/admin', adminRoutes);
+router.use('/hazard-reports', hazardReportRoutes);
 
 // Module D routes (Administrative Area, Authority Organization, SOS Assignment)
 router.use('/administrative-areas', administrativeAreaRoutes);

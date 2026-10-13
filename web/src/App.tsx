@@ -240,7 +240,7 @@ function MainRouter() {
               </header>
 
               <div className="sos-page-body">
-                <div style={{ maxWidth: '1360px', margin: '0 auto' }}>
+                <div style={{ width: '100%' }}>
                   <DashboardViews
                     activeKey={activeNavKey}
                     onOpenMap={() => handleNavSelect('map')}

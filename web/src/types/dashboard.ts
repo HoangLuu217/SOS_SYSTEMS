@@ -150,3 +150,49 @@ export interface AuthorityOrgItem {
   address?: string;
   status: string;
 }
+
+export interface HazardReportItem {
+  _id: string;
+  title: string;
+  description: string;
+  hazardType:
+    | 'FLOOD'
+    | 'LANDSLIDE'
+    | 'FALLEN_TREE'
+    | 'EROSION'
+    | 'OBSTACLE'
+    | 'ELECTRICAL'
+    | 'ROAD_DAMAGE'
+    | 'OTHER';
+  customHazardType?: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  location: {
+    type: 'Point';
+    coordinates: [number, number]; // [lng, lat]
+  };
+  address: string;
+  areaId?: {
+    _id: string;
+    name: string;
+    code?: string;
+  } | string;
+  reportedBy?: {
+    _id: string;
+    fullName: string;
+    phone?: string;
+    email?: string;
+    roles?: string[];
+  } | string;
+  reporterRole?: 'CITIZEN' | 'RESCUER' | 'LOCAL_AUTHORITY' | 'ADMIN' | string;
+  images?: string[];
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RESOLVED';
+  reviewedBy?: {
+    _id: string;
+    fullName: string;
+  } | string;
+  reviewedAt?: string;
+  reviewNote?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+

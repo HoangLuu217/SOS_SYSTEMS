@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { User } from '../types/auth';
-import { fetchSosRequests, fetchAlerts, fetchAdminUsers } from '../services/api';
+import { fetchSosRequests, fetchAdminUsers, fetchHazardReports } from '../services/api';
 import { domainDService } from '../services/domainDService';
 import {
   Map,
@@ -110,9 +110,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
 
     try {
-      const alertRes = await fetchAlerts();
-      if (alertRes.success && Array.isArray(alertRes.data)) {
-        setHazardCount(alertRes.data.filter((a) => a.isActive).length);
+      const hazardRes = await fetchHazardReports({ status: 'PENDING' });
+      if (hazardRes.success && hazardRes.data) {
+        setHazardCount(hazardRes.data.counts?.PENDING ?? hazardRes.data.reports?.length ?? 0);
       }
     } catch {
       // ignore
