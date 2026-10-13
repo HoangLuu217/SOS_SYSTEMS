@@ -27,7 +27,10 @@ function AuthenticatedApp() {
       <View style={styles.screenContainer}>
         {/* Tab Trang chủ */}
         <View style={[styles.tabScreenWrap, activeTab !== 'home' && styles.hiddenTabScreen]}>
-          <HomeScreen onOpenSettings={() => setConfigVisible(true)} />
+          <HomeScreen
+            onOpenSettings={() => setConfigVisible(true)}
+            onNavigateToTab={(tab) => setActiveTab(tab as TabName)}
+          />
         </View>
 
         {/* Tab Bản đồ */}
