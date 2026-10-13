@@ -9,6 +9,8 @@ const {
   Vehicle,
   SosRequest,
   HazardReport,
+  SafeLocation,
+  Alert,
 } = require('./models');
 
 const seed = async () => {
@@ -19,6 +21,21 @@ const seed = async () => {
 
     const defaultPasswordHash = await bcrypt.hash('Password@123', 10);
 
+    // 0. Tạo hoặc đảm bảo có tài khoản Admin hệ thống
+    let admin = await User.findOne({ email: 'admin@sos.vn' });
+    if (!admin) {
+      admin = await User.create({
+        fullName: 'Admin Hệ Thống SOS',
+        email: 'admin@sos.vn',
+        phone: '0901234567',
+        passwordHash: defaultPasswordHash,
+        roles: ['ADMIN'],
+        status: 'ACTIVE',
+        isVerified: true,
+      });
+      console.log('✅ Đã tạo tài khoản ADMIN: admin@sos.vn (Pass: Password@123)');
+    }
+
     // 1. Đảm bảo có Khu vực hành chính (Đà Nẵng)
     let area = await AdministrativeArea.findOne({ code: 'DANANG' });
     if (!area) {
@@ -27,6 +44,7 @@ const seed = async () => {
         code: 'DANANG',
         type: 'PROVINCE',
         parentId: null,
+        status: 'ACTIVE',
         boundary: {
           type: 'Polygon',
           coordinates: [
@@ -39,7 +57,6 @@ const seed = async () => {
             ],
           ],
         },
-        status: 'ACTIVE',
       });
       console.log('✅ Đã tạo khu vực hành chính:', area.name);
     } else {
@@ -101,7 +118,7 @@ const seed = async () => {
       console.log('✅ Đã cập nhật tài khoản LOCAL_AUTHORITY: authority@sos.vn');
     }
 
-    // Tạo thêm tài khoản cá nhân cho HoangLuu (nếu muốn dùng email đuôi @gmail.com)
+    // Tạo thêm tài khoản cá nhân cho HoangLuu
     let hlAuthority = await User.findOne({ email: 'hoangluu2172k4+authority@gmail.com' });
     if (!hlAuthority) {
       hlAuthority = await User.create({
@@ -119,7 +136,7 @@ const seed = async () => {
           department: 'Ban Chỉ Huy PCTT & TKCN TP. Đà Nẵng',
         },
       });
-      console.log('✅ Đã tạo thêm tài khoản cá nhân: hoangluu2172k4+authority@gmail.com (SĐT: 0988888888)');
+      console.log('✅ Đã tạo thêm tài khoản cá nhân: hoangluu2172k4+authority@gmail.com');
     }
 
     // 4. Tạo tài khoản Cứu Hộ Viên (RESCUER) để phân công nhiệm vụ
@@ -202,7 +219,6 @@ const seed = async () => {
     // 7. Tạo SOS Request mẫu nếu chưa có để màn hình Tiếp nhận & Bản đồ có dữ liệu test
     const sosCount = await SosRequest.countDocuments();
     if (sosCount === 0) {
-      // Lấy user citizen làm người gửi
       let citizen = await User.findOne({ roles: 'CITIZEN' });
       if (!citizen) {
         citizen = await User.create({
@@ -255,7 +271,6 @@ const seed = async () => {
     const hazardCount = await HazardReport.countDocuments();
     if (hazardCount === 0) {
       let citizen = await User.findOne({ roles: 'CITIZEN' });
-      let rescuer = await User.findOne({ roles: 'RESCUER' });
 
       await HazardReport.create([
         {
@@ -271,7 +286,7 @@ const seed = async () => {
           areaId: area._id,
           reportedBy: citizen ? citizen._id : authority._id,
           reporterRole: 'CITIZEN',
-          status: 'PENDING', // Đang chờ Authority duyệt
+          status: 'PENDING',
           images: [],
         },
         {
@@ -287,7 +302,7 @@ const seed = async () => {
           areaId: area._id,
           reportedBy: rescuer ? rescuer._id : authority._id,
           reporterRole: 'RESCUER',
-          status: 'PENDING', // Đang chờ Authority duyệt
+          status: 'PENDING',
           images: [],
         },
         {
@@ -303,7 +318,7 @@ const seed = async () => {
           areaId: area._id,
           reportedBy: citizen ? citizen._id : authority._id,
           reporterRole: 'CITIZEN',
-          status: 'APPROVED', // Điểm đã được duyệt
+          status: 'APPROVED',
           reviewedBy: authority._id,
           reviewedAt: new Date(),
           reviewNote: 'Đã xác minh và chuyển đội cây xanh & điện lực xử lý.',
@@ -311,6 +326,178 @@ const seed = async () => {
         },
       ]);
       console.log('✅ Đã tạo 3 điểm nguy hiểm mẫu (2 PENDING chờ duyệt, 1 APPROVED)');
+    }
+
+    // 9. Tạo các điểm an toàn mẫu (Safe Locations)
+    const sampleSafeLocations = [
+      {
+        name: 'Bệnh viện Đa khoa Đà Nẵng',
+        type: 'HOSPITAL',
+        location: {
+          type: 'Point',
+          coordinates: [108.2178, 16.0718],
+        },
+        areaId: area._id,
+        address: '124 Hải Phòng, Thạch Thang, Hải Châu, Đà Nẵng',
+        capacity: 1000,
+        currentOccupancy: 350,
+        status: 'ACTIVE',
+        createdBy: admin._id,
+      },
+      {
+        name: 'Trung tâm Cứu hộ Phòng chống Thiên tai Sông Hàn',
+        type: 'RESCUE_STATION',
+        location: {
+          type: 'Point',
+          coordinates: [108.2255, 16.068],
+        },
+        areaId: area._id,
+        address: 'Bạch Đằng, Phước Ninh, Hải Châu, Đà Nẵng',
+        capacity: 500,
+        currentOccupancy: 80,
+        status: 'ACTIVE',
+        createdBy: admin._id,
+      },
+      {
+        name: 'Cung Thể thao Tiên Sơn (Điểm sơ tán khẩn cấp)',
+        type: 'EVACUATION_CENTER',
+        location: {
+          type: 'Point',
+          coordinates: [108.228, 16.036],
+        },
+        areaId: area._id,
+        address: 'Đường Phan Đăng Lưu, Hòa Cường Bắc, Hải Châu, Đà Nẵng',
+        capacity: 2500,
+        currentOccupancy: 420,
+        status: 'ACTIVE',
+        createdBy: admin._id,
+      },
+      {
+        name: 'Nhà thi đấu Quân khu 5 (Khu trú ẩn bão lũ)',
+        type: 'SHELTER',
+        location: {
+          type: 'Point',
+          coordinates: [108.213, 16.0535],
+        },
+        areaId: area._id,
+        address: '07 Duy Tân, Hòa Cường Bắc, Hải Châu, Đà Nẵng',
+        capacity: 1500,
+        currentOccupancy: 210,
+        status: 'ACTIVE',
+        createdBy: admin._id,
+      },
+      {
+        name: 'Bệnh viện Phụ Sản - Nhi Đà Nẵng',
+        type: 'HOSPITAL',
+        location: {
+          type: 'Point',
+          coordinates: [108.2435, 16.0305],
+        },
+        areaId: area._id,
+        address: '402 Lê Văn Hiến, Khuê Mỹ, Ngũ Hành Sơn, Đà Nẵng',
+        capacity: 800,
+        currentOccupancy: 500,
+        status: 'ACTIVE',
+        createdBy: admin._id,
+      },
+      {
+        name: 'Điểm tập kết Cứu trợ Bán đảo Sơn Trà',
+        type: 'MEETING_POINT',
+        location: {
+          type: 'Point',
+          coordinates: [108.258, 16.102],
+        },
+        areaId: area._id,
+        address: 'Đường Hoàng Sa, Thọ Quang, Sơn Trà, Đà Nẵng',
+        capacity: 300,
+        currentOccupancy: 45,
+        status: 'ACTIVE',
+        createdBy: admin._id,
+      },
+    ];
+
+    for (const loc of sampleSafeLocations) {
+      const exists = await SafeLocation.findOne({ name: loc.name });
+      if (!exists) {
+        await SafeLocation.create(loc);
+        console.log(`✅ Đã tạo SafeLocation: ${loc.name}`);
+      }
+    }
+
+    // 10. Tạo các Cảnh báo thiên tai mẫu (Alerts)
+    const sampleAlerts = [
+      {
+        title: 'Cảnh báo ngập lụt cục bộ do triều cường sông Hàn',
+        content: 'Mực nước dâng cao gây ngập 0.5m - 1.2m tại các tuyến đường trũng thấp ven sông Hàn. Người dân không di chuyển bằng xe máy.',
+        type: 'FLOOD',
+        severity: 'HIGH',
+        location: {
+          type: 'Point',
+          coordinates: [108.2235, 16.0645],
+        },
+        radius: 800,
+        areaId: area._id,
+        startTime: new Date(Date.now() - 3600000 * 2),
+        endTime: new Date(Date.now() + 3600000 * 24),
+        isActive: true,
+        createdBy: admin._id,
+      },
+      {
+        title: 'Nguy cơ sạt lở đất nghiêm trọng tại bán đảo Sơn Trà',
+        content: 'Mưa lớn kéo dài làm mềm đất đá ven đường dốc. Tạm dừng lưu thông trên tuyến Hoàng Sa lên Đỉnh Bàn Cờ.',
+        type: 'LANDSLIDE',
+        severity: 'CRITICAL',
+        location: {
+          type: 'Point',
+          coordinates: [108.275, 16.115],
+        },
+        radius: 1500,
+        areaId: area._id,
+        startTime: new Date(Date.now() - 3600000),
+        endTime: new Date(Date.now() + 3600000 * 48),
+        isActive: true,
+        createdBy: admin._id,
+      },
+      {
+        title: 'Cảnh báo lốc xoáy và gió giật mạnh ven biển Mỹ Khê',
+        content: 'Gió giật cấp 8-9, sóng biển cao 3-4m. Cấm tắm biển và cấm tất cả các phương tiện ghe thuyền ra khơi.',
+        type: 'STORM',
+        severity: 'MEDIUM',
+        location: {
+          type: 'Point',
+          coordinates: [108.248, 16.062],
+        },
+        radius: 1200,
+        areaId: area._id,
+        startTime: new Date(),
+        endTime: new Date(Date.now() + 3600000 * 12),
+        isActive: true,
+        createdBy: admin._id,
+      },
+      {
+        title: 'Cảnh báo khói bụi đám cháy kho phế liệu Cẩm Lệ',
+        content: 'Đám cháy đã được cô lập nhưng lượng khói độc hại cao. Người dân trong bán kính 600m nên đóng kín cửa và đeo khẩu trang.',
+        type: 'FIRE',
+        severity: 'HIGH',
+        location: {
+          type: 'Point',
+          coordinates: [108.198, 16.022],
+        },
+        radius: 700,
+        areaId: area._id,
+        startTime: new Date(Date.now() - 1800000),
+        endTime: new Date(Date.now() + 3600000 * 6),
+        isActive: true,
+        createdBy: admin._id,
+      },
+    ];
+
+    for (const alt of sampleAlerts) {
+      const exists = await Alert.findOne({ title: alt.title });
+      if (!exists) {
+        await Alert.create(alt);
+        console.log(`✅ Đã tạo Alert: ${alt.title}`);
+      }
     }
 
     console.log('\n======================================================');

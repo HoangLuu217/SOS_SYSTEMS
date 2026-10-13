@@ -18,6 +18,95 @@ export interface NotificationItem {
   actionUrl?: string;
 }
 
+export type SafeLocationType =
+  | 'EVACUATION_CENTER'
+  | 'HOSPITAL'
+  | 'RESCUE_STATION'
+  | 'SHELTER'
+  | 'MEETING_POINT';
+
+export type SafeLocationStatus = 'ACTIVE' | 'INACTIVE' | 'FULL' | 'MAINTENANCE';
+
+export interface SafeLocation {
+  _id: string;
+  name: string;
+  type: SafeLocationType;
+  location: {
+    type: 'Point';
+    coordinates: [number, number]; // [lng, lat]
+  };
+  address: string;
+  capacity: number;
+  currentOccupancy: number;
+  status: SafeLocationStatus;
+  areaId?: {
+    _id: string;
+    name: string;
+    code: string;
+    type: string;
+  };
+  createdBy?: {
+    fullName?: string;
+    phone?: string;
+    email?: string;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type AlertType =
+  | 'FLOOD'
+  | 'LANDSLIDE'
+  | 'STORM'
+  | 'FIRE'
+  | 'DANGEROUS_AREA'
+  | 'OTHER';
+
+export type AlertSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+export interface AlertItem {
+  _id: string;
+  title: string;
+  content: string;
+  type: AlertType;
+  severity: AlertSeverity;
+  startTime: string;
+  endTime?: string | null;
+  isActive: boolean;
+  location?: {
+    type: 'Point';
+    coordinates: [number, number]; // [lng, lat]
+  };
+  radius?: number; // bán kính cảnh báo (mét)
+  areaId?: {
+    _id: string;
+    name: string;
+    code: string;
+    type: string;
+    boundary?: {
+      type: 'Polygon';
+      coordinates: number[][][]; // [[[lng, lat], ...]]
+    };
+  };
+  targetArea?: {
+    _id: string;
+    name: string;
+    code: string;
+    type: string;
+    boundary?: {
+      type: 'Polygon';
+      coordinates: number[][][];
+    };
+  };
+  createdBy?: {
+    fullName?: string;
+    phone?: string;
+    email?: string;
+  };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface UserProfile {
   _id: string;
   fullName: string;
@@ -500,6 +589,83 @@ class BackendApiService {
     return await this.request('/rescuer/me/availability', {
       method: 'PATCH',
       body: JSON.stringify({ availabilityStatus }),
+    });
+  }
+
+  /**
+   * Lấy danh sách điểm an toàn (Safe Locations)
+   */
+  async getSafeLocations(params: {
+    type?: string;
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  } = {}): Promise<ApiResponse<SafeLocation[]>> {
+    const queryParts: string[] = [];
+    if (params.type) queryParts.push(`type=${encodeURIComponent(params.type)}`);
+    if (params.status) queryParts.push(`status=${encodeURIComponent(params.status)}`);
+    if (params.search) queryParts.push(`search=${encodeURIComponent(params.search)}`);
+    if (params.page) queryParts.push(`page=${params.page}`);
+    queryParts.push(`limit=${params.limit || 100}`);
+    const qs = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+    return await this.request<SafeLocation[]>(`/safe-locations${qs}`, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Lấy danh sách điểm an toàn gần nhất theo tọa độ
+   */
+  async getNearbySafeLocations(
+    lng: number,
+    lat: number,
+    maxDistance: number = 20000,
+    limit: number = 50
+  ): Promise<ApiResponse<SafeLocation[]>> {
+    return await this.request<SafeLocation[]>(
+      `/safe-locations/nearby?lng=${lng}&lat=${lat}&maxDistance=${maxDistance}&limit=${limit}`,
+      { method: 'GET' }
+    );
+  }
+
+  /**
+   * Lấy danh sách cảnh báo đang hoạt động (Active Alerts)
+   */
+  async getActiveAlerts(params: {
+    type?: string;
+    severity?: string;
+    limit?: number;
+  } = {}): Promise<ApiResponse<AlertItem[]>> {
+    const queryParts: string[] = [];
+    if (params.type) queryParts.push(`type=${encodeURIComponent(params.type)}`);
+    if (params.severity) queryParts.push(`severity=${encodeURIComponent(params.severity)}`);
+    queryParts.push(`limit=${params.limit || 100}`);
+    const qs = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+    return await this.request<AlertItem[]>(`/alerts/active${qs}`, {
+      method: 'GET',
+    });
+  }
+
+  /**
+   * Lấy tất cả cảnh báo (Alerts)
+   */
+  async getAlerts(params: {
+    type?: string;
+    severity?: string;
+    isActive?: boolean;
+    page?: number;
+    limit?: number;
+  } = {}): Promise<ApiResponse<AlertItem[]>> {
+    const queryParts: string[] = [];
+    if (params.type) queryParts.push(`type=${encodeURIComponent(params.type)}`);
+    if (params.severity) queryParts.push(`severity=${encodeURIComponent(params.severity)}`);
+    if (params.isActive !== undefined) queryParts.push(`isActive=${params.isActive}`);
+    if (params.page) queryParts.push(`page=${params.page}`);
+    queryParts.push(`limit=${params.limit || 100}`);
+    const qs = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+    return await this.request<AlertItem[]>(`/alerts${qs}`, {
+      method: 'GET',
     });
   }
 
