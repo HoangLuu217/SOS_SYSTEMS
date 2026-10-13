@@ -441,7 +441,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
           <Text style={styles.headerTitle}>CỨU HỘ NGẬP LỤT KHẨN CẤP</Text>
           <Text style={styles.headerSubTitle}>Gửi trực tiếp tới Đội cứu hộ & Ca-nô/Xuồng</Text>
         </View>
-        <TouchableOpacity style={styles.reloadGpsBtn} onPress={fetchLocation} activeOpacity={0.7} title="Lấy lại GPS">
+        <TouchableOpacity style={styles.reloadGpsBtn} onPress={fetchLocation} activeOpacity={0.7} accessibilityLabel="Lấy lại GPS">
           <Feather name="refresh-cw" size={18} color="#0284C7" />
         </TouchableOpacity>
       </View>
