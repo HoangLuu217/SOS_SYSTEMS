@@ -313,7 +313,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
       <View style={styles.successContainer}>
         <View style={styles.successCard}>
           <View style={styles.successIconOuter}>
-            <Ionicons name="checkmark-circle" size={70} color="#EF4444" />
+            <Ionicons name="checkmark-circle" size={70} color="#0284C7" />
           </View>
 
           <Text style={styles.successTitle}>ĐÃ ĐĂNG TIN THÀNH CÔNG!</Text>
@@ -368,7 +368,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.doneBtn, { flex: 1, backgroundColor: '#EF4444' }]}
+              style={[styles.doneBtn, { flex: 1, backgroundColor: '#0284C7' }]}
               onPress={onClose}
               activeOpacity={0.85}
             >
@@ -382,11 +382,11 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
 
   return (
     <View style={styles.container}>
-      {/* HEADER THEO PHONG CÁCH MẪU */}
+      {/* HEADER PHONG CÁCH XANH DƯƠNG THANH LỊCH */}
       <View style={styles.header}>
         {onClose ? (
           <TouchableOpacity style={styles.backButton} onPress={onClose} activeOpacity={0.7}>
-            <Feather name={isTab ? 'home' : 'chevron-left'} size={24} color="#1E293B" />
+            <Feather name={isTab ? 'home' : 'chevron-left'} size={22} color="#0F172A" />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 36 }} />
@@ -394,13 +394,17 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
 
         <View style={styles.headerTitleWrap}>
           <Text style={styles.headerTitle}>Đăng tin cần cứu trợ</Text>
-          <Text style={styles.headerSubTitle}>Gửi thông tin để được hỗ trợ</Text>
+          <Text style={styles.headerSubTitle}>Gửi thông tin để được hỗ trợ kịp thời</Text>
         </View>
 
-        <View style={{ width: 36 }} />
+        <TouchableOpacity
+          style={styles.reloadGpsBtn}
+          onPress={fetchLocation}
+          activeOpacity={0.7}
+        >
+          <Feather name="refresh-cw" size={17} color="#0284C7" />
+        </TouchableOpacity>
       </View>
-      {/* Đường viền phân cách mỏng */}
-      <View style={styles.headerAccentLine} />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -412,10 +416,10 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
           keyboardShouldPersistTaps="handled"
         >
           {/* 1. LOẠI YÊU CẦU * */}
-          <View style={styles.formSection}>
+          <View style={styles.formCard}>
             <View style={styles.fieldHeaderRow}>
               <View style={styles.fieldBadgeIcon}>
-                <Ionicons name="alert-circle" size={16} color="#EF4444" />
+                <Ionicons name="alert-circle" size={16} color="#0284C7" />
               </View>
               <Text style={styles.fieldTitle}>
                 Loại yêu cầu <Text style={styles.requiredStar}>*</Text>
@@ -435,11 +439,11 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
           </View>
 
           {/* 2. SỐ NGƯỜI * (CÙNG 1 HÀNG VỚI NÚT STEPPER BÊN PHẢI) */}
-          <View style={styles.formSection}>
+          <View style={styles.formCard}>
             <View style={styles.betweenHeaderRow}>
               <View style={styles.fieldHeaderRow}>
                 <View style={styles.fieldBadgeIcon}>
-                  <MaterialCommunityIcons name="account-group" size={16} color="#EF4444" />
+                  <MaterialCommunityIcons name="account-group" size={16} color="#0284C7" />
                 </View>
                 <Text style={styles.fieldTitle}>
                   Số người <Text style={styles.requiredStar}>*</Text>
@@ -472,11 +476,11 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
           </View>
 
           {/* 3. SỐ ĐIỆN THOẠI * (KÈM NÚT + THÊM SỐ BÊN PHẢI) */}
-          <View style={styles.formSection}>
+          <View style={styles.formCard}>
             <View style={styles.betweenHeaderRow}>
               <View style={styles.fieldHeaderRow}>
                 <View style={styles.fieldBadgeIcon}>
-                  <Ionicons name="call" size={14} color="#EF4444" />
+                  <Ionicons name="call" size={14} color="#0284C7" />
                 </View>
                 <Text style={styles.fieldTitle}>
                   Số điện thoại <Text style={styles.requiredStar}>*</Text>
@@ -489,7 +493,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
                   onPress={() => setShowSecondaryPhone(true)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="add-circle" size={16} color="#0284C7" />
+                  <Ionicons name="add-circle" size={15} color="#0284C7" />
                   <Text style={styles.addPhoneBtnText}>Thêm số</Text>
                 </TouchableOpacity>
               )}
@@ -536,10 +540,10 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
           </View>
 
           {/* 4. NỘI DUNG * (KÈM BỘ ĐẾM 0/500) */}
-          <View style={styles.formSection}>
+          <View style={styles.formCard}>
             <View style={styles.fieldHeaderRow}>
               <View style={styles.fieldBadgeIcon}>
-                <MaterialCommunityIcons name="square-edit-outline" size={16} color="#EF4444" />
+                <MaterialCommunityIcons name="square-edit-outline" size={16} color="#0284C7" />
               </View>
               <Text style={styles.fieldTitle}>
                 Nội dung <Text style={styles.requiredStar}>*</Text>
@@ -562,10 +566,10 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
           </View>
 
           {/* 5. ĐỊA ĐIỂM * (CHỌN VỊ TRÍ & NHẬP SỐ NHÀ, TÊN ĐƯỜNG) */}
-          <View style={styles.formSection}>
+          <View style={styles.formCard}>
             <View style={styles.fieldHeaderRow}>
               <View style={styles.fieldBadgeIcon}>
-                <Ionicons name="location" size={16} color="#EF4444" />
+                <Ionicons name="location" size={16} color="#0284C7" />
               </View>
               <Text style={styles.fieldTitle}>
                 Địa điểm <Text style={styles.requiredStar}>*</Text>
@@ -580,15 +584,15 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
               activeOpacity={0.8}
             >
               <View style={styles.locationSelectorLeft}>
-                <Ionicons name="location-sharp" size={17} color="#EF4444" />
+                <Ionicons name="location-sharp" size={17} color="#0284C7" />
                 <Text style={styles.locationSelectorText} numberOfLines={1}>
                   {locating ? 'Đang xác định vị trí...' : gpsAddress ? `Vị trí: ${gpsAddress}` : 'Chọn vị trí'}
                 </Text>
               </View>
               {locating ? (
-                <ActivityIndicator size="small" color="#EF4444" />
+                <ActivityIndicator size="small" color="#0284C7" />
               ) : (
-                <Feather name="chevron-right" size={18} color="#EF4444" />
+                <Feather name="refresh-cw" size={16} color="#0284C7" />
               )}
             </TouchableOpacity>
 
@@ -606,10 +610,10 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
           </View>
 
           {/* 6. ĐỐI TƯỢNG CẦN ƯU TIÊN ⓘ (GRID 2 CỘT) */}
-          <View style={styles.formSection}>
+          <View style={styles.formCard}>
             <View style={styles.fieldHeaderRow}>
               <View style={styles.fieldBadgeIcon}>
-                <Ionicons name="heart" size={15} color="#EF4444" />
+                <Ionicons name="heart" size={15} color="#0284C7" />
               </View>
               <Text style={styles.fieldTitle}>Đối tượng cần ưu tiên</Text>
               <Feather name="info" size={14} color="#94A3B8" style={{ marginLeft: 4 }} />
@@ -631,7 +635,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
                     <FontAwesome5
                       name={target.icon}
                       size={15}
-                      color={target.color}
+                      color={isSelected ? '#0284C7' : target.color}
                       style={{ marginRight: 8 }}
                     />
                     <Text
@@ -643,6 +647,14 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
                     >
                       {target.label}
                     </Text>
+                    {isSelected && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={14}
+                        color="#0284C7"
+                        style={{ marginLeft: 4 }}
+                      />
+                    )}
                   </TouchableOpacity>
                 );
               })}
@@ -650,10 +662,10 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
           </View>
 
           {/* 7. ĐÍNH KÈM ẢNH HIỆN TRƯỜNG (KHÔNG BẮT BUỘC) */}
-          <View style={styles.formSection}>
+          <View style={styles.formCard}>
             <View style={styles.fieldHeaderRow}>
               <View style={styles.fieldBadgeIcon}>
-                <Ionicons name="camera" size={15} color="#EF4444" />
+                <Ionicons name="camera" size={15} color="#0284C7" />
               </View>
               <Text style={styles.fieldTitle}>Ảnh hiện trường (Không bắt buộc)</Text>
             </View>
@@ -680,22 +692,22 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
             )}
           </View>
 
-          {/* 8. NÚT ĐĂNG TIN BO TRÒN ĐỎ NỔI BẬT */}
+          {/* 8. NÚT GỬI CỨU TRỢ XANH DƯƠNG CHỦ ĐẠO */}
           <TouchableOpacity
-            style={styles.submitPillBtn}
+            style={styles.mainSendBtn}
             onPress={handleSubmit}
             disabled={sending}
             activeOpacity={0.85}
           >
             {sending ? (
-              <View style={styles.submitBtnContent}>
+              <View style={styles.sendingRow}>
                 <ActivityIndicator color="#FFFFFF" size="small" />
-                <Text style={styles.submitPillBtnText}>ĐANG GỬI THÔNG TIN...</Text>
+                <Text style={styles.mainSendBtnText}>ĐANG GỬI THÔNG TIN...</Text>
               </View>
             ) : (
-              <View style={styles.submitBtnContent}>
+              <View style={styles.sendingRow}>
                 <Ionicons name="navigate" size={18} color="#FFFFFF" style={{ transform: [{ rotate: '45deg' }] }} />
-                <Text style={styles.submitPillBtnText}>Đăng tin</Text>
+                <Text style={styles.mainSendBtnText}>ĐĂNG TIN CẦN CỨU TRỢ</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -742,7 +754,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
                     {item.label}
                   </Text>
                   {requestType === item.id && (
-                    <Ionicons name="checkmark-circle" size={20} color="#EF4444" />
+                    <Ionicons name="checkmark-circle" size={20} color="#0284C7" />
                   )}
                 </TouchableOpacity>
               ))}
@@ -761,7 +773,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
         <View style={styles.modalBackdrop}>
           <View style={styles.valAlertCard}>
             <View style={styles.valAlertBadge}>
-              <Ionicons name="alert-circle" size={32} color="#EF4444" />
+              <Ionicons name="alert-circle" size={32} color="#0284C7" />
             </View>
             <Text style={styles.valAlertTitle}>Thiếu thông tin</Text>
             <Text style={styles.valAlertMessage}>{validationMessage}</Text>
@@ -782,80 +794,97 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 42 : 52,
-    paddingBottom: 12,
+    paddingTop: Platform.OS === 'android' ? 42 : 54,
+    paddingBottom: 14,
     backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
   },
   headerTitleWrap: {
     flex: 1,
     alignItems: 'center',
+    marginHorizontal: 8,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
     letterSpacing: 0.1,
   },
   headerSubTitle: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#64748B',
     marginTop: 2,
     fontWeight: '500',
   },
-  headerAccentLine: {
-    height: 1.5,
-    backgroundColor: '#FEE2E2',
-    width: '100%',
+  reloadGpsBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFF6FF',
   },
   keyboardContainer: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 18,
-    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
     paddingBottom: 120, // Chừa khoảng trống phía dưới cho Bottom Nav
   },
 
-  // TỪNG PHẦN FIELD
-  formSection: {
-    marginBottom: 18,
+  // THẺ FORM CHUNG (PHONG CÁCH THANH LỊCH NHƯ CŨ)
+  formCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
   fieldHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   betweenHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   fieldBadgeIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#E0F2FE',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
   },
   fieldTitle: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '700',
     color: '#0F172A',
   },
@@ -869,17 +898,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
+    borderRadius: 10,
     paddingHorizontal: 14,
-    paddingVertical: 13,
-    backgroundColor: '#FFFFFF',
+    paddingVertical: 12,
+    backgroundColor: '#F8FAFC',
   },
   dropdownSelectedText: {
     fontSize: 14,
     color: '#0F172A',
-    fontWeight: '500',
+    fontWeight: '600',
   },
 
   // 2. STEPPER SỐ NGƯỜI
@@ -888,8 +917,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
     overflow: 'hidden',
   },
   stepperActionBtn: {
@@ -900,15 +929,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
   },
   stepperValueBox: {
-    minWidth: 38,
+    minWidth: 42,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,
+    backgroundColor: '#EFF6FF',
   },
   stepperValueText: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#0284C7',
   },
 
   // 3. SỐ ĐIỆN THOẠI
@@ -916,20 +946,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
   },
   addPhoneBtnText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#0284C7',
   },
   inputWrapWithIcon: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
+    borderRadius: 10,
     paddingHorizontal: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
     height: 48,
   },
   inputLeadingIcon: {
@@ -939,15 +975,16 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: '#0F172A',
+    fontWeight: '500',
   },
 
   // 4. TEXTAREA NỘI DUNG
   textareaContainer: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
     minHeight: 105,
     justifyContent: 'space-between',
   },
@@ -970,10 +1007,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFF5F5',
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-    borderRadius: 12,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1.5,
+    borderColor: '#BAE6FD',
+    borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
@@ -985,7 +1022,7 @@ const styles = StyleSheet.create({
   },
   locationSelectorText: {
     fontSize: 13.5,
-    color: '#DC2626',
+    color: '#0369A1',
     fontWeight: '600',
     marginLeft: 8,
     flex: 1,
@@ -1004,14 +1041,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingVertical: 12,
+    borderRadius: 10,
+    paddingVertical: 11,
     paddingHorizontal: 10,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
   },
   priorityGridCardSelected: {
-    borderColor: '#EF4444',
-    backgroundColor: '#FEF2F2',
+    borderColor: '#0284C7',
+    backgroundColor: '#F0F9FF',
     borderWidth: 1.5,
   },
   priorityGridCardText: {
@@ -1021,7 +1058,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   priorityGridCardTextSelected: {
-    color: '#DC2626',
+    color: '#0284C7',
     fontWeight: '700',
   },
 
@@ -1039,7 +1076,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#BAE6FD',
     borderRadius: 10,
-    paddingVertical: 10,
+    paddingVertical: 11,
     gap: 6,
   },
   photoBtnText: {
@@ -1066,30 +1103,31 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
 
-  // 8. NÚT ĐĂNG TIN BO TRÒN ĐỎ
-  submitPillBtn: {
-    backgroundColor: '#EF4444',
-    borderRadius: 28,
-    paddingVertical: 14,
+  // 8. NÚT GỬI CỨU HỘ XANH DƯƠNG CHỦ ĐẠO
+  mainSendBtn: {
+    backgroundColor: '#0284C7',
+    borderRadius: 14,
+    paddingVertical: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
-    shadowColor: '#EF4444',
+    marginTop: 4,
+    marginBottom: 20,
+    shadowColor: '#0284C7',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.28,
     shadowRadius: 8,
     elevation: 4,
   },
-  submitBtnContent: {
+  sendingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  submitPillBtnText: {
+  mainSendBtnText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    letterSpacing: 0.2,
+    letterSpacing: 0.3,
   },
 
   // MODAL BOTTOM SHEET CHO LOẠI YÊU CẦU
@@ -1130,8 +1168,8 @@ const styles = StyleSheet.create({
     borderColor: '#F1F5F9',
   },
   typeOptionItemSelected: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FEE2E2',
+    backgroundColor: '#F0F9FF',
+    borderColor: '#BAE6FD',
   },
   typeOptionEmoji: {
     fontSize: 18,
@@ -1144,7 +1182,7 @@ const styles = StyleSheet.create({
     color: '#334155',
   },
   typeOptionLabelSelected: {
-    color: '#DC2626',
+    color: '#0284C7',
     fontWeight: '700',
   },
 
@@ -1176,9 +1214,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   valAlertBtn: {
-    backgroundColor: '#EF4444',
+    backgroundColor: '#0284C7',
     borderRadius: 10,
-    paddingVertical: 10,
+    paddingVertical: 11,
     paddingHorizontal: 24,
     width: '100%',
     alignItems: 'center',
@@ -1218,7 +1256,7 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: 17,
     fontWeight: '900',
-    color: '#0F172A',
+    color: '#0284C7',
     textAlign: 'center',
     marginBottom: 6,
   },
@@ -1251,7 +1289,7 @@ const styles = StyleSheet.create({
   successDetailCode: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#EF4444',
+    color: '#0284C7',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   successDetailValue: {
