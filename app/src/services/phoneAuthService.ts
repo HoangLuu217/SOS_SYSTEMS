@@ -1,4 +1,5 @@
 import { firebaseConfig } from '../config/firebase';
+import { backendApi } from './backendApi';
 
 export interface SendOtpResponse {
   success: boolean;
@@ -29,75 +30,29 @@ export const formatVietnamPhoneNumber = (phone: string): string => {
 };
 
 /**
- * Gửi mã OTP xác thực số điện thoại qua Firebase
- * @param phoneNumber Số điện thoại (chấp nhận cả 09... hoặc +84...)
+ * Gửi mã OTP xác thực số điện thoại qua cổng SMS Backend (TextBee Android Gateway / eSMS)
+ * @param phoneNumber Số điện thoại
  */
 export const sendPhoneOtpFirebase = async (phoneNumber: string): Promise<SendOtpResponse> => {
   try {
-    const formattedPhone = formatVietnamPhoneNumber(phoneNumber);
-
-    const response = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:sendVerificationCode?key=${firebaseConfig.apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          phoneNumber: formattedPhone,
-        }),
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      const errCode = data?.error?.message || '';
-      if (errCode.includes('BILLING_NOT_ENABLED')) {
-        return {
-          success: false,
-          message: 'Firebase yêu cầu tài khoản thanh toán để gửi SMS thật. Để test MIỄN PHÍ không cần thẻ, bạn hãy thêm số này vào mục "Phone numbers for testing" trên Firebase Console.',
-        };
-      }
-      if (errCode.includes('region enabled') || errCode.includes('region policy')) {
-        return {
-          success: false,
-          message: 'Firebase đang chặn vùng SMS Việt Nam (+84). Vui lòng vào Firebase Console > Authentication > tab Settings > SMS region policy để mở quyền cho Việt Nam (+84) hoặc thêm số vào "Phone numbers for testing".',
-        };
-      }
-      if (errCode.includes('OPERATION_NOT_ALLOWED')) {
-        return {
-          success: false,
-          message: 'Chưa kích hoạt tính năng Phone Auth hoặc vùng SMS chưa được mở trong Firebase Console.',
-        };
-      }
-      if (errCode.includes('TOO_MANY_ATTEMPTS')) {
-        return {
-          success: false,
-          message: 'Đã thử quá nhiều lần. Vui lòng đợi vài phút rồi thử lại.',
-        };
-      }
-      if (errCode.includes('INVALID_PHONE_NUMBER')) {
-        return {
-          success: false,
-          message: 'Số điện thoại không hợp lệ. Vui lòng kiểm tra lại.',
-        };
-      }
+    const backendRes = await backendApi.sendOtp(phoneNumber.trim());
+    if (backendRes.success) {
+      console.log('📱 [PhoneAuth] Đã yêu cầu gửi SMS OTP thành công qua Backend Gateway');
       return {
-        success: false,
-        message: data?.error?.message || 'Không thể gửi mã xác nhận số điện thoại.',
+        success: true,
+        sessionInfo: 'backend_' + phoneNumber.trim(),
+        message: backendRes.message || 'Mã xác thực OTP đã được gửi đến số điện thoại của bạn.',
       };
     }
-
-    return {
-      success: true,
-      sessionInfo: data.sessionInfo,
-      message: 'Mã xác thực OTP đã được gửi đến số điện thoại của bạn.',
-    };
-  } catch (error: any) {
     return {
       success: false,
-      message: error?.message || 'Lỗi kết nối khi gửi mã OTP qua Firebase.',
+      message: backendRes.message || 'Không thể gửi mã xác thực SMS. Vui lòng thử lại.',
+    };
+  } catch (err: any) {
+    console.error('[PhoneAuth] Lỗi kết nối Backend OTP:', err);
+    return {
+      success: false,
+      message: err.message || 'Lỗi kết nối máy chủ khi gửi mã xác thực SMS.',
     };
   }
 };
@@ -111,6 +66,31 @@ export const verifyPhoneOtpFirebase = async (
   sessionInfo: string,
   code: string
 ): Promise<VerifyOtpResponse> => {
+  // 1. Nếu sessionInfo là từ Backend (TextBee / eSMS)
+  if (sessionInfo && (sessionInfo.startsWith('backend_') || sessionInfo.startsWith('esms_') || sessionInfo.startsWith('textbee_'))) {
+    const phoneNumber = sessionInfo.replace(/^(backend_|esms_|textbee_)/, '');
+    try {
+      const res = await backendApi.verifyOtp(phoneNumber, code, true);
+      if (res.success) {
+        return {
+          success: true,
+          phoneNumber,
+          message: 'Xác thực số điện thoại thành công!',
+        };
+      }
+      return {
+        success: false,
+        message: res.message || 'Mã xác thực OTP không chính xác hoặc đã hết hạn.',
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: err.message || 'Lỗi xác thực mã OTP qua máy chủ.',
+      };
+    }
+  }
+
+  // 2. Xác thực qua Firebase
   try {
     const response = await fetch(
       `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPhoneNumber?key=${firebaseConfig.apiKey}`,

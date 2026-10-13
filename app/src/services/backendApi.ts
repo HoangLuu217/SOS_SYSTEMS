@@ -312,30 +312,36 @@ class BackendApiService {
   }
 
   /**
-   * Gửi mã OTP xác thực qua Email (sử dụng Resend)
+   * Gửi mã OTP xác thực qua SMS (eSMS) hoặc Email (Resend)
    */
-  async sendOtp(email: string): Promise<ApiResponse> {
+  async sendOtp(target: string): Promise<ApiResponse> {
+    const isEmail = target.includes('@');
+    const payload = isEmail
+      ? { email: target.trim().toLowerCase() }
+      : { phone: target.trim() };
+
     return await this.request('/auth/send-otp', {
       method: 'POST',
-      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      body: JSON.stringify(payload),
     });
   }
 
   /**
-   * Xác thực mã OTP và đăng nhập
+   * Xác thực mã OTP và đăng nhập (hỗ trợ cả SĐT và Email)
    */
   async verifyOtp(
-    email: string,
+    target: string,
     otp: string,
     verifyOnly: boolean = false
   ): Promise<ApiResponse<AuthResponseData>> {
+    const isEmail = target.includes('@');
+    const payload = isEmail
+      ? { email: target.trim().toLowerCase(), otp: otp.trim(), verifyOnly }
+      : { phone: target.trim(), otp: otp.trim(), verifyOnly };
+
     const res = await this.request<AuthResponseData>('/auth/verify-otp', {
       method: 'POST',
-      body: JSON.stringify({
-        email: email.trim().toLowerCase(),
-        otp: otp.trim(),
-        verifyOnly,
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!verifyOnly && res.success && res.data?.accessToken) {
