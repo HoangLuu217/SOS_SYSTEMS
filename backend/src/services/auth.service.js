@@ -15,7 +15,6 @@ const {
 const path = require('path');
 const fs = require('fs');
 const nodemailer = require('nodemailer');
-const esmsService = require('./esms.service');
 const textbeeService = require('./textbee.service');
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -555,7 +554,7 @@ class AuthService {
   }
 
   /**
-   * Gửi mã OTP 6 số qua SMS (eSMS) hoặc Email (Resend)
+   * Gửi mã OTP 6 số qua SMS (TextBee Gateway) hoặc Email (Resend)
    */
   async sendOtp(target) {
     const rawTarget = typeof target === 'string' ? target : (target?.phone || target?.email);
@@ -567,7 +566,7 @@ class AuthService {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 phút
 
-    // TRƯỜNG HỢP 1: GỬI QUA SMS BẰNG TEXTBEE ANDROID GATEWAY (HOẶC eSMS)
+    // TRƯỜNG HỢP 1: GỬI QUA SMS BẰNG TEXTBEE ANDROID GATEWAY
     if (!isEmail) {
       const cleanPhone = String(rawTarget).trim().replace(/[^0-9]/g, '');
       if (cleanPhone.length < 10) {
@@ -583,12 +582,7 @@ class AuthService {
       const textbeeResult = await textbeeService.sendOtp(cleanPhone, otp);
 
       if (!textbeeResult.success) {
-        console.warn(`[TextBee Warning]: ${textbeeResult.message}, kích hoạt thử nghiệm eSMS Voice...`);
-        try {
-          await esmsService.sendOtp(cleanPhone, otp, 'voice');
-        } catch (e) {
-          // Bỏ qua lỗi fallback
-        }
+        console.warn(`[TextBee Warning]: ${textbeeResult.message}`);
       }
 
       return {

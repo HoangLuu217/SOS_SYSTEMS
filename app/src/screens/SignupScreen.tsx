@@ -19,7 +19,7 @@ import { GoogleButton } from '../components/GoogleButton';
 import { AlertModal } from '../components/AlertModal';
 import { OtpModal } from './OtpModal';
 import { useAuth } from '../context/AuthContext';
-import { sendPhoneOtpFirebase, verifyPhoneOtpFirebase } from '../services/phoneAuthService';
+import { sendPhoneOtp, verifyPhoneOtp } from '../services/phoneAuthService';
 import { LogoSOS } from '../components/LogoSOS';
 
 interface SignupScreenProps {
@@ -126,7 +126,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
     setSendingOtp(true);
 
     if (verifyMethod === 'phone') {
-      const res = await sendPhoneOtpFirebase(phone.trim());
+      const res = await sendPhoneOtp(phone.trim());
       setSendingOtp(false);
       if (res.success && res.sessionInfo) {
         setPhoneSessionInfo(res.sessionInfo);
@@ -157,7 +157,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
 
   const handleVerifyAndSignup = async (otpCode: string) => {
     if (verifyMethod === 'phone') {
-      const verifyRes = await verifyPhoneOtpFirebase(phoneSessionInfo, otpCode);
+      const verifyRes = await verifyPhoneOtp(phoneSessionInfo, otpCode);
       if (!verifyRes.success) {
         return {
           success: false,
@@ -216,7 +216,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
 
   const handleResendOtp = async () => {
     if (verifyMethod === 'phone') {
-      const res = await sendPhoneOtpFirebase(phone.trim());
+      const res = await sendPhoneOtp(phone.trim());
       if (res.success && res.sessionInfo) {
         setPhoneSessionInfo(res.sessionInfo);
         return { success: true, message: 'Đã gửi lại mã OTP qua SMS.' };
@@ -233,7 +233,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
     setVerifyMethod(nextMethod);
     setSendingOtp(true);
     if (nextMethod === 'phone') {
-      const res = await sendPhoneOtpFirebase(phone.trim());
+      const res = await sendPhoneOtp(phone.trim());
       setSendingOtp(false);
       if (res.success && res.sessionInfo) {
         setPhoneSessionInfo(res.sessionInfo);

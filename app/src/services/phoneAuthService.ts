@@ -1,4 +1,3 @@
-import { firebaseConfig } from '../config/firebase';
 import { backendApi } from './backendApi';
 
 export interface SendOtpResponse {
@@ -30,17 +29,17 @@ export const formatVietnamPhoneNumber = (phone: string): string => {
 };
 
 /**
- * Gửi mã OTP xác thực số điện thoại qua cổng SMS Backend (TextBee Android Gateway / eSMS)
+ * Gửi mã OTP xác thực số điện thoại qua Backend (TextBee Android SMS Gateway)
  * @param phoneNumber Số điện thoại
  */
-export const sendPhoneOtpFirebase = async (phoneNumber: string): Promise<SendOtpResponse> => {
+export const sendPhoneOtp = async (phoneNumber: string): Promise<SendOtpResponse> => {
   try {
     const backendRes = await backendApi.sendOtp(phoneNumber.trim());
     if (backendRes.success) {
-      console.log('📱 [PhoneAuth] Đã yêu cầu gửi SMS OTP thành công qua Backend Gateway');
+      console.log('📱 [PhoneAuth] Đã gửi SMS OTP thành công qua TextBee Gateway');
       return {
         success: true,
-        sessionInfo: 'backend_' + phoneNumber.trim(),
+        sessionInfo: 'textbee_' + phoneNumber.trim(),
         message: backendRes.message || 'Mã xác thực OTP đã được gửi đến số điện thoại của bạn.',
       };
     }
@@ -49,7 +48,7 @@ export const sendPhoneOtpFirebase = async (phoneNumber: string): Promise<SendOtp
       message: backendRes.message || 'Không thể gửi mã xác thực SMS. Vui lòng thử lại.',
     };
   } catch (err: any) {
-    console.error('[PhoneAuth] Lỗi kết nối Backend OTP:', err);
+    console.error('[PhoneAuth] Lỗi gửi SMS OTP:', err);
     return {
       success: false,
       message: err.message || 'Lỗi kết nối máy chủ khi gửi mã xác thực SMS.',
@@ -58,86 +57,40 @@ export const sendPhoneOtpFirebase = async (phoneNumber: string): Promise<SendOtp
 };
 
 /**
- * Xác thực mã OTP người dùng nhập vào
- * @param sessionInfo Chuỗi sessionInfo nhận được từ bước sendPhoneOtpFirebase
+ * Xác thực mã OTP người dùng nhập vào qua Backend
+ * @param sessionInfo Chuỗi sessionInfo nhận được từ bước gửi OTP
  * @param code Mã OTP 6 chữ số
  */
-export const verifyPhoneOtpFirebase = async (
+export const verifyPhoneOtp = async (
   sessionInfo: string,
   code: string
 ): Promise<VerifyOtpResponse> => {
-  // 1. Nếu sessionInfo là từ Backend (TextBee / eSMS)
-  if (sessionInfo && (sessionInfo.startsWith('backend_') || sessionInfo.startsWith('esms_') || sessionInfo.startsWith('textbee_'))) {
-    const phoneNumber = sessionInfo.replace(/^(backend_|esms_|textbee_)/, '');
-    try {
-      const res = await backendApi.verifyOtp(phoneNumber, code, true);
-      if (res.success) {
-        return {
-          success: true,
-          phoneNumber,
-          message: 'Xác thực số điện thoại thành công!',
-        };
-      }
-      return {
-        success: false,
-        message: res.message || 'Mã xác thực OTP không chính xác hoặc đã hết hạn.',
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        message: err.message || 'Lỗi xác thực mã OTP qua máy chủ.',
-      };
-    }
-  }
-
-  // 2. Xác thực qua Firebase
-  try {
-    const response = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPhoneNumber?key=${firebaseConfig.apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sessionInfo,
-          code: code.trim(),
-        }),
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      const errCode = data?.error?.message || '';
-      if (errCode.includes('INVALID_CODE')) {
-        return {
-          success: false,
-          message: 'Mã xác thực OTP không chính xác. Vui lòng nhập lại.',
-        };
-      }
-      if (errCode.includes('SESSION_EXPIRED')) {
-        return {
-          success: false,
-          message: 'Mã xác thực OTP đã hết hạn. Vui lòng gửi lại mã mới.',
-        };
-      }
-      return {
-        success: false,
-        message: data?.error?.message || 'Xác thực số điện thoại thất bại.',
-      };
-    }
-
-    return {
-      success: true,
-      phoneNumber: data.phoneNumber,
-      idToken: data.idToken,
-      message: 'Xác thực số điện thoại thành công!',
-    };
-  } catch (error: any) {
+  if (!code || code.trim().length !== 6) {
     return {
       success: false,
-      message: error?.message || 'Lỗi kết nối khi xác thực mã OTP.',
+      message: 'Vui lòng nhập đủ 6 chữ số mã OTP.',
+    };
+  }
+
+  const phoneNumber = sessionInfo.replace(/^(textbee_|backend_|esms_)/, '').trim();
+
+  try {
+    const res = await backendApi.verifyOtp(phoneNumber, code.trim(), true);
+    if (res.success) {
+      return {
+        success: true,
+        phoneNumber,
+        message: 'Xác thực số điện thoại thành công!',
+      };
+    }
+    return {
+      success: false,
+      message: res.message || 'Mã xác thực OTP không chính xác hoặc đã hết hạn.',
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || 'Lỗi xác thực mã OTP qua máy chủ.',
     };
   }
 };

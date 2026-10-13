@@ -380,7 +380,7 @@ class BackendApiService {
   }
 
   /**
-   * Gửi mã OTP xác thực qua SMS (eSMS) hoặc Email (Resend)
+   * Gửi mã OTP xác thực qua SMS (TextBee) hoặc Email (Resend)
    */
   async sendOtp(target: string): Promise<ApiResponse> {
     const isEmail = target.includes('@');

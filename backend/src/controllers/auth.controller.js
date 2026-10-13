@@ -166,7 +166,7 @@ class AuthController {
 
   /**
    * POST /auth/send-otp
-   * Gửi mã OTP qua SMS (eSMS) hoặc email (Resend)
+   * Gửi mã OTP qua SMS (TextBee Gateway) hoặc email (Resend)
    */
   async sendOtp(req, res, next) {
     try {
