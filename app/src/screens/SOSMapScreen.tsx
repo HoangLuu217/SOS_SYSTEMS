@@ -20,11 +20,12 @@ import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { backendApi } from '../services/backendApi';
 
 interface SOSMapScreenProps {
-  onClose: () => void;
+  onClose?: () => void;
   initialEmergencyType?: string;
+  isTab?: boolean;
 }
 
-export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
+export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = false }) => {
   // GPS & Vị trí thực tế từ điện thoại
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [address, setAddress] = useState<string>('Đang định vị GPS...');
@@ -353,9 +354,28 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.doneBtn} onPress={onClose} activeOpacity={0.85}>
-            <Text style={styles.doneBtnText}>HOÀN TẤT & ĐÓNG</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 10, width: '100%', marginTop: 14 }}>
+            <TouchableOpacity
+              style={[styles.doneBtn, { flex: 1, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1' }]}
+              onPress={() => {
+                setSuccessData(null);
+                setDescription('');
+                setImageUri(null);
+                setImageBase64(null);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.doneBtnText, { color: '#0F172A' }]}>GỬI YÊU CẦU MỚI</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.doneBtn, { flex: 1 }]}
+              onPress={onClose}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.doneBtnText}>{isTab ? 'VỀ TRANG CHỦ' : 'HOÀN TẤT & ĐÓNG'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     );
@@ -365,9 +385,13 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={onClose} activeOpacity={0.7}>
-          <Feather name="x" size={24} color="#0F172A" />
-        </TouchableOpacity>
+        {onClose ? (
+          <TouchableOpacity style={styles.backButton} onPress={onClose} activeOpacity={0.7}>
+            <Feather name={isTab ? "home" : "x"} size={22} color="#0F172A" />
+          </TouchableOpacity>
+        ) : (
+          <View style={{ width: 36 }} />
+        )}
         <View style={styles.headerTitleWrap}>
           <Text style={styles.headerTitle}>CỨU HỘ NGẬP LỤT KHẨN CẤP</Text>
           <Text style={styles.headerSubTitle}>Gửi trực tiếp tới Đội cứu hộ & Ca-nô/Xuồng</Text>
@@ -527,6 +551,62 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose }) => {
               </View>
             )}
           </TouchableOpacity>
+
+          {/* SỐ ĐIỆN THOẠI KHẨN CẤP QUỐC GIA (BẤM ĐỂ GỌI TRỰC TIẾP) */}
+          <View style={styles.contactsCard}>
+            <Text style={styles.contactsTitle}>Số điện thoại khẩn cấp quốc gia (Bấm để gọi ngay)</Text>
+
+            <View style={styles.contactRow}>
+              <View style={[styles.contactIcon, { backgroundColor: '#DC2626' }]}>
+                <Ionicons name="flame" size={18} color="#FFFFFF" />
+              </View>
+              <View style={styles.contactInfo}>
+                <Text style={styles.contactName}>Cứu nạn & Cứu hỏa</Text>
+                <Text style={styles.contactNumber}>114 (Miễn phí cước)</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.callBtn}
+                onPress={() => Linking.openURL('tel:114').catch(() => {})}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="call" size={16} color="#DC2626" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.contactRow}>
+              <View style={[styles.contactIcon, { backgroundColor: '#10B981' }]}>
+                <Ionicons name="medical" size={18} color="#FFFFFF" />
+              </View>
+              <View style={styles.contactInfo}>
+                <Text style={styles.contactName}>Cấp cứu y tế</Text>
+                <Text style={styles.contactNumber}>115 (Miễn phí cước)</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.callBtn}
+                onPress={() => Linking.openURL('tel:115').catch(() => {})}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="call" size={16} color="#10B981" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.contactRow}>
+              <View style={[styles.contactIcon, { backgroundColor: '#3B82F6' }]}>
+                <Ionicons name="shield" size={18} color="#FFFFFF" />
+              </View>
+              <View style={styles.contactInfo}>
+                <Text style={styles.contactName}>Cảnh sát phản ứng nhanh</Text>
+                <Text style={styles.contactNumber}>113 (Miễn phí cước)</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.callBtn}
+                onPress={() => Linking.openURL('tel:113').catch(() => {})}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="call" size={16} color="#3B82F6" />
+              </TouchableOpacity>
+            </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -1191,5 +1271,62 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     fontWeight: '600',
+  },
+  contactsCard: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 18,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  contactsTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 12,
+  },
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  contactIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  contactInfo: {
+    flex: 1,
+  },
+  contactName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  contactNumber: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  callBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
