@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { NavItemKey } from './Sidebar';
+import type { User } from '../types/auth';
 import type {
   SosRequestItem,
   AdminOverviewStats,
@@ -8,6 +9,7 @@ import type {
   AuditLogItem,
   AdministrativeAreaItem,
   AuthorityOrgItem,
+  SafeLocationItem,
 } from '../types/dashboard';
 import {
   fetchSosRequests,
@@ -24,6 +26,8 @@ import {
   fetchAdministrativeAreas,
   fetchAuthorityOrganizations,
   fetchAuditLogs,
+  fetchSafeLocations,
+  createSafeLocation,
 } from '../services/api';
 import {
   Siren,
@@ -47,6 +51,9 @@ import {
   Send,
   RefreshCw,
   Loader2,
+  MapPin,
+  Plus,
+  Home,
 } from 'lucide-react';
 import './DashboardViews.css';
 
@@ -55,11 +62,13 @@ import { domainDService } from '../services/domainDService';
 interface DashboardViewsProps {
   activeKey: NavItemKey;
   onOpenMap: () => void;
+  user?: User;
 }
 
 export const DashboardViews: React.FC<DashboardViewsProps> = ({
   activeKey,
   onOpenMap,
+  user,
 }) => {
   const [loading, setLoading] = useState(false);
   const [refreshIndex, setRefreshIndex] = useState(0);
@@ -96,6 +105,19 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     type: 'FLOOD',
     severity: 'HIGH',
     areaId: '',
+  });
+
+  // State phục vụ Quản lý Điểm trú ẩn & Trạm an toàn (UC-L12)
+  const [shelters, setShelters] = useState<SafeLocationItem[]>([]);
+  const [showShelterModal, setShowShelterModal] = useState(false);
+  const [shelterForm, setShelterForm] = useState({
+    name: '',
+    type: 'EVACUATION_CENTER',
+    address: '',
+    capacity: 100,
+    currentOccupancy: 0,
+    areaId: '',
+    coordinates: '108.2540, 15.9720',
   });
 
   const refreshData = () => setRefreshIndex((prev) => prev + 1);
@@ -275,6 +297,49 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
         }
       }
 
+      // 7b. Nếu ở trang Điểm trú ẩn & Trạm an toàn -> Lấy Safe Locations từ DB
+      if (activeKey === 'shelters') {
+        const res = await fetchSafeLocations();
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setShelters(res.data);
+        } else {
+          // Fallback các điểm trú ẩn an toàn nếu DB chưa có
+          const fallbackShelters: SafeLocationItem[] = [
+            {
+              _id: 'shelter-dn-01',
+              name: 'Điểm sơ tán Trường Đại học FPT Đà Nẵng',
+              type: 'EVACUATION_CENTER',
+              address: 'Khu đô thị FPT City, Phường Hòa Hải, Ngũ Hành Sơn, Đà Nẵng',
+              capacity: 1000,
+              currentOccupancy: 120,
+              status: 'ACTIVE',
+              location: { type: 'Point', coordinates: [108.2612, 15.9698] },
+            },
+            {
+              _id: 'shelter-dn-02',
+              name: 'Trạm Y tế Dã chiến Cấp cứu - BV Phụ sản Nhi',
+              type: 'HOSPITAL',
+              address: '402 Lê Văn Hiến, Phường Khuê Mỹ, Ngũ Hành Sơn, Đà Nẵng',
+              capacity: 250,
+              currentOccupancy: 45,
+              status: 'ACTIVE',
+              location: { type: 'Point', coordinates: [108.2435, 16.0221] },
+            },
+            {
+              _id: 'shelter-dn-03',
+              name: 'Nhà Văn hóa Cộng đồng Trà Khê',
+              type: 'SHELTER',
+              address: 'Đường Nam Kỳ Khởi Nghĩa, Phường Hòa Quý, Ngũ Hành Sơn, Đà Nẵng',
+              capacity: 150,
+              currentOccupancy: 85,
+              status: 'ACTIVE',
+              location: { type: 'Point', coordinates: [108.2395, 15.9812] },
+            },
+          ];
+          setShelters(fallbackShelters);
+        }
+      }
+
       // 8. Nếu ở trang Khu vực hành chính -> Lấy Administrative Areas
       if (activeKey === 'areas') {
         const res = await fetchAdministrativeAreas();
@@ -291,14 +356,16 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
         }
       }
 
-      // Tải danh mục khu vực để dùng cho form tạo SOS / Alert
-      if (['sos_requests', 'alerts'].includes(activeKey)) {
+      // Tải danh mục khu vực để dùng cho form tạo SOS / Alert / Shelter
+      if (['sos_requests', 'alerts', 'shelters'].includes(activeKey)) {
         const areaRes = await fetchAdministrativeAreas();
         if (areaRes.success && Array.isArray(areaRes.data)) {
           setAreas(areaRes.data);
-          if (areaRes.data.length > 0 && !hotlineForm.areaId) {
-            setHotlineForm((f) => ({ ...f, areaId: areaRes.data[0]._id }));
-            setAlertForm((f) => ({ ...f, areaId: areaRes.data[0]._id }));
+          const defaultAreaId = user?.authority?.areaId || (areaRes.data[0]?._id ?? '');
+          if (areaRes.data.length > 0) {
+            setHotlineForm((f) => ({ ...f, areaId: f.areaId || defaultAreaId }));
+            setAlertForm((f) => ({ ...f, areaId: f.areaId || defaultAreaId }));
+            setShelterForm((f) => ({ ...f, areaId: f.areaId || defaultAreaId }));
           }
         }
       }
@@ -307,7 +374,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [activeKey, hotlineForm.areaId]);
+  }, [activeKey, hotlineForm.areaId, user?.authority?.areaId]);
 
   useEffect(() => {
     loadData();
@@ -426,10 +493,52 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
         severity: alertForm.severity,
       });
       alert('✅ Đã lưu và phát cảnh báo thiên tai thành công trên cơ sở dữ liệu!');
-      setAlertForm({ title: '', content: '', type: 'FLOOD', severity: 'HIGH', areaId: areas[0]?._id || '' });
+      setAlertForm({ title: '', content: '', type: 'FLOOD', severity: 'HIGH', areaId: user?.authority?.areaId || areas[0]?._id || '' });
       refreshData();
     } catch (err: any) {
       alert('❌ Lỗi phát cảnh báo: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Hành động 7: Thêm điểm trú ẩn an toàn mới (Lưu vào MongoDB safe_locations)
+  const handleCreateShelterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      const coords = shelterForm.coordinates.split(',').map((c) => parseFloat(c.trim()));
+      const lng = isNaN(coords[0]) ? 108.2540 : coords[0];
+      const lat = isNaN(coords[1]) ? 15.9720 : coords[1];
+      const targetAreaId = shelterForm.areaId || user?.authority?.areaId || (areas[0]?._id as string);
+
+      await createSafeLocation({
+        name: shelterForm.name,
+        type: shelterForm.type,
+        address: shelterForm.address,
+        capacity: Number(shelterForm.capacity) || 50,
+        currentOccupancy: Number(shelterForm.currentOccupancy) || 0,
+        areaId: targetAreaId,
+        location: {
+          type: 'Point',
+          coordinates: [lng, lat],
+        },
+      });
+
+      alert('✅ Đã thêm điểm trú ẩn / trạm an toàn mới vào cơ sở dữ liệu thành công!');
+      setShowShelterModal(false);
+      setShelterForm({
+        name: '',
+        type: 'EVACUATION_CENTER',
+        address: '',
+        capacity: 100,
+        currentOccupancy: 0,
+        areaId: user?.authority?.areaId || (areas[0]?._id as string) || '',
+        coordinates: '108.2540, 15.9720',
+      });
+      refreshData();
+    } catch (err: any) {
+      alert('❌ Lỗi thêm điểm trú ẩn: ' + (err.message || 'Lỗi server'));
     } finally {
       setLoading(false);
     }
@@ -932,60 +1041,165 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   }
 
   /* -------------------------------------------------------------
-   * 5. LOCAL AUTHORITY: CẢNH BÁO & TRẠM TRÚ ẨN (UC-L12)
+   * 5. LOCAL AUTHORITY: PHÁT CẢNH BÁO CHO NGƯỜI DÂN ĐỊA PHƯƠNG (UC-L12)
    * ------------------------------------------------------------- */
   if (activeKey === 'alerts') {
+    const currentArea = areas.find((a) => a._id === alertForm.areaId || a._id === user?.authority?.areaId) || areas[0];
+
+    const quickTemplates = [
+      {
+        title: '🌊 Cảnh báo ngập lụt dâng cao',
+        type: 'FLOOD',
+        severity: 'CRITICAL',
+        headline: `Cảnh báo ngập lụt khẩn cấp lưu vực ${currentArea?.name || 'địa phương'}`,
+        content: `Mực nước dâng nhanh trên 0.8m do mưa lớn kéo dài. Toàn bộ người dân vùng trũng thấp khẩn trương ngắt nguồn điện, di dời người già và trẻ nhỏ đến điểm trú ẩn an toàn của phường.`,
+      },
+      {
+        title: '⚡ Cảnh báo bão & gió giật mạnh',
+        type: 'STORM',
+        severity: 'HIGH',
+        headline: `Cảnh báo bão đổ bộ sức gió cấp 9-10 tại ${currentArea?.name || 'địa phương'}`,
+        content: `Gió giật mạnh nguy hiểm. Yêu cầu toàn bộ người dân ở yên trong nhà kiên cố, chằng chống cửa nẻo, tuyệt đối không di chuyển trên đường hoặc đứng gần cây to, cột điện.`,
+      },
+      {
+        title: '⛰️ Báo động sạt lở ven sông / taluy',
+        type: 'LANDSLIDE',
+        severity: 'HIGH',
+        headline: `Cảnh báo sạt lở nguy hiểm ven sông và triền dốc tại ${currentArea?.name || 'địa bàn'}`,
+        content: `Xuất hiện dấu hiệu nứt trượt bờ sông và taluy dốc. Yêu cầu các hộ dân nằm trong bán kính 100m khẩn cấp sơ tán ngay đến nhà văn hóa hoặc trường học an toàn đã bố trí.`,
+      },
+      {
+        title: '📢 Hiệu lệnh sơ tán dân khẩn cấp',
+        type: 'EVACUATION',
+        severity: 'CRITICAL',
+        headline: `Lệnh sơ tán khẩn cấp toàn bộ cư dân khu vực nguy hiểm ${currentArea?.name || ''}`,
+        content: `Mức nước vượt ngưỡng báo động khẩn. Lực lượng cứu hộ địa phương đang bố trí ca-nô và xe đặc chủng tại đầu đường chính để đón người dân đến Trạm sơ tán. Gọi Hotline SOS nếu cần hỗ trợ đặc biệt.`,
+      },
+    ];
+
     return (
       <div className="sos-views-container">
+        {/* Form Phát cảnh báo */}
         <div className="sos-view-card">
           <div className="sos-view-card-header">
             <div className="sos-view-card-title">
               <BellRing size={18} color="#ef4444" />
-              <span>Phát Cảnh Báo Mới (Lưu vào Collection `alerts` MongoDB)</span>
+              <span>Soạn &amp; Phát Cảnh Báo Khẩn Cấp Cho Người Dân</span>
+            </div>
+            <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+              Dữ liệu lưu trực tiếp vào Collection `alerts` MongoDB
+            </span>
+          </div>
+
+          {/* Mẫu cảnh báo nhanh một chạm */}
+          <div>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: '#94a3b8', marginBottom: '6px' }}>
+              Mẫu cảnh báo địa phương soạn sẵn (Nhấp để điền nhanh):
+            </div>
+            <div className="sos-quick-broadcast-grid">
+              {quickTemplates.map((t, idx) => (
+                <button
+                  type="button"
+                  key={idx}
+                  className="sos-quick-template-btn"
+                  onClick={() => {
+                    setAlertForm({
+                      ...alertForm,
+                      title: t.headline,
+                      content: t.content,
+                      type: t.type,
+                      severity: t.severity as any,
+                      areaId: alertForm.areaId || user?.authority?.areaId || (areas[0]?._id as string),
+                    });
+                  }}
+                >
+                  <span className="sos-quick-template-title">{t.title}</span>
+                  <span className="sos-quick-template-snippet">{t.content}</span>
+                </button>
+              ))}
             </div>
           </div>
-          <form onSubmit={handleCreateAlertSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div>
-              <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Tiêu đề cảnh báo:</label>
-              <input
-                type="text"
-                required
-                value={alertForm.title}
-                onChange={(e) => setAlertForm({ ...alertForm, title: e.target.value })}
-                placeholder="VD: Cảnh báo nước sông Cổ Cò vượt báo động 3"
-                className="sos-form-input"
-                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
-              />
+
+          <form onSubmit={handleCreateAlertSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
+              <div>
+                <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Tiêu đề cảnh báo:</label>
+                <input
+                  type="text"
+                  required
+                  value={alertForm.title}
+                  onChange={(e) => setAlertForm({ ...alertForm, title: e.target.value })}
+                  placeholder="VD: Cảnh báo nước sông dâng cao vượt báo động 3"
+                  className="sos-form-input"
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
+                />
+              </div>
+
+              <div>
+                <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Địa bàn người dân tiếp nhận cảnh báo:</label>
+                <select
+                  value={alertForm.areaId}
+                  onChange={(e) => setAlertForm({ ...alertForm, areaId: e.target.value })}
+                  className="sos-form-select"
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
+                >
+                  {areas.map((a) => (
+                    <option key={a._id} value={a._id}>
+                      {a.name} ({a.code}) {user?.authority?.areaId === a._id ? '★ Địa bàn quản lý' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Loại thiên tai / tình huống:</label>
+                <select
+                  value={alertForm.type}
+                  onChange={(e) => setAlertForm({ ...alertForm, type: e.target.value })}
+                  className="sos-form-select"
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
+                >
+                  <option value="FLOOD">LŨ LỤT &amp; NGẬP ÚNG</option>
+                  <option value="STORM">BÃO LỚN &amp; LỐC XOÁY</option>
+                  <option value="LANDSLIDE">SẠT LỞ ĐẤT ĐÁ</option>
+                  <option value="EVACUATION">HIỆU LỆNH SƠ TÁN</option>
+                  <option value="GENERAL">CẢNH BÁO CHUNG</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Mức độ nghiêm trọng:</label>
+                <select
+                  value={alertForm.severity}
+                  onChange={(e) => setAlertForm({ ...alertForm, severity: e.target.value as any })}
+                  className="sos-form-select"
+                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
+                >
+                  <option value="CRITICAL">NGUY CẤP (Báo động đỏ - Còi hú &amp; Khẩn cấp)</option>
+                  <option value="HIGH">CAO (Cảnh báo cam - Nguy hiểm cao)</option>
+                  <option value="MEDIUM">TRUNG BÌNH (Cảnh báo vàng)</option>
+                  <option value="LOW">THÔNG BÁO (Hướng dẫn phòng ngừa)</option>
+                </select>
+              </div>
             </div>
+
             <div>
-              <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Khu vực áp dụng:</label>
-              <select
-                value={alertForm.areaId}
-                onChange={(e) => setAlertForm({ ...alertForm, areaId: e.target.value })}
-                className="sos-form-select"
-                style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
-              >
-                {areas.map((a) => (
-                  <option key={a._id} value={a._id}>{a.name} ({a.code})</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Nội dung cảnh báo chi tiết:</label>
+              <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Nội dung cảnh báo &amp; hướng dẫn hành động cho người dân:</label>
               <textarea
                 rows={3}
                 required
                 value={alertForm.content}
                 onChange={(e) => setAlertForm({ ...alertForm, content: e.target.value })}
-                placeholder="Nhập thông tin hướng dẫn sơ tán và liên hệ khẩn cấp..."
+                placeholder="Nhập thông tin hướng dẫn sơ tán, địa điểm trạm trú ẩn, số hotline liên hệ khẩn cấp..."
                 className="sos-form-textarea"
                 style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
               />
             </div>
+
             <div>
               <button type="submit" disabled={loading} className="sos-hotline-btn">
                 <Send size={15} />
-                <span>{loading ? 'Đang lưu vào DB...' : 'Lưu & Phát Cảnh Báo Vào Database'}</span>
+                <span>{loading ? 'Đang phát cảnh báo...' : '📢 Phát Cảnh Báo Cho Người Dân Địa Phương Vào Database'}</span>
               </button>
             </div>
           </form>
@@ -993,35 +1207,356 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
         {/* Danh sách cảnh báo đang lưu trong DB */}
         <div className="sos-view-card">
-          <div className="sos-view-card-title" style={{ marginBottom: 16 }}>
-            <BellRing size={18} color="#0284c7" />
-            <span>Các Cảnh Báo Đang Hoạt Động Trong Cơ Sở Dữ Liệu ({alerts.length})</span>
+          <div className="sos-view-card-header">
+            <div className="sos-view-card-title">
+              <BellRing size={18} color="#0284c7" />
+              <span>Cảnh Báo Đang Hoạt Động Trên Địa Bàn ({alerts.length})</span>
+            </div>
+            <button type="button" onClick={refreshData} className="sos-btn-refresh">
+              <RefreshCw size={14} />
+              <span>Làm mới</span>
+            </button>
           </div>
           <div className="sos-table-wrapper">
             <table className="sos-table">
               <thead>
                 <tr>
-                  <th>Tiêu đề</th>
+                  <th>Tiêu đề cảnh báo</th>
                   <th>Loại</th>
                   <th>Mức độ</th>
-                  <th>Nội dung</th>
+                  <th>Địa bàn áp dụng</th>
+                  <th>Nội dung hướng dẫn</th>
                   <th>Trạng thái</th>
                 </tr>
               </thead>
               <tbody>
-                {alerts.map((al) => (
-                  <tr key={al._id}>
-                    <td><strong>{al.title}</strong></td>
-                    <td>{al.type}</td>
-                    <td><span className={`sos-badge ${al.severity?.toLowerCase()}`}>{al.severity}</span></td>
-                    <td style={{ maxWidth: '300px' }}>{al.content}</td>
-                    <td><span className="sos-badge active">{al.isActive ? 'ĐANG PHÁT' : 'HẾT HẠN'}</span></td>
+                {alerts.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
+                      Chưa có cảnh báo nào trong khu vực.
+                    </td>
                   </tr>
-                ))}
+                ) : (
+                  alerts.map((al) => {
+                    const areaName = typeof al.areaId === 'object' && al.areaId !== null ? al.areaId.name : 'Địa bàn toàn quận';
+                    return (
+                      <tr key={al._id}>
+                        <td><strong>{al.title}</strong></td>
+                        <td>{al.type}</td>
+                        <td><span className={`sos-badge ${al.severity?.toLowerCase()}`}>{al.severity}</span></td>
+                        <td><span className="sos-badge verified">{areaName}</span></td>
+                        <td style={{ maxWidth: '320px' }}>{al.content}</td>
+                        <td><span className="sos-badge active">{al.isActive ? 'ĐANG PHÁT TỚI DÂN' : 'HẾT HẠN'}</span></td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  /* -------------------------------------------------------------
+   * 5b. LOCAL AUTHORITY: ĐIỂM TRÚ ẨN & TRẠM AN TOÀN (UC-L12)
+   * ------------------------------------------------------------- */
+  if (activeKey === 'shelters') {
+    const totalCapacity = shelters.reduce((acc, curr) => acc + (curr.capacity || 0), 0);
+    const totalOccupancy = shelters.reduce((acc, curr) => acc + (curr.currentOccupancy || 0), 0);
+    const availableSlots = Math.max(0, totalCapacity - totalOccupancy);
+
+    const typeLabels: Record<string, string> = {
+      EVACUATION_CENTER: 'Trung tâm sơ tán tập trung',
+      HOSPITAL: 'Trạm Y tế Dã chiến',
+      SHELTER: 'Điểm tránh trú bão lũ',
+      RESCUE_STATION: 'Trạm cứu hộ tác chiến',
+      MEETING_POINT: 'Điểm tập kết an toàn',
+    };
+
+    return (
+      <div className="sos-views-container">
+        {/* KPI Thống kê sức chứa trú ẩn an toàn */}
+        <div className="sos-stats-grid">
+          <div className="sos-stat-box">
+            <div className="sos-stat-icon blue"><Shield size={22} /></div>
+            <div className="sos-stat-meta">
+              <span className="sos-stat-value">{shelters.length} Điểm</span>
+              <span className="sos-stat-label">Tổng điểm trú ẩn &amp; trạm an toàn (DB)</span>
+            </div>
+          </div>
+
+          <div className="sos-stat-box">
+            <div className="sos-stat-icon green"><Users size={22} /></div>
+            <div className="sos-stat-meta">
+              <span className="sos-stat-value">{totalCapacity} Chỗ</span>
+              <span className="sos-stat-label">Tổng sức chứa người dân tối đa</span>
+            </div>
+          </div>
+
+          <div className="sos-stat-box">
+            <div className="sos-stat-icon yellow"><Home size={22} /></div>
+            <div className="sos-stat-meta">
+              <span className="sos-stat-value">{totalOccupancy} Người</span>
+              <span className="sos-stat-label">Người dân đang tạm trú an toàn</span>
+            </div>
+          </div>
+
+          <div className="sos-stat-box">
+            <div className="sos-stat-icon purple"><CheckCircle2 size={22} /></div>
+            <div className="sos-stat-meta">
+              <span className="sos-stat-value">{availableSlots} Chỗ</span>
+              <span className="sos-stat-label">Sức chứa còn khả dụng tiếp nhận</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Danh sách các Điểm Trú Ẩn lấy từ DB */}
+        <div className="sos-view-card">
+          <div className="sos-view-card-header">
+            <div className="sos-view-card-title">
+              <Shield size={18} color="#22c55e" />
+              <span>Danh Sách Điểm Trú Ẩn &amp; Trạm Y Tế An Toàn Địa Phương ({shelters.length})</span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setShowShelterModal(true)}
+                className="sos-hotline-btn"
+                style={{ padding: '8px 14px', fontSize: '13px' }}
+              >
+                <Plus size={15} />
+                <span>Thêm Điểm Trú Ẩn Mới</span>
+              </button>
+              <button type="button" onClick={refreshData} className="sos-btn-refresh">
+                <RefreshCw size={14} />
+                <span>Làm mới</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="sos-table-wrapper">
+            <table className="sos-table">
+              <thead>
+                <tr>
+                  <th>Tên cơ sở an toàn</th>
+                  <th>Phân loại</th>
+                  <th>Địa chỉ cụ thể</th>
+                  <th>Sức chứa &amp; Tỷ lệ lưu trú</th>
+                  <th>Trạng thái</th>
+                  <th>Hành động</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shelters.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: '#94a3b8' }}>
+                      Chưa có điểm trú ẩn nào trong database. Hãy nhấn "Thêm Điểm Trú Ẩn Mới".
+                    </td>
+                  </tr>
+                ) : (
+                  shelters.map((sh) => {
+                    const capacity = sh.capacity || 1;
+                    const occupancy = sh.currentOccupancy || 0;
+                    const percent = Math.min(100, Math.round((occupancy / capacity) * 100));
+                    const barColor = percent >= 90 ? 'full' : percent >= 60 ? 'warning' : 'safe';
+
+                    return (
+                      <tr key={sh._id}>
+                        <td>
+                          <strong>{sh.name}</strong>
+                          {sh.location?.coordinates && (
+                            <div style={{ fontSize: '11px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                              <MapPin size={11} />
+                              <span>{sh.location.coordinates[1].toFixed(4)}, {sh.location.coordinates[0].toFixed(4)}</span>
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <span className="sos-badge verified">
+                            {typeLabels[sh.type] || sh.type}
+                          </span>
+                        </td>
+                        <td style={{ maxWidth: '280px' }}>{sh.address}</td>
+                        <td>
+                          <div className="sos-occupancy-cell">
+                            <div className="sos-occupancy-meta">
+                              <span>{occupancy} / {capacity} người</span>
+                              <span>{percent}%</span>
+                            </div>
+                            <div className="sos-occupancy-bar-bg">
+                              <div
+                                className={`sos-occupancy-bar-fill ${barColor}`}
+                                style={{ width: `${percent}%` }}
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`sos-badge ${percent >= 100 ? 'critical' : 'active'}`}>
+                            {percent >= 100 ? 'ĐÃ ĐẦY' : sh.status === 'ACTIVE' ? 'SẴN SÀNG TIẾP NHẬN' : sh.status}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            onClick={onOpenMap}
+                            className="sos-btn-action view"
+                            title="Định vị điểm trú ẩn này trên Bản đồ tác chiến"
+                          >
+                            <MapPin size={13} />
+                            <span>Bản đồ</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Modal Thêm Điểm Trú Ẩn Mới (Lưu MongoDB) */}
+        {showShelterModal && (
+          <div className="sos-modal-overlay">
+            <div className="sos-modal-card" style={{ maxWidth: '560px' }}>
+              <div className="sos-modal-header">
+                <div className="sos-modal-title">
+                  <Shield size={20} color="#22c55e" />
+                  <span>Thêm Điểm Trú Ẩn / Trạm An Toàn Mới</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowShelterModal(false)}
+                  className="sos-modal-close"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateShelterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px' }}>
+                <div>
+                  <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Tên điểm sơ tán / trạm an toàn:</label>
+                  <input
+                    type="text"
+                    required
+                    value={shelterForm.name}
+                    onChange={(e) => setShelterForm({ ...shelterForm, name: e.target.value })}
+                    placeholder="VD: Trường Tiểu học Lê Quý Đôn - Điểm Tránh Trú"
+                    className="sos-form-input"
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Loại cơ sở:</label>
+                    <select
+                      value={shelterForm.type}
+                      onChange={(e) => setShelterForm({ ...shelterForm, type: e.target.value as any })}
+                      className="sos-form-select"
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
+                    >
+                      <option value="EVACUATION_CENTER">Trung tâm sơ tán tập trung</option>
+                      <option value="HOSPITAL">Trạm Y tế dã chiến</option>
+                      <option value="SHELTER">Điểm trú ẩn kiên cố</option>
+                      <option value="RESCUE_STATION">Trạm chỉ huy cứu hộ</option>
+                      <option value="MEETING_POINT">Điểm hẹn tập kết</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Khu vực hành chính:</label>
+                    <select
+                      value={shelterForm.areaId}
+                      onChange={(e) => setShelterForm({ ...shelterForm, areaId: e.target.value })}
+                      className="sos-form-select"
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
+                    >
+                      {areas.map((a) => (
+                        <option key={a._id} value={a._id}>{a.name} ({a.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Địa chỉ cụ thể:</label>
+                  <input
+                    type="text"
+                    required
+                    value={shelterForm.address}
+                    onChange={(e) => setShelterForm({ ...shelterForm, address: e.target.value })}
+                    placeholder="VD: Số 45 đường Nguyễn Du, Phường Hòa Cường"
+                    className="sos-form-input"
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Sức chứa tối đa (người):</label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      value={shelterForm.capacity}
+                      onChange={(e) => setShelterForm({ ...shelterForm, capacity: parseInt(e.target.value, 10) || 50 })}
+                      className="sos-form-input"
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Đang lưu trú hiện tại:</label>
+                    <input
+                      type="number"
+                      required
+                      min={0}
+                      value={shelterForm.currentOccupancy}
+                      onChange={(e) => setShelterForm({ ...shelterForm, currentOccupancy: parseInt(e.target.value, 10) || 0 })}
+                      className="sos-form-input"
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Tọa độ GPS (Kinh độ, Vĩ độ):</label>
+                  <input
+                    type="text"
+                    required
+                    value={shelterForm.coordinates}
+                    onChange={(e) => setShelterForm({ ...shelterForm, coordinates: e.target.value })}
+                    placeholder="VD: 108.2540, 15.9720"
+                    className="sos-form-input"
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowShelterModal(false)}
+                    className="sos-btn-refresh"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="sos-hotline-btn"
+                  >
+                    <Send size={15} />
+                    <span>{loading ? 'Đang lưu vào DB...' : 'Lưu Điểm Trú Ẩn Vào Database'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

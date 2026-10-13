@@ -150,3 +150,28 @@ export interface AuthorityOrgItem {
   address?: string;
   status: string;
 }
+
+export interface SafeLocationItem {
+  _id: string;
+  name: string;
+  type: 'EVACUATION_CENTER' | 'HOSPITAL' | 'RESCUE_STATION' | 'SHELTER' | 'MEETING_POINT';
+  location: {
+    type: 'Point';
+    coordinates: [number, number]; // [lng, lat]
+  };
+  areaId?: {
+    _id: string;
+    name: string;
+    code?: string;
+  } | string;
+  address: string;
+  capacity: number;
+  currentOccupancy: number;
+  status: 'ACTIVE' | 'INACTIVE' | 'FULL' | 'MAINTENANCE';
+  createdBy?: {
+    _id: string;
+    fullName: string;
+  } | string;
+  createdAt?: string;
+}
+
