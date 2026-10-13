@@ -196,3 +196,27 @@ export interface HazardReportItem {
   updatedAt: string;
 }
 
+export interface SafeLocationItem {
+  _id: string;
+  name: string;
+  type: 'EVACUATION_CENTER' | 'HOSPITAL' | 'RESCUE_STATION' | 'SHELTER' | 'MEETING_POINT';
+  location: {
+    type: 'Point';
+    coordinates: [number, number]; // [lng, lat]
+  };
+  address: string;
+  areaId?: {
+    _id: string;
+    name: string;
+    code?: string;
+  } | string;
+  capacity: number;
+  currentOccupancy: number;
+  status: 'ACTIVE' | 'INACTIVE' | 'FULL' | 'MAINTENANCE';
+  createdBy?: {
+    _id: string;
+    fullName: string;
+  } | string;
+  createdAt?: string;
+}
+

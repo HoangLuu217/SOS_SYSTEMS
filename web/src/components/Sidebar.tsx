@@ -21,8 +21,6 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  ShieldCheck,
-  Radio,
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -34,6 +32,7 @@ export type NavItemKey =
   | 'rescuers'
   | 'resources'
   | 'alerts'
+  | 'shelters'
   | 'hazard_reports'
   | 'reports'
   // Admin keys
@@ -201,9 +200,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           key: 'alerts',
-          label: 'Phát cảnh báo & Trạm trú ẩn',
+          label: 'Phát cảnh báo địa phương',
           useCase: 'UC-L12',
           icon: <BellRing size={18} className="sos-nav-icon" />,
+        },
+        {
+          key: 'shelters',
+          label: 'Điểm trú ẩn & Trạm an toàn',
+          useCase: 'UC-L12',
+          icon: <Shield size={18} className="sos-nav-icon" />,
         },
         {
           key: 'hazard_reports',
@@ -331,24 +336,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
       </div>
 
-      {/* 2. Banner định danh vai trò (Role Badge) */}
-      {!collapsed && (
-        <div className={`sos-role-banner ${isAdmin ? 'admin' : 'authority'}`}>
-          {isAdmin ? <ShieldCheck size={18} /> : <Radio size={18} />}
-          <div className="sos-role-banner-text">
-            <span className="sos-role-banner-title">
-              {isAdmin ? 'Quản Trị Viên (ADMIN)' : 'Cán Bộ (LOCAL_AUTHORITY)'}
-            </span>
-            <span className="sos-role-banner-sub">
-              {isAdmin
-                ? 'Toàn quyền điều hành hệ thống'
-                : user.authority?.department || 'Ban chỉ huy PCTT & TKCN'}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* 3. Danh sách Menu điều hướng (Nav Items) */}
+      {/* 2. Danh sách Menu điều hướng (Nav Items) */}
       <nav className="sos-sidebar-nav">
         {currentGroups.map((group, groupIdx) => (
           <div key={groupIdx} className="sos-nav-group">

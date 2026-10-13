@@ -9,6 +9,7 @@ import type {
   AdministrativeAreaItem,
   AuthorityOrgItem,
   HazardReportItem,
+  SafeLocationItem,
 } from '../types/dashboard';
 
 const API_BASE = '/api';
@@ -29,11 +30,40 @@ async function safeParseResponse(res: Response): Promise<any> {
   }
 }
 
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = localStorage.getItem('sos_refresh_token');
+  if (!refreshToken) return null;
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ refreshToken }),
+    });
+
+    const data = await safeParseResponse(res);
+    if (res.ok && data.success && data.data?.accessToken) {
+      const newAccessToken = data.data.accessToken;
+      localStorage.setItem('sos_access_token', newAccessToken);
+      if (data.data.refreshToken) {
+        localStorage.setItem('sos_refresh_token', data.data.refreshToken);
+      }
+      return newAccessToken;
+    }
+  } catch (e) {
+    console.warn('Lỗi tự động làm mới token:', e);
+  }
+  return null;
+}
+
 /**
- * Helper gọi API kèm Header Authorization token tự động và xử lý fallback URL
+ * Helper gọi API kèm Header Authorization token tự động và xử lý fallback URL & Silent Refresh Token
  */
 async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('sos_access_token');
+  let token = localStorage.getItem('sos_access_token');
   const userStr = localStorage.getItem('sos_auth_user');
   let userId = '';
   if (userStr) {
@@ -42,7 +72,6 @@ async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Pr
       userId = u._id || u.id || '';
     } catch {}
   }
-
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {}),
@@ -62,7 +91,26 @@ async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Pr
   };
 
   try {
-    const res = await fetch(`${API_BASE}${endpoint}`, mergedOptions);
+    let res = await fetch(`${API_BASE}${endpoint}`, mergedOptions);
+
+    // Xử lý khi Token hết hạn (HTTP 401): Tự động làm mới bằng Refresh Token mà không gián đoạn người dùng
+    if (!res.ok && res.status === 401 && endpoint !== '/auth/refresh' && endpoint !== '/auth/login') {
+      if (!refreshPromise) {
+        refreshPromise = refreshAccessToken().finally(() => {
+          refreshPromise = null;
+        });
+      }
+      const newToken = await refreshPromise;
+      if (newToken) {
+        token = newToken;
+        headers['Authorization'] = `Bearer ${newToken}`;
+        res = await fetch(`${API_BASE}${endpoint}`, {
+          ...mergedOptions,
+          headers,
+        });
+      }
+    }
+
     if (!res.ok && res.status >= 500) {
       throw new Error(`Proxy error HTTP ${res.status}`);
     }
@@ -459,5 +507,32 @@ export function subscribeHazardEvents(onEvent: (payload: { action: 'CREATED' | '
       eventSource.close();
     }
   };
+}
+
+// ─── SAFE LOCATIONS (ĐIỂM TRÚ ẨN & TRẠM Y TẾ AN TOÀN) ─────────────────────────
+
+export async function fetchSafeLocations(params: Record<string, string> = {}): Promise<{ success: boolean; data: SafeLocationItem[] }> {
+  const query = new URLSearchParams(params).toString();
+  const endpoint = query ? `/safe-locations?${query}` : '/safe-locations';
+  const raw = await fetchWithAuth<any>(endpoint, { method: 'GET' });
+  if (Array.isArray(raw.data)) {
+    return { success: raw.success, data: raw.data };
+  }
+  return raw;
+}
+
+export async function createSafeLocation(payload: {
+  name: string;
+  type: string;
+  address: string;
+  capacity: number;
+  currentOccupancy?: number;
+  areaId: string;
+  location: { type: 'Point'; coordinates: [number, number] };
+}): Promise<{ success: boolean; data: SafeLocationItem }> {
+  return fetchWithAuth('/safe-locations', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }
 
