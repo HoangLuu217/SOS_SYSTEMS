@@ -14,6 +14,8 @@ import {
   Linking,
   Modal,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather, MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
@@ -29,12 +31,26 @@ const REQUEST_TYPES = [
   { id: 'OTHER', label: 'Yêu cầu cứu hộ khác', emoji: '❓' },
 ];
 
-// Danh sách đối tượng ưu tiên
-const PRIORITY_TARGETS = [
-  { id: 'PREGNANT', label: 'Phụ nữ có thai', icon: 'female', color: '#EF4444' },
+// Danh sách đối tượng ưu tiên mẫu (hỗ trợ tìm kiếm theo từ khóa)
+const PRIORITY_SUGGESTIONS = [
+  { id: 'PREGNANT', label: 'Phụ nữ mang thai / Sắp sinh', icon: 'female', color: '#EF4444' },
   { id: 'CHILD_UNDER_5', label: 'Trẻ em dưới 5 tuổi', icon: 'child', color: '#0284C7' },
-  { id: 'ELDERLY', label: 'Người cao tuổi (>65t)', icon: 'blind', color: '#D97706' },
-  { id: 'DISABILITY_SICK', label: 'Người bệnh / Khuyết tật', icon: 'wheelchair', color: '#8B5CF6' },
+  { id: 'INFANT', label: 'Trẻ sơ sinh (< 1 tuổi)', icon: 'baby', color: '#EC4899' },
+  { id: 'ELDERLY', label: 'Người cao tuổi (> 65 tuổi)', icon: 'blind', color: '#D97706' },
+  { id: 'DISABILITY', label: 'Người khuyết tật / Đi lại khó khăn', icon: 'wheelchair', color: '#8B5CF6' },
+  { id: 'SICK_SEVERE', label: 'Người bệnh nặng / Đang điều trị', icon: 'procedures', color: '#DC2626' },
+  { id: 'KIDNEY_DIALYSIS', label: 'Bệnh nhân suy thận / Cần chạy thận', icon: 'heartbeat', color: '#059669' },
+  { id: 'INJURED', label: 'Người bị thương / Chảy máu', icon: 'user-injured', color: '#EA580C' },
+  { id: 'NON_SWIMMER', label: 'Người không biết bơi', icon: 'life-ring', color: '#2563EB' },
+  { id: 'ISOLATED_ROOF', label: 'Mắc kẹt trên mái nhà / Nóc nhà', icon: 'home', color: '#7C3AED' },
+];
+
+// Các gợi ý nhanh phổ biến (1 chạm)
+const QUICK_PRIORITY_TAGS = [
+  { label: 'Phụ nữ có thai', icon: 'female', color: '#EF4444' },
+  { label: 'Trẻ em dưới 5 tuổi', icon: 'child', color: '#0284C7' },
+  { label: 'Người cao tuổi', icon: 'blind', color: '#D97706' },
+  { label: 'Người bệnh / khuyết tật', icon: 'wheelchair', color: '#8B5CF6' },
 ];
 
 interface SOSMapScreenProps {
@@ -48,7 +64,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
   const [requestType, setRequestType] = useState<string>('FLOOD');
   const [showTypeModal, setShowTypeModal] = useState<boolean>(false);
 
-  // Số người cần cứu
+  // Số người cần cứu (người dùng có thể tự gõ số hoặc bấm nút +/-)
   const [peopleCount, setPeopleCount] = useState<number>(1);
 
   // Số điện thoại chính & số điện thoại phụ
@@ -64,9 +80,19 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
   const [gpsAddress, setGpsAddress] = useState<string>('Đang định vị...');
   const [locating, setLocating] = useState<boolean>(true);
   const [detailedAddress, setDetailedAddress] = useState<string>('');
+  const [isCustomMapLocation, setIsCustomMapLocation] = useState<boolean>(false);
 
-  // Đối tượng ưu tiên
+  // Modal Bản đồ chọn vị trí
+  const [showMapPickerModal, setShowMapPickerModal] = useState<boolean>(false);
+  const [pickerCoords, setPickerCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [pickerAddress, setPickerAddress] = useState<string>('');
+  const [isReverseGeocoding, setIsReverseGeocoding] = useState<boolean>(false);
+  const mapPickerWebViewRef = useRef<WebView>(null);
+
+  // Đối tượng ưu tiên (Nhập tìm kiếm keyword + Gợi ý dropdown)
   const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
+  const [prioritySearchText, setPrioritySearchText] = useState<string>('');
+  const [isPriorityDropdownOpen, setIsPriorityDropdownOpen] = useState<boolean>(false);
 
   // Ảnh hiện trường (Không bắt buộc)
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -89,7 +115,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
     description: string;
   } | null>(null);
 
-  // Lấy vị trí GPS thực tế
+  // Lấy vị trí GPS thực tế của máy
   const fetchLocation = async () => {
     setLocating(true);
     try {
@@ -104,6 +130,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
         accuracy: Location.Accuracy.Balanced,
       });
       setLocation(currentLoc);
+      setIsCustomMapLocation(false);
 
       try {
         const [geo] = await Location.reverseGeocodeAsync({
@@ -136,15 +163,216 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
 
   // Tăng giảm số người
   const handleAdjustPeople = (delta: number) => {
-    setPeopleCount((prev) => Math.max(1, prev + delta));
+    setPeopleCount((prev) => Math.min(999, Math.max(1, prev + delta)));
   };
 
-  // Toggle đối tượng ưu tiên
-  const togglePriority = (id: string) => {
-    setSelectedPriorities((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
+  // Mở modal bản đồ chọn vị trí
+  const openMapPicker = () => {
+    const currentLat = location?.coords?.latitude || 15.96836;
+    const currentLng = location?.coords?.longitude || 108.26054;
+    setPickerCoords({ lat: currentLat, lng: currentLng });
+    setPickerAddress(gpsAddress.includes('Đang định vị') ? 'Chạm vào vị trí trên bản đồ để chọn' : gpsAddress);
+    setShowMapPickerModal(true);
   };
+
+  // Xử lý khi người dùng chạm vào vị trí bất kỳ trên bản đồ WebView
+  const handleMapPickerMessage = async (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'MAP_CLICK') {
+        const { lat, lng } = data;
+        setPickerCoords({ lat, lng });
+        setIsReverseGeocoding(true);
+        try {
+          const [geo] = await Location.reverseGeocodeAsync({
+            latitude: lat,
+            longitude: lng,
+          });
+          if (geo) {
+            const parts = [
+              geo.streetNumber,
+              geo.street,
+              geo.subregion,
+              geo.district,
+              geo.city || geo.region,
+            ].filter(Boolean);
+            const addr = parts.length > 0 ? parts.join(', ') : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+            setPickerAddress(addr);
+          } else {
+            setPickerAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+          }
+        } catch {
+          setPickerAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        } finally {
+          setIsReverseGeocoding(false);
+        }
+      }
+    } catch {
+      // Bỏ qua lỗi parse
+    }
+  };
+
+  // Quay lại vị trí GPS của máy trong Modal bản đồ
+  const moveToMyGps = async () => {
+    try {
+      setIsReverseGeocoding(true);
+      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const lat = current.coords.latitude;
+      const lng = current.coords.longitude;
+      setPickerCoords({ lat, lng });
+      mapPickerWebViewRef.current?.injectJavaScript(`window.setMapLocation(${lat}, ${lng}); true;`);
+      try {
+        const [geo] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+        if (geo) {
+          const parts = [geo.streetNumber, geo.street, geo.subregion, geo.district, geo.city || geo.region].filter(Boolean);
+          setPickerAddress(parts.join(', '));
+        }
+      } catch {
+        setPickerAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+      }
+    } catch {
+      Alert.alert('Không thể lấy GPS', 'Vui lòng kiểm tra quyền truy cập vị trí của ứng dụng.');
+    } finally {
+      setIsReverseGeocoding(false);
+    }
+  };
+
+  // Xác nhận vị trí đã chọn trên bản đồ
+  const handleConfirmMapLocation = () => {
+    if (pickerCoords) {
+      setLocation({
+        coords: {
+          latitude: pickerCoords.lat,
+          longitude: pickerCoords.lng,
+          altitude: null,
+          accuracy: null,
+          altitudeAccuracy: null,
+          heading: null,
+          speed: null,
+        },
+        timestamp: Date.now(),
+      });
+      setGpsAddress(pickerAddress || `${pickerCoords.lat.toFixed(5)}, ${pickerCoords.lng.toFixed(5)}`);
+      setIsCustomMapLocation(true);
+    }
+    setShowMapPickerModal(false);
+  };
+
+  // HTML bản đồ chọn vị trí Leaflet
+  const generatePickerMapHtml = (lat: number, lng: number) => `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+      <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #f1f5f9; }
+        @keyframes pulseWave {
+          0% { transform: scale(0.6); opacity: 0.95; }
+          70% { transform: scale(1.6); opacity: 0; }
+          100% { transform: scale(1.8); opacity: 0; }
+        }
+        .sos-picker-pin {
+          position: relative;
+          width: 44px;
+          height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .sos-picker-wave {
+          position: absolute;
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background-color: rgba(2, 132, 199, 0.45);
+          border: 2px solid #0284C7;
+          animation: pulseWave 1.5s ease-out infinite;
+        }
+        .sos-picker-core {
+          position: relative;
+          width: 32px;
+          height: 32px;
+          background: #0284C7;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          box-shadow: 0 0 10px rgba(2, 132, 199, 0.8), 0 3px 6px rgba(0,0,0,0.3);
+          border: 2.5px solid white;
+          z-index: 2;
+        }
+      </style>
+    </head>
+    <body>
+      <div id="map"></div>
+      <script>
+        var map = L.map('map', { zoomControl: false, preferCanvas: true }).setView([${lat}, ${lng}], 16);
+        L.control.zoom({ position: 'topright' }).addTo(map);
+
+        L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&apistyle=s.t:33|p.v:off%2Cs.t:21|s.e:l|p.v:off&x={x}&y={y}&z={z}', {
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 20
+        }).addTo(map);
+
+        var pinIcon = L.divIcon({
+          html: '<div class="sos-picker-pin"><div class="sos-picker-wave"></div><div class="sos-picker-core"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"/><circle cx="12" cy="10" r="3"/></svg></div></div>',
+          className: 'custom-picker-pin',
+          iconSize: [44, 44],
+          iconAnchor: [22, 22]
+        });
+
+        var marker = L.marker([${lat}, ${lng}], { icon: pinIcon }).addTo(map);
+
+        map.on('click', function(e) {
+          marker.setLatLng(e.latlng);
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'MAP_CLICK',
+              lat: e.latlng.lat,
+              lng: e.latlng.lng
+            }));
+          }
+        });
+
+        window.setMapLocation = function(newLat, newLng) {
+          map.setView([newLat, newLng], 16);
+          marker.setLatLng([newLat, newLng]);
+        };
+      </script>
+    </body>
+    </html>
+  `;
+
+  // Xử lý đối tượng ưu tiên
+  const handleAddCustomPriority = (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    if (!selectedPriorities.includes(trimmed)) {
+      setSelectedPriorities((prev) => [...prev, trimmed]);
+    }
+    setPrioritySearchText('');
+    setIsPriorityDropdownOpen(false);
+  };
+
+  const handleTogglePriority = (label: string) => {
+    if (selectedPriorities.includes(label)) {
+      setSelectedPriorities((prev) => prev.filter((p) => p !== label));
+    } else {
+      setSelectedPriorities((prev) => [...prev, label]);
+    }
+  };
+
+  const handleRemovePriority = (label: string) => {
+    setSelectedPriorities((prev) => prev.filter((p) => p !== label));
+  };
+
+  const filteredPrioritySuggestions = PRIORITY_SUGGESTIONS.filter((s) =>
+    s.label.toLowerCase().includes(prioritySearchText.trim().toLowerCase())
+  );
 
   // Chụp ảnh hiện trường
   const takePhoto = async () => {
@@ -225,9 +453,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
     setSending(true);
     try {
       const selectedTypeObj = REQUEST_TYPES.find((t) => t.id === requestType);
-      const priorityLabels = selectedPriorities.map(
-        (id) => PRIORITY_TARGETS.find((p) => p.id === id)?.label || id
-      );
+      const priorityLabels = selectedPriorities;
 
       // Địa chỉ tổng hợp
       let finalAddress = detailedAddress.trim();
@@ -438,7 +664,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
             </TouchableOpacity>
           </View>
 
-          {/* 2. SỐ NGƯỜI * (CÙNG 1 HÀNG VỚI NÚT STEPPER BÊN PHẢI) */}
+          {/* 2. SỐ NGƯỜI * (CÙNG 1 HÀNG, CÓ THỂ TỰ GÕ SỐ HOẶC BẤM +/-) */}
           <View style={styles.formCard}>
             <View style={styles.betweenHeaderRow}>
               <View style={styles.fieldHeaderRow}>
@@ -450,7 +676,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
                 </Text>
               </View>
 
-              {/* Stepper nhỏ gọn tỉ lệ chuẩn */}
+              {/* Stepper có thể tự gõ số hoặc bấm nút +/- */}
               <View style={styles.stepperContainer}>
                 <TouchableOpacity
                   style={styles.stepperActionBtn}
@@ -461,7 +687,23 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
                 </TouchableOpacity>
 
                 <View style={styles.stepperValueBox}>
-                  <Text style={styles.stepperValueText}>{peopleCount}</Text>
+                  <TextInput
+                    style={styles.stepperInput}
+                    keyboardType="number-pad"
+                    value={String(peopleCount)}
+                    onChangeText={(text) => {
+                      const cleaned = text.replace(/[^0-9]/g, '');
+                      if (!cleaned) {
+                        setPeopleCount(1);
+                      } else {
+                        const val = parseInt(cleaned, 10);
+                        setPeopleCount(Math.min(999, Math.max(1, val)));
+                      }
+                    }}
+                    maxLength={3}
+                    selectTextOnFocus
+                  />
+                  <Text style={styles.stepperUnitText}>người</Text>
                 </View>
 
                 <TouchableOpacity
@@ -565,43 +807,77 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
             </View>
           </View>
 
-          {/* 5. ĐỊA ĐIỂM * (CHỌN VỊ TRÍ & NHẬP SỐ NHÀ, TÊN ĐƯỜNG) */}
+          {/* 5. ĐỊA ĐIỂM * (CHỌN TRỰC TIẾP TRÊN BẢN ĐỒ & NHẬP SỐ NHÀ, TÊN ĐƯỜNG) */}
           <View style={styles.formCard}>
-            <View style={styles.fieldHeaderRow}>
-              <View style={styles.fieldBadgeIcon}>
-                <Ionicons name="location" size={16} color="#0284C7" />
+            <View style={styles.betweenHeaderRow}>
+              <View style={styles.fieldHeaderRow}>
+                <View style={styles.fieldBadgeIcon}>
+                  <Ionicons name="location" size={16} color="#0284C7" />
+                </View>
+                <Text style={styles.fieldTitle}>
+                  Địa điểm <Text style={styles.requiredStar}>*</Text>
+                </Text>
               </View>
-              <Text style={styles.fieldTitle}>
-                Địa điểm <Text style={styles.requiredStar}>*</Text>
-              </Text>
-              <Feather name="info" size={14} color="#94A3B8" style={{ marginLeft: 4 }} />
+
+              {/* Nút mở bản đồ để ghim vị trí */}
+              <TouchableOpacity
+                style={styles.openMapBtnHeader}
+                onPress={openMapPicker}
+                activeOpacity={0.75}
+              >
+                <Feather name="map" size={13} color="#0284C7" />
+                <Text style={styles.openMapBtnHeaderText}>Chọn trên bản đồ</Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Nút chọn vị trí / GPS */}
+            {/* Thẻ hiển thị vị trí (chạm vào để mở bản đồ chọn vị trí mới) */}
             <TouchableOpacity
-              style={styles.locationSelectorCard}
-              onPress={fetchLocation}
+              style={[styles.locationSelectorCard, isCustomMapLocation && styles.locationSelectorCardCustom]}
+              onPress={openMapPicker}
               activeOpacity={0.8}
             >
               <View style={styles.locationSelectorLeft}>
-                <Ionicons name="location-sharp" size={17} color="#0284C7" />
-                <Text style={styles.locationSelectorText} numberOfLines={1}>
-                  {locating ? 'Đang xác định vị trí...' : gpsAddress ? `Vị trí: ${gpsAddress}` : 'Chọn vị trí'}
-                </Text>
+                <Ionicons
+                  name={isCustomMapLocation ? "pin" : "location-sharp"}
+                  size={19}
+                  color="#0284C7"
+                />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                    <Text style={styles.locationModeBadge}>
+                      {isCustomMapLocation ? 'ĐÃ GHIM TRÊN BẢN ĐỒ' : 'GPS THIẾT BỊ'}
+                    </Text>
+                    <Text style={styles.locationModeHint}>(Chạm để đổi vị trí)</Text>
+                  </View>
+                  <Text style={styles.locationSelectorText} numberOfLines={2}>
+                    {locating ? 'Đang xác định vị trí...' : gpsAddress ? gpsAddress : 'Chạm để chọn vị trí trên bản đồ'}
+                  </Text>
+                </View>
               </View>
-              {locating ? (
-                <ActivityIndicator size="small" color="#0284C7" />
-              ) : (
-                <Feather name="refresh-cw" size={16} color="#0284C7" />
-              )}
+
+              <View style={styles.mapPinActionBtn}>
+                <Feather name="map-pin" size={15} color="#0284C7" />
+              </View>
             </TouchableOpacity>
 
-            {/* Ô nhập số nhà, tên đường, thôn ấp */}
+            {/* Nút quay lại GPS của thiết bị nếu đang dùng vị trí ghim */}
+            {isCustomMapLocation && (
+              <TouchableOpacity
+                style={styles.resetGpsBtn}
+                onPress={fetchLocation}
+                activeOpacity={0.7}
+              >
+                <Feather name="crosshair" size={14} color="#0284C7" />
+                <Text style={styles.resetGpsText}>Quay lại vị trí GPS của máy tôi</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Ô nhập số nhà, tên đường, thôn ấp chi tiết */}
             <View style={[styles.inputWrapWithIcon, { marginTop: 8 }]}>
               <Feather name="home" size={16} color="#94A3B8" style={styles.inputLeadingIcon} />
               <TextInput
                 style={styles.textInputInside}
-                placeholder="Nhập số nhà, tên đường, thôn ấp..."
+                placeholder="Nhập số nhà, tên đường, thôn ấp, vị trí cụ thể..."
                 placeholderTextColor="#94A3B8"
                 value={detailedAddress}
                 onChangeText={setDetailedAddress}
@@ -609,7 +885,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
             </View>
           </View>
 
-          {/* 6. ĐỐI TƯỢNG CẦN ƯU TIÊN ⓘ (GRID 2 CỘT) */}
+          {/* 6. ĐỐI TƯỢNG CẦN ƯU TIÊN ⓘ (TÌM KIẾM KEYWORD, GỢI Ý DROPDOWN & TỰ NHẬP) */}
           <View style={styles.formCard}>
             <View style={styles.fieldHeaderRow}>
               <View style={styles.fieldBadgeIcon}>
@@ -619,45 +895,145 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
               <Feather name="info" size={14} color="#94A3B8" style={{ marginLeft: 4 }} />
             </View>
 
-            <View style={styles.priorityGrid}>
-              {PRIORITY_TARGETS.map((target) => {
-                const isSelected = selectedPriorities.includes(target.id);
-                return (
-                  <TouchableOpacity
-                    key={target.id}
-                    style={[
-                      styles.priorityGridCard,
-                      isSelected && styles.priorityGridCardSelected,
-                    ]}
-                    onPress={() => togglePriority(target.id)}
-                    activeOpacity={0.75}
-                  >
-                    <FontAwesome5
-                      name={target.icon}
-                      size={15}
-                      color={isSelected ? '#0284C7' : target.color}
-                      style={{ marginRight: 8 }}
-                    />
-                    <Text
-                      style={[
-                        styles.priorityGridCardText,
-                        isSelected && styles.priorityGridCardTextSelected,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {target.label}
-                    </Text>
-                    {isSelected && (
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={14}
-                        color="#0284C7"
-                        style={{ marginLeft: 4 }}
-                      />
-                    )}
+            <Text style={styles.fieldSubHelp}>
+              Nhập hoặc chọn đối tượng (người già, trẻ nhỏ, bệnh tật...) để lực lượng cứu hộ ưu tiên canô, thuốc men:
+            </Text>
+
+            {/* Ô input tìm kiếm & nhập tự do */}
+            <View style={styles.priorityInputWrap}>
+              <Feather name="search" size={16} color="#94A3B8" style={styles.inputLeadingIcon} />
+              <TextInput
+                style={styles.priorityTextInput}
+                placeholder="Tìm hoặc gõ đối tượng ưu tiên..."
+                placeholderTextColor="#94A3B8"
+                value={prioritySearchText}
+                onChangeText={(text) => {
+                  setPrioritySearchText(text);
+                  setIsPriorityDropdownOpen(true);
+                }}
+                onFocus={() => setIsPriorityDropdownOpen(true)}
+              />
+              {prioritySearchText.trim().length > 0 ? (
+                <TouchableOpacity
+                  style={styles.addPriorityBtnInline}
+                  onPress={() => handleAddCustomPriority(prioritySearchText)}
+                  activeOpacity={0.8}
+                >
+                  <Feather name="plus" size={14} color="#FFFFFF" />
+                  <Text style={styles.addPriorityBtnInlineText}>Thêm</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => setIsPriorityDropdownOpen(!isPriorityDropdownOpen)}
+                  style={{ padding: 4 }}
+                >
+                  <Feather name={isPriorityDropdownOpen ? "chevron-up" : "chevron-down"} size={18} color="#64748B" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Menu Dropdown gợi ý sổ ra theo từ khóa */}
+            {isPriorityDropdownOpen && (
+              <View style={styles.priorityDropdownCard}>
+                <View style={styles.priorityDropdownHeader}>
+                  <Text style={styles.priorityDropdownTitle}>
+                    {prioritySearchText ? `Kết quả tìm kiếm cho "${prioritySearchText}":` : 'Danh mục đối tượng ưu tiên gợi ý:'}
+                  </Text>
+                  <TouchableOpacity onPress={() => setIsPriorityDropdownOpen(false)} style={{ padding: 2 }}>
+                    <Feather name="x" size={16} color="#94A3B8" />
                   </TouchableOpacity>
-                );
-              })}
+                </View>
+
+                <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                  {/* Nút thêm đối tượng tự do nếu không trùng mẫu */}
+                  {prioritySearchText.trim().length > 0 && !PRIORITY_SUGGESTIONS.some(s => s.label.toLowerCase() === prioritySearchText.trim().toLowerCase()) && (
+                    <TouchableOpacity
+                      style={styles.customAddSuggestionRow}
+                      onPress={() => handleAddCustomPriority(prioritySearchText)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.customAddIconWrap}>
+                        <Feather name="plus" size={14} color="#0284C7" />
+                      </View>
+                      <Text style={styles.customAddText}>
+                        Thêm: <Text style={{ fontWeight: '800', color: '#0284C7' }}>"{prioritySearchText.trim()}"</Text>
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {filteredPrioritySuggestions.length > 0 ? (
+                    filteredPrioritySuggestions.map((item) => {
+                      const isSelected = selectedPriorities.includes(item.label);
+                      return (
+                        <TouchableOpacity
+                          key={item.id}
+                          style={[styles.prioritySuggestionRow, isSelected && styles.prioritySuggestionRowSelected]}
+                          onPress={() => {
+                            handleTogglePriority(item.label);
+                            setPrioritySearchText('');
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <FontAwesome5 name={item.icon} size={14} color={isSelected ? '#0284C7' : item.color} style={{ width: 22 }} />
+                          <Text style={[styles.prioritySuggestionText, isSelected && styles.prioritySuggestionTextSelected]}>
+                            {item.label}
+                          </Text>
+                          {isSelected ? (
+                            <Ionicons name="checkmark-circle" size={18} color="#0284C7" />
+                          ) : (
+                            <Feather name="plus" size={16} color="#94A3B8" />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })
+                  ) : (
+                    <View style={{ paddingVertical: 10, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 13, color: '#64748B' }}>Bấm nút "Thêm" ở trên để lưu đối tượng này.</Text>
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Các tag đối tượng đã chọn */}
+            {selectedPriorities.length > 0 && (
+              <View style={styles.selectedPrioritiesContainer}>
+                <Text style={styles.selectedPrioritiesTitle}>Đối tượng đã chọn ({selectedPriorities.length}):</Text>
+                <View style={styles.selectedPrioritiesChipsWrap}>
+                  {selectedPriorities.map((item, idx) => (
+                    <View key={idx} style={styles.selectedPriorityChip}>
+                      <Text style={styles.selectedPriorityChipText}>{item}</Text>
+                      <TouchableOpacity onPress={() => handleRemovePriority(item)} style={styles.removePriorityChipBtn}>
+                        <Feather name="x" size={13} color="#0284C7" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Các tag chọn nhanh phổ biến (1 chạm) */}
+            <View style={styles.quickTagsSection}>
+              <Text style={styles.quickTagsHeading}>Chọn nhanh phổ biến:</Text>
+              <View style={styles.quickTagsRow}>
+                {QUICK_PRIORITY_TAGS.map((item) => {
+                  const isSelected = selectedPriorities.includes(item.label);
+                  return (
+                    <TouchableOpacity
+                      key={item.label}
+                      style={[styles.quickTagBtn, isSelected && styles.quickTagBtnSelected]}
+                      onPress={() => handleTogglePriority(item.label)}
+                      activeOpacity={0.75}
+                    >
+                      <FontAwesome5 name={item.icon} size={12} color={isSelected ? '#0284C7' : item.color} style={{ marginRight: 6 }} />
+                      <Text style={[styles.quickTagBtnText, isSelected && styles.quickTagBtnTextSelected]}>
+                        {item.label}
+                      </Text>
+                      {isSelected && <Ionicons name="checkmark-circle" size={13} color="#0284C7" style={{ marginLeft: 4 }} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
           </View>
 
@@ -714,7 +1090,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* MODAL CHỌN LOẠI YÊU CẦU */}
+      {/* MODAL 1: CHỌN LOẠI YÊU CẦU */}
       <Modal
         visible={showTypeModal}
         transparent
@@ -763,7 +1139,87 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
         </View>
       </Modal>
 
-      {/* MODAL THÔNG BÁO XÁC THỰC THIẾU THÔNG TIN */}
+      {/* MODAL 2: BẢN ĐỒ CHỌN VỊ TRÍ CỨU NẠN TRỰC TIẾP */}
+      <Modal
+        visible={showMapPickerModal}
+        animationType="slide"
+        onRequestClose={() => setShowMapPickerModal(false)}
+      >
+        <SafeAreaView style={styles.mapModalContainer} edges={['top', 'bottom']}>
+          {/* Header Modal */}
+          <View style={styles.mapModalHeader}>
+            <TouchableOpacity
+              style={styles.mapModalCloseBtn}
+              onPress={() => setShowMapPickerModal(false)}
+              activeOpacity={0.7}
+            >
+              <Feather name="arrow-left" size={22} color="#0F172A" />
+            </TouchableOpacity>
+
+            <View style={{ flex: 1, marginHorizontal: 10 }}>
+              <Text style={styles.mapModalTitle}>Chọn vị trí cần cứu hộ</Text>
+              <Text style={styles.mapModalSubtitle}>Chạm vào bản đồ để di chuyển ghim</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.mapModalMyGpsBtn}
+              onPress={moveToMyGps}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="locate" size={20} color="#0284C7" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Floating Address Bar */}
+          <View style={styles.mapModalAddressBar}>
+            <View style={styles.mapModalAddressIconWrap}>
+              <Ionicons name="location-sharp" size={20} color="#0284C7" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.mapModalAddressLabel}>Vị trí đang ghim trên bản đồ:</Text>
+              <Text style={styles.mapModalAddressText} numberOfLines={2}>
+                {isReverseGeocoding ? 'Đang xác định địa chỉ...' : pickerAddress || (pickerCoords ? `${pickerCoords.lat.toFixed(5)}, ${pickerCoords.lng.toFixed(5)}` : 'Chạm trên bản đồ')}
+              </Text>
+            </View>
+            {isReverseGeocoding && <ActivityIndicator size="small" color="#0284C7" style={{ marginLeft: 6 }} />}
+          </View>
+
+          {/* Bản đồ WebView Leaflet */}
+          <View style={styles.mapWebViewContainer}>
+            {pickerCoords && (
+              <WebView
+                ref={mapPickerWebViewRef}
+                source={{ html: generatePickerMapHtml(pickerCoords.lat, pickerCoords.lng) }}
+                onMessage={handleMapPickerMessage}
+                style={{ flex: 1 }}
+                javaScriptEnabled
+                domStorageEnabled
+                startInLoadingState
+                renderLoading={() => (
+                  <View style={styles.mapLoadingOverlay}>
+                    <ActivityIndicator size="large" color="#0284C7" />
+                    <Text style={{ marginTop: 8, fontSize: 13, color: '#64748B' }}>Đang tải bản đồ...</Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+
+          {/* Footer Xác nhận */}
+          <View style={styles.mapModalFooter}>
+            <TouchableOpacity
+              style={styles.confirmMapLocationBtn}
+              onPress={handleConfirmMapLocation}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.confirmMapLocationBtnText}>XÁC NHẬN VỊ TRÍ NÀY</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* MODAL 3: THÔNG BÁO XÁC THỰC THIẾU THÔNG TIN */}
       <Modal
         visible={validationModalVisible}
         transparent
@@ -849,7 +1305,7 @@ const styles = StyleSheet.create({
     paddingBottom: 120, // Chừa khoảng trống phía dưới cho Bottom Nav
   },
 
-  // THẺ FORM CHUNG (PHONG CÁCH THANH LỊCH NHƯ CŨ)
+  // THẺ FORM CHUNG
   formCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -888,6 +1344,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F172A',
   },
+  fieldSubHelp: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 8,
+    lineHeight: 16,
+  },
   requiredStar: {
     color: '#EF4444',
     fontWeight: '800',
@@ -911,34 +1373,45 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // 2. STEPPER SỐ NGƯỜI
+  // 2. STEPPER SỐ NGƯỜI (CÓ THỂ GÕ SỐ BÀN PHÍM VÀ BẤM NÚT +/-)
   stepperContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
     overflow: 'hidden',
   },
   stepperActionBtn: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#F1F5F9',
   },
   stepperValueBox: {
-    minWidth: 42,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,
     backgroundColor: '#EFF6FF',
+    minWidth: 72,
+    height: 38,
   },
-  stepperValueText: {
+  stepperInput: {
     fontSize: 16,
     fontWeight: '800',
     color: '#0284C7',
+    textAlign: 'center',
+    minWidth: 26,
+    padding: 0,
+  },
+  stepperUnitText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0284C7',
+    marginLeft: 3,
   },
 
   // 3. SỐ ĐIỆN THOẠI
@@ -1003,6 +1476,22 @@ const styles = StyleSheet.create({
   },
 
   // 5. ĐỊA ĐIỂM
+  openMapBtnHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  openMapBtnHeaderText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
   locationSelectorCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1012,7 +1501,12 @@ const styles = StyleSheet.create({
     borderColor: '#BAE6FD',
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingVertical: 11,
+  },
+  locationSelectorCardCustom: {
+    borderColor: '#0284C7',
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1.5,
   },
   locationSelectorLeft: {
     flexDirection: 'row',
@@ -1020,44 +1514,222 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
+  locationModeBadge: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0284C7',
+    backgroundColor: '#E0F2FE',
+    paddingVertical: 1,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+  },
+  locationModeHint: {
+    fontSize: 11,
+    color: '#64748B',
+    fontStyle: 'italic',
+  },
   locationSelectorText: {
-    fontSize: 13.5,
+    fontSize: 13,
     color: '#0369A1',
     fontWeight: '600',
-    marginLeft: 8,
-    flex: 1,
+    lineHeight: 18,
   },
-
-  // 6. GRID ĐỐI TƯỢNG ƯU TIÊN (2 CỘT)
-  priorityGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    justifyContent: 'space-between',
+  mapPinActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  priorityGridCard: {
-    width: '48.5%',
+  resetGpsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
+    gap: 5,
+    marginTop: 6,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+  },
+  resetGpsText: {
+    fontSize: 11.5,
+    color: '#0284C7',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+
+  // 6. ĐỐI TƯỢNG CẦN ƯU TIÊN (SEARCH KEYWORD & GỢI Ý)
+  priorityInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
     borderRadius: 10,
-    paddingVertical: 11,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     backgroundColor: '#F8FAFC',
+    height: 48,
   },
-  priorityGridCardSelected: {
-    borderColor: '#0284C7',
-    backgroundColor: '#F0F9FF',
+  priorityTextInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#0F172A',
+  },
+  addPriorityBtnInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#0284C7',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+  },
+  addPriorityBtnInlineText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  priorityDropdownCard: {
+    marginTop: 6,
     borderWidth: 1.5,
+    borderColor: '#BAE6FD',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  priorityGridCardText: {
+  priorityDropdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 6,
+  },
+  priorityDropdownTitle: {
     fontSize: 12.5,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  customAddSuggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    padding: 9,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    marginBottom: 6,
+  },
+  customAddIconWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  customAddText: {
+    fontSize: 13,
     color: '#334155',
     flex: 1,
   },
-  priorityGridCardTextSelected: {
+  prioritySuggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginBottom: 3,
+  },
+  prioritySuggestionRowSelected: {
+    backgroundColor: '#F0F9FF',
+  },
+  prioritySuggestionText: {
+    fontSize: 13,
+    color: '#334155',
+    flex: 1,
+    marginLeft: 8,
+  },
+  prioritySuggestionTextSelected: {
+    color: '#0284C7',
+    fontWeight: '700',
+  },
+  selectedPrioritiesContainer: {
+    marginTop: 10,
+  },
+  selectedPrioritiesTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 6,
+  },
+  selectedPrioritiesChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  selectedPriorityChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 20,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    gap: 6,
+  },
+  selectedPriorityChipText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  removePriorityChipBtn: {
+    padding: 2,
+  },
+  quickTagsSection: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  quickTagsHeading: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    marginBottom: 8,
+  },
+  quickTagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  quickTagBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  quickTagBtnSelected: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#0284C7',
+    borderWidth: 1.5,
+  },
+  quickTagBtnText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  quickTagBtnTextSelected: {
     color: '#0284C7',
     fontWeight: '700',
   },
@@ -1184,6 +1856,114 @@ const styles = StyleSheet.create({
   typeOptionLabelSelected: {
     color: '#0284C7',
     fontWeight: '700',
+  },
+
+  // MODAL BẢN ĐỒ CHỌN VỊ TRÍ
+  mapModalContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  mapModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  mapModalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapModalTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  mapModalSubtitle: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  mapModalMyGpsBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapModalAddressBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  mapModalAddressIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  mapModalAddressLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  mapModalAddressText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 1,
+  },
+  mapWebViewContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  mapLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapModalFooter: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  confirmMapLocationBtn: {
+    backgroundColor: '#0284C7',
+    borderRadius: 14,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0284C7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  confirmMapLocationBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
 
   // MODAL XÁC THỰC
