@@ -132,11 +132,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--sos-radius-md);
-  background: #0f172a;
-  color: #ffffff;
+  width: 38px;
+  height: 38px;
+  border-radius: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .sos-brand-text {
