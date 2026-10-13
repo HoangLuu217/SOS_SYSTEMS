@@ -11,6 +11,7 @@ const Alert = require('./Alert');
 const Notification = require('./Notification');
 const File = require('./File');
 const AuditLog = require('./AuditLog');
+const HazardReport = require('./HazardReport');
 
 module.exports = {
   User,
@@ -26,4 +27,5 @@ module.exports = {
   Notification,
   File,
   AuditLog,
+  HazardReport,
 };

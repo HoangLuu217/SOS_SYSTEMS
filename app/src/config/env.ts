@@ -7,11 +7,8 @@ import { Platform } from 'react-native';
  */
 
 export const getDefaultApiUrl = () => {
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
-  }
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:5000/api';
+  if (process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_API_URL.trim()) {
+    return process.env.EXPO_PUBLIC_API_URL.trim();
   }
   return 'http://localhost:5000/api';
 };

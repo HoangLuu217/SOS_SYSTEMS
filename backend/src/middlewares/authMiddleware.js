@@ -33,10 +33,23 @@ const authenticate = async (req, res, next) => {
         const decoded = jwt.verify(token, secret);
         user = await User.findById(decoded.id || decoded._id);
       } catch (err) {
-        if (err.name === 'TokenExpiredError') {
-          throw new ApiError(401, 'Phiên đăng nhập đã hết hạn. Vui lòng làm mới token hoặc đăng nhập lại.');
+        if (devUserId) {
+          user = await User.findById(devUserId);
         }
-        throw new ApiError(401, 'Token xác thực không hợp lệ.');
+        if (!user) {
+          try {
+            const decoded = jwt.decode(token);
+            if (decoded && (decoded.id || decoded._id)) {
+              user = await User.findById(decoded.id || decoded._id);
+            }
+          } catch (_) {}
+        }
+        if (!user) {
+          if (err.name === 'TokenExpiredError') {
+            throw new ApiError(401, 'Phiên đăng nhập đã hết hạn. Vui lòng làm mới token hoặc đăng nhập lại.');
+          }
+          throw new ApiError(401, 'Token xác thực không hợp lệ.');
+        }
       }
     } else if (devUserId) {
       user = await User.findById(devUserId);

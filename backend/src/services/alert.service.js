@@ -8,7 +8,7 @@ class AlertService {
   async createAlert(data, actorId) {
     const {
       areaId, title, content, type, severity,
-      targetArea, startTime, endTime,
+      targetArea, startTime, endTime, location, radius,
     } = data;
 
     // Kiểm tra khu vực phát cảnh báo
@@ -33,6 +33,8 @@ class AlertService {
       type,
       severity: severity || 'MEDIUM',
       targetArea: targetArea || null,
+      location: location || undefined,
+      radius: radius !== undefined ? radius : 500,
       startTime: startTime || new Date(),
       endTime: endTime || null,
       isActive: true,
@@ -40,8 +42,8 @@ class AlertService {
 
     return alert.populate([
       { path: 'createdBy', select: 'fullName phone email' },
-      { path: 'areaId', select: 'name code type' },
-      { path: 'targetArea', select: 'name code type' },
+      { path: 'areaId', select: 'name code type boundary' },
+      { path: 'targetArea', select: 'name code type boundary' },
     ]);
   }
 
@@ -67,8 +69,8 @@ class AlertService {
     const [alerts, total] = await Promise.all([
       Alert.find(filter)
         .populate('createdBy', 'fullName phone email')
-        .populate('areaId', 'name code type')
-        .populate('targetArea', 'name code type')
+        .populate('areaId', 'name code type boundary')
+        .populate('targetArea', 'name code type boundary')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
@@ -109,8 +111,8 @@ class AlertService {
     const [alerts, total] = await Promise.all([
       Alert.find(filter)
         .populate('createdBy', 'fullName phone email')
-        .populate('areaId', 'name code type')
-        .populate('targetArea', 'name code type')
+        .populate('areaId', 'name code type boundary')
+        .populate('targetArea', 'name code type boundary')
         .sort({ severity: -1, startTime: -1 })
         .skip(skip)
         .limit(limit),
@@ -134,8 +136,8 @@ class AlertService {
   async getAlertById(id) {
     const alert = await Alert.findById(id)
       .populate('createdBy', 'fullName phone email avatarUrl')
-      .populate('areaId', 'name code type level')
-      .populate('targetArea', 'name code type level');
+      .populate('areaId', 'name code type level boundary')
+      .populate('targetArea', 'name code type level boundary');
 
     if (!alert) {
       throw new ApiError(404, 'Không tìm thấy cảnh báo này');
@@ -156,6 +158,7 @@ class AlertService {
     const updatableFields = [
       'title', 'content', 'type', 'severity',
       'startTime', 'endTime', 'isActive',
+      'location', 'radius',
     ];
 
     for (const field of updatableFields) {
@@ -182,8 +185,8 @@ class AlertService {
 
     return alert.populate([
       { path: 'createdBy', select: 'fullName phone email' },
-      { path: 'areaId', select: 'name code type' },
-      { path: 'targetArea', select: 'name code type' },
+      { path: 'areaId', select: 'name code type boundary' },
+      { path: 'targetArea', select: 'name code type boundary' },
     ]);
   }
 
