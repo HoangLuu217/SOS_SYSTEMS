@@ -117,6 +117,33 @@ class AdminController {
     }
   }
 
+  /**
+   * POST /admin/users
+   * Tạo tài khoản người dùng mới (đặc biệt hỗ trợ LOCAL_AUTHORITY)
+   */
+  async createUser(req, res, next) {
+    try {
+      const newUser = await adminService.createUser(req.body);
+
+      await auditService.log({
+        actorId: req.user._id,
+        actorRole: 'ADMIN',
+        action: 'ADMIN_CREATE_USER',
+        entityType: 'User',
+        entityId: newUser._id,
+        metadata: {
+          roles: newUser.roles,
+          phone: newUser.phone,
+          areaId: newUser.authority?.areaId,
+        },
+      });
+
+      return sendSuccess(res, 201, 'Tạo tài khoản cán bộ địa phương thành công', newUser);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // ─── RESCUER VERIFICATION ─────────────────────
 
   /**

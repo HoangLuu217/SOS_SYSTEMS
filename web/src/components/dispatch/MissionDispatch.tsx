@@ -158,13 +158,15 @@ export const MissionDispatch = ({
   }) => {
     if (!assignment) return;
     onReassign(assignment.id, params);
-    showToast(`Reassigned mission to ${params.rescueTeamName} successfully!`, 'success');
+    setIsReassignOpen(false);
+    showToast(`Đã chuyển điều động sang ${params.rescueTeamName} thành công!`, 'success');
   };
 
   const handleCancelSubmit = (reason: string) => {
     if (!assignment) return;
     onCancelAssignment(assignment.id, reason);
-    showToast(`Mission assignment cancelled for ${selectedSos.sosCode}.`, 'error');
+    setIsCancelOpen(false);
+    showToast(`Đã hủy điều động cứu hộ cho ${selectedSos.sosCode}.`, 'error');
   };
 
   const handleCitizenSosSubmit = (newSos: Omit<SosRequest, 'id' | 'sosCode' | 'timeAgo' | 'createdAt' | 'status' | 'assignmentId'>) => {
@@ -254,7 +256,13 @@ export const MissionDispatch = ({
             type="button"
             onClick={toggleRightPanel}
             className="floating-dock-open-btn"
-            title="Mở rộng bảng phân công cứu hộ"
+            title="Mở rộng bảng phân công cứu hộ & tác chiến"
+            style={{
+              position: 'absolute',
+              top: 14,
+              right: 54,
+              zIndex: 1100,
+            }}
           >
             <ChevronLeft size={16} color="#dc2626" />
             <span>Bảng Phân Công & Tác Chiến</span>

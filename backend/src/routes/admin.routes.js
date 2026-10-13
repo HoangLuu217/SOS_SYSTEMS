@@ -28,6 +28,13 @@ router.get('/statistics', adminController.getStatistics);
 router.get('/users', adminController.getUsers);
 
 /**
+ * @route   POST /admin/users
+ * @desc    Tạo tài khoản người dùng mới (đặc biệt LOCAL_AUTHORITY phân bổ địa bàn)
+ * @access  ADMIN
+ */
+router.post('/users', adminController.createUser);
+
+/**
  * @route   GET /admin/users/:id
  * @desc    Lấy chi tiết 1 người dùng
  * @access  ADMIN

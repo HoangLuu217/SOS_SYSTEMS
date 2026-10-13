@@ -44,7 +44,16 @@ class DomainDService {
     this.sosRequests = loadedSos.filter(
       (s) => !s.sosCode.includes('8938') && !s.locationName.includes('Nam Kỳ Khởi Nghĩa')
     );
-    if (this.sosRequests.length !== loadedSos.length) {
+    // Đảm bảo các ca SOS khởi tạo mới (như Phường Hòa Xuân) được merge vào nếu localStorage chưa có
+    const existingIds = new Set(this.sosRequests.map((s) => s.id));
+    let hasNew = false;
+    for (const initSos of INITIAL_SOS_REQUESTS) {
+      if (!existingIds.has(initSos.id)) {
+        this.sosRequests.push(initSos);
+        hasNew = true;
+      }
+    }
+    if (this.sosRequests.length !== loadedSos.length || hasNew) {
       this.save(STORAGE_SOS, this.sosRequests);
     }
     this.rescueTeams = INITIAL_RESCUE_TEAMS;
@@ -415,23 +424,47 @@ class DomainDService {
     );
 
     if (matched) {
+      if (user.authority?.areaId) {
+        const directArea = this.areas.find(
+          (a) =>
+            a.id === user.authority.areaId ||
+            a.code === user.authority.areaId ||
+            (user.authority.areaName && a.name.toLowerCase().includes(user.authority.areaName.toLowerCase()))
+        );
+        matched.jurisdictionAreaId = directArea ? directArea.id : user.authority.areaId;
+        matched.jurisdictionAreaName = directArea ? directArea.name : (user.authority.areaName || 'Khu vực quản lý');
+      }
       this.activeOfficerId = matched.id;
       this.save(STORAGE_ACTIVE_OFFICER, matched.id);
       return matched;
     }
 
-    // Determine managed area from user authority department or position
+    // Determine managed area from user authority (areaId, areaName, department, position)
+    const directArea = user.authority?.areaId
+      ? this.areas.find(
+          (a) =>
+            a.id === user.authority.areaId ||
+            a.code === user.authority.areaId ||
+            (user.authority.areaName && a.name.toLowerCase().includes(user.authority.areaName.toLowerCase()))
+        )
+      : null;
+
+    let areaId = directArea ? directArea.id : (user.authority?.areaId || 'area-htd');
+    let areaName = directArea ? directArea.name : (user.authority?.areaName || 'Phường Hòa Cường');
+    let districtName = directArea ? directArea.name : (user.authority?.areaName || 'Thành phố Đà Nẵng');
+
     const dept = (user.authority?.department || '').toLowerCase();
     const pos = (user.authority?.position || '').toLowerCase();
-
-    let areaId = 'area-hc';
-    let areaName = 'Quận Hải Châu';
-    let districtName = 'Quận Hải Châu';
 
     if (user.roles?.includes('ADMIN')) {
       areaId = 'area-dn';
       areaName = 'Toàn TP Đà Nẵng';
       districtName = 'Thành phố Đà Nẵng';
+    } else if (directArea || user.authority?.areaId) {
+      // Use direct area bound to account
+      areaId = directArea ? directArea.id : user.authority.areaId;
+      areaName = directArea ? directArea.name : (user.authority?.areaName || 'Khu vực quản lý');
+      districtName = areaName;
     } else if (dept.includes('cẩm lệ') || pos.includes('cẩm lệ')) {
       areaId = 'area-cl';
       areaName = 'Quận Cẩm Lệ';

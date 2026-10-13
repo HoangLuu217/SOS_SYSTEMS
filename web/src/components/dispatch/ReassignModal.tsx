@@ -85,14 +85,36 @@ export const ReassignModal = ({
   };
 
   return (
-    <div className="sos-modal-overlay">
-      <div className="sos-modal-window">
+    <div
+      className="sos-modal-overlay"
+      style={{ zIndex: 10000 }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <div
+        className="sos-modal-window"
+        onClick={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="sos-modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <RefreshCw size={18} style={{ color: '#0f172a' }} />
-            <h3 className="sos-modal-title">Reassign Rescue Mission</h3>
+            <h3 className="sos-modal-title">Điều chỉnh đội cứu hộ</h3>
           </div>
-          <button type="button" className="sos-modal-close-icon" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="sos-modal-close-icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            aria-label="Đóng"
+          >
             <X size={18} />
           </button>
         </div>
@@ -100,11 +122,11 @@ export const ReassignModal = ({
         <form onSubmit={handleSubmit}>
           <div className="sos-modal-content">
             <div style={{ fontSize: 13, color: 'var(--sos-text-secondary)', marginBottom: 8 }}>
-              Change the operational team, lead field rescuer, or tactical vehicle for this active assignment.
+              Thay đổi đội cứu hộ, cán bộ chỉ huy thực địa hoặc phương tiện cơ động cho yêu cầu này.
             </div>
 
             <div className="form-group">
-              <label className="form-label">Step 1: Select Rescue Team *</label>
+              <label className="form-label">Bước 1: Chọn Đội cứu hộ *</label>
               <select
                 className="form-select"
                 value={selectedTeamId}
@@ -112,14 +134,14 @@ export const ReassignModal = ({
               >
                 {rescueTeams.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.name} ({t.availableRescuersCount} available rescuers)
+                    {t.name} ({t.availableRescuersCount} cán bộ sẵn sàng)
                   </option>
                 ))}
               </select>
             </div>
 
             <div className="form-group">
-              <label className="form-label">Step 2: Select Lead Rescuer *</label>
+              <label className="form-label">Bước 2: Cán bộ chỉ huy / phụ trách *</label>
               <select
                 className="form-select"
                 value={selectedRescuerId}
@@ -134,7 +156,7 @@ export const ReassignModal = ({
             </div>
 
             <div className="form-group">
-              <label className="form-label">Step 3: Select Rescue Vehicle *</label>
+              <label className="form-label">Bước 3: Phương tiện cứu hộ *</label>
               <select
                 className="form-select"
                 value={selectedVehicleId}
@@ -142,7 +164,7 @@ export const ReassignModal = ({
               >
                 {fallbackVehicles.map((v) => (
                   <option key={v.id} value={v.id}>
-                    {v.name} ({v.type}) — Cap: {v.capacity}
+                    {v.name} ({v.type}) — Tải trọng: {v.capacity}
                   </option>
                 ))}
               </select>
@@ -150,12 +172,19 @@ export const ReassignModal = ({
           </div>
 
           <div className="sos-modal-footer">
-            <button type="button" className="btn-secondary" onClick={onClose}>
-              Cancel
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+            >
+              Đóng
             </button>
             <button type="submit" className="btn-primary-action">
               <CheckCircle2 size={15} />
-              Confirm Reassignment
+              <span>Xác nhận điều chuyển</span>
             </button>
           </div>
         </form>

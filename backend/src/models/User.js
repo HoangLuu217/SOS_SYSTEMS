@@ -152,6 +152,11 @@ const authoritySchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    areaName: {
+      type: String,
+      trim: true,
+      default: null,
+    },
   },
   { _id: false }
 );

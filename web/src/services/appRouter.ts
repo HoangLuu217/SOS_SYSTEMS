@@ -1,17 +1,17 @@
 import type { User } from '../types/auth';
 import type { NavItemKey } from '../components/Sidebar';
 
-export const getRolePrefix = (user: User | null): '/localauthority' | '/admin' => {
+export const getRolePrefix = (user: User | null): '/local_authority' | '/admin' => {
   if (!user) {
     const savedRole = localStorage.getItem('sos_active_portal');
-    return savedRole === 'admin' ? '/admin' : '/localauthority';
+    return savedRole === 'admin' ? '/admin' : '/local_authority';
   }
   const isAuthority = user.roles.includes('LOCAL_AUTHORITY') && !user.roles.includes('ADMIN');
-  return isAuthority ? '/localauthority' : '/admin';
+  return isAuthority ? '/local_authority' : '/admin';
 };
 
 export interface ParsedRoute {
-  rolePrefix: '/localauthority' | '/admin';
+  rolePrefix: '/local_authority' | '/admin';
   navKey: NavItemKey;
   subPath?: string;
   sosId?: string;
@@ -27,6 +27,8 @@ const VALID_KEYS: Set<string> = new Set([
   'alerts',
   'hazard_reports',
   'reports',
+  'operation_logs',
+  'settings',
   'admin_overview',
   'citizens',
   'rescuers_admin',
@@ -44,6 +46,8 @@ const KEY_ALIASES: Record<string, NavItemKey> = {
   requests: 'sos_requests',
   dispatch: 'coordination',
   danger_points: 'hazard_reports',
+  logs: 'operation_logs',
+  history: 'operation_logs',
 };
 
 /**
@@ -79,17 +83,22 @@ export function parseRoute(
     };
   }
 
-  // 2. Phân tích clean pathname: e.g. /localauthority/sos_requests hoặc /admin/map/sos-8924
+  // 2. Phân tích clean pathname: e.g. /local_authority/sos_requests hoặc /admin/map/sos-8924
   const segments = pathname
     .replace(/^\/+|\/+$/g, '')
     .split('/')
     .filter(Boolean);
 
-  let rolePrefix: '/localauthority' | '/admin' = defaultPrefix;
+  let rolePrefix: '/local_authority' | '/admin' = defaultPrefix;
   let keyIndex = 0;
 
-  if (segments[0] === 'localauthority' || segments[0] === 'localauthor') {
-    rolePrefix = '/localauthority';
+  if (
+    segments[0] === 'local_authority' ||
+    segments[0] === 'localauthority' ||
+    segments[0] === 'localauthor' ||
+    segments[0] === 'local-authority'
+  ) {
+    rolePrefix = '/local_authority';
     keyIndex = 1;
   } else if (segments[0] === 'admin') {
     rolePrefix = '/admin';

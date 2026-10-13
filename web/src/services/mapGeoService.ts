@@ -2,17 +2,37 @@ import type { FeatureCollection, Feature } from 'geojson';
 import type { AdministrativeArea, SosRequest, SosAssignment, AuthorityOfficer } from '../types/domainD';
 import { getRegionColor } from './geoapifyBoundariesService';
 
+// Tinh chỉnh apistyle chuyên dụng cho bản đồ cứu hộ & phòng chống thiên tai:
+// - ẨN các địa điểm thương mại không cần thiết: quán cafe, quán ăn, nhà hàng, shop bán lẻ (s.t:33|p.v:off)
+// - GIỮ LẠI ĐẦY ĐỦ các địa điểm lớn & thiết yếu phục vụ cứu nạn bão lũ:
+//   + Bệnh viện, trung tâm y tế, trạm cấp cứu (poi.medical)
+//   + Trụ sở chính quyền, công an, BCH quân sự, trạm cứu hộ (poi.government)
+//   + Trường học, trường đại học (điểm tập kết sơ tán khẩn cấp an toàn - poi.school)
+//   + Đầu mối giao thông vận tải: Sân bay quốc tế Đà Nẵng, Ga đường sắt, Bến cảng, Bến xe (transit.station)
+//   + Công viên, bãi đất trống, sân vận động, quảng trường (poi.park, poi.sports_complex)
+//   + Địa danh tôn giáo kiên cố cao tầng trú ẩn (poi.place_of_worship)
+//   + Toàn bộ mạng lưới giao thông đường bộ, cầu cống, sông ngòi, ranh giới và địa danh hành chính
+export const TACTICAL_CLEAN_APISTYLE = encodeURIComponent('s.t:33|p.v:off');
+
 // Google Maps Tile Server URLs (Miễn phí, tốc độ cao, hỗ trợ tiếng Việt đầy đủ)
 export const GOOGLE_MAP_TILES = {
-  STREETS: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+  // Bản đồ tinh gọn (mặc định: ẩn các icon nhỏ không cần thiết)
+  STREETS_CLEAN: `https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&apistyle=${TACTICAL_CLEAN_APISTYLE}`,
+  // Bản đồ gốc hiển thị toàn bộ icon thương mại
+  STREETS_FULL: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+  // Mặc định cho đường phố là bản đồ tinh gọn
+  STREETS: `https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&apistyle=${TACTICAL_CLEAN_APISTYLE}`,
   SATELLITE: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
   TERRAIN: 'https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
   TRAFFIC: 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}',
 };
 
-export function getGoogleTileUrl(mode: 'street' | 'satellite' | 'streets' = 'street'): string {
+export function getGoogleTileUrl(
+  mode: 'street' | 'satellite' | 'streets' = 'street',
+  clean: boolean = true
+): string {
   if (mode === 'satellite') return GOOGLE_MAP_TILES.SATELLITE;
-  return GOOGLE_MAP_TILES.STREETS;
+  return clean ? GOOGLE_MAP_TILES.STREETS_CLEAN : GOOGLE_MAP_TILES.STREETS_FULL;
 }
 
 // Quick View Presets cho bản đồ Đà Nẵng và Biển Đảo Việt Nam
