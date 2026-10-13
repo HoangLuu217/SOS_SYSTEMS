@@ -16,15 +16,12 @@ export const TACTICAL_CLEAN_APISTYLE = encodeURIComponent('s.t:33|p.v:off');
 
 // Google Maps Tile Server URLs (Miễn phí, tốc độ cao, hỗ trợ tiếng Việt đầy đủ)
 export const GOOGLE_MAP_TILES = {
-  // Bản đồ tinh gọn (mặc định: ẩn các icon nhỏ không cần thiết)
-  STREETS_CLEAN: `https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&apistyle=${TACTICAL_CLEAN_APISTYLE}`,
-  // Bản đồ gốc hiển thị toàn bộ icon thương mại
+  STREETS_CLEAN: 'https://mt{s}.google.com/vt/lyrs=m&apistyle=s.t:33|p.v:off&x={x}&y={y}&z={z}',
   STREETS_FULL: 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
-  // Mặc định cho đường phố là bản đồ tinh gọn
-  STREETS: `https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&apistyle=${TACTICAL_CLEAN_APISTYLE}`,
-  SATELLITE: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-  TERRAIN: 'https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
-  TRAFFIC: 'https://mt{s}.google.com/vt/lyrs=m,traffic&x={x}&y={y}&z={z}',
+  STREETS: 'https://mt{s}.google.com/vt/lyrs=m&apistyle=s.t:33|p.v:off&x={x}&y={y}&z={z}',
+  SATELLITE: 'https://mt{s}.google.com/vt/lyrs=y&apistyle=s.t:33|p.v:off&x={x}&y={y}&z={z}',
+  TERRAIN: 'https://mt{s}.google.com/vt/lyrs=p&apistyle=s.t:33|p.v:off&x={x}&y={y}&z={z}',
+  TRAFFIC: 'https://mt{s}.google.com/vt/lyrs=m,traffic&apistyle=s.t:33|p.v:off&x={x}&y={y}&z={z}',
 };
 
 export function getGoogleTileUrl(
@@ -429,7 +426,7 @@ export function isPointInAreaBoundary(
   coords: { lng: number; lat: number },
   area: AdministrativeArea
 ): boolean {
-  if (!area.boundary || !area.boundary.coordinates) return true;
+  if (!area.boundary || !area.boundary.coordinates) return false;
   const { type, coordinates } = area.boundary;
   const point: [number, number] = [coords.lng, coords.lat];
 

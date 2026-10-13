@@ -32,16 +32,16 @@ const authenticate = async (req, res, next) => {
       try {
         const decoded = jwt.verify(token, secret);
         user = await User.findById(decoded.id || decoded._id);
-      } catch (err) {
-        let fallbackId = devUserId;
-        if (!fallbackId) {
-          try {
-            const decodedPayload = jwt.decode(token);
-            fallbackId = decodedPayload?.id || decodedPayload?._id;
-          } catch {}
+        if (devUserId) {
+          user = await User.findById(devUserId);
         }
-        if (fallbackId) {
-          user = await User.findById(fallbackId);
+        if (!user) {
+          try {
+            const decoded = jwt.decode(token);
+            if (decoded && (decoded.id || decoded._id)) {
+              user = await User.findById(decoded.id || decoded._id);
+            }
+          } catch (_) {}
         }
         if (!user) {
           if (err.name === 'TokenExpiredError') {
