@@ -67,19 +67,13 @@ import {
   Plus,
   Home,
   UserPlus,
-  X,
-  Volume2,
-  VolumeX,
   Sliders,
   Compass,
   Layers,
   Wifi,
-  Cpu,
   Check,
   Search,
-  Filter,
   Boxes,
-  HeartHandshake,
   Package,
 } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
@@ -2521,7 +2515,6 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
               <span className="sos-stat-value" style={{ color: '#0f172a' }}>{displayHazardCounts.PENDING}</span>
               <span className="sos-stat-label" style={{ color: '#475569', fontWeight: 600 }}>Chờ duyệt (PENDING)</span>
             </div>
->>>>>>> d91dcceb67662db308b5fb25da3e0e6c24b943f6
           </div>
 
           <div className="sos-stat-box">

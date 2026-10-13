@@ -62,11 +62,30 @@
   flex-shrink: 0;
 }
 
-.sos-stat-icon.red { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-.sos-stat-icon.blue { background: rgba(2, 132, 199, 0.15); color: #38bdf8; }
-.sos-stat-icon.green { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
-.sos-stat-icon.yellow { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
-.sos-stat-icon.purple { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+.sos-stat-icon.red {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.sos-stat-icon.blue {
+  background: rgba(2, 132, 199, 0.15);
+  color: #38bdf8;
+}
+
+.sos-stat-icon.green {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.sos-stat-icon.yellow {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.sos-stat-icon.purple {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+}
 
 .sos-stat-meta {
   display: flex;
@@ -131,12 +150,41 @@
   white-space: nowrap;
 }
 
-.sos-badge.critical { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
-.sos-badge.high { background: rgba(249, 115, 22, 0.2); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.4); }
-.sos-badge.medium { background: rgba(234, 179, 8, 0.2); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4); }
-.sos-badge.verified { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); }
-.sos-badge.active { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4); }
-.sos-badge.pending { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.4); }
+.sos-badge.critical {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.sos-badge.high {
+  background: rgba(249, 115, 22, 0.2);
+  color: #fb923c;
+  border: 1px solid rgba(249, 115, 22, 0.4);
+}
+
+.sos-badge.medium {
+  background: rgba(234, 179, 8, 0.2);
+  color: #facc15;
+  border: 1px solid rgba(234, 179, 8, 0.4);
+}
+
+.sos-badge.verified {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+
+.sos-badge.active {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.sos-badge.pending {
+  background: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}
 
 /* ACTION BUTTONS */
 .sos-btn-action {
@@ -156,6 +204,7 @@
   background: #2563eb;
   color: #ffffff;
 }
+
 .sos-btn-action.primary:hover {
   background: #1d4ed8;
 }
@@ -165,6 +214,7 @@
   color: #4ade80;
   border-color: rgba(34, 197, 94, 0.3);
 }
+
 .sos-btn-action.success:hover {
   background: #22c55e;
   color: #ffffff;
@@ -175,6 +225,7 @@
   color: #f87171;
   border-color: rgba(239, 68, 68, 0.3);
 }
+
 .sos-btn-action.danger:hover {
   background: #ef4444;
   color: #ffffff;
@@ -643,7 +694,6 @@
 [data-theme="light"] .sos-occupancy-bar-bg {
   background: #e2e8f0;
 }
-}
 
 /* ==========================================================================
    FILTER PILLS & TABS
@@ -813,12 +863,12 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-.sos-toggle-switch input:checked + .sos-toggle-slider {
+.sos-toggle-switch input:checked+.sos-toggle-slider {
   background-color: #2563eb;
   border-color: #3b82f6;
 }
 
-.sos-toggle-switch input:checked + .sos-toggle-slider:before {
+.sos-toggle-switch input:checked+.sos-toggle-slider:before {
   transform: translateX(20px);
 }
 
@@ -865,5 +915,3 @@
   background-color: #cbd5e1;
   border-color: #94a3b8;
 }
-
-

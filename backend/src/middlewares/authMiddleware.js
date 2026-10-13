@@ -32,14 +32,15 @@ const authenticate = async (req, res, next) => {
       try {
         const decoded = jwt.verify(token, secret);
         user = await User.findById(decoded.id || decoded._id);
+      } catch (err) {
         if (devUserId) {
           user = await User.findById(devUserId);
         }
         if (!user) {
           try {
-            const decoded = jwt.decode(token);
-            if (decoded && (decoded.id || decoded._id)) {
-              user = await User.findById(decoded.id || decoded._id);
+            const decodedPayload = jwt.decode(token);
+            if (decodedPayload && (decodedPayload.id || decodedPayload._id)) {
+              user = await User.findById(decodedPayload.id || decodedPayload._id);
             }
           } catch (_) {}
         }

@@ -16,8 +16,6 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  ShieldCheck,
-  Radio,
   LayoutDashboard,
   Users,
   UserCheck,
@@ -420,16 +418,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      {/* Banner vai trò thu nhỏ (khi mở rộng) */}
-      {!collapsed && (
-        <div className={`sos-role-pill-badge ${isAdmin ? 'admin' : 'authority'}`}>
-          <div className="sos-role-badge-left">
-            {isAdmin ? <ShieldCheck size={14} /> : <Radio size={14} />}
-            <span>{isAdmin ? 'QUẢN TRỊ VIÊN' : 'CÁN BỘ ĐỊA PHƯƠNG'}</span>
-          </div>
-          <span className="sos-role-status-dot" />
-        </div>
-      )}
+
 
       {/* ===================================================================
           2. MENU ĐIỀU HƯỚNG (4 NHÓM CHÍNH PHÂN CẤP RÕ RÀNG)
