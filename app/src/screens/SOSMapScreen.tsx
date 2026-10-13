@@ -1201,7 +1201,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
                     <Text style={{ marginTop: 8, fontSize: 13, color: '#64748B' }}>Đang tải bản đồ...</Text>
                   </View>
                 )}
-              </View>
+              />
             )}
           </View>
 
