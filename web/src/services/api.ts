@@ -353,6 +353,29 @@ export async function createAdminUser(payload: {
   });
 }
 
+export async function updateAdminUser(
+  userId: string,
+  payload: {
+    fullName?: string;
+    phone?: string;
+    email?: string;
+    password?: string;
+    status?: string;
+    authority?: {
+      organizationId?: string;
+      areaId?: string;
+      areaName?: string;
+      position?: string;
+      department?: string;
+    };
+  }
+): Promise<{ success: boolean; data?: any; message?: string }> {
+  return fetchWithAuth(`/admin/users/${userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function verifyRescuer(
   userId: string,
   verificationStatus: 'VERIFIED' | 'REJECTED'
@@ -402,6 +425,47 @@ export async function fetchAdministrativeAreas(): Promise<{ success: boolean; da
 
 export async function fetchAuthorityOrganizations(): Promise<{ success: boolean; data: AuthorityOrgItem[] }> {
   return fetchWithAuth('/authority-organizations', { method: 'GET' });
+}
+
+export async function syncAdministrativeAreasToBackend(payload: {
+  provinceName: string;
+  provinceCode?: number | string;
+  units: any[];
+}): Promise<{ success: boolean; data: any }> {
+  try {
+    return await fetchWithAuth('/administrative-areas/sync-api', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    console.warn('Sync administrative areas to MongoDB failed:', e);
+    return { success: false, data: null };
+  }
+}
+
+export interface AreaManagerInfo {
+  hasManager: boolean;
+  managerName?: string;
+  phone?: string;
+  email?: string;
+  position?: string;
+  department?: string;
+  organizationName?: string | null;
+  areaName?: string;
+  areaId?: string | null;
+}
+
+export async function fetchAreaManagers(): Promise<{ success: boolean; data: Record<string, AreaManagerInfo> }> {
+  try {
+    const raw = await fetchWithAuth<any>('/administrative-areas/managers', { method: 'GET' });
+    if (raw && raw.data) {
+      return { success: true, data: raw.data };
+    }
+    return { success: false, data: {} };
+  } catch (e) {
+    console.warn('Lấy danh sách cán bộ quản lý địa phương thất bại:', e);
+    return { success: false, data: {} };
+  }
 }
 
 // ─── AUDIT LOGS (CƠ SỞ DỮ LIỆU THẬT) ─────────────────────────────────────────

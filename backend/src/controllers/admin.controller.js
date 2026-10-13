@@ -30,6 +30,30 @@ class AdminController {
   }
 
   /**
+   * PATCH /admin/users/:id
+   */
+  async updateUser(req, res, next) {
+    try {
+      const user = await adminService.updateUser(req.params.id, req.body);
+
+      if (req.user) {
+        await auditService.log({
+          actorId: req.user._id,
+          actorRole: 'ADMIN',
+          action: 'ADMIN_UPDATE_USER',
+          entityType: 'User',
+          entityId: req.params.id,
+          metadata: { updatedFields: Object.keys(req.body) },
+        });
+      }
+
+      return sendSuccess(res, 200, 'Cập nhật thông tin tài khoản thành công', user);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * PATCH /admin/users/:id/status
    */
   async updateUserStatus(req, res, next) {

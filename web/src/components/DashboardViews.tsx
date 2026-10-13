@@ -34,6 +34,9 @@ import {
   fetchSafeLocations,
   createSafeLocation,
   createAdminUser,
+  updateAdminUser,
+  fetchAreaManagers,
+  type AreaManagerInfo,
 } from '../services/api';
 import {
   Siren,
@@ -75,11 +78,22 @@ import {
   Search,
   Boxes,
   Package,
+  ArrowLeft,
+  ChevronRight,
+  UserCheck,
+  UserX,
 } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import './DashboardViews.css';
 
+import {
+  fetchVietnamProvincesService,
+  fetchProvinceSubUnitsService,
+  VIETNAM_34_PROVINCES_STANDARD,
+  type VietnamProvinceItem,
+  type ProvinceSubUnitItem,
+} from '../services/geoapifyBoundariesService';
 import { domainDService, JURISDICTION_CONFIGS } from '../services/domainDService';
 import {
   FALLBACK_SOS_LIST,
@@ -342,9 +356,20 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   // State chuyển tab trong mục Phương tiện & Vật tư
   const [resourceTab, setResourceTab] = useState<'VEHICLES' | 'SUPPLIES'>('VEHICLES');
 
-  // State lọc và tìm kiếm khu vực hành chính Đà Nẵng
-  const [areaTypeFilter, setAreaTypeFilter] = useState<'ALL' | 'DISTRICT' | 'WARD' | 'PROVINCE'>('ALL');
-  const [areaSearchQuery, setAreaSearchQuery] = useState('');
+
+
+  // State phân cấp 2 tầng: Tỉnh/Thành phố toàn quốc & Xã/Phường/Quận/Huyện trực thuộc
+  const [vietnamProvinces, setVietnamProvinces] = useState<VietnamProvinceItem[]>([]);
+  const [provincesLoading, setProvincesLoading] = useState(false);
+  const [selectedProvince, setSelectedProvince] = useState<VietnamProvinceItem | null>(null);
+  const [subUnits, setSubUnits] = useState<ProvinceSubUnitItem[]>([]);
+  const [subUnitsLoading, setSubUnitsLoading] = useState(false);
+  const [provinceSearchQuery, setProvinceSearchQuery] = useState('');
+  const [provinceManagerFilter, setProvinceManagerFilter] = useState<'ALL' | 'MANAGED' | 'UNMANAGED'>('ALL');
+  const [subUnitTypeFilter, setSubUnitTypeFilter] = useState<'ALL' | 'DISTRICT' | 'WARD'>('ALL');
+  const [subUnitManagerFilter, setSubUnitManagerFilter] = useState<'ALL' | 'MANAGED' | 'UNMANAGED'>('ALL');
+  const [subUnitSearchQuery, setSubUnitSearchQuery] = useState('');
+  const [areaManagers, setAreaManagers] = useState<Record<string, AreaManagerInfo>>({});
 
   // State Cấu hình Hệ thống (Settings) lưu trong localStorage
   const [systemSettings, setSystemSettings] = useState<SystemSettingsConfig>(() => {
@@ -391,17 +416,48 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     areaName: 'Phường Hòa Cường',
   });
 
+  // State danh mục đơn vị hành chính con (xã/phường) theo tỉnh được chọn trong Modal
+  const [modalProvinceSubUnits, setModalProvinceSubUnits] = useState<Array<{ id: string; name: string; district?: string }>>(DANANG_ADMIN_AREAS);
+  const [modalSubUnitsLoading, setModalSubUnitsLoading] = useState(false);
+
+  // State bộ lọc danh sách Cán bộ địa phương
+  const [authSearchQuery, setAuthSearchQuery] = useState('');
+  const [authStatusFilter, setAuthStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+
+  // State phục vụ modal chỉnh sửa Cán bộ & thay đổi địa bàn quản lý
+  const [editingAuthority, setEditingAuthority] = useState<any | null>(null);
+  const [editAuthSubmitting, setEditAuthSubmitting] = useState(false);
+  const [editAuthError, setEditAuthError] = useState<string | null>(null);
+  const [editAuthSuccess, setEditAuthSuccess] = useState<string | null>(null);
+  const [editAuthForm, setEditAuthForm] = useState({
+    fullName: '',
+    phone: '',
+    email: '',
+    status: 'ACTIVE',
+    areaId: '',
+    areaName: '',
+    department: '',
+    position: '',
+    password: '',
+  });
+
   // Kiểm tra xem một phường/khu vực đã có tài khoản cán bộ quản lý hay chưa
   const isAreaAssigned = useCallback(
-    (ar: { id: string; name: string }) => {
-      const cleanArName = ar.name.replace(/^(Phường|Xã|Quận|Huyện)\s+/i, '').trim().toLowerCase();
+    (ar: { id: string; name: string }, cityName?: string) => {
+      const cleanArName = ar.name.replace(/^(Phường|Xã|Quận|Huyện|Thị trấn)\s+/i, '').trim().toLowerCase();
       return authorities.some((a) => {
         const authAreaId = String(a.authority?.areaId || '').trim();
         const authAreaName = String(a.authority?.areaName || '').trim().toLowerCase();
-        const cleanAuthName = authAreaName.replace(/^(Phường|Xã|Quận|Huyện)\s+/i, '').trim();
+        const cleanAuthName = authAreaName.replace(/^(Phường|Xã|Quận|Huyện|Thị trấn)\s+/i, '').trim();
+        if (cityName) {
+          const authDept = String(a.authority?.department || '');
+          if (authDept && !authDept.toLowerCase().includes(cityName.toLowerCase()) && !cityName.toLowerCase().includes(authDept.toLowerCase())) {
+            // Khác tỉnh thành
+          }
+        }
         return (
-          authAreaId === ar.id ||
-          authAreaName === ar.name.toLowerCase() ||
+          (authAreaId && ar.id && authAreaId === ar.id) ||
+          (authAreaName && authAreaName === ar.name.toLowerCase()) ||
           (cleanAuthName && cleanAuthName === cleanArName)
         );
       });
@@ -409,12 +465,77 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     [authorities]
   );
 
-  // Danh sách các khu vực chưa có tài khoản quản lý
+  // Tải danh mục xã/phường cho Tỉnh/Thành phố được chọn trong modal tạo tài khoản
+  const loadSubUnitsForCity = useCallback(
+    async (cityName: string) => {
+      setModalSubUnitsLoading(true);
+      try {
+        const provList = vietnamProvinces.length > 0 ? vietnamProvinces : VIETNAM_34_PROVINCES_STANDARD;
+        const matchedProv = provList.find(
+          (p: any) =>
+            p.name.toLowerCase() === cityName.toLowerCase() ||
+            cityName.toLowerCase().includes(p.name.toLowerCase()) ||
+            p.name.toLowerCase().includes(cityName.toLowerCase())
+        );
+
+        const provCode = matchedProv?.code || (matchedProv as any)?.code || 48;
+        const provPlaceId = (matchedProv as any)?.placeId || `prov-${provCode}`;
+
+        const units = await fetchProvinceSubUnitsService(provPlaceId, cityName, provCode);
+        if (units && units.length > 0) {
+          const mapped = units.map((u) => ({
+            id: u.id || u.code,
+            name: u.name,
+            district: u.parentName || cityName,
+          }));
+          setModalProvinceSubUnits(mapped);
+          return mapped;
+        }
+      } catch (err) {
+        console.warn('Lỗi tải danh mục đơn vị cho tỉnh', cityName, err);
+      } finally {
+        setModalSubUnitsLoading(false);
+      }
+      if (cityName.includes('Đà Nẵng')) {
+        setModalProvinceSubUnits(DANANG_ADMIN_AREAS);
+        return DANANG_ADMIN_AREAS;
+      }
+      return [];
+    },
+    [vietnamProvinces]
+  );
+
+  // Xử lý khi admin đổi Tỉnh / Thành phố trong form tạo tài khoản
+  const handleCityChange = async (newCity: string) => {
+    setCreateAuthForm((prev) => ({
+      ...prev,
+      city: newCity,
+    }));
+    const units = await loadSubUnitsForCity(newCity);
+    if (units && units.length > 0) {
+      const firstAvailable = units.find((u) => !isAreaAssigned(u, newCity)) || units[0];
+      setCreateAuthForm((prev) => ({
+        ...prev,
+        city: newCity,
+        areaId: firstAvailable.id,
+        areaName: firstAvailable.name,
+      }));
+    } else {
+      setCreateAuthForm((prev) => ({
+        ...prev,
+        city: newCity,
+        areaId: `area-${Date.now()}`,
+        areaName: `Khu vực Trung Tâm (${newCity})`,
+      }));
+    }
+  };
+
+  // Danh sách các khu vực chưa có tài khoản quản lý (cho Đà Nẵng fallback)
   const availableAreas = useMemo(() => {
     return DANANG_ADMIN_AREAS.filter((ar) => !isAreaAssigned(ar));
   }, [isAreaAssigned]);
 
-  // Danh sách các khu vực đã có tài khoản quản lý
+  // Danh sách các khu vực đã có tài khoản quản lý (cho Đà Nẵng fallback)
   const assignedAreas = useMemo(() => {
     return DANANG_ADMIN_AREAS.filter((ar) => isAreaAssigned(ar));
   }, [isAreaAssigned]);
@@ -639,11 +760,34 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
         }
       }
 
-      // 8. Nếu ở trang Khu vực hành chính -> Lấy Administrative Areas
+      // 8. Nếu ở trang Khu vực hành chính -> Lấy Administrative Areas & Danh mục Tỉnh/Thành Việt Nam & Cán bộ quản lý
       if (activeKey === 'areas') {
         const res = await fetchAdministrativeAreas();
         if (res.success && Array.isArray(res.data)) {
           setAreas(res.data);
+        }
+        try {
+          const mgrRes = await fetchAreaManagers();
+          if (mgrRes.success && mgrRes.data) {
+            setAreaManagers(mgrRes.data);
+          }
+        } catch (e) {
+          console.warn('Lỗi tải danh sách cán bộ quản lý địa phương:', e);
+        }
+        setProvincesLoading(true);
+        try {
+          try {
+            localStorage.removeItem('rescuesos_vietnam_provinces_cache_v4');
+            localStorage.removeItem('rescuesos_vietnam_provinces_cache_v3');
+            localStorage.removeItem('rescuesos_vietnam_provinces_cache_v2');
+            localStorage.removeItem('rescuesos_vietnam_provinces_cache_v1');
+          } catch {}
+          const provs = await fetchVietnamProvincesService();
+          setVietnamProvinces(provs);
+        } catch (e) {
+          console.warn('Lỗi tải danh mục tỉnh thành:', e);
+        } finally {
+          setProvincesLoading(false);
         }
       }
 
@@ -916,12 +1060,13 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     setAuthSubmitError(null);
     setAuthSubmitSuccess(null);
     try {
-      const selectedArea = DANANG_ADMIN_AREAS.find((a) => a.id === createAuthForm.areaId);
+      const currentCityAreas = modalProvinceSubUnits.length > 0 ? modalProvinceSubUnits : DANANG_ADMIN_AREAS;
+      const selectedArea = currentCityAreas.find((a) => a.id === createAuthForm.areaId);
       const areaName = selectedArea ? selectedArea.name : createAuthForm.areaName;
 
       // Chặn ngay tại Client nếu khu vực đã có tài khoản quản lý
-      if (isAreaAssigned({ id: createAuthForm.areaId, name: areaName })) {
-        setAuthSubmitError(`⛔ Khu vực "${areaName}" đã có tài khoản cán bộ quản lý. Hệ thống chỉ cho phép tạo tài khoản cho khu vực chưa có quản lý.`);
+      if (isAreaAssigned({ id: createAuthForm.areaId, name: areaName }, createAuthForm.city)) {
+        setAuthSubmitError(`⛔ Khu vực "${areaName}" (${createAuthForm.city}) đã có tài khoản cán bộ quản lý. Hệ thống chỉ cho phép tạo tài khoản cho khu vực chưa có quản lý.`);
         setAuthSubmitting(false);
         return;
       }
@@ -935,7 +1080,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
         areaId: createAuthForm.areaId,
         areaName: areaName,
         position: 'Chỉ Huy Trực Ban Tác Chiến',
-        department: `Ban Chỉ Huy PCTT ${areaName}`,
+        department: `Ban Chỉ Huy PCTT ${areaName} (${createAuthForm.city})`,
       };
 
       const res = await createAdminUser(payload);
@@ -950,16 +1095,16 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
         setTimeout(() => {
           setShowCreateAuthModal(false);
           setAuthSubmitSuccess(null);
-          const nextArea = availableAreas.find((a: { id: string; name: string }) => a.id !== payload.areaId) || availableAreas[0];
-          setCreateAuthForm({
+          const nextArea = currentCityAreas.find((a) => a.id !== payload.areaId && !isAreaAssigned(a, createAuthForm.city)) || currentCityAreas[0];
+          setCreateAuthForm((prev) => ({
+            ...prev,
             fullName: '',
             phone: '',
             email: '',
             password: generateRandomPassword(10),
-            city: 'Thành phố Đà Nẵng',
-            areaId: nextArea?.id || 'area-htd',
-            areaName: nextArea?.name || 'Phường Hòa Cường',
-          });
+            areaId: nextArea?.id || 'area-default',
+            areaName: nextArea?.name || 'Khu vực quản lý',
+          }));
         }, 3200);
       } else {
         setAuthSubmitError(res.message || 'Không thể tạo tài khoản cán bộ.');
@@ -968,6 +1113,82 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
       setAuthSubmitError(err?.message || 'Lỗi kết nối khi gửi yêu cầu tạo tài khoản.');
     } finally {
       setAuthSubmitting(false);
+    }
+  };
+
+  // Hành động 8b: Chỉnh sửa Cán bộ & thay đổi địa bàn quản lý
+  const handleOpenEditAuthority = (a: any) => {
+    setEditingAuthority(a);
+    setEditAuthError(null);
+    setEditAuthSuccess(null);
+    setEditAuthForm({
+      fullName: a.fullName || '',
+      phone: a.phone || '',
+      email: a.email || '',
+      status: a.status || 'ACTIVE',
+      areaId: String(a.authority?.areaId || ''),
+      areaName: a.authority?.areaName || '',
+      department: a.authority?.department || '',
+      position: a.authority?.position || 'Chỉ Huy Trực Ban Tác Chiến',
+      password: '',
+    });
+  };
+
+  const handleEditAuthoritySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAuthority) return;
+    setEditAuthSubmitting(true);
+    setEditAuthError(null);
+    setEditAuthSuccess(null);
+    try {
+      const selectedArea = DANANG_ADMIN_AREAS.find((ar) => ar.id === editAuthForm.areaId);
+      const finalAreaName = selectedArea ? selectedArea.name : editAuthForm.areaName;
+
+      const payload: any = {
+        fullName: editAuthForm.fullName.trim(),
+        phone: editAuthForm.phone.trim(),
+        email: editAuthForm.email.trim(),
+        status: editAuthForm.status,
+        authority: {
+          areaId: editAuthForm.areaId,
+          areaName: finalAreaName,
+          department: editAuthForm.department.trim() || `Ban Chỉ Huy PCTT ${finalAreaName}`,
+          position: editAuthForm.position.trim() || 'Chỉ Huy Trực Ban Tác Chiến',
+        },
+      };
+
+      if (editAuthForm.password && editAuthForm.password.trim()) {
+        payload.password = editAuthForm.password.trim();
+      }
+
+      const res = await updateAdminUser(editingAuthority._id, payload);
+      if (res.success) {
+        setEditAuthSuccess(`✅ Đã cập nhật thông tin và địa bàn cho cán bộ ${payload.fullName} thành công!`);
+        refreshData();
+        setTimeout(() => {
+          setEditingAuthority(null);
+          setEditAuthSuccess(null);
+        }, 1200);
+      } else {
+        setEditAuthError(res.message || 'Không thể cập nhật tài khoản cán bộ.');
+      }
+    } catch (err: any) {
+      setEditAuthError(err?.message || 'Lỗi kết nối khi cập nhật tài khoản.');
+    } finally {
+      setEditAuthSubmitting(false);
+    }
+  };
+
+  const handleQuickToggleAuthStatus = async (a: any) => {
+    const nextStatus = a.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    try {
+      setLoading(true);
+      await updateUserStatus(a._id, nextStatus);
+      refreshData();
+    } catch (err: any) {
+      alert('❌ Lỗi cập nhật trạng thái: ' + (err.message || 'Lỗi server'));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -4526,61 +4747,67 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
    * 11. ADMIN: QUẢN LÝ CÁN BỘ & ĐỊA PHƯƠNG (UC-A04)
    * ------------------------------------------------------------- */
   if (activeKey === 'authorities') {
+    const activeOfficersCount = authorities.filter((a) => a.status === 'ACTIVE').length;
+    const inactiveOfficersCount = authorities.length - activeOfficersCount;
+
+    const filteredAuthorities = authorities.filter((a) => {
+      if (authStatusFilter === 'ACTIVE' && a.status !== 'ACTIVE') return false;
+      if (authStatusFilter === 'INACTIVE' && a.status === 'ACTIVE') return false;
+      if (authSearchQuery.trim()) {
+        const q = authSearchQuery.toLowerCase();
+        const matchName = (a.fullName || '').toLowerCase().includes(q);
+        const matchPhone = (a.phone || '').includes(q);
+        const matchEmail = (a.email || '').toLowerCase().includes(q);
+        const matchArea = (a.authority?.areaName || a.authority?.areaId || '').toLowerCase().includes(q);
+        const matchDept = (a.authority?.department || '').toLowerCase().includes(q);
+        const matchPos = (a.authority?.position || '').toLowerCase().includes(q);
+        return matchName || matchPhone || matchEmail || matchArea || matchDept || matchPos;
+      }
+      return true;
+    });
+
     return (
       <div className="sos-views-container">
         <div className="sos-view-card">
-          <div className="sos-view-card-header">
+          <div className="sos-view-card-header" style={{ flexWrap: 'wrap', gap: '12px' }}>
             <div className="sos-view-card-title">
               <Building2 size={18} color="#a855f7" />
               <span>
-                Cán Bộ &amp; Địa Bàn Phụ Trách ({authorities.length} cán bộ • Đã quản lý: {assignedAreas.length}/{DANANG_ADMIN_AREAS.length} địa bàn)
+                Cán Bộ &amp; Địa Bàn Phụ Trách ({authorities.length} cán bộ điều hành toàn quốc)
               </span>
             </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
               <button
                 type="button"
-                disabled={availableAreas.length === 0}
                 className="sos-btn-action"
                 style={{
-                  background:
-                    availableAreas.length === 0
-                      ? '#64748b'
-                      : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                   color: '#ffffff',
                   fontWeight: 600,
-                  boxShadow: availableAreas.length === 0 ? 'none' : '0 2px 8px rgba(16, 185, 129, 0.3)',
+                  boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
                   border: 'none',
-                  padding: '8px 14px',
+                  padding: '8px 16px',
                   borderRadius: '6px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
-                  cursor: availableAreas.length === 0 ? 'not-allowed' : 'pointer',
-                  opacity: availableAreas.length === 0 ? 0.75 : 1,
+                  cursor: 'pointer',
                 }}
                 onClick={() => {
-                  if (availableAreas.length === 0) {
-                    alert('Tất cả 16 phường/xã trên địa bàn TP Đà Nẵng đều đã có tài khoản cán bộ quản lý!');
-                    return;
-                  }
                   setAuthSubmitError(null);
                   setAuthSubmitSuccess(null);
-                  const firstAvailable = availableAreas[0];
                   setCreateAuthForm((prev) => ({
                     ...prev,
                     password: generateRandomPassword(10),
-                    areaId: firstAvailable.id,
-                    areaName: firstAvailable.name,
                   }));
                   setShowCreateAuthModal(true);
+                  if (modalProvinceSubUnits.length === 0) {
+                    loadSubUnitsForCity(createAuthForm.city || 'Thành phố Đà Nẵng');
+                  }
                 }}
               >
                 <UserPlus size={16} />
-                <span>
-                  {availableAreas.length === 0
-                    ? 'Đã Phân Bổ Đủ 100% Địa Bàn'
-                    : `+ Tạo Tài Khoản Cán Bộ (${availableAreas.length} địa bàn trống)`}
-                </span>
+                <span>+ Tạo Tài Khoản Cán Bộ</span>
               </button>
               <button
                 type="button"
@@ -4594,34 +4821,89 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             </div>
           </div>
 
+          {/* Thanh lọc nhanh trạng thái & Tìm kiếm */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', padding: '12px 18px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className={`sos-btn-filter-pill ${authStatusFilter === 'ALL' ? 'active' : ''}`}
+                onClick={() => setAuthStatusFilter('ALL')}
+              >
+                Tất cả ({authorities.length})
+              </button>
+              <button
+                type="button"
+                className={`sos-btn-filter-pill ${authStatusFilter === 'ACTIVE' ? 'active-green' : ''}`}
+                onClick={() => setAuthStatusFilter('ACTIVE')}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+              >
+                <UserCheck size={13} />
+                <span>Đang hoạt động ({activeOfficersCount})</span>
+              </button>
+              <button
+                type="button"
+                className={`sos-btn-filter-pill ${authStatusFilter === 'INACTIVE' ? 'active-red' : ''}`}
+                onClick={() => setAuthStatusFilter('INACTIVE')}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+              >
+                <UserX size={13} />
+                <span>Tạm khóa / Ngừng ({inactiveOfficersCount})</span>
+              </button>
+            </div>
+
+            <div style={{ position: 'relative' }}>
+              <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+              <input
+                type="text"
+                placeholder="Tìm cán bộ, SĐT, email hoặc địa bàn..."
+                value={authSearchQuery}
+                onChange={(e) => setAuthSearchQuery(e.target.value)}
+                style={{
+                  padding: '7px 14px 7px 32px',
+                  borderRadius: '20px',
+                  fontSize: '12.5px',
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  color: '#0f172a',
+                  outline: 'none',
+                  minWidth: '270px',
+                }}
+              />
+            </div>
+          </div>
+
           <div className="sos-table-wrapper">
             <table className="sos-table">
               <thead>
                 <tr>
-                  <th>Họ và tên</th>
-                  <th>Số điện thoại / Email</th>
-                  <th>Khu vực phụ trách (Địa bàn)</th>
-                  <th>Đơn vị / Cơ quan</th>
-                  <th>Chức vụ</th>
-                  <th>Trạng thái</th>
+                  <th style={{ width: '18%' }}>Họ và tên</th>
+                  <th style={{ width: '20%' }}>Số điện thoại / Email</th>
+                  <th style={{ width: '20%' }}>Khu vực phụ trách (Địa bàn)</th>
+                  <th style={{ width: '18%' }}>Đơn vị / Cơ quan</th>
+                  <th style={{ width: '12%' }}>Chức vụ</th>
+                  <th style={{ width: '12%', textAlign: 'center' }}>Trạng thái</th>
+                  <th style={{ width: '14%', textAlign: 'center' }}>Hành động</th>
                 </tr>
               </thead>
               <tbody>
-                {authorities.length === 0 ? (
+                {filteredAuthorities.length === 0 ? (
                   <tr>
-                    <td colSpan={6} style={{ textAlign: 'center', padding: '28px', color: '#94a3b8' }}>
-                      Chưa có tài khoản cán bộ địa phương nào. Nhấn "+ Tạo Tài Khoản Cán Bộ Địa Phương" để tạo mới!
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '28px', color: '#94a3b8' }}>
+                      {authorities.length === 0
+                        ? 'Chưa có tài khoản cán bộ địa phương nào. Nhấn "+ Tạo Tài Khoản Cán Bộ" để tạo mới!'
+                        : 'Không có cán bộ nào phù hợp với bộ lọc tìm kiếm.'}
                     </td>
                   </tr>
                 ) : (
-                  authorities.map((a) => {
+                  filteredAuthorities.map((a) => {
                     const areaName = a.authority?.areaName || a.authority?.areaId || 'Địa bàn phụ trách';
+                    const isActive = a.status === 'ACTIVE';
                     return (
                       <tr key={a._id}>
                         <td><strong>{a.fullName}</strong></td>
                         <td>
                           <div style={{ fontWeight: 600, color: '#f8fafc' }}>{a.phone}</div>
-                          <small style={{ color: '#94a3b8' }}>{a.email}</small>
+                          <small style={{ color: '#94a3b8' }}>{a.email || '--'}</small>
                         </td>
                         <td>
                           <span
@@ -4644,10 +4926,61 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                         </td>
                         <td>{a.authority?.department || 'Ban chỉ huy PCTT'}</td>
                         <td>{a.authority?.position || 'Cán bộ tác chiến'}</td>
-                        <td>
-                          <span className={`sos-badge ${a.status === 'ACTIVE' ? 'active' : 'critical'}`}>
-                            {a.status}
+                        <td style={{ textAlign: 'center' }}>
+                          <span
+                            className={`sos-badge ${isActive ? 'active' : 'critical'}`}
+                            style={{ cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            title="Bấm để chuyển nhanh trạng thái"
+                            onClick={() => handleQuickToggleAuthStatus(a)}
+                          >
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: isActive ? '#16a34a' : '#ef4444' }} />
+                            {isActive ? 'HOẠT ĐỘNG' : a.status || 'TẠM KHÓA'}
                           </span>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <div style={{ display: 'inline-flex', gap: '6px' }}>
+                            <button
+                              type="button"
+                              className="sos-btn-action"
+                              style={{
+                                padding: '5px 10px',
+                                borderRadius: '6px',
+                                backgroundColor: 'rgba(2, 132, 199, 0.15)',
+                                color: '#0284c7',
+                                border: '1px solid rgba(2, 132, 199, 0.3)',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                cursor: 'pointer',
+                              }}
+                              title="Chỉnh sửa thông tin & đổi địa bàn quản lý"
+                              onClick={() => handleOpenEditAuthority(a)}
+                            >
+                              <Edit size={13} />
+                              <span>Sửa</span>
+                            </button>
+                            <button
+                              type="button"
+                              className={`sos-btn-action ${isActive ? 'danger' : 'success'}`}
+                              style={{
+                                padding: '5px 10px',
+                                borderRadius: '6px',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                cursor: 'pointer',
+                              }}
+                              title={isActive ? 'Khóa tài khoản cán bộ' : 'Mở khóa kích hoạt lại'}
+                              onClick={() => handleQuickToggleAuthStatus(a)}
+                            >
+                              {isActive ? <Lock size={13} /> : <Unlock size={13} />}
+                              <span>{isActive ? 'Khóa' : 'Mở'}</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -4658,37 +4991,312 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
           </div>
         </div>
 
-        {/* Danh sách cơ quan */}
-        <div className="sos-view-card">
-          <div className="sos-view-card-title" style={{ marginBottom: 16 }}>
-            <Building2 size={18} color="#0284c7" />
-            <span>Danh Sách Cơ Quan Chỉ Huy &amp; Đầu Mối Liên Lạc ({orgs.length} tổ chức)</span>
+        {/* MODAL: CHỈNH SỬA THÔNG TIN CÁN BỘ & THAY ĐỔI ĐỊA BÀN QUẢN LÝ */}
+        {editingAuthority && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              backdropFilter: 'blur(5px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 125,
+              padding: '20px',
+            }}
+          >
+            <div
+              className="sos-modal-card"
+              style={{
+                borderRadius: '14px',
+                padding: '24px',
+                maxWidth: '560px',
+                width: '100%',
+                maxHeight: '92vh',
+                overflowY: 'auto',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 className="sos-modal-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px' }}>
+                  <Edit size={20} color="#0284c7" />
+                  <span>Chỉnh Sửa Cán Bộ &amp; Thay Đổi Địa Bàn</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setEditingAuthority(null)}
+                  style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {editAuthError && (
+                <div
+                  style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid rgba(239, 68, 68, 0.4)',
+                    color: '#f87171',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    marginBottom: '16px',
+                  }}
+                >
+                  {editAuthError}
+                </div>
+              )}
+
+              {editAuthSuccess && (
+                <div
+                  style={{
+                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                    border: '1px solid rgba(16, 185, 129, 0.4)',
+                    color: '#34d399',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    marginBottom: '16px',
+                  }}
+                >
+                  {editAuthSuccess}
+                </div>
+              )}
+
+              <form onSubmit={handleEditAuthoritySubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label className="sos-form-label" style={{ fontSize: '12px', display: 'block', marginBottom: '5px' }}>
+                      Họ và tên cán bộ <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      className="sos-form-input"
+                      placeholder="VD: Nguyễn Văn Sơn"
+                      value={editAuthForm.fullName}
+                      onChange={(e) => setEditAuthForm({ ...editAuthForm, fullName: e.target.value })}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="sos-form-label" style={{ fontSize: '12px', display: 'block', marginBottom: '5px' }}>
+                      Số điện thoại đăng nhập <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      className="sos-form-input"
+                      placeholder="VD: 0905123456"
+                      value={editAuthForm.phone}
+                      onChange={(e) => setEditAuthForm({ ...editAuthForm, phone: e.target.value })}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label className="sos-form-label" style={{ fontSize: '12px', display: 'block', marginBottom: '5px' }}>
+                      Email liên hệ
+                    </label>
+                    <input
+                      type="email"
+                      className="sos-form-input"
+                      placeholder="VD: officer@danang.gov.vn"
+                      value={editAuthForm.email}
+                      onChange={(e) => setEditAuthForm({ ...editAuthForm, email: e.target.value })}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="sos-form-label" style={{ fontSize: '12px', display: 'block', marginBottom: '5px' }}>
+                      Trạng thái tài khoản <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <select
+                      className="sos-form-select"
+                      value={editAuthForm.status}
+                      onChange={(e) => setEditAuthForm({ ...editAuthForm, status: e.target.value })}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
+                    >
+                      <option value="ACTIVE">🟢 ACTIVE - Đang hoạt động tác chiến</option>
+                      <option value="INACTIVE">🔴 INACTIVE - Tạm khóa / Ngừng điều hành</option>
+                      <option value="SUSPENDED">⛔ SUSPENDED - Đình chỉ tác chiến</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Thay đổi địa bàn quản lý */}
+                <div>
+                  <label className="sos-form-label" style={{ fontSize: '12px', display: 'block', marginBottom: '5px' }}>
+                    Khu vực phụ trách (Thay đổi địa bàn điều phối) <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <select
+                    className="sos-form-select"
+                    value={editAuthForm.areaId}
+                    onChange={(e) => {
+                      const targetId = e.target.value;
+                      const match = DANANG_ADMIN_AREAS.find((a) => a.id === targetId);
+                      const areaName = match ? match.name : '';
+                      setEditAuthForm({
+                        ...editAuthForm,
+                        areaId: targetId,
+                        areaName: areaName,
+                        department: `Ban Chỉ Huy PCTT ${areaName}`,
+                      });
+                    }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
+                  >
+                    {/* Địa bàn hiện tại */}
+                    {editAuthForm.areaName && (
+                      <option value={editAuthForm.areaId}>
+                        ⭐ {editAuthForm.areaName} (Địa bàn đang quản lý)
+                      </option>
+                    )}
+                    {/* Các địa bàn còn trống */}
+                    <optgroup label="Các địa bàn chưa có cán bộ quản lý (Trống)">
+                      {availableAreas.map((ar: { id: string; name: string; district: string }) => (
+                        <option key={ar.id} value={ar.id}>
+                          🟢 {ar.name} ({ar.district})
+                        </option>
+                      ))}
+                    </optgroup>
+                    {/* Các địa bàn khác */}
+                    <optgroup label="Các địa bàn khác">
+                      {assignedAreas
+                        .filter((ar: { id: string; name: string }) => ar.id !== editAuthForm.areaId && ar.name !== editAuthForm.areaName)
+                        .map((ar: { id: string; name: string; district: string }) => (
+                          <option key={ar.id} value={ar.id}>
+                            ⚠️ {ar.name} ({ar.district}) – Đã có cán bộ khác
+                          </option>
+                        ))}
+                    </optgroup>
+                  </select>
+                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                    * Chọn địa bàn mới để chuyển quyền điều phối tác chiến của cán bộ này sang khu vực đó.
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label className="sos-form-label" style={{ fontSize: '12px', display: 'block', marginBottom: '5px' }}>
+                      Đơn vị / Cơ quan
+                    </label>
+                    <input
+                      type="text"
+                      className="sos-form-input"
+                      value={editAuthForm.department}
+                      onChange={(e) => setEditAuthForm({ ...editAuthForm, department: e.target.value })}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="sos-form-label" style={{ fontSize: '12px', display: 'block', marginBottom: '5px' }}>
+                      Chức vụ
+                    </label>
+                    <input
+                      type="text"
+                      className="sos-form-input"
+                      value={editAuthForm.position}
+                      onChange={(e) => setEditAuthForm({ ...editAuthForm, position: e.target.value })}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Đổi mật khẩu mới nếu muốn */}
+                <div>
+                  <label className="sos-form-label" style={{ fontSize: '12px', display: 'block', marginBottom: '5px' }}>
+                    Đặt mật khẩu mới (Bỏ trống nếu không muốn đổi mật khẩu)
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      className="sos-form-input"
+                      placeholder="Để trống nếu giữ nguyên mật khẩu cũ"
+                      value={editAuthForm.password}
+                      onChange={(e) => setEditAuthForm({ ...editAuthForm, password: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '9px 38px 9px 12px',
+                        borderRadius: '6px',
+                        fontFamily: editAuthForm.password ? 'monospace' : 'inherit',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditAuthForm((prev) => ({
+                          ...prev,
+                          password: generateRandomPassword(8),
+                        }))
+                      }
+                      style={{
+                        position: 'absolute',
+                        right: '6px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        color: '#0284c7',
+                        cursor: 'pointer',
+                        padding: '5px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: '4px',
+                      }}
+                      title="Sinh mật khẩu ngẫu nhiên"
+                    >
+                      <RefreshCw size={15} />
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
+                  <button
+                    type="button"
+                    className="sos-btn-action sos-btn-refresh"
+                    style={{ padding: '9px 16px', borderRadius: '6px' }}
+                    onClick={() => setEditingAuthority(null)}
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={editAuthSubmitting}
+                    style={{
+                      padding: '9px 20px',
+                      borderRadius: '6px',
+                      background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                      color: '#fff',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontWeight: 700,
+                      boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    {editAuthSubmitting ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        <span>Đang lưu thay đổi...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={16} />
+                        <span>Lưu Thay Đổi &amp; Cập Nhật Địa Bàn</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-          <div className="sos-table-wrapper">
-            <table className="sos-table">
-              <thead>
-                <tr>
-                  <th>Tên cơ quan</th>
-                  <th>Mã cơ quan</th>
-                  <th>Loại</th>
-                  <th>Số điện thoại</th>
-                  <th>Địa chỉ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orgs.map((o) => (
-                  <tr key={o._id}>
-                    <td><strong>{o.name}</strong></td>
-                    <td><code>{o.code}</code></td>
-                    <td>{o.type}</td>
-                    <td>{o.phone}</td>
-                    <td>{o.address}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        )}
 
         {/* MODAL: TẠO TÀI KHOẢN CÁN BỘ ĐỊA PHƯƠNG & GÁN ĐỊA BÀN QUẢN LÝ */}
         {showCreateAuthModal && (
@@ -4708,321 +5316,413 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             <div
               className="sos-modal-card"
               style={{
-                borderRadius: '14px',
-                padding: '24px',
-                maxWidth: '560px',
+                borderRadius: '16px',
+                padding: '28px 32px',
+                maxWidth: '680px',
                 width: '100%',
                 maxHeight: '92vh',
                 overflowY: 'auto',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)',
+                boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.45)',
+                border: '1px solid rgba(226, 232, 240, 0.8)',
+                background: '#ffffff',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 className="sos-modal-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px' }}>
-                  <UserPlus size={20} color="#10b981" />
-                  <span>Tạo Tài Khoản Cán Bộ &amp; Gán Khu Vực Quản Lý</span>
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowCreateAuthModal(false)}
-                  style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
-                >
-                  <X size={20} />
-                </button>
-              </div>
+              {(() => {
+                const currentCityAreas = modalProvinceSubUnits.length > 0 ? modalProvinceSubUnits : DANANG_ADMIN_AREAS;
+                const currentAvailableAreas = currentCityAreas.filter((ar) => !isAreaAssigned(ar, createAuthForm.city));
+                const currentAssignedAreas = currentCityAreas.filter((ar) => isAreaAssigned(ar, createAuthForm.city));
+                const allProvincesList = vietnamProvinces.length > 0 ? vietnamProvinces : VIETNAM_34_PROVINCES_STANDARD;
 
-              {authSubmitError && (
-                <div
-                  style={{
-                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                    border: '1px solid rgba(239, 68, 68, 0.4)',
-                    color: '#f87171',
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    fontSize: '13px',
-                    marginBottom: '16px',
-                  }}
-                >
-                  {authSubmitError}
-                </div>
-              )}
-
-              {authSubmitSuccess && (
-                <div
-                  style={{
-                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                    border: '1px solid rgba(16, 185, 129, 0.4)',
-                    color: '#34d399',
-                    padding: '10px 14px',
-                    borderRadius: '8px',
-                    fontSize: '13px',
-                    marginBottom: '16px',
-                  }}
-                >
-                  {authSubmitSuccess}
-                </div>
-              )}
-
-              <form onSubmit={handleCreateAuthorityUser} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label className="sos-form-label" style={{ fontSize: '12px', display: 'block', marginBottom: '5px' }}>
-                      Họ và tên cán bộ <span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      className="sos-form-input"
-                      placeholder="VD: Nguyễn Văn Thắng"
-                      value={createAuthForm.fullName}
-                      onChange={(e) => setCreateAuthForm({ ...createAuthForm, fullName: e.target.value })}
-                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="sos-form-label" style={{ fontSize: '12px', display: 'block', marginBottom: '5px' }}>
-                      Số điện thoại đăng nhập <span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <input
-                      type="tel"
-                      required
-                      className="sos-form-input"
-                      placeholder="VD: 0905123456"
-                      value={createAuthForm.phone}
-                      onChange={(e) => setCreateAuthForm({ ...createAuthForm, phone: e.target.value })}
-                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label className="sos-form-label" style={{ fontSize: '12px', display: 'block', marginBottom: '5px' }}>
-                      Email liên hệ <span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      className="sos-form-input"
-                      placeholder="VD: thang.nguyen@danang.gov.vn"
-                      value={createAuthForm.email}
-                      onChange={(e) => setCreateAuthForm({ ...createAuthForm, email: e.target.value })}
-                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="sos-form-label" style={{ fontSize: '12px', display: 'block', marginBottom: '5px' }}>
-                      Mật khẩu khởi tạo
-                    </label>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type="text"
-                        required
-                        className="sos-form-input"
-                        placeholder="Mật khẩu ngẫu nhiên gồm chữ và số"
-                        value={createAuthForm.password}
-                        onChange={(e) => setCreateAuthForm({ ...createAuthForm, password: e.target.value })}
-                        style={{
-                          width: '100%',
-                          padding: '9px 38px 9px 12px',
-                          borderRadius: '6px',
-                          fontFamily: 'monospace',
-                          fontWeight: 700,
-                          letterSpacing: '0.8px',
-                          color: '#0284c7',
-                          backgroundColor: 'rgba(2, 132, 199, 0.05)',
-                        }}
-                      />
+                return (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div
+                          style={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: '10px',
+                            background: 'rgba(16, 185, 129, 0.12)',
+                            color: '#059669',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <UserPlus size={22} />
+                        </div>
+                        <div>
+                          <h3 className="sos-modal-title" style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>
+                            Tạo Tài Khoản Cán Bộ &amp; Gán Khu Vực Quản Lý
+                          </h3>
+                          <div style={{ fontSize: '12.5px', color: '#64748b', marginTop: '3px' }}>
+                            Cấp tài khoản điều hành tác chiến theo địa bàn hành chính trên toàn quốc
+                          </div>
+                        </div>
+                      </div>
                       <button
                         type="button"
-                        onClick={() =>
-                          setCreateAuthForm((prev) => ({
-                            ...prev,
-                            password: generateRandomPassword(8),
-                          }))
-                        }
+                        onClick={() => setShowCreateAuthModal(false)}
                         style={{
-                          position: 'absolute',
-                          right: '6px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
+                          background: '#f1f5f9',
                           border: 'none',
-                          color: '#0284c7',
+                          color: '#64748b',
                           cursor: 'pointer',
-                          padding: '5px',
+                          padding: '6px',
+                          borderRadius: '8px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          borderRadius: '4px',
+                          transition: 'all 0.2s',
                         }}
-                        title="Đổi mật khẩu ngẫu nhiên mới"
                       >
-                        <RefreshCw size={15} />
+                        <X size={18} />
                       </button>
                     </div>
-                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
-                      * Mật khẩu ngẫu nhiên này kèm link đổi mật khẩu sẽ được tự động gửi về Email của cán bộ.
-                    </div>
-                  </div>
-                </div>
 
-                {/* Chọn Tỉnh / Thành Phố và Địa Bàn Phụ Trách */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label className="sos-form-label" style={{ fontSize: '12px', display: 'block', marginBottom: '5px' }}>
-                      Tỉnh / Thành phố
-                    </label>
-                    <select
-                      className="sos-form-select"
-                      value={createAuthForm.city}
-                      onChange={(e) => setCreateAuthForm({ ...createAuthForm, city: e.target.value })}
-                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
-                    >
-                      <option value="Thành phố Đà Nẵng">Thành phố Đà Nẵng</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="sos-form-label" style={{ fontSize: '12px', display: 'block', marginBottom: '5px' }}>
-                      Khu vực quản lý (Còn trống: {availableAreas.length}/{DANANG_ADMIN_AREAS.length} địa bàn) <span style={{ color: '#ef4444' }}>*</span>
-                    </label>
-                    <select
-                      className="sos-form-select"
-                      value={createAuthForm.areaId}
-                      onChange={(e) => {
-                        const targetId = e.target.value;
-                        const match = DANANG_ADMIN_AREAS.find((a) => a.id === targetId);
-                        const areaName = match ? match.name : '';
-                        setCreateAuthForm({
-                          ...createAuthForm,
-                          areaId: targetId,
-                          areaName: areaName,
-                        });
-                      }}
-                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
-                    >
-                      {availableAreas.length === 0 ? (
-                        <option value="" disabled>
-                          Không còn địa bàn nào chưa có quản lý
-                        </option>
-                      ) : (
-                        <optgroup label={`Khu vực chưa có quản lý (${availableAreas.length} địa bàn khả dụng)`}>
-                          {availableAreas.map((ar: { id: string; name: string; district: string }) => (
-                            <option key={ar.id} value={ar.id}>
-                              {ar.name} ({ar.district})
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {assignedAreas.length > 0 && (
-                        <optgroup label="Khu vực đã có tài khoản quản lý (Khóa - không cho tạo trùng)">
-                          {assignedAreas.map((ar: { id: string; name: string; district: string }) => {
-                            const mgr = authorities.find((a: any) => {
-                              const authAreaId = String(a.authority?.areaId || '').trim();
-                              const authAreaName = String(a.authority?.areaName || '').trim().toLowerCase();
-                              const cleanAuthName = authAreaName.replace(/^(Phường|Xã|Quận|Huyện)\s+/i, '').trim();
-                              const cleanArName = ar.name.replace(/^(Phường|Xã|Quận|Huyện)\s+/i, '').trim().toLowerCase();
-                              return authAreaId === ar.id || authAreaName === ar.name.toLowerCase() || (cleanAuthName && cleanAuthName === cleanArName);
-                            });
-                            return (
-                              <option key={ar.id} value={ar.id} disabled style={{ color: '#94a3b8' }}>
-                                ⛔ {ar.name} ({ar.district}) – Đã có: {mgr?.fullName || 'Cán bộ'} ({mgr?.phone || ''})
-                              </option>
-                            );
-                          })}
-                        </optgroup>
-                      )}
-                    </select>
-                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
-                      * Chỉ tạo tài khoản cho các khu vực <strong>chưa có quản lý</strong>. Mỗi phường/xã chỉ có 1 tài khoản điều phối tác chiến.
-                    </div>
-                  </div>
-                </div>
-
-                {/* Banner giải thích cơ chế định vị địa bàn & phân quyền quản lý */}
-                <div
-                  style={{
-                    backgroundColor: 'rgba(14, 165, 233, 0.08)',
-                    border: '1px solid rgba(14, 165, 233, 0.3)',
-                    borderRadius: '10px',
-                    padding: '12px 14px',
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '10px',
-                    marginTop: '4px',
-                  }}
-                >
-                  <MapPin size={18} color="#0284c7" style={{ flexShrink: 0, marginTop: '2px' }} />
-                  <div style={{ fontSize: '13px', lineHeight: 1.5, color: '#334155' }}>
-                    <div style={{ color: '#0369a1', fontWeight: 700, marginBottom: '3px' }}>
-                      Cơ chế tự động định vị địa bàn:
-                    </div>
-                    <div>
-                      Khi cán bộ đăng nhập bằng SĐT này, hệ thống sẽ tự động khóa phạm vi quản lý và định vị đúng tại{' '}
-                      <strong style={{ color: '#0284c7', fontWeight: 700 }}>{createAuthForm.areaName}</strong>{' '}
-                      (mã ranh giới:{' '}
-                      <span
+                    {authSubmitError && (
+                      <div
                         style={{
-                          backgroundColor: '#e0f2fe',
-                          color: '#0369a1',
-                          padding: '2px 7px',
-                          borderRadius: '4px',
-                          fontWeight: 700,
-                          fontSize: '12px',
-                          fontFamily: 'monospace',
-                          border: '1px solid #bae6fd',
+                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          color: '#dc2626',
+                          padding: '12px 16px',
+                          borderRadius: '10px',
+                          fontSize: '13px',
+                          marginBottom: '18px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
                         }}
                       >
-                        {createAuthForm.areaId}
-                      </span>
-                      ).
-                    </div>
-                    <div style={{ marginTop: '5px', fontSize: '12px', color: '#64748b' }}>
-                      • Vai trò tác chiến: <strong style={{ color: '#0f172a' }}>Chỉ Huy Trực Ban Tác Chiến</strong> (các đội cứu hộ cơ sở sẽ do cán bộ này trực tiếp tạo và điều phối).
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
-                  <button
-                    type="button"
-                    className="sos-btn-action sos-btn-refresh"
-                    style={{ padding: '9px 16px', borderRadius: '6px' }}
-                    onClick={() => setShowCreateAuthModal(false)}
-                  >
-                    Hủy
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={authSubmitting}
-                    style={{
-                      padding: '9px 20px',
-                      borderRadius: '6px',
-                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                      color: '#fff',
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontWeight: 700,
-                      boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                    }}
-                  >
-                    {authSubmitting ? (
-                      <>
-                        <Loader2 size={16} className="animate-spin" />
-                        <span>Đang tạo tài khoản...</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 size={16} />
-                        <span>Tạo Tài Khoản &amp; Gán Địa Bàn</span>
-                      </>
+                        <span>{authSubmitError}</span>
+                      </div>
                     )}
-                  </button>
-                </div>
-              </form>
+
+                    {authSubmitSuccess && (
+                      <div
+                        style={{
+                          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                          border: '1px solid rgba(16, 185, 129, 0.3)',
+                          color: '#059669',
+                          padding: '12px 16px',
+                          borderRadius: '10px',
+                          fontSize: '13px',
+                          marginBottom: '18px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                        }}
+                      >
+                        <span>{authSubmitSuccess}</span>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleCreateAuthorityUser} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {/* PHẦN 1: THÔNG TIN TÀI KHOẢN CÁN BỘ */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div style={{ fontSize: '11.5px', fontWeight: 700, textTransform: 'uppercase', color: '#475569', letterSpacing: '0.6px' }}>
+                          1. Thông Tin Tài Khoản Đăng Nhập
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                          <div>
+                            <label className="sos-form-label" style={{ fontSize: '12.5px', fontWeight: 600, display: 'block', marginBottom: '6px', color: '#1e293b' }}>
+                              Họ và tên cán bộ <span style={{ color: '#ef4444' }}>*</span>
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              className="sos-form-input"
+                              placeholder="VD: Nguyễn Văn Thắng"
+                              value={createAuthForm.fullName}
+                              onChange={(e) => setCreateAuthForm({ ...createAuthForm, fullName: e.target.value })}
+                              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }}
+                            />
+                          </div>
+                          <div>
+                            <label className="sos-form-label" style={{ fontSize: '12.5px', fontWeight: 600, display: 'block', marginBottom: '6px', color: '#1e293b' }}>
+                              Số điện thoại đăng nhập <span style={{ color: '#ef4444' }}>*</span>
+                            </label>
+                            <input
+                              type="tel"
+                              required
+                              className="sos-form-input"
+                              placeholder="VD: 0905123456"
+                              value={createAuthForm.phone}
+                              onChange={(e) => setCreateAuthForm({ ...createAuthForm, phone: e.target.value })}
+                              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }}
+                            />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                          <div>
+                            <label className="sos-form-label" style={{ fontSize: '12.5px', fontWeight: 600, display: 'block', marginBottom: '6px', color: '#1e293b' }}>
+                              Email liên hệ <span style={{ color: '#ef4444' }}>*</span>
+                            </label>
+                            <input
+                              type="email"
+                              required
+                              className="sos-form-input"
+                              placeholder="VD: thang.nguyen@danang.gov.vn"
+                              value={createAuthForm.email}
+                              onChange={(e) => setCreateAuthForm({ ...createAuthForm, email: e.target.value })}
+                              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }}
+                            />
+                          </div>
+                          <div>
+                            <label className="sos-form-label" style={{ fontSize: '12.5px', fontWeight: 600, display: 'block', marginBottom: '6px', color: '#1e293b' }}>
+                              Mật khẩu khởi tạo
+                            </label>
+                            <div style={{ position: 'relative' }}>
+                              <input
+                                type="text"
+                                required
+                                className="sos-form-input"
+                                placeholder="Mật khẩu ngẫu nhiên"
+                                value={createAuthForm.password}
+                                onChange={(e) => setCreateAuthForm({ ...createAuthForm, password: e.target.value })}
+                                style={{
+                                  width: '100%',
+                                  padding: '10px 42px 10px 14px',
+                                  borderRadius: '8px',
+                                  fontFamily: 'monospace',
+                                  fontWeight: 700,
+                                  fontSize: '13.5px',
+                                  letterSpacing: '0.8px',
+                                  color: '#0284c7',
+                                  backgroundColor: 'rgba(2, 132, 199, 0.04)',
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setCreateAuthForm((prev) => ({
+                                    ...prev,
+                                    password: generateRandomPassword(8),
+                                  }))
+                                }
+                                style={{
+                                  position: 'absolute',
+                                  right: '6px',
+                                  top: '50%',
+                                  transform: 'translateY(-50%)',
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#0284c7',
+                                  cursor: 'pointer',
+                                  padding: '6px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  borderRadius: '6px',
+                                }}
+                                title="Đổi mật khẩu ngẫu nhiên mới"
+                              >
+                                <RefreshCw size={15} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ fontSize: '11.5px', color: '#64748b', fontStyle: 'italic', marginTop: '-2px' }}>
+                          * Mật khẩu ngẫu nhiên kèm liên kết xác thực sẽ được tự động gửi về Email của cán bộ.
+                        </div>
+                      </div>
+
+                      <div style={{ borderTop: '1px solid #f1f5f9', margin: '2px 0' }} />
+
+                      {/* PHẦN 2: PHẠM VI ĐỊA BÀN PHÂN QUYỀN TÁC CHIẾN */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ fontSize: '11.5px', fontWeight: 700, textTransform: 'uppercase', color: '#0284c7', letterSpacing: '0.6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <MapPin size={13} />
+                            <span>2. Phạm Vi Địa Bàn Quản Lý (34 Tỉnh Thành Cả Nước)</span>
+                          </div>
+                          {modalSubUnitsLoading && (
+                            <span style={{ fontSize: '11.5px', color: '#0284c7', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <Loader2 size={12} className="animate-spin" />
+                              Đang nạp xã/phường...
+                            </span>
+                          )}
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                          <div>
+                            <label className="sos-form-label" style={{ fontSize: '12.5px', fontWeight: 600, display: 'block', marginBottom: '6px', color: '#1e293b' }}>
+                              Tỉnh / Thành phố <span style={{ color: '#ef4444' }}>*</span>
+                            </label>
+                            <select
+                              className="sos-form-select"
+                              value={createAuthForm.city}
+                              onChange={(e) => handleCityChange(e.target.value)}
+                              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}
+                            >
+                              {allProvincesList.map((p) => (
+                                <option key={p.code || p.name} value={p.name}>
+                                  {p.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="sos-form-label" style={{ fontSize: '12.5px', fontWeight: 600, display: 'block', marginBottom: '6px', color: '#1e293b' }}>
+                              Khu vực quản lý (Còn trống: {currentAvailableAreas.length}/{currentCityAreas.length}) <span style={{ color: '#ef4444' }}>*</span>
+                            </label>
+                            <select
+                              className="sos-form-select"
+                              value={createAuthForm.areaId}
+                              disabled={modalSubUnitsLoading}
+                              onChange={(e) => {
+                                const targetId = e.target.value;
+                                const match = currentCityAreas.find((a) => a.id === targetId);
+                                const areaName = match ? match.name : '';
+                                setCreateAuthForm({
+                                  ...createAuthForm,
+                                  areaId: targetId,
+                                  areaName: areaName,
+                                });
+                              }}
+                              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}
+                            >
+                              {currentAvailableAreas.length === 0 ? (
+                                <option value="" disabled>
+                                  Không còn địa bàn nào chưa có quản lý tại {createAuthForm.city}
+                                </option>
+                              ) : (
+                                <optgroup label={`Khu vực chưa có quản lý (${currentAvailableAreas.length} địa bàn khả dụng)`}>
+                                  {currentAvailableAreas.map((ar) => (
+                                    <option key={ar.id} value={ar.id}>
+                                      {ar.name} {ar.district ? `(${ar.district})` : ''}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              {currentAssignedAreas.length > 0 && (
+                                <optgroup label="Khu vực đã có tài khoản quản lý (Khóa)">
+                                  {currentAssignedAreas.map((ar) => {
+                                    const mgr = authorities.find((a: any) => {
+                                      const authAreaId = String(a.authority?.areaId || '').trim();
+                                      const authAreaName = String(a.authority?.areaName || '').trim().toLowerCase();
+                                      const cleanAuthName = authAreaName.replace(/^(Phường|Xã|Quận|Huyện|Thị trấn)\s+/i, '').trim();
+                                      const cleanArName = ar.name.replace(/^(Phường|Xã|Quận|Huyện|Thị trấn)\s+/i, '').trim().toLowerCase();
+                                      return authAreaId === ar.id || authAreaName === ar.name.toLowerCase() || (cleanAuthName && cleanAuthName === cleanArName);
+                                    });
+                                    return (
+                                      <option key={ar.id} value={ar.id} disabled style={{ color: '#94a3b8' }}>
+                                        ⛔ {ar.name} – Đã có: {mgr?.fullName || 'Cán bộ'} ({mgr?.phone || ''})
+                                      </option>
+                                    );
+                                  })}
+                                </optgroup>
+                              )}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div style={{ fontSize: '11.5px', color: '#64748b', fontStyle: 'italic', marginTop: '-2px' }}>
+                          * Mỗi phường/xã chỉ có 1 tài khoản điều phối. Hệ thống chỉ cho phép gán khu vực chưa có quản lý để tránh xung đột tác chiến.
+                        </div>
+                      </div>
+
+                      {/* THẺ TÓM TẮT ĐỊNH VỊ TÁC CHIẾN */}
+                      <div
+                        style={{
+                          backgroundColor: '#f0f9ff',
+                          border: '1px solid #bae6fd',
+                          borderRadius: '12px',
+                          padding: '14px 16px',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '12px',
+                          marginTop: '4px',
+                        }}
+                      >
+                        <MapPin size={20} color="#0284c7" style={{ flexShrink: 0, marginTop: '2px' }} />
+                        <div style={{ fontSize: '13px', lineHeight: 1.55, color: '#334155' }}>
+                          <div style={{ color: '#0369a1', fontWeight: 700, marginBottom: '3px' }}>
+                            Cơ chế tự động định vị địa bàn tác chiến:
+                          </div>
+                          <div>
+                            Khi cán bộ đăng nhập bằng SĐT này, hệ thống sẽ tự động khóa định vị và quản lý tại{' '}
+                            <strong style={{ color: '#0284c7', fontWeight: 700 }}>{createAuthForm.areaName || 'Khu vực quản lý'}</strong>{' '}
+                            (thuộc <strong style={{ color: '#0f172a' }}>{createAuthForm.city}</strong>) – Mã ranh giới:{' '}
+                            <span
+                              style={{
+                                backgroundColor: '#e0f2fe',
+                                color: '#0369a1',
+                                padding: '2px 7px',
+                                borderRadius: '4px',
+                                fontWeight: 700,
+                                fontSize: '12px',
+                                fontFamily: 'monospace',
+                                border: '1px solid #bae6fd',
+                              }}
+                            >
+                              {createAuthForm.areaId}
+                            </span>
+                            .
+                          </div>
+                          <div style={{ marginTop: '5px', fontSize: '12px', color: '#64748b' }}>
+                            • Vai trò tác chiến: <strong style={{ color: '#0f172a' }}>Chỉ Huy Trực Ban Tác Chiến</strong> (tiếp nhận SOS, cảnh báo rủi ro &amp; chỉ đạo các đội cứu hộ tại địa bàn).
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+                        <button
+                          type="button"
+                          className="sos-btn-action"
+                          style={{
+                            padding: '10px 18px',
+                            borderRadius: '8px',
+                            border: '1px solid #cbd5e1',
+                            background: '#f8fafc',
+                            color: '#475569',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => setShowCreateAuthModal(false)}
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={authSubmitting || modalSubUnitsLoading}
+                          style={{
+                            padding: '10px 24px',
+                            borderRadius: '8px',
+                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                            color: '#fff',
+                            border: 'none',
+                            cursor: authSubmitting ? 'not-allowed' : 'pointer',
+                            fontWeight: 700,
+                            fontSize: '13.5px',
+                            boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '7px',
+                          }}
+                        >
+                          {authSubmitting ? (
+                            <>
+                              <Loader2 size={16} className="animate-spin" />
+                              <span>Đang tạo tài khoản...</span>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 size={16} />
+                              <span>Tạo Tài Khoản &amp; Gán Địa Bàn</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -5034,32 +5734,488 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
    * 12. ADMIN: KHU VỰC HÀNH CHÍNH (UC-A05)
    * ------------------------------------------------------------- */
   if (activeKey === 'areas') {
-    const districtsCount = areas.filter((a) => a.type === 'DISTRICT').length;
-    const wardsCount = areas.filter((a) => a.type === 'WARD').length;
-    const provinceCount = areas.filter((a) => a.type === 'PROVINCE').length;
+    const getSubUnitManager = (u: ProvinceSubUnitItem): AreaManagerInfo | null => {
+      if (!areaManagers || Object.keys(areaManagers).length === 0) return null;
 
-    const filteredAreas = areas.filter((ar) => {
-      if (areaTypeFilter !== 'ALL' && ar.type !== areaTypeFilter) return false;
-      if (areaSearchQuery.trim()) {
-        const q = areaSearchQuery.toLowerCase();
-        const matchesName = (ar.name || '').toLowerCase().includes(q);
-        const matchesCode = (ar.code || '').toLowerCase().includes(q);
-        return matchesName || matchesCode;
+      const fullName = (u.name || '').toLowerCase().trim();
+      if (areaManagers[fullName]) return areaManagers[fullName];
+
+      const shortName = fullName.replace(/^(quận|huyện|thị xã|thành phố|tp\.|phường|xã)\s+/i, '').trim();
+      if (shortName && areaManagers[shortName]) return areaManagers[shortName];
+
+      if (u.id && areaManagers[u.id]) return areaManagers[u.id];
+      if (u.code && areaManagers[u.code.toLowerCase()]) return areaManagers[u.code.toLowerCase()];
+
+      for (const key of Object.keys(areaManagers)) {
+        if (key && shortName && (key.includes(shortName) || shortName.includes(key))) {
+          return areaManagers[key];
+        }
       }
-      return true;
+
+      return null;
+    };
+
+    const getProvinceManager = (p: VietnamProvinceItem): AreaManagerInfo | null => {
+      if (!areaManagers || Object.keys(areaManagers).length === 0) return null;
+
+      const fullName = (p.name || '').toLowerCase().trim();
+      if (areaManagers[fullName]) return areaManagers[fullName];
+
+      const shortName = fullName.replace(/^(thành phố|tỉnh|tp\.)\s+/i, '').trim();
+      if (shortName && areaManagers[shortName]) return areaManagers[shortName];
+
+      if (p.id && areaManagers[p.id]) return areaManagers[p.id];
+      if (p.code && areaManagers[String(p.code)]) return areaManagers[String(p.code)];
+      if (p.isoCode && areaManagers[p.isoCode.toLowerCase()]) return areaManagers[p.isoCode.toLowerCase()];
+
+      for (const key of Object.keys(areaManagers)) {
+        if (key && shortName && (key.includes(shortName) || shortName.includes(key))) {
+          return areaManagers[key];
+        }
+      }
+
+      return null;
+    };
+
+    const handleSelectProvince = async (prov: VietnamProvinceItem) => {
+      setSelectedProvince(prov);
+      setSubUnitsLoading(true);
+      setSubUnitSearchQuery('');
+      setSubUnitTypeFilter('ALL');
+      setSubUnitManagerFilter('ALL');
+      try {
+        const [units, mgrRes] = await Promise.all([
+          fetchProvinceSubUnitsService(prov.placeId, prov.name, prov.code),
+          fetchAreaManagers(),
+        ]);
+        setSubUnits(units);
+        if (mgrRes.success && mgrRes.data) {
+          setAreaManagers(mgrRes.data);
+        }
+      } catch (err) {
+        console.error('Lỗi khi tải đơn vị con:', err);
+      } finally {
+        setSubUnitsLoading(false);
+      }
+    };
+
+    const handleBackToProvinces = () => {
+      setSelectedProvince(null);
+      setSubUnits([]);
+      setSubUnitSearchQuery('');
+      setSubUnitTypeFilter('ALL');
+      setSubUnitManagerFilter('ALL');
+    };
+
+    // TẦNG 2: XEM CHI TIẾT CÁC XÃ, PHƯỜNG, QUẬN, HUYỆN CỦA TỈNH ĐƯỢC CHỌN
+    if (selectedProvince) {
+      const managedCount = subUnits.filter((u) => getSubUnitManager(u) !== null).length;
+      const unmanagedCount = subUnits.length - managedCount;
+
+      const filteredSubUnits = subUnits.filter((u) => {
+        const mgr = getSubUnitManager(u);
+        if (subUnitManagerFilter === 'MANAGED' && !mgr) return false;
+        if (subUnitManagerFilter === 'UNMANAGED' && mgr) return false;
+        if (subUnitTypeFilter !== 'ALL') {
+          if (subUnitTypeFilter === 'DISTRICT' && u.type !== 'DISTRICT') return false;
+          if (subUnitTypeFilter === 'WARD' && u.type !== 'WARD' && u.type !== 'COMMUNE' && u.type !== 'TOWN') return false;
+        }
+        if (subUnitSearchQuery.trim()) {
+          const q = subUnitSearchQuery.toLowerCase();
+          const matchName = (u.name || '').toLowerCase().includes(q) || (u.code || '').toLowerCase().includes(q);
+          const matchMgr = mgr
+            ? (mgr.managerName || '').toLowerCase().includes(q) ||
+              (mgr.phone || '').includes(q) ||
+              (mgr.department || '').toLowerCase().includes(q)
+            : false;
+          return matchName || matchMgr;
+        }
+        return true;
+      });
+
+      const districtCount = subUnits.filter((u) => u.type === 'DISTRICT').length;
+      const wardCount = subUnits.filter((u) => u.type === 'WARD' || u.type === 'COMMUNE' || u.type === 'TOWN').length;
+
+      return (
+        <div className="sos-views-container">
+          {/* THANH BREADCRUMB ĐIỀU HƯỚNG */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13.5px' }}>
+              <button
+                type="button"
+                onClick={handleBackToProvinces}
+                className="sos-btn-refresh"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '8px' }}
+              >
+                <ArrowLeft size={15} />
+                <span>Quay lại Danh sách Tỉnh / Thành</span>
+              </button>
+              <span style={{ color: '#64748b' }}>/</span>
+              <span style={{ color: '#64748b' }}>Toàn Quốc</span>
+              <span style={{ color: '#64748b' }}>/</span>
+              <strong style={{ color: '#0f172a', display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: 700 }}>
+                <Building2 size={15} color="#0284c7" />
+                {selectedProvince.name}
+              </strong>
+            </div>
+
+            <span className="sos-badge active" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a' }} />
+              KHẢ DỤNG HỆ THỐNG
+            </span>
+          </div>
+
+          {/* STATS CỦA TỈNH ĐƯỢC CHỌN - LOẠI BỎ DÂN SỐ/DIỆN TÍCH, THAY BẰNG THỐNG KÊ QUẢN LÝ ĐỊA BÀN */}
+          <div className="sos-stats-grid">
+            <div className="sos-stat-box">
+              <div className="sos-stat-icon blue">
+                <Building2 size={20} />
+              </div>
+              <div className="sos-stat-meta">
+                <span className="sos-stat-value">{subUnits.length}</span>
+                <span className="sos-stat-label">Tổng Đơn Vị Con</span>
+              </div>
+            </div>
+            <div className="sos-stat-box">
+              <div className="sos-stat-icon green">
+                <UserCheck size={20} />
+              </div>
+              <div className="sos-stat-meta">
+                <span className="sos-stat-value" style={{ color: '#16a34a' }}>{managedCount}</span>
+                <span className="sos-stat-label">Đã Có Địa Phương Quản Lý</span>
+              </div>
+            </div>
+            <div className="sos-stat-box">
+              <div className="sos-stat-icon red">
+                <UserX size={20} />
+              </div>
+              <div className="sos-stat-meta">
+                <span className="sos-stat-value" style={{ color: '#dc2626' }}>{unmanagedCount}</span>
+                <span className="sos-stat-label">Chưa Phân Công Quản Lý</span>
+              </div>
+            </div>
+            <div className="sos-stat-box">
+              <div className="sos-stat-icon yellow">
+                <Home size={20} />
+              </div>
+              <div className="sos-stat-meta">
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', lineHeight: 1.2 }}>
+                  <span style={{ fontSize: '22px', fontWeight: 800, color: '#0f172a' }}>{districtCount}</span>
+                  <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#64748b' }}>Quận/Huyện</span>
+                  <span style={{ color: '#cbd5e1', fontSize: '13px', margin: '0 2px' }}>•</span>
+                  <span style={{ fontSize: '22px', fontWeight: 800, color: '#0f172a' }}>{wardCount}</span>
+                  <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#64748b' }}>Phường/Xã</span>
+                </div>
+                <span className="sos-stat-label">Cơ Cấu Đơn Vị Hành Chính</span>
+              </div>
+            </div>
+          </div>
+
+          {/* BẢNG DANH MỤC XÃ PHƯỜNG / QUẬN HUYỆN CỦA TỈNH */}
+          <div className="sos-view-card">
+            <div className="sos-view-card-header">
+              <div className="sos-view-card-title">
+                <Building2 size={18} color="#0284c7" />
+                <span>Danh Mục Đơn Vị Trực Thuộc: {selectedProvince.name} ({filteredSubUnits.length}/{subUnits.length} đơn vị)</span>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                {/* Nút lọc nhanh dạng Pill theo trạng thái quản lý & phân cấp */}
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className={`sos-btn-filter-pill ${subUnitManagerFilter === 'ALL' && subUnitTypeFilter === 'ALL' ? 'active' : ''}`}
+                    onClick={() => {
+                      setSubUnitManagerFilter('ALL');
+                      setSubUnitTypeFilter('ALL');
+                    }}
+                  >
+                    Tất cả ({subUnits.length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`sos-btn-filter-pill ${subUnitManagerFilter === 'MANAGED' ? 'active-green' : ''}`}
+                    onClick={() => setSubUnitManagerFilter(subUnitManagerFilter === 'MANAGED' ? 'ALL' : 'MANAGED')}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                  >
+                    <UserCheck size={13} />
+                    <span>Đã có quản lý ({managedCount})</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sos-btn-filter-pill ${subUnitManagerFilter === 'UNMANAGED' ? 'active-red' : ''}`}
+                    onClick={() => setSubUnitManagerFilter(subUnitManagerFilter === 'UNMANAGED' ? 'ALL' : 'UNMANAGED')}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                  >
+                    <UserX size={13} />
+                    <span>Chưa có quản lý ({unmanagedCount})</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`sos-btn-filter-pill ${subUnitTypeFilter === 'DISTRICT' ? 'active-yellow' : ''}`}
+                    onClick={() => setSubUnitTypeFilter(subUnitTypeFilter === 'DISTRICT' ? 'ALL' : 'DISTRICT')}
+                  >
+                    Quận / Huyện ({districtCount})
+                  </button>
+                  <button
+                    type="button"
+                    className={`sos-btn-filter-pill ${subUnitTypeFilter === 'WARD' ? 'active-blue' : ''}`}
+                    onClick={() => setSubUnitTypeFilter(subUnitTypeFilter === 'WARD' ? 'ALL' : 'WARD')}
+                  >
+                    Phường / Xã ({wardCount})
+                  </button>
+                </div>
+
+                {/* Thanh tìm kiếm */}
+                <div style={{ position: 'relative' }}>
+                  <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+                  <input
+                    type="text"
+                    placeholder={`Tìm đơn vị hoặc cán bộ phụ trách...`}
+                    value={subUnitSearchQuery}
+                    onChange={(e) => setSubUnitSearchQuery(e.target.value)}
+                    style={{
+                      padding: '7px 14px 7px 32px',
+                      borderRadius: '20px',
+                      fontSize: '12.5px',
+                      border: '1px solid #cbd5e1',
+                      background: '#ffffff',
+                      color: '#0f172a',
+                      outline: 'none',
+                      minWidth: '240px',
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="sos-table-wrapper">
+              <table className="sos-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '28%' }}>Tên đơn vị (Xã/Phường/Quận/Huyện)</th>
+                    <th style={{ width: '15%' }}>Mã định danh tác chiến</th>
+                    <th style={{ width: '13%' }}>Cấp hành chính</th>
+                    <th style={{ width: '32%' }}>Địa phương quản lý</th>
+                    <th style={{ width: '12%', textAlign: 'center' }}>Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {subUnitsLoading ? (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                        <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 8px auto', display: 'block', color: '#0284c7' }} />
+                        Đang kết nối API bản đồ mới để tải các xã, phường của {selectedProvince.name}...
+                      </td>
+                    </tr>
+                  ) : filteredSubUnits.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                        Không có đơn vị nào phù hợp với bộ lọc tìm kiếm.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredSubUnits.map((u) => {
+                      const isDistrict = u.type === 'DISTRICT';
+                      const isCommune = u.type === 'COMMUNE';
+                      const isTown = u.type === 'TOWN';
+
+                      let typeLabel = 'Phường';
+                      let typeBadgeClass = 'green';
+                      if (isDistrict) {
+                        if (u.name.startsWith('Quận')) typeLabel = 'Quận';
+                        else if (u.name.startsWith('Huyện')) typeLabel = 'Huyện';
+                        else if (u.name.startsWith('Thành phố') || u.name.startsWith('TP')) typeLabel = 'Thành phố';
+                        else if (u.name.startsWith('Thị xã')) typeLabel = 'Thị xã';
+                        else typeLabel = 'Quận / Huyện';
+                        typeBadgeClass = 'yellow';
+                      } else if (isCommune) {
+                        typeLabel = 'Xã';
+                        typeBadgeClass = 'blue';
+                      } else if (isTown) {
+                        typeLabel = 'Thị trấn';
+                        typeBadgeClass = 'purple';
+                      }
+
+                      const mgr = getSubUnitManager(u);
+
+                      return (
+                        <tr key={u.id} style={{ height: '56px' }}>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <div
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: '6px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                  background: isDistrict
+                                    ? 'rgba(217, 119, 6, 0.1)'
+                                    : isCommune
+                                    ? 'rgba(2, 132, 199, 0.1)'
+                                    : 'rgba(22, 163, 74, 0.1)',
+                                  color: isDistrict ? '#d97706' : isCommune ? '#0284c7' : '#16a34a',
+                                }}
+                              >
+                                {isDistrict ? (
+                                  <Building2 size={15} />
+                                ) : isCommune ? (
+                                  <Globe2 size={15} />
+                                ) : (
+                                  <Home size={15} />
+                                )}
+                              </div>
+                              <span
+                                style={{
+                                  color: '#0f172a',
+                                  fontSize: '13.5px',
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {u.name}
+                              </span>
+                            </div>
+                          </td>
+                          <td>
+                            <code
+                              style={{
+                                background: '#f8fafc',
+                                padding: '3px 8px',
+                                borderRadius: '5px',
+                                fontSize: '12px',
+                                color: '#0369a1',
+                                border: '1px solid #e2e8f0',
+                                fontWeight: 600,
+                                letterSpacing: '0.3px',
+                              }}
+                            >
+                              {u.code}
+                            </code>
+                          </td>
+                          <td>
+                            <span
+                              className={`sos-badge ${typeBadgeClass}`}
+                              style={{ fontSize: '11.5px', padding: '3px 8px', fontWeight: 600 }}
+                            >
+                              {typeLabel}
+                            </span>
+                          </td>
+                          <td>
+                            {mgr ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                                  <span style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px' }}>
+                                    {mgr.managerName}
+                                  </span>
+                                  <span
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '3px',
+                                      fontSize: '10.5px',
+                                      fontWeight: 600,
+                                      padding: '1px 6px',
+                                      borderRadius: '4px',
+                                      background: '#dcfce7',
+                                      color: '#15803d',
+                                      border: '1px solid #bbf7d0',
+                                    }}
+                                  >
+                                    <CheckCircle2 size={10} color="#15803d" />
+                                    Đã có quản lý
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <span>{mgr.position || mgr.department || 'Cán bộ phụ trách'}</span>
+                                  {mgr.phone && (
+                                    <span style={{ color: '#0284c7', fontWeight: 600 }}>
+                                      • {mgr.phone}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                                  <span style={{ fontWeight: 500, color: '#64748b', fontSize: '13px' }}>
+                                    Chưa có cán bộ quản lý
+                                  </span>
+                                  <span
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '3px',
+                                      fontSize: '10.5px',
+                                      fontWeight: 600,
+                                      padding: '1px 6px',
+                                      borderRadius: '4px',
+                                      background: '#fef2f2',
+                                      color: '#b91c1c',
+                                      border: '1px solid #fecaca',
+                                    }}
+                                  >
+                                    <UserX size={10} color="#b91c1c" />
+                                    Chưa phân công
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                                  Chưa gán tài khoản địa phương phụ trách
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                fontSize: '11.5px',
+                                fontWeight: 600,
+                                color: '#16a34a',
+                                background: '#f0fdf4',
+                                border: '1px solid #bbf7d0',
+                                padding: '3px 8px',
+                                borderRadius: '12px',
+                              }}
+                            >
+                              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#16a34a' }} />
+                              HOẠT ĐỘNG
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // TẦNG 1: DANH MỤC CÁC TỈNH / THÀNH PHỐ VIỆT NAM (CHUẨN 34 TỈNH THÀNH MỚI)
+    const filteredProvinces = vietnamProvinces.filter((p) => {
+      if (!provinceSearchQuery.trim()) return true;
+      const q = provinceSearchQuery.toLowerCase();
+      return (p.name || '').toLowerCase().includes(q) || (p.ref || '').toLowerCase().includes(q) || (p.isoCode || '').toLowerCase().includes(q);
     });
 
     return (
       <div className="sos-views-container">
-        {/* THỐNG KÊ NHANH CÁC CẤP HÀNH CHÍNH ĐÀ NẴNG */}
+        {/* STATS TỔNG QUAN CÁC TỈNH THÀNH VIỆT NAM */}
         <div className="sos-stats-grid">
           <div className="sos-stat-box">
             <div className="sos-stat-icon blue">
               <Globe2 size={22} />
             </div>
             <div className="sos-stat-meta">
-              <span className="sos-stat-value">{areas.length}</span>
-              <span className="sos-stat-label">Tổng Đơn Vị Đà Nẵng</span>
+              <span className="sos-stat-value">{vietnamProvinces.length || 34}</span>
+              <span className="sos-stat-label">34 Tỉnh / Thành Phố Cả Nước</span>
             </div>
           </div>
           <div className="sos-stat-box">
@@ -5067,17 +6223,17 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
               <Building2 size={22} />
             </div>
             <div className="sos-stat-meta">
-              <span className="sos-stat-value">{districtsCount}</span>
-              <span className="sos-stat-label">Quận / Huyện Trực Thuộc</span>
+              <span className="sos-stat-value">Toàn Quốc</span>
+              <span className="sos-stat-label">Phạm Vi Quản Trị Hệ Thống</span>
             </div>
           </div>
           <div className="sos-stat-box">
             <div className="sos-stat-icon green">
-              <Home size={22} />
+              <Layers size={22} />
             </div>
             <div className="sos-stat-meta">
-              <span className="sos-stat-value">{wardsCount}</span>
-              <span className="sos-stat-label">Phường / Xã Quản Lý</span>
+              <span className="sos-stat-value">Mô Hình 2025</span>
+              <span className="sos-stat-label">34 Đơn Vị Cấp Tỉnh Mới</span>
             </div>
           </div>
           <div className="sos-stat-box">
@@ -5085,74 +6241,60 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
               <Shield size={22} />
             </div>
             <div className="sos-stat-meta">
-              <span className="sos-stat-value">100%</span>
-              <span className="sos-stat-label">Độ Phủ Cứu Nạn GIS</span>
+              <span className="sos-stat-value">2 Tầng</span>
+              <span className="sos-stat-label">Tỉnh Thành ➔ Xã Phường Con</span>
             </div>
           </div>
         </div>
 
         <div className="sos-view-card">
           <div className="sos-view-card-header">
-            <div className="sos-view-card-title">
-              <Globe2 size={18} color="#0284c7" />
-              <span>Danh Mục Địa Giới Hành Chính Thành Phố Đà Nẵng ({filteredAreas.length}/{areas.length} đơn vị)</span>
-            </div>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-              {/* Nút lọc nhanh dạng Pill */}
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button
-                  type="button"
-                  className={`sos-btn-filter-pill ${areaTypeFilter === 'ALL' ? 'active' : ''}`}
-                  onClick={() => setAreaTypeFilter('ALL')}
-                >
-                  Tất cả ({areas.length})
-                </button>
-                <button
-                  type="button"
-                  className={`sos-btn-filter-pill ${areaTypeFilter === 'DISTRICT' ? 'active-yellow' : ''}`}
-                  onClick={() => setAreaTypeFilter('DISTRICT')}
-                >
-                  Quận / Huyện ({districtsCount})
-                </button>
-                <button
-                  type="button"
-                  className={`sos-btn-filter-pill ${areaTypeFilter === 'WARD' ? 'active-green' : ''}`}
-                  onClick={() => setAreaTypeFilter('WARD')}
-                >
-                  Phường / Xã ({wardsCount})
-                </button>
-                <button
-                  type="button"
-                  className={`sos-btn-filter-pill ${areaTypeFilter === 'PROVINCE' ? 'active-blue' : ''}`}
-                  onClick={() => setAreaTypeFilter('PROVINCE')}
-                >
-                  Cấp TP ({provinceCount})
-                </button>
+            <div>
+              <div className="sos-view-card-title">
+                <Globe2 size={18} color="#0284c7" />
+                <span>Danh Mục Tỉnh / Thành Phố Việt Nam ({filteredProvinces.length}/{vietnamProvinces.length} đơn vị cấp tỉnh)</span>
               </div>
+              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '3px' }}>
+                Nhấn vào từng Tỉnh / Thành phố để xem danh sách các Quận, Huyện, Xã, Phường trực thuộc
+              </div>
+            </div>
 
-              {/* Thanh tìm kiếm */}
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Thanh tìm kiếm tỉnh thành */}
               <div style={{ position: 'relative' }}>
-                <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
                 <input
                   type="text"
-                  placeholder="Tìm quận, phường, mã..."
-                  value={areaSearchQuery}
-                  onChange={(e) => setAreaSearchQuery(e.target.value)}
+                  placeholder="Tìm tỉnh, thành phố (Hà Nội, Đà Nẵng, TP.HCM...)"
+                  value={provinceSearchQuery}
+                  onChange={(e) => setProvinceSearchQuery(e.target.value)}
                   style={{
-                    padding: '6px 12px 6px 30px',
+                    padding: '7px 14px 7px 32px',
                     borderRadius: '20px',
                     fontSize: '12.5px',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    background: 'rgba(15, 23, 42, 0.6)',
-                    color: '#f8fafc',
+                    border: '1px solid #cbd5e1',
+                    background: '#ffffff',
+                    color: '#0f172a',
                     outline: 'none',
-                    minWidth: '200px',
+                    minWidth: '280px',
                   }}
                 />
               </div>
 
-              <button onClick={() => setRefreshIndex((p) => p + 1)} className="sos-btn-refresh">
-                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              <button
+                onClick={() => {
+                  try {
+                    localStorage.removeItem('rescuesos_vietnam_34_provinces_v2');
+                    localStorage.removeItem('rescuesos_vietnam_provinces_cache_v4');
+                    localStorage.removeItem('rescuesos_vietnam_provinces_cache_v3');
+                    localStorage.removeItem('rescuesos_vietnam_provinces_cache_v2');
+                    localStorage.removeItem('rescuesos_vietnam_provinces_cache_v1');
+                  } catch {}
+                  setRefreshIndex((p) => p + 1);
+                }}
+                className="sos-btn-refresh"
+              >
+                <RefreshCw size={14} className={provincesLoading ? 'animate-spin' : ''} />
                 <span>Làm mới</span>
               </button>
             </div>
@@ -5162,51 +6304,97 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             <table className="sos-table">
               <thead>
                 <tr>
-                  <th style={{ width: '32%' }}>Tên đơn vị hành chính</th>
-                  <th style={{ width: '22%' }}>Mã định danh tác chiến</th>
-                  <th style={{ width: '22%' }}>Cấp hành chính</th>
-                  <th style={{ width: '24%' }}>Trạng thái vận hành</th>
+                  <th style={{ width: '40%' }}>Tên Tỉnh / Thành Phố</th>
+                  <th style={{ width: '22%' }}>Mã ISO / Ký hiệu</th>
+                  <th style={{ width: '20%' }}>Cấp hành chính</th>
+                  <th style={{ width: '18%', textAlign: 'center' }}>Thao tác phân cấp</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredAreas.length === 0 ? (
+                {provincesLoading ? (
                   <tr>
-                    <td colSpan={4} style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
-                      Không tìm thấy đơn vị hành chính nào phù hợp với điều kiện lọc.
+                    <td colSpan={4} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                      <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 8px auto', display: 'block', color: '#0284c7' }} />
+                      Đang đồng bộ danh mục các Tỉnh / Thành phố Việt Nam từ API bản đồ...
+                    </td>
+                  </tr>
+                ) : filteredProvinces.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                      Không tìm thấy Tỉnh / Thành phố nào phù hợp.
                     </td>
                   </tr>
                 ) : (
-                  filteredAreas.map((ar) => {
-                    const isProvince = ar.type === 'PROVINCE';
-                    const isDistrict = ar.type === 'DISTRICT';
-                    const typeLabel = isProvince ? 'Cấp Tỉnh / Thành Phố' : isDistrict ? 'Quận / Huyện' : 'Phường / Xã';
-                    const typeBadgeClass = isProvince ? 'purple' : isDistrict ? 'yellow' : 'green';
+                  filteredProvinces.map((prov) => {
+                    const isTWCity =
+                      prov.name.toLowerCase().includes('thành phố') ||
+                      prov.name.toLowerCase().includes('tp');
 
                     return (
-                      <tr key={ar._id}>
+                      <tr
+                        key={prov.id}
+                        onClick={() => handleSelectProvince(prov)}
+                        style={{ cursor: 'pointer', height: '54px' }}
+                      >
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            {isProvince ? <Globe2 size={16} color="#8b5cf6" /> : isDistrict ? <Building2 size={16} color="#f59e0b" /> : <Home size={15} color="#10b981" />}
-                            <strong style={{ color: isProvince ? '#c084fc' : isDistrict ? '#fcd34d' : '#f8fafc', fontSize: isProvince ? '13.5px' : '13px' }}>
-                              {ar.name}
-                            </strong>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div
+                              style={{
+                                width: 28,
+                                height: 28,
+                                borderRadius: '6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                                background: isTWCity ? 'rgba(2, 132, 199, 0.1)' : 'rgba(124, 58, 237, 0.1)',
+                                color: isTWCity ? '#0284c7' : '#7c3aed',
+                              }}
+                            >
+                              <Globe2 size={15} />
+                            </div>
+                            <span style={{ color: '#0f172a', fontSize: '13.5px', fontWeight: 600 }}>
+                              {prov.name}
+                            </span>
                           </div>
                         </td>
                         <td>
-                          <code style={{ background: 'rgba(255, 255, 255, 0.06)', padding: '2px 6px', borderRadius: '4px', fontSize: '11.5px', color: '#38bdf8' }}>
-                            {ar.code}
+                          <code
+                            style={{
+                              background: '#f8fafc',
+                              padding: '3px 8px',
+                              borderRadius: '5px',
+                              fontSize: '12px',
+                              color: '#0369a1',
+                              border: '1px solid #e2e8f0',
+                              fontWeight: 600,
+                              letterSpacing: '0.3px',
+                            }}
+                          >
+                            {prov.isoCode || prov.ref || 'VN-PROV'}
                           </code>
                         </td>
                         <td>
-                          <span className={`sos-badge ${typeBadgeClass}`}>
-                            {typeLabel}
+                          <span
+                            className={`sos-badge ${isTWCity ? 'verified' : 'default'}`}
+                            style={{ fontSize: '11.5px', padding: '3px 8px', fontWeight: 600 }}
+                          >
+                            {isTWCity ? 'Thành phố TW' : 'Tỉnh'}
                           </span>
                         </td>
-                        <td>
-                          <span className="sos-badge active" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} />
-                            ĐANG ỨNG TRỰC
-                          </span>
+                        <td style={{ textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectProvince(prov);
+                            }}
+                            className="sos-btn-filter-pill active-blue"
+                            style={{ fontSize: '12px', padding: '5px 12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          >
+                            <span>Xem Xã Phường</span>
+                            <ChevronRight size={13} />
+                          </button>
                         </td>
                       </tr>
                     );

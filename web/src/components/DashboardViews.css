@@ -733,6 +733,13 @@
   box-shadow: 0 2px 8px rgba(22, 163, 74, 0.35);
 }
 
+.sos-btn-filter-pill.active-red {
+  background: #dc2626;
+  color: #ffffff;
+  border-color: #ef4444;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);
+}
+
 .sos-btn-filter-pill.active-yellow {
   background: #d97706;
   color: #ffffff;

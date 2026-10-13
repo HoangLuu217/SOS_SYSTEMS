@@ -42,6 +42,13 @@ router.post('/users', adminController.createUser);
 router.get('/users/:id', adminController.getUserById);
 
 /**
+ * @route   PATCH /admin/users/:id
+ * @desc    Cập nhật thông tin chi tiết người dùng (họ tên, SĐT, email, status, địa bàn quản lý)
+ * @access  ADMIN
+ */
+router.patch('/users/:id', adminController.updateUser);
+
+/**
  * @route   PATCH /admin/users/:id/status
  * @desc    Cập nhật trạng thái tài khoản (ACTIVE / INACTIVE / SUSPENDED / PENDING)
  * @access  ADMIN

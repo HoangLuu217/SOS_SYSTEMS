@@ -102,6 +102,110 @@ class AdminService {
   }
 
   /**
+   * Cập nhật thông tin chi tiết người dùng (họ tên, SĐT, email, status, địa bàn quản lý authority)
+   */
+  async updateUser(id, data) {
+    const user = await User.findById(id);
+    if (!user) throw new ApiError(404, 'Không tìm thấy người dùng cần cập nhật');
+
+    // 1. Cập nhật họ tên
+    if (data.fullName && data.fullName.trim()) {
+      user.fullName = data.fullName.trim();
+    }
+
+    // 2. Cập nhật SĐT nếu đổi
+    if (data.phone && data.phone.trim()) {
+      const cleanPhone = data.phone.trim();
+      if (cleanPhone !== user.phone) {
+        const existPhone = await User.findOne({ phone: cleanPhone, _id: { $ne: id } });
+        if (existPhone) throw new ApiError(400, 'Số điện thoại này đã được sử dụng bởi tài khoản khác');
+        user.phone = cleanPhone;
+      }
+    }
+
+    // 3. Cập nhật Email nếu đổi
+    if (data.email !== undefined) {
+      const cleanEmail = data.email ? data.email.trim().toLowerCase() : null;
+      if (cleanEmail && cleanEmail !== user.email) {
+        const existEmail = await User.findOne({ email: cleanEmail, _id: { $ne: id } });
+        if (existEmail) throw new ApiError(400, 'Email này đã được sử dụng bởi tài khoản khác');
+      }
+      user.email = cleanEmail;
+    }
+
+    // 4. Cập nhật trạng thái status
+    if (data.status) {
+      const ALLOWED = ['ACTIVE', 'INACTIVE', 'SUSPENDED', 'PENDING'];
+      if (!ALLOWED.includes(data.status)) {
+        throw new ApiError(400, `Trạng thái không hợp lệ. Cho phép: ${ALLOWED.join(', ')}`);
+      }
+      user.status = data.status;
+    }
+
+    // 5. Cập nhật mật khẩu nếu có
+    if (data.password && data.password.trim()) {
+      user.passwordHash = await bcrypt.hash(data.password.trim(), 10);
+    }
+
+    // 6. Cập nhật quyền hạn cán bộ địa phương & địa bàn phụ trách
+    if (data.authority || data.areaName || data.areaId || data.department || data.position) {
+      const authInput = data.authority || {};
+      const newAreaName = (authInput.areaName || data.areaName || user.authority?.areaName || '').trim();
+      const newAreaId = authInput.areaId || data.areaId || user.authority?.areaId;
+      const newPosition = (authInput.position || data.position || user.authority?.position || 'Chỉ Huy Trực Ban Tác Chiến').trim();
+      const newDepartment = (authInput.department || data.department || user.authority?.department || (newAreaName ? `Ban Chỉ Huy PCTT ${newAreaName}` : 'Ban Chỉ Huy PCTT')).trim();
+
+      // Kiểm tra nếu đổi sang địa bàn khác mà địa bàn đó đã có cán bộ khác quản lý
+      if (newAreaName && (!user.authority?.areaName || user.authority.areaName.toLowerCase() !== newAreaName.toLowerCase())) {
+        const normalizedAreaName = newAreaName.replace(/^(Phường|Xã|Quận|Huyện)\s+/i, '').trim();
+        const existingOfficer = await User.findOne({
+          _id: { $ne: id },
+          roles: 'LOCAL_AUTHORITY',
+          status: { $ne: 'DELETED' },
+          $or: [
+            { 'authority.areaName': new RegExp(`^${newAreaName}$`, 'i') },
+            { 'authority.areaName': new RegExp(normalizedAreaName, 'i') },
+          ],
+        });
+        if (existingOfficer) {
+          throw new ApiError(
+            400,
+            `Khu vực "${newAreaName}" đã được quản lý bởi cán bộ ${existingOfficer.fullName} (${existingOfficer.phone}).`
+          );
+        }
+      }
+
+      let matchedAreaDoc = null;
+      if (newAreaId && mongoose.Types.ObjectId.isValid(newAreaId)) {
+        matchedAreaDoc = await AdministrativeArea.findById(newAreaId);
+      }
+      if (!matchedAreaDoc && newAreaName) {
+        const cleanName = newAreaName.replace(/^(Phường|Xã|Quận|Huyện)\s+/i, '').trim();
+        matchedAreaDoc = await AdministrativeArea.findOne({ name: new RegExp(cleanName, 'i') });
+      }
+
+      const finalAreaId = matchedAreaDoc ? matchedAreaDoc._id : (newAreaId && mongoose.Types.ObjectId.isValid(newAreaId) ? newAreaId : (user.authority?.areaId || new mongoose.Types.ObjectId()));
+
+      let orgId = authInput.organizationId || data.organizationId || user.authority?.organizationId;
+      if (!orgId) {
+        const defaultOrg = await AuthorityOrganization.findOne({});
+        orgId = defaultOrg ? defaultOrg._id : new mongoose.Types.ObjectId();
+      }
+
+      user.authority = {
+        organizationId: orgId,
+        areaId: finalAreaId,
+        areaName: newAreaName || user.authority?.areaName,
+        position: newPosition,
+        department: newDepartment,
+      };
+    }
+
+    await user.save();
+    return user.toObject({ transform: (doc, ret) => { delete ret.passwordHash; return ret; } });
+  }
+
+  /**
    * Xác minh tài khoản người dùng
    */
   async verifyUser(id) {
