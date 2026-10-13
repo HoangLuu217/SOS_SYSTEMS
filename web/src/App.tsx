@@ -171,6 +171,7 @@ function MainRouter() {
     await logoutApi();
     localStorage.removeItem('sos_auth_user');
     localStorage.removeItem('sos_access_token');
+    localStorage.removeItem('sos_refresh_token');
     localStorage.removeItem('sos_active_portal');
     setAuthUser(null);
     window.history.replaceState(null, '', '/login');

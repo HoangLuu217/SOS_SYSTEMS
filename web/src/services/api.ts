@@ -29,11 +29,40 @@ async function safeParseResponse(res: Response): Promise<any> {
   }
 }
 
+let refreshPromise: Promise<string | null> | null = null;
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = localStorage.getItem('sos_refresh_token');
+  if (!refreshToken) return null;
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ refreshToken }),
+    });
+
+    const data = await safeParseResponse(res);
+    if (res.ok && data.success && data.data?.accessToken) {
+      const newAccessToken = data.data.accessToken;
+      localStorage.setItem('sos_access_token', newAccessToken);
+      if (data.data.refreshToken) {
+        localStorage.setItem('sos_refresh_token', data.data.refreshToken);
+      }
+      return newAccessToken;
+    }
+  } catch (e) {
+    console.warn('Lỗi tự động làm mới token:', e);
+  }
+  return null;
+}
+
 /**
- * Helper gọi API kèm Header Authorization token tự động và xử lý fallback URL
+ * Helper gọi API kèm Header Authorization token tự động và xử lý fallback URL & Silent Refresh Token
  */
 async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('sos_access_token');
+  let token = localStorage.getItem('sos_access_token');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string> || {}),
@@ -50,7 +79,26 @@ async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Pr
   };
 
   try {
-    const res = await fetch(`${API_BASE}${endpoint}`, mergedOptions);
+    let res = await fetch(`${API_BASE}${endpoint}`, mergedOptions);
+
+    // Xử lý khi Token hết hạn (HTTP 401): Tự động làm mới bằng Refresh Token mà không gián đoạn người dùng
+    if (!res.ok && res.status === 401 && endpoint !== '/auth/refresh' && endpoint !== '/auth/login') {
+      if (!refreshPromise) {
+        refreshPromise = refreshAccessToken().finally(() => {
+          refreshPromise = null;
+        });
+      }
+      const newToken = await refreshPromise;
+      if (newToken) {
+        token = newToken;
+        headers['Authorization'] = `Bearer ${newToken}`;
+        res = await fetch(`${API_BASE}${endpoint}`, {
+          ...mergedOptions,
+          headers,
+        });
+      }
+    }
+
     if (!res.ok && res.status >= 500) {
       throw new Error(`Proxy error HTTP ${res.status}`);
     }
