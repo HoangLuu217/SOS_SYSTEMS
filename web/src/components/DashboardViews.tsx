@@ -15,7 +15,6 @@ import type {
 import {
   fetchSosRequests,
   createSosRequest,
-  verifySosRequest,
   completeSosRequest,
   fetchAdminStatistics,
   fetchAdminUsers,
@@ -919,30 +918,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     };
   }, [activeKey, loadData]);
 
-  // Hành động 1: Xác minh SOS (PENDING -> VERIFIED)
-  const handleVerifySos = async (sosId: string, currentPriority: string) => {
-    try {
-      setLoading(true);
-      if (sosId.startsWith('sos-dn-')) {
-        // Fallback item local update
-        setSosList((prev) => {
-          const base = prev.length > 0 ? prev : FALLBACK_SOS_LIST;
-          return base.map((s) => (s._id === sosId ? { ...s, status: 'VERIFIED' } : s));
-        });
-      } else {
-        await verifySosRequest(sosId, { priority: currentPriority, status: 'VERIFIED' });
-        refreshData();
-      }
-      alert('✅ Đã xác minh yêu cầu cứu nạn SOS thành công!');
-      window.dispatchEvent(new CustomEvent('sos_data_updated'));
-    } catch (err: any) {
-      alert('❌ Lỗi: ' + (err.message || 'Không thể xác minh'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Hành động 2: Hoàn thành SOS (COMPLETED)
+  // Hành động: Hoàn thành SOS (COMPLETED)
   const handleCompleteSos = async (sosId: string) => {
     try {
       setLoading(true);
@@ -1522,7 +1498,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                 onClick={() => setTriageFilter('PENDING')}
               >
                 <span className="dot-mini yellow" />
-                Chờ duyệt ({pendingCount})
+                Chờ điều phối ({pendingCount})
               </button>
               <button
                 type="button"
@@ -1564,7 +1540,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                   <th style={{ minWidth: 110, width: 110 }}>Nạn nhân</th>
                   <th style={{ minWidth: 125, width: 125 }}>Mức độ</th>
                   <th style={{ minWidth: 125, width: 125 }}>Trạng thái</th>
-                  <th style={{ minWidth: 185, width: 185, textAlign: 'right' }}>Hành động nghiệp vụ</th>
+                  <th style={{ minWidth: 100, width: 100, textAlign: 'right' }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -1744,77 +1720,46 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                           )}
                         </td>
 
-                        {/* 6. Trạng thái */}
+                        {/* 6. Trạng thái thời gian thực */}
                         <td>
                           {sos.status === 'PENDING' ? (
                             <span className="status-tag pending">
                               <Clock size={11} />
-                              Chờ duyệt
+                              Chờ điều phối
                             </span>
-                          ) : sos.status === 'VERIFIED' ? (
+                          ) : ['VERIFIED', 'ASSIGNED', 'ACCEPTED'].includes(sos.status) ? (
                             <span className="status-tag verified">
                               <CheckCircle2 size={11} />
-                              Đã duyệt
+                              Đã tiếp nhận
                             </span>
                           ) : sos.status === 'COMPLETED' ? (
                             <span className="status-tag completed">
                               <FileCheck size={11} />
-                              Đã cứu xong
+                              Đã hoàn thành
                             </span>
                           ) : (
                             <span className="status-tag active">
                               <LifeBuoy size={11} />
-                              Đang cứu
+                              Đang cứu nạn
                             </span>
                           )}
                         </td>
 
-                        {/* 7. Hành động nghiệp vụ */}
+                        {/* 7. Thao tác điều hướng */}
                         <td>
-                          <div className="table-actions-cell">
-                            {sos.status === 'PENDING' && (
-                              <button
-                                type="button"
-                                className="action-btn verify"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleVerifySos(sos._id, sos.priority);
-                                }}
-                                title="Xác minh và phê duyệt ca cứu nạn này"
-                              >
-                                <CheckCircle2 size={12} />
-                                <span>Duyệt ca</span>
-                              </button>
-                            )}
-
-                            {sos.status !== 'COMPLETED' && sos.status !== 'CANCELLED' && sos.status !== 'REJECTED' && (
-                              <button
-                                type="button"
-                                className="action-btn map"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onOpenMap();
-                                }}
-                                title="Chuyển sang Bản đồ tác chiến để điều phối xuồng và lực lượng cứu hộ"
-                              >
-                                <Compass size={12} />
-                                <span>Bản đồ</span>
-                              </button>
-                            )}
-
-                            {['VERIFIED', 'ON_THE_WAY', 'RESCUING'].includes(sos.status) && (
-                              <button
-                                type="button"
-                                className="action-btn complete"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCompleteSos(sos._id);
-                                }}
-                                title="Đánh dấu ca cứu hộ đã hoàn thành"
-                              >
-                                <span>Hoàn thành</span>
-                              </button>
-                            )}
+                          <div className="table-actions-cell" style={{ justifyContent: 'flex-end' }}>
+                            <button
+                              type="button"
+                              className="action-btn map"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenMap();
+                              }}
+                              title="Chuyển sang Bản đồ tác chiến để định vị và điều phối cứu hộ"
+                            >
+                              <Compass size={12} />
+                              <span>Bản đồ</span>
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -1883,9 +1828,9 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                       <span className="priority-tag medium">TRUNG BÌNH</span>
                     )}
                     <span className={`status-tag ${selectedSosDetail.status.toLowerCase()}`}>
-                      {selectedSosDetail.status === 'PENDING' ? 'Chờ duyệt' :
-                       selectedSosDetail.status === 'VERIFIED' ? 'Đã duyệt' :
-                       selectedSosDetail.status === 'COMPLETED' ? 'Đã hoàn thành' : 'Đang xử lý'}
+                      {selectedSosDetail.status === 'PENDING' ? 'Chờ điều phối' :
+                       ['VERIFIED', 'ASSIGNED', 'ACCEPTED'].includes(selectedSosDetail.status) ? 'Đã tiếp nhận' :
+                       selectedSosDetail.status === 'COMPLETED' ? 'Đã hoàn thành' : 'Đang cứu nạn'}
                     </span>
                   </div>
                 </div>
@@ -2137,54 +2082,24 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                   </span>
                 </div>
                 <div className="sos-detail-footer-actions">
-                  {selectedSosDetail.status === 'PENDING' && (
-                    <button
-                      type="button"
-                      className="action-btn verify large"
-                      onClick={() => {
-                        handleVerifySos(selectedSosDetail._id, selectedSosDetail.priority);
-                        setSelectedSosDetail((prev) => prev ? { ...prev, status: 'VERIFIED' } : null);
-                      }}
-                    >
-                      <CheckCircle2 size={15} />
-                      <span>Xác minh & Duyệt ca</span>
-                    </button>
-                  )}
-
-                  {selectedSosDetail.status !== 'COMPLETED' && (
-                    <button
-                      type="button"
-                      className="action-btn map large"
-                      onClick={() => {
-                        setSelectedSosDetail(null);
-                        onOpenMap();
-                      }}
-                    >
-                      <Compass size={15} />
-                      <span>Điều phối Bản đồ</span>
-                    </button>
-                  )}
-
-                  {['VERIFIED', 'ON_THE_WAY', 'RESCUING'].includes(selectedSosDetail.status) && (
-                    <button
-                      type="button"
-                      className="action-btn complete large"
-                      onClick={() => {
-                        handleCompleteSos(selectedSosDetail._id);
-                        setSelectedSosDetail((prev) => prev ? { ...prev, status: 'COMPLETED' } : null);
-                      }}
-                    >
-                      <FileCheck size={15} />
-                      <span>Đánh dấu Hoàn thành</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="action-btn map large"
+                    onClick={() => {
+                      setSelectedSosDetail(null);
+                      onOpenMap();
+                    }}
+                  >
+                    <Compass size={15} />
+                    <span>Điều phối trên Bản đồ</span>
+                  </button>
 
                   <button
                     type="button"
                     className="action-btn secondary large"
                     onClick={() => setSelectedSosDetail(null)}
                   >
-                    Đóng
+                    <span>Đóng</span>
                   </button>
                 </div>
               </div>
