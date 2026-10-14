@@ -137,11 +137,26 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
                 ? 'Medical Emergency'
                 : 'RESCUE',
             priority: (item.priority || 'HIGH') as any,
-            title: item.description
-              ? item.description.length > 55
-                ? item.description.slice(0, 52) + '...'
-                : item.description
-              : `Cứu hộ ngập lụt: ${item.people || 1} người gặp nguy`,
+            title: (() => {
+              const rawDesc = item.description || '';
+              if (rawDesc.includes('[Loại yêu cầu:')) {
+                const userContent = rawDesc
+                  .replace(/\[Loại yêu cầu:[^\]]+\]/g, '')
+                  .replace(/\[SĐT:[^\]]+\]/g, '')
+                  .replace(/\[Ưu tiên:[^\]]+\]/g, '')
+                  .trim();
+                const typeMatch = rawDesc.match(/\[Loại yêu cầu:\s*([^\]]+)\]/);
+                if (userContent) {
+                  return userContent.length > 55 ? userContent.slice(0, 52) + '...' : userContent;
+                } else if (typeMatch && typeMatch[1]) {
+                  return typeMatch[1];
+                }
+              }
+              if (rawDesc) {
+                return rawDesc.length > 55 ? rawDesc.slice(0, 52) + '...' : rawDesc;
+              }
+              return item.emergencyType === 'FLOOD' ? 'Cứu hộ ngập lụt / Mắc kẹt' : 'Yêu cầu cứu nạn khẩn cấp';
+            })(),
             description: item.description || `Yêu cầu cứu nạn khẩn cấp tại ${item.address}`,
             locationName: item.address || 'Vị trí cứu nạn',
             wardId: officer.jurisdictionAreaId,

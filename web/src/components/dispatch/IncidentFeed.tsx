@@ -230,7 +230,7 @@ export const IncidentFeed = ({
         <div className="feed-filter-tabs-pills">
           {[
             { id: 'ALL', label: 'Tất cả', count: tabCounts.all },
-            { id: 'UNASSIGNED', label: 'Chưa gán', count: tabCounts.unassigned },
+            { id: 'UNASSIGNED', label: lang === 'vi' ? 'Chờ điều phối' : 'Pending', count: tabCounts.unassigned },
             { id: 'URGENT', label: 'Khẩn cấp', count: tabCounts.urgent },
             { id: 'ACTIVE', label: 'Đang cứu', count: tabCounts.active },
             { id: 'RESOLVED', label: 'Hoàn thành', count: tabCounts.resolved },
@@ -255,19 +255,21 @@ export const IncidentFeed = ({
           const priorityClass =
             sos.priority === 'CRITICAL' ? 'critical' : sos.priority === 'HIGH' ? 'high' : 'medium';
 
-          const typeLabelMap: Record<string, { labelVi: string; labelEn: string }> = {
-            MEDICAL: { labelVi: 'Y Tế', labelEn: 'Medical' },
-            FIRE: { labelVi: 'Cháy Nổ', labelEn: 'Fire' },
-            POLICE: { labelVi: 'An Ninh', labelEn: 'Police' },
-            RESCUE: { labelVi: 'Cứu Nạn', labelEn: 'Rescue' },
-          };
-
-          const typeInfo = typeLabelMap[sos.emergencyType] || {
-            labelVi: sos.emergencyType,
-            labelEn: sos.emergencyType,
-          };
-
-          const isAssigned = Boolean(sos.assignmentId && sos.status !== 'CANCELLED');
+          // Clean up title if it contains technical bracket prefixes from mobile app
+          let cleanTitle = sos.title || '';
+          if (cleanTitle.includes('[Loại yêu cầu:')) {
+            const userContent = cleanTitle
+              .replace(/\[Loại yêu cầu:[^\]]+\]/g, '')
+              .replace(/\[SĐT:[^\]]+\]/g, '')
+              .replace(/\[Ưu tiên:[^\]]+\]/g, '')
+              .trim();
+            const typeMatch = cleanTitle.match(/\[Loại yêu cầu:\s*([^\]]+)\]/);
+            if (userContent) {
+              cleanTitle = userContent;
+            } else if (typeMatch && typeMatch[1]) {
+              cleanTitle = typeMatch[1];
+            }
+          }
 
           return (
             <div
@@ -307,32 +309,12 @@ export const IncidentFeed = ({
                 </div>
               </div>
 
-              {/* Card Middle: Title + Chips + (Side Thumbnail) */}
+              {/* Card Middle: Clean Title & Location + (Side Thumbnail) */}
               <div className="compact-card-content">
                 <div className="compact-card-text">
-                  <h3 className="compact-card-title" title={sos.title}>
-                    {sos.title}
+                  <h3 className="compact-card-title" title={cleanTitle}>
+                    {cleanTitle}
                   </h3>
-
-                  <div className="compact-chips-row">
-                    <span className="compact-type-chip">
-                      {lang === 'vi' ? typeInfo.labelVi : typeInfo.labelEn}
-                    </span>
-
-                    {!isAssigned ? (
-                      <span className="compact-status-chip unassigned">
-                        {lang === 'vi' ? 'Chưa gán' : 'Unassigned'}
-                      </span>
-                    ) : sos.status === 'COMPLETED' ? (
-                      <span className="compact-status-chip completed">
-                        {lang === 'vi' ? 'Hoàn thành' : 'Completed'}
-                      </span>
-                    ) : (
-                      <span className="compact-status-chip enroute">
-                        {lang === 'vi' ? 'Đang cứu' : 'Active'}
-                      </span>
-                    )}
-                  </div>
 
                   <div className="compact-card-location" title={sos.locationName}>
                     <MapPin size={11} className="compact-pin-icon" style={{ flexShrink: 0 }} />
