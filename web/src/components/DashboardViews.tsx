@@ -1534,9 +1534,9 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             <table className="executive-table">
               <thead>
                 <tr>
-                  <th style={{ width: '15%' }}>Mã sự cố</th>
-                  <th style={{ width: '18%' }}>Người dân &amp; Liên hệ</th>
-                  <th style={{ width: '31%' }}>Địa điểm &amp; Tình trạng</th>
+                  <th style={{ width: '14%' }}>Mã sự cố</th>
+                  <th style={{ width: '20%' }}>Người dân &amp; Liên hệ</th>
+                  <th style={{ width: '30%' }}>Địa điểm &amp; Tình trạng</th>
                   <th style={{ width: '12%' }}>Nạn nhân</th>
                   <th style={{ width: '11%' }}>Mức độ</th>
                   <th style={{ width: '13%' }}>Trạng thái</th>

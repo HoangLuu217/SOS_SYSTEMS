@@ -854,7 +854,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   padding: 0 2px;
 }
 
@@ -863,9 +863,9 @@
   align-items: center;
   background: #F1F5F9;
   border: 1px solid #E2E8F0;
-  border-radius: 8px;
-  padding: 3px;
-  gap: 2px;
+  border-radius: 9px;
+  padding: 4px;
+  gap: 6px;
   flex-wrap: nowrap;
   overflow-x: auto;
   scrollbar-width: none;
@@ -881,7 +881,7 @@
   border: none;
   outline: none;
   border-radius: 6px;
-  padding: 4px 12px;
+  padding: 6px 14px;
   font-size: 12px;
   font-weight: 600;
   color: #64748B;
@@ -993,7 +993,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 12px 10px;
+  padding: 13px 12px;
   border-bottom: 2px solid #CBD5E1;
   border-right: 1px solid #E2E8F0;
   text-align: left;
@@ -1002,17 +1002,17 @@
 
 .executive-table thead tr th:first-child {
   border-top-left-radius: 7px;
-  padding-left: 14px;
+  padding-left: 16px;
 }
 
 .executive-table thead tr th:last-child {
   border-top-right-radius: 7px;
   border-right: none;
-  padding-right: 14px;
+  padding-right: 16px;
 }
 
 .executive-table tbody tr td {
-  padding: 12px 10px;
+  padding: 13px 12px;
   border-bottom: 1px solid #E2E8F0;
   border-right: 1px solid #F1F5F9;
   font-size: 12px;
@@ -1024,12 +1024,12 @@
 }
 
 .executive-table tbody tr td:first-child {
-  padding-left: 14px;
+  padding-left: 16px;
 }
 
 .executive-table tbody tr td:last-child {
   border-right: none;
-  padding-right: 14px;
+  padding-right: 16px;
 }
 
 .executive-table tbody tr:last-child td:first-child {
