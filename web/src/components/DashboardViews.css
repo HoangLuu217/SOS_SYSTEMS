@@ -2048,8 +2048,9 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #DC2626;
+  color: #0F172A;
   font-size: 14px;
+  font-weight: 800;
 }
 
 .emergency-type-badge {
@@ -2102,17 +2103,13 @@
 .priority-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 12px;
 }
 
 .priority-chip-item {
-  background: #FEF2F2;
-  border: 1px solid #FECACA;
   color: #DC2626;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  border-radius: 6px;
-  padding: 3px 9px;
   display: inline-flex;
   align-items: center;
   gap: 4px;

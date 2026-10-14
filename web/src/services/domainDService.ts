@@ -519,7 +519,7 @@ class DomainDService {
       this.save(STORAGE_ACTIVE_OFFICER, officer.id);
       try {
         localStorage.setItem(STORAGE_JURISDICTION_KEY, key);
-      } catch {}
+      } catch { }
     }
     return officer;
   }
@@ -528,7 +528,7 @@ class DomainDService {
     try {
       const stored = localStorage.getItem(STORAGE_JURISDICTION_KEY);
       if (stored && JURISDICTION_CONFIGS[stored]) return stored;
-    } catch {}
+    } catch { }
     const officer = this.getActiveOfficer();
     if (officer?.role === 'ADMIN' || officer?.jurisdictionAreaId === 'area-dn') return 'toan_thanh_pho';
     const nameLower = (officer?.jurisdictionAreaName || '').toLowerCase();

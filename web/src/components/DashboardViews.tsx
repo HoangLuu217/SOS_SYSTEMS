@@ -298,7 +298,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   const [vehicles, setVehicles] = useState<VehicleItem[]>([]);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>([]);
-  const [orgs, setOrgs] = useState<AuthorityOrgItem[]>([]);
+  const [_orgs, setOrgs] = useState<AuthorityOrgItem[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
 
   // State phong cách Executive Overview & Triage (Theo thiết kế chuẩn)
@@ -379,8 +379,8 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   });
 
   // State bộ lọc và tìm kiếm cho yêu cầu cứu nạn
-  const [sosStatusFilter, setSosStatusFilter] = useState<'ALL' | 'PENDING' | 'ACTIVE' | 'COMPLETED'>('ALL');
-  const [sosSearchQuery, setSosSearchQuery] = useState('');
+  const [_sosStatusFilter, _setSosStatusFilter] = useState<'ALL' | 'PENDING' | 'ACTIVE' | 'COMPLETED'>('ALL');
+  const [_sosSearchQuery, _setSosSearchQuery] = useState('');
 
   // State chuyển tab trong mục Phương tiện & Vật tư
   const [resourceTab, setResourceTab] = useState<'VEHICLES' | 'SUPPLIES'>('VEHICLES');
@@ -394,7 +394,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   const [subUnits, setSubUnits] = useState<ProvinceSubUnitItem[]>([]);
   const [subUnitsLoading, setSubUnitsLoading] = useState(false);
   const [provinceSearchQuery, setProvinceSearchQuery] = useState('');
-  const [provinceManagerFilter, setProvinceManagerFilter] = useState<'ALL' | 'MANAGED' | 'UNMANAGED'>('ALL');
+  const [_provinceManagerFilter, _setProvinceManagerFilter] = useState<'ALL' | 'MANAGED' | 'UNMANAGED'>('ALL');
   const [subUnitTypeFilter, setSubUnitTypeFilter] = useState<'ALL' | 'DISTRICT' | 'WARD'>('ALL');
   const [subUnitManagerFilter, setSubUnitManagerFilter] = useState<'ALL' | 'MANAGED' | 'UNMANAGED'>('ALL');
   const [subUnitSearchQuery, setSubUnitSearchQuery] = useState('');
@@ -6518,27 +6518,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
       return null;
     };
 
-    const getProvinceManager = (p: VietnamProvinceItem): AreaManagerInfo | null => {
-      if (!areaManagers || Object.keys(areaManagers).length === 0) return null;
 
-      const fullName = (p.name || '').toLowerCase().trim();
-      if (areaManagers[fullName]) return areaManagers[fullName];
-
-      const shortName = fullName.replace(/^(thành phố|tỉnh|tp\.)\s+/i, '').trim();
-      if (shortName && areaManagers[shortName]) return areaManagers[shortName];
-
-      if (p.id && areaManagers[p.id]) return areaManagers[p.id];
-      if (p.code && areaManagers[String(p.code)]) return areaManagers[String(p.code)];
-      if (p.isoCode && areaManagers[p.isoCode.toLowerCase()]) return areaManagers[p.isoCode.toLowerCase()];
-
-      for (const key of Object.keys(areaManagers)) {
-        if (key && shortName && (key.includes(shortName) || shortName.includes(key))) {
-          return areaManagers[key];
-        }
-      }
-
-      return null;
-    };
 
     const handleSelectProvince = async (prov: VietnamProvinceItem) => {
       setSelectedProvince(prov);
