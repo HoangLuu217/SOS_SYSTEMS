@@ -139,7 +139,7 @@ export const TerritorialMapCanvas = ({
   activeOfficer,
   onSwitchScreen: _onSwitchScreen,
 }: Props) => {
-  const { t, mapMode } = useApp();
+  const { t, mapMode, mapCleanMode } = useApp();
   const isAdmin = activeOfficer?.role === 'ADMIN';
   const officerAreaId = activeOfficer?.jurisdictionAreaId || '';
   const officerArea = areas.find((a) => a.id === officerAreaId);
@@ -172,7 +172,7 @@ export const TerritorialMapCanvas = ({
     const rawCentroid = getAreaCentroid(targetArea, areas) || [108.2175, 16.0416];
     const targetLatLng: [number, number] = [rawCentroid[1], rawCentroid[0]];
 
-    let zoomLevel = 14.5;
+    let zoomLevel: number;
     if (isAdmin) {
       if (targetArea.type === 'PROVINCE' || targetArea.id === 'area-dn') zoomLevel = 11.2;
       else if (targetArea.type === 'DISTRICT') {
@@ -196,7 +196,7 @@ export const TerritorialMapCanvas = ({
   // Google Maps Tile URL
   const googleTilesUrl = mapMode === 'satellite'
     ? GOOGLE_MAP_TILES.SATELLITE
-    : GOOGLE_MAP_TILES.STREETS;
+    : (mapCleanMode ? GOOGLE_MAP_TILES.STREETS_CLEAN : GOOGLE_MAP_TILES.STREETS_FULL);
 
   // Manual Zoom controls
   const handleZoom = (delta: number) => {
@@ -249,8 +249,10 @@ export const TerritorialMapCanvas = ({
           fillColor: isOfficerAssigned ? '#ef4444' : (isSelected ? '#2563eb' : fillColor),
           borderColor: isProvince ? '#dc2626' : (isOfficerAssigned ? '#dc2626' : (isSelected ? '#1d4ed8' : borderColor)),
           fillOpacity: isProvince ? 0.04 : (isOfficerAssigned ? 0.05 : (isSelected ? 0.18 : 0.12)),
-          weight: isProvince ? 3 : (isSelected ? 3 : 2),
-          dashArray: isProvince ? '8, 4' : (isOfficerAssigned ? '6, 6' : undefined),
+          weight: isProvince ? 3 : (isOfficerAssigned ? 2.5 : (isSelected ? 3 : 2)),
+          dashArray: isProvince ? '8, 4' : (isOfficerAssigned ? '1, 6' : undefined),
+          lineCap: isOfficerAssigned ? ('round' as const) : undefined,
+          lineJoin: isOfficerAssigned ? ('round' as const) : undefined,
         };
       });
   }, [areas, selectedArea.id, isAuthorMode, officerAreaId]);
@@ -526,6 +528,8 @@ export const TerritorialMapCanvas = ({
                   fillOpacity: w.fillOpacity,
                   weight: w.weight,
                   dashArray: w.dashArray,
+                  lineCap: w.lineCap,
+                  lineJoin: w.lineJoin,
                 }}
                 eventHandlers={{
                   click: () => onSelectArea(w.area),

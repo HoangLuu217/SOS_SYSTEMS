@@ -14,6 +14,8 @@ import {
   Plus,
   Minus,
   RotateCcw,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import type {
   SosRequest,
@@ -23,11 +25,13 @@ import type {
 } from '../../types/domainD';
 import {
   isSosInOfficerJurisdiction,
+  GOOGLE_MAP_TILES,
 } from '../../services/mapGeoService';
+import { WARD_CENTROIDS } from '../territorial/TerritorialMapCanvas';
 import { useApp } from '../../context/AppContext';
 
 interface Props {
-  selectedSos: SosRequest;
+  selectedSos: SosRequest | null;
   assignment: SosAssignment | null;
   activeOfficer?: AuthorityOfficer;
   areas?: AdministrativeArea[];
@@ -66,23 +70,27 @@ export const TacticalMap = ({
   sosRequests = [],
   onSelectSos,
 }: Props) => {
-  const { mapMode } = useApp();
+  const { mapMode, mapCleanMode, toggleMapCleanMode } = useApp();
   const mapInstanceRef = useRef<L.Map | null>(null);
 
   const defaultLng = 108.2178;
   const defaultLat = 16.0465;
-  const sosLng = selectedSos?.coordinates?.lng ?? defaultLng;
-  const sosLat = selectedSos?.coordinates?.lat ?? defaultLat;
+
+  const targetAreaId = areas[0]?.id || activeOfficer?.jurisdictionAreaId || 'area-htd';
+  const areaCentroid = WARD_CENTROIDS[targetAreaId] || [defaultLng, defaultLat];
+
+  const sosLng = selectedSos?.coordinates?.lng ?? areaCentroid[0];
+  const sosLat = selectedSos?.coordinates?.lat ?? areaCentroid[1];
 
   // Google Maps Tiles URL (Streets & Satellite)
   const googleTilesUrl =
     mapMode === 'satellite'
-      ? 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}'
-      : 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
+      ? GOOGLE_MAP_TILES.SATELLITE
+      : (mapCleanMode ? GOOGLE_MAP_TILES.STREETS_CLEAN : GOOGLE_MAP_TILES.STREETS_FULL);
 
   // Kiểm tra SOS có thuộc phạm vi quản lý của cán bộ không
   const managedWard = areas[0];
-  const isSelectedInJurisdiction = isSosInOfficerJurisdiction(selectedSos, activeOfficer, managedWard);
+  const isSelectedInJurisdiction = selectedSos ? isSosInOfficerJurisdiction(selectedSos, activeOfficer, managedWard) : false;
 
   // Lọc các ca SOS khác thuộc khu vực
   const otherSosList = useMemo(() => {
@@ -270,7 +278,7 @@ export const TacticalMap = ({
     RESCUE: '🛟 Cứu Hộ',
     FLOOD: '🌊 Ngập Lụt',
   };
-  const typeLabel = typeIconMap[selectedSos.emergencyType] || selectedSos.emergencyType;
+  const typeLabel = selectedSos ? (typeIconMap[selectedSos.emergencyType] || selectedSos.emergencyType) : '';
 
   // Zoom controls
   const handleZoomIn = () => {
@@ -337,17 +345,19 @@ export const TacticalMap = ({
           }}
         />
 
-        {/* 1. Vẽ Ranh Giới Hành Chính Khu Vực Phụ Trách */}
+        {/* 1. Vẽ Ranh Giới Hành Chính Khu Vực Phụ Trách (Viền chấm nhỏ chuẩn Google Maps) */}
         {wardPolygons.map((w) => (
           <Polygon
-            key={`ward-poly-${w.id}-pink-v4`}
+            key={`ward-poly-${w.id}-google-dots`}
             positions={w.positions}
             pathOptions={{
-              color: '#e11d48',
-              fillColor: '#f472b6',
-              fillOpacity: 0.09,
-              weight: 2,
-              dashArray: '6, 6',
+              color: '#dc2626',
+              fillColor: '#ef4444',
+              fillOpacity: 0.05,
+              weight: 2.5,
+              dashArray: '1, 6',
+              lineCap: 'round',
+              lineJoin: 'round',
             }}
           />
         ))}
@@ -366,7 +376,7 @@ export const TacticalMap = ({
         )}
 
         {/* 3. Marker Điểm SOS Chính Đang Chọn (Kèm Radar & Popup chi tiết) */}
-        {isSelectedInJurisdiction && (
+        {selectedSos && isSelectedInJurisdiction && (
           <Marker position={[sosLat, sosLng]} icon={mainSosIcon}>
             <Popup autoPan={false}>
               <div style={{ fontFamily: 'inherit', padding: '2px', minWidth: '200px' }}>
@@ -511,6 +521,34 @@ export const TacticalMap = ({
         >
           <RotateCcw size={15} />
         </button>
+
+        {mapMode === 'street' && (
+          <button
+            type="button"
+            onClick={toggleMapCleanMode}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              backgroundColor: mapCleanMode ? 'rgba(16, 185, 129, 0.12)' : '#ffffff',
+              border: `1px solid ${mapCleanMode ? '#10b981' : '#cbd5e1'}`,
+              boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: mapCleanMode ? '#059669' : '#1e293b',
+              transition: 'all 0.15s ease',
+            }}
+            title={
+              mapCleanMode
+                ? 'Đang ẩn bớt ký hiệu nhỏ không cần thiết (quán xá, bến xe bus). Bấm để hiện đầy đủ'
+                : 'Đang hiện đầy đủ mọi ký hiệu. Bấm để ẩn bớt ký hiệu phụ'
+            }
+          >
+            {mapCleanMode ? <EyeOff size={15} /> : <Eye size={15} />}
+          </button>
+        )}
       </div>
 
       {/* Watermark Biển đảo Việt Nam (Đảm bảo chủ quyền Hoàng Sa & Trường Sa) */}

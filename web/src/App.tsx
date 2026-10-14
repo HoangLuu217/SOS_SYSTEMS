@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { LoginPage } from './components/LoginPage';
-import SOSMap from './components/SOSMap';
 import { Sidebar } from './components/Sidebar';
 import type { NavItemKey } from './components/Sidebar';
 import { DashboardViews } from './components/DashboardViews';
 import { AuthorPortal } from './components/author/AuthorPortal';
+import { AdminPortal } from './components/admin/AdminPortal';
 import { AppProvider } from './context/AppContext';
 import { domainDService } from './services/domainDService';
 import { logoutApi } from './services/api';
@@ -51,8 +51,8 @@ const navTitles: Record<NavItemKey, { title: string; desc: string }> = {
     desc: 'Quản lý lực lượng cứu hộ, trạng thái sẵn sàng và khu vực hoạt động',
   },
   resources: {
-    title: 'NGUỒN LỰC & PHƯƠNG TIỆN CỨU HỘ',
-    desc: 'Quản lý thuyền cano, xe cấp cứu, trang thiết bị ứng phó thiên tai lũ lụt',
+    title: 'PHƯƠNG TIỆN & VẬT TƯ',
+    desc: 'Quản lý thuyền cano, xe cấp cứu, áo phao, túi y tế ứng phó thiên tai lũ lụt',
   },
   alerts: {
     title: 'PHÁT CẢNH BÁO ĐỊA PHƯƠNG',
@@ -69,6 +69,14 @@ const navTitles: Record<NavItemKey, { title: string; desc: string }> = {
   reports: {
     title: 'BÁO CÁO & THỐNG KÊ ĐỊA PHƯƠNG',
     desc: 'Phân tích số liệu cứu hộ, thời gian phản hồi và tỷ lệ hỗ trợ người dân',
+  },
+  operation_logs: {
+    title: 'NHẬT KÝ TÁC CHIẾN & SỰ KIỆN',
+    desc: 'Theo dõi chi tiết lịch sử sự kiện, điều động lực lượng và biên bản tác chiến thực địa',
+  },
+  settings: {
+    title: 'CÀI ĐẶT HỆ THỐNG',
+    desc: 'Cấu hình tham số điều hành tác chiến, thông báo khẩn cấp và kết nối vệ tinh',
   },
   admin_overview: {
     title: 'TỔNG QUAN & GIÁM SÁT TOÀN DIỆN',
@@ -100,11 +108,26 @@ const navTitles: Record<NavItemKey, { title: string; desc: string }> = {
   },
 };
 
+const checkIsResetPasswordFlow = (): boolean => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('view') === 'reset' || Boolean(params.get('token')) || window.location.pathname === '/reset-password';
+  } catch {
+    return false;
+  }
+};
+
 function MainRouter() {
   const [authUser, setAuthUser] = useState<User | null>(() => getAuthorizedUser());
+  const [isResetFlow, setIsResetFlow] = useState<boolean>(() => checkIsResetPasswordFlow());
   const [activeNavKey, setActiveNavKey] = useState<NavItemKey>(() => {
     const user = getAuthorizedUser();
-    return parseRoute(window.location.pathname, window.location.hash, user).navKey;
+    const parsed = parseRoute(window.location.pathname, window.location.hash, user);
+    // Mặc định Đội cứu hộ địa phương ('rescuers') ở trạng thái Active nếu chưa chọn trang cụ thể
+    if (parsed.navKey === 'map' && (!window.location.hash && (window.location.pathname === '/' || window.location.pathname === '/local_authority' || window.location.pathname === '/localauthor'))) {
+      return 'rescuers';
+    }
+    return parsed.navKey || 'rescuers';
   });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -116,6 +139,11 @@ function MainRouter() {
 
   // Route Guard: Kiểm tra phiên và quyền hạn
   const checkRouteAccess = useCallback(() => {
+    if (checkIsResetPasswordFlow()) {
+      setIsResetFlow(true);
+      return;
+    }
+
     const user = getAuthorizedUser();
     setAuthUser(user);
 
@@ -128,6 +156,11 @@ function MainRouter() {
 
   useEffect(() => {
     const handlePopState = () => {
+      if (checkIsResetPasswordFlow()) {
+        setIsResetFlow(true);
+        return;
+      }
+      setIsResetFlow(false);
       checkRouteAccess();
       const user = getAuthorizedUser();
       const parsed = parseRoute(window.location.pathname, window.location.hash, user);
@@ -137,7 +170,15 @@ function MainRouter() {
     window.addEventListener('popstate', handlePopState);
     window.addEventListener('storage', checkRouteAccess);
 
-    // Initial check: đồng bộ URL sạch không có hash
+    // Initial check: Nếu đang ở luồng reset mật khẩu từ email thì không auto-redirect vào dashboard
+    if (checkIsResetPasswordFlow()) {
+      setIsResetFlow(true);
+      return () => {
+        window.removeEventListener('popstate', handlePopState);
+        window.removeEventListener('storage', checkRouteAccess);
+      };
+    }
+
     const user = getAuthorizedUser();
     if (user) {
       const parsed = parseRoute(window.location.pathname, window.location.hash, user);
@@ -177,9 +218,22 @@ function MainRouter() {
     window.history.replaceState(null, '', '/login');
   };
 
+  // Ưu tiên cao nhất: Khi người dùng bấm link đổi mật khẩu từ Email, chuyển thẳng tới trang đổi mật khẩu
+  if (isResetFlow) {
+    return (
+      <LoginPage
+        isResetPasswordMode={true}
+        onCloseResetMode={() => {
+          setIsResetFlow(false);
+          window.history.replaceState(null, '', '/login');
+        }}
+        onLoginSuccess={handleLoginSuccess}
+      />
+    );
+  }
+
   // 1. KHI ĐÃ ĐĂNG NHẬP VÀ XÁC THỰC ROLE HỢP LỆ (ADMIN hoặc LOCAL_AUTHORITY)
   if (authUser && hasAuthorizedRole(authUser.roles)) {
-    const isAuthority = authUser.roles.includes('LOCAL_AUTHORITY') && !authUser.roles.includes('ADMIN');
     const currentMeta = navTitles[activeNavKey] || navTitles.map;
 
     return (
@@ -208,29 +262,18 @@ function MainRouter() {
           }}
         >
           {activeNavKey === 'map' ? (
-            isAuthority ? (
-              /* Giao diện Tác Chiến Cấp Cơ Sở (3 Cột: Tin SOS • Bản đồ Google Maps • Phân công cứu hộ) */
+            /* Phân biệt rõ: LOCAL_AUTHORITY dùng AuthorPortal (Khóa khu vực & SOS thực địa), ADMIN dùng AdminPortal (Toàn TP Đà Nẵng, không hiện SOS) */
+            authUser.roles.includes('LOCAL_AUTHORITY') && !authUser.roles.includes('ADMIN') ? (
               <AuthorPortal
                 user={authUser}
                 embedded={true}
                 onLogout={handleLogout}
               />
             ) : (
-              /* Giao diện Giám sát Bản đồ cho ADMIN */
-              <>
-                <header className="sos-main-header">
-                  <div className="sos-page-title-wrap">
-                    <div>
-                      <h1 className="sos-page-title">{currentMeta.title}</h1>
-                      <p className="sos-page-desc">{currentMeta.desc}</p>
-                    </div>
-                  </div>
-                </header>
-
-                <div className="sos-page-body" style={{ padding: '16px 20px', maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
-                  <SOSMap />
-                </div>
-              </>
+              <AdminPortal
+                embedded={true}
+                onLogout={handleLogout}
+              />
             )
           ) : (
             /* Các màn hình quản trị nghiệp vụ khác */

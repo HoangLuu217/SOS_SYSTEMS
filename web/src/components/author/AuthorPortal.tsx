@@ -10,6 +10,7 @@ import type {
 } from '../../types/domainD';
 import { domainDService } from '../../services/domainDService';
 import { MissionDispatch } from '../dispatch/MissionDispatch';
+import { TacticalMap } from '../dispatch/TacticalMap';
 import {
   ShieldAlert,
   LogOut,
@@ -39,7 +40,7 @@ interface Props {
   embedded?: boolean;
 }
 
-export const AuthorPortal = ({ user, onSwitchToAdmin: _onSwitchToAdmin, onLogout, embedded = false }: Props) => {
+export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
   const { theme, setTheme, mapMode, setMapMode } = useApp();
 
   // Domain D data
@@ -60,18 +61,17 @@ export const AuthorPortal = ({ user, onSwitchToAdmin: _onSwitchToAdmin, onLogout
       if (synced) return synced;
     }
     return (
-      authorOfficers.find((o) => o.jurisdictionAreaId === 'area-htd') ||
       authorOfficers[0] || {
-        id: 'officer-hc-htd',
-        fullName: 'Trần Văn Cường',
+        id: 'officer-default',
+        fullName: 'Cán Bộ Trực Ban Địa Bàn',
         role: 'AUTHOR',
-        email: 'cuong.tran@hoacuong.danang.gov.vn',
-        phone: '0905114116',
-        position: 'Author Quản Lý Phường Hòa Cường',
-        department: 'Ban Chỉ Huy PCTT Phường Hòa Cường',
+        email: 'canbo@danang.gov.vn',
+        phone: '0905000000',
+        position: 'Chỉ Huy Trực Ban Tác Chiến',
+        department: 'Ban Chỉ Huy PCTT Địa Phương',
         jurisdictionAreaId: 'area-htd',
-        jurisdictionAreaName: 'Phường Hòa Cường',
-        districtName: 'Quận Hải Châu',
+        jurisdictionAreaName: 'Địa Bàn Phụ Trách',
+        districtName: 'Thành phố Đà Nẵng',
       }
     );
   }, [user, authorOfficers]);
@@ -147,8 +147,16 @@ export const AuthorPortal = ({ user, onSwitchToAdmin: _onSwitchToAdmin, onLogout
     }, 3800);
   };
 
-  // Strictly scope areas to ONLY the ward managed by this Author account
+  // Strictly scope areas: For Admin, highlight the ward of selected SOS; for Author scope to managed ward
   const authorScopedAreas = useMemo(() => {
+    if (activeOfficer.role === 'ADMIN') {
+      const activeWardId = selectedSosId ? sosRequests.find((s) => s.id === selectedSosId)?.wardId : null;
+      if (activeWardId) {
+        const found = areas.find((a) => a.id === activeWardId || a.code === activeWardId);
+        if (found) return [found];
+      }
+      return areas.length > 0 ? [areas[0]] : [];
+    }
     const targetArea = areas.find(
       (a) =>
         a.id === activeOfficer.jurisdictionAreaId ||
@@ -157,10 +165,13 @@ export const AuthorPortal = ({ user, onSwitchToAdmin: _onSwitchToAdmin, onLogout
           a.name.toLowerCase().includes(activeOfficer.jurisdictionAreaName.replace('Phường ', '').toLowerCase()))
     );
     return targetArea ? [targetArea] : (areas.length > 0 ? [areas[0]] : []);
-  }, [areas, activeOfficer.jurisdictionAreaId, activeOfficer.jurisdictionAreaName]);
+  }, [areas, activeOfficer, selectedSosId, sosRequests]);
 
-  // Strictly filter SOS requests to ONLY those occurring within this Author officer's managed ward
+  // Strictly filter SOS requests: For Admin show all citywide SOS, for Author filter to managed ward
   const authorScopedSosRequests = useMemo(() => {
+    if (activeOfficer.role === 'ADMIN') {
+      return sosRequests;
+    }
     const managedWard = authorScopedAreas[0];
     return sosRequests.filter((s) => isSosInOfficerJurisdiction(s, activeOfficer, managedWard));
   }, [sosRequests, activeOfficer, authorScopedAreas]);
@@ -186,12 +197,13 @@ export const AuthorPortal = ({ user, onSwitchToAdmin: _onSwitchToAdmin, onLogout
   }, [authorScopedSosRequests]);
 
   // Compute officer initials for avatar badge (e.g. "TC" for Trần Văn Cường)
+  const officerFullName = activeOfficer?.fullName;
   const officerInitials = useMemo(() => {
-    if (!activeOfficer?.fullName) return 'CB';
-    const parts = activeOfficer.fullName.trim().split(/\s+/);
+    if (!officerFullName) return 'CB';
+    const parts = officerFullName.trim().split(/\s+/);
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  }, [activeOfficer?.fullName]);
+  }, [officerFullName]);
 
   const handleConfirmAssign = (params: {
     authorityOrganizationId: string;
@@ -272,40 +284,32 @@ export const AuthorPortal = ({ user, onSwitchToAdmin: _onSwitchToAdmin, onLogout
         </div>
       )}
 
-      {/* Ultra-modern Author Command Center Header */}
+      {/* Unified Command Bar Header */}
       <header className="author-command-nav">
-        {/* Left: Brand & Local Sector Identity */}
-        <div className="author-brand-group">
-          <div className="author-brand-badge" title="Trung tâm Tác chiến Khẩn cấp Cấp Cơ Sở">
-            <ShieldAlert size={19} />
+        {/* Left: Sector & Status (Unified, cohesive cluster) */}
+        <div className="author-header-left">
+          <div className="author-jurisdiction-badge" title="Địa bàn tác chiến được giao quản lý">
+            <ShieldAlert size={14} className="author-shield-icon" />
+            <span className="author-jurisdiction-name">
+              {activeOfficer.role === 'ADMIN' ? 'Toàn TP Đà Nẵng' : (activeOfficer.jurisdictionAreaName || 'Phường An Hải')}
+            </span>
           </div>
-          <div className="author-brand-text">
-            <div className="author-brand-row">
-              <span className="author-brand-title">{embedded ? 'ĐIỀU HÀNH TÁC CHIẾN' : 'SOS SYSTEMS'}</span>
-              <span className="author-brand-tag">
-                {activeOfficer.jurisdictionAreaName}
-              </span>
-            </div>
-            <div className="author-brand-sub">
-              Ban Chỉ Huy PCTT & TKCN • Cấp Cơ Sở
-            </div>
-          </div>
-        </div>
 
-        {/* Center: Live Tactical Status HUD */}
-        <div className="author-center-hud">
-          {localUrgentCount > 0 ? (
-            <div className="author-hud-pill urgent" title="Có sự cố khẩn cấp đang diễn ra trên địa bàn">
-              <span className="author-radar-dot" />
-              <span>ĐANG XỬ LÝ:</span>
-              <span className="author-urgent-count-badge">{localUrgentCount} KHẨN CẤP</span>
-            </div>
-          ) : (
-            <div className="author-hud-pill safe" title="Toàn bộ địa bàn an toàn, sẵn sàng trực chiến">
-              <span className="author-safe-dot" />
-              <span>ĐỊA BÀN ỔN ĐỊNH • TRỰC CHIẾN 24/7</span>
-            </div>
-          )}
+          <span className="author-header-divider">/</span>
+
+          <span className="author-view-label">
+            {activeOfficer.role === 'ADMIN' ? 'Giám sát cứu nạn toàn thành phố' : 'Điều hành tác chiến SOS'}
+          </span>
+
+          {/* Integrated live status (immediately next to sector, not floating in the middle!) */}
+          <div className={`author-live-chip ${localUrgentCount > 0 ? 'urgent' : 'normal'}`}>
+            <span className="author-chip-dot" />
+            <span>
+              {localUrgentCount > 0
+                ? `${localUrgentCount} sự cố khẩn cấp`
+                : 'Trực ban 24/7'}
+            </span>
+          </div>
         </div>
 
         {/* Right: Map Mode, Theme, Officer Profile, Logout */}
@@ -414,24 +418,55 @@ export const AuthorPortal = ({ user, onSwitchToAdmin: _onSwitchToAdmin, onLogout
             areas={authorScopedAreas}
           />
         ) : (
-          <div
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'var(--sos-surface)',
-              color: 'var(--sos-text-secondary)',
-            }}
-          >
-            <span style={{ fontSize: 48, marginBottom: 12 }}>🛡️</span>
-            <h3 style={{ margin: '0 0 6px', fontSize: 18, color: 'var(--sos-text-primary)' }}>
-              Địa Bàn An Toàn - Không Có Tín Hiệu SOS
-            </h3>
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--sos-text-muted)' }}>
-              Khu vực {activeOfficer.jurisdictionAreaName} hiện không có sự cố khẩn cấp nào cần điều phối.
-            </p>
+          <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+            <TacticalMap
+              selectedSos={null}
+              assignment={null}
+              activeOfficer={activeOfficer}
+              areas={authorScopedAreas}
+              sosRequests={[]}
+            />
+            {/* Floating indicator: Khu vực an toàn */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 14,
+                left: 14,
+                zIndex: 450,
+                background: 'var(--sos-surface)',
+                border: '1px solid var(--sos-border)',
+                boxShadow: '0 8px 24px rgba(15, 23, 42, 0.15)',
+                borderRadius: 12,
+                padding: '12px 18px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                animation: 'fadeIn 0.2s ease-out',
+              }}
+            >
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: '50%',
+                  background: 'rgba(16, 185, 129, 0.12)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 18,
+                }}
+              >
+                🛡️
+              </div>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--sos-text-primary)' }}>
+                  Địa Bàn An Toàn • {activeOfficer.jurisdictionAreaName}
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--sos-text-secondary)', marginTop: 2 }}>
+                  Hiện không có tín hiệu SOS khẩn cấp trong khu vực quản lý. Trực chiến 24/7.
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </main>
