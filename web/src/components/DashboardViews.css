@@ -1692,3 +1692,483 @@
 [data-theme="light"] .sos-occupancy-bar-bg {
   background: #e2e8f0;
 }
+
+/* ============================================================
+   MODAL CHI TIẾT TOÀN DIỆN YÊU CẦU SOS (OCEANIC BLUE THEME)
+   ============================================================ */
+.executive-table tbody tr.executive-table-row {
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sos-detail-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(8px);
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.sos-detail-modal-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 20px;
+  max-width: 780px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(2, 132, 199, 0.08);
+}
+
+.sos-detail-header {
+  padding: 18px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #E2E8F0;
+  background: #F8FAFC;
+  flex-shrink: 0;
+}
+
+.sos-detail-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sos-detail-code-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+
+.sos-detail-code-badge .code-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 800;
+  font-size: 14px;
+  color: #0F172A;
+}
+
+.sos-detail-code-badge .source-tag {
+  background: #E0F2FE;
+  color: #0369A1;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.sos-detail-status-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sos-detail-close-btn {
+  background: #F1F5F9;
+  border: none;
+  cursor: pointer;
+  color: #64748B;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  transition: all 0.15s ease;
+}
+
+.sos-detail-close-btn:hover {
+  background: #E2E8F0;
+  color: #0F172A;
+}
+
+.sos-detail-body {
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  scrollbar-width: thin;
+  scrollbar-color: #CBD5E1 #F8FAFC;
+}
+
+.sos-detail-body::-webkit-scrollbar {
+  width: 6px;
+}
+.sos-detail-body::-webkit-scrollbar-track {
+  background: #F8FAFC;
+}
+.sos-detail-body::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 9999px;
+}
+
+.sos-detail-section {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.sos-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0F172A;
+  margin: 0 0 14px 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.sos-section-title svg {
+  color: #0284C7;
+}
+
+.sos-detail-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .sos-detail-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sos-info-box {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sos-info-box.highlight-phone {
+  background: #F0F9FF;
+  border-color: #BAE6FD;
+}
+
+.info-label {
+  font-size: 11px;
+  color: #64748B;
+  font-weight: 500;
+}
+
+.info-value {
+  font-size: 13px;
+  color: #0F172A;
+  font-weight: 600;
+}
+
+.info-value.victims-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #DC2626;
+  font-size: 14px;
+}
+
+.emergency-type-badge {
+  color: #0369A1;
+  font-weight: 700;
+}
+
+.phone-clickable {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #0284C7;
+  text-decoration: none;
+}
+
+.phone-clickable:hover {
+  text-decoration: underline;
+}
+
+.phone-clickable.emergency {
+  color: #0284C7;
+  font-size: 14px;
+}
+
+.badge-call {
+  background: #0284C7;
+  color: #FFFFFF;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 9999px;
+  padding: 1px 8px;
+  margin-left: 6px;
+}
+
+.sos-priority-groups-wrap {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed #E2E8F0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.priority-groups-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #DC2626;
+}
+
+.priority-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.priority-chip-item {
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  color: #DC2626;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 3px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sos-location-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.location-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.loc-pin-icon {
+  color: #EF4444;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.loc-text-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.loc-address {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #0F172A;
+  line-height: 1.4;
+}
+
+.loc-coords {
+  font-size: 11.5px;
+  color: #64748B;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.location-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.btn-open-tactical-map {
+  background: #0284C7;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.btn-open-tactical-map:hover {
+  background: #0369A1;
+}
+
+.btn-google-maps {
+  background: #F1F5F9;
+  color: #475569;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.btn-google-maps:hover {
+  background: #E2E8F0;
+  color: #0F172A;
+}
+
+.sos-description-box {
+  margin-top: 12px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-left: 3px solid #0284C7;
+  border-radius: 0 8px 8px 0;
+  padding: 10px 14px;
+}
+
+.desc-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.desc-content {
+  font-size: 12.5px;
+  color: #1E293B;
+  font-style: italic;
+  margin: 0;
+  line-height: 1.45;
+}
+
+.sos-photos-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.photo-thumb-item {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  height: 100px;
+  border: 1px solid #E2E8F0;
+  cursor: pointer;
+  background: #0F172A;
+}
+
+.photo-thumb-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.2s ease;
+}
+
+.photo-thumb-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: #FFFFFF;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.photo-thumb-item:hover img {
+  transform: scale(1.05);
+}
+
+.photo-thumb-item:hover .photo-thumb-overlay {
+  opacity: 1;
+}
+
+.no-photos-card {
+  background: #F8FAFC;
+  border: 1px dashed #CBD5E1;
+  border-radius: 10px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: #94A3B8;
+  font-size: 12px;
+}
+
+.no-photo-icon {
+  color: #CBD5E1;
+}
+
+.sos-detail-footer {
+  padding: 16px 24px;
+  background: #F8FAFC;
+  border-top: 1px solid #E2E8F0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.sos-detail-footer-left .meta-time {
+  font-size: 11px;
+  color: #94A3B8;
+}
+
+.sos-detail-footer-left code {
+  background: #E2E8F0;
+  color: #475569;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 10.5px;
+}
+
+.sos-detail-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.action-btn.large {
+  padding: 8px 16px;
+  font-size: 12.5px;
+  border-radius: 8px;
+}
+
+.action-btn.secondary {
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  color: #475569;
+}
+
+.action-btn.secondary:hover {
+  background: #F1F5F9;
+  color: #0F172A;
+}
