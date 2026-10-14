@@ -177,7 +177,7 @@ export const LoginPage = ({
             Boolean(loggedInUser.roles?.includes('AUTHORITY'))) &&
           !loggedInUser.roles?.includes('ADMIN');
         const target = isAuth ? 'author' : 'admin';
-        const targetPath = isAuth ? '/local_authority/map' : '/admin/map';
+        const targetPath = isAuth ? '/authority/map' : '/admin/map';
         localStorage.setItem('sos_active_portal', target);
         window.history.replaceState(null, '', targetPath);
         if (onLoginSuccess) {
@@ -795,7 +795,7 @@ export const LoginPage = ({
                     Boolean(user?.roles?.includes('AUTHORITY'))) &&
                   !user?.roles?.includes('ADMIN');
                 const target = isAuth ? 'author' : 'admin';
-                const targetPath = isAuth ? '/local_authority/map' : '/admin/map';
+                const targetPath = isAuth ? '/authority/map' : '/admin/map';
                 localStorage.setItem('sos_active_portal', target);
                 window.history.replaceState(null, '', targetPath);
                 if (onLoginSuccess && user) {

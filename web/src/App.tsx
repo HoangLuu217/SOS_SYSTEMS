@@ -125,7 +125,7 @@ function MainRouter() {
     const user = getAuthorizedUser();
     const parsed = parseRoute(window.location.pathname, window.location.hash, user);
     // Mặc định Đội cứu hộ địa phương ('rescuers') ở trạng thái Active nếu chưa chọn trang cụ thể
-    if (parsed.navKey === 'map' && (!window.location.hash && (window.location.pathname === '/' || window.location.pathname === '/local_authority' || window.location.pathname === '/localauthor'))) {
+    if (parsed.navKey === 'map' && (!window.location.hash && (window.location.pathname === '/' || window.location.pathname === '/authority' || window.location.pathname === '/local_authority' || window.location.pathname === '/localauthor' || window.location.pathname === '/localauthority'))) {
       return 'rescuers';
     }
     return parsed.navKey || 'rescuers';
