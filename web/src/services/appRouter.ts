@@ -6,7 +6,11 @@ export const getRolePrefix = (user: User | null): '/local_authority' | '/admin' 
     const savedRole = localStorage.getItem('sos_active_portal');
     return savedRole === 'admin' ? '/admin' : '/local_authority';
   }
-  const isAuthority = user.roles.includes('LOCAL_AUTHORITY') && !user.roles.includes('ADMIN');
+  const isAuthority =
+    (Boolean(user.authority) ||
+      Boolean(user.roles?.includes('LOCAL_AUTHORITY')) ||
+      Boolean(user.roles?.includes('AUTHORITY'))) &&
+    !user.roles?.includes('ADMIN');
   return isAuthority ? '/local_authority' : '/admin';
 };
 

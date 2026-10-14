@@ -12,10 +12,11 @@ import { parseRoute, buildRouteUrl, navigateTo } from './services/appRouter';
 import type { User } from './types/auth';
 import './App.css';
 
-// Kiểm tra quyền hạn hợp lệ: Chỉ ADMIN hoặc LOCAL_AUTHORITY
-const hasAuthorizedRole = (roles: string[] | undefined): boolean => {
+// Kiểm tra quyền hạn hợp lệ: ADMIN, LOCAL_AUTHORITY hoặc có trường .authority
+const hasAuthorizedRole = (roles: string[] | undefined, authority?: any): boolean => {
+  if (authority && typeof authority === 'object' && Object.keys(authority).length > 0) return true;
   if (!roles || !Array.isArray(roles)) return false;
-  return roles.includes('ADMIN') || roles.includes('LOCAL_AUTHORITY');
+  return roles.includes('ADMIN') || roles.includes('LOCAL_AUTHORITY') || roles.includes('AUTHORITY');
 };
 
 // Đọc và xác minh thông tin tài khoản từ localStorage
@@ -24,7 +25,7 @@ const getAuthorizedUser = (): User | null => {
     const saved = localStorage.getItem('sos_auth_user');
     if (!saved) return null;
     const parsed = JSON.parse(saved) as User;
-    if (hasAuthorizedRole(parsed?.roles)) {
+    if (hasAuthorizedRole(parsed?.roles, parsed?.authority)) {
       return parsed;
     }
     return null;
@@ -232,9 +233,14 @@ function MainRouter() {
     );
   }
 
-  // 1. KHI ĐÃ ĐĂNG NHẬP VÀ XÁC THỰC ROLE HỢP LỆ (ADMIN hoặc LOCAL_AUTHORITY)
-  if (authUser && hasAuthorizedRole(authUser.roles)) {
+  // 1. KHI ĐÃ ĐĂNG NHẬP VÀ XÁC THỰC ROLE HỢP LỆ (ADMIN, LOCAL_AUTHORITY hoặc có trường .authority)
+  if (authUser && hasAuthorizedRole(authUser.roles, authUser.authority)) {
     const currentMeta = navTitles[activeNavKey] || navTitles.map;
+    const isAuthority =
+      (Boolean(authUser.authority) ||
+        Boolean(authUser.roles?.includes('LOCAL_AUTHORITY')) ||
+        Boolean(authUser.roles?.includes('AUTHORITY'))) &&
+      !authUser.roles?.includes('ADMIN');
 
     return (
       <div className="sos-dashboard-container">
@@ -262,8 +268,8 @@ function MainRouter() {
           }}
         >
           {activeNavKey === 'map' ? (
-            /* Phân biệt rõ: LOCAL_AUTHORITY dùng AuthorPortal (Khóa khu vực & SOS thực địa), ADMIN dùng AdminPortal (Toàn TP Đà Nẵng, không hiện SOS) */
-            authUser.roles.includes('LOCAL_AUTHORITY') && !authUser.roles.includes('ADMIN') ? (
+            /* Phân biệt rõ: Cán bộ địa phương (.authority / LOCAL_AUTHORITY) dùng AuthorPortal (Khóa khu vực & SOS thực địa), ADMIN dùng AdminPortal (Toàn TP Đà Nẵng, không hiện SOS) */
+            isAuthority ? (
               <AuthorPortal
                 user={authUser}
                 embedded={true}
