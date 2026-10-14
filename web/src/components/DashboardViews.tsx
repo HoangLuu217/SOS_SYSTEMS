@@ -1591,7 +1591,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
         },
       });
 
-      alert('✅ Đã kích hoạt điểm trú ẩn / trạm an toàn mới thành công!');
+      showToast('Đã kích hoạt điểm trú ẩn / trạm an toàn mới thành công!', 'success');
       setShowShelterModal(false);
       setShelterForm({
         name: '',
@@ -1603,8 +1603,9 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
         coordinates: '108.2540, 15.9720',
       });
       refreshData();
+      window.dispatchEvent(new CustomEvent('sos_data_updated'));
     } catch (err: any) {
-      alert('❌ Lỗi thêm điểm trú ẩn: ' + (err.message || 'Lỗi server'));
+      showToast('Lỗi thêm điểm trú ẩn: ' + (err.message || 'Lỗi server'), 'error');
     } finally {
       setLoading(false);
     }
@@ -2928,6 +2929,9 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             </div>
           </div>
         )}
+
+        {/* TOASTS VÀ CONFIRMATION MODAL TOÀN CỤC */}
+        {renderGlobalModals()}
       </div>
     );
   }
