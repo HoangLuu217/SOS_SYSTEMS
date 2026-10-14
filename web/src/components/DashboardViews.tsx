@@ -1573,6 +1573,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                     const hasPhoto = Boolean(sos.imageUrl || (sos.images && sos.images.length > 0));
                     const photoUrl = sos.imageUrl || (sos.images && sos.images[0]);
                     const timeAgoText = formatTimeAgo(sos.createdAt);
+                    const isRescuer = Array.isArray(citizenInfo?.roles) && citizenInfo.roles.includes('RESCUER');
 
                     return (
                       <tr
@@ -1590,7 +1591,17 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                             </div>
                             <div className="meta-line">
                               <span className="time-text">{timeAgoText}</span>
-                              <span className="source-pill">APP DÂN</span>
+                              <span
+                                className="source-pill"
+                                style={{
+                                  backgroundColor: isRescuer ? '#eff6ff' : '#f0fdf4',
+                                  borderColor: isRescuer ? '#bfdbfe' : '#bbf7d0',
+                                  color: isRescuer ? '#1d4ed8' : '#15803d',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {isRescuer ? 'RESCUER' : 'CITIZEN'}
+                              </span>
                             </div>
                           </div>
                         </td>
@@ -1799,7 +1810,22 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                 <div className="sos-detail-header-left">
                   <div className="sos-detail-code-badge">
                     <span className="code-text">{selectedSosDetail.sosCode}</span>
-                    <span className="source-tag">APP DÂN</span>
+                    {(() => {
+                      const detailCitizen = typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId !== null ? selectedSosDetail.citizenId : null;
+                      const isDetailRescuer = Array.isArray(detailCitizen?.roles) && detailCitizen.roles.includes('RESCUER');
+                      return (
+                        <span
+                          className="source-tag"
+                          style={{
+                            backgroundColor: isDetailRescuer ? '#2563eb' : '#16a34a',
+                            color: '#ffffff',
+                            fontWeight: 800,
+                          }}
+                        >
+                          {isDetailRescuer ? 'RESCUER' : 'CITIZEN'}
+                        </span>
+                      );
+                    })()}
                   </div>
                   <div className="sos-detail-status-pills">
                     {selectedSosDetail.priority === 'CRITICAL' ? (

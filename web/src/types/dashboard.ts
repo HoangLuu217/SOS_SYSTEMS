@@ -15,6 +15,7 @@ export interface SosRequestItem {
         relation?: string;
       };
     };
+    roles?: string[];
   } | string;
   location: {
     type: 'Point';

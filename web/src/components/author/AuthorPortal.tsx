@@ -189,6 +189,12 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
               }
               return undefined;
             })(),
+            senderRole: (() => {
+              const citizen = typeof item.citizenId === 'object' && item.citizenId !== null ? item.citizenId : null;
+              const roles = citizen?.roles;
+              if (Array.isArray(roles) && roles.includes('RESCUER')) return 'RESCUER';
+              return 'CITIZEN';
+            })(),
           };
         });
 

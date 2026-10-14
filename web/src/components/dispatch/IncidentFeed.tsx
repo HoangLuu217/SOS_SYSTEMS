@@ -318,17 +318,21 @@ export const IncidentFeed = ({
                       style={{
                         fontSize: 8.5,
                         fontWeight: 800,
-                        backgroundColor: '#16a34a',
+                        backgroundColor: sos.senderRole === 'RESCUER' ? '#2563eb' : '#16a34a',
                         color: '#ffffff',
-                        padding: '1px 4px',
+                        padding: '1px 5px',
                         borderRadius: 3,
                         marginLeft: 3,
                         letterSpacing: '0.2px',
                         flexShrink: 0,
                       }}
-                      title="Tín hiệu gửi trực tiếp từ ứng dụng SOS người dân"
+                      title={
+                        sos.senderRole === 'RESCUER'
+                          ? 'Tín hiệu khẩn cấp từ lực lượng cứu hộ hiện trường'
+                          : 'Tín hiệu gửi trực tiếp từ ứng dụng SOS người dân'
+                      }
                     >
-                      APP DÂN
+                      {sos.senderRole === 'RESCUER' ? 'RESCUER' : 'CITIZEN'}
                     </span>
                   )}
                 </div>
