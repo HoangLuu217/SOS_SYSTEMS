@@ -1535,11 +1535,11 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
               <thead>
                 <tr>
                   <th style={{ width: '15%' }}>Mã sự cố</th>
-                  <th style={{ width: '19%' }}>Người dân &amp; Liên hệ</th>
-                  <th style={{ width: '34%' }}>Địa điểm &amp; Tình trạng</th>
+                  <th style={{ width: '18%' }}>Người dân &amp; Liên hệ</th>
+                  <th style={{ width: '31%' }}>Địa điểm &amp; Tình trạng</th>
                   <th style={{ width: '12%' }}>Nạn nhân</th>
-                  <th style={{ width: '10%' }}>Mức độ</th>
-                  <th style={{ width: '10%' }}>Trạng thái</th>
+                  <th style={{ width: '11%' }}>Mức độ</th>
+                  <th style={{ width: '13%' }}>Trạng thái</th>
                 </tr>
               </thead>
               <tbody>
@@ -1690,7 +1690,8 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                                     borderRadius: 4,
                                     backgroundColor: '#fee2e2',
                                     color: '#b91c1c',
-                                    whiteSpace: 'nowrap',
+                                    whiteSpace: 'normal',
+                                    lineHeight: 1.25,
                                   }}
                                 >
                                   {grp}

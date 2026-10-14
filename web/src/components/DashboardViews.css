@@ -843,10 +843,11 @@
 /* 4. EXECUTIVE TABLE CARD */
 .executive-table-card {
   background: #FFFFFF;
-  border: 1px solid #E2E8F0;
+  border: 1px solid #CBD5E1;
   border-radius: 0;
-  padding: 18px 22px;
+  padding: 16px 0 0 0;
   box-shadow: 0 4px 20px -2px rgba(2, 132, 199, 0.05);
+  overflow: hidden;
 }
 
 .executive-table-toolbar {
@@ -854,7 +855,8 @@
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
+  padding: 0 16px;
 }
 
 .executive-triage-pills {
@@ -963,54 +965,35 @@
   align-items: center;
 }
 
-/* 5. BẢNG DỮ LIỆU CỨU NẠN (RỘNG RÃI, CÓ KHUNG VIỀN SẮC NÉT) */
+/* 5. BẢNG DỮ LIỆU CỨU NẠN (RỘNG RÃI, CÙNG KHUNG HÌNH VUÔNG 100%) */
 .executive-table-scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  border: 1px solid #CBD5E1;
+  overflow-x: hidden;
+  border-top: 1px solid #CBD5E1;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
   border-radius: 0;
   background: #FFFFFF;
   box-shadow: none;
-  scrollbar-width: thin;
-  scrollbar-color: #CBD5E1 #F8FAFC;
-}
-
-/* Thanh cuộn ngang thanh mảnh */
-.executive-table-scroll::-webkit-scrollbar {
-  height: 6px;
-  width: 6px;
-}
-
-.executive-table-scroll::-webkit-scrollbar-track {
-  background: #F8FAFC;
-  border-radius: 0;
-}
-
-.executive-table-scroll::-webkit-scrollbar-thumb {
-  background: #CBD5E1;
-  border-radius: 0;
-  transition: background 0.2s ease;
-}
-
-.executive-table-scroll::-webkit-scrollbar-thumb:hover {
-  background: #0284C7;
+  width: 100%;
 }
 
 .executive-table {
   width: 100%;
   min-width: 0;
-  border-collapse: separate;
+  border-collapse: collapse;
   border-spacing: 0;
+  table-layout: fixed;
 }
 
 .executive-table thead tr th {
   background: #F1F5F9;
   color: #334155;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 13px 14px;
+  padding: 12px 10px;
   border-bottom: 2px solid #CBD5E1;
   border-right: 1px solid #E2E8F0;
   text-align: left;
@@ -1019,26 +1002,34 @@
 
 .executive-table thead tr th:first-child {
   border-top-left-radius: 0;
+  padding-left: 16px;
 }
 
 .executive-table thead tr th:last-child {
   border-top-right-radius: 0;
   border-right: none;
+  padding-right: 16px;
 }
 
 .executive-table tbody tr td {
-  padding: 13px 16px;
+  padding: 12px 10px;
   border-bottom: 1px solid #E2E8F0;
   border-right: 1px solid #F1F5F9;
-  font-size: 12.5px;
+  font-size: 12px;
   color: #334155;
   vertical-align: middle;
   background: #FFFFFF;
   transition: background-color 0.15s ease;
+  word-break: break-word;
+}
+
+.executive-table tbody tr td:first-child {
+  padding-left: 16px;
 }
 
 .executive-table tbody tr td:last-child {
   border-right: none;
+  padding-right: 16px;
 }
 
 .executive-table tbody tr:nth-child(even) td {
@@ -1180,7 +1171,8 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-width: 320px;
+  width: 100%;
+  min-width: 0;
 }
 
 .location-line {
@@ -1209,6 +1201,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .photo-preview-chip {
