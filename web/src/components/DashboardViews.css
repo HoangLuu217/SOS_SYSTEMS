@@ -1295,30 +1295,29 @@
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
 }
 
 .status-tag.pending {
-  background: #FFFBEB;
-  border: 1px solid #FDE68A;
   color: #D97706;
 }
 
 .status-tag.verified {
-  background: #F0FDF4;
-  border: 1px solid #BBF7D0;
   color: #16A34A;
 }
 
 .status-tag.active {
-  background: #F0F9FF;
-  border: 1px solid #BAE6FD;
   color: #0284C7;
 }
 
 .status-tag.completed {
-  background: #F8FAFC;
-  border: 1px solid #E2E8F0;
   color: #64748B;
+}
+
+.status-tag.cancelled,
+.status-tag.rejected {
+  color: #DC2626;
 }
 
 /* Actions cell */
