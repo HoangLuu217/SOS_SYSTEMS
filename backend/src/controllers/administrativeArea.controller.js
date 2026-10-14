@@ -49,6 +49,30 @@ class AdministrativeAreaController {
       next(error);
     }
   }
+
+  /**
+   * POST /administrative-areas/sync-api
+   */
+  async syncFromApi(req, res, next) {
+    try {
+      const result = await administrativeAreaService.syncAreasFromApi(req.body);
+      return sendSuccess(res, 200, 'Đồng bộ khu vực hành chính từ API thành công', result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /administrative-areas/managers
+   */
+  async getAreaManagers(req, res, next) {
+    try {
+      const managers = await administrativeAreaService.getAreaManagers();
+      return sendSuccess(res, 200, 'Lấy danh sách cán bộ quản lý địa phương thành công', managers);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new AdministrativeAreaController();

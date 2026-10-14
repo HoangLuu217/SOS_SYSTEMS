@@ -9,7 +9,9 @@ export interface User {
   avatarUrl?: string;
   authority?: {
     organizationId?: string;
+    organizationName?: string;
     areaId?: string;
+    areaName?: string;
     position?: string;
     department?: string;
   };

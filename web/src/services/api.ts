@@ -74,6 +74,7 @@ async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Pr
   }
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...(userId ? { 'x-user-id': userId } : {}),
     ...(options.headers as Record<string, string> || {}),
   };
 
@@ -125,7 +126,7 @@ async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Pr
       const directRes = await fetch(`${DIRECT_BACKEND}${endpoint}`, mergedOptions);
       const directData = await safeParseResponse(directRes);
       if (!directRes.ok) {
-        throw new Error(directData.message || 'Lỗi xử lý yêu cầu máy chủ');
+        throw new Error(directData.message || 'Lỗi xử lý yêu cầu máy chủ', { cause: err });
       }
       return directData;
     }
@@ -170,13 +171,13 @@ export async function loginApi(account: string, password: string): Promise<Login
         });
         const directData = await safeParseResponse(directRes);
         if (!directRes.ok) {
-          throw new Error(directData.message || 'Đăng nhập không thành công');
+          throw new Error(directData.message || 'Đăng nhập không thành công', { cause: err });
         }
         return directData;
       } catch (fallbackErr: unknown) {
         const fallbackMsg = fallbackErr instanceof Error ? fallbackErr.message : '';
         if (fallbackMsg.includes('Failed to fetch') || fallbackMsg.includes('NetworkError')) {
-          throw new Error('Không thể kết nối đến máy chủ Backend (Port 5000). Vui lòng đảm bảo Backend server đang chạy.');
+          throw new Error('Không thể kết nối đến máy chủ Backend (Port 5000). Vui lòng đảm bảo Backend server đang chạy.', { cause: fallbackErr });
         }
         throw fallbackErr;
       }
@@ -199,6 +200,23 @@ export async function logoutApi(): Promise<void> {
   } catch {
     // Bỏ qua lỗi mạng khi logout
   }
+}
+
+export async function resetPasswordApi(payload: {
+  email?: string;
+  token: string;
+  newPassword: string;
+}): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await safeParseResponse(res);
+  if (!res.ok) {
+    throw new Error(data.message || 'Không thể đặt lại mật khẩu');
+  }
+  return data;
 }
 
 export async function checkBackendHealth(): Promise<boolean> {
@@ -315,6 +333,49 @@ export async function updateUserStatus(userId: string, status: string): Promise<
   });
 }
 
+export async function createAdminUser(payload: {
+  fullName: string;
+  phone: string;
+  email?: string;
+  password?: string;
+  roles?: string[];
+  authority?: {
+    organizationId?: string;
+    areaId?: string;
+    areaName?: string;
+    position?: string;
+    department?: string;
+  };
+}): Promise<{ success: boolean; data: any; message?: string }> {
+  return fetchWithAuth('/admin/users', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAdminUser(
+  userId: string,
+  payload: {
+    fullName?: string;
+    phone?: string;
+    email?: string;
+    password?: string;
+    status?: string;
+    authority?: {
+      organizationId?: string;
+      areaId?: string;
+      areaName?: string;
+      position?: string;
+      department?: string;
+    };
+  }
+): Promise<{ success: boolean; data?: any; message?: string }> {
+  return fetchWithAuth(`/admin/users/${userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function verifyRescuer(
   userId: string,
   verificationStatus: 'VERIFIED' | 'REJECTED'
@@ -364,6 +425,47 @@ export async function fetchAdministrativeAreas(): Promise<{ success: boolean; da
 
 export async function fetchAuthorityOrganizations(): Promise<{ success: boolean; data: AuthorityOrgItem[] }> {
   return fetchWithAuth('/authority-organizations', { method: 'GET' });
+}
+
+export async function syncAdministrativeAreasToBackend(payload: {
+  provinceName: string;
+  provinceCode?: number | string;
+  units: any[];
+}): Promise<{ success: boolean; data: any }> {
+  try {
+    return await fetchWithAuth('/administrative-areas/sync-api', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    console.warn('Sync administrative areas to MongoDB failed:', e);
+    return { success: false, data: null };
+  }
+}
+
+export interface AreaManagerInfo {
+  hasManager: boolean;
+  managerName?: string;
+  phone?: string;
+  email?: string;
+  position?: string;
+  department?: string;
+  organizationName?: string | null;
+  areaName?: string;
+  areaId?: string | null;
+}
+
+export async function fetchAreaManagers(): Promise<{ success: boolean; data: Record<string, AreaManagerInfo> }> {
+  try {
+    const raw = await fetchWithAuth<any>('/administrative-areas/managers', { method: 'GET' });
+    if (raw && raw.data) {
+      return { success: true, data: raw.data };
+    }
+    return { success: false, data: {} };
+  } catch (e) {
+    console.warn('Lấy danh sách cán bộ quản lý địa phương thất bại:', e);
+    return { success: false, data: {} };
+  }
 }
 
 // ─── AUDIT LOGS (CƠ SỞ DỮ LIỆU THẬT) ─────────────────────────────────────────

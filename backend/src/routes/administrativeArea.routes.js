@@ -15,6 +15,12 @@ router.post('/', administrativeAreaController.createArea);
 router.get('/', administrativeAreaController.getAreas);
 
 /**
+ * @route   GET /administrative-areas/managers
+ * @desc    Lấy danh sách cán bộ / đơn vị địa phương đang quản lý từng khu vực
+ */
+router.get('/managers', administrativeAreaController.getAreaManagers);
+
+/**
  * @route   GET /administrative-areas/:id
  * @desc    Lấy thông tin chi tiết một khu vực hành chính
  */
@@ -25,5 +31,11 @@ router.get('/:id', administrativeAreaController.getAreaById);
  * @desc    Cập nhật thông tin khu vực hành chính
  */
 router.patch('/:id', administrativeAreaController.updateArea);
+
+/**
+ * @route   POST /administrative-areas/sync-api
+ * @desc    Tự động đồng bộ các đơn vị hành chính lấy trực tiếp từ API vào CSDL
+ */
+router.post('/sync-api', administrativeAreaController.syncFromApi);
 
 module.exports = router;
