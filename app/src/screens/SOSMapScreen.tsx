@@ -791,9 +791,6 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
                   <Feather name="alert-circle" size={12} color="#DC2626" style={{ marginRight: 4 }} />
                   <Text style={styles.profilePhoneMissingTagText}>Chưa có trong hồ sơ</Text>
                 </View>
-                <Text style={styles.phoneMissingHintText}>
-                  Vui lòng nhập số điện thoại để cứu hộ liên lạc
-                </Text>
               </View>
             ) : (
               <View style={styles.phoneProfileAutoFilledRow}>
@@ -809,7 +806,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
               <Feather name="phone" size={16} color="#94A3B8" style={styles.inputLeadingIcon} />
               <TextInput
                 style={styles.textInputInside}
-                placeholder="Nhập số điện thoại để cứu hộ liên lạc"
+                placeholder="Vui lòng nhập số điện thoại để cứu hộ liên lạc"
                 placeholderTextColor="#94A3B8"
                 keyboardType="phone-pad"
                 value={phone}
@@ -1494,14 +1491,8 @@ const styles = StyleSheet.create({
   // 3. SỐ ĐIỆN THOẠI
   phoneMissingContainer: {
     marginTop: 6,
-    marginBottom: 10,
+    marginBottom: 8,
     alignItems: 'flex-start',
-  },
-  phoneMissingHintText: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 4,
-    fontWeight: '500',
   },
   phoneProfileAutoFilledRow: {
     flexDirection: 'row',
