@@ -643,5 +643,548 @@
 [data-theme="light"] .sos-occupancy-bar-bg {
   background: #e2e8f0;
 }
+
+/* ============================================================
+   CLEAN & FLAT AUTHORITY HAZARD REPORTS (NO FLASHY COLORS)
+   ============================================================ */
+
+/* 1. Header & Fixed Jurisdiction Bar */
+.sos-hazard-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 2px;
+}
+
+.sos-hazard-page-title-group h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 4px 0;
+  letter-spacing: -0.01em;
+}
+
+.sos-hazard-page-title-group p {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.sos-fixed-jurisdiction-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.sos-fixed-jur-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sos-fixed-jur-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sos-fixed-jur-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13.5px;
+  color: #334155;
+}
+
+.sos-fixed-jur-title strong {
+  color: #0f172a;
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
+.sos-fixed-jur-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: #e2e8f0;
+  color: #475569;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.sos-fixed-jur-sub {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+/* 2. Flat Minimal Stats Cards */
+.sos-flat-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.sos-flat-stat-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.sos-flat-stat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.sos-flat-stat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.sos-flat-stat-dot.pending { background: #d97706; }
+.sos-flat-stat-dot.approved { background: #16a34a; }
+.sos-flat-stat-dot.rejected { background: #dc2626; }
+.sos-flat-stat-dot.total { background: #0f172a; }
+
+.sos-flat-stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.sos-flat-stat-desc {
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+
+/* 3. Clean Filter Tabs & Search Bar */
+.sos-clean-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 6px;
+}
+
+.sos-clean-tabs {
+  display: flex;
+  gap: 6px;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.sos-clean-tab {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sos-clean-tab:hover {
+  color: #0f172a;
+}
+
+.sos-clean-tab.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.sos-clean-tab-count {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #e2e8f0;
+  color: #475569;
+}
+.sos-clean-tab.active .sos-clean-tab-count {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.sos-clean-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 14px;
+  min-width: 280px;
+}
+
+.sos-clean-search input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13.5px;
+  color: #0f172a;
+  width: 100%;
+}
+
+/* 4. Hazard Type Grid Modal (Theo đúng Ảnh 2) */
+.sos-hazard-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.sos-hazard-type-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
+  color: #1e293b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+  user-select: none;
+}
+
+.sos-hazard-type-card:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.sos-hazard-type-card.selected {
+  background: #ea580c;
+  border-color: #ea580c;
+  color: #ffffff;
+}
+
+.sos-hazard-type-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sos-hazard-type-card-label {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* 5. Minimal Data Table - Large, Clear with Borders */
+.sos-clean-table-container {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.sos-clean-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  text-align: left;
+}
+
+.sos-clean-table th {
+  background: #f8fafc;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border: 1px solid #cbd5e1;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.sos-clean-table td {
+  padding: 13px 14px;
+  border: 1px solid #e2e8f0;
+  color: #1e293b;
+  vertical-align: middle;
+  font-size: 13.5px;
+}
+
+.sos-clean-table tr:hover td {
+  background: #f8fafc;
+}
+
+.sos-clean-table tr:last-child td {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+/* Minimal Action Buttons */
+.sos-btn-flat {
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.sos-btn-flat:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #94a3b8;
+}
+
+.sos-btn-flat.primary {
+  background: #e0f2fe; /* Xanh nhạt như màu sidebar */
+  color: #0369a1;
+  border-color: #7dd3fc;
+}
+.sos-btn-flat.primary:hover {
+  background: #bae6fd;
+  color: #0284c7;
+  border-color: #38bdf8;
+}
+
+.sos-btn-flat.danger {
+  color: #b91c1c;
+  border-color: #fca5a5;
+  background: #ffffff;
+}
+.sos-btn-flat.danger:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+}
+
+.sos-btn-flat.success {
+  color: #15803d;
+  border-color: #86efac;
+  background: #ffffff;
+}
+.sos-btn-flat.success:hover {
+  background: #dcfce7;
+}
+
+/* Scope switch tabs (Local vs City) */
+.sos-scope-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sos-scope-tab {
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+
+.sos-scope-tab:hover {
+  background: #f0f9ff;
+  color: #0284c7;
+  border-color: #7dd3fc;
+}
+
+.sos-scope-tab.active {
+  background: #e0f2fe; /* Xanh nhạt như màu sidebar */
+  color: #0369a1;
+  border-color: #7dd3fc;
+  font-weight: 700;
+}
+
+.sos-scope-tab.active .sos-scope-badge {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.sos-scope-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* 6. Clean Table Pagination Bar */
+.sos-clean-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: #f8fafc;
+  border-top: 1px solid #cbd5e1;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.sos-pagination-info {
+  font-size: 13px;
+  color: #475569;
+  font-weight: 500;
+}
+
+.sos-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sos-pagination-btn {
+  padding: 5px 11px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  transition: all 0.15s ease;
+  min-width: 32px;
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sos-pagination-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #94a3b8;
+}
+
+.sos-pagination-btn.active {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #7dd3fc;
+  font-weight: 700;
+}
+
+.sos-pagination-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: #e2e8f0;
+  color: #94a3b8;
+}
+
+/* 7. Table Header Sorting Styles */
+.sos-clean-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.sos-clean-table th.sortable:hover {
+  background-color: #f1f5f9;
+  color: #0284c7;
+}
+
+.sos-clean-table th.sortable.sorted {
+  color: #0284c7;
+  background-color: #f0f9ff;
+  border-bottom: 2px solid #0284c7;
+}
+
+/* 8. Quick Sort Selector in Toolbar */
+.sos-clean-sort-select {
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #0f172a;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.sos-clean-sort-select:hover {
+  border-color: #94a3b8;
+}
+
+.sos-clean-sort-select:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+}
+
+/* 9. Pagination Jump to Page */
+.sos-pagination-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 8px;
+  padding-left: 10px;
+  border-left: 1px solid #cbd5e1;
+}
+
+.sos-pagination-jump-input {
+  width: 48px;
+  padding: 4px 6px;
+  font-size: 12.5px;
+  text-align: center;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  outline: none;
+  font-weight: 600;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sos-pagination-jump-input:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
 }
 

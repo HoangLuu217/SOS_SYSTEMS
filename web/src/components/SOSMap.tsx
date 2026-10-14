@@ -853,6 +853,7 @@ const SOSMap: React.FC<SOSMapProps> = ({
                 <MapContainer
                     center={[16.0544, 108.2022]}
                     zoom={14}
+                    preferCanvas={true}
                     style={{ height: height || '500px', width: '100%', borderRadius: '10px', zIndex: 1, border: '2px solid #cbd5e1' }}
                 >
                     <TileLayer

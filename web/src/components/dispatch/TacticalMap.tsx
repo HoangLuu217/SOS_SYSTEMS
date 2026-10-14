@@ -316,6 +316,7 @@ export const TacticalMap = ({
       <MapContainer
         center={[sosLat, sosLng]}
         zoom={15}
+        preferCanvas={true}
         zoomControl={false}
         attributionControl={false}
         style={{ width: '100%', height: '100%' }}

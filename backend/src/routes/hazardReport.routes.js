@@ -50,6 +50,13 @@ const optionalAuthenticate = async (req, res, next) => {
 router.get('/stream', hazardReportController.streamHazardEvents);
 
 /**
+ * @route   POST /hazard-reports/resolve-map-link
+ * @desc    Giải mã liên kết Google Maps thành tọa độ GPS ghim vị trí
+ */
+router.post('/resolve-map-link', optionalAuthenticate, hazardReportController.resolveMapLink);
+router.get('/resolve-map-link', optionalAuthenticate, hazardReportController.resolveMapLink);
+
+/**
  * @route   GET /hazard-reports
  * @desc    Lấy danh sách điểm nguy hiểm
  */

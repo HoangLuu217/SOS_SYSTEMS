@@ -63,8 +63,8 @@ const navTitles: Record<NavItemKey, { title: string; desc: string }> = {
     desc: 'Quản lý các trạm sơ tán, điểm tránh lũ và năng lực tiếp nhận người dân trong địa bàn',
   },
   hazard_reports: {
-    title: 'DUYỆT ĐIỂM NGUY HIỂM TỪ NGƯỜI DÂN',
-    desc: 'Thẩm định và xác nhận các vị trí sạt lở, nước dâng sâu do cộng đồng đóng góp',
+    title: 'QUẢN LÝ & TẠO ĐIỂM NGUY HIỂM',
+    desc: 'Tạo mới, thẩm định và chuẩn hóa các vị trí sạt lở, nước dâng sâu, khu vực hiểm họa',
   },
   reports: {
     title: 'BÁO CÁO & THỐNG KÊ ĐỊA PHƯƠNG',
@@ -201,7 +201,7 @@ function MainRouter() {
         <main
           className="sos-main-content"
           style={{
-            overflow: activeNavKey === 'map' && isAuthority ? 'hidden' : 'auto',
+            overflow: (activeNavKey === 'map' && isAuthority) || activeNavKey === 'hazard_reports' ? 'hidden' : 'auto',
             height: '100vh',
             display: 'flex',
             flexDirection: 'column',
@@ -244,8 +244,18 @@ function MainRouter() {
                 </div>
               </header>
 
-              <div className="sos-page-body">
-                <div style={{ width: '100%' }}>
+              <div
+                className="sos-page-body"
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minHeight: 0,
+                  overflow: activeNavKey === 'hazard_reports' ? 'hidden' : undefined,
+                  padding: activeNavKey === 'hazard_reports' ? '14px 20px 16px' : undefined,
+                }}
+              >
+                <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                   <DashboardViews
                     activeKey={activeNavKey}
                     onOpenMap={() => handleNavSelect('map')}

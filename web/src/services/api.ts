@@ -460,12 +460,15 @@ export async function createHazardReport(payload: {
   title: string;
   description: string;
   hazardType: string;
+  customHazardType?: string;
   severity: string;
   location: { type: 'Point'; coordinates: [number, number] };
   address: string;
   areaId?: string;
   images?: string[];
-}): Promise<{ success: boolean; data: HazardReportItem }> {
+  status?: 'APPROVED' | 'PENDING' | string;
+  reviewNote?: string;
+}): Promise<{ success: boolean; data: HazardReportItem; message?: string }> {
   return fetchWithAuth('/hazard-reports', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -475,6 +478,20 @@ export async function createHazardReport(payload: {
 export async function deleteHazardReport(id: string): Promise<{ success: boolean; message: string }> {
   return fetchWithAuth(`/hazard-reports/${id}`, {
     method: 'DELETE',
+  });
+}
+
+/**
+ * Giải mã liên kết Google Maps hoặc chuỗi tọa độ qua Backend (hỗ trợ cả link rút gọn)
+ */
+export async function resolveMapLink(url: string): Promise<{
+  success: boolean;
+  data?: { lat: number; lng: number; placeName?: string; resolvedUrl?: string; source?: string };
+  message?: string;
+}> {
+  return fetchWithAuth('/hazard-reports/resolve-map-link', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
   });
 }
 

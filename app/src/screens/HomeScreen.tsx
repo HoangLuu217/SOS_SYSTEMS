@@ -27,7 +27,7 @@ import { TabName } from '../components/BottomNav';
 
 export interface HomeScreenProps {
   onOpenSettings: () => void;
-  onNavigateToTab?: (tab: TabName) => void;
+  onNavigateToTab?: (tab: TabName, options?: { filter?: 'ALL' | 'HAZARD' | 'SAFE' | 'RELIEF'; areaId?: string }) => void;
 }
 
 interface NewsItem {
@@ -47,6 +47,7 @@ interface WeatherState {
   desc: string;
   rainChance: string;
   icon: any;
+  isDay: number;
 }
 
 // Icon vị trí Bootstrap (bi-geo-alt-fill)
@@ -195,13 +196,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
 
   // Trạng thái Thời tiết thật từ API Open-Meteo & GPS
-  const [weatherData, setWeatherData] = useState<WeatherState>({
-    city: 'Đà Nẵng',
-    temp: '26°C',
-    tempRange: '24° - 28°',
-    desc: 'Mưa rào nhẹ',
-    rainChance: 'Khả năng mưa 63%',
-    icon: WEATHER_ICONS.mua,
+  const [weatherData, setWeatherData] = useState<WeatherState>(() => {
+    const currentHour = new Date().getHours();
+    const isDay = currentHour >= 6 && currentHour < 18 ? 1 : 0;
+    return {
+      city: 'Đà Nẵng',
+      temp: '26°C',
+      tempRange: '24° - 28°',
+      desc: isDay === 1 ? 'Thời tiết nắng ráo' : 'Trời đêm mát mẻ',
+      rainChance: 'Khả năng mưa 63%',
+      icon: isDay === 1 ? WEATHER_ICONS.nang : WEATHER_ICONS.maydem,
+      isDay,
+    };
   });
   const [isWeatherLoading, setIsWeatherLoading] = useState(false);
 
@@ -242,15 +248,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           }
         }
 
-        // 2. Gọi Open-Meteo API lấy dữ liệu thời tiết thời gian thực
+        // 2. Gọi Open-Meteo API lấy dữ liệu thời tiết thời gian thực (bao gồm cả dự báo theo giờ và ngày)
         const res = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,is_day,precipitation,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto`
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,is_day,precipitation,weather_code&hourly=precipitation_probability&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto`
         );
         const json = await res.json();
 
         if (isMounted && json && json.current) {
           const code = json.current.weather_code ?? 0;
-          const isDay = json.current.is_day ?? 1;
+          const currentHour = new Date().getHours();
+          const isDay = json.current.is_day ?? (currentHour >= 6 && currentHour < 18 ? 1 : 0);
           const weatherInfo = mapWmoToWeather(code, isDay);
 
           const curTemp = Math.round(json.current.temperature_2m);
@@ -261,7 +268,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             ? Math.round(json.daily.temperature_2m_max[0])
             : curTemp + 2;
 
+          // Lấy khả năng mưa theo đúng giờ hiện tại thay vì lấy số cực đại cả ngày
           const rainProb =
+            json.hourly?.precipitation_probability?.[currentHour] ??
             json.daily?.precipitation_probability_max?.[0] ??
             Math.min(100, Math.round((json.current.precipitation || 0) * 20));
 
@@ -272,6 +281,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             desc: weatherInfo.desc,
             rainChance: `Khả năng mưa ${rainProb}%`,
             icon: weatherInfo.icon,
+            isDay,
           });
         }
       } catch (err) {
@@ -299,16 +309,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       case 'map_support':
         // Bản đồ điểm hỗ trợ
         if (onNavigateToTab) {
-          onNavigateToTab('map');
+          onNavigateToTab('map', { filter: 'RELIEF' });
         } else {
           setShowSOSMap(true);
         }
         break;
 
       case 'map_hazard':
-        // Bản đồ nơi nguy hiểm
+        // Bản đồ nơi nguy hiểm: Nhảy đến map và tự động filter ra các điểm nguy hiểm
         if (onNavigateToTab) {
-          onNavigateToTab('map');
+          onNavigateToTab('map', { filter: 'HAZARD' });
         } else {
           setShowSOSMap(true);
         }
@@ -434,13 +444,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 { paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 36 : 20) },
               ]}
             >
-              {/* Thanh điều khiển trên cùng: Mặt trăng (Trái) & Thông báo + Cài đặt (Phải) */}
+              {/* Thanh điều khiển trên cùng: Thông báo + Cài đặt (Phải) */}
               <View style={styles.topBar}>
-                <View style={styles.moonContainer}>
-                  <View style={styles.moonGlow} />
-                  <Ionicons name="moon" size={22} color="#FEF08A" />
-                </View>
-
                 <View style={styles.topBarRight}>
                   <TouchableOpacity
                     style={styles.circleIconButton}
@@ -792,39 +797,23 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   headerGradient: {
-    paddingHorizontal: 18,
-    paddingBottom: 20,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
   topBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-    marginBottom: 16,
-  },
-  moonContainer: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  moonGlow: {
-    position: 'absolute',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(254, 240, 138, 0.25)',
+    marginBottom: 8,
   },
   topBarRight: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   circleIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -834,108 +823,111 @@ const styles = StyleSheet.create({
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 18,
+    gap: 10,
+    marginBottom: 10,
   },
   logoBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2.5,
+    borderWidth: 2,
     borderColor: '#10B981',
     overflow: 'hidden',
   },
   logoImage: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
   },
   brandTextColumn: {
     flex: 1,
   },
   brandTitle: {
-    fontSize: 21,
+    fontSize: 18.5,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
   },
   brandSubtitle: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#E2E8F0',
-    marginTop: 2,
+    marginTop: 1,
     fontWeight: '400',
   },
 
   // ==================== WEATHER CARD ====================
   weatherCard: {
     backgroundColor: 'rgba(15, 23, 42, 0.58)',
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.22)',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.18,
+        shadowRadius: 6,
       },
       android: {
-        elevation: 4,
+        elevation: 3,
       },
     }),
   },
   weatherLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 10,
+    flex: 1,
   },
   weatherIconImage: {
-    width: 48,
-    height: 48,
+    width: 36,
+    height: 36,
   },
-  weatherInfo: {},
+  weatherInfo: {
+    flex: 1,
+  },
   weatherLocationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
   },
   weatherCity: {
-    fontSize: 14.5,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#FFFFFF',
   },
   weatherDesc: {
-    fontSize: 12.5,
+    fontSize: 11.5,
     color: '#F1F5F9',
-    marginTop: 2,
+    marginTop: 1,
     fontWeight: '500',
   },
   weatherRainChance: {
-    fontSize: 11,
+    fontSize: 10.5,
     color: 'rgba(255, 255, 255, 0.75)',
-    marginTop: 2,
+    marginTop: 1,
   },
   weatherRight: {
     alignItems: 'flex-end',
-    minWidth: 70,
+    minWidth: 64,
   },
   weatherTemp: {
-    fontSize: 28,
+    fontSize: 23,
     fontWeight: '800',
     color: '#FFFFFF',
-    lineHeight: 32,
+    lineHeight: 26,
   },
   weatherTempRange: {
-    fontSize: 12,
+    fontSize: 11,
     color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 2,
+    marginTop: 1,
     textAlign: 'right',
   },
 

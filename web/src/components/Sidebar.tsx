@@ -212,7 +212,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           key: 'hazard_reports',
-          label: 'Duyệt điểm nguy hiểm',
+          label: 'Quản lý điểm nguy hiểm',
           useCase: 'UC-L15',
           icon: <AlertTriangle size={18} className="sos-nav-icon" />,
           badge: hazardCount > 0 ? `${hazardCount}` : undefined,
@@ -249,6 +249,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: 'Tổng quan & Giám sát',
           useCase: 'UC-A07 / UC-A08',
           icon: <LayoutDashboard size={18} className="sos-nav-icon" />,
+        },
+        {
+          key: 'hazard_reports',
+          label: 'Quản lý điểm nguy hiểm',
+          useCase: 'UC-L15 / UC-A07',
+          icon: <AlertTriangle size={18} className="sos-nav-icon" />,
+          badge: hazardCount > 0 ? `${hazardCount}` : undefined,
+          badgeType: 'info',
         },
       ],
     },

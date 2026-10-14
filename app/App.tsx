@@ -6,7 +6,7 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { SignupScreen } from './src/screens/SignupScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
-import { MapScreen } from './src/screens/MapScreen';
+import { MapScreen, MapFilterType } from './src/screens/MapScreen';
 import { SosScreen } from './src/screens/SosScreen';
 import { NewsScreen } from './src/screens/NewsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
@@ -20,6 +20,18 @@ import { BACKGROUND_APP_SOURCE } from './src/constants/backgroundBase64';
 function AuthenticatedApp() {
   const [activeTab, setActiveTab] = useState<TabName>('home');
   const [configVisible, setConfigVisible] = useState(false);
+  const [mapFilter, setMapFilter] = useState<MapFilterType>('ALL');
+  const [mapNavKey, setMapNavKey] = useState(0);
+
+  const handleNavigateToTab = (tab: TabName, options?: { filter?: MapFilterType; areaId?: string }) => {
+    setActiveTab(tab);
+    if (tab === 'map') {
+      if (options?.filter) {
+        setMapFilter(options.filter);
+      }
+      setMapNavKey(prev => prev + 1);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -29,13 +41,17 @@ function AuthenticatedApp() {
         <View style={[styles.tabScreenWrap, activeTab !== 'home' && styles.hiddenTabScreen]}>
           <HomeScreen
             onOpenSettings={() => setConfigVisible(true)}
-            onNavigateToTab={(tab) => setActiveTab(tab as TabName)}
+            onNavigateToTab={handleNavigateToTab}
           />
         </View>
 
         {/* Tab Bản đồ */}
         <View style={[styles.tabScreenWrap, activeTab !== 'map' && styles.hiddenTabScreen]}>
-          <MapScreen />
+          <MapScreen
+            initialFilter={mapFilter}
+            navigationKey={mapNavKey}
+            onFilterChange={setMapFilter}
+          />
         </View>
 
         {/* Tab Cứu hộ SOS */}

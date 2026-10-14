@@ -491,6 +491,7 @@ export const TerritorialMapCanvas = ({
       <MapContainer
         center={mapTarget.center}
         zoom={mapTarget.zoom}
+        preferCanvas={true}
         zoomControl={false}
         attributionControl={false}
         style={{ width: '100%', height: '100%' }}
