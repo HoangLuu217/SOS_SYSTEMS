@@ -82,12 +82,12 @@ const getSosRequests = async (query = {}) => {
   return await SosRequest.find(filter)
     // Nếu dùng $near, MongoDB sẽ tự sort theo khoảng cách. Nếu không thì sort theo thời gian tạo mới nhất.
     .sort(query.lng ? {} : { createdAt: -1 })
-    .populate('citizenId', 'fullName phone avatarUrl');
+    .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile');
 };
 
 const getSosRequestById = async (id) => {
   const sos = await SosRequest.findById(id)
-    .populate('citizenId', 'fullName phone avatarUrl')
+    .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile')
     .populate('areaId', 'name');
     
   if (!sos) {

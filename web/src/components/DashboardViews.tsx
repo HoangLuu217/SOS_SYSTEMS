@@ -1129,6 +1129,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                     const citizenInfo = typeof sos.citizenId === 'object' && sos.citizenId !== null ? sos.citizenId : null;
                     const citizenName = citizenInfo?.fullName || 'Người dân';
                     const citizenPhone = citizenInfo?.phone;
+                    const citizenAvatar = citizenInfo?.avatarUrl;
                     const initials = getInitials(citizenName);
                     const isCritical = sos.priority === 'CRITICAL';
                     const hasPhoto = Boolean(sos.imageUrl || (sos.images && sos.images.length > 0));
@@ -1159,7 +1160,17 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                         {/* 2. Người dân & Liên hệ */}
                         <td>
                           <div className="table-citizen-cell">
-                            <div className="citizen-avatar">{initials}</div>
+                            <div className="citizen-avatar">
+                              {citizenAvatar ? (
+                                <img
+                                  src={citizenAvatar}
+                                  alt={citizenName}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+                                />
+                              ) : (
+                                initials
+                              )}
+                            </div>
                             <div className="citizen-meta">
                               <span className="citizen-name">{citizenName}</span>
                               {sos.contactPhone ? (
@@ -1429,15 +1440,45 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                     <Users size={16} />
                     <span>Thông tin Người báo & Nạn nhân</span>
                   </h4>
-                  <div className="sos-detail-grid-2">
-                    <div className="sos-info-box">
-                      <span className="info-label">Người gửi yêu cầu</span>
-                      <span className="info-value">
-                        {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.fullName
-                          ? selectedSosDetail.citizenId.fullName
-                          : 'Người dân'}
-                      </span>
+
+                  {/* Banner Profile Người Dân */}
+                  <div className="sos-citizen-profile-banner">
+                    <div className="sos-citizen-avatar-large">
+                      {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.avatarUrl ? (
+                        <img
+                          src={selectedSosDetail.citizenId.avatarUrl}
+                          alt={selectedSosDetail.citizenId.fullName}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+                        />
+                      ) : (
+                        getInitials(typeof selectedSosDetail.citizenId === 'object' ? selectedSosDetail.citizenId?.fullName || '' : '')
+                      )}
                     </div>
+                    <div className="sos-citizen-profile-info">
+                      <div className="profile-name-row">
+                        <span className="profile-name">
+                          {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.fullName
+                            ? selectedSosDetail.citizenId.fullName
+                            : 'Người dân'}
+                        </span>
+                        <span className="profile-verified-badge">Tài khoản xác thực</span>
+                      </div>
+                      <div className="profile-sub-badges">
+                        {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.email && (
+                          <span className="profile-sub-item">
+                            ✉️ {selectedSosDetail.citizenId.email}
+                          </span>
+                        )}
+                        {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.address && (
+                          <span className="profile-sub-item">
+                            🏠 Thường trú: {selectedSosDetail.citizenId.address}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="sos-detail-grid-2">
                     <div className="sos-info-box">
                       <span className="info-label">SĐT tài khoản người gửi</span>
                       <span className="info-value">
@@ -1472,6 +1513,29 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                         <strong>{selectedSosDetail.people} người</strong>
                       </span>
                     </div>
+                    {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.citizenProfile?.emergencyContact?.phone ? (
+                      <div className="sos-info-box">
+                        <span className="info-label">Người thân trong hồ sơ cá nhân</span>
+                        <span className="info-value">
+                          <a
+                            href={`tel:${selectedSosDetail.citizenId.citizenProfile.emergencyContact.phone}`}
+                            className="phone-clickable"
+                          >
+                            <Phone size={12} />
+                            <span>
+                              {selectedSosDetail.citizenId.citizenProfile.emergencyContact.name || 'Người thân'} (
+                              {selectedSosDetail.citizenId.citizenProfile.emergencyContact.relation || 'Liên hệ'}
+                              ): {selectedSosDetail.citizenId.citizenProfile.emergencyContact.phone}
+                            </span>
+                          </a>
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="sos-info-box">
+                        <span className="info-label">Phương thức nhận tin</span>
+                        <span className="info-value">Ứng dụng di động (Cứu nạn 1-chạm)</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Đối tượng cần ưu tiên cứu trợ */}

@@ -6,6 +6,15 @@ export interface SosRequestItem {
     fullName: string;
     phone?: string;
     email?: string;
+    avatarUrl?: string;
+    address?: string;
+    citizenProfile?: {
+      emergencyContact?: {
+        name?: string;
+        phone?: string;
+        relation?: string;
+      };
+    };
   } | string;
   location: {
     type: 'Point';
