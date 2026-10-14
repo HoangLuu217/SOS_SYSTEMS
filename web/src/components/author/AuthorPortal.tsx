@@ -176,6 +176,19 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
             assignmentId: null,
             imageUrl: item.imageUrl || (item.images && item.images.length > 0 ? item.images[0] : undefined),
             images: item.images || (item.imageUrl ? [item.imageUrl] : undefined),
+            priorityGroups: (() => {
+              if (Array.isArray(item.priorityGroups) && item.priorityGroups.length > 0) {
+                return item.priorityGroups;
+              }
+              const desc = item.description || '';
+              if (desc.includes('[Đối tượng ưu tiên:')) {
+                const match = desc.match(/\[Đối tượng ưu tiên:\s*([^\]]+)\]/);
+                if (match && match[1]) {
+                  return match[1].split(',').map((s: string) => s.trim()).filter(Boolean);
+                }
+              }
+              return undefined;
+            })(),
           };
         });
 

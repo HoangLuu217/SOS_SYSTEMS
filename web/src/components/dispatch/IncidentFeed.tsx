@@ -281,6 +281,27 @@ export const IncidentFeed = ({
             return typeMap[sos.emergencyType] || sos.emergencyType || 'Cứu hộ ngập lụt / Mắc kẹt';
           })();
 
+          // Danh sách đối tượng ưu tiên
+          const priorityList = (() => {
+            if (Array.isArray(sos.priorityGroups) && sos.priorityGroups.length > 0) {
+              return sos.priorityGroups;
+            }
+            const desc = (sos.description || '') + ' ' + (sos.title || '');
+            if (desc.includes('[Đối tượng ưu tiên:')) {
+              const match = desc.match(/\[Đối tượng ưu tiên:\s*([^\]]+)\]/);
+              if (match && match[1]) {
+                return match[1].split(',').map((s) => s.trim()).filter(Boolean);
+              }
+            }
+            const keywords: string[] = [];
+            if (/người già|người cao tuổi/i.test(desc)) keywords.push('Người già');
+            if (/trẻ nhỏ|trẻ em|em bé|sơ sinh/i.test(desc)) keywords.push('Trẻ em');
+            if (/mang thai|bầu|thai phụ/i.test(desc)) keywords.push('Phụ nữ có thai');
+            if (/khuyết tật|tàn tật|liệt/i.test(desc)) keywords.push('Người khuyết tật');
+            if (/bệnh nặng|thở oxy|tai biến/i.test(desc)) keywords.push('Bệnh nhân nặng');
+            return keywords;
+          })();
+
           return (
             <div
               key={sos.id}
@@ -320,12 +341,20 @@ export const IncidentFeed = ({
                 </div>
               </div>
 
-              {/* Card Middle: Request Type + (Side Thumbnail) */}
+              {/* Card Middle: Request Type + Priority Targets + (Side Thumbnail) */}
               <div className="compact-card-content">
                 <div className="compact-card-text">
                   <h3 className="compact-card-title" title={emergencyTypeLabel}>
                     {emergencyTypeLabel}
                   </h3>
+                  {priorityList.length > 0 && (
+                    <div className="compact-priority-groups">
+                      <span className="compact-priority-groups-label">
+                        {lang === 'vi' ? 'Ưu tiên: ' : 'Priority: '}
+                      </span>
+                      <span className="compact-priority-groups-val">{priorityList.join(', ')}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Elegant Thumbnail on the right */}
