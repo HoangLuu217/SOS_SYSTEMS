@@ -1753,18 +1753,18 @@
 }
 
 .compact-card-location {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--sos-text-muted);
   display: flex;
-  align-items: flex-start;
-  gap: 4px;
-  margin-top: 2px;
+  align-items: center;
+  gap: 5px;
+  margin-top: 1px;
   line-height: 1.35;
 }
 
 .compact-location-text {
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1772,9 +1772,9 @@
 }
 
 .compact-card-thumb {
-  width: 50px;
-  height: 50px;
-  border-radius: 7px;
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
   overflow: hidden;
   position: relative;
   flex-shrink: 0;

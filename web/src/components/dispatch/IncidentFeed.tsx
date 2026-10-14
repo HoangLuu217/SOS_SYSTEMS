@@ -320,25 +320,26 @@ export const IncidentFeed = ({
                 </div>
               </div>
 
-              {/* Card Middle: Request Type & Location + (Side Thumbnail) */}
+              {/* Card Middle: Request Type + (Side Thumbnail) */}
               <div className="compact-card-content">
                 <div className="compact-card-text">
                   <h3 className="compact-card-title" title={emergencyTypeLabel}>
                     {emergencyTypeLabel}
                   </h3>
-
-                  <div className="compact-card-location" title={sos.locationName}>
-                    <MapPin size={11} className="compact-pin-icon" style={{ flexShrink: 0 }} />
-                    <span className="compact-location-text">{sos.locationName}</span>
-                  </div>
                 </div>
 
-                {/* Elegant 48x48 Thumbnail on the right */}
+                {/* Elegant Thumbnail on the right */}
                 {sos.imageUrl && (
                   <div className="compact-card-thumb" title={lang === 'vi' ? 'Ảnh hiện trường' : 'Scene Photo'}>
                     <img src={sos.imageUrl} alt="Hiện trường" />
                   </div>
                 )}
+              </div>
+
+              {/* Vị trí nằm trọn vẹn bên trên vạch nét đứt */}
+              <div className="compact-card-location" title={sos.locationName}>
+                <MapPin size={11} className="compact-pin-icon" style={{ flexShrink: 0 }} />
+                <span className="compact-location-text">{sos.locationName}</span>
               </div>
 
               {/* Card Footer: Citizen name & Victim count (Clean, no emojis) */}
