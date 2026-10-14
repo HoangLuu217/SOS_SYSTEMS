@@ -2013,7 +2013,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                       <div className="priority-chips">
                         {selectedSosDetail.priorityGroups.map((grp, idx) => (
                           <span key={idx} className="priority-chip-item">
-                            ⚠️ {grp}
+                            {grp}{idx < selectedSosDetail.priorityGroups!.length - 1 ? ',' : ''}
                           </span>
                         ))}
                       </div>

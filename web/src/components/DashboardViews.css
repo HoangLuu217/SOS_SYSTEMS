@@ -2103,16 +2103,15 @@
 .priority-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
 }
 
 .priority-chip-item {
   color: #DC2626;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
 }
 
 .sos-location-card {
