@@ -957,11 +957,14 @@
   align-items: center;
 }
 
-/* 5. BẢNG DỮ LIỆU CỨU NẠN (RỘNG RÃI, KHÔNG VỠ HÀNG) */
+/* 5. BẢNG DỮ LIỆU CỨU NẠN (RỘNG RÃI, CÓ KHUNG VIỀN SẮC NÉT) */
 .executive-table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  border: 1px solid #CBD5E1;
   border-radius: 12px;
+  background: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
 }
 
 .executive-table {
@@ -972,42 +975,61 @@
 }
 
 .executive-table thead tr th {
-  background: #F8FAFC;
-  color: #475569;
-  font-size: 11px;
+  background: #F1F5F9;
+  color: #334155;
+  font-size: 11.5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 12px 16px;
-  border-bottom: 1px solid #E2E8F0;
+  padding: 13px 16px;
+  border-bottom: 2px solid #CBD5E1;
+  border-right: 1px solid #E2E8F0;
   text-align: left;
   white-space: nowrap;
 }
 
 .executive-table thead tr th:first-child {
-  border-top-left-radius: 8px;
-  border-bottom-left-radius: 8px;
+  border-top-left-radius: 11px;
 }
 
 .executive-table thead tr th:last-child {
-  border-top-right-radius: 8px;
-  border-bottom-right-radius: 8px;
+  border-top-right-radius: 11px;
+  border-right: none;
 }
 
 .executive-table tbody tr td {
-  padding: 14px 16px;
-  border-bottom: 1px solid #F1F5F9;
+  padding: 13px 16px;
+  border-bottom: 1px solid #E2E8F0;
+  border-right: 1px solid #F1F5F9;
   font-size: 12.5px;
   color: #334155;
   vertical-align: middle;
+  background: #FFFFFF;
+  transition: background-color 0.15s ease;
 }
 
-.executive-table tbody tr:hover td {
+.executive-table tbody tr td:last-child {
+  border-right: none;
+}
+
+.executive-table tbody tr:nth-child(even) td {
   background: #F8FAFC;
 }
 
+.executive-table tbody tr:hover td {
+  background: #F0F9FF !important;
+}
+
+.executive-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
 .executive-table tbody tr.row-critical-tint td {
-  background: rgba(254, 242, 242, 0.45);
+  background: rgba(254, 242, 242, 0.6);
+}
+
+.executive-table tbody tr.row-critical-tint:hover td {
+  background: rgba(254, 226, 226, 0.85) !important;
 }
 
 /* Chi tiết ô */

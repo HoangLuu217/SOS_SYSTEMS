@@ -1094,18 +1094,18 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                 {loading && sosList.length === 0 ? (
                   <tr>
                     <td colSpan={7} style={{ textAlign: 'center', padding: '45px 20px' }}>
-                      <Loader2 size={26} className="animate-spin" style={{ margin: '0 auto 10px', color: '#6E6559' }} />
-                      <p style={{ margin: 0, fontWeight: 600, color: '#857E75' }}>Đang nạp dữ liệu cứu nạn...</p>
+                      <Loader2 size={26} className="animate-spin" style={{ margin: '0 auto 10px', color: '#0284C7' }} />
+                      <p style={{ margin: 0, fontWeight: 600, color: '#64748B' }}>Đang nạp dữ liệu cứu nạn...</p>
                     </td>
                   </tr>
                 ) : filteredSosList.length === 0 ? (
                   <tr>
                     <td colSpan={7} style={{ textAlign: 'center', padding: '50px 20px' }}>
                       <span style={{ fontSize: 32, display: 'block', marginBottom: 10 }}>🛡️</span>
-                      <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: '#1E1B18' }}>
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: '#0F172A' }}>
                         Không có yêu cầu cứu hộ nào phù hợp với bộ lọc hiện tại
                       </p>
-                      <p style={{ margin: '6px 0 0', fontSize: 13, color: '#857E75' }}>
+                      <p style={{ margin: '6px 0 0', fontSize: 13, color: '#64748B' }}>
                         Thử chọn lại tab "Tất cả" hoặc xóa từ khóa tìm kiếm
                       </p>
                     </td>
