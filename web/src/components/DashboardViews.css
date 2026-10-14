@@ -844,10 +844,9 @@
 .executive-table-card {
   background: #FFFFFF;
   border: 1px solid #CBD5E1;
-  border-radius: 0;
-  padding: 16px 0 0 0;
+  border-radius: 10px;
+  padding: 14px;
   box-shadow: 0 4px 20px -2px rgba(2, 132, 199, 0.05);
-  overflow: hidden;
 }
 
 .executive-table-toolbar {
@@ -855,8 +854,8 @@
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  margin-bottom: 14px;
-  padding: 0 16px;
+  margin-bottom: 12px;
+  padding: 0 2px;
 }
 
 .executive-triage-pills {
@@ -965,14 +964,11 @@
   align-items: center;
 }
 
-/* 5. BẢNG DỮ LIỆU CỨU NẠN (RỘNG RÃI, CÙNG KHUNG HÌNH VUÔNG 100%) */
+/* 5. BẢNG DỮ LIỆU CỨU NẠN (RỘNG RÃI, HỞ 1 XÍU, BO GÓC NHẸ 100%) */
 .executive-table-scroll {
   overflow-x: hidden;
-  border-top: 1px solid #CBD5E1;
-  border-left: none;
-  border-right: none;
-  border-bottom: none;
-  border-radius: 0;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
   background: #FFFFFF;
   box-shadow: none;
   width: 100%;
@@ -981,7 +977,7 @@
 .executive-table {
   width: 100%;
   min-width: 0;
-  border-collapse: collapse;
+  border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
 }
@@ -1001,14 +997,14 @@
 }
 
 .executive-table thead tr th:first-child {
-  border-top-left-radius: 0;
-  padding-left: 16px;
+  border-top-left-radius: 7px;
+  padding-left: 14px;
 }
 
 .executive-table thead tr th:last-child {
-  border-top-right-radius: 0;
+  border-top-right-radius: 7px;
   border-right: none;
-  padding-right: 16px;
+  padding-right: 14px;
 }
 
 .executive-table tbody tr td {
@@ -1024,12 +1020,20 @@
 }
 
 .executive-table tbody tr td:first-child {
-  padding-left: 16px;
+  padding-left: 14px;
 }
 
 .executive-table tbody tr td:last-child {
   border-right: none;
-  padding-right: 16px;
+  padding-right: 14px;
+}
+
+.executive-table tbody tr:last-child td:first-child {
+  border-bottom-left-radius: 7px;
+}
+
+.executive-table tbody tr:last-child td:last-child {
+  border-bottom-right-radius: 7px;
 }
 
 .executive-table tbody tr:nth-child(even) td {
