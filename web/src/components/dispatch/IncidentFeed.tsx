@@ -255,19 +255,16 @@ export const IncidentFeed = ({
           const priorityClass =
             sos.priority === 'CRITICAL' ? 'critical' : sos.priority === 'HIGH' ? 'high' : 'medium';
 
-          const typeIconMap: Record<string, { icon: string; labelVi: string; labelEn: string; color: string; bg: string }> = {
-            MEDICAL: { icon: '🚑', labelVi: 'Y Tế', labelEn: 'Medical', color: '#dc2626', bg: 'rgba(220, 38, 38, 0.1)' },
-            FIRE: { icon: '🔥', labelVi: 'Cháy', labelEn: 'Fire', color: '#ea580c', bg: 'rgba(234, 88, 12, 0.1)' },
-            POLICE: { icon: '🚓', labelVi: 'An Ninh', labelEn: 'Police', color: '#2563eb', bg: 'rgba(37, 99, 235, 0.1)' },
-            RESCUE: { icon: '🛟', labelVi: 'Cứu Hộ', labelEn: 'Rescue', color: '#0284c7', bg: 'rgba(2, 132, 199, 0.1)' },
+          const typeLabelMap: Record<string, { labelVi: string; labelEn: string }> = {
+            MEDICAL: { labelVi: 'Y Tế', labelEn: 'Medical' },
+            FIRE: { labelVi: 'Cháy Nổ', labelEn: 'Fire' },
+            POLICE: { labelVi: 'An Ninh', labelEn: 'Police' },
+            RESCUE: { labelVi: 'Cứu Nạn', labelEn: 'Rescue' },
           };
 
-          const typeInfo = typeIconMap[sos.emergencyType] || {
-            icon: '🛟',
+          const typeInfo = typeLabelMap[sos.emergencyType] || {
             labelVi: sos.emergencyType,
             labelEn: sos.emergencyType,
-            color: '#dc2626',
-            bg: 'rgba(220, 38, 38, 0.1)',
           };
 
           const isAssigned = Boolean(sos.assignmentId && sos.status !== 'CANCELLED');
@@ -281,7 +278,7 @@ export const IncidentFeed = ({
               {/* Card Top: Code + Priority Pill + Time Elapsed */}
               <div className="compact-card-top">
                 <div className="code-beacon-wrapper">
-                  <span className={`beacon-dot ${sos.priority === 'CRITICAL' ? 'pulse-red' : ''}`} />
+                  <span className="beacon-dot" />
                   <span className="card-code-mono">{sos.sosCode}</span>
                   {sos.id.length === 24 && (
                     <span
@@ -318,25 +315,21 @@ export const IncidentFeed = ({
                   </h3>
 
                   <div className="compact-chips-row">
-                    <span
-                      className="compact-type-chip"
-                      style={{ color: typeInfo.color, background: typeInfo.bg, borderColor: `${typeInfo.color}33` }}
-                    >
-                      <span>{typeInfo.icon}</span>
-                      <span>{lang === 'vi' ? typeInfo.labelVi : typeInfo.labelEn}</span>
+                    <span className="compact-type-chip">
+                      {lang === 'vi' ? typeInfo.labelVi : typeInfo.labelEn}
                     </span>
 
                     {!isAssigned ? (
                       <span className="compact-status-chip unassigned">
-                        🚨 {lang === 'vi' ? 'Chưa phân công' : 'Unassigned'}
+                        {lang === 'vi' ? 'Chưa gán' : 'Unassigned'}
                       </span>
                     ) : sos.status === 'COMPLETED' ? (
                       <span className="compact-status-chip completed">
-                        ✅ {lang === 'vi' ? 'Hoàn thành' : 'Completed'}
+                        {lang === 'vi' ? 'Hoàn thành' : 'Completed'}
                       </span>
                     ) : (
                       <span className="compact-status-chip enroute">
-                        🚤 {lang === 'vi' ? 'Đang cứu nạn' : 'Active'}
+                        {lang === 'vi' ? 'Đang cứu' : 'Active'}
                       </span>
                     )}
                   </div>
@@ -347,22 +340,21 @@ export const IncidentFeed = ({
                   </div>
                 </div>
 
-                {/* Elegant 50x50 Thumbnail on the right */}
+                {/* Elegant 48x48 Thumbnail on the right */}
                 {sos.imageUrl && (
-                  <div className="compact-card-thumb" title={lang === 'vi' ? 'Xem ảnh hiện trường' : 'Scene Photo'}>
+                  <div className="compact-card-thumb" title={lang === 'vi' ? 'Ảnh hiện trường' : 'Scene Photo'}>
                     <img src={sos.imageUrl} alt="Hiện trường" />
-                    <span className="thumb-cam-pill">📷</span>
                   </div>
                 )}
               </div>
 
-              {/* Card Footer: Citizen name & Victim count */}
+              {/* Card Footer: Citizen name & Victim count (Clean, no emojis) */}
               <div className="compact-card-footer">
                 <span className="compact-citizen-name">
-                  👤 {sos.citizenName}
+                  {sos.citizenName}
                 </span>
                 <span className="compact-affected-count">
-                  👥 {sos.affectedPeople} {lang === 'vi' ? 'người gặp nạn' : 'victims'}
+                  {sos.affectedPeople} {lang === 'vi' ? 'người cần cứu' : 'victims'}
                 </span>
               </div>
             </div>
@@ -371,22 +363,21 @@ export const IncidentFeed = ({
 
         {filteredIncidents.length === 0 && (
           <div className="feed-empty-state">
-            <div style={{ fontSize: 28, marginBottom: 8 }}>🛡️</div>
-            <p style={{ margin: 0, fontWeight: 600 }}>
-              {lang === 'vi' ? 'Không có tín hiệu SOS nào phù hợp với bộ lọc.' : 'No SOS incidents match current filter.'}
+            <p style={{ margin: 0, fontWeight: 600, color: 'var(--sos-text-muted)' }}>
+              {lang === 'vi' ? 'Không có tin SOS nào theo bộ lọc.' : 'No SOS incidents match current filter.'}
             </p>
           </div>
         )}
       </div>
 
-      {/* 5. Sleek Realtime Footer */}
+      {/* 5. Clean, Professional Footer */}
       <div className="feed-footer-summary">
         <div className="feed-footer-live">
-          <span className="live-dot-pulse" />
-          <span>{lang === 'vi' ? 'Trực chiến 24/7' : 'Live Operations'}</span>
+          <span className="live-dot-steady" />
+          <span>{lang === 'vi' ? 'Trực ban tác chiến' : 'Live Operations'}</span>
         </div>
         <span className="feed-footer-count">
-          {filteredIncidents.length} {lang === 'vi' ? 'sự cố đang theo dõi' : 'active incidents'}
+          {filteredIncidents.length} {lang === 'vi' ? 'sự cố' : 'incidents'}
         </span>
       </div>
     </div>

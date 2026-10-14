@@ -11,6 +11,7 @@ const {
   isValidEmail,
   isValidPhone,
   isValidPassword,
+  validatePasswordStrength,
 } = require('../utils/validation.util');
 const path = require('path');
 const fs = require('fs');
@@ -487,27 +488,61 @@ class AuthService {
    * Đặt lại mật khẩu mới bằng token đã nhận
    */
   async resetPassword({ email, token, newPassword }) {
-    if (!token) {
-      throw new ApiError(400, 'Mã xác nhận đặt lại mật khẩu (OTP) là bắt buộc.');
+    if (!email || !isValidEmail(email)) {
+      throw new ApiError(400, 'Địa chỉ email không được để trống và phải có định dạng hợp lệ (có chứa ký tự @ và tên miền).');
     }
 
-    if (!isValidPassword(newPassword, 6)) {
-      throw new ApiError(400, 'Mật khẩu mới phải có ít nhất 6 ký tự.');
+    if (!token || typeof token !== 'string' || !token.trim()) {
+      throw new ApiError(400, 'Mã xác nhận đặt lại mật khẩu (OTP) hoặc mật khẩu khởi tạo từ Email là bắt buộc.');
     }
 
-    const tokenHash = hashToken(token.trim());
-    const query = {
-      resetPasswordTokenHash: tokenHash,
-      resetPasswordExpires: { $gt: new Date() },
-    };
+    const passCheck = validatePasswordStrength(newPassword);
+    if (!passCheck.valid) {
+      throw new ApiError(400, passCheck.message);
+    }
+
+    const cleanToken = token.trim();
+    const tokenHash = hashToken(cleanToken);
+
+    let user = null;
+
     if (email) {
-      query.email = email.toLowerCase().trim();
+      const identifier = email.trim();
+      const candidateUser = await User.findOne({
+        $or: [
+          { email: identifier.toLowerCase() },
+          { phone: identifier },
+        ],
+      });
+
+      if (candidateUser) {
+        // 1. Khớp theo hashToken (mã OTP hoặc token trong link đổi mật khẩu)
+        const isTokenHashValid =
+          candidateUser.resetPasswordTokenHash === tokenHash &&
+          (!candidateUser.resetPasswordExpires || candidateUser.resetPasswordExpires > new Date());
+
+        // 2. Hoặc người dùng nhập trực tiếp Mật khẩu khởi tạo được cấp trong Email
+        let isInitialPasswordValid = false;
+        if (candidateUser.passwordHash) {
+          isInitialPasswordValid = await bcrypt.compare(cleanToken, candidateUser.passwordHash);
+        }
+
+        if (isTokenHashValid || isInitialPasswordValid) {
+          user = candidateUser;
+        }
+      }
     }
 
-    const user = await User.findOne(query);
+    // Nếu chưa tìm thấy hoặc không có email truyền vào, tìm theo resetPasswordTokenHash
+    if (!user) {
+      user = await User.findOne({
+        resetPasswordTokenHash: tokenHash,
+        resetPasswordExpires: { $gt: new Date() },
+      });
+    }
 
     if (!user) {
-      throw new ApiError(400, 'Mã OTP không chính xác hoặc đã hết hạn.');
+      throw new ApiError(400, 'Mã OTP hoặc mật khẩu khởi tạo không chính xác hoặc đã hết hạn.');
     }
 
     // Băm mật khẩu mới

@@ -7,6 +7,8 @@ import {
   X,
   AlertTriangle,
   CheckCircle2,
+  MapPin,
+  ChevronRight,
 } from 'lucide-react';
 import type {
   SosRequest,
@@ -55,7 +57,7 @@ export const DispatchWorkflow = ({
   onUpdateStatus: _onUpdateStatus,
   onOpenReassign,
   onOpenCancel,
-  onToggleCollapse: _onToggleCollapse,
+  onToggleCollapse,
 }: Props) => {
   const { lang: _lang } = useApp();
   const isAdmin = activeOfficer?.role === 'ADMIN';
@@ -166,6 +168,7 @@ export const DispatchWorkflow = ({
       <aside
         className="dispatch-right-col"
         style={{
+          position: 'relative',
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
@@ -176,6 +179,32 @@ export const DispatchWorkflow = ({
           background: 'var(--sos-surface)',
         }}
       >
+        {onToggleCollapse && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            style={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              background: 'none',
+              border: '1px solid var(--sos-border)',
+              borderRadius: 5,
+              padding: '4px 6px',
+              cursor: 'pointer',
+              color: 'var(--sos-text-secondary)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 3,
+              fontSize: 10,
+              fontWeight: 600,
+            }}
+            title="Thu gọn bảng tác chiến để mở rộng bản đồ"
+          >
+            <span>Thu gọn</span>
+            <ChevronRight size={13} />
+          </button>
+        )}
         <div
           style={{
             width: 64,
@@ -239,16 +268,13 @@ export const DispatchWorkflow = ({
         borderLeft: '1px solid var(--sos-border)',
       }}
     >
-      {/* 1. COMPACT TOP HEADER */}
-      {/* 1. ELEGANT TOP HEADER */}
+      {/* 1. CLEAN TOP HEADER */}
       <div
         style={{
           flexShrink: 0,
           padding: '12px 16px',
           borderBottom: '1px solid var(--sos-border)',
-          background: isAssigned
-            ? 'linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(59, 130, 246, 0.02))'
-            : 'linear-gradient(135deg, rgba(220, 38, 38, 0.08), rgba(239, 68, 68, 0.02))',
+          background: 'var(--sos-surface)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -256,23 +282,22 @@ export const DispatchWorkflow = ({
             <span
               style={{
                 display: 'inline-block',
-                width: 9,
-                height: 9,
+                width: 8,
+                height: 8,
                 borderRadius: '50%',
-                background: isAssigned ? '#2563eb' : '#dc2626',
-                boxShadow: isAssigned ? '0 0 10px #2563eb' : '0 0 10px #dc2626',
+                background: isAssigned ? '#1e293b' : '#dc2626',
               }}
             />
             <span
               style={{
                 fontSize: 11,
-                fontWeight: 800,
+                fontWeight: 700,
                 textTransform: 'uppercase',
-                letterSpacing: '0.4px',
-                color: isAssigned ? '#2563eb' : '#dc2626',
+                letterSpacing: '0.3px',
+                color: isAssigned ? '#1e293b' : '#dc2626',
               }}
             >
-              {isAssigned ? 'Đang Điều Động Cứu Nạn' : 'Tín Hiệu SOS Chờ Phân Công'}
+              {isAssigned ? 'Đang Điều Động Cứu Nạn' : 'Yêu Cầu Chờ Phân Công'}
             </span>
           </div>
 
@@ -281,18 +306,41 @@ export const DispatchWorkflow = ({
               className={`badge-priority ${
                 selectedSos.priority === 'CRITICAL' ? 'critical' : selectedSos.priority === 'HIGH' ? 'high' : 'medium'
               }`}
-              style={{ fontSize: 10.5, fontWeight: 800, padding: '2px 7px', borderRadius: 4 }}
+              style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}
             >
               {selectedSos.priority}
             </span>
+            {onToggleCollapse && (
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                style={{
+                  background: 'none',
+                  border: '1px solid var(--sos-border)',
+                  borderRadius: 5,
+                  padding: '3px 6px',
+                  cursor: 'pointer',
+                  color: 'var(--sos-text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 3,
+                  fontSize: 10,
+                  fontWeight: 600,
+                }}
+                title="Thu gọn bảng tác chiến để mở rộng bản đồ"
+              >
+                <span>Thu gọn</span>
+                <ChevronRight size={13} />
+              </button>
+            )}
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 900, color: 'var(--sos-text-primary)', margin: 0, letterSpacing: '-0.3px' }}>
+          <h2 style={{ fontSize: 15, fontWeight: 800, color: 'var(--sos-text-primary)', margin: 0 }}>
             {selectedSos.sosCode}
           </h2>
-          <span style={{ fontSize: 11.5, fontWeight: 700, color: '#dc2626', background: 'rgba(220, 38, 38, 0.08)', padding: '1px 6px', borderRadius: 4 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--sos-text-secondary)', background: 'var(--sos-surface-subtle)', border: '1px solid var(--sos-border)', padding: '1px 6px', borderRadius: 4 }}>
             {selectedSos.emergencyType}
           </span>
           <span style={{ fontSize: 11, color: 'var(--sos-text-muted)' }}>
@@ -312,15 +360,14 @@ export const DispatchWorkflow = ({
           gap: 12,
         }}
       >
-        {/* Citizen Distress Profile (Modern, clear hierarchy) */}
+        {/* Citizen Distress Profile (Clean & professional) */}
         <div
           style={{
             padding: '12px 14px',
             background: 'var(--sos-surface)',
             border: '1px solid var(--sos-border)',
-            borderRadius: 10,
+            borderRadius: 8,
             fontSize: 12,
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
             display: 'flex',
             flexDirection: 'column',
             gap: 8,
@@ -328,9 +375,8 @@ export const DispatchWorkflow = ({
         >
           {/* Row 1: Citizen Name + Direct hotline call */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <span style={{ fontWeight: 800, color: 'var(--sos-text-primary)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span>👤</span>
-              <span>{selectedSos.citizenName}</span>
+            <span style={{ fontWeight: 700, color: 'var(--sos-text-primary)', fontSize: 13 }}>
+              {selectedSos.citizenName}
             </span>
             <a
               href={`tel:${selectedSos.citizenPhone}`}
@@ -338,15 +384,14 @@ export const DispatchWorkflow = ({
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 5,
-                color: '#1d4ed8',
-                fontWeight: 700,
+                color: 'var(--sos-text-primary)',
+                fontWeight: 600,
                 textDecoration: 'none',
-                background: '#eff6ff',
-                padding: '3px 9px',
-                borderRadius: 6,
-                border: '1px solid #bfdbfe',
+                background: 'var(--sos-surface-subtle)',
+                padding: '3px 8px',
+                borderRadius: 5,
+                border: '1px solid var(--sos-border)',
                 fontSize: 11.5,
-                transition: 'all 0.15s ease',
               }}
             >
               <Phone size={12} />
@@ -355,52 +400,21 @@ export const DispatchWorkflow = ({
           </div>
 
           {/* Row 2: Location snippet */}
-          <div style={{ color: 'var(--sos-text-primary)', lineHeight: 1.4, fontSize: 12, display: 'flex', alignItems: 'flex-start', gap: 4 }}>
-            <span style={{ color: '#dc2626', flexShrink: 0 }}>📍</span>
+          <div style={{ color: 'var(--sos-text-primary)', lineHeight: 1.4, fontSize: 12, display: 'flex', alignItems: 'flex-start', gap: 5 }}>
+            <MapPin size={13} style={{ color: '#64748b', flexShrink: 0, marginTop: 1 }} />
             <span><strong>{selectedSos.locationName}</strong></span>
           </div>
 
-          {/* Row 3: Casualties and Vulnerabilities pills */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
-            <span
-              style={{
-                color: '#dc2626',
-                fontWeight: 800,
-                background: 'rgba(220, 38, 38, 0.08)',
-                padding: '2.5px 7px',
-                borderRadius: 5,
-                fontSize: 11,
-                border: '1px solid rgba(220, 38, 38, 0.2)',
-              }}
-            >
-              ⚠️ {selectedSos.affectedPeople} người gặp nạn
+          {/* Row 3: Casualties and Vulnerabilities summary (Clean, single row, no rainbow pills) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, color: 'var(--sos-text-secondary)' }}>
+            <span style={{ fontWeight: 700, color: '#dc2626' }}>
+              {selectedSos.affectedPeople} người gặp nạn
             </span>
-            <span
-              style={{
-                color: '#b45309',
-                fontWeight: 700,
-                background: '#fef3c7',
-                padding: '2.5px 7px',
-                borderRadius: 5,
-                fontSize: 11,
-                border: '1px solid #fde68a',
-              }}
-            >
-              👴 1 người cao tuổi
-            </span>
-            <span
-              style={{
-                color: '#0369a1',
-                fontWeight: 700,
-                background: '#e0f2fe',
-                padding: '2.5px 7px',
-                borderRadius: 5,
-                fontSize: 11,
-                border: '1px solid #bae6fd',
-              }}
-            >
-              👶 1 trẻ nhỏ
-            </span>
+            {selectedSos.affectedPeople > 1 && (
+              <span style={{ color: 'var(--sos-text-muted)', fontSize: 11 }}>
+                (Bao gồm người cao tuổi, trẻ nhỏ)
+              </span>
+            )}
           </div>
 
           {/* Row 4: Narrative Description */}
@@ -582,11 +596,10 @@ export const DispatchWorkflow = ({
                           </div>
 
                           <div style={{ fontSize: 11, color: 'var(--sos-text-secondary)', marginTop: 3 }}>
-                            👤 Chỉ huy: <strong>{leadRescuer?.name || 'Trưởng đội'}</strong> ({team.availableRescuersCount || 4} chiến sĩ)
+                            Chỉ huy: <strong>{leadRescuer?.name || 'Trưởng đội'}</strong> ({team.availableRescuersCount || 4} chiến sĩ)
                           </div>
-                          <div style={{ fontSize: 11, color: 'var(--sos-text-muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span>🚤</span>
-                            <span>{vehicleSpec}</span>
+                          <div style={{ fontSize: 11, color: 'var(--sos-text-muted)', marginTop: 2 }}>
+                            Phương tiện: {vehicleSpec}
                           </div>
                         </div>
                       </div>
@@ -595,8 +608,8 @@ export const DispatchWorkflow = ({
                         <span
                           style={{
                             fontSize: 10,
-                            fontWeight: 800,
-                            background: '#dcfce7',
+                            fontWeight: 700,
+                            background: 'var(--sos-surface-subtle)',
                             color: '#15803d',
                             padding: '2px 6px',
                             borderRadius: 4,
@@ -605,8 +618,8 @@ export const DispatchWorkflow = ({
                         >
                           SẴN SÀNG
                         </span>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: '#0284c7' }}>
-                          ⏱️ {etaText}
+                        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--sos-text-secondary)' }}>
+                          {etaText}
                         </span>
                       </div>
                     </div>
@@ -615,13 +628,13 @@ export const DispatchWorkflow = ({
               })}
             </div>
 
-            {/* Tactical Selected Team Dispatch Plan (Fills void with mission intelligence) */}
+            {/* Tactical Selected Team Dispatch Plan */}
             {currentTeam && (
               <div
                 style={{
                   marginTop: 4,
                   padding: '10px 12px',
-                  borderRadius: 8,
+                  borderRadius: 6,
                   background: 'var(--sos-surface-subtle)',
                   border: '1px solid var(--sos-border)',
                   fontSize: 11.5,
@@ -630,9 +643,8 @@ export const DispatchWorkflow = ({
                   gap: 6,
                 }}
               >
-                <div style={{ fontWeight: 800, color: 'var(--sos-text-primary)', display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span>📋</span>
-                  <span>KẾ HOẠCH XUẤT KÍCH NHANH:</span>
+                <div style={{ fontWeight: 700, color: 'var(--sos-text-primary)' }}>
+                  KẾ HOẠCH ĐIỀU ĐỘNG:
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11 }}>
                   <div>
@@ -641,14 +653,14 @@ export const DispatchWorkflow = ({
                   </div>
                   <div>
                     <span style={{ color: 'var(--sos-text-muted)' }}>Tiếp cận dự kiến:</span>{' '}
-                    <strong style={{ color: '#0284c7' }}>~5-7 phút</strong>
+                    <strong style={{ color: 'var(--sos-text-primary)' }}>~5-7 phút</strong>
                   </div>
                   <div>
-                    <span style={{ color: 'var(--sos-text-muted)' }}>Chỉ huy hiện trường:</span>{' '}
+                    <span style={{ color: 'var(--sos-text-muted)' }}>Chỉ huy:</span>{' '}
                     <strong style={{ color: 'var(--sos-text-primary)' }}>{currentRescuer?.name || 'Trưởng đội'}</strong>
                   </div>
                   <div>
-                    <span style={{ color: 'var(--sos-text-muted)' }}>Phương tiện chính:</span>{' '}
+                    <span style={{ color: 'var(--sos-text-muted)' }}>Phương tiện:</span>{' '}
                     <strong style={{ color: 'var(--sos-text-primary)' }}>{currentVehicle?.name || 'Ca-nô 50HP'}</strong>
                   </div>
                 </div>
@@ -656,7 +668,7 @@ export const DispatchWorkflow = ({
             )}
           </div>
         ) : (
-          /* Active Mission Console when Assigned - GRAB STYLE LIVE TRACKER */
+          /* Active Mission Console when Assigned - Professional Clean CAD */
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {(() => {
               const assignedRescuer = rescueTeams
@@ -666,75 +678,55 @@ export const DispatchWorkflow = ({
 
               const assignedVehicle = vehicles.find((v) => v.id === assignment?.vehicleId);
               const vehiclePlate = assignedVehicle?.plate || '43C-554.12';
-              const isBoat = assignment?.vehicleName?.toLowerCase().includes('ca-nô');
 
               return (
                 <>
-                  {/* Top Status Banner with pulsing Radar dot */}
+                  {/* Top Status Card */}
                   <div
                     style={{
-                      padding: '11px 13px',
-                      borderRadius: 9,
-                      background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
-                      color: '#ffffff',
-                      boxShadow: '0 3px 10px rgba(16, 185, 129, 0.25)',
+                      padding: '10px 12px',
+                      borderRadius: 6,
+                      background: 'var(--sos-surface-subtle)',
+                      border: '1px solid var(--sos-border)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                      <div
-                        style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: '50%',
-                          background: 'rgba(255, 255, 255, 0.22)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 18,
-                        }}
-                      >
-                        {isBoat ? '🚤' : '🚙'}
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.3px', color: '#15803d' }}>
+                        {assignment?.status === 'ASSIGNED' || assignment?.status === 'ACCEPTED'
+                          ? 'Đã điều động • Đang xuất phát'
+                          : assignment?.status === 'ON_THE_WAY'
+                          ? 'Đang di chuyển đến điểm cứu nạn'
+                          : assignment?.status === 'ARRIVED'
+                          ? 'Đã tiếp cận vị trí ngập'
+                          : assignment?.status === 'RESCUING'
+                          ? 'Đang tiến hành ứng cứu'
+                          : 'Đã hoàn thành cứu nạn'}
                       </div>
-                      <div>
-                        <div style={{ fontSize: 12.5, fontWeight: 900, letterSpacing: '0.2px' }}>
-                          {assignment?.status === 'ASSIGNED' || assignment?.status === 'ACCEPTED'
-                            ? 'ĐÃ ĐIỀU ĐỘNG • ĐANG XUẤT PHÁT'
-                            : assignment?.status === 'ON_THE_WAY'
-                            ? 'ĐANG DI CHUYỂN ĐẾN ĐIỂM CỨU NẠN'
-                            : assignment?.status === 'ARRIVED'
-                            ? 'ĐÃ TIẾP CẬN VỊ TRÍ NGẬP'
-                            : assignment?.status === 'RESCUING'
-                            ? 'ĐANG TIẾN HÀNH ỨNG CỨU'
-                            : 'ĐÃ HOÀN THÀNH CỨU NẠN'}
-                        </div>
-                        <div style={{ fontSize: 10.5, opacity: 0.92, display: 'flex', alignItems: 'center', gap: 5, marginTop: 1 }}>
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ffffff', display: 'inline-block' }} />
-                          <span>Đang kết nối GPS trực tiếp từ đội cứu hộ</span>
-                        </div>
+                      <div style={{ fontSize: 10.5, color: 'var(--sos-text-muted)', marginTop: 2 }}>
+                        Định vị GPS trực tiếp từ đội cứu hộ
                       </div>
                     </div>
 
                     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <div style={{ fontSize: 17, fontWeight: 900, lineHeight: 1 }}>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--sos-text-primary)' }}>
                         ~{assignment?.etaMinutes ?? 7}p
                       </div>
-                      <div style={{ fontSize: 9.5, opacity: 0.85, fontWeight: 700, marginTop: 2 }}>
+                      <div style={{ fontSize: 9.5, color: 'var(--sos-text-muted)', fontWeight: 600 }}>
                         DỰ KIẾN ĐẾN
                       </div>
                     </div>
                   </div>
 
-                  {/* Grab Driver & Vehicle Card */}
+                  {/* Rescuer & Vehicle Card */}
                   <div
                     style={{
                       padding: '12px 13px',
-                      borderRadius: 9,
+                      borderRadius: 8,
                       background: 'var(--sos-surface)',
                       border: '1px solid var(--sos-border)',
-                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 10,
@@ -745,54 +737,29 @@ export const DispatchWorkflow = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div
                           style={{
-                            width: 42,
-                            height: 42,
+                            width: 38,
+                            height: 38,
                             borderRadius: '50%',
-                            background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+                            background: '#1e293b',
                             color: '#ffffff',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            fontSize: 17,
-                            fontWeight: 800,
-                            position: 'relative',
+                            fontSize: 14,
+                            fontWeight: 700,
                             flexShrink: 0,
                           }}
                         >
                           {assignment?.rescuerName ? assignment.rescuerName.charAt(0) : 'C'}
-                          <span
-                            style={{
-                              position: 'absolute',
-                              bottom: 0,
-                              right: 0,
-                              width: 11,
-                              height: 11,
-                              borderRadius: '50%',
-                              background: '#10b981',
-                              border: '2px solid #ffffff',
-                            }}
-                          />
                         </div>
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--sos-text-primary)' }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--sos-text-primary)' }}>
                               {assignment?.rescuerName || 'Cứu Hộ Viên'}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: 10,
-                                fontWeight: 800,
-                                background: '#fef3c7',
-                                color: '#b45309',
-                                padding: '1px 5px',
-                                borderRadius: 4,
-                              }}
-                            >
-                              ⭐ 5.0
                             </span>
                           </div>
                           <div style={{ fontSize: 11, color: 'var(--sos-text-secondary)', marginTop: 1 }}>
-                            {assignment?.rescuerRole || 'Chỉ Huy Hiện Trường'} • <strong>{assignment?.rescueTeamName}</strong>
+                            {assignment?.rescuerRole || 'Chỉ Huy'} • <strong>{assignment?.rescueTeamName}</strong>
                           </div>
                         </div>
                       </div>
@@ -801,21 +768,21 @@ export const DispatchWorkflow = ({
                       <a
                         href={`tel:${rescuerPhone}`}
                         style={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: '50%',
-                          background: '#10b981',
-                          color: '#ffffff',
+                          width: 32,
+                          height: 32,
+                          borderRadius: 6,
+                          background: 'var(--sos-surface-subtle)',
+                          border: '1px solid var(--sos-border)',
+                          color: 'var(--sos-text-primary)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           textDecoration: 'none',
-                          boxShadow: '0 2px 6px rgba(16, 185, 129, 0.4)',
                           flexShrink: 0,
                         }}
                         title={`Gọi cho đội cứu hộ: ${rescuerPhone}`}
                       >
-                        <Phone size={16} />
+                        <Phone size={14} />
                       </a>
                     </div>
 
@@ -824,7 +791,7 @@ export const DispatchWorkflow = ({
                       style={{
                         padding: '8px 10px',
                         borderRadius: 6,
-                        background: 'var(--sos-surface-subtle, #f8fafc)',
+                        background: 'var(--sos-surface-subtle)',
                         border: '1px solid var(--sos-border)',
                         display: 'flex',
                         alignItems: 'center',
@@ -832,13 +799,10 @@ export const DispatchWorkflow = ({
                         fontSize: 11,
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 15 }}>{isBoat ? '🚤' : '🚙'}</span>
-                        <div>
-                          <strong style={{ color: 'var(--sos-text-primary)' }}>{assignment?.vehicleName}</strong>
-                          <div style={{ fontSize: 10, color: 'var(--sos-text-muted)' }}>
-                            Sức chứa: {assignment?.vehicleCapacity || '6 người'}
-                          </div>
+                      <div>
+                        <strong style={{ color: 'var(--sos-text-primary)' }}>{assignment?.vehicleName}</strong>
+                        <div style={{ fontSize: 10, color: 'var(--sos-text-muted)' }}>
+                          Sức chứa: {assignment?.vehicleCapacity || '6 người'}
                         </div>
                       </div>
 
@@ -846,11 +810,11 @@ export const DispatchWorkflow = ({
                         style={{
                           padding: '2px 8px',
                           borderRadius: 4,
-                          background: '#fef08a',
-                          border: '1.5px solid #ca8a04',
-                          color: '#713f12',
-                          fontWeight: 900,
-                          letterSpacing: '0.5px',
+                          background: 'var(--sos-surface)',
+                          border: '1px solid var(--sos-border)',
+                          color: 'var(--sos-text-primary)',
+                          fontWeight: 700,
+                          fontFamily: 'monospace',
                           fontSize: 11,
                         }}
                       >
@@ -921,7 +885,10 @@ export const DispatchWorkflow = ({
                   <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
                     <button
                       type="button"
-                      onClick={onOpenReassign}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenReassign();
+                      }}
                       style={{
                         flex: 1,
                         padding: '8px 10px',
@@ -944,7 +911,10 @@ export const DispatchWorkflow = ({
 
                     <button
                       type="button"
-                      onClick={onOpenCancel}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenCancel();
+                      }}
                       style={{
                         flex: 1,
                         padding: '8px 10px',
@@ -991,24 +961,22 @@ export const DispatchWorkflow = ({
             onClick={() => setIsConfirmModalOpen(true)}
             style={{
               width: '100%',
-              padding: '12px 18px',
-              background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+              padding: '11px 18px',
+              background: '#dc2626',
               color: '#ffffff',
               border: 'none',
-              borderRadius: 8,
+              borderRadius: 6,
               fontSize: 13,
-              fontWeight: 800,
+              fontWeight: 700,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 8,
-              boxShadow: '0 4px 14px rgba(220, 38, 38, 0.35)',
-              letterSpacing: '0.3px',
+              letterSpacing: '0.2px',
               transition: 'all 0.15s ease',
             }}
           >
-            <span>🚨</span>
             <span>XÁC NHẬN PHÂN CÔNG & XUẤT KÍCH</span>
           </button>
           <div style={{ textAlign: 'center', fontSize: 10, color: 'var(--sos-text-muted)' }}>
@@ -1021,12 +989,19 @@ export const DispatchWorkflow = ({
       {isLightboxOpen && selectedSos.imageUrl && (
         <div
           className="sos-modal-overlay"
-          onClick={() => setIsLightboxOpen(false)}
-          style={{ zIndex: 1000 }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsLightboxOpen(false);
+          }}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{ zIndex: 10000 }}
         >
           <div
             className="sos-modal-window"
             onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
             style={{ width: 640, maxWidth: '95vw', padding: 0, background: '#000000', overflow: 'hidden' }}
           >
             <div
@@ -1040,7 +1015,7 @@ export const DispatchWorkflow = ({
               }}
             >
               <span style={{ fontSize: 12, fontWeight: 700 }}>
-                📷 Ảnh hiện trường: {selectedSos.sosCode}
+                Ảnh hiện trường: {selectedSos.sosCode}
               </span>
               <button
                 type="button"
@@ -1071,12 +1046,19 @@ export const DispatchWorkflow = ({
       {isConfirmModalOpen && (
         <div
           className="sos-modal-overlay"
-          onClick={() => setIsConfirmModalOpen(false)}
-          style={{ zIndex: 1000 }}
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsConfirmModalOpen(false);
+          }}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{ zIndex: 10000 }}
         >
           <div
             className="sos-modal-window"
             onClick={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
             style={{ width: 480, maxWidth: '92vw' }}
           >
             <div className="sos-modal-header" style={{ background: '#fef2f2', borderBottom: '1px solid #fee2e2' }}>

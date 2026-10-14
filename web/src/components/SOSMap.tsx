@@ -18,6 +18,7 @@ import {
     Landmark,
     Shield
 } from 'lucide-react';
+import { GOOGLE_MAP_TILES } from '../services/mapGeoService';
 
 // Fix lỗi tàng hình Icon mặc định của Leaflet khi build bằng React/Vite
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -439,8 +440,8 @@ const SOSMap: React.FC<SOSMapProps> = ({
 
     // Google Maps Tile URLs
     const googleTilesUrl = mapType === 'streets' 
-        ? 'https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'
-        : 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}';
+        ? GOOGLE_MAP_TILES.STREETS_CLEAN
+        : GOOGLE_MAP_TILES.SATELLITE;
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>

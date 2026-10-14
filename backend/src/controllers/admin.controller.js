@@ -30,6 +30,30 @@ class AdminController {
   }
 
   /**
+   * PATCH /admin/users/:id
+   */
+  async updateUser(req, res, next) {
+    try {
+      const user = await adminService.updateUser(req.params.id, req.body);
+
+      if (req.user) {
+        await auditService.log({
+          actorId: req.user._id,
+          actorRole: 'ADMIN',
+          action: 'ADMIN_UPDATE_USER',
+          entityType: 'User',
+          entityId: req.params.id,
+          metadata: { updatedFields: Object.keys(req.body) },
+        });
+      }
+
+      return sendSuccess(res, 200, 'Cập nhật thông tin tài khoản thành công', user);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * PATCH /admin/users/:id/status
    */
   async updateUserStatus(req, res, next) {
@@ -112,6 +136,33 @@ class AdminController {
       });
 
       return sendSuccess(res, 200, result.message);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /admin/users
+   * Tạo tài khoản người dùng mới (đặc biệt hỗ trợ LOCAL_AUTHORITY)
+   */
+  async createUser(req, res, next) {
+    try {
+      const newUser = await adminService.createUser(req.body);
+
+      await auditService.log({
+        actorId: req.user._id,
+        actorRole: 'ADMIN',
+        action: 'ADMIN_CREATE_USER',
+        entityType: 'User',
+        entityId: newUser._id,
+        metadata: {
+          roles: newUser.roles,
+          phone: newUser.phone,
+          areaId: newUser.authority?.areaId,
+        },
+      });
+
+      return sendSuccess(res, 201, 'Tạo tài khoản cán bộ địa phương thành công', newUser);
     } catch (error) {
       next(error);
     }

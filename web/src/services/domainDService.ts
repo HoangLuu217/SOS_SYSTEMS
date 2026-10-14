@@ -147,7 +147,16 @@ class DomainDService {
     this.sosRequests = loadedSos.filter(
       (s) => !s.sosCode.includes('8938') && !s.locationName.includes('Nam Kỳ Khởi Nghĩa')
     );
-    if (this.sosRequests.length !== loadedSos.length) {
+    // Đảm bảo các ca SOS khởi tạo mới (như Phường Hòa Xuân) được merge vào nếu localStorage chưa có
+    const existingIds = new Set(this.sosRequests.map((s) => s.id));
+    let hasNew = false;
+    for (const initSos of INITIAL_SOS_REQUESTS) {
+      if (!existingIds.has(initSos.id)) {
+        this.sosRequests.push(initSos);
+        hasNew = true;
+      }
+    }
+    if (this.sosRequests.length !== loadedSos.length || hasNew) {
       this.save(STORAGE_SOS, this.sosRequests);
     }
     this.rescueTeams = INITIAL_RESCUE_TEAMS;
@@ -563,6 +572,15 @@ class DomainDService {
         matched.jurisdictionAreaId = cfg.areaId;
         matched.jurisdictionAreaName = cfg.name;
         matched.districtName = cfg.district;
+      } else if (user.authority?.areaId) {
+        const directArea = this.areas.find(
+          (a) =>
+            a.id === user.authority.areaId ||
+            a.code === user.authority.areaId ||
+            (user.authority.areaName && a.name.toLowerCase().includes(user.authority.areaName.toLowerCase()))
+        );
+        matched.jurisdictionAreaId = directArea ? directArea.id : user.authority.areaId;
+        matched.jurisdictionAreaName = directArea ? directArea.name : (user.authority.areaName || 'Khu vực quản lý');
       }
       this.activeOfficerId = matched.id;
       this.save(STORAGE_ACTIVE_OFFICER, matched.id);

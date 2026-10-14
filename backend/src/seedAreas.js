@@ -2,58 +2,91 @@ const mongoose = require('mongoose');
 require('dotenv').config();
 const { AdministrativeArea } = require('./models');
 
-const AREAS_TO_SEED = [
-  { name: 'Phường Hải Châu', code: 'DAD-HC-01', type: 'WARD' },
-  { name: 'Phường Hòa Cường', code: 'DAD-HC-02', type: 'WARD' },
-  { name: 'Phường Thanh Khê', code: 'DAD-TK-01', type: 'WARD' },
-  { name: 'Phường An Khê', code: 'DAD-TK-02', type: 'WARD' },
-  { name: 'Phường Sơn Trà', code: 'DAD-ST-01', type: 'WARD' },
-  { name: 'Phường An Hải', code: 'DAD-ST-02', type: 'WARD' },
-  { name: 'Phường Ngũ Hành Sơn', code: 'DAD-NHS-01', type: 'WARD' },
-  { name: 'Phường Cẩm Lệ', code: 'DAD-CL-01', type: 'WARD' },
-  { name: 'Phường Hòa Xuân', code: 'DAD-CL-02', type: 'WARD' },
-  { name: 'Phường Liên Chiểu', code: 'DAD-LC-01', type: 'WARD' },
-  { name: 'Phường Hòa Khánh', code: 'DAD-LC-02', type: 'WARD' },
-  { name: 'Phường Hải Vân', code: 'DAD-LC-03', type: 'WARD' },
-  { name: 'Xã Hòa Vang', code: 'DAD-HV-01', type: 'WARD' },
-  { name: 'Xã Bà Nà', code: 'DAD-HV-02', type: 'WARD' },
-  { name: 'Xã Hòa Tiến', code: 'DAD-HV-03', type: 'WARD' },
-  { name: 'Huyện Hoàng Sa', code: 'DAD-HS', type: 'DISTRICT' },
-];
+function consolidateWardName(name) {
+  return name.replace(/\s+(Bắc|Nam|Đông|Tây|1|2|I|II)$/i, '').trim();
+}
 
-async function seed() {
+/**
+ * Script đồng bộ khu vực hành chính trực tiếp từ API bản đồ Việt Nam (KHÔNG DÙNG DỮ LIỆU CỨNG)
+ */
+async function syncFromLiveApi() {
   await mongoose.connect(process.env.MONGODB_URI);
+  console.log('Connected to MongoDB:', process.env.MONGODB_URI);
+
+  console.log('Đang gọi trực tiếp API bản đồ Việt Nam...');
+  const res = await fetch('https://provinces.open-api.vn/api/p/48?depth=3');
+  if (!res.ok) throw new Error('Không thể gọi API: ' + res.status);
+  const provData = await res.json();
+
+  // 1. Tỉnh/Thành gốc
   let danang = await AdministrativeArea.findOne({ code: 'DANANG' });
   if (!danang) {
     danang = await AdministrativeArea.create({
-      name: 'Thành phố Đà Nẵng',
+      name: provData.name || 'Thành phố Đà Nẵng',
       code: 'DANANG',
       type: 'PROVINCE',
       status: 'ACTIVE',
     });
   }
 
-  for (const a of AREAS_TO_SEED) {
-    await AdministrativeArea.findOneAndUpdate(
-      { code: a.code },
+  // 2. 8 Quận / Huyện từ API
+  const districtMap = {};
+  for (const [idx, d] of provData.districts.entries()) {
+    const code = `DAD-D-${idx + 1}`;
+    const doc = await AdministrativeArea.findOneAndUpdate(
+      { code },
       {
         $set: {
-          name: a.name,
-          code: a.code,
-          type: a.type,
+          name: d.name,
+          code,
+          type: 'DISTRICT',
           parentId: danang._id,
           status: 'ACTIVE',
         },
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
+    );
+    districtMap[d.name] = doc._id;
+  }
+  console.log(`Đã đồng bộ ${Object.keys(districtMap).length} Quận/Huyện từ API.`);
+
+  // 3. Phường / Xã từ API (Tự động gộp các phường tách nhỏ như Phường An Hải)
+  const mergedWardsMap = new Map();
+  provData.districts.forEach((d) => {
+    (d.wards || []).forEach((w) => {
+      const unifiedName = consolidateWardName(w.name);
+      const key = `${d.name}::${unifiedName}`;
+      if (!mergedWardsMap.has(key)) {
+        mergedWardsMap.set(key, { district: d.name, name: unifiedName, code: w.code });
+      }
+    });
+  });
+
+  let wardIdx = 1;
+  for (const item of mergedWardsMap.values()) {
+    const code = `DAD-W-${wardIdx++}`;
+    const parentId = districtMap[item.district] || danang._id;
+    await AdministrativeArea.findOneAndUpdate(
+      { code },
+      {
+        $set: {
+          name: item.name,
+          code,
+          type: 'WARD',
+          parentId,
+          status: 'ACTIVE',
+        },
+      },
+      { upsert: true, returnDocument: 'after' }
     );
   }
 
-  console.log('✅ Đã đồng bộ các khu vực hành chính vào MongoDB!');
-  process.exit(0);
+  console.log(`Đã đồng bộ ${mergedWardsMap.size} Phường/Xã hợp nhất trực tiếp từ API vào CSDL.`);
+  await mongoose.disconnect();
+  console.log('Hoàn tất đồng bộ từ API.');
 }
 
-seed().catch((err) => {
+syncFromLiveApi().catch((err) => {
   console.error(err);
   process.exit(1);
 });

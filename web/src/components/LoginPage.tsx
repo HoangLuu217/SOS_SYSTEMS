@@ -12,9 +12,12 @@ import {
   Radio,
   FileText,
   X,
-  CheckCircle2
+  CheckCircle2,
+  KeyRound,
+  Mail,
+  Check,
 } from 'lucide-react';
-import { loginApi, logoutApi } from '../services/api';
+import { loginApi, logoutApi, resetPasswordApi } from '../services/api';
 import type { User } from '../types/auth';
 import { domainDService } from '../services/domainDService';
 import { useApp } from '../context/AppContext';
@@ -23,9 +26,16 @@ import './Login.css';
 interface LoginPageProps {
   onEnterConsole?: (targetPortal?: 'admin' | 'author') => void;
   onLoginSuccess?: (user: User) => void;
+  isResetPasswordMode?: boolean;
+  onCloseResetMode?: () => void;
 }
 
-export const LoginPage = ({ onEnterConsole, onLoginSuccess }: LoginPageProps = {}) => {
+export const LoginPage = ({
+  onEnterConsole,
+  onLoginSuccess,
+  isResetPasswordMode = false,
+  onCloseResetMode,
+}: LoginPageProps = {}) => {
   const { lang, toggleLang, theme, toggleTheme } = useApp();
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
@@ -36,21 +46,60 @@ export const LoginPage = ({ onEnterConsole, onLoginSuccess }: LoginPageProps = {
   const [user, setUser] = useState<User | null>(null);
   const [termsModal, setTermsModal] = useState<'terms' | 'privacy' | null>(null);
 
-  // Restore saved session or remembered password on mount
+  // States phục vụ modal Đổi / Đặt lại mật khẩu (từ link email hoặc nút Quên mật khẩu)
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
+  const [resetSubmitting, setResetSubmitting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetSuccess, setResetSuccess] = useState<string | null>(null);
+
+  // Validation rules real-time
+  const isValidEmailFormat = (emailStr: string): boolean => {
+    if (!emailStr || !emailStr.trim()) return false;
+    return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(emailStr.trim());
+  };
+
+  const passLengthOk = newPassword.length >= 8;
+  const passUpperOk = /[A-Z]/.test(newPassword);
+  const passLowerOk = /[a-z]/.test(newPassword);
+  const passNumberOk = /[0-9]/.test(newPassword);
+  const passSpecialOk = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/.test(newPassword);
+  const passScore = [passLengthOk, passUpperOk, passLowerOk, passNumberOk, passSpecialOk].filter(Boolean).length;
+  const isConfirmMatch = confirmNewPassword.length > 0 && newPassword === confirmNewPassword;
+  const isEmailValid = isValidEmailFormat(resetEmail);
+
+  // Restore saved session or remembered password on mount & check reset link from email
   useEffect(() => {
-    // 1. Check if user already logged in
-    const savedUser = localStorage.getItem('sos_auth_user');
-    if (savedUser) {
-      try {
-        const parsed = JSON.parse(savedUser) as User;
-        if (hasAuthorizedRole(parsed.roles)) {
-          setUser(parsed);
-          return;
-        } else {
+    // 0. Check reset password link query params: ?view=reset&email=...&token=...
+    const urlParams = new URLSearchParams(window.location.search);
+    const viewParam = urlParams.get('view');
+    const emailParam = urlParams.get('email');
+    const tokenParam = urlParams.get('token');
+    if (viewParam === 'reset' || tokenParam) {
+      if (emailParam) setResetEmail(emailParam);
+      if (tokenParam) setResetToken(tokenParam);
+      setShowResetModal(true);
+    }
+    // 1. Check if user already logged in (chỉ đọc nếu không ở chế độ reset password)
+    if (!isResetPasswordMode && viewParam !== 'reset' && !tokenParam) {
+      const savedUser = localStorage.getItem('sos_auth_user');
+      if (savedUser) {
+        try {
+          const parsed = JSON.parse(savedUser) as User;
+          if (hasAuthorizedRole(parsed.roles)) {
+            setUser(parsed);
+            return;
+          } else {
+            localStorage.removeItem('sos_auth_user');
+          }
+        } catch {
           localStorage.removeItem('sos_auth_user');
         }
-      } catch {
-        localStorage.removeItem('sos_auth_user');
       }
     }
 
@@ -63,7 +112,7 @@ export const LoginPage = ({ onEnterConsole, onLoginSuccess }: LoginPageProps = {
       if (savedAcc) setAccount(savedAcc);
       if (savedPass) setPassword(savedPass);
     }
-  }, []);
+  }, [isResetPasswordMode]);
 
   // Strict check: Only LOCAL_AUTHORITY and ADMIN
   const hasAuthorizedRole = (roles: string[] | undefined): boolean => {
@@ -123,7 +172,7 @@ export const LoginPage = ({ onEnterConsole, onLoginSuccess }: LoginPageProps = {
         // Tự động chuyển hướng ngay lập tức vào giao diện điều hành tương ứng
         const isAuth = loggedInUser.roles.includes('LOCAL_AUTHORITY') && !loggedInUser.roles.includes('ADMIN');
         const target = isAuth ? 'author' : 'admin';
-        const targetPath = isAuth ? '/localauthority/map' : '/admin/map';
+        const targetPath = isAuth ? '/local_authority/map' : '/admin/map';
         localStorage.setItem('sos_active_portal', target);
         window.history.replaceState(null, '', targetPath);
         if (onLoginSuccess) {
@@ -158,6 +207,462 @@ export const LoginPage = ({ onEnterConsole, onLoginSuccess }: LoginPageProps = {
     }
     setErrorMsg(null);
     setLoading(false);
+  };
+
+  const handleResetPasswordSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setResetError(null);
+    setResetSuccess(null);
+
+    const cleanEmail = resetEmail.trim();
+    if (!cleanEmail) {
+      setResetError('Email tài khoản không được để trống.');
+      return;
+    }
+    if (!cleanEmail.includes('@')) {
+      setResetError('Email phải có ký tự "@". Ví dụ: canbo@danang.gov.vn');
+      return;
+    }
+    if (!isValidEmailFormat(cleanEmail)) {
+      setResetError('Định dạng email không hợp lệ (cần có ký tự @ và tên miền, ví dụ: canbo@danang.gov.vn).');
+      return;
+    }
+
+    const cleanToken = resetToken.trim();
+    if (!cleanToken) {
+      setResetError('Vui lòng cung cấp Mã OTP / Token xác nhận hoặc Mật khẩu khởi tạo từ email.');
+      return;
+    }
+
+    if (!newPassword) {
+      setResetError('Mật khẩu mới không được để trống.');
+      return;
+    }
+    if (!passLengthOk) {
+      setResetError('Mật khẩu mới phải có tối thiểu 8 ký tự.');
+      return;
+    }
+    if (!passUpperOk) {
+      setResetError('Mật khẩu mới phải chứa ít nhất 1 chữ cái in hoa (A-Z).');
+      return;
+    }
+    if (!passLowerOk) {
+      setResetError('Mật khẩu mới phải chứa ít nhất 1 chữ cái in thường (a-z).');
+      return;
+    }
+    if (!passNumberOk) {
+      setResetError('Mật khẩu mới phải chứa ít nhất 1 chữ số (0-9).');
+      return;
+    }
+    if (!passSpecialOk) {
+      setResetError('Mật khẩu mới phải chứa ít nhất 1 ký tự đặc biệt (!@#$%^&*...).');
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setResetError('Mật khẩu xác nhận không khớp với mật khẩu mới.');
+      return;
+    }
+
+    setResetSubmitting(true);
+    try {
+      const res = await resetPasswordApi({
+        email: cleanEmail,
+        token: cleanToken,
+        newPassword: newPassword,
+      });
+      setResetSuccess(res.message || '✅ Đặt lại mật khẩu thành công! Đang chuyển đến trang đăng nhập...');
+      setAccount(cleanEmail);
+      setPassword('');
+      setTimeout(() => {
+        setShowResetModal(false);
+        if (onCloseResetMode) {
+          onCloseResetMode();
+        }
+        setResetSuccess(null);
+        setNewPassword('');
+        setConfirmNewPassword('');
+      }, 1600);
+    } catch (err: any) {
+      setResetError(err?.message || 'Không thể đổi mật khẩu. Vui lòng kiểm tra lại thông tin xác nhận.');
+    } finally {
+      setResetSubmitting(false);
+    }
+  };
+
+  const renderResetPasswordContent = (isDirectPage: boolean) => {
+    return (
+      <div>
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 50,
+              height: 50,
+              borderRadius: 14,
+              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+              boxShadow: '0 8px 18px -4px rgba(2, 132, 199, 0.45)',
+              marginBottom: 12,
+            }}
+          >
+            <KeyRound size={26} color="#ffffff" />
+          </div>
+          <h2 style={{ margin: '0 0 6px', fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
+            Thiết Lập Mật Khẩu Mới
+          </h2>
+          <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
+            Nhập email và mã xác thực để kích hoạt mật khẩu bảo mật cao cho tài khoản của bạn
+          </p>
+        </div>
+
+        {/* Error / Success Notifications */}
+        {resetError && (
+          <div
+            style={{
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              color: '#dc2626',
+              padding: '10px 14px',
+              borderRadius: '10px',
+              fontSize: '13px',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <AlertTriangle size={18} style={{ flexShrink: 0 }} />
+            <span>{resetError}</span>
+          </div>
+        )}
+
+        {resetSuccess && (
+          <div
+            style={{
+              backgroundColor: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              color: '#059669',
+              padding: '12px 14px',
+              borderRadius: '10px',
+              fontSize: '13.5px',
+              fontWeight: 600,
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <CheckCircle2 size={20} style={{ flexShrink: 0 }} />
+            <span>{resetSuccess}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleResetPasswordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* Field 1: Email */}
+          <div>
+            <label style={{ fontSize: '12.5px', display: 'block', marginBottom: '6px', fontWeight: 700, color: '#1e293b' }}>
+              Email tài khoản <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <div style={{ position: 'relative' }}>
+              <Mail size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <input
+                type="email"
+                required
+                placeholder="Ví dụ: canbo@danang.gov.vn"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '11px 12px 11px 38px',
+                  borderRadius: '10px',
+                  border: resetEmail && !isEmailValid ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  boxSizing: 'border-box',
+                  background: '#ffffff',
+                  outline: 'none',
+                }}
+              />
+            </div>
+            {resetEmail && !resetEmail.includes('@') && (
+              <div style={{ fontSize: '11.5px', color: '#ef4444', marginTop: 4, fontWeight: 500 }}>
+                ⚠️ Email phải chứa ký tự '@'
+              </div>
+            )}
+            {resetEmail && resetEmail.includes('@') && !isEmailValid && (
+              <div style={{ fontSize: '11.5px', color: '#f59e0b', marginTop: 4, fontWeight: 500 }}>
+                ⚠️ Vui lòng nhập đúng định dạng email (ví dụ: canbo@danang.gov.vn)
+              </div>
+            )}
+            {resetEmail && isEmailValid && (
+              <div style={{ fontSize: '11.5px', color: '#10b981', marginTop: 4, fontWeight: 500 }}>
+                ✓ Định dạng email hợp lệ
+              </div>
+            )}
+          </div>
+
+          {/* Field 2: Token / OTP */}
+          <div>
+            <label style={{ fontSize: '12.5px', display: 'block', marginBottom: '6px', fontWeight: 700, color: '#1e293b' }}>
+              Mã OTP / Token xác nhận hoặc Mật khẩu khởi tạo từ Email <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <div style={{ position: 'relative' }}>
+              <KeyRound size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <input
+                type="text"
+                required
+                placeholder="Nhập mã OTP hoặc mật khẩu khởi tạo từ email"
+                value={resetToken}
+                onChange={(e) => setResetToken(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '11px 12px 11px 38px',
+                  borderRadius: '10px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '15px',
+                  fontFamily: 'monospace',
+                  letterSpacing: '1px',
+                  fontWeight: 700,
+                  boxSizing: 'border-box',
+                  background: '#ffffff',
+                  outline: 'none',
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Field 3: Mật khẩu mới */}
+          <div>
+            <label style={{ fontSize: '12.5px', display: 'block', marginBottom: '6px', fontWeight: 700, color: '#1e293b' }}>
+              Mật khẩu mới <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <div style={{ position: 'relative' }}>
+              <Lock size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <input
+                type={showNewPassword ? 'text' : 'password'}
+                required
+                placeholder="Tối thiểu 8 ký tự, có in hoa, thường, số, ký tự đặc biệt"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '11px 40px 11px 38px',
+                  borderRadius: '10px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  boxSizing: 'border-box',
+                  background: '#ffffff',
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                style={{
+                  position: 'absolute',
+                  right: 10,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#64748b',
+                  padding: 4,
+                  display: 'flex',
+                }}
+              >
+                {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+
+            {/* Password Strength Meter */}
+            {newPassword && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ display: 'flex', gap: 4, height: 4, marginBottom: 5 }}>
+                  {[1, 2, 3, 4, 5].map((lvl) => (
+                    <div
+                      key={lvl}
+                      style={{
+                        flex: 1,
+                        borderRadius: 2,
+                        backgroundColor:
+                          lvl <= passScore
+                            ? passScore <= 2
+                              ? '#ef4444'
+                              : passScore <= 3
+                              ? '#f59e0b'
+                              : passScore <= 4
+                              ? '#0284c7'
+                              : '#10b981'
+                            : '#e2e8f0',
+                        transition: 'background-color 0.2s',
+                      }}
+                    />
+                  ))}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#64748b' }}>
+                  <span>Độ mạnh mật khẩu:</span>
+                  <span
+                    style={{
+                      fontWeight: 700,
+                      color: passScore <= 2 ? '#ef4444' : passScore <= 3 ? '#f59e0b' : passScore <= 4 ? '#0284c7' : '#10b981',
+                    }}
+                  >
+                    {passScore <= 2 ? 'Yếu' : passScore <= 3 ? 'Trung bình' : passScore <= 4 ? 'Khá' : 'Rất an toàn'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Checklist Tiêu Chuẩn Bảo Mật */}
+            <div
+              style={{
+                background: 'rgba(248, 250, 252, 0.85)',
+                border: '1px solid #e2e8f0',
+                borderRadius: 8,
+                padding: '8px 10px',
+                marginTop: 8,
+                fontSize: '11.5px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: passLengthOk ? '#10b981' : '#64748b', fontWeight: passLengthOk ? 600 : 400 }}>
+                {passLengthOk ? <Check size={13} strokeWidth={3} /> : <span style={{ width: 13, textAlign: 'center' }}>•</span>}
+                <span>Tối thiểu 8 ký tự</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: passUpperOk ? '#10b981' : '#64748b', fontWeight: passUpperOk ? 600 : 400 }}>
+                {passUpperOk ? <Check size={13} strokeWidth={3} /> : <span style={{ width: 13, textAlign: 'center' }}>•</span>}
+                <span>Có ít nhất 1 chữ cái in hoa (A-Z)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: passLowerOk ? '#10b981' : '#64748b', fontWeight: passLowerOk ? 600 : 400 }}>
+                {passLowerOk ? <Check size={13} strokeWidth={3} /> : <span style={{ width: 13, textAlign: 'center' }}>•</span>}
+                <span>Có ít nhất 1 chữ cái in thường (a-z)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: passNumberOk ? '#10b981' : '#64748b', fontWeight: passNumberOk ? 600 : 400 }}>
+                {passNumberOk ? <Check size={13} strokeWidth={3} /> : <span style={{ width: 13, textAlign: 'center' }}>•</span>}
+                <span>Có ít nhất 1 chữ số (0-9)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: passSpecialOk ? '#10b981' : '#64748b', fontWeight: passSpecialOk ? 600 : 400 }}>
+                {passSpecialOk ? <Check size={13} strokeWidth={3} /> : <span style={{ width: 13, textAlign: 'center' }}>•</span>}
+                <span>Có ít nhất 1 ký tự đặc biệt (!@#$%^&*...)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Field 4: Xác nhận mật khẩu mới */}
+          <div>
+            <label style={{ fontSize: '12.5px', display: 'block', marginBottom: '6px', fontWeight: 700, color: '#1e293b' }}>
+              Xác nhận mật khẩu mới <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <div style={{ position: 'relative' }}>
+              <Lock size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <input
+                type={showConfirmNewPassword ? 'text' : 'password'}
+                required
+                placeholder="Nhập lại chính xác mật khẩu mới"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '11px 40px 11px 38px',
+                  borderRadius: '10px',
+                  border: confirmNewPassword
+                    ? isConfirmMatch
+                      ? '1.5px solid #10b981'
+                      : '1.5px solid #ef4444'
+                    : '1px solid #cbd5e1',
+                  fontSize: '14px',
+                  boxSizing: 'border-box',
+                  background: '#ffffff',
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
+                style={{
+                  position: 'absolute',
+                  right: 10,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#64748b',
+                  padding: 4,
+                  display: 'flex',
+                }}
+              >
+                {showConfirmNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+            {confirmNewPassword && !isConfirmMatch && (
+              <div style={{ fontSize: '11.5px', color: '#ef4444', marginTop: 4, fontWeight: 500 }}>
+                ✗ Mật khẩu xác nhận chưa khớp
+              </div>
+            )}
+            {confirmNewPassword && isConfirmMatch && (
+              <div style={{ fontSize: '11.5px', color: '#10b981', marginTop: 4, fontWeight: 500 }}>
+                ✓ Mật khẩu xác nhận đã trùng khớp hoàn toàn
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+            <button
+              type="submit"
+              disabled={resetSubmitting}
+              style={{
+                width: '100%',
+                padding: '12px 20px',
+                borderRadius: '10px',
+                border: 'none',
+                background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                color: '#ffffff',
+                fontWeight: 700,
+                fontSize: '14px',
+                cursor: resetSubmitting ? 'not-allowed' : 'pointer',
+                boxShadow: '0 4px 12px rgba(2, 132, 199, 0.35)',
+                transition: 'opacity 0.2s',
+                opacity: resetSubmitting ? 0.7 : 1,
+              }}
+            >
+              {resetSubmitting ? 'Đang cập nhật...' : 'Cập Nhật Mật Khẩu Mới'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowResetModal(false);
+                if (onCloseResetMode) {
+                  onCloseResetMode();
+                } else {
+                  window.history.replaceState(null, '', '/login');
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '10px 16px',
+                borderRadius: '10px',
+                border: '1px solid #cbd5e1',
+                background: 'rgba(255, 255, 255, 0.8)',
+                color: '#475569',
+                cursor: 'pointer',
+                fontSize: '13.5px',
+                fontWeight: 600,
+              }}
+            >
+              {isDirectPage ? '← Quay lại trang Đăng nhập' : 'Hủy bỏ'}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
   };
 
   return (
@@ -235,9 +740,11 @@ export const LoginPage = ({ onEnterConsole, onLoginSuccess }: LoginPageProps = {
         </button>
       </div>
 
-      <div className="sos-glass-card">
-        {user ? (
-
+      <div className="sos-glass-card" style={isResetPasswordMode ? { maxWidth: 520 } : undefined}>
+        {isResetPasswordMode ? (
+          /* TRỰC TIẾP TRANG THIẾT LẬP MẬT KHẨU MỚI TỪ EMAIL */
+          renderResetPasswordContent(true)
+        ) : user ? (
           /* LOGGED IN USER VIEW */
           <div className="sos-user-card">
             <div className="sos-user-avatar">
@@ -279,7 +786,7 @@ export const LoginPage = ({ onEnterConsole, onLoginSuccess }: LoginPageProps = {
                 }
                 const isAuth = user?.roles.includes('LOCAL_AUTHORITY') && !user?.roles.includes('ADMIN');
                 const target = isAuth ? 'author' : 'admin';
-                const targetPath = isAuth ? '/localauthority/map' : '/admin/map';
+                const targetPath = isAuth ? '/local_authority/map' : '/admin/map';
                 localStorage.setItem('sos_active_portal', target);
                 window.history.replaceState(null, '', targetPath);
                 if (onLoginSuccess && user) {
@@ -394,13 +901,18 @@ export const LoginPage = ({ onEnterConsole, onLoginSuccess }: LoginPageProps = {
                   </>
                 )}
               </button>
-              {/* Link: Quên mật khẩu? */}
+              {/* Link: Quên / Đổi mật khẩu? */}
               <div className="sos-forgot-center">
                 <span
                   className="sos-forgot-text"
-                  onClick={() => alert('Vui lòng liên hệ Quản trị viên để đặt lại mật khẩu của bạn.')}
+                  onClick={() => {
+                    setResetError(null);
+                    setResetSuccess(null);
+                    setShowResetModal(true);
+                  }}
+                  style={{ cursor: 'pointer' }}
                 >
-                  Quên mật khẩu?
+                  Quên / Đổi mật khẩu?
                 </span>
               </div>
 
@@ -505,6 +1017,42 @@ export const LoginPage = ({ onEnterConsole, onLoginSuccess }: LoginPageProps = {
                 Đã hiểu và đồng ý
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ĐỔI MẬT KHẨU TÀI KHOẢN (TỪ LINK EMAIL HOẶC QUÊN MẬT KHẨU) */}
+      {showResetModal && !isResetPasswordMode && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+          }}
+          onClick={() => setShowResetModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--sos-surface, #ffffff)',
+              borderRadius: '20px',
+              padding: '30px',
+              maxWidth: '520px',
+              width: '100%',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
+              border: '1px solid var(--sos-border, #e2e8f0)',
+              color: 'var(--sos-text-primary, #0f172a)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {renderResetPasswordContent(false)}
           </div>
         </div>
       )}
