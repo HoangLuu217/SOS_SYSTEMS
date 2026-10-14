@@ -1534,26 +1534,25 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             <table className="executive-table">
               <thead>
                 <tr>
-                  <th style={{ minWidth: 175, width: 175 }}>Mã sự cố</th>
-                  <th style={{ minWidth: 185, width: 185 }}>Người dân &amp; Liên hệ</th>
-                  <th style={{ minWidth: 260 }}>Địa điểm &amp; Tình trạng</th>
-                  <th style={{ minWidth: 110, width: 110 }}>Nạn nhân</th>
-                  <th style={{ minWidth: 125, width: 125 }}>Mức độ</th>
-                  <th style={{ minWidth: 125, width: 125 }}>Trạng thái</th>
-                  <th style={{ minWidth: 100, width: 100, textAlign: 'right' }}>Thao tác</th>
+                  <th style={{ width: '15%' }}>Mã sự cố</th>
+                  <th style={{ width: '19%' }}>Người dân &amp; Liên hệ</th>
+                  <th style={{ width: '34%' }}>Địa điểm &amp; Tình trạng</th>
+                  <th style={{ width: '12%' }}>Nạn nhân</th>
+                  <th style={{ width: '10%' }}>Mức độ</th>
+                  <th style={{ width: '10%' }}>Trạng thái</th>
                 </tr>
               </thead>
               <tbody>
                 {loading && displaySosList.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '45px 20px' }}>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '45px 20px' }}>
                       <Loader2 size={26} className="animate-spin" style={{ margin: '0 auto 10px', color: '#0284C7' }} />
                       <p style={{ margin: 0, fontWeight: 600, color: '#64748B' }}>Đang nạp dữ liệu cứu nạn...</p>
                     </td>
                   </tr>
                 ) : filteredSosList.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '50px 20px' }}>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '50px 20px' }}>
                       <span style={{ fontSize: 32, display: 'block', marginBottom: 10 }}>🛡️</span>
                       <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: '#0F172A' }}>
                         Không có yêu cầu cứu hộ nào phù hợp với bộ lọc hiện tại
@@ -1743,24 +1742,6 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                               Đang cứu nạn
                             </span>
                           )}
-                        </td>
-
-                        {/* 7. Thao tác điều hướng */}
-                        <td>
-                          <div className="table-actions-cell" style={{ justifyContent: 'flex-end' }}>
-                            <button
-                              type="button"
-                              className="action-btn map"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onOpenMap();
-                              }}
-                              title="Chuyển sang Bản đồ tác chiến để định vị và điều phối cứu hộ"
-                            >
-                              <Compass size={12} />
-                              <span>Bản đồ</span>
-                            </button>
-                          </div>
                         </td>
                       </tr>
                     );

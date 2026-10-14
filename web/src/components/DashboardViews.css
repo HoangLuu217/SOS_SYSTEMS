@@ -844,7 +844,7 @@
 .executive-table-card {
   background: #FFFFFF;
   border: 1px solid #E2E8F0;
-  border-radius: 20px;
+  border-radius: 0;
   padding: 18px 22px;
   box-shadow: 0 4px 20px -2px rgba(2, 132, 199, 0.05);
 }
@@ -968,14 +968,14 @@
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border: 1px solid #CBD5E1;
-  border-radius: 12px;
+  border-radius: 0;
   background: #FFFFFF;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  box-shadow: none;
   scrollbar-width: thin;
   scrollbar-color: #CBD5E1 #F8FAFC;
 }
 
-/* Thanh cuộn ngang thanh mảnh, bo tròn hiện đại */
+/* Thanh cuộn ngang thanh mảnh */
 .executive-table-scroll::-webkit-scrollbar {
   height: 6px;
   width: 6px;
@@ -983,13 +983,12 @@
 
 .executive-table-scroll::-webkit-scrollbar-track {
   background: #F8FAFC;
-  border-bottom-left-radius: 11px;
-  border-bottom-right-radius: 11px;
+  border-radius: 0;
 }
 
 .executive-table-scroll::-webkit-scrollbar-thumb {
   background: #CBD5E1;
-  border-radius: 9999px;
+  border-radius: 0;
   transition: background 0.2s ease;
 }
 
@@ -999,7 +998,7 @@
 
 .executive-table {
   width: 100%;
-  min-width: 1180px;
+  min-width: 0;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -1011,7 +1010,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 13px 16px;
+  padding: 13px 14px;
   border-bottom: 2px solid #CBD5E1;
   border-right: 1px solid #E2E8F0;
   text-align: left;
@@ -1019,11 +1018,11 @@
 }
 
 .executive-table thead tr th:first-child {
-  border-top-left-radius: 11px;
+  border-top-left-radius: 0;
 }
 
 .executive-table thead tr th:last-child {
-  border-top-right-radius: 11px;
+  border-top-right-radius: 0;
   border-right: none;
 }
 
