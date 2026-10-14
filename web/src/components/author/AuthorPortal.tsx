@@ -22,6 +22,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { isSosInOfficerJurisdiction } from '../../services/mapGeoService';
 import { navigateTo, getCurrentSosIdFromUrl } from '../../services/appRouter';
+import { onSosCreated, onSosUpdated } from '../../services/socketService';
 import '../RescueSos.css';
 
 interface ToastState {
@@ -180,15 +181,40 @@ export const AuthorPortal = ({ user, onSwitchToAdmin: _onSwitchToAdmin, onLogout
   useEffect(() => {
     loadAllData(activeOfficer.id);
 
-    // Định kỳ 6 giây tự động cập nhật tín hiệu SOS mới từ người dân
+    // Lắng nghe sự kiện Realtime Socket.IO khi có người dân bấm gửi SOS trên App
+    const unsubCreated = onSosCreated((newSos) => {
+      syncRealSosFromApi(activeOfficer);
+      const citizenName =
+        typeof newSos?.citizenId === 'object' && newSos.citizenId?.fullName
+          ? newSos.citizenId.fullName
+          : 'Người dân';
+      const people = newSos?.people || 1;
+      const addr = newSos?.address || 'Khu vực ngập lụt';
+      showToast(`🚨 [SOS KHẨN CẤP] Nhận yêu cầu cứu trợ mới từ ${citizenName} (${people} người gặp nạn tại ${addr})!`, 'success');
+      if (newSos?._id) {
+        setSelectedSosId(newSos._id);
+      }
+    });
+
+    // Lắng nghe sự kiện Realtime cập nhật trạng thái SOS (xác minh, hoàn thành ca)
+    const unsubUpdated = onSosUpdated((updatedSos) => {
+      syncRealSosFromApi(activeOfficer);
+      if (updatedSos?._id) {
+        showToast(`ℹ️ Cập nhật trạng thái SOS: ${updatedSos.status}`, 'success');
+      }
+    });
+
+    // Định kỳ 15 giây dự phòng kiểm tra lại tín hiệu SOS từ server
     const interval = setInterval(() => {
       syncRealSosFromApi(activeOfficer);
-    }, 6000);
+    }, 15000);
 
     const handleUpdateEvent = () => syncRealSosFromApi(activeOfficer);
     window.addEventListener('sos_data_updated', handleUpdateEvent);
 
     return () => {
+      unsubCreated();
+      unsubUpdated();
       clearInterval(interval);
       window.removeEventListener('sos_data_updated', handleUpdateEvent);
     };

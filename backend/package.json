@@ -28,6 +28,7 @@
     "multer-storage-cloudinary": "^4.0.0",
     "nodemailer": "^10.0.11",
     "nodemon": "^3.1.14",
-    "osmtogeojson": "^3.0.0-beta.5"
+    "osmtogeojson": "^3.0.0-beta.5",
+    "socket.io": "^4.8.4"
   }
 }

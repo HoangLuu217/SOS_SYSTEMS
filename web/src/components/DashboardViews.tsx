@@ -34,6 +34,7 @@ import {
   fetchSafeLocations,
   createSafeLocation,
 } from '../services/api';
+import { onSosCreated, onSosUpdated } from '../services/socketService';
 import {
   Siren,
   PhoneCall,
@@ -597,6 +598,28 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   useEffect(() => {
     loadData();
   }, [loadData, refreshIndex]);
+
+  // Realtime subscription cho SOS Requests qua Socket.IO (không cần F5)
+  useEffect(() => {
+    const unsubCreated = onSosCreated((newSos) => {
+      console.log('⚡ [DashboardViews] Nhận yêu cầu SOS mới realtime:', newSos);
+      if (['sos_requests', 'coordination', 'reports', 'admin_overview'].includes(activeKey)) {
+        loadData();
+      }
+    });
+
+    const unsubUpdated = onSosUpdated((updatedSos) => {
+      console.log('⚡ [DashboardViews] Cập nhật trạng thái SOS realtime:', updatedSos);
+      if (['sos_requests', 'coordination', 'reports', 'admin_overview'].includes(activeKey)) {
+        loadData();
+      }
+    });
+
+    return () => {
+      unsubCreated();
+      unsubUpdated();
+    };
+  }, [activeKey, loadData]);
 
   // Realtime subscription cho Điểm nguy hiểm (SSE) và tự động đồng bộ khi có tin báo mới
   useEffect(() => {

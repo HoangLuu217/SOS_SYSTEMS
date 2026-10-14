@@ -54,7 +54,11 @@ const createSosRequest = async (citizenId, sosData) => {
     note: 'Tạo yêu cầu cứu nạn mới'
   });
 
-  return newSos;
+  const populatedSos = await SosRequest.findById(newSos._id)
+    .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile')
+    .populate('areaId', 'name');
+
+  return populatedSos || newSos;
 };
 
 const getSosRequests = async (query = {}) => {
