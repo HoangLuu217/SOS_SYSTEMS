@@ -62,11 +62,30 @@
   flex-shrink: 0;
 }
 
-.sos-stat-icon.red { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-.sos-stat-icon.blue { background: rgba(2, 132, 199, 0.15); color: #38bdf8; }
-.sos-stat-icon.green { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
-.sos-stat-icon.yellow { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
-.sos-stat-icon.purple { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+.sos-stat-icon.red {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.sos-stat-icon.blue {
+  background: rgba(2, 132, 199, 0.15);
+  color: #38bdf8;
+}
+
+.sos-stat-icon.green {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.sos-stat-icon.yellow {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.sos-stat-icon.purple {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+}
 
 .sos-stat-meta {
   display: flex;
@@ -131,12 +150,41 @@
   white-space: nowrap;
 }
 
-.sos-badge.critical { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
-.sos-badge.high { background: rgba(249, 115, 22, 0.2); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.4); }
-.sos-badge.medium { background: rgba(234, 179, 8, 0.2); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4); }
-.sos-badge.verified { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); }
-.sos-badge.active { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4); }
-.sos-badge.pending { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.4); }
+.sos-badge.critical {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.sos-badge.high {
+  background: rgba(249, 115, 22, 0.2);
+  color: #fb923c;
+  border: 1px solid rgba(249, 115, 22, 0.4);
+}
+
+.sos-badge.medium {
+  background: rgba(234, 179, 8, 0.2);
+  color: #facc15;
+  border: 1px solid rgba(234, 179, 8, 0.4);
+}
+
+.sos-badge.verified {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+
+.sos-badge.active {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.sos-badge.pending {
+  background: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}
 
 /* ACTION BUTTONS */
 .sos-btn-action {
@@ -156,6 +204,7 @@
   background: #2563eb;
   color: #ffffff;
 }
+
 .sos-btn-action.primary:hover {
   background: #1d4ed8;
 }
@@ -165,6 +214,7 @@
   color: #4ade80;
   border-color: rgba(34, 197, 94, 0.3);
 }
+
 .sos-btn-action.success:hover {
   background: #22c55e;
   color: #ffffff;
@@ -175,6 +225,7 @@
   color: #f87171;
   border-color: rgba(239, 68, 68, 0.3);
 }
+
 .sos-btn-action.danger:hover {
   background: #ef4444;
   color: #ffffff;
@@ -643,5 +694,231 @@
 [data-theme="light"] .sos-occupancy-bar-bg {
   background: #e2e8f0;
 }
+
+/* ==========================================================================
+   FILTER PILLS & TABS
+   ========================================================================== */
+.sos-btn-filter-pill {
+  padding: 5px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.6);
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
+.sos-btn-filter-pill:hover {
+  background: rgba(30, 41, 59, 0.8);
+  color: #f1f5f9;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.sos-btn-filter-pill.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #3b82f6;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+}
+
+.sos-btn-filter-pill.active-green {
+  background: #16a34a;
+  color: #ffffff;
+  border-color: #22c55e;
+  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.35);
+}
+
+.sos-btn-filter-pill.active-red {
+  background: #dc2626;
+  color: #ffffff;
+  border-color: #ef4444;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);
+}
+
+.sos-btn-filter-pill.active-yellow {
+  background: #d97706;
+  color: #ffffff;
+  border-color: #f59e0b;
+  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.35);
+}
+
+.sos-btn-filter-pill.active-blue {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #38bdf8;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35);
+}
+
+/* ==========================================================================
+   SYSTEM SETTINGS CARDS & CONTROLS
+   ========================================================================== */
+.sos-settings-card {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+
+.sos-settings-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.sos-settings-card-head {
+  padding: 14px 18px;
+  background: rgba(30, 41, 59, 0.45);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sos-settings-card-head h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sos-settings-card-body {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sos-settings-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sos-settings-row label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.sos-settings-row .sos-desc-muted {
+  font-size: 11.5px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.sos-settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.06);
+}
+
+.sos-settings-toggle-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+/* TOGGLE SWITCH */
+.sos-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.sos-toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.sos-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #334155;
+  transition: 0.3s;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sos-toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.sos-toggle-switch input:checked+.sos-toggle-slider {
+  background-color: #2563eb;
+  border-color: #3b82f6;
+}
+
+.sos-toggle-switch input:checked+.sos-toggle-slider:before {
+  transform: translateX(20px);
+}
+
+/* Light Mode Overrides for Settings & Filters */
+[data-theme="light"] .sos-btn-filter-pill {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+[data-theme="light"] .sos-btn-filter-pill:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-settings-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+}
+
+[data-theme="light"] .sos-settings-card-head {
+  background: #f8fafc;
+  border-bottom-color: #e2e8f0;
+}
+
+[data-theme="light"] .sos-settings-card-head h4 {
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-settings-row label {
+  color: #1e293b;
+}
+
+[data-theme="light"] .sos-settings-row .sos-desc-muted {
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-settings-toggle-row {
+  border-bottom-color: #f1f5f9;
+}
+
+[data-theme="light"] .sos-toggle-slider {
+  background-color: #cbd5e1;
+  border-color: #94a3b8;
+}

@@ -13,6 +13,9 @@ interface AppContextType {
   toggleTheme: () => void;
   mapMode: MapMode;
   setMapMode: (mode: MapMode) => void;
+  mapCleanMode: boolean;
+  setMapCleanMode: (clean: boolean) => void;
+  toggleMapCleanMode: () => void;
   t: (key: string, params?: Record<string, any>) => string;
 }
 
@@ -265,6 +268,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved === 'satellite' ? 'satellite' : 'street';
   });
 
+  const [mapCleanMode, setMapCleanModeState] = useState<boolean>(() => {
+    const saved = localStorage.getItem('rescuesos_map_clean_v1');
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  const setMapCleanMode = (clean: boolean) => {
+    setMapCleanModeState(clean);
+    localStorage.setItem('rescuesos_map_clean_v1', String(clean));
+  };
+
+  const toggleMapCleanMode = () => {
+    setMapCleanModeState((prev) => {
+      const next = !prev;
+      localStorage.setItem('rescuesos_map_clean_v1', String(next));
+      return next;
+    });
+  };
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     document.documentElement.setAttribute('data-lang', lang);
@@ -317,6 +338,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleTheme,
         mapMode,
         setMapMode,
+        mapCleanMode,
+        setMapCleanMode,
+        toggleMapCleanMode,
         t,
       }}
     >

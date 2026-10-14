@@ -3,7 +3,7 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const { User } = require('../models');
 const ApiError = require('../utils/apiError');
-const { isValidPassword, isValidPhone } = require('../utils/validation.util');
+const { isValidPassword, isValidPhone, validatePasswordStrength } = require('../utils/validation.util');
 
 class UserService {
   /**
@@ -131,8 +131,9 @@ class UserService {
    * Đổi mật khẩu người dùng
    */
   async changePassword(userId, { oldPassword, newPassword }) {
-    if (!newPassword || !isValidPassword(newPassword, 6)) {
-      throw new ApiError(400, 'Mật khẩu mới phải có ít nhất 6 ký tự.');
+    const passCheck = validatePasswordStrength(newPassword);
+    if (!passCheck.valid) {
+      throw new ApiError(400, passCheck.message);
     }
 
     const user = await User.findById(userId);

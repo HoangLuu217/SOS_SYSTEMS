@@ -276,6 +276,134 @@ class AdministrativeAreaService {
 
     return updatedArea;
   }
+
+  /**
+   * Đồng bộ tự động các đơn vị hành chính lấy trực tiếp từ API vào CSDL MongoDB
+   * Tuyệt đối không cần chạy script seed thủ công
+   */
+  async syncAreasFromApi(data) {
+    const { provinceName, provinceCode, units } = data;
+    if (!provinceName || !Array.isArray(units) || units.length === 0) {
+      return { success: false, message: 'Dữ liệu không đủ để đồng bộ' };
+    }
+
+    // 1. Tìm hoặc tạo Province
+    let provinceDoc = await AdministrativeArea.findOne({
+      $or: [
+        { code: `VN-${provinceCode}` },
+        { name: provinceName },
+        { code: String(provinceCode || '') }
+      ]
+    });
+
+    if (!provinceDoc) {
+      provinceDoc = await AdministrativeArea.create({
+        name: provinceName,
+        code: `VN-${provinceCode || Date.now()}`,
+        type: 'PROVINCE',
+        status: 'ACTIVE'
+      });
+    }
+
+    // 2. Map lưu trữ ObjectId các District
+    const districtMap = new Map();
+
+    // 3. Upsert các District
+    const districts = units.filter(u => u.type === 'DISTRICT');
+    for (const d of districts) {
+      const cleanCode = (d.code || `VN-${provinceCode}-D-${d.name}`).toUpperCase();
+      const doc = await AdministrativeArea.findOneAndUpdate(
+        { code: cleanCode },
+        {
+          $set: {
+            name: d.name,
+            code: cleanCode,
+            type: 'DISTRICT',
+            parentId: provinceDoc._id,
+            status: 'ACTIVE'
+          }
+        },
+        { upsert: true, returnDocument: 'after' }
+      );
+      districtMap.set(d.name, doc._id);
+      districtMap.set(cleanCode, doc._id);
+    }
+
+    // 4. Upsert các Ward
+    const wards = units.filter(u => u.type !== 'DISTRICT');
+    for (const w of wards) {
+      const cleanCode = (w.code || `VN-${provinceCode}-W-${w.name}`).toUpperCase();
+      const parentId = (w.parentName && districtMap.get(w.parentName)) || provinceDoc._id;
+      await AdministrativeArea.findOneAndUpdate(
+        { code: cleanCode },
+        {
+          $set: {
+            name: w.name,
+            code: cleanCode,
+            type: 'WARD',
+            parentId,
+            status: 'ACTIVE'
+          }
+        },
+        { upsert: true, returnDocument: 'after' }
+      );
+    }
+
+    return {
+      success: true,
+      syncedCount: units.length,
+      province: provinceDoc.name
+    };
+  }
+
+  /**
+   * Lấy danh sách cán bộ / đơn vị địa phương đang quản lý từng địa bàn
+   */
+  async getAreaManagers() {
+    const { User, AuthorityOrganization } = require('../models');
+
+    // 1. Tìm tất cả cán bộ có vai trò LOCAL_AUTHORITY
+    const users = await User.find({ roles: 'LOCAL_AUTHORITY' })
+      .select('fullName phone email roles authority status')
+      .populate('authority.organizationId', 'name code');
+
+    // 2. Tìm tất cả cơ quan địa phương
+    const orgs = await AuthorityOrganization.find({ status: 'ACTIVE' })
+      .select('name code phone email administrativeAreaId areaId');
+
+    // 3. Map theo tên địa bàn và ID
+    const managerMap = {};
+
+    users.forEach((u) => {
+      const auth = u.authority || {};
+      const areaName = auth.areaName;
+      const areaId = auth.areaId ? String(auth.areaId) : null;
+
+      const managerInfo = {
+        hasManager: true,
+        managerName: u.fullName,
+        phone: u.phone,
+        email: u.email,
+        position: auth.position || 'Cán bộ trực ban tác chiến',
+        department: auth.department || (auth.organizationId ? auth.organizationId.name : 'Ban Chỉ Huy PCTT Địa Phương'),
+        organizationName: auth.organizationId ? auth.organizationId.name : null,
+        areaName: areaName,
+        areaId: areaId,
+      };
+
+      if (areaName) {
+        managerMap[areaName.toLowerCase().trim()] = managerInfo;
+        // Chuẩn hóa tên bỏ 'quận', 'huyện', 'phường', 'xã'
+        const shortName = areaName.toLowerCase().replace(/^(quận|huyện|thị xã|thành phố|phường|xã)\s+/i, '').trim();
+        managerMap[shortName] = managerInfo;
+      }
+      if (areaId) {
+        managerMap[areaId] = managerInfo;
+      }
+    });
+
+    return managerMap;
+  }
 }
 
 module.exports = new AdministrativeAreaService();
