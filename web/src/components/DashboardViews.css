@@ -863,6 +863,12 @@
   gap: 8px;
   flex-wrap: nowrap;
   overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.executive-triage-pills::-webkit-scrollbar {
+  display: none;
 }
 
 .triage-btn {
@@ -965,6 +971,30 @@
   border-radius: 12px;
   background: #FFFFFF;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  scrollbar-width: thin;
+  scrollbar-color: #CBD5E1 #F8FAFC;
+}
+
+/* Thanh cuộn ngang thanh mảnh, bo tròn hiện đại */
+.executive-table-scroll::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.executive-table-scroll::-webkit-scrollbar-track {
+  background: #F8FAFC;
+  border-bottom-left-radius: 11px;
+  border-bottom-right-radius: 11px;
+}
+
+.executive-table-scroll::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 9999px;
+  transition: background 0.2s ease;
+}
+
+.executive-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: #0284C7;
 }
 
 .executive-table {
