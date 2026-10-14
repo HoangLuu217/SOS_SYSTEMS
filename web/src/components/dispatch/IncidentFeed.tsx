@@ -255,21 +255,31 @@ export const IncidentFeed = ({
           const priorityClass =
             sos.priority === 'CRITICAL' ? 'critical' : sos.priority === 'HIGH' ? 'high' : 'medium';
 
-          // Clean up title if it contains technical bracket prefixes from mobile app
-          let cleanTitle = sos.title || '';
-          if (cleanTitle.includes('[Loại yêu cầu:')) {
-            const userContent = cleanTitle
-              .replace(/\[Loại yêu cầu:[^\]]+\]/g, '')
-              .replace(/\[SĐT:[^\]]+\]/g, '')
-              .replace(/\[Ưu tiên:[^\]]+\]/g, '')
-              .trim();
-            const typeMatch = cleanTitle.match(/\[Loại yêu cầu:\s*([^\]]+)\]/);
-            if (userContent) {
-              cleanTitle = userContent;
-            } else if (typeMatch && typeMatch[1]) {
-              cleanTitle = typeMatch[1];
+          // Chỉ hiển thị Loại yêu cầu cứu trợ (ngắn gọn, chuẩn chỉ, không hiển thị text mô tả dài dòng)
+          const emergencyTypeLabel = (() => {
+            const desc = sos.description || sos.title || '';
+            if (desc.includes('[Loại yêu cầu:')) {
+              const match = desc.match(/\[Loại yêu cầu:\s*([^\]]+)\]/);
+              if (match && match[1]) {
+                return match[1].trim();
+              }
             }
-          }
+
+            const typeMap: Record<string, string> = {
+              FLOOD: 'Cứu hộ ngập lụt / Mắc kẹt',
+              FIRE: 'Hỏa hoạn / Cháy nổ',
+              MEDICAL: 'Cấp cứu y tế / Thương tích',
+              RESCUE: 'Cứu nạn sông nước',
+              LANDSLIDE: 'Sạt lở đất đá',
+              STORM: 'Bão lũ thiên tai',
+              ACCIDENT: 'Tai nạn sập đổ / Giao thông',
+              MISSING_PERSON: 'Tìm kiếm người mất tích',
+              POLICE: 'An ninh trật tự',
+              OTHER: 'Cứu hộ khẩn cấp',
+            };
+
+            return typeMap[sos.emergencyType] || sos.emergencyType || 'Cứu hộ ngập lụt / Mắc kẹt';
+          })();
 
           return (
             <div
@@ -285,14 +295,15 @@ export const IncidentFeed = ({
                   {sos.id.length === 24 && (
                     <span
                       style={{
-                        fontSize: 9,
+                        fontSize: 8.5,
                         fontWeight: 800,
                         backgroundColor: '#16a34a',
                         color: '#ffffff',
-                        padding: '1px 5px',
-                        borderRadius: 4,
-                        marginLeft: 4,
-                        letterSpacing: '0.3px',
+                        padding: '1px 4px',
+                        borderRadius: 3,
+                        marginLeft: 3,
+                        letterSpacing: '0.2px',
+                        flexShrink: 0,
                       }}
                       title="Tín hiệu gửi trực tiếp từ ứng dụng SOS người dân"
                     >
@@ -309,11 +320,11 @@ export const IncidentFeed = ({
                 </div>
               </div>
 
-              {/* Card Middle: Clean Title & Location + (Side Thumbnail) */}
+              {/* Card Middle: Request Type & Location + (Side Thumbnail) */}
               <div className="compact-card-content">
                 <div className="compact-card-text">
-                  <h3 className="compact-card-title" title={cleanTitle}>
-                    {cleanTitle}
+                  <h3 className="compact-card-title" title={emergencyTypeLabel}>
+                    {emergencyTypeLabel}
                   </h3>
 
                   <div className="compact-card-location" title={sos.locationName}>
