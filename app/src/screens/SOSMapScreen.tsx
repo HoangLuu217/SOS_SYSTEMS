@@ -20,6 +20,7 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather, MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { backendApi } from '../services/backendApi';
+import { useAuth } from '../context/AuthContext';
 
 // Danh sách các loại yêu cầu cứu trợ
 const REQUEST_TYPES = [
@@ -60,15 +61,18 @@ interface SOSMapScreenProps {
 }
 
 export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = false }) => {
+  const { user, updateUserProfile } = useAuth();
+
   // Loại yêu cầu
   const [requestType, setRequestType] = useState<string>('FLOOD');
   const [showTypeModal, setShowTypeModal] = useState<boolean>(false);
 
   // Số người cần cứu (người dùng có thể tự gõ số hoặc bấm nút +/-)
   const [peopleCount, setPeopleCount] = useState<number>(1);
+  const [peopleInput, setPeopleInput] = useState<string>('1');
 
-  // Số điện thoại chính & số điện thoại phụ
-  const [phone, setPhone] = useState<string>('');
+  // Số điện thoại chính & số điện thoại phụ (lấy mặc định từ profile)
+  const [phone, setPhone] = useState<string>(user?.phone || '');
   const [secondaryPhone, setSecondaryPhone] = useState<string>('');
   const [showSecondaryPhone, setShowSecondaryPhone] = useState<boolean>(false);
 
@@ -161,9 +165,23 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
     fetchLocation();
   }, []);
 
+  // Tự động điền số điện thoại từ hồ sơ cá nhân nếu chưa có
+  useEffect(() => {
+    if (user?.phone && !phone) {
+      setPhone(user.phone);
+    }
+  }, [user?.phone]);
+
+  // Cập nhật số người (đồng bộ giữa số đếm và ô nhập liệu)
+  const handleSetPeople = (num: number) => {
+    const valid = Math.min(999, Math.max(1, num));
+    setPeopleCount(valid);
+    setPeopleInput(String(valid));
+  };
+
   // Tăng giảm số người
   const handleAdjustPeople = (delta: number) => {
-    setPeopleCount((prev) => Math.min(999, Math.max(1, prev + delta)));
+    handleSetPeople(peopleCount + delta);
   };
 
   // Mở modal bản đồ chọn vị trí
@@ -428,9 +446,9 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
 
   // Gửi thông tin cứu trợ
   const handleSubmit = async () => {
-    // 1. Kiểm tra số điện thoại
+    // 1. Kiểm tra số điện thoại (bắt buộc - lấy từ hồ sơ hoặc người dùng nhập bổ sung)
     if (!phone.trim()) {
-      setValidationMessage('Vui lòng nhập số điện thoại liên hệ để Đội cứu hộ gọi lại!');
+      setValidationMessage('Tài khoản chưa có số điện thoại. Vui lòng nhập số điện thoại để Đội cứu hộ có thể liên lạc khẩn cấp và cập nhật vào hồ sơ!');
       setValidationModalVisible(true);
       return;
     }
@@ -513,6 +531,11 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
           }
         }
 
+        // Nếu tài khoản chưa có số điện thoại thì tự động lưu vào hồ sơ cá nhân
+        if (!user?.phone && phone.trim()) {
+          updateUserProfile({ phone: phone.trim() }).catch(() => {});
+        }
+
         setSuccessData({
           sosCode: code,
           requestTypeLabel: selectedTypeObj?.label || 'Cứu hộ khẩn cấp',
@@ -581,7 +604,9 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
                 setSuccessData(null);
                 setDescription('');
                 setDetailedAddress('');
-                setPhone('');
+                setPeopleCount(1);
+                setPeopleInput('1');
+                setPhone(user?.phone || '');
                 setSecondaryPhone('');
                 setShowSecondaryPhone(false);
                 setSelectedPriorities([]);
@@ -664,7 +689,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
             </TouchableOpacity>
           </View>
 
-          {/* 2. SỐ NGƯỜI * (CÙNG 1 HÀNG, CÓ THỂ TỰ GÕ SỐ HOẶC BẤM +/-) */}
+          {/* 2. SỐ NGƯỜI * (CÓ THỂ BẤM CHỌN NHANH 1, 2, 3... HOẶC TỰ GÕ SỐ TRỰC TIẾP) */}
           <View style={styles.formCard}>
             <View style={styles.betweenHeaderRow}>
               <View style={styles.fieldHeaderRow}>
@@ -690,14 +715,23 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
                   <TextInput
                     style={styles.stepperInput}
                     keyboardType="number-pad"
-                    value={String(peopleCount)}
-                    onChangeText={(text) => {
-                      const cleaned = text.replace(/[^0-9]/g, '');
-                      if (!cleaned) {
+                    value={peopleInput}
+                    onChangeText={(txt) => {
+                      const cleaned = txt.replace(/[^0-9]/g, '');
+                      setPeopleInput(cleaned);
+                      if (cleaned) {
+                        const parsed = parseInt(cleaned, 10);
+                        if (parsed > 0) setPeopleCount(Math.min(999, parsed));
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!peopleInput || parseInt(peopleInput, 10) < 1) {
+                        setPeopleInput('1');
                         setPeopleCount(1);
                       } else {
-                        const val = parseInt(cleaned, 10);
-                        setPeopleCount(Math.min(999, Math.max(1, val)));
+                        const parsed = Math.min(999, parseInt(peopleInput, 10));
+                        setPeopleInput(String(parsed));
+                        setPeopleCount(parsed);
                       }
                     }}
                     maxLength={3}
@@ -715,9 +749,41 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Các nút chọn nhanh số người: 1 người, 2 người, 3-4 người, 5+ người */}
+            <View style={styles.quickPeopleRow}>
+              {[
+                { label: '1 người', value: 1 },
+                { label: '2 người', value: 2 },
+                { label: '3-4 người', value: 3 },
+                { label: '5+ người', value: 5 },
+              ].map((opt) => {
+                const isSelected = peopleCount === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.label}
+                    style={[
+                      styles.quickPeopleBtn,
+                      isSelected && styles.quickPeopleBtnSelected,
+                    ]}
+                    onPress={() => handleSetPeople(opt.value)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.quickPeopleBtnText,
+                        isSelected && styles.quickPeopleBtnTextSelected,
+                      ]}
+                    >
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
 
-          {/* 3. SỐ ĐIỆN THOẠI * (KÈM NÚT + THÊM SỐ BÊN PHẢI) */}
+          {/* 3. SỐ ĐIỆN THOẠI * (LẤY TỰ ĐỘNG TỪ HỒ SƠ, KÈM NÚT + THÊM SỐ BÊN PHẢI) */}
           <View style={styles.formCard}>
             <View style={styles.betweenHeaderRow}>
               <View style={styles.fieldHeaderRow}>
@@ -727,6 +793,16 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
                 <Text style={styles.fieldTitle}>
                   Số điện thoại <Text style={styles.requiredStar}>*</Text>
                 </Text>
+                {user?.phone ? (
+                  <View style={styles.profilePhoneTag}>
+                    <Ionicons name="checkmark-circle" size={12} color="#0284C7" />
+                    <Text style={styles.profilePhoneTagText}>Từ hồ sơ</Text>
+                  </View>
+                ) : (
+                  <View style={styles.profilePhoneMissingTag}>
+                    <Text style={styles.profilePhoneMissingTagText}>Chưa có trong hồ sơ</Text>
+                  </View>
+                )}
               </View>
 
               {!showSecondaryPhone && (
@@ -746,7 +822,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
               <Feather name="phone" size={16} color="#94A3B8" style={styles.inputLeadingIcon} />
               <TextInput
                 style={styles.textInputInside}
-                placeholder="Số điện thoại chính"
+                placeholder={user?.phone ? 'Số điện thoại chính (từ hồ sơ)' : 'Nhập số điện thoại để cứu hộ liên lạc'}
                 placeholderTextColor="#94A3B8"
                 keyboardType="phone-pad"
                 value={phone}
@@ -1097,8 +1173,15 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
         animationType="slide"
         onRequestClose={() => setShowTypeModal(false)}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheetCard}>
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowTypeModal(false)}
+        >
+          <View
+            style={styles.modalSheetCard}
+            onStartShouldSetResponder={() => true}
+          >
             <View style={styles.modalSheetHeader}>
               <Text style={styles.modalSheetTitle}>Chọn loại yêu cầu cứu trợ</Text>
               <TouchableOpacity onPress={() => setShowTypeModal(false)} style={{ padding: 4 }}>
@@ -1136,7 +1219,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
               ))}
             </ScrollView>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
 
       {/* MODAL 2: BẢN ĐỒ CHỌN VỊ TRÍ CỨU NẠN TRỰC TIẾP */}
@@ -1226,8 +1309,15 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
         animationType="fade"
         onRequestClose={() => setValidationModalVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.valAlertCard}>
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setValidationModalVisible(false)}
+        >
+          <View
+            style={styles.valAlertCard}
+            onStartShouldSetResponder={() => true}
+          >
             <View style={styles.valAlertBadge}>
               <Ionicons name="alert-circle" size={32} color="#0284C7" />
             </View>
@@ -1241,7 +1331,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
               <Text style={styles.valAlertBtnText}>Đã hiểu</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -1302,7 +1392,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 14,
-    paddingBottom: 120, // Chừa khoảng trống phía dưới cho Bottom Nav
+    paddingBottom: 20, // Thu gọn khoảng trống thừa phía dưới cho vừa vặn sát thanh điều hướng
   },
 
   // THẺ FORM CHUNG
@@ -1413,8 +1503,69 @@ const styles = StyleSheet.create({
     color: '#0284C7',
     marginLeft: 3,
   },
+  quickPeopleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  quickPeopleBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickPeopleBtnSelected: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#0284C7',
+    borderWidth: 1.5,
+  },
+  quickPeopleBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  quickPeopleBtnTextSelected: {
+    color: '#0284C7',
+    fontWeight: '800',
+  },
 
   // 3. SỐ ĐIỆN THOẠI
+  profilePhoneTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingVertical: 2,
+    paddingHorizontal: 7,
+    borderRadius: 6,
+    marginLeft: 6,
+  },
+  profilePhoneTagText: {
+    fontSize: 11,
+    color: '#0284C7',
+    fontWeight: '700',
+  },
+  profilePhoneMissingTag: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    paddingVertical: 2,
+    paddingHorizontal: 7,
+    borderRadius: 6,
+    marginLeft: 6,
+  },
+  profilePhoneMissingTagText: {
+    fontSize: 11,
+    color: '#DC2626',
+    fontWeight: '700',
+  },
   addPhoneBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1783,7 +1934,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 4,
-    marginBottom: 20,
+    marginBottom: 8,
     shadowColor: '#0284C7',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.28,
