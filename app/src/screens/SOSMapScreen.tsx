@@ -537,7 +537,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
 
         // Nếu tài khoản chưa có số điện thoại thì tự động lưu vào hồ sơ cá nhân
         if (!user?.phone && phone.trim()) {
-          updateUserProfile({ phone: phone.trim() }).catch(() => {});
+          updateUserProfile({ phone: phone.trim() }).catch(() => { });
         }
 
         setSuccessData({
@@ -806,7 +806,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
               <Feather name="phone" size={16} color="#94A3B8" style={styles.inputLeadingIcon} />
               <TextInput
                 style={styles.textInputInside}
-                placeholder="Vui lòng nhập số điện thoại để cứu hộ liên lạc"
+                placeholder="Vui lòng nhập số điện thoại của bạn"
                 placeholderTextColor="#94A3B8"
                 keyboardType="phone-pad"
                 value={phone}
@@ -937,7 +937,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({ onClose, isTab = fal
               <Feather name="home" size={16} color="#94A3B8" style={styles.inputLeadingIcon} />
               <TextInput
                 style={styles.textInputInside}
-                placeholder="Nhập số nhà, tên đường, thôn ấp, vị trí cụ thể..."
+                placeholder="Nhập số nhà, tên đường, thôn ấp, vị trí "
                 placeholderTextColor="#94A3B8"
                 value={detailedAddress}
                 onChangeText={setDetailedAddress}
