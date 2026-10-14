@@ -276,7 +276,7 @@ const HazardMiniMap: React.FC<{
 
 interface DashboardViewsProps {
   activeKey: NavItemKey;
-  onOpenMap: () => void;
+  onOpenMap: (sosId?: string) => void;
   user?: User;
 }
 
@@ -1996,25 +1996,16 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                       <button
                         type="button"
                         className="btn-open-tactical-map"
+                        style={{ width: '100%', justifyContent: 'center' }}
                         onClick={() => {
+                          const targetId = selectedSosDetail._id;
                           setSelectedSosDetail(null);
-                          onOpenMap();
+                          onOpenMap(targetId);
                         }}
                       >
-                        <Compass size={14} />
+                        <Compass size={15} />
                         <span>Xem trên Bản đồ Tác chiến</span>
                       </button>
-                      {selectedSosDetail.location?.coordinates && (
-                        <a
-                          href={`https://www.google.com/maps?q=${selectedSosDetail.location.coordinates[1]},${selectedSosDetail.location.coordinates[0]}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="btn-google-maps"
-                        >
-                          <ExternalLink size={13} />
-                          <span>Google Maps</span>
-                        </a>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -4297,32 +4288,8 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                       />
                     </div>
 
-                    {/* Nút tác vụ mở bản đồ ngoài */}
-                    <div style={{ display: 'flex', gap: '10px', marginTop: '14px' }}>
-                      <a
-                        href={`https://www.google.com/maps?q=${detailHazard.location.coordinates[1]},${detailHazard.location.coordinates[0]}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          flex: 1,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                          padding: '9px 12px',
-                          borderRadius: '8px',
-                          background: '#f1f5f9',
-                          color: '#334155',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          textDecoration: 'none',
-                          border: '1px solid #cbd5e1',
-                        }}
-                      >
-                        <ExternalLink size={14} />
-                        <span>Google Maps</span>
-                      </a>
-
+                    {/* Nút tác vụ mở bản đồ tác chiến nội bộ */}
+                    <div style={{ marginTop: '14px' }}>
                       <button
                         type="button"
                         onClick={() => {
@@ -4330,23 +4297,25 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                           onOpenMap();
                         }}
                         style={{
-                          flex: 1,
+                          width: '100%',
                           display: 'inline-flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           gap: '6px',
-                          padding: '9px 12px',
+                          padding: '10px 14px',
                           borderRadius: '8px',
                           background: '#2563eb',
                           color: '#ffffff',
-                          fontSize: '12px',
+                          fontSize: '13px',
                           fontWeight: 600,
                           border: 'none',
                           cursor: 'pointer',
+                          boxShadow: '0 2px 4px rgba(37,99,235,0.2)',
+                          transition: 'all 0.2s',
                         }}
                       >
-                        <MapPin size={14} />
-                        <span>Bản đồ Tác chiến</span>
+                        <Compass size={15} />
+                        <span>Xem trên Bản đồ Tác chiến</span>
                       </button>
                     </div>
                   </div>
