@@ -51,6 +51,7 @@ import {
   LifeBuoy,
   BellRing,
   AlertTriangle,
+  Info,
   BarChart3,
   Building2,
   Globe2,
@@ -609,6 +610,288 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     coordinates?: string;
     general?: string;
   }>({});
+
+  // Hệ thống Toast Notifications thay thế alert()
+  interface ToastMessage {
+    id: string;
+    type: 'success' | 'error' | 'warning' | 'info';
+    message: string;
+  }
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') => {
+    const id = Date.now().toString() + Math.random().toString(36).substring(2, 5);
+    setToasts((prev) => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  };
+
+  // Hệ thống Confirmation Modal xác nhận trước khi thao tác
+  interface ConfirmModalConfig {
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type?: 'primary' | 'danger' | 'warning';
+    confirmText?: string;
+    cancelText?: string;
+    details?: { label: string; value: string }[];
+    promptInput?: {
+      label: string;
+      defaultValue?: string;
+      placeholder?: string;
+    };
+    onConfirm: (promptVal?: string) => void | Promise<void>;
+  }
+  const [confirmModal, setConfirmModal] = useState<ConfirmModalConfig>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+  const [confirmPromptValue, setConfirmPromptValue] = useState('');
+  const [confirmLoading, setConfirmLoading] = useState(false);
+
+  // Render chung Toast và Confirmation Modal
+  const renderGlobalModals = () => (
+    <>
+      {/* TOAST NOTIFICATIONS */}
+      {toasts.length > 0 && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '20px',
+            right: '24px',
+            zIndex: 100000,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '10px',
+            pointerEvents: 'none',
+          }}
+        >
+          {toasts.map((toast) => {
+            const isSuccess = toast.type === 'success';
+            const isError = toast.type === 'error';
+            const isWarning = toast.type === 'warning';
+            const bg = isSuccess ? '#064e3b' : isError ? '#7f1d1d' : isWarning ? '#78350f' : '#0f172a';
+            const borderCol = isSuccess ? '#10b981' : isError ? '#ef4444' : isWarning ? '#f59e0b' : '#38bdf8';
+            const iconColor = isSuccess ? '#34d399' : isError ? '#f87171' : isWarning ? '#fbbf24' : '#38bdf8';
+
+            return (
+              <div
+                key={toast.id}
+                style={{
+                  pointerEvents: 'auto',
+                  minWidth: '320px',
+                  maxWidth: '440px',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  background: bg,
+                  color: '#ffffff',
+                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3)',
+                  borderLeft: `5px solid ${borderCol}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {isSuccess && <CheckCircle2 size={18} style={{ color: iconColor, flexShrink: 0 }} />}
+                  {isError && <AlertTriangle size={18} style={{ color: iconColor, flexShrink: 0 }} />}
+                  {isWarning && <AlertTriangle size={18} style={{ color: iconColor, flexShrink: 0 }} />}
+                  {!isSuccess && !isError && !isWarning && <Info size={18} style={{ color: iconColor, flexShrink: 0 }} />}
+                  <span style={{ lineHeight: 1.4 }}>{toast.message}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    cursor: 'pointer',
+                    padding: '2px',
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                  title="Đóng thông báo"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* CONFIRMATION MODAL */}
+      {confirmModal.isOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(2px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '16px',
+          }}
+          onClick={() => !confirmLoading && setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '12px',
+              maxWidth: '480px',
+              width: '100%',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2)',
+              overflow: 'hidden',
+              border: '1px solid #e2e8f0',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: '16px 20px',
+                borderBottom: '1px solid #f1f5f9',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {confirmModal.type === 'danger' ? (
+                  <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626' }}>
+                    <AlertTriangle size={18} />
+                  </div>
+                ) : (
+                  <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7' }}>
+                    <CheckCircle2 size={18} />
+                  </div>
+                )}
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
+                  {confirmModal.title}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => !confirmLoading && setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 4 }}
+                title="Đóng"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <p style={{ margin: 0, fontSize: '13px', color: '#334155', lineHeight: 1.5 }}>
+                {confirmModal.message}
+              </p>
+
+              {confirmModal.details && confirmModal.details.length > 0 && (
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                  {confirmModal.details.map((d, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', gap: '10px' }}>
+                      <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>{d.label}:</span>
+                      <span style={{ color: '#0f172a', fontWeight: 600, textAlign: 'right', wordBreak: 'break-word' }}>{d.value}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {confirmModal.promptInput && (
+                <div style={{ marginTop: '4px' }}>
+                  <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                    {confirmModal.promptInput.label}
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={confirmPromptValue}
+                    onChange={(e) => setConfirmPromptValue(e.target.value)}
+                    placeholder={confirmModal.promptInput.placeholder}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '12.5px',
+                      boxSizing: 'border-box',
+                      outline: 'none',
+                      resize: 'vertical',
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              style={{
+                padding: '12px 20px',
+                borderTop: '1px solid #f1f5f9',
+                background: '#f8fafc',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '8px',
+              }}
+            >
+              <button
+                type="button"
+                disabled={confirmLoading}
+                onClick={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+                className="sos-btn-flat"
+                style={{ padding: '7px 14px', fontSize: '12.5px' }}
+              >
+                {confirmModal.cancelText || 'Hủy bỏ'}
+              </button>
+              <button
+                type="button"
+                disabled={confirmLoading}
+                onClick={async () => {
+                  try {
+                    setConfirmLoading(true);
+                    await confirmModal.onConfirm(confirmPromptValue);
+                    setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+                  } catch (err: any) {
+                    showToast(err.message || 'Thao tác không thành công', 'error');
+                  } finally {
+                    setConfirmLoading(false);
+                  }
+                }}
+                className={`sos-btn-flat ${confirmModal.type === 'danger' ? 'danger' : 'primary'}`}
+                style={{
+                  padding: '7px 18px',
+                  fontSize: '12.5px',
+                  background: confirmModal.type === 'danger' ? '#dc2626' : '#0284c7',
+                  color: '#ffffff',
+                  borderColor: confirmModal.type === 'danger' ? '#dc2626' : '#0284c7',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                {confirmLoading ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    <span>Đang xử lý...</span>
+                  </>
+                ) : (
+                  confirmModal.confirmText || 'Xác nhận'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 
   // State phục vụ Quản lý Điểm trú ẩn & Trạm an toàn (UC-L12)
   const [shelters, setShelters] = useState<SafeLocationItem[]>([]);
@@ -3110,6 +3393,33 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
       }
       setCreateErrors({});
 
+      // Mở modal xác nhận trước khi gửi API
+      const statusLabel = createStatus === 'APPROVED' ? 'Duyệt & Công bố ngay' : 'Lưu nháp / Chờ duyệt';
+      const typeConfig = getHazardTypeConfig(createHazardType, createCustomHazardType);
+      const sevBadge = getSeverityBadge(createSeverity);
+
+      setConfirmModal({
+        isOpen: true,
+        title: 'Xác nhận tạo điểm nguy hiểm',
+        message: `Bạn có chắc chắn muốn khởi tạo điểm nguy hiểm này với trạng thái "${statusLabel}" không?`,
+        type: 'primary',
+        confirmText: 'Xác nhận tạo',
+        cancelText: 'Quay lại',
+        details: [
+          { label: 'Tiêu đề điểm', value: createTitle.trim() },
+          { label: 'Loại hiểm họa', value: typeConfig.label },
+          { label: 'Mức độ', value: sevBadge.label },
+          { label: 'Địa chỉ', value: createAddress.trim() },
+          { label: 'Trạng thái công bố', value: statusLabel },
+        ],
+        onConfirm: async () => {
+          await executeSubmitCreateHazard();
+        },
+      });
+    };
+
+    // Thực hiện gọi API tạo điểm nguy hiểm sau khi đã xác nhận
+    const executeSubmitCreateHazard = async () => {
       try {
         setSubmittingCreate(true);
         const payload = {
@@ -3141,18 +3451,26 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
           setIsCreateHazardOpen(false);
           refreshData();
           window.dispatchEvent(new CustomEvent('sos_data_updated'));
-          alert(res.message || 'Tạo điểm nguy hiểm thành công!');
+          showToast(
+            res.message ||
+              (createStatus === 'APPROVED'
+                ? 'Khởi tạo và công bố điểm nguy hiểm thành công!'
+                : 'Tạo điểm nguy hiểm (Lưu nháp / Chờ duyệt) thành công!'),
+            'success'
+          );
         } else {
           setCreateErrors((prev) => ({
             ...prev,
             general: 'Không thể tạo điểm nguy hiểm. Vui lòng kiểm tra lại!',
           }));
+          showToast('Không thể tạo điểm nguy hiểm. Vui lòng kiểm tra lại!', 'error');
         }
       } catch (err: any) {
         setCreateErrors((prev) => ({
           ...prev,
           general: err.message || 'Lỗi khi tạo điểm nguy hiểm mới',
         }));
+        showToast(err.message || 'Lỗi khi tạo điểm nguy hiểm mới', 'error');
       } finally {
         setSubmittingCreate(false);
       }
@@ -3201,7 +3519,37 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
           return;
         }
         setEditErrors({});
+
+        // Mở modal xác nhận trước khi phê duyệt
+        const typeConfig = getHazardTypeConfig(editHazardType, editCustomHazardType);
+        const sevBadge = getSeverityBadge(editSeverity);
+        setConfirmModal({
+          isOpen: true,
+          title: 'Xác nhận chuẩn hóa & Phê duyệt',
+          message: 'Điểm nguy hiểm sau khi phê duyệt sẽ được chuẩn hóa dữ liệu và công bố trực tiếp lên bản đồ tác chiến cứu hộ.',
+          type: 'primary',
+          confirmText: 'Xác nhận phê duyệt',
+          cancelText: 'Quay lại',
+          details: [
+            { label: 'Tiêu đề điểm', value: editTitle.trim() },
+            { label: 'Loại hiểm họa', value: typeConfig.label },
+            { label: 'Mức độ', value: sevBadge.label },
+            { label: 'Địa chỉ', value: editAddress.trim() },
+          ],
+          onConfirm: async () => {
+            await executeSubmitReview('APPROVED');
+          },
+        });
+        return;
       }
+
+      // Nếu từ chối: mở modal xác nhận kèm lý do
+      handleInitiateRejectHazard();
+    };
+
+    // Thực hiện lưu thẩm định lên server
+    const executeSubmitReview = async (status: 'APPROVED' | 'REJECTED', customNote?: string) => {
+      if (!reviewingHazard) return;
 
       try {
         setSubmittingReview(true);
@@ -3219,7 +3567,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
         };
 
         const finalNote =
-          editReviewNote.trim() ||
+          (customNote !== undefined ? customNote : editReviewNote).trim() ||
           (status === 'APPROVED' ? 'Đã chuẩn hóa và phê duyệt' : 'Từ chối điểm báo');
 
         const res = await reviewHazardReport(reviewingHazard._id, status, finalNote, extraData);
@@ -3247,15 +3595,51 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
           setReviewingHazard(null);
           refreshData();
           window.dispatchEvent(new CustomEvent('sos_data_updated'));
+          showToast(
+            status === 'APPROVED'
+              ? 'Đã chuẩn hóa và phê duyệt điểm nguy hiểm thành công!'
+              : 'Đã từ chối điểm nguy hiểm thành công!',
+            status === 'APPROVED' ? 'success' : 'info'
+          );
         }
       } catch (err: any) {
         setEditErrors((prev) => ({
           ...prev,
           general: err.message || 'Lỗi khi cập nhật thẩm định điểm nguy hiểm',
         }));
+        showToast(err.message || 'Lỗi khi cập nhật thẩm định điểm nguy hiểm', 'error');
       } finally {
         setSubmittingReview(false);
       }
+    };
+
+    // Mở modal xác nhận từ chối điểm báo (thay thế prompt)
+    const handleInitiateRejectHazard = (hazardId?: string) => {
+      const defaultReason = editReviewNote.trim() || 'Thông tin chưa đủ căn cứ xác thực';
+      setConfirmPromptValue(defaultReason);
+      setConfirmModal({
+        isOpen: true,
+        title: 'Từ chối điểm nguy hiểm',
+        message: 'Bạn có chắc chắn muốn từ chối điểm nguy hiểm này? Điểm báo sẽ chuyển sang trạng thái "Từ chối" và không công bố.',
+        type: 'danger',
+        confirmText: 'Từ chối điểm báo',
+        cancelText: 'Hủy bỏ',
+        promptInput: {
+          label: 'Lý do từ chối (tùy chọn):',
+          defaultValue: defaultReason,
+          placeholder: 'Nhập lý do từ chối điểm nguy hiểm này...',
+        },
+        onConfirm: async (customReason) => {
+          const finalReason = (customReason || defaultReason).trim();
+          if (hazardId) {
+            await handleQuickReview(hazardId, 'REJECTED', finalReason);
+            setDetailHazard(null);
+          } else {
+            setEditReviewNote(finalReason);
+            await executeSubmitReview('REJECTED', finalReason);
+          }
+        },
+      });
     };
 
     const handleQuickReview = async (id: string, status: 'APPROVED' | 'REJECTED', defaultNote?: string) => {
@@ -3278,20 +3662,38 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
           });
           refreshData();
           window.dispatchEvent(new CustomEvent('sos_data_updated'));
+          showToast(
+            status === 'APPROVED'
+              ? 'Đã phê duyệt và công bố điểm nguy hiểm lên bản đồ!'
+              : 'Đã từ chối điểm báo nguy hiểm!',
+            status === 'APPROVED' ? 'success' : 'info'
+          );
         }
       } catch (err: any) {
-        alert(err.message || 'Lỗi khi cập nhật trạng thái duyệt');
+        showToast(err.message || 'Lỗi khi cập nhật trạng thái duyệt', 'error');
       } finally {
         setLoading(false);
       }
     };
 
-    const handleDeleteHazard = async (id: string, title?: string) => {
-      const confirmed = window.confirm(
-        `Bạn có chắc chắn muốn xóa điểm nguy hiểm "${title || 'này'}" không?\n\nĐiểm nguy hiểm này sẽ bị xóa khỏi cơ sở dữ liệu và bản đồ tác chiến.`
-      );
-      if (!confirmed) return;
+    // Mở modal xác nhận trước khi xóa (thay thế window.confirm)
+    const handleDeleteHazard = (id: string, title?: string) => {
+      setConfirmModal({
+        isOpen: true,
+        title: 'Xác nhận xóa điểm nguy hiểm',
+        message: `Bạn có chắc chắn muốn xóa điểm nguy hiểm "${title || 'này'}" không? Thao tác này sẽ gỡ bỏ dữ liệu khỏi cơ sở dữ liệu và bản đồ tác chiến.`,
+        type: 'danger',
+        confirmText: 'Xác nhận xóa',
+        cancelText: 'Hủy bỏ',
+        details: title ? [{ label: 'Tên điểm nguy hiểm', value: title }] : undefined,
+        onConfirm: async () => {
+          await executeDeleteHazard(id);
+        },
+      });
+    };
 
+    // Thực hiện xóa điểm nguy hiểm
+    const executeDeleteHazard = async (id: string) => {
       try {
         setLoading(true);
         const res = await deleteHazardReport(id);
@@ -3311,9 +3713,10 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
           }
           refreshData();
           window.dispatchEvent(new CustomEvent('sos_data_updated'));
+          showToast('Đã xóa vĩnh viễn điểm nguy hiểm thành công!', 'success');
         }
       } catch (err: any) {
-        alert(err.message || 'Lỗi khi xóa điểm nguy hiểm');
+        showToast(err.message || 'Lỗi khi xóa điểm nguy hiểm', 'error');
       } finally {
         setLoading(false);
       }
@@ -3954,7 +4357,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                           setHazardPage(target);
                           setJumpInputPage('');
                         } else {
-                          alert(`Vui lòng nhập số trang từ 1 đến ${totalHazardPages}`);
+                          showToast(`Vui lòng nhập số trang từ 1 đến ${totalHazardPages}`, 'warning');
                         }
                       }
                     }}
@@ -3971,7 +4374,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                         setHazardPage(target);
                         setJumpInputPage('');
                       } else {
-                        alert(`Vui lòng nhập số trang từ 1 đến ${totalHazardPages}`);
+                        showToast(`Vui lòng nhập số trang từ 1 đến ${totalHazardPages}`, 'warning');
                       }
                     }}
                   >
@@ -4309,13 +4712,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                       <button
                         type="button"
                         className="sos-btn-flat danger"
-                        onClick={() => {
-                          const reason = prompt('Nhập lý do từ chối (tùy chọn):', 'Thông tin chưa đủ căn cứ');
-                          if (reason !== null) {
-                            handleQuickReview(detailHazard._id, 'REJECTED', reason);
-                            setDetailHazard(null);
-                          }
-                        }}
+                        onClick={() => handleInitiateRejectHazard(detailHazard._id)}
                         disabled={loading}
                       >
                         <XCircle size={14} />
@@ -5026,16 +5423,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                   type="button"
                   className="sos-btn-flat danger"
                   disabled={submittingReview}
-                  onClick={() => {
-                    const reason = prompt(
-                      'Nhập lý do từ chối điểm nguy hiểm này (tùy chọn):',
-                      editReviewNote || 'Thông tin không chính xác hoặc chưa đủ căn cứ'
-                    );
-                    if (reason !== null) {
-                      setEditReviewNote(reason);
-                      handleSubmitReview('REJECTED');
-                    }
-                  }}
+                  onClick={() => handleInitiateRejectHazard()}
                 >
                   <XCircle size={14} />
                   <span>Từ chối điểm báo</span>
@@ -5894,6 +6282,9 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             </div>
           </div>
         )}
+
+        {/* TOASTS VÀ CONFIRMATION MODAL TOÀN CỤC */}
+        {renderGlobalModals()}
       </div>
     );
   }
