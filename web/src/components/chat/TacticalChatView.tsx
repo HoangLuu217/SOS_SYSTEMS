@@ -38,7 +38,9 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const activeConvRef = useRef<ChatConversationItem | null>(null);
-  activeConvRef.current = activeConv;
+  useEffect(() => {
+    activeConvRef.current = activeConv;
+  }, [activeConv]);
 
   // Phát âm thanh nhẹ khi có tin nhắn mới (Web Audio API)
   const playChime = useCallback(() => {
