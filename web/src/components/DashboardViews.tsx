@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { NavItemKey } from './Sidebar';
 import type { User } from '../types/auth';
 import type {
   SosRequestItem,
   AdminOverviewStats,
   VehicleItem,
+  RescueTeamItem,
   AlertItem,
   AuditLogItem,
   AdministrativeAreaItem,
@@ -21,6 +22,7 @@ import {
   updateUserStatus,
   verifyRescuer,
   fetchVehicles,
+  fetchRescueTeams,
   fetchAlerts,
   createAlert,
   fetchAdministrativeAreas,
@@ -35,12 +37,14 @@ import {
   createAdminUser,
   updateAdminUser,
   fetchAreaManagers,
+  fetchAreaBoundary,
   type AreaManagerInfo,
 } from '../services/api';
 import { onSosCreated, onSosUpdated } from '../services/socketService';
 import {
   Siren,
   PhoneCall,
+  Check,
   CheckCircle2,
   XCircle,
   MapPin,
@@ -74,7 +78,6 @@ import {
   Phone,
   Eye,
   Trash2,
-  ExternalLink,
   Edit,
   Plus,
   Home,
@@ -82,12 +85,14 @@ import {
   Sliders,
   Layers,
   Wifi,
-  Check,
   Boxes,
   Package,
   ArrowLeft,
+  Award,
   UserCheck,
   UserX,
+  Map,
+  Mail,
 } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -104,7 +109,6 @@ import { domainDService, JURISDICTION_CONFIGS } from '../services/domainDService
 import { INITIAL_SOS_REQUESTS } from '../services/mockData';
 import {
   FALLBACK_SOS_LIST,
-  FALLBACK_RESCUERS,
   FALLBACK_VEHICLES,
   FALLBACK_SUPPLIES,
   FALLBACK_SHELTERS,
@@ -274,9 +278,253 @@ const HazardMiniMap: React.FC<{
   return <div ref={containerRef} style={{ width: '100%', height: '100%', minHeight: '260px', borderRadius: '10px', border: '1px solid #cbd5e1' }} />;
 };
 
+// Hàm định vị tọa độ địa bàn hành chính dựa theo tên và đơn vị/thành phố
+function getAreaCoordinates(areaName: string, department?: string): { lat: number; lng: number } {
+  const name = (areaName || '').toLowerCase().trim();
+  const dept = (department || '').toLowerCase().trim();
+
+  // Hà Nội
+  if (name.includes('cầu giấy') || dept.includes('cầu giấy')) return { lat: 21.0313, lng: 105.7925 };
+  if (name.includes('ba đình') || dept.includes('ba đình')) return { lat: 21.0341, lng: 105.8235 };
+  if (name.includes('hoàn kiếm') || dept.includes('hoàn kiếm')) return { lat: 21.0285, lng: 105.8542 };
+  if (name.includes('đống đa') || dept.includes('đống đa')) return { lat: 21.0181, lng: 105.8268 };
+  if (name.includes('hai bà trưng') || dept.includes('hai bà trưng')) return { lat: 21.0062, lng: 105.8569 };
+  if (name.includes('hoàng mai') || dept.includes('hoàng mai')) return { lat: 20.9754, lng: 105.8617 };
+  if (name.includes('thanh xuân') || dept.includes('thanh xuân')) return { lat: 20.9937, lng: 105.8118 };
+  if (name.includes('hà đông') || dept.includes('hà đông')) return { lat: 20.9723, lng: 105.7725 };
+  if (name.includes('tây hồ') || dept.includes('tây hồ')) return { lat: 21.0708, lng: 105.8211 };
+  if (name.includes('long biên') || dept.includes('long biên')) return { lat: 21.0362, lng: 105.8943 };
+  if (name.includes('nam từ liêm') || name.includes('bắc từ liêm')) return { lat: 21.0373, lng: 105.7656 };
+  if (dept.includes('hà nội') || dept.includes('ha noi')) return { lat: 21.0285, lng: 105.8542 };
+
+  // Đà Nẵng
+  if (name.includes('hòa vang') || dept.includes('hòa vang')) return { lat: 15.9868, lng: 108.1154 };
+  if (name.includes('hải châu') || dept.includes('hải châu')) return { lat: 16.0504, lng: 108.2208 };
+  if (name.includes('hòa cường') || dept.includes('hòa cường')) return { lat: 16.0354, lng: 108.2173 };
+  if (name.includes('thanh khê') || dept.includes('thanh khê')) return { lat: 16.0619, lng: 108.1880 };
+  if (name.includes('an khê')) return { lat: 16.0601, lng: 108.1812 };
+  if (name.includes('sơn trà') || dept.includes('sơn trà')) return { lat: 16.0967, lng: 108.2471 };
+  if (name.includes('an hải') || name.includes('thọ quang')) return { lat: 16.0683, lng: 108.2392 };
+  if (name.includes('ngũ hành sơn') || dept.includes('ngũ hành sơn')) return { lat: 16.0026, lng: 108.2520 };
+  if (name.includes('khuê mỹ') || name.includes('hòa quý')) return { lat: 16.0125, lng: 108.2510 };
+  if (name.includes('cẩm lệ') || dept.includes('cẩm lệ')) return { lat: 15.9996, lng: 108.2045 };
+  if (name.includes('hòa xuân') || name.includes('khuê trung')) return { lat: 15.9880, lng: 108.2150 };
+  if (name.includes('liên chiểu') || dept.includes('liên chiểu')) return { lat: 16.0820, lng: 108.1480 };
+  if (name.includes('hòa khánh')) return { lat: 16.0650, lng: 108.1400 };
+  if (name.includes('hải vân')) return { lat: 16.1350, lng: 108.1100 };
+  if (name.includes('hoàng sa') || dept.includes('hoàng sa')) return { lat: 16.5385, lng: 111.6033 };
+
+  // TP Hồ Chí Minh
+  if (name.includes('quận 1') || name.includes('bến nghé') || name.includes('bến thành')) return { lat: 10.7769, lng: 106.7009 };
+  if (name.includes('quận 3')) return { lat: 10.7844, lng: 106.6843 };
+  if (name.includes('quận 7') || name.includes('tân phong')) return { lat: 10.7340, lng: 106.7218 };
+  if (name.includes('thủ đức')) return { lat: 10.8494, lng: 106.7537 };
+  if (name.includes('bình thạnh')) return { lat: 10.8106, lng: 106.7091 };
+  if (dept.includes('hồ chí minh') || dept.includes('hcm')) return { lat: 10.7769, lng: 106.7009 };
+
+  // Cao Bằng
+  if (name.includes('nùng trí cao') || name.includes('cao bằng') || dept.includes('cao bằng')) return { lat: 22.6667, lng: 106.2667 };
+
+  // Hải Phòng
+  if (dept.includes('hải phòng')) return { lat: 20.8449, lng: 106.6881 };
+  // Cần Thơ
+  if (dept.includes('cần thơ')) return { lat: 10.0452, lng: 105.7469 };
+  // Huế
+  if (dept.includes('huế')) return { lat: 16.4637, lng: 107.5909 };
+  // Quảng Ninh
+  if (dept.includes('quảng ninh')) return { lat: 20.9500, lng: 107.0833 };
+
+  return { lat: 16.0544, lng: 108.2022 };
+}
+
+// Component hiển thị bản đồ địa bàn tác chiến với ranh giới khu đỏ chuẩn GeoJSON
+// Component hiển thị bản đồ địa bàn tác chiến với ranh giới khu đỏ chuẩn GeoJSON (Đa giác thực tế, không dùng hình tròn)
+const AreaPreviewMap: React.FC<{
+  lat: number;
+  lng: number;
+  areaName: string;
+  areaId?: string;
+  department?: string;
+}> = ({ lat, lng, areaName, areaId, department }) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    if (mapRef.current) {
+      mapRef.current.remove();
+      mapRef.current = null;
+    }
+
+    let isSubscribed = true;
+
+    const map = L.map(containerRef.current, {
+      center: [lat, lng],
+      zoom: 13,
+      zoomControl: true,
+      attributionControl: false,
+    });
+
+    L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&apistyle=s.t:33|p.v:off&x={x}&y={y}&z={z}', {
+      subdomains: ['0', '1', '2', '3'],
+      maxZoom: 19,
+    }).addTo(map);
+
+    mapRef.current = map;
+
+    // Centroid marker với icon ghim đỏ tác chiến
+    const redPinIcon = L.divIcon({
+      className: 'sos-area-red-pin',
+      html: `
+        <div style="
+          width: 32px;
+          height: 32px;
+          border-radius: 50% 50% 50% 0;
+          background: #dc2626;
+          transform: rotate(-45deg);
+          border: 2px solid #ffffff;
+          box-shadow: 0 3px 8px rgba(220, 38, 38, 0.45);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        ">
+          <div style="width: 10px; height: 10px; background: #ffffff; border-radius: 50%; transform: rotate(45deg);"></div>
+        </div>
+      `,
+      iconSize: [32, 32],
+      iconAnchor: [16, 32],
+      popupAnchor: [0, -34],
+    });
+
+    const marker = L.marker([lat, lng], { icon: redPinIcon }).addTo(map);
+    marker
+      .bindPopup(
+        `<div style="font-family: inherit; font-size: 13px; font-weight: 700; color: #0f172a; line-height: 1.4; padding: 2px 4px;">
+          <div style="color: #dc2626; font-size: 11px; font-weight: 800; text-transform: uppercase; margin-bottom: 2px;">
+            🛡️ Vùng ranh giới tác chiến
+          </div>
+          <div>${areaName}</div>
+        </div>`
+      )
+      .openPopup();
+
+    const renderBoundary = (boundary: any) => {
+      if (!isSubscribed || !mapRef.current) return;
+      try {
+        const geoLayer = L.geoJSON(
+          {
+            type: 'Feature',
+            geometry: boundary,
+            properties: { name: areaName },
+          } as any,
+          {
+            style: {
+              color: '#dc2626', // Viền đỏ đậm tác chiến giống map tổng
+              fillColor: '#ef4444', // Vùng đỏ
+              fillOpacity: 0.16,
+              weight: 2.5,
+              dashArray: '4, 4',
+            },
+          }
+        ).addTo(mapRef.current);
+
+        const bounds = geoLayer.getBounds();
+        if (bounds.isValid()) {
+          marker.setLatLng(bounds.getCenter());
+          mapRef.current.fitBounds(bounds, { padding: [32, 32] });
+        }
+      } catch (err) {
+        console.warn('Lỗi vẽ boundary GeoJSON:', err);
+      }
+    };
+
+    // Tự động tìm và render boundary
+    const loadBoundary = async () => {
+      // 1. Tìm trong domainDService
+      const allAreas = domainDService.getAreas();
+      const cleanQuery = (areaName || '')
+        .toLowerCase()
+        .replace(/^(phường|xã|quận|huyện|thị xã|thị trấn|tp\.|thành phố)\s+/i, '')
+        .trim();
+
+      const matchedArea = allAreas.find((a) => {
+        if (areaId && a.id === areaId) return true;
+        const cleanAreaName = (a.name || '')
+          .toLowerCase()
+          .replace(/^(phường|xã|quận|huyện|thị xã|thị trấn|tp\.|thành phố)\s+/i, '')
+          .trim();
+        return (
+          cleanAreaName === cleanQuery ||
+          (cleanQuery && cleanAreaName.includes(cleanQuery)) ||
+          (cleanAreaName && cleanQuery.includes(cleanAreaName))
+        );
+      });
+
+      if (
+        matchedArea?.boundary &&
+        Array.isArray((matchedArea.boundary as any).coordinates) &&
+        (matchedArea.boundary as any).coordinates.length > 0
+      ) {
+        renderBoundary(matchedArea.boundary);
+        return;
+      }
+
+      // 2. Nếu chưa có trong local, gọi API backend
+      try {
+        const res = await fetchAreaBoundary({
+          name: areaName,
+          areaId,
+          province: department,
+        });
+
+        if (isSubscribed && res.success && res.data?.boundary?.coordinates) {
+          renderBoundary(res.data.boundary);
+          return;
+        }
+      } catch (e) {
+        console.warn('Lỗi fetchAreaBoundary:', e);
+      }
+
+      // 3. Fallback đa giác tự nhiên (KHÔNG BAO GIỜ DÙNG HÌNH TRÒN L.circle)
+      if (isSubscribed && mapRef.current) {
+        const angles = [0, 36, 72, 108, 144, 180, 216, 252, 288, 324];
+        const baseR = 0.016; // ~1.8km
+        const ring: [number, number][] = angles.map((deg, i) => {
+          const rad = (deg * Math.PI) / 180;
+          const variation = 0.8 + ((i * 47) % 40) / 100;
+          const r = baseR * variation;
+          return [lng + r * Math.cos(rad) * 1.05, lat + r * Math.sin(rad)];
+        });
+        ring.push(ring[0]);
+        renderBoundary({
+          type: 'Polygon',
+          coordinates: [ring],
+        });
+      }
+    };
+
+    loadBoundary();
+
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 150);
+
+    return () => {
+      isSubscribed = false;
+      clearTimeout(timer);
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, [lat, lng, areaName, areaId, department]);
+
+  return <div ref={containerRef} style={{ width: '100%', height: '100%', minHeight: '380px', background: '#f1f5f9' }} />;
+};
+
 interface DashboardViewsProps {
   activeKey: NavItemKey;
-  onOpenMap: (sosId?: string) => void;
+  onOpenMap: (sosId?: any) => void;
   user?: User;
 }
 
@@ -307,6 +555,13 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
   const [selectedSosDetail, setSelectedSosDetail] = useState<SosRequestItem | null>(null);
+
+  // State quản lý Đội Cứu Hộ Thực Địa (lấy theo từng đội từ DB) & Phương tiện trực thuộc
+  const [rescueTeams, setRescueTeams] = useState<RescueTeamItem[]>([]);
+  const [expandedTeamIds, setExpandedTeamIds] = useState<Record<string, boolean>>({});
+  const [teamSearchQuery, setTeamSearchQuery] = useState<string>('');
+  const [teamTypeFilter, setTeamTypeFilter] = useState<string>('ALL');
+  const [vehicleTeamFilter, setVehicleTeamFilter] = useState<string>('ALL');
 
   // State phục vụ modal nhận SOS hotline thủ công (UC-L02)
   const [showHotlineModal, setShowHotlineModal] = useState(false);
@@ -416,7 +671,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     const uppers = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
     const lowers = 'abcdefghjkmnpqrstuvwxyz';
     const numbers = '23456789';
-    const specials = '!@#$%&*';
+    const specials = '!@$*._';
     const all = uppers + lowers + numbers + specials;
     let pwd = '';
     pwd += uppers[Math.floor(Math.random() * uppers.length)];
@@ -433,7 +688,15 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   const [showCreateAuthModal, setShowCreateAuthModal] = useState(false);
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [authSubmitError, setAuthSubmitError] = useState<string | null>(null);
-  const [authSubmitSuccess, setAuthSubmitSuccess] = useState<string | null>(null);
+  const [_authSubmitSuccess, setAuthSubmitSuccess] = useState<string | null>(null);
+  const [createdOfficerSuccess, setCreatedOfficerSuccess] = useState<{
+    fullName: string;
+    phone: string;
+    email: string;
+    areaName: string;
+    city: string;
+  } | null>(null);
+  const [selectedMapOfficer, setSelectedMapOfficer] = useState<any | null>(null);
   const [createAuthForm, setCreateAuthForm] = useState({
     fullName: '',
     phone: '',
@@ -469,29 +732,6 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     password: '',
   });
 
-  // Kiểm tra xem một phường/khu vực đã có tài khoản cán bộ quản lý hay chưa
-  const isAreaAssigned = useCallback(
-    (ar: { id: string; name: string }, cityName?: string) => {
-      const cleanArName = ar.name.replace(/^(Phường|Xã|Quận|Huyện|Thị trấn)\s+/i, '').trim().toLowerCase();
-      return authorities.some((a) => {
-        const authAreaId = String(a.authority?.areaId || '').trim();
-        const authAreaName = String(a.authority?.areaName || '').trim().toLowerCase();
-        const cleanAuthName = authAreaName.replace(/^(Phường|Xã|Quận|Huyện|Thị trấn)\s+/i, '').trim();
-        if (cityName) {
-          const authDept = String(a.authority?.department || '');
-          if (authDept && !authDept.toLowerCase().includes(cityName.toLowerCase()) && !cityName.toLowerCase().includes(authDept.toLowerCase())) {
-            // Khác tỉnh thành
-          }
-        }
-        return (
-          (authAreaId && ar.id && authAreaId === ar.id) ||
-          (authAreaName && authAreaName === ar.name.toLowerCase()) ||
-          (cleanAuthName && cleanAuthName === cleanArName)
-        );
-      });
-    },
-    [authorities]
-  );
 
   // Tải danh mục xã/phường cho Tỉnh/Thành phố được chọn trong modal tạo tài khoản
   const loadSubUnitsForCity = useCallback(
@@ -541,12 +781,12 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     }));
     const units = await loadSubUnitsForCity(newCity);
     if (units && units.length > 0) {
-      const firstAvailable = units.find((u) => !isAreaAssigned(u, newCity)) || units[0];
+      const firstArea = units[0];
       setCreateAuthForm((prev) => ({
         ...prev,
         city: newCity,
-        areaId: firstAvailable.id,
-        areaName: firstAvailable.name,
+        areaId: firstArea.id,
+        areaName: firstArea.name,
       }));
     } else {
       setCreateAuthForm((prev) => ({
@@ -558,15 +798,6 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     }
   };
 
-  // Danh sách các khu vực chưa có tài khoản quản lý (cho Đà Nẵng fallback)
-  const availableAreas = useMemo(() => {
-    return DANANG_ADMIN_AREAS.filter((ar) => !isAreaAssigned(ar));
-  }, [isAreaAssigned]);
-
-  // Danh sách các khu vực đã có tài khoản quản lý (cho Đà Nẵng fallback)
-  const assignedAreas = useMemo(() => {
-    return DANANG_ADMIN_AREAS.filter((ar) => isAreaAssigned(ar));
-  }, [isAreaAssigned]);
   const refreshData = () => setRefreshIndex((prev) => prev + 1);
 
   // Tải dữ liệu từ database tương ứng với activeKey
@@ -646,8 +877,63 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
         }
       }
 
-      // 4. Nếu ở trang Quản lý Cứu hộ viên -> Lấy Users có role RESCUER
+      // 4. Nếu ở trang Đội Cứu Hộ Địa Phương / Cứu hộ viên -> Lấy Teams từ DB
       if (['rescuers', 'rescuers_admin'].includes(activeKey)) {
+        let loadedTeams = false;
+        try {
+          const teamRes = await fetchRescueTeams();
+          if (teamRes.success && Array.isArray(teamRes.data) && teamRes.data.length > 0) {
+            setRescueTeams(teamRes.data);
+            loadedTeams = true;
+            // Mặc định mở rộng 2 đội đầu tiên
+            const initialExpanded: Record<string, boolean> = {};
+            teamRes.data.slice(0, 2).forEach((t) => {
+              if (t._id) initialExpanded[t._id] = true;
+            });
+            setExpandedTeamIds((prev) => (Object.keys(prev).length === 0 ? initialExpanded : prev));
+          }
+        } catch (e) {
+          console.warn('[DashboardViews] fetchRescueTeams error:', e);
+        }
+
+        // Nếu DB chưa có team nào, tạo fallback từ domainDService
+        if (!loadedTeams) {
+          const fallbackTeams: RescueTeamItem[] = domainDService.getRescueTeams().map((t) => ({
+            _id: t.id,
+            name: t.name,
+            type: t.name.includes('Ca-nô') ? 'FLOOD_RESCUE' : t.name.includes('PCCC') ? 'FIRE_RESCUE' : 'GENERAL_RESCUE',
+            status: 'ACTIVE',
+            leaderId: t.rescuers?.[0] ? {
+              _id: t.rescuers[0].id,
+              fullName: t.rescuers[0].name,
+              phone: t.rescuers[0].phone,
+              rescuer: { skills: [t.rescuers[0].role] },
+            } : undefined,
+            members: t.rescuers.map((r, idx) => ({
+              role: idx === 0 ? 'LEADER' : 'MEMBER',
+              rescuerId: {
+                _id: r.id,
+                fullName: r.name,
+                phone: r.phone,
+                rescuer: {
+                  skills: [r.role, t.name],
+                  availabilityStatus: r.status === 'Online' ? 'AVAILABLE' : 'BUSY',
+                  verificationStatus: 'VERIFIED',
+                },
+              },
+            })),
+            vehicles: domainDService.getVehicles().filter((v) => v.teamId === t.id).map((v) => ({
+              _id: v.id,
+              plateNumber: v.plate || v.name,
+              type: (v.type.includes('Boat') ? 'BOAT' : v.type.includes('Ambulance') ? 'AMBULANCE' : 'TRUCK') as any,
+              capacity: parseInt(v.capacity) || 6,
+              status: 'AVAILABLE',
+              description: `${v.name} (Sức chứa: ${v.capacity})`,
+            })),
+          }));
+          setRescueTeams(fallbackTeams);
+        }
+
         let loaded = false;
         try {
           const res = await fetchAdminUsers({ role: 'RESCUER' });
@@ -659,7 +945,6 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
           console.warn('[DashboardViews] fetchAdminUsers RESCUER fallback:', e);
         }
         if (!loaded) {
-          // Fallback từ các đội cứu hộ domainDService (Đảm bảo luôn có lực lượng thực địa cho Cán bộ địa phương)
           const fallbackRescuers = domainDService.getRescueTeams().flatMap((t) =>
             t.rescuers.map((r) => ({
               _id: r.id,
@@ -693,11 +978,14 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
         }
       }
 
-      // 6. Nếu ở trang Phương tiện -> Lấy danh sách Vehicles
+      // 6. Nếu ở trang Phương tiện -> Lấy danh sách Vehicles & Teams
       if (activeKey === 'resources') {
-        const res = await fetchVehicles();
-        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-          setVehicles(res.data);
+        const [vehRes, teamRes] = await Promise.all([
+          fetchVehicles(),
+          fetchRescueTeams(),
+        ]);
+        if (vehRes.success && Array.isArray(vehRes.data) && vehRes.data.length > 0) {
+          setVehicles(vehRes.data);
         } else {
           // Fallback từ domainDService
           const fallbackVehs: VehicleItem[] = domainDService.getVehicles().map((v) => ({
@@ -710,6 +998,10 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             teamId: { _id: v.teamId, name: v.name },
           }));
           setVehicles(fallbackVehs);
+        }
+
+        if (teamRes.success && Array.isArray(teamRes.data) && teamRes.data.length > 0) {
+          setRescueTeams(teamRes.data);
         }
       }
 
@@ -1103,13 +1395,6 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
       const selectedArea = currentCityAreas.find((a) => a.id === createAuthForm.areaId);
       const areaName = selectedArea ? selectedArea.name : createAuthForm.areaName;
 
-      // Chặn ngay tại Client nếu khu vực đã có tài khoản quản lý
-      if (isAreaAssigned({ id: createAuthForm.areaId, name: areaName }, createAuthForm.city)) {
-        setAuthSubmitError(`⛔ Khu vực "${areaName}" (${createAuthForm.city}) đã có tài khoản cán bộ quản lý. Hệ thống chỉ cho phép tạo tài khoản cho khu vực chưa có quản lý.`);
-        setAuthSubmitting(false);
-        return;
-      }
-
       const payload = {
         fullName: createAuthForm.fullName.trim(),
         phone: createAuthForm.phone.trim(),
@@ -1118,33 +1403,34 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
         role: 'LOCAL_AUTHORITY',
         areaId: createAuthForm.areaId,
         areaName: areaName,
+        city: createAuthForm.city,
         position: 'Chỉ Huy Trực Ban Tác Chiến',
         department: `Ban Chỉ Huy PCTT ${areaName} (${createAuthForm.city})`,
       };
 
       const res = await createAdminUser(payload);
       if (res.success) {
-        const emailNotice = res.data?.emailSent
-          ? ` và đã gửi email thông tin đăng nhập + link đổi mật khẩu đến ${payload.email}`
-          : (payload.email ? ` (Lưu ý: chưa gửi được email: ${res.data?.emailError || 'kiểm tra hòm thư'})` : '');
-        setAuthSubmitSuccess(
-          `✅ Đã tạo tài khoản cán bộ thành công! SĐT: ${payload.phone} | Mật khẩu: ${payload.password}${emailNotice}`
-        );
+        setShowCreateAuthModal(false);
+        setAuthSubmitError(null);
+        setAuthSubmitSuccess(null);
         refreshData();
-        setTimeout(() => {
-          setShowCreateAuthModal(false);
-          setAuthSubmitSuccess(null);
-          const nextArea = currentCityAreas.find((a) => a.id !== payload.areaId && !isAreaAssigned(a, createAuthForm.city)) || currentCityAreas[0];
-          setCreateAuthForm((prev) => ({
-            ...prev,
-            fullName: '',
-            phone: '',
-            email: '',
-            password: generateRandomPassword(10),
-            areaId: nextArea?.id || 'area-default',
-            areaName: nextArea?.name || 'Khu vực quản lý',
-          }));
-        }, 3200);
+        setCreatedOfficerSuccess({
+          fullName: payload.fullName,
+          phone: payload.phone,
+          email: payload.email,
+          areaName: areaName,
+          city: createAuthForm.city,
+        });
+        const nextArea = currentCityAreas.find((a) => a.id !== payload.areaId) || currentCityAreas[0];
+        setCreateAuthForm((prev) => ({
+          ...prev,
+          fullName: '',
+          phone: '',
+          email: '',
+          password: generateRandomPassword(10),
+          areaId: nextArea?.id || 'area-default',
+          areaName: nextArea?.name || 'Khu vực quản lý',
+        }));
       } else {
         setAuthSubmitError(res.message || 'Không thể tạo tài khoản cán bộ.');
       }
@@ -2240,7 +2526,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     const activeMissions = baseSos.filter((s) => ['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status));
 
     return (
-      <div className="sos-views-container">
+      <div className="sos-views-container sos-light-view">
         <div className="sos-stats-grid">
           <div className="sos-stat-box">
             <div className="sos-stat-icon blue"><Radio size={22} /></div>
@@ -2327,69 +2613,457 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
   /* -------------------------------------------------------------
    * 3. LOCAL AUTHORITY: ĐỘI CỨU HỘ ĐỊA PHƯƠNG (UC-L10)
+   * Lấy theo từng Đội từ DB, hỗ trợ mở rộng danh sách thành viên & Phương tiện
    * ------------------------------------------------------------- */
   if (activeKey === 'rescuers') {
-    const displayRescuers = rescuers.length > 0 ? rescuers : FALLBACK_RESCUERS;
-    const availableCount = displayRescuers.filter((r) => r.rescuer?.availabilityStatus === 'AVAILABLE').length;
+    // 1. Chuẩn bị danh sách Đội cứu hộ
+    const rawTeams = rescueTeams.length > 0 ? rescueTeams : (domainDService.getRescueTeams().map((t) => ({
+      _id: t.id,
+      name: t.name,
+      type: t.name.includes('Ca-nô') ? 'FLOOD_RESCUE' : t.name.includes('PCCC') ? 'FIRE_RESCUE' : 'GENERAL_RESCUE',
+      status: 'ACTIVE',
+      leaderId: t.rescuers?.[0] ? {
+        _id: t.rescuers[0].id,
+        fullName: t.rescuers[0].name,
+        phone: t.rescuers[0].phone,
+        status: 'ACTIVE',
+        rescuer: { skills: [t.rescuers[0].role] },
+      } : undefined,
+      members: t.rescuers.map((r, idx) => ({
+        role: idx === 0 ? 'LEADER' : 'MEMBER',
+        rescuerId: {
+          _id: r.id,
+          fullName: r.name,
+          phone: r.phone,
+          status: 'ACTIVE',
+          rescuer: {
+            skills: [r.role, t.name],
+            availabilityStatus: r.status === 'Online' ? 'AVAILABLE' : 'BUSY',
+            verificationStatus: 'VERIFIED',
+          },
+        },
+      })),
+      vehicles: domainDService.getVehicles().filter((v) => v.teamId === t.id).map((v) => ({
+        _id: v.id,
+        plateNumber: v.plate || v.name,
+        type: (v.type.includes('Boat') ? 'BOAT' : v.type.includes('Ambulance') ? 'AMBULANCE' : 'TRUCK') as any,
+        capacity: parseInt(v.capacity) || 6,
+        status: 'AVAILABLE' as any,
+        description: `${v.name} (Sức chứa: ${v.capacity})`,
+      })),
+    })) as RescueTeamItem[]);
+
+    // 2. Lọc theo bộ lọc & tìm kiếm
+    const filteredTeams = rawTeams.filter((team) => {
+      if (teamTypeFilter !== 'ALL' && team.type !== teamTypeFilter) return false;
+      if (teamSearchQuery.trim()) {
+        const q = teamSearchQuery.toLowerCase();
+        const leaderName = typeof team.leaderId === 'object' ? team.leaderId?.fullName?.toLowerCase() || '' : '';
+        const leaderPhone = typeof team.leaderId === 'object' ? team.leaderId?.phone?.toLowerCase() || '' : '';
+        const areaName = typeof team.areaId === 'object' ? team.areaId?.name?.toLowerCase() || '' : '';
+        const teamName = team.name.toLowerCase();
+        return teamName.includes(q) || leaderName.includes(q) || leaderPhone.includes(q) || areaName.includes(q);
+      }
+      return true;
+    });
+
+    const totalTeams = rawTeams.length;
+    const totalMembers = rawTeams.reduce((acc, t) => acc + (t.members?.length || 0), 0);
+    const totalTeamVehicles = rawTeams.reduce((acc, t) => acc + (t.vehicles?.length || 0), 0);
+    const activeTeamsCount = rawTeams.filter((t) => t.status === 'ACTIVE').length;
+
+    const toggleTeam = (teamId: string) => {
+      setExpandedTeamIds((prev) => ({
+        ...prev,
+        [teamId]: !prev[teamId],
+      }));
+    };
+
+    const expandAll = () => {
+      const all: Record<string, boolean> = {};
+      filteredTeams.forEach((t) => {
+        if (t._id) all[t._id] = true;
+      });
+      setExpandedTeamIds(all);
+    };
+
+    const collapseAll = () => {
+      setExpandedTeamIds({});
+    };
+
+    const getTeamTypeBadge = (type: string) => {
+      switch (type) {
+        case 'FLOOD_RESCUE':
+          return <span className="sos-badge active" style={{ background: '#e0f2fe', color: '#0369a1', borderColor: '#bae6fd' }}>Thủy Bộ Vượt Lũ</span>;
+        case 'FIRE_RESCUE':
+          return <span className="sos-badge" style={{ background: '#fee2e2', color: '#b91c1c', borderColor: '#fca5a5' }}>PCCC &amp; CNCH</span>;
+        case 'MEDICAL_RESCUE':
+          return <span className="sos-badge active" style={{ background: '#dcfce7', color: '#15803d', borderColor: '#86efac' }}>Y Tế Cứu Thương</span>;
+        case 'SEARCH_RESCUE':
+          return <span className="sos-badge active" style={{ background: '#f3e8ff', color: '#7e22ce', borderColor: '#d8b4fe' }}>Tìm Kiếm &amp; Sạt Lở</span>;
+        default:
+          return <span className="sos-badge" style={{ background: '#fef3c7', color: '#b45309', borderColor: '#fde68a' }}>Cứu Hộ Cơ Sở</span>;
+      }
+    };
 
     return (
-      <div className="sos-views-container">
+      <div className="sos-views-container sos-light-view">
+        {/* Thống kê chỉ số lực lượng theo từng đội */}
         <div className="sos-stats-grid">
           <div className="sos-stat-box">
-            <div className="sos-stat-icon green"><LifeBuoy size={22} /></div>
+            <div className="sos-stat-icon blue"><Shield size={22} /></div>
             <div className="sos-stat-meta">
-              <span className="sos-stat-value">{displayRescuers.length} Đội</span>
-              <span className="sos-stat-label">Lực Lượng Cứu Hộ Đã Sẵn Sàng</span>
+              <span className="sos-stat-value">{totalTeams} Đội</span>
+              <span className="sos-stat-label">Tổng Số Đội Cứu Hộ Thực Địa</span>
             </div>
           </div>
           <div className="sos-stat-box">
-            <div className="sos-stat-icon blue"><Users size={22} /></div>
+            <div className="sos-stat-icon green"><Users size={22} /></div>
             <div className="sos-stat-meta">
-              <span className="sos-stat-value">{availableCount} Đội</span>
-              <span className="sos-stat-label">Trực Tuyến Sẵn Sàng Xuất Kích</span>
+              <span className="sos-stat-value">{totalMembers} Cán Bộ</span>
+              <span className="sos-stat-label">Tổng Lực Lượng Đội Trưởng &amp; Đội Viên</span>
+            </div>
+          </div>
+          <div className="sos-stat-box">
+            <div className="sos-stat-icon yellow"><Truck size={22} /></div>
+            <div className="sos-stat-meta">
+              <span className="sos-stat-value">{totalTeamVehicles} Phương Tiện</span>
+              <span className="sos-stat-label">Phương Tiện Do Các Đội Tự Quản Lý</span>
+            </div>
+          </div>
+          <div className="sos-stat-box">
+            <div className="sos-stat-icon green"><LifeBuoy size={22} /></div>
+            <div className="sos-stat-meta">
+              <span className="sos-stat-value">{activeTeamsCount} Đội</span>
+              <span className="sos-stat-label">Sẵn Sàng Xuất Kích Tác Chiến 24/7</span>
             </div>
           </div>
         </div>
 
+        {/* Thanh công cụ tìm kiếm và lọc Đội */}
         <div className="sos-view-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', width: 280 }}>
+                <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <input
+                  type="text"
+                  placeholder="Tìm theo tên đội, đội trưởng, khu vực..."
+                  value={teamSearchQuery}
+                  onChange={(e) => setTeamSearchQuery(e.target.value)}
+                  className="sos-input"
+                  style={{ paddingLeft: 36, fontSize: '13px', width: '100%' }}
+                />
+              </div>
+
+              <select
+                value={teamTypeFilter}
+                onChange={(e) => setTeamTypeFilter(e.target.value)}
+                className="sos-select"
+                style={{ fontSize: '13px', padding: '8px 12px', minWidth: 160 }}
+              >
+                <option value="ALL">Tất cả loại đội cứu hộ</option>
+                <option value="FLOOD_RESCUE">Cứu hộ vượt lũ (Thủy bộ)</option>
+                <option value="FIRE_RESCUE">PCCC &amp; CNCH ngập sâu</option>
+                <option value="MEDICAL_RESCUE">Y tế cứu thương dã chiến</option>
+                <option value="SEARCH_RESCUE">Tìm kiếm &amp; Vùng sạt lở</option>
+                <option value="GENERAL_RESCUE">Cứu nạn tổng hợp cơ sở</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                type="button"
+                className="sos-btn-filter-pill"
+                onClick={expandAll}
+                style={{ fontSize: '12px', padding: '6px 12px' }}
+                title="Mở rộng danh sách thành viên tất cả các đội"
+              >
+                <ChevronDown size={14} style={{ marginRight: 4 }} /> Mở rộng tất cả
+              </button>
+              <button
+                type="button"
+                className="sos-btn-filter-pill"
+                onClick={collapseAll}
+                style={{ fontSize: '12px', padding: '6px 12px' }}
+                title="Thu gọn danh sách"
+              >
+                <ChevronUp size={14} style={{ marginRight: 4 }} /> Thu gọn tất cả
+              </button>
+              <button type="button" className="sos-btn-action sos-btn-refresh" onClick={refreshData}>
+                <RefreshCw size={14} /> Làm mới
+              </button>
+            </div>
+          </div>
+
           <div className="sos-view-card-title" style={{ marginBottom: 16 }}>
-            <Users size={18} color="#38bdf8" />
-            <span>Danh Sách Lực Lượng Cứu Hộ &amp; Tình Nguyện Viên Thực Địa ({displayRescuers.length} đơn vị)</span>
+            <Users size={18} color="#0284c7" />
+            <span>Danh Sách Đội Cứu Hộ Thực Địa Từ Database ({filteredTeams.length} đội)</span>
           </div>
-          <div className="sos-table-wrapper">
-            <table className="sos-table">
-              <thead>
-                <tr>
-                  <th>Tên đội / Cán bộ phụ trách</th>
-                  <th>Số điện thoại trực ban</th>
-                  <th>Kỹ năng chuyên môn</th>
-                  <th>Phương tiện trang bị</th>
-                  <th>Trạng thái sẵn sàng</th>
-                  <th>Chứng nhận</th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayRescuers.map((r) => (
-                  <tr key={r._id}>
-                    <td><strong>{r.fullName}</strong></td>
-                    <td>{r.phone || 'Chưa cập nhật'}</td>
-                    <td>{Array.isArray(r.rescuer?.skills) ? r.rescuer.skills.join(', ') : 'Cứu nạn tổng hợp'}</td>
-                    <td>{r.rescuer?.vehicleType || 'Ca-nô / Xuồng cứu sinh'}</td>
-                    <td>
-                      <span className="sos-badge active">
-                        {r.rescuer?.availabilityStatus || 'SẴN SÀNG'}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`sos-badge ${r.rescuer?.verificationStatus === 'VERIFIED' ? 'verified' : 'pending'}`}>
-                        {r.rescuer?.verificationStatus === 'VERIFIED' ? 'ĐÃ PHÊ DUYỆT' : 'CHỜ DUYỆT'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+
+          {/* Danh sách từng Đội cứu hộ dạng Accordion Card */}
+          {filteredTeams.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+              <Shield size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+              <p>Không tìm thấy đội cứu hộ nào phù hợp với điều kiện tìm kiếm.</p>
+            </div>
+          ) : (
+            filteredTeams.map((team) => {
+              const isExpanded = !!expandedTeamIds[team._id];
+              const leader = typeof team.leaderId === 'object' ? team.leaderId : null;
+              const area = typeof team.areaId === 'object' ? team.areaId : null;
+              const membersCount = team.members?.length || 0;
+              const vehiclesCount = team.vehicles?.length || 0;
+
+              return (
+                <div key={team._id} className="sos-team-card">
+                  {/* Header của Đội Cứu Hộ */}
+                  <div className="sos-team-header" onClick={() => toggleTeam(team._id)}>
+                    <div className="sos-team-header-main">
+                      <div className={`sos-team-avatar-icon ${
+                        team.type === 'FLOOD_RESCUE' ? 'flood' :
+                        team.type === 'FIRE_RESCUE' ? 'fire' :
+                        team.type === 'MEDICAL_RESCUE' ? 'medical' :
+                        team.type === 'SEARCH_RESCUE' ? 'search' : 'general'
+                      }`}>
+                        {team.type === 'FLOOD_RESCUE' ? <LifeBuoy size={22} /> :
+                         team.type === 'FIRE_RESCUE' ? <AlertTriangle size={22} /> :
+                         team.type === 'MEDICAL_RESCUE' ? <Plus size={22} /> :
+                         team.type === 'SEARCH_RESCUE' ? <Compass size={22} /> : <Shield size={22} />}
+                      </div>
+
+                      <div className="sos-team-title-wrap">
+                        <div className="sos-team-name-row">
+                          <span className="sos-team-title">{team.name}</span>
+                          {getTeamTypeBadge(team.type)}
+                          <span className="sos-badge active" style={{ fontSize: '11px' }}>
+                            {team.status === 'ACTIVE' ? 'SẴN SÀNG TÁC CHIẾN' : team.status}
+                          </span>
+                        </div>
+
+                        <div className="sos-team-meta-row">
+                          <span className="sos-team-meta-item">
+                            <MapPin size={13} color="#0284c7" />
+                            <span>{area?.name || 'TP. Đà Nẵng'}</span>
+                          </span>
+
+                          <span className="sos-team-meta-item">
+                            <Award size={13} color="#d97706" />
+                            <span>Đội trưởng: <strong>{leader?.fullName || 'Chưa phân công'}</strong></span>
+                            {leader?.phone && (
+                              <a
+                                href={`tel:${leader.phone}`}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ color: '#0284c7', textDecoration: 'none', marginLeft: 4, display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                              >
+                                <PhoneCall size={12} /> {leader.phone}
+                              </a>
+                            )}
+                          </span>
+
+                          <span className="sos-team-meta-item">
+                            <Users size={13} color="#64748b" />
+                            <span>Quân số: <strong>{membersCount} cán bộ</strong></span>
+                          </span>
+
+                          <span className="sos-team-meta-item">
+                            <Truck size={13} color="#059669" />
+                            <span>Phương tiện: <strong>{vehiclesCount} phương tiện tự quản lý</strong></span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="sos-team-header-actions">
+                      <button
+                        type="button"
+                        className="sos-team-expand-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleTeam(team._id);
+                        }}
+                      >
+                        {isExpanded ? (
+                          <>
+                            <ChevronUp size={15} />
+                            <span>Thu gọn danh sách</span>
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown size={15} />
+                            <span>Mở rộng thành viên ({membersCount})</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Phần nội dung Mở rộng: Danh sách thành viên & Phương tiện trực thuộc đội */}
+                  {isExpanded && (
+                    <div className="sos-team-body">
+                      {/* Mô tả đội nếu có */}
+                      {team.description && (
+                        <p style={{ margin: '0 0 16px', fontSize: '13px', color: '#64748b', fontStyle: 'italic', background: 'rgba(56, 189, 248, 0.05)', padding: '8px 12px', borderRadius: '6px', borderLeft: '3px solid #0284c7' }}>
+                          ℹ️ {team.description}
+                        </p>
+                      )}
+
+                      {/* 1. DANH SÁCH THÀNH VIÊN TRONG ĐỘI */}
+                      <div className="sos-team-section-title">
+                        <Users size={16} color="#0284c7" />
+                        <span>Danh Sách Thành Viên Trong Đội ({membersCount} nhân sự)</span>
+                      </div>
+
+                      <div className="sos-table-wrapper" style={{ marginBottom: 20 }}>
+                        <table className="sos-table">
+                          <thead>
+                            <tr>
+                              <th style={{ width: 140 }}>Vai trò trong đội</th>
+                              <th>Họ và tên thành viên</th>
+                              <th>Số điện thoại trực ban</th>
+                              <th>Kỹ năng chuyên môn</th>
+                              <th>Trạng thái sẵn sàng</th>
+                              <th>Chứng nhận hồ sơ</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {team.members && team.members.length > 0 ? (
+                              team.members.map((member, mIdx) => {
+                                const rescuerUser = typeof member.rescuerId === 'object' ? member.rescuerId : null;
+                                const isLeader = member.role === 'LEADER' || (!member.role && mIdx === 0);
+                                const skills = rescuerUser?.rescuer?.skills || [];
+                                const phone = rescuerUser?.phone || (isLeader ? leader?.phone : '') || 'Chưa cập nhật';
+                                const fullName = rescuerUser?.fullName || (isLeader ? leader?.fullName : 'Thành viên cứu hộ');
+                                const availStatus = rescuerUser?.rescuer?.availabilityStatus || 'AVAILABLE';
+
+                                return (
+                                  <tr key={member._id || mIdx}>
+                                    <td>
+                                      {isLeader ? (
+                                        <span className="sos-role-badge-leader">
+                                          <Award size={13} /> ĐỘI TRƯỞNG
+                                        </span>
+                                      ) : (
+                                        <span className="sos-role-badge-member">
+                                          <Shield size={13} /> ĐỘI VIÊN
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <div style={{
+                                          width: 28,
+                                          height: 28,
+                                          borderRadius: '50%',
+                                          background: isLeader ? '#fef3c7' : '#f1f5f9',
+                                          color: isLeader ? '#b45309' : '#475569',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          fontSize: '12px',
+                                          fontWeight: 700,
+                                        }}>
+                                          {(fullName || '').charAt(0)}
+                                        </div>
+                                        <strong>{fullName || 'Chưa cập nhật'}</strong>
+                                      </div>
+                                    </td>
+                                    <td>
+                                      {phone !== 'Chưa cập nhật' ? (
+                                        <a href={`tel:${phone}`} style={{ color: '#0284c7', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                          <PhoneCall size={13} /> {phone}
+                                        </a>
+                                      ) : (
+                                        <span style={{ color: '#94a3b8' }}>Chưa cập nhật</span>
+                                      )}
+                                    </td>
+                                    <td>
+                                      {Array.isArray(skills) && skills.length > 0 ? (
+                                        <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+                                          {skills.map((skill, sIdx) => (
+                                            <span key={sIdx} className="sos-skill-tag">{skill}</span>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <span style={{ color: '#94a3b8', fontSize: '12px' }}>Cứu nạn tổng hợp</span>
+                                      )}
+                                    </td>
+                                    <td>
+                                      <span className="sos-badge active">
+                                        {availStatus === 'AVAILABLE' ? 'SẴN SÀNG' : availStatus}
+                                      </span>
+                                    </td>
+                                    <td>
+                                      <span className="sos-badge verified">
+                                        ĐÃ PHÊ DUYỆT
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            ) : (
+                              <tr>
+                                <td colSpan={6} style={{ textAlign: 'center', color: '#94a3b8', padding: '16px' }}>
+                                  Chưa có danh sách thành viên cụ thể.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* 2. PHƯƠNG TIỆN DO ĐỘI TỰ QUẢN LÝ */}
+                      <div className="sos-team-section-title">
+                        <Truck size={16} color="#059669" />
+                        <span>Phương Tiện Do Đội Tự Quản Lý &amp; Vận Hành ({vehiclesCount} phương tiện)</span>
+                      </div>
+
+                      {team.vehicles && team.vehicles.length > 0 ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+                          {team.vehicles.map((v, vIdx) => (
+                            <div key={v._id || vIdx} className="sos-team-vehicle-chip" style={{ justifyContent: 'space-between', padding: '12px 16px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div style={{
+                                  width: 38,
+                                  height: 38,
+                                  borderRadius: 8,
+                                  background: 'rgba(2, 132, 199, 0.1)',
+                                  color: '#0284c7',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}>
+                                  <Truck size={20} />
+                                </div>
+                                <div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <strong style={{ fontSize: '14px' }}>{v.plateNumber}</strong>
+                                    <span className="sos-badge active" style={{ fontSize: '10px', padding: '2px 6px' }}>
+                                      {v.type === 'BOAT' ? 'Ca-nô' : v.type === 'AMBULANCE' ? 'Cấp cứu' : 'Xe 4x4'}
+                                    </span>
+                                  </div>
+                                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: 2 }}>
+                                    Sức chở: <strong>{v.capacity} người</strong>
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="sos-badge active" style={{ fontSize: '11px' }}>
+                                SẴN SÀNG
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8', fontStyle: 'italic' }}>
+                          Đội hiện đang cơ động bằng trang bị phối hợp hoặc đang tiếp nhận phương tiện mới.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
     );
@@ -2397,20 +3071,29 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
   /* -------------------------------------------------------------
    * 4. LOCAL AUTHORITY: NGUỒN LỰC & PHƯƠNG TIỆN (UC-L11)
+   * Phương tiện gắn với Đội Cứu Hộ vì do Đội tự quản lý
    * ------------------------------------------------------------- */
   if (activeKey === 'resources') {
-    const displayVehicles = vehicles.length > 0 ? vehicles : FALLBACK_VEHICLES;
+    const rawVehicles = vehicles.length > 0 ? vehicles : FALLBACK_VEHICLES;
+
+    // Lọc phương tiện theo Đội cứu hộ tự quản lý
+    const displayVehicles = rawVehicles.filter((v) => {
+      if (vehicleTeamFilter === 'ALL') return true;
+      const tId = typeof v.teamId === 'object' && v.teamId ? (v.teamId as any)._id : v.teamId;
+      return tId === vehicleTeamFilter;
+    });
+
     const totalSuppliesAvailable = FALLBACK_SUPPLIES.reduce((acc, s) => acc + s.available, 0);
     const totalSuppliesDeployed = FALLBACK_SUPPLIES.reduce((acc, s) => acc + s.deployed, 0);
 
     return (
-      <div className="sos-views-container">
+      <div className="sos-views-container sos-light-view">
         <div className="sos-stats-grid">
           <div className="sos-stat-box">
             <div className="sos-stat-icon blue"><Truck size={22} /></div>
             <div className="sos-stat-meta">
-              <span className="sos-stat-value">{displayVehicles.length} Phương Tiện</span>
-              <span className="sos-stat-label">Phương Tiện Sẵn Sàng Tác Chiến</span>
+              <span className="sos-stat-value">{rawVehicles.length} Phương Tiện</span>
+              <span className="sos-stat-label">Phương Tiện Do Các Đội Tự Quản Lý</span>
             </div>
           </div>
           <div className="sos-stat-box">
@@ -2440,7 +3123,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                 style={{ fontSize: '13px', padding: '8px 16px' }}
               >
                 <Truck size={15} style={{ marginRight: 6 }} />
-                Phương Tiện Cơ Động &amp; Cano ({displayVehicles.length})
+                Phương Tiện Đội Quản Lý ({rawVehicles.length})
               </button>
               <button
                 type="button"
@@ -2452,9 +3135,30 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                 Kho Vật Tư &amp; Thiết Bị Cứu Nạn ({FALLBACK_SUPPLIES.length} danh mục)
               </button>
             </div>
-            <button type="button" className="sos-btn-action sos-btn-refresh" onClick={refreshData}>
-              <RefreshCw size={14} /> Làm mới
-            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {resourceTab === 'VEHICLES' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600, color: '#64748b' }}>Đội tự quản lý:</label>
+                  <select
+                    value={vehicleTeamFilter}
+                    onChange={(e) => setVehicleTeamFilter(e.target.value)}
+                    className="sos-select"
+                    style={{ fontSize: '13px', padding: '6px 12px', minWidth: 220 }}
+                  >
+                    <option value="ALL">Tất cả các đội cứu hộ ({rawVehicles.length} xe)</option>
+                    {rescueTeams.map((t) => (
+                      <option key={t._id} value={t._id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <button type="button" className="sos-btn-action sos-btn-refresh" onClick={refreshData}>
+                <RefreshCw size={14} /> Làm mới
+              </button>
+            </div>
           </div>
 
           {resourceTab === 'VEHICLES' ? (
@@ -2464,25 +3168,50 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                   <tr>
                     <th>Biển số / Định danh</th>
                     <th>Loại phương tiện</th>
+                    <th>Đội cứu hộ tự quản lý</th>
                     <th>Sức chở tối đa</th>
                     <th>Mô tả trang bị chuyên dụng</th>
                     <th>Tình trạng hoạt động</th>
+                    <th>Phân cấp quản lý</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {displayVehicles.map((v) => (
-                    <tr key={v._id}>
-                      <td><strong>{v.plateNumber}</strong></td>
-                      <td>
-                        <span className="sos-badge active">
-                          {v.type === 'BOAT' ? 'Ca-nô / Xuồng cứu nạn' : v.type === 'AMBULANCE' ? 'Xe cấp cứu dã chiến' : v.type === 'TRUCK' ? 'Xe tải lội nước 4x4' : v.type}
-                        </span>
-                      </td>
-                      <td><strong>{v.capacity} người</strong></td>
-                      <td>{v.description || 'Phương tiện cứu hộ chuyên dụng'}</td>
-                      <td><span className="sos-badge active">{v.status === 'AVAILABLE' ? 'SẴN SÀNG' : v.status}</span></td>
-                    </tr>
-                  ))}
+                  {displayVehicles.map((v) => {
+                    const team = typeof v.teamId === 'object' && v.teamId ? (v.teamId as any) : null;
+                    const teamName = team?.name || (typeof v.teamId === 'string' ? v.teamId : 'Đội Cứu Hộ Hải Châu');
+                    const leader = team?.leaderId;
+
+                    return (
+                      <tr key={v._id}>
+                        <td><strong>{v.plateNumber}</strong></td>
+                        <td>
+                          <span className="sos-badge active">
+                            {v.type === 'BOAT' ? 'Ca-nô / Xuồng cứu nạn' : v.type === 'AMBULANCE' ? 'Xe cấp cứu dã chiến' : v.type === 'TRUCK' ? 'Xe tải lội nước 4x4' : v.type}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <strong style={{ color: '#0284c7' }}>
+                              {teamName}
+                            </strong>
+                            {leader && (
+                              <span style={{ fontSize: '12px', color: '#64748b' }}>
+                                Chỉ huy: {leader.fullName} {leader.phone ? `(${leader.phone})` : ''}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td><strong>{v.capacity} người</strong></td>
+                        <td>{v.description || 'Phương tiện cứu hộ chuyên dụng'}</td>
+                        <td><span className="sos-badge active">{v.status === 'AVAILABLE' ? 'SẴN SÀNG' : v.status}</span></td>
+                        <td>
+                          <span className="sos-badge verified" style={{ fontSize: '11px' }}>
+                            Đội tự quản lý
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -5342,7 +6071,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
    * ------------------------------------------------------------- */
   if (activeKey === 'rescuers_admin') {
     return (
-      <div className="sos-views-container">
+      <div className="sos-views-container sos-light-view">
         <div className="sos-view-card">
           <div className="sos-view-card-title" style={{ marginBottom: 16 }}>
             <LifeBuoy size={18} color="#38bdf8" />
@@ -5422,31 +6151,31 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     });
 
     return (
-      <div className="sos-views-container">
-        <div className="sos-view-card">
-          <div className="sos-view-card-header" style={{ flexWrap: 'wrap', gap: '12px' }}>
-            <div className="sos-view-card-title">
-              <Building2 size={18} color="#a855f7" />
-              <span>
+      <div className="sos-views-container sos-light-view">
+        <div className="sos-view-card" style={{ border: '1px solid #e2e8f0', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', background: '#ffffff' }}>
+          <div className="sos-view-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', padding: '16px 20px', borderBottom: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Building2 size={20} color="#334155" />
+              <span style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
                 Cán Bộ &amp; Địa Bàn Phụ Trách ({authorities.length} cán bộ điều hành toàn quốc)
               </span>
             </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
               <button
                 type="button"
-                className="sos-btn-action"
                 style={{
-                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  background: '#0284c7',
                   color: '#ffffff',
                   fontWeight: 600,
-                  boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                  fontSize: '13px',
                   border: 'none',
                   padding: '8px 16px',
                   borderRadius: '6px',
-                  display: 'flex',
+                  display: 'inline-flex',
                   alignItems: 'center',
                   gap: '6px',
                   cursor: 'pointer',
+                  transition: 'background 0.15s ease',
                 }}
                 onClick={() => {
                   setAuthSubmitError(null);
@@ -5461,13 +6190,24 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                   }
                 }}
               >
-                <UserPlus size={16} />
+                <UserPlus size={15} />
                 <span>+ Tạo Tài Khoản Cán Bộ</span>
               </button>
               <button
                 type="button"
-                className="sos-btn-action"
-                style={{ backgroundColor: '#1e293b', color: '#f1f5f9', border: '1px solid #475569', padding: '8px 12px', borderRadius: '6px' }}
+                style={{
+                  backgroundColor: '#ffffff',
+                  color: '#334155',
+                  border: '1px solid #cbd5e1',
+                  padding: '8px 14px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                }}
                 onClick={refreshData}
               >
                 <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
@@ -5477,37 +6217,63 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
           </div>
 
           {/* Thanh lọc nhanh trạng thái & Tìm kiếm */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', padding: '12px 18px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'inline-flex', background: '#e2e8f0', padding: '3px', borderRadius: '8px', gap: '3px' }}>
               <button
                 type="button"
-                className={`sos-btn-filter-pill ${authStatusFilter === 'ALL' ? 'active' : ''}`}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '12.5px',
+                  fontWeight: authStatusFilter === 'ALL' ? 600 : 500,
+                  borderRadius: '6px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: authStatusFilter === 'ALL' ? '#ffffff' : 'transparent',
+                  color: authStatusFilter === 'ALL' ? '#0f172a' : '#64748b',
+                  boxShadow: authStatusFilter === 'ALL' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                }}
                 onClick={() => setAuthStatusFilter('ALL')}
               >
                 Tất cả ({authorities.length})
               </button>
               <button
                 type="button"
-                className={`sos-btn-filter-pill ${authStatusFilter === 'ACTIVE' ? 'active-green' : ''}`}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '12.5px',
+                  fontWeight: authStatusFilter === 'ACTIVE' ? 600 : 500,
+                  borderRadius: '6px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: authStatusFilter === 'ACTIVE' ? '#ffffff' : 'transparent',
+                  color: authStatusFilter === 'ACTIVE' ? '#16a34a' : '#64748b',
+                  boxShadow: authStatusFilter === 'ACTIVE' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                }}
                 onClick={() => setAuthStatusFilter('ACTIVE')}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
               >
-                <UserCheck size={13} />
-                <span>Đang hoạt động ({activeOfficersCount})</span>
+                Đang hoạt động ({activeOfficersCount})
               </button>
               <button
                 type="button"
-                className={`sos-btn-filter-pill ${authStatusFilter === 'INACTIVE' ? 'active-red' : ''}`}
+                style={{
+                  padding: '6px 12px',
+                  fontSize: '12.5px',
+                  fontWeight: authStatusFilter === 'INACTIVE' ? 600 : 500,
+                  borderRadius: '6px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: authStatusFilter === 'INACTIVE' ? '#ffffff' : 'transparent',
+                  color: authStatusFilter === 'INACTIVE' ? '#dc2626' : '#64748b',
+                  boxShadow: authStatusFilter === 'INACTIVE' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                }}
                 onClick={() => setAuthStatusFilter('INACTIVE')}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
               >
-                <UserX size={13} />
-                <span>Tạm khóa / Ngừng ({inactiveOfficersCount})</span>
+                Tạm khóa / Ngừng ({inactiveOfficersCount})
               </button>
             </div>
 
             <div style={{ position: 'relative' }}>
-              <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+              <Search size={14} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
               <input
                 type="text"
                 placeholder="Tìm cán bộ, SĐT, email hoặc địa bàn..."
@@ -5515,13 +6281,13 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                 onChange={(e) => setAuthSearchQuery(e.target.value)}
                 style={{
                   padding: '7px 14px 7px 32px',
-                  borderRadius: '20px',
-                  fontSize: '12.5px',
+                  borderRadius: '6px',
+                  fontSize: '13px',
                   border: '1px solid #cbd5e1',
                   background: '#ffffff',
                   color: '#0f172a',
                   outline: 'none',
-                  minWidth: '270px',
+                  minWidth: '290px',
                 }}
               />
             </div>
@@ -5531,19 +6297,20 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             <table className="sos-table">
               <thead>
                 <tr>
-                  <th style={{ width: '18%' }}>Họ và tên</th>
-                  <th style={{ width: '20%' }}>Số điện thoại / Email</th>
-                  <th style={{ width: '20%' }}>Khu vực phụ trách (Địa bàn)</th>
-                  <th style={{ width: '18%' }}>Đơn vị / Cơ quan</th>
+                  <th style={{ width: '16%' }}>Họ và tên</th>
+                  <th style={{ width: '19%' }}>Số điện thoại / Email</th>
+                  <th style={{ width: '18%' }}>Khu vực phụ trách (Địa bàn)</th>
+                  <th style={{ width: '10%', textAlign: 'center' }}>Bản đồ</th>
+                  <th style={{ width: '17%' }}>Đơn vị / Cơ quan</th>
                   <th style={{ width: '12%' }}>Chức vụ</th>
-                  <th style={{ width: '12%', textAlign: 'center' }}>Trạng thái</th>
-                  <th style={{ width: '14%', textAlign: 'center' }}>Hành động</th>
+                  <th style={{ width: '11%', textAlign: 'center' }}>Trạng thái</th>
+                  <th style={{ width: '11%', textAlign: 'center' }}>Hành động</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredAuthorities.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '28px', color: '#94a3b8' }}>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '36px', color: '#64748b' }}>
                       {authorities.length === 0
                         ? 'Chưa có tài khoản cán bộ địa phương nào. Nhấn "+ Tạo Tài Khoản Cán Bộ" để tạo mới!'
                         : 'Không có cán bộ nào phù hợp với bộ lọc tìm kiếm.'}
@@ -5555,84 +6322,110 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                     const isActive = a.status === 'ACTIVE';
                     return (
                       <tr key={a._id}>
-                        <td><strong>{a.fullName}</strong></td>
                         <td>
-                          <div style={{ fontWeight: 600, color: '#f8fafc' }}>{a.phone}</div>
-                          <small style={{ color: '#94a3b8' }}>{a.email || '--'}</small>
+                          <div style={{ fontWeight: 600, color: '#0f172a' }}>{a.fullName}</div>
                         </td>
                         <td>
-                          <span
+                          <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px' }}>{a.phone || '--'}</div>
+                          <div style={{ color: '#64748b', fontSize: '12px' }}>{a.email || '--'}</div>
+                        </td>
+                        <td>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#1e293b', fontWeight: 500, fontSize: '13px' }}>
+                            <MapPin size={14} color="#64748b" />
+                            <span>{areaName}</span>
+                          </div>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedMapOfficer(a)}
                             style={{
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '5px',
+                              gap: '4px',
                               padding: '4px 10px',
                               borderRadius: '6px',
+                              border: '1px solid #cbd5e1',
+                              background: '#f8fafc',
+                              color: '#0369a1',
                               fontSize: '12px',
-                              fontWeight: 600,
-                              backgroundColor: 'rgba(56, 189, 248, 0.15)',
-                              color: '#38bdf8',
-                              border: '1px solid rgba(56, 189, 248, 0.3)',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
                             }}
+                            title={`Xem bản đồ khu vực ${areaName}`}
                           >
-                            <MapPin size={13} />
-                            <span>{areaName}</span>
-                          </span>
+                            <Map size={13} />
+                            <span>Xem</span>
+                          </button>
                         </td>
-                        <td>{a.authority?.department || 'Ban chỉ huy PCTT'}</td>
-                        <td>{a.authority?.position || 'Cán bộ tác chiến'}</td>
+                        <td style={{ color: '#334155', fontSize: '13px' }}>{a.authority?.department || 'Ban chỉ huy PCTT'}</td>
+                        <td style={{ color: '#475569', fontSize: '13px' }}>{a.authority?.position || 'Cán bộ tác chiến'}</td>
                         <td style={{ textAlign: 'center' }}>
-                          <span
-                            className={`sos-badge ${isActive ? 'active' : 'critical'}`}
-                            style={{ cursor: 'pointer', userSelect: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                            title="Bấm để chuyển nhanh trạng thái"
+                          <button
+                            type="button"
                             onClick={() => handleQuickToggleAuthStatus(a)}
+                            style={{
+                              background: isActive ? '#f0fdf4' : '#f8fafc',
+                              color: isActive ? '#15803d' : '#64748b',
+                              border: `1px solid ${isActive ? '#bbf7d0' : '#e2e8f0'}`,
+                              borderRadius: '6px',
+                              padding: '3px 8px',
+                              fontSize: '11.5px',
+                              fontWeight: 600,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                              cursor: 'pointer',
+                            }}
+                            title="Bấm để chuyển trạng thái"
                           >
-                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: isActive ? '#16a34a' : '#ef4444' }} />
-                            {isActive ? 'HOẠT ĐỘNG' : a.status || 'TẠM KHÓA'}
-                          </span>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: isActive ? '#16a34a' : '#94a3b8' }} />
+                            <span>{isActive ? 'HOẠT ĐỘNG' : 'TẠM KHÓA'}</span>
+                          </button>
                         </td>
                         <td style={{ textAlign: 'center' }}>
                           <div style={{ display: 'inline-flex', gap: '6px' }}>
                             <button
                               type="button"
-                              className="sos-btn-action"
                               style={{
-                                padding: '5px 10px',
-                                borderRadius: '6px',
-                                backgroundColor: 'rgba(2, 132, 199, 0.15)',
-                                color: '#0284c7',
-                                border: '1px solid rgba(2, 132, 199, 0.3)',
+                                padding: '4px 8px',
+                                borderRadius: '5px',
+                                backgroundColor: '#ffffff',
+                                color: '#0369a1',
+                                border: '1px solid #cbd5e1',
                                 fontSize: '12px',
-                                fontWeight: 600,
+                                fontWeight: 500,
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '4px',
+                                gap: '3px',
                                 cursor: 'pointer',
                               }}
-                              title="Chỉnh sửa thông tin & đổi địa bàn quản lý"
+                              title="Chỉnh sửa thông tin cán bộ"
                               onClick={() => handleOpenEditAuthority(a)}
                             >
-                              <Edit size={13} />
+                              <Edit size={12} />
                               <span>Sửa</span>
                             </button>
                             <button
                               type="button"
-                              className={`sos-btn-action ${isActive ? 'danger' : 'success'}`}
                               style={{
-                                padding: '5px 10px',
-                                borderRadius: '6px',
+                                padding: '4px 8px',
+                                borderRadius: '5px',
+                                backgroundColor: '#ffffff',
+                                color: isActive ? '#b91c1c' : '#15803d',
+                                border: `1px solid ${isActive ? '#fecaca' : '#bbf7d0'}`,
                                 fontSize: '12px',
-                                fontWeight: 600,
+                                fontWeight: 500,
                                 display: 'inline-flex',
                                 alignItems: 'center',
-                                gap: '4px',
+                                gap: '3px',
                                 cursor: 'pointer',
                               }}
                               title={isActive ? 'Khóa tài khoản cán bộ' : 'Mở khóa kích hoạt lại'}
                               onClick={() => handleQuickToggleAuthStatus(a)}
                             >
-                              {isActive ? <Lock size={13} /> : <Unlock size={13} />}
+                              {isActive ? <Lock size={12} /> : <Unlock size={12} />}
                               <span>{isActive ? 'Khóa' : 'Mở'}</span>
                             </button>
                           </div>
@@ -5732,7 +6525,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                       placeholder="VD: Nguyễn Văn Sơn"
                       value={editAuthForm.fullName}
                       onChange={(e) => setEditAuthForm({ ...editAuthForm, fullName: e.target.value })}
-                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', background: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1' }}
                     />
                   </div>
                   <div>
@@ -5746,7 +6539,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                       placeholder="VD: 0905123456"
                       value={editAuthForm.phone}
                       onChange={(e) => setEditAuthForm({ ...editAuthForm, phone: e.target.value })}
-                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', background: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1' }}
                     />
                   </div>
                 </div>
@@ -5762,7 +6555,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                       placeholder="VD: officer@danang.gov.vn"
                       value={editAuthForm.email}
                       onChange={(e) => setEditAuthForm({ ...editAuthForm, email: e.target.value })}
-                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', background: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1' }}
                     />
                   </div>
                   <div>
@@ -5773,7 +6566,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                       className="sos-form-select"
                       value={editAuthForm.status}
                       onChange={(e) => setEditAuthForm({ ...editAuthForm, status: e.target.value })}
-                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', background: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1' }}
                     >
                       <option value="ACTIVE">🟢 ACTIVE - Đang hoạt động tác chiến</option>
                       <option value="INACTIVE">🔴 INACTIVE - Tạm khóa / Ngừng điều hành</option>
@@ -5801,32 +6594,21 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                         department: `Ban Chỉ Huy PCTT ${areaName}`,
                       });
                     }}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', background: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1' }}
                   >
                     {/* Địa bàn hiện tại */}
                     {editAuthForm.areaName && (
                       <option value={editAuthForm.areaId}>
-                        ⭐ {editAuthForm.areaName} (Địa bàn đang quản lý)
+                        ⭐ {editAuthForm.areaName} (Địa bàn hiện tại)
                       </option>
                     )}
-                    {/* Các địa bàn còn trống */}
-                    <optgroup label="Các địa bàn chưa có cán bộ quản lý (Trống)">
-                      {availableAreas.map((ar: { id: string; name: string; district: string }) => (
+                    {DANANG_ADMIN_AREAS
+                      .filter((ar) => ar.id !== editAuthForm.areaId)
+                      .map((ar: { id: string; name: string; district: string }) => (
                         <option key={ar.id} value={ar.id}>
-                          🟢 {ar.name} ({ar.district})
+                          {ar.name} ({ar.district})
                         </option>
                       ))}
-                    </optgroup>
-                    {/* Các địa bàn khác */}
-                    <optgroup label="Các địa bàn khác">
-                      {assignedAreas
-                        .filter((ar: { id: string; name: string }) => ar.id !== editAuthForm.areaId && ar.name !== editAuthForm.areaName)
-                        .map((ar: { id: string; name: string; district: string }) => (
-                          <option key={ar.id} value={ar.id}>
-                            ⚠️ {ar.name} ({ar.district}) – Đã có cán bộ khác
-                          </option>
-                        ))}
-                    </optgroup>
                   </select>
                   <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
                     * Chọn địa bàn mới để chuyển quyền điều phối tác chiến của cán bộ này sang khu vực đó.
@@ -5843,7 +6625,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                       className="sos-form-input"
                       value={editAuthForm.department}
                       onChange={(e) => setEditAuthForm({ ...editAuthForm, department: e.target.value })}
-                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', background: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1' }}
                     />
                   </div>
                   <div>
@@ -5855,7 +6637,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                       className="sos-form-input"
                       value={editAuthForm.position}
                       onChange={(e) => setEditAuthForm({ ...editAuthForm, position: e.target.value })}
-                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px' }}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', background: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1' }}
                     />
                   </div>
                 </div>
@@ -5877,6 +6659,9 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                         padding: '9px 38px 9px 12px',
                         borderRadius: '6px',
                         fontFamily: editAuthForm.password ? 'monospace' : 'inherit',
+                        background: '#ffffff',
+                        color: '#0f172a',
+                        border: '1px solid #cbd5e1',
                       }}
                     />
                     <button
@@ -5984,8 +6769,6 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             >
               {(() => {
                 const currentCityAreas = modalProvinceSubUnits.length > 0 ? modalProvinceSubUnits : DANANG_ADMIN_AREAS;
-                const currentAvailableAreas = currentCityAreas.filter((ar) => !isAreaAssigned(ar, createAuthForm.city));
-                const currentAssignedAreas = currentCityAreas.filter((ar) => isAreaAssigned(ar, createAuthForm.city));
                 const allProvincesList = vietnamProvinces.length > 0 ? vietnamProvinces : VIETNAM_34_PROVINCES_STANDARD;
 
                 return (
@@ -6055,29 +6838,11 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                       </div>
                     )}
 
-                    {authSubmitSuccess && (
-                      <div
-                        style={{
-                          backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                          border: '1px solid rgba(16, 185, 129, 0.3)',
-                          color: '#059669',
-                          padding: '12px 16px',
-                          borderRadius: '10px',
-                          fontSize: '13px',
-                          marginBottom: '18px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                        }}
-                      >
-                        <span>{authSubmitSuccess}</span>
-                      </div>
-                    )}
 
                     <form onSubmit={handleCreateAuthorityUser} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                       {/* PHẦN 1: THÔNG TIN TÀI KHOẢN CÁN BỘ */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        <div style={{ fontSize: '11.5px', fontWeight: 700, textTransform: 'uppercase', color: '#475569', letterSpacing: '0.6px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: '#334155', letterSpacing: '0.5px' }}>
                           1. Thông Tin Tài Khoản Đăng Nhập
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
@@ -6092,7 +6857,15 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                               placeholder="VD: Nguyễn Văn Thắng"
                               value={createAuthForm.fullName}
                               onChange={(e) => setCreateAuthForm({ ...createAuthForm, fullName: e.target.value })}
-                              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }}
+                              style={{
+                                width: '100%',
+                                padding: '10px 14px',
+                                borderRadius: '8px',
+                                fontSize: '13px',
+                                background: '#ffffff',
+                                color: '#0f172a',
+                                border: '1px solid #cbd5e1',
+                              }}
                             />
                           </div>
                           <div>
@@ -6106,7 +6879,15 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                               placeholder="VD: 0905123456"
                               value={createAuthForm.phone}
                               onChange={(e) => setCreateAuthForm({ ...createAuthForm, phone: e.target.value })}
-                              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }}
+                              style={{
+                                width: '100%',
+                                padding: '10px 14px',
+                                borderRadius: '8px',
+                                fontSize: '13px',
+                                background: '#ffffff',
+                                color: '#0f172a',
+                                border: '1px solid #cbd5e1',
+                              }}
                             />
                           </div>
                         </div>
@@ -6123,7 +6904,15 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                               placeholder="VD: thang.nguyen@danang.gov.vn"
                               value={createAuthForm.email}
                               onChange={(e) => setCreateAuthForm({ ...createAuthForm, email: e.target.value })}
-                              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', fontSize: '13px' }}
+                              style={{
+                                width: '100%',
+                                padding: '10px 14px',
+                                borderRadius: '8px',
+                                fontSize: '13px',
+                                background: '#ffffff',
+                                color: '#0f172a',
+                                border: '1px solid #cbd5e1',
+                              }}
                             />
                           </div>
                           <div>
@@ -6143,11 +6932,12 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                                   padding: '10px 42px 10px 14px',
                                   borderRadius: '8px',
                                   fontFamily: 'monospace',
-                                  fontWeight: 700,
+                                  fontWeight: 600,
                                   fontSize: '13.5px',
                                   letterSpacing: '0.8px',
-                                  color: '#0284c7',
-                                  backgroundColor: 'rgba(2, 132, 199, 0.04)',
+                                  color: '#0f172a',
+                                  backgroundColor: '#ffffff',
+                                  border: '1px solid #cbd5e1',
                                 }}
                               />
                               <button
@@ -6165,7 +6955,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                                   transform: 'translateY(-50%)',
                                   background: 'none',
                                   border: 'none',
-                                  color: '#0284c7',
+                                  color: '#64748b',
                                   cursor: 'pointer',
                                   padding: '6px',
                                   display: 'flex',
@@ -6186,14 +6976,13 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                         </div>
                       </div>
 
-                      <div style={{ borderTop: '1px solid #f1f5f9', margin: '2px 0' }} />
+                      <div style={{ borderTop: '1px solid #e2e8f0', margin: '4px 0' }} />
 
                       {/* PHẦN 2: PHẠM VI ĐỊA BÀN PHÂN QUYỀN TÁC CHIẾN */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div style={{ fontSize: '11.5px', fontWeight: 700, textTransform: 'uppercase', color: '#0284c7', letterSpacing: '0.6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                            <MapPin size={13} />
-                            <span>2. Phạm Vi Địa Bàn Quản Lý (34 Tỉnh Thành Cả Nước)</span>
+                          <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: '#334155', letterSpacing: '0.5px' }}>
+                            2. Phạm Vi Địa Bàn Quản Lý (34 Tỉnh Thành Cả Nước)
                           </div>
                           {modalSubUnitsLoading && (
                             <span style={{ fontSize: '11.5px', color: '#0284c7', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
@@ -6212,7 +7001,16 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                               className="sos-form-select"
                               value={createAuthForm.city}
                               onChange={(e) => handleCityChange(e.target.value)}
-                              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}
+                              style={{
+                                width: '100%',
+                                padding: '10px 14px',
+                                borderRadius: '8px',
+                                fontSize: '13px',
+                                cursor: 'pointer',
+                                background: '#ffffff',
+                                color: '#0f172a',
+                                border: '1px solid #cbd5e1',
+                              }}
                             >
                               {allProvincesList.map((p) => (
                                 <option key={p.code || p.name} value={p.name}>
@@ -6224,7 +7022,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
                           <div>
                             <label className="sos-form-label" style={{ fontSize: '12.5px', fontWeight: 600, display: 'block', marginBottom: '6px', color: '#1e293b' }}>
-                              Khu vực quản lý (Còn trống: {currentAvailableAreas.length}/{currentCityAreas.length}) <span style={{ color: '#ef4444' }}>*</span>
+                              Khu vực quản lý ({currentCityAreas.length} địa bàn) <span style={{ color: '#ef4444' }}>*</span>
                             </label>
                             <select
                               className="sos-form-select"
@@ -6240,89 +7038,44 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                                   areaName: areaName,
                                 });
                               }}
-                              style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}
+                              style={{
+                                width: '100%',
+                                padding: '10px 14px',
+                                borderRadius: '8px',
+                                fontSize: '13px',
+                                cursor: 'pointer',
+                                background: '#ffffff',
+                                color: '#0f172a',
+                                border: '1px solid #cbd5e1',
+                              }}
                             >
-                              {currentAvailableAreas.length === 0 ? (
+                              {currentCityAreas.length === 0 ? (
                                 <option value="" disabled>
-                                  Không còn địa bàn nào chưa có quản lý tại {createAuthForm.city}
+                                  Không có dữ liệu khu vực tại {createAuthForm.city}
                                 </option>
                               ) : (
-                                <optgroup label={`Khu vực chưa có quản lý (${currentAvailableAreas.length} địa bàn khả dụng)`}>
-                                  {currentAvailableAreas.map((ar) => (
+                                currentCityAreas.map((ar) => {
+                                  const officersInArea = authorities.filter((a: any) => {
+                                    const authAreaId = String(a.authority?.areaId || '').trim();
+                                    const authAreaName = String(a.authority?.areaName || '').trim().toLowerCase();
+                                    const cleanAuthName = authAreaName.replace(/^(Phường|Xã|Quận|Huyện|Thị trấn)\s+/i, '').trim();
+                                    const cleanArName = ar.name.replace(/^(Phường|Xã|Quận|Huyện|Thị trấn)\s+/i, '').trim().toLowerCase();
+                                    return authAreaId === ar.id || authAreaName === ar.name.toLowerCase() || (cleanAuthName && cleanAuthName === cleanArName);
+                                  });
+                                  const count = officersInArea.length;
+                                  return (
                                     <option key={ar.id} value={ar.id}>
-                                      {ar.name} {ar.district ? `(${ar.district})` : ''}
+                                      {ar.name} {ar.district ? `(${ar.district})` : ''} {count > 0 ? `• [Hiện có ${count} cán bộ]` : ''}
                                     </option>
-                                  ))}
-                                </optgroup>
-                              )}
-                              {currentAssignedAreas.length > 0 && (
-                                <optgroup label="Khu vực đã có tài khoản quản lý (Khóa)">
-                                  {currentAssignedAreas.map((ar) => {
-                                    const mgr = authorities.find((a: any) => {
-                                      const authAreaId = String(a.authority?.areaId || '').trim();
-                                      const authAreaName = String(a.authority?.areaName || '').trim().toLowerCase();
-                                      const cleanAuthName = authAreaName.replace(/^(Phường|Xã|Quận|Huyện|Thị trấn)\s+/i, '').trim();
-                                      const cleanArName = ar.name.replace(/^(Phường|Xã|Quận|Huyện|Thị trấn)\s+/i, '').trim().toLowerCase();
-                                      return authAreaId === ar.id || authAreaName === ar.name.toLowerCase() || (cleanAuthName && cleanAuthName === cleanArName);
-                                    });
-                                    return (
-                                      <option key={ar.id} value={ar.id} disabled style={{ color: '#94a3b8' }}>
-                                        ⛔ {ar.name} – Đã có: {mgr?.fullName || 'Cán bộ'} ({mgr?.phone || ''})
-                                      </option>
-                                    );
-                                  })}
-                                </optgroup>
+                                  );
+                                })
                               )}
                             </select>
                           </div>
                         </div>
 
                         <div style={{ fontSize: '11.5px', color: '#64748b', fontStyle: 'italic', marginTop: '-2px' }}>
-                          * Mỗi phường/xã chỉ có 1 tài khoản điều phối. Hệ thống chỉ cho phép gán khu vực chưa có quản lý để tránh xung đột tác chiến.
-                        </div>
-                      </div>
-
-                      {/* THẺ TÓM TẮT ĐỊNH VỊ TÁC CHIẾN */}
-                      <div
-                        style={{
-                          backgroundColor: '#f0f9ff',
-                          border: '1px solid #bae6fd',
-                          borderRadius: '12px',
-                          padding: '14px 16px',
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          gap: '12px',
-                          marginTop: '4px',
-                        }}
-                      >
-                        <MapPin size={20} color="#0284c7" style={{ flexShrink: 0, marginTop: '2px' }} />
-                        <div style={{ fontSize: '13px', lineHeight: 1.55, color: '#334155' }}>
-                          <div style={{ color: '#0369a1', fontWeight: 700, marginBottom: '3px' }}>
-                            Cơ chế tự động định vị địa bàn tác chiến:
-                          </div>
-                          <div>
-                            Khi cán bộ đăng nhập bằng SĐT này, hệ thống sẽ tự động khóa định vị và quản lý tại{' '}
-                            <strong style={{ color: '#0284c7', fontWeight: 700 }}>{createAuthForm.areaName || 'Khu vực quản lý'}</strong>{' '}
-                            (thuộc <strong style={{ color: '#0f172a' }}>{createAuthForm.city}</strong>) – Mã ranh giới:{' '}
-                            <span
-                              style={{
-                                backgroundColor: '#e0f2fe',
-                                color: '#0369a1',
-                                padding: '2px 7px',
-                                borderRadius: '4px',
-                                fontWeight: 700,
-                                fontSize: '12px',
-                                fontFamily: 'monospace',
-                                border: '1px solid #bae6fd',
-                              }}
-                            >
-                              {createAuthForm.areaId}
-                            </span>
-                            .
-                          </div>
-                          <div style={{ marginTop: '5px', fontSize: '12px', color: '#64748b' }}>
-                            • Vai trò tác chiến: <strong style={{ color: '#0f172a' }}>Chỉ Huy Trực Ban Tác Chiến</strong> (tiếp nhận SOS, cảnh báo rủi ro &amp; chỉ đạo các đội cứu hộ tại địa bàn).
-                          </div>
+                          * Một khu vực / phường xã có thể phân bổ nhiều cán bộ điều phối cùng tham gia trực ban và tác chiến.
                         </div>
                       </div>
 
@@ -6347,15 +7100,15 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                           type="submit"
                           disabled={authSubmitting || modalSubUnitsLoading}
                           style={{
-                            padding: '10px 24px',
+                            padding: '10px 22px',
                             borderRadius: '8px',
-                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                            color: '#fff',
+                            background: '#0284c7',
+                            color: '#ffffff',
                             border: 'none',
                             cursor: authSubmitting ? 'not-allowed' : 'pointer',
-                            fontWeight: 700,
-                            fontSize: '13.5px',
-                            boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)',
+                            fontWeight: 600,
+                            fontSize: '13px',
+                            boxShadow: '0 1px 3px rgba(2, 132, 199, 0.25)',
                             display: 'flex',
                             alignItems: 'center',
                             gap: '7px',
@@ -6381,6 +7134,367 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             </div>
           </div>
         )}
+
+        {/* MODAL: THÔNG BÁO TẠO TÀI KHOẢN CÁN BỘ THÀNH CÔNG */}
+        {createdOfficerSuccess && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(15, 23, 42, 0.65)',
+              backdropFilter: 'blur(4px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 130,
+              padding: '20px',
+            }}
+            onClick={() => setCreatedOfficerSuccess(null)}
+          >
+            <div
+              className="sos-modal-card"
+              style={{
+                borderRadius: '14px',
+                padding: '28px 24px',
+                maxWidth: '430px',
+                width: '100%',
+                background: '#ffffff',
+                boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.2)',
+                border: '1px solid #e2e8f0',
+                textAlign: 'center',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '50%',
+                  backgroundColor: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  color: '#16a34a',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 16px',
+                }}
+              >
+                <Check size={24} strokeWidth={2.5} />
+              </div>
+
+              <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', margin: '0 0 6px' }}>
+                Tạo tài khoản thành công
+              </h3>
+              <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 20px', lineHeight: 1.5 }}>
+                Tài khoản điều phối tác chiến đã được khởi tạo và sẵn sàng tham gia trực ban.
+              </p>
+
+              <div
+                style={{
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  padding: '14px 16px',
+                  textAlign: 'left',
+                  fontSize: '13px',
+                  lineHeight: 1.6,
+                  color: '#334155',
+                  marginBottom: '18px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ color: '#64748b' }}>Cán bộ:</span>
+                  <strong style={{ color: '#0f172a' }}>{createdOfficerSuccess.fullName}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ color: '#64748b' }}>Số điện thoại:</span>
+                  <strong style={{ color: '#0f172a' }}>{createdOfficerSuccess.phone}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ color: '#64748b' }}>Địa bàn:</span>
+                  <strong style={{ color: '#0284c7' }}>{createdOfficerSuccess.areaName}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #e2e8f0', paddingTop: '8px', marginTop: '6px' }}>
+                  <span style={{ color: '#64748b' }}>Email tiếp nhận:</span>
+                  <span style={{ color: '#0f172a', fontWeight: 500 }}>{createdOfficerSuccess.email}</span>
+                </div>
+              </div>
+
+              <p style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic', margin: '0 0 22px', lineHeight: 1.5 }}>
+                * Mật khẩu khởi tạo và liên kết kích hoạt đã được gửi tự động đến email của cán bộ.
+              </p>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  style={{
+                    flex: 1,
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    background: '#f8fafc',
+                    color: '#475569',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => {
+                    setCreatedOfficerSuccess(null);
+                    setShowCreateAuthModal(true);
+                  }}
+                >
+                  Tạo tiếp tài khoản khác
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    flex: 1,
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#0284c7',
+                    color: '#ffffff',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                    boxShadow: '0 1px 3px rgba(2, 132, 199, 0.25)',
+                  }}
+                  onClick={() => setCreatedOfficerSuccess(null)}
+                >
+                  Hoàn tất
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL POPUP: XEM BẢN ĐỒ KHU VỰC ĐỊA BÀN PHỤ TRÁCH */}
+        {selectedMapOfficer && (() => {
+          const officerArea = selectedMapOfficer.authority?.areaName || selectedMapOfficer.authority?.areaId || 'Địa bàn phụ trách';
+          const officerDept = selectedMapOfficer.authority?.department || '';
+          const coords = getAreaCoordinates(officerArea, officerDept);
+          const isOfficerActive = selectedMapOfficer.status === 'ACTIVE';
+
+          return (
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                backgroundColor: 'rgba(15, 23, 42, 0.5)',
+                backdropFilter: 'blur(3px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 9999,
+                padding: '16px',
+              }}
+              onClick={() => setSelectedMapOfficer(null)}
+            >
+              <div
+                style={{
+                  background: '#ffffff',
+                  borderRadius: '12px',
+                  width: '100%',
+                  maxWidth: '840px',
+                  boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.08)',
+                  overflow: 'hidden',
+                  border: '1px solid #cbd5e1',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Modal Header */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '14px 20px',
+                    borderBottom: '1px solid #e2e8f0',
+                    background: '#f8fafc',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Map size={20} color="#0284c7" />
+                    <div>
+                      <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
+                        Bản đồ địa bàn phụ trách
+                      </h4>
+                      <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b' }}>
+                        {officerArea}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid #cbd5e1',
+                      color: '#475569',
+                      cursor: 'pointer',
+                      padding: '6px',
+                      borderRadius: '6px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    title="Đóng cửa sổ bản đồ"
+                    onClick={() => setSelectedMapOfficer(null)}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Modal Body */}
+                <div style={{ padding: '18px 20px' }}>
+                  {/* Map container - Chiều cao mở rộng cho tầm nhìn bao quát */}
+                  <div style={{ height: '380px', width: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1', marginBottom: '14px' }}>
+                    <AreaPreviewMap
+                      lat={coords.lat}
+                      lng={coords.lng}
+                      areaName={officerArea}
+                      areaId={selectedMapOfficer.authority?.areaId}
+                      department={officerDept}
+                    />
+                  </div>
+
+                  {/* Thông tin cơ bản */}
+                  {/* Thẻ thông tin cán bộ phụ trách địa bàn */}
+                  <div
+                    style={{
+                      background: '#ffffff',
+                      borderRadius: '10px',
+                      border: '1px solid #e2e8f0',
+                      padding: '14px 18px',
+                      boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
+                    }}
+                  >
+                    {/* Hàng trên: Cán bộ, Chức vụ, Đơn vị & Trạng thái */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div
+                          style={{
+                            width: 38,
+                            height: 38,
+                            borderRadius: '50%',
+                            background: '#e0f2fe',
+                            color: '#0369a1',
+                            fontWeight: 700,
+                            fontSize: '14px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            border: '1px solid #bae6fd',
+                          }}
+                        >
+                          {(selectedMapOfficer.fullName || 'CB').slice(0, 1).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <h5 style={{ margin: 0, fontSize: '14.5px', fontWeight: 700, color: '#0f172a' }}>
+                              {selectedMapOfficer.fullName}
+                            </h5>
+                            {selectedMapOfficer.authority?.position && (
+                              <span
+                                style={{
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  color: '#0369a1',
+                                  background: '#f0f9ff',
+                                  border: '1px solid #e0f2fe',
+                                  padding: '2px 8px',
+                                  borderRadius: '4px',
+                                }}
+                              >
+                                {selectedMapOfficer.authority.position}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                            {selectedMapOfficer.authority?.department || 'Ban Chỉ Huy PCTT'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Trạng thái hoạt động */}
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '4px 10px',
+                          borderRadius: '20px',
+                          fontSize: '11.5px',
+                          fontWeight: 600,
+                          background: isOfficerActive ? '#dcfce7' : '#f1f5f9',
+                          color: isOfficerActive ? '#15803d' : '#64748b',
+                          border: `1px solid ${isOfficerActive ? '#bbf7d0' : '#e2e8f0'}`,
+                        }}
+                      >
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: isOfficerActive ? '#16a34a' : '#94a3b8' }} />
+                        {isOfficerActive ? 'Đang hoạt động' : 'Tạm dừng / Khóa'}
+                      </span>
+                    </div>
+
+                    {/* Đường phân cách */}
+                    <div style={{ height: '1px', background: '#f1f5f9', margin: '12px 0 10px 0' }} />
+
+                    {/* Hàng dưới: Liên hệ & Địa bàn */}
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                        gap: '12px',
+                        fontSize: '12px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ width: 28, height: 28, borderRadius: '6px', background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <Phone size={13} color="#0284c7" />
+                        </div>
+                        <div>
+                          <span style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>Điện thoại</span>
+                          <span style={{ color: '#0f172a', fontWeight: 600 }}>{selectedMapOfficer.phone || '--'}</span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: '6px', background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <Mail size={13} color="#0284c7" />
+                        </div>
+                        <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                          <span style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>Email</span>
+                          <span
+                            style={{
+                              color: '#334155',
+                              display: 'block',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                            title={selectedMapOfficer.email || '--'}
+                          >
+                            {selectedMapOfficer.email || '--'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ width: 28, height: 28, borderRadius: '6px', background: '#f8fafc', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <MapPin size={13} color="#0284c7" />
+                        </div>
+                        <div>
+                          <span style={{ color: '#64748b', fontSize: '11px', display: 'block' }}>Địa bàn quản lý</span>
+                          <span style={{ color: '#0f172a', fontWeight: 600 }}>{officerArea}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     );
   }
@@ -6472,7 +7586,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
       const wardCount = subUnits.filter((u) => u.type === 'WARD' || u.type === 'COMMUNE' || u.type === 'TOWN').length;
 
       return (
-        <div className="sos-views-container">
+        <div className="sos-views-container sos-light-view">
           {/* THANH BREADCRUMB ĐIỀU HƯỚNG */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13.5px' }}>
@@ -6841,7 +7955,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     });
 
     return (
-      <div className="sos-views-container">
+      <div className="sos-views-container sos-light-view">
         {/* STATS TỔNG QUAN CÁC TỈNH THÀNH VIỆT NAM */}
         <div className="sos-stats-grid">
           <div className="sos-stat-box">

@@ -2466,3 +2466,143 @@
   background-color: #cbd5e1;
   border-color: #94a3b8;
 }
+
+/* ============================================================
+   PAGE-SPECIFIC THEME ISOLATION (CHỈNH SÁNG 6 TRANG, CÒN LẠI GIỮ TỐI)
+   1. Các trang SÁNG dễ nhìn: Điều phối, Đội cứu hộ, Phương tiện, Xác minh cứu nạn, Cán bộ tổ chức, Khu vực hành chính
+   2. Các trang còn lại: Trả lại giao diện màu TỐI chuẩn tác chiến
+   ============================================================ */
+
+/* --- 1. SÁNG CHO 6 TRANG QUẢN TRỊ NGHIỆP VỤ --- */
+.sos-main-content.sos-page-theme-light {
+  background-color: #f8fafc !important;
+}
+
+.sos-main-content.sos-page-theme-light .sos-main-header {
+  background: #ffffff !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03) !important;
+}
+
+.sos-main-content.sos-page-theme-light .sos-page-title {
+  color: #0f172a !important;
+}
+
+.sos-main-content.sos-page-theme-light .sos-page-desc {
+  color: #64748b !important;
+}
+
+.sos-light-view,
+.sos-page-theme-light .sos-views-container {
+  color: #0f172a;
+}
+
+.sos-light-view .sos-view-card,
+.sos-page-theme-light .sos-view-card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05) !important;
+  color: #0f172a !important;
+}
+
+.sos-light-view .sos-view-card-header,
+.sos-page-theme-light .sos-view-card-header {
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.sos-light-view .sos-view-card-title,
+.sos-page-theme-light .sos-view-card-title {
+  color: #0f172a !important;
+}
+
+.sos-light-view .sos-stat-box,
+.sos-page-theme-light .sos-stat-box {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+.sos-light-view .sos-stat-value,
+.sos-page-theme-light .sos-stat-value {
+  color: #0f172a !important;
+}
+
+.sos-light-view .sos-stat-label,
+.sos-page-theme-light .sos-stat-label {
+  color: #64748b !important;
+}
+
+.sos-light-view .sos-table-wrapper,
+.sos-page-theme-light .sos-table-wrapper {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+}
+
+.sos-light-view .sos-table th,
+.sos-page-theme-light .sos-table th {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.sos-light-view .sos-table td,
+.sos-page-theme-light .sos-table td {
+  color: #1e293b !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.sos-light-view .sos-table tr:hover td,
+.sos-page-theme-light .sos-table tr:hover td {
+  background: #f8fafc !important;
+}
+
+.sos-light-view .sos-form-label,
+.sos-page-theme-light .sos-form-label {
+  color: #475569 !important;
+}
+
+.sos-light-view .sos-form-input,
+.sos-light-view .sos-form-select,
+.sos-light-view .sos-form-textarea,
+.sos-page-theme-light .sos-form-input,
+.sos-page-theme-light .sos-form-select,
+.sos-page-theme-light .sos-form-textarea {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.sos-light-view .sos-btn-refresh,
+.sos-page-theme-light .sos-btn-refresh {
+  background: #ffffff !important;
+  color: #475569 !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+.sos-light-view .sos-btn-refresh:hover,
+.sos-page-theme-light .sos-btn-refresh:hover {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+.sos-light-view .sos-btn-filter-pill,
+.sos-page-theme-light .sos-btn-filter-pill {
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #475569 !important;
+}
+
+.sos-light-view .sos-btn-filter-pill:hover,
+.sos-page-theme-light .sos-btn-filter-pill:hover {
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+.sos-light-view .sos-btn-filter-pill.active-blue,
+.sos-page-theme-light .sos-btn-filter-pill.active-blue {
+  background: #e0f2fe !important;
+  color: #0284c7 !important;
+  border-color: #bae6fd !important;
+}
+

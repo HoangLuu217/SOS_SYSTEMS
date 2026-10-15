@@ -487,13 +487,10 @@ class AuthService {
   /**
    * Đặt lại mật khẩu mới bằng token đã nhận
    */
-  async resetPassword({ email, token, newPassword }) {
-    if (!email || !isValidEmail(email)) {
-      throw new ApiError(400, 'Địa chỉ email không được để trống và phải có định dạng hợp lệ (có chứa ký tự @ và tên miền).');
-    }
-
-    if (!token || typeof token !== 'string' || !token.trim()) {
-      throw new ApiError(400, 'Mã xác nhận đặt lại mật khẩu (OTP) hoặc mật khẩu khởi tạo từ Email là bắt buộc.');
+  async resetPassword({ email, account, identifier, token, newPassword }) {
+    const rawAccount = (account || identifier || email || '').trim();
+    if (!rawAccount) {
+      throw new ApiError(400, 'Tài khoản đăng nhập (Số điện thoại hoặc Email) không được để trống.');
     }
 
     const passCheck = validatePasswordStrength(newPassword);
@@ -501,19 +498,17 @@ class AuthService {
       throw new ApiError(400, passCheck.message);
     }
 
-    const cleanToken = token.trim();
-    const tokenHash = hashToken(cleanToken);
-
     let user = null;
+    const candidateUser = await User.findOne({
+      $or: [
+        { email: rawAccount.toLowerCase() },
+        { phone: rawAccount },
+      ],
+    });
 
-    if (email) {
-      const identifier = email.trim();
-      const candidateUser = await User.findOne({
-        $or: [
-          { email: identifier.toLowerCase() },
-          { phone: identifier },
-        ],
-      });
+    if (token && typeof token === 'string' && token.trim()) {
+      const cleanToken = token.trim();
+      const tokenHash = hashToken(cleanToken);
 
       if (candidateUser) {
         // 1. Khớp theo hashToken (mã OTP hoặc token trong link đổi mật khẩu)
@@ -531,18 +526,25 @@ class AuthService {
           user = candidateUser;
         }
       }
+
+      // Nếu chưa tìm thấy hoặc không có email truyền vào, tìm theo resetPasswordTokenHash
+      if (!user) {
+        user = await User.findOne({
+          resetPasswordTokenHash: tokenHash,
+          resetPasswordExpires: { $gt: new Date() },
+        });
+      }
+
+      if (!user) {
+        throw new ApiError(400, 'Mã xác nhận hoặc token liên kết không chính xác hoặc đã hết hạn.');
+      }
+    } else {
+      // Khi không truyền token, dùng trực tiếp candidateUser nếu tồn tại
+      user = candidateUser;
     }
 
-    // Nếu chưa tìm thấy hoặc không có email truyền vào, tìm theo resetPasswordTokenHash
     if (!user) {
-      user = await User.findOne({
-        resetPasswordTokenHash: tokenHash,
-        resetPasswordExpires: { $gt: new Date() },
-      });
-    }
-
-    if (!user) {
-      throw new ApiError(400, 'Mã OTP hoặc mật khẩu khởi tạo không chính xác hoặc đã hết hạn.');
+      throw new ApiError(404, 'Không tìm thấy tài khoản tương ứng với email đã cung cấp.');
     }
 
     // Băm mật khẩu mới

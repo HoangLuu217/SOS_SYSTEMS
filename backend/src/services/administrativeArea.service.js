@@ -404,6 +404,147 @@ class AdministrativeAreaService {
 
     return managerMap;
   }
+
+  /**
+   * Lấy hoặc truy vấn online ranh giới GeoJSON polygon của một khu vực hành chính (phường/xã/quận/huyện)
+   * Tự động lưu cache vào CSDL MongoDB để các lần sau không cần gọi API ngoài
+   */
+  async getBoundaryForArea({ areaId, name, province, district }) {
+    let areaDoc = null;
+    if (areaId && mongoose.Types.ObjectId.isValid(areaId)) {
+      areaDoc = await AdministrativeArea.findById(areaId);
+    }
+    if (!areaDoc && name) {
+      const cleanName = name
+        .replace(/^(phường|xã|thị trấn|quận|huyện|thị xã|thành phố)\s+/i, '')
+        .trim();
+      areaDoc = await AdministrativeArea.findOne({
+        name: new RegExp(cleanName, 'i'),
+      });
+    }
+
+    // 1. Nếu đã có boundary trong CSDL
+    if (areaDoc && areaDoc.boundary && Array.isArray(areaDoc.boundary.coordinates) && areaDoc.boundary.coordinates.length > 0) {
+      return {
+        areaId: areaDoc._id,
+        name: areaDoc.name,
+        code: areaDoc.code,
+        boundary: areaDoc.boundary,
+        source: 'DATABASE_CACHE',
+      };
+    }
+
+    // 2. Chuẩn bị truy vấn online qua Nominatim / Geoapify
+    const targetName = name || (areaDoc ? areaDoc.name : '');
+    if (!targetName) {
+      return null;
+    }
+
+    const cleanTargetName = targetName.trim();
+    const cleanProvince = (province || '').replace(/^Thành phố\s+|^Tỉnh\s+/i, '').trim();
+    const cleanDistrict = (district || '').replace(/^(Quận|Huyện|Thị xã)\s+/i, '').trim();
+
+    // Các biến thể từ khóa tìm kiếm tăng dần độ rộng
+    const searchQueries = [];
+    if (cleanDistrict && cleanProvince) {
+      searchQueries.push(`${cleanTargetName}, ${cleanDistrict}, ${cleanProvince}`);
+    }
+    if (cleanProvince) {
+      searchQueries.push(`${cleanTargetName}, ${cleanProvince}`);
+    }
+    searchQueries.push(cleanTargetName);
+
+    let foundFeature = null;
+
+    // Thử lần lượt qua Nominatim
+    for (const q of searchQueries) {
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&countrycodes=vn&format=geojson&polygon_geojson=1&limit=5`;
+        const res = await fetch(url, {
+          headers: {
+            'User-Agent': 'SOS_Vietnam_Emergency_System/1.0 (contact@sos-system.vn)',
+          },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const polyFeature = data.features?.find(
+            (f) => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')
+          );
+          if (polyFeature) {
+            foundFeature = polyFeature;
+            break;
+          }
+        }
+      } catch (err) {
+        console.warn(`Nominatim search failed for query "${q}":`, err.message);
+      }
+    }
+
+    // Fallback: Geoapify Geocode + Boundary
+    if (!foundFeature) {
+      for (const q of searchQueries) {
+        try {
+          const geoUrl = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(q + ', Vietnam')}&format=geojson&apiKey=3383e3ba2267489985bbe6d9bf7aa05d`;
+          const geoRes = await fetch(geoUrl);
+          if (geoRes.ok) {
+            const geoData = await geoRes.json();
+            const placeId = geoData.features?.[0]?.properties?.place_id;
+            if (placeId) {
+              const boundUrl = `https://api.geoapify.com/v1/boundaries/part-of?id=${placeId}&geometry=geometry_1000&apiKey=3383e3ba2267489985bbe6d9bf7aa05d`;
+              const boundRes = await fetch(boundUrl);
+              if (boundRes.ok) {
+                const boundData = await boundRes.json();
+                const bFeature = boundData.features?.find(
+                  (f) => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')
+                );
+                if (bFeature) {
+                  foundFeature = bFeature;
+                  break;
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.warn(`Geoapify fallback failed for query "${q}":`, err.message);
+        }
+      }
+    }
+
+    if (!foundFeature || !foundFeature.geometry) {
+      return null;
+    }
+
+    const boundary = {
+      type: foundFeature.geometry.type,
+      coordinates: foundFeature.geometry.coordinates,
+    };
+
+    // 3. Tự động lưu cache boundary vào MongoDB
+    if (areaDoc) {
+      areaDoc.boundary = boundary;
+      await areaDoc.save();
+    } else {
+      try {
+        areaDoc = await AdministrativeArea.create({
+          name: cleanTargetName,
+          code: `AUTO-${Date.now()}`,
+          type: 'WARD',
+          boundary,
+          status: 'ACTIVE',
+        });
+      } catch (e) {
+        // ignore unique code conflict
+      }
+    }
+
+    return {
+      areaId: areaDoc ? areaDoc._id : null,
+      name: areaDoc ? areaDoc.name : cleanTargetName,
+      code: areaDoc ? areaDoc.code : null,
+      boundary,
+      source: 'LIVE_FETCH_AND_CACHED',
+    };
+  }
 }
 
 module.exports = new AdministrativeAreaService();

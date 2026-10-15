@@ -12,7 +12,6 @@ import {
   AlertTriangle,
   BarChart3,
   History,
-  Settings,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -289,11 +288,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: 'Khu vực hành chính',
           icon: <Globe2 size={18} className="sos-nav-icon" />,
         },
-        {
-          key: 'rbac',
-          label: 'Phân quyền & Vai trò',
-          icon: <Shield size={18} className="sos-nav-icon" />,
-        },
       ],
     },
   ];
@@ -483,18 +477,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           3. FOOTER CỦA SIDEBAR (GHIM CỐ ĐỊNH Ở DƯỚI CÙNG)
           =================================================================== */}
       <div className="sos-sidebar-footer">
-        {/* Cài đặt hệ thống (Icon: Settings/Gear) */}
-        <div
-          className={`sos-settings-item ${isItemActive('settings') ? 'active' : ''}`}
-          onClick={() => handleItemClick('settings')}
-          title="Cài đặt hệ thống"
-          role="button"
-          tabIndex={0}
-        >
-          <Settings size={18} className="sos-nav-icon" />
-          {!collapsed && <span className="sos-settings-label">Cài đặt hệ thống</span>}
-        </div>
-
         {/* Khung User Profile (Avatar, Tên, Chức vụ, Nút Đăng xuất) */}
         <div className="sos-user-profile-card">
           <div

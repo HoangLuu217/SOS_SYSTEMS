@@ -17,8 +17,10 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
-
     },
+  },
+  optimizeDeps: {
+    include: ['socket.io-client'],
   },
 })
 

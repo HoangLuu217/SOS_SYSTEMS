@@ -63,6 +63,27 @@ class AdministrativeAreaController {
   }
 
   /**
+   * GET /administrative-areas/boundary
+   */
+  async getAreaBoundary(req, res, next) {
+    try {
+      const { areaId, name, province, district } = req.query;
+      const data = await administrativeAreaService.getBoundaryForArea({
+        areaId,
+        name,
+        province,
+        district,
+      });
+      if (!data) {
+        return sendSuccess(res, 200, 'Không tìm thấy ranh giới cho khu vực này', null);
+      }
+      return sendSuccess(res, 200, 'Lấy ranh giới khu vực thành công', data);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * GET /administrative-areas/managers
    */
   async getAreaManagers(req, res, next) {

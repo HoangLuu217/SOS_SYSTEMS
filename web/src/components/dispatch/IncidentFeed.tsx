@@ -22,7 +22,6 @@ export const IncidentFeed = ({
 }: Props) => {
   const { t, lang } = useApp();
   const isAdmin = activeOfficer?.role === 'ADMIN';
-  const officerDistrictId = activeOfficer?.jurisdictionAreaId || 'area-hc';
 
   const [searchQuery, setSearchQuery] = useState('');
   const [adminDistrictFilter, setAdminDistrictFilter] = useState<string>('ALL');
@@ -31,26 +30,8 @@ export const IncidentFeed = ({
   // Baseline scoped incidents for this officer (before status/search filter)
   const scopedIncidents = useMemo(() => {
     return sosRequests.filter((s) => {
-      // Yêu cầu SOS thật từ MongoDB (từ app mobile người dân) luôn hiển thị trực quan
-      if (s.id.length === 24) return true;
-
       if (!isAdmin) {
-        const keyword = activeOfficer?.jurisdictionAreaName
-          ? activeOfficer.jurisdictionAreaName
-              .toLowerCase()
-              .replace('phường ', '')
-              .replace('quận ', '')
-              .replace('huyện ', '')
-              .replace('xã ', '')
-              .trim()
-          : '';
-
-        const matchesDistrict =
-          s.districtId === officerDistrictId ||
-          s.wardId === officerDistrictId ||
-          (keyword && s.wardName.toLowerCase().includes(keyword));
-
-        return matchesDistrict;
+        return true;
       } else {
         if (adminDistrictFilter !== 'ALL') {
           return s.districtId === adminDistrictFilter;
@@ -58,7 +39,7 @@ export const IncidentFeed = ({
         return true;
       }
     });
-  }, [sosRequests, isAdmin, officerDistrictId, adminDistrictFilter, activeOfficer]);
+  }, [sosRequests, isAdmin, adminDistrictFilter]);
 
   // Tab counts based on current scoped jurisdiction
   const tabCounts = useMemo(() => {
