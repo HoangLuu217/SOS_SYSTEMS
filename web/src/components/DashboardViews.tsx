@@ -22,7 +22,6 @@ import {
   verifyRescuer,
   fetchVehicles,
   fetchAlerts,
-  createAlert,
   fetchAdministrativeAreas,
   fetchAuthorityOrganizations,
   fetchAuditLogs,
@@ -54,7 +53,6 @@ import {
   Truck,
   Users,
   Shield,
-  Hospital,
   LifeBuoy,
   BellRing,
   AlertTriangle,
@@ -74,7 +72,6 @@ import {
   Send,
   RefreshCw,
   Loader2,
-  Zap,
   ChevronDown,
   ChevronUp,
   ChevronRight,
@@ -88,12 +85,9 @@ import {
   Trash2,
   ExternalLink,
   Edit,
-  Plus,
   PlusCircle,
   Home,
-  Search,
   ArrowUpDown,
-  ArrowUp,
   ArrowDown,
   Navigation,
   UserPlus,
@@ -286,7 +280,6 @@ import {
   FALLBACK_VEHICLES,
   FALLBACK_SUPPLIES,
   FALLBACK_SHELTERS,
-  FALLBACK_ALERTS,
   FALLBACK_AUDIT_LOGS,
   DEFAULT_SYSTEM_SETTINGS,
   type SystemSettingsConfig,
@@ -797,7 +790,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   const [rescuers, setRescuers] = useState<any[]>([]);
   const [authorities, setAuthorities] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<VehicleItem[]>([]);
-  const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const [_alerts, setAlerts] = useState<AlertItem[]>([]);
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>([]);
   const [_orgs, setOrgs] = useState<AuthorityOrgItem[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
@@ -1704,7 +1697,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
           if (areaRes.data.length > 0) {
             setHotlineForm((f) => ({ ...f, areaId: f.areaId || defaultAreaId }));
             setAlertForm((f) => ({ ...f, areaId: f.areaId || defaultAreaId }));
-            setShelterForm((f) => ({ ...f, areaId: f.areaId || defaultAreaId }));
+            setCreateShelterAreaId((prev) => prev || defaultAreaId);
           }
         }
       }
@@ -2314,7 +2307,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                   <button
                     type="button"
                     className="executive-link-btn bold"
-                    onClick={onOpenMap}
+                    onClick={() => onOpenMap()}
                   >
                     <span>Bản đồ chi tiết</span>
                     <ChevronRight size={13} />
@@ -3137,7 +3130,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
               <Radio size={18} color="#0284c7" />
               <span>Bảng Điều Phối &amp; Giám Sát Tiến Trình Thực Địa ({activeMissions.length} vụ đang xử lý)</span>
             </div>
-            <button type="button" className="sos-btn-action primary" onClick={onOpenMap}>
+            <button type="button" className="sos-btn-action primary" onClick={() => onOpenMap()}>
               Mở Bản Đồ Realtime
             </button>
           </div>
@@ -3783,7 +3776,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                   onChange={(e) => setBroadcastSearch(e.target.value)}
                   placeholder="Tìm theo tiêu đề, khu vực..."
                   className="sos-form-input"
-                  style={{ paddingLeft: '32px', paddingRight: '12px', paddingVertical: '6px', fontSize: '12.5px', width: '220px' }}
+                  style={{ paddingLeft: '32px', paddingRight: '12px', paddingTop: '6px', paddingBottom: '6px', fontSize: '12.5px', width: '220px' }}
                 />
               </div>
 
@@ -4738,7 +4731,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             <button
               type="button"
               className="sos-btn-flat"
-              onClick={onOpenMap}
+              onClick={() => onOpenMap()}
               style={{ padding: '8px 16px', fontSize: '13px' }}
             >
               <MapPin size={15} />
@@ -7941,7 +7934,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             <button
               type="button"
               className="sos-btn-flat"
-              onClick={onOpenMap}
+              onClick={() => onOpenMap()}
               style={{ padding: '8px 16px', fontSize: '13px' }}
             >
               <MapPin size={15} />
@@ -8837,6 +8830,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
               {/* Footer Modal với nút Xóa, Duyệt, Từ chối */}
               {(() => {
+                const isAdmin = Boolean(user?.roles?.includes('ADMIN'));
                 const isDetailInJurisdiction = isAdmin || isHazardInOfficerJurisdiction(detailHazard);
                 return (
                   <div
@@ -9025,310 +9019,6 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                   </div>
                 );
               })()}
-            </div>
-          </div>
-        )}
-
-        {/* MODAL THẨM ĐỊNH & CHUẨN HÓA ĐIỂM NGUY HIỂM (FORM EDIT CHUẨN TRƯỚC KHI DUYỆT) */}
-        {reviewingHazard && (
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(15, 23, 42, 0.75)',
-              backdropFilter: 'blur(5px)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 1100,
-              padding: '16px',
-            }}
-            onClick={() => setReviewingHazard(null)}
-          >
-            <div
-              style={{
-                backgroundColor: '#ffffff',
-                borderRadius: '16px',
-                width: '100%',
-                maxWidth: '980px',
-                maxHeight: '92vh',
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
-                border: '1px solid #e2e8f0',
-                overflow: 'hidden',
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* 1. Header Modal */}
-              <div
-                style={{
-                  padding: '16px 24px',
-                  borderBottom: '1px solid #e2e8f0',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  background: '#f8fafc',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div
-                    style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '10px',
-                      background: '#e0f2fe',
-                      color: '#0284c7',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <i className="bi bi-shield-check" style={{ fontSize: '22px' }}></i>
-                  </div>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0f172a' }}>
-                      {reviewingHazard.status === 'APPROVED'
-                        ? 'Chỉnh Sửa & Chuẩn Hóa Điểm Nguy Hiểm'
-                        : 'Thẩm Định & Chuẩn Hóa Thông Tin Điểm Nguy Hiểm'}
-                    </h3>
-                    <p style={{ margin: 0, fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                      Chính quyền kiểm tra và chỉnh sửa lại các thông tin chuẩn xác trước khi phê duyệt đưa lên bản đồ tác chiến.
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setReviewingHazard(null)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: '#64748b',
-                    padding: '6px',
-                    borderRadius: '6px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                  title="Đóng"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* 2. Body Form cuộn */}
-              <div
-                style={{
-                  padding: '20px 24px',
-                  overflowY: 'auto',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '18px',
-                }}
-              >
-                {/* Banner Thông tin gốc người dân gửi */}
-                <div
-                  style={{
-                    background: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '12px',
-                    padding: '14px 18px',
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: '11.5px',
-                      fontWeight: 800,
-                      color: '#0284c7',
-                      textTransform: 'uppercase',
-                      marginBottom: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                    }}
-                  >
-                    <i className="bi bi-person-badge"></i> Thông tin đối chiếu người dân gửi ban đầu:
-                  </div>
-
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                      gap: '10px',
-                      fontSize: '12.5px',
-                    }}
-                  >
-                    <div>
-                      <span style={{ color: '#64748b' }}>Người gửi: </span>
-                      <strong style={{ color: '#0f172a' }}>
-                        {typeof reviewingHazard.reportedBy === 'object'
-                          ? reviewingHazard.reportedBy?.fullName
-                          : 'Người dân'}
-                      </strong>
-                      {typeof reviewingHazard.reportedBy === 'object' && reviewingHazard.reportedBy?.phone ? (
-                        <span style={{ color: '#475569' }}> ({reviewingHazard.reportedBy.phone})</span>
-                      ) : null}
-                    </div>
-
-                    <div>
-                      <span style={{ color: '#64748b' }}>Thời gian: </span>
-                      <strong style={{ color: '#0f172a' }}>{formatHazardTime(reviewingHazard.createdAt)}</strong>
-                    </div>
-
-                    <div>
-                      <span style={{ color: '#64748b' }}>Tiêu đề người dân gửi: </span>
-                      <strong style={{ color: '#ea580c' }}>"{reviewingHazard.title}"</strong>
-                    </div>
-                  </div>
-
-                  {reviewingHazard.images && reviewingHazard.images.length > 0 && (
-                    <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed #cbd5e1' }}>
-                      <div style={{ fontSize: '11.5px', color: '#64748b', marginBottom: '6px' }}>
-                        Ảnh hiện trường người dân gửi ({reviewingHazard.images.length} ảnh):
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        {reviewingHazard.images.map((imgUrl, i) => (
-                          <img
-                            key={i}
-                            src={imgUrl}
-                            alt="Hiện trường"
-                            onClick={() => setSelectedHazardPhoto(imgUrl)}
-                            style={{
-                              width: '100%',
-                              height: '70px',
-                              objectFit: 'cover',
-                              borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              cursor: 'pointer',
-                            }}
-                            title="Bấm để xem ảnh phóng to"
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Cột 2: Bản đồ nhỏ hiển thị vị trí */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div style={{ background: '#ffffff', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', height: '100%' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                      <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#0f172a' }}>
-                        Vị trí hiện trường
-                      </span>
-                      <span style={{ fontSize: '11px', color: '#64748b' }}>
-                        [{detailHazard.location.coordinates[1].toFixed(5)}, {detailHazard.location.coordinates[0].toFixed(5)}]
-                      </span>
-                    </div>
-
-                    <div style={{ flex: 1, minHeight: '280px' }}>
-                      <HazardMiniMap
-                        lat={detailHazard.location.coordinates[1]}
-                        lng={detailHazard.location.coordinates[0]}
-                        title={detailHazard.title}
-                        hazardType={detailHazard.hazardType}
-                      />
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                      <a
-                        href={`https://www.google.com/maps?q=${detailHazard.location.coordinates[1]},${detailHazard.location.coordinates[0]}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="sos-btn-flat"
-                        style={{ flex: 1, justifyContent: 'center' }}
-                      >
-                        <ExternalLink size={13} />
-                        <span>Google Maps</span>
-                      </a>
-                      <button
-                        type="button"
-                        className="sos-btn-flat primary"
-                        style={{ flex: 1, justifyContent: 'center' }}
-                        onClick={() => {
-                          setDetailHazard(null);
-                          onOpenMap();
-                        }}
-                      >
-                        <MapPin size={13} />
-                        <span>Bản đồ Tác chiến</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer Modal */}
-              <div
-                style={{
-                  padding: '12px 20px',
-                  borderTop: '1px solid #e2e8f0',
-                  background: '#f8fafc',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                <button
-                  type="button"
-                  className="sos-btn-flat danger"
-                  onClick={() => handleDeleteHazard(detailHazard._id, detailHazard.title)}
-                  disabled={loading}
-                >
-                  <Trash2 size={14} />
-                  <span>Xóa điểm này</span>
-                </button>
-
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {detailHazard.status === 'PENDING' && (
-                    <>
-                      <button
-                        type="button"
-                        className="sos-btn-flat danger"
-                        onClick={() => handleInitiateRejectHazard(detailHazard._id)}
-                        disabled={loading}
-                      >
-                        <XCircle size={14} />
-                        <span>Từ chối</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="sos-btn-flat success"
-                        onClick={() => handleOpenReviewModal(detailHazard)}
-                        disabled={loading}
-                      >
-                        <Edit size={14} />
-                        <span>Duyệt &amp; Chuẩn hóa</span>
-                      </button>
-                    </>
-                  )}
-
-                  {detailHazard.status === 'APPROVED' && (
-                    <button
-                      type="button"
-                      className="sos-btn-flat"
-                      onClick={() => handleOpenReviewModal(detailHazard)}
-                      disabled={loading}
-                    >
-                      <Edit size={14} />
-                      <span>Chỉnh sửa</span>
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    className="sos-btn-flat"
-                    onClick={() => setDetailHazard(null)}
-                  >
-                    Đóng
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
         )}
