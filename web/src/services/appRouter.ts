@@ -21,7 +21,6 @@ export interface ParsedRoute {
   sosId?: string;
 }
 
-// Danh sách các key hợp lệ
 const VALID_KEYS: Set<string> = new Set([
   'map',
   'sos_requests',
@@ -33,6 +32,7 @@ const VALID_KEYS: Set<string> = new Set([
   'hazard_reports',
   'reports',
   'operation_logs',
+  'chat',
   'settings',
   'admin_overview',
   'citizens',
@@ -55,7 +55,10 @@ const KEY_ALIASES: Record<string, NavItemKey> = {
   danger_points: 'hazard_reports',
   logs: 'operation_logs',
   history: 'operation_logs',
+  messages: 'chat',
+  conversation: 'chat',
 };
+
 
 /**
  * Trích xuất route và subPath từ pathname hoặc hash cũ (backward-compatibility)

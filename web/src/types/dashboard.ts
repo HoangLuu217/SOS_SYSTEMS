@@ -176,11 +176,24 @@ export interface AuditLogItem {
     _id: string;
     fullName: string;
     email?: string;
+    phone?: string;
+    authority?: {
+      organizationName?: string;
+      position?: string;
+      department?: string;
+      areaName?: string;
+    };
   } | string;
   actorRole?: string;
   action: string;
   entityType: string;
   entityId?: string;
+  areaId?: {
+    _id: string;
+    name: string;
+    code?: string;
+    type?: string;
+  } | string;
   metadata?: Record<string, unknown>;
   createdAt: string;
 }

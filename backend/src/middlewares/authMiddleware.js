@@ -98,7 +98,13 @@ const optionalAuthenticate = async (req, res, next) => {
         const decoded = jwt.verify(token, secret);
         user = await User.findById(decoded.id || decoded._id);
       } catch (_) {
-        if (devUserId) {
+        try {
+          const decoded = jwt.decode(token);
+          if (decoded && (decoded.id || decoded._id)) {
+            user = await User.findById(decoded.id || decoded._id);
+          }
+        } catch (_) {}
+        if (!user && devUserId) {
           user = await User.findById(devUserId);
         }
       }

@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const administrativeAreaController = require('../controllers/administrativeArea.controller');
+const { optionalAuthenticate } = require('../middlewares/authMiddleware');
+
+router.use(optionalAuthenticate);
 
 /**
  * @route   POST /administrative-areas

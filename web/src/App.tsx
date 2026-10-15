@@ -72,12 +72,16 @@ const navTitles: Record<NavItemKey, { title: string; desc: string }> = {
     desc: 'Phân tích số liệu cứu hộ, thời gian phản hồi và tỷ lệ hỗ trợ người dân',
   },
   operation_logs: {
-    title: 'NHẬT KÝ TÁC CHIẾN & SỰ KIỆN',
-    desc: 'Theo dõi chi tiết lịch sử sự kiện, điều động lực lượng và biên bản tác chiến thực địa',
+    title: 'NHẬT KÝ',
+    desc: 'Theo dõi chi tiết lịch sử sự kiện, điều động lực lượng và biên bản cứu hộ thực địa',
+  },
+  chat: {
+    title: 'Trao đổi',
+    desc: 'Kết nối ban chỉ huy và cán bộ địa phương',
   },
   settings: {
     title: 'CÀI ĐẶT HỆ THỐNG',
-    desc: 'Cấu hình tham số điều hành tác chiến, thông báo khẩn cấp và kết nối vệ tinh',
+    desc: 'Cấu hình tham số điều hành, thông báo khẩn cấp và kết nối vệ tinh',
   },
   admin_overview: {
     title: 'TỔNG QUAN & GIÁM SÁT TOÀN DIỆN',
@@ -288,7 +292,7 @@ function MainRouter() {
                 <div className="sos-page-title-wrap">
                   <div>
                     <h1 className="sos-page-title">{currentMeta.title}</h1>
-                    <p className="sos-page-desc">{currentMeta.desc}</p>
+                    {currentMeta.desc && <p className="sos-page-desc">{currentMeta.desc}</p>}
                   </div>
                 </div>
               </header>

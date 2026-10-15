@@ -7,7 +7,6 @@ import type {
   VehicleItem,
   RescueTeamItem,
   AlertItem,
-  AuditLogItem,
   AdministrativeAreaItem,
   AuthorityOrgItem,
   HazardReportItem,
@@ -26,7 +25,6 @@ import {
   fetchAlerts,
   fetchAdministrativeAreas,
   fetchAuthorityOrganizations,
-  fetchAuditLogs,
   fetchHazardReports,
   createHazardReport,
   reviewHazardReport,
@@ -67,7 +65,6 @@ import {
   BarChart3,
   Building2,
   Globe2,
-  History,
   Lock,
   Unlock,
   Clock,
@@ -113,6 +110,9 @@ import {
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import './DashboardViews.css';
+import { TacticalChatView } from './chat/TacticalChatView';
+import { AuditLogsView } from './audit/AuditLogsView';
+
 
 import {
   fetchVietnamProvincesService,
@@ -286,7 +286,6 @@ import {
   FALLBACK_VEHICLES,
   FALLBACK_SUPPLIES,
   FALLBACK_SHELTERS,
-  FALLBACK_AUDIT_LOGS,
   DEFAULT_SYSTEM_SETTINGS,
   type SystemSettingsConfig,
 } from '../services/dashboardFallbackData';
@@ -1042,8 +1041,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   const [vehicles, setVehicles] = useState<VehicleItem[]>([]);
   const [_alerts, setAlerts] = useState<AlertItem[]>([]);
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>([]);
-  const [_orgs, setOrgs] = useState<AuthorityOrgItem[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
+  const [, setOrgs] = useState<AuthorityOrgItem[]>([]);
 
   // State phong cách Executive Overview & Triage (Theo thiết kế chuẩn)
   const [overviewExpanded, setOverviewExpanded] = useState(true);
@@ -1516,7 +1514,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   const [subUnits, setSubUnits] = useState<ProvinceSubUnitItem[]>([]);
   const [subUnitsLoading, setSubUnitsLoading] = useState(false);
   const [provinceSearchQuery, setProvinceSearchQuery] = useState('');
-  const [_provinceManagerFilter, _setProvinceManagerFilter] = useState<'ALL' | 'MANAGED' | 'UNMANAGED'>('ALL');
+  const [provinceManagerFilter, setProvinceManagerFilter] = useState<'ALL' | 'MANAGED' | 'UNMANAGED'>('ALL');
   const [subUnitTypeFilter, setSubUnitTypeFilter] = useState<'ALL' | 'DISTRICT' | 'WARD'>('ALL');
   const [subUnitManagerFilter, setSubUnitManagerFilter] = useState<'ALL' | 'MANAGED' | 'UNMANAGED'>('ALL');
   const [subUnitSearchQuery, setSubUnitSearchQuery] = useState('');
@@ -1971,14 +1969,6 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
           console.warn('Lỗi tải danh mục tỉnh thành:', e);
         } finally {
           setProvincesLoading(false);
-        }
-      }
-
-      // 9. Nếu ở trang Nhật ký hệ thống / Nhật ký tác chiến -> Lấy Audit Logs
-      if (activeKey === 'audit_logs' || activeKey === 'operation_logs') {
-        const res = await fetchAuditLogs();
-        if (res.success && res.data?.logs) {
-          setAuditLogs(res.data.logs);
         }
       }
 
@@ -2817,7 +2807,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                                 className="photo-preview-chip"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  photoUrl && setPreviewPhoto(photoUrl);
+                                  if (photoUrl) setPreviewPhoto(photoUrl);
                                 }}
                                 title="Bấm để xem ảnh hiện trường"
                               >
@@ -12932,6 +12922,20 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
       return null;
     };
 
+    const getProvinceManager = (p: VietnamProvinceItem): AreaManagerInfo | null => {
+      if (!areaManagers || Object.keys(areaManagers).length === 0) return null;
+      const fullName = (p.name || '').toLowerCase().trim();
+      if (areaManagers[fullName]) return areaManagers[fullName];
+      const shortName = fullName.replace(/^(thành phố|tỉnh|tp\.)\s+/i, '').trim();
+      if (shortName && areaManagers[shortName]) return areaManagers[shortName];
+      for (const key of Object.keys(areaManagers)) {
+        if (key && shortName && (key.includes(shortName) || shortName.includes(key))) {
+          return areaManagers[key];
+        }
+      }
+      return null;
+    };
+
 
 
     const handleSelectProvince = async (prov: VietnamProvinceItem) => {
@@ -13357,10 +13361,14 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
     // TẦNG 1: DANH MỤC CÁC TỈNH / THÀNH PHỐ VIỆT NAM (CHUẨN 34 TỈNH THÀNH MỚI)
     const filteredProvinces = vietnamProvinces.filter((p) => {
+      const mgr = getProvinceManager(p);
+      if (provinceManagerFilter === 'MANAGED' && !mgr) return false;
+      if (provinceManagerFilter === 'UNMANAGED' && mgr) return false;
       if (!provinceSearchQuery.trim()) return true;
       const q = provinceSearchQuery.toLowerCase();
       return (p.name || '').toLowerCase().includes(q) || (p.ref || '').toLowerCase().includes(q) || (p.isoCode || '').toLowerCase().includes(q);
     });
+
 
     return (
       <div className="sos-views-container sos-light-view">
@@ -13417,6 +13425,31 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             </div>
 
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Bộ lọc cán bộ quản lý cấp tỉnh */}
+              <div className="sos-filter-tabs" style={{ marginBottom: 0 }}>
+                <button
+                  type="button"
+                  className={`sos-btn-filter-pill ${provinceManagerFilter === 'ALL' ? 'active' : ''}`}
+                  onClick={() => setProvinceManagerFilter('ALL')}
+                >
+                  Tất cả
+                </button>
+                <button
+                  type="button"
+                  className={`sos-btn-filter-pill ${provinceManagerFilter === 'MANAGED' ? 'active-green' : ''}`}
+                  onClick={() => setProvinceManagerFilter('MANAGED')}
+                >
+                  Đã có cán bộ
+                </button>
+                <button
+                  type="button"
+                  className={`sos-btn-filter-pill ${provinceManagerFilter === 'UNMANAGED' ? 'active-yellow' : ''}`}
+                  onClick={() => setProvinceManagerFilter('UNMANAGED')}
+                >
+                  Chưa phân công
+                </button>
+              </div>
+
               {/* Thanh tìm kiếm tỉnh thành */}
               <div style={{ position: 'relative' }}>
                 <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
@@ -13638,55 +13671,14 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
    * 14. NHẬT KÝ TÁC CHIẾN & HỆ THỐNG (UC-A09 / UC-L16)
    * ------------------------------------------------------------- */
   if (activeKey === 'audit_logs' || activeKey === 'operation_logs') {
-    const displayAuditLogs = auditLogs.length > 0 ? auditLogs : FALLBACK_AUDIT_LOGS;
+    return <AuditLogsView />;
+  }
 
-    return (
-      <div className="sos-views-container">
-        <div className="sos-view-card">
-          <div className="sos-view-card-header">
-            <div className="sos-view-card-title">
-              <History size={18} color="#eab308" />
-              <span>Nhật Ký Tác Chiến &amp; Lịch Sử Điều Hành Thực Địa ({displayAuditLogs.length} sự kiện)</span>
-            </div>
-            <button
-              type="button"
-              className="sos-btn-action"
-              style={{ backgroundColor: '#1e293b', color: '#f1f5f9', border: '1px solid #475569' }}
-              onClick={refreshData}
-            >
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              <span>Làm mới</span>
-            </button>
-          </div>
-          <div className="sos-timeline">
-            {displayAuditLogs.map((log) => {
-              const actor = typeof log.actorId === 'object' && log.actorId !== null ? log.actorId : null;
-              return (
-                <div key={log._id} className="sos-timeline-item">
-                  <div className="sos-timeline-dot" />
-                  <div className="sos-timeline-content">
-                    <div className="sos-timeline-time">
-                      {new Date(log.createdAt).toLocaleString('vi-VN')}
-                    </div>
-                    <div className="sos-timeline-text">
-                      <strong>[{log.actorRole || 'CHỈ HUY'}] {actor?.fullName || actor?.email || 'Ban Chỉ Huy Tác Chiến'}</strong>
-                      {' '}thực hiện hành động{' '}
-                      <strong style={{ color: '#38bdf8' }}>{log.action}</strong>
-                      {' '}đối với <strong>{log.entityType}</strong>
-                      {log.metadata && (
-                        <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '4px', background: 'rgba(0,0,0,0.03)', padding: '5px 10px', borderRadius: '4px' }}>
-                          Chi tiết: {JSON.stringify(log.metadata)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
+  /* -------------------------------------------------------------
+   * 14b. KÊNH TRAO ĐỔI TÁC CHIẾN CHAT REALTIME (ADMIN & AUTHORITY)
+   * ------------------------------------------------------------- */
+  if (activeKey === 'chat') {
+    return <TacticalChatView currentUser={user} />;
   }
 
   /* -------------------------------------------------------------

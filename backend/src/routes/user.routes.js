@@ -11,6 +11,8 @@ router.get('/me', userController.getMe);
 router.patch('/me', userController.updateMe);
 router.patch('/me/avatar', userController.updateAvatar);
 router.patch('/me/password', userController.changePassword);
+router.post('/me/send-phone-otp', userController.sendPhoneOtp);
+router.post('/me/verify-phone-otp', userController.verifyPhoneOtp);
 
 // 3. Citizen Profile
 router.get('/me/citizen', userController.getCitizen);

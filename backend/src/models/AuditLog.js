@@ -27,6 +27,12 @@ const auditLogSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       default: null,
     },
+    areaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AdministrativeArea',
+      default: null,
+      index: true,
+    },
     metadata: {
       type: mongoose.Schema.Types.Mixed,
       default: {},
@@ -47,6 +53,7 @@ const auditLogSchema = new mongoose.Schema(
 auditLogSchema.index({ actorId: 1 });
 auditLogSchema.index({ entityType: 1, entityId: 1 });
 auditLogSchema.index({ action: 1 });
+auditLogSchema.index({ areaId: 1, createdAt: -1 });
 auditLogSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('AuditLog', auditLogSchema);

@@ -17,6 +17,7 @@ class SafeLocationController {
         action: 'CREATE_SAFE_LOCATION',
         entityType: 'SafeLocation',
         entityId: safeLocation._id,
+        areaId: safeLocation.areaId || req.user?.authority?.areaId || null,
         metadata: { name: safeLocation.name, type: safeLocation.type },
       });
 
@@ -80,6 +81,7 @@ class SafeLocationController {
         action: 'UPDATE_SAFE_LOCATION',
         entityType: 'SafeLocation',
         entityId: updated._id,
+        areaId: updated?.areaId || req.user?.authority?.areaId || null,
         metadata: req.body,
       });
 
@@ -102,6 +104,7 @@ class SafeLocationController {
         action: 'DELETE_SAFE_LOCATION',
         entityType: 'SafeLocation',
         entityId: req.params.id,
+        areaId: req.user?.authority?.areaId || null,
       });
 
       return sendSuccess(res, 200, result.message);

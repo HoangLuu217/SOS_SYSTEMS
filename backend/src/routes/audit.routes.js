@@ -4,9 +4,9 @@ const auditController = require('../controllers/audit.controller');
 const { authenticate } = require('../middlewares/authMiddleware');
 const { authorize } = require('../middlewares/roleMiddleware');
 
-// Tất cả audit-log routes đều yêu cầu xác thực + quyền ADMIN
+// Tất cả audit-log routes đều yêu cầu xác thực + quyền ADMIN hoặc LOCAL_AUTHORITY
 router.use(authenticate);
-router.use(authorize('ADMIN'));
+router.use(authorize('ADMIN', 'LOCAL_AUTHORITY'));
 
 /**
  * @route   GET /audit-logs
