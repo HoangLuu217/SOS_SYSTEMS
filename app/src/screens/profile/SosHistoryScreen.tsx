@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { backendApi } from '../../services/backendApi';
 import { PROFILE_THEME } from './theme';
+import { CitizenSosTrackingModal } from './CitizenSosTrackingModal';
 
 interface SosHistoryScreenProps {
   onBack: () => void;
@@ -46,6 +47,8 @@ export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack }) =>
   const [sosList, setSosList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedSosForTracking, setSelectedSosForTracking] = useState<any | null>(null);
+  const [trackingModalVisible, setTrackingModalVisible] = useState<boolean>(false);
 
   const fetchSosHistory = async () => {
     try {
@@ -80,7 +83,14 @@ export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack }) =>
     });
 
     return (
-      <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.9}
+        onPress={() => {
+          setSelectedSosForTracking(item);
+          setTrackingModalVisible(true);
+        }}
+      >
         <View style={styles.cardHeader}>
           <Text style={styles.dateText}>{dateStr}</Text>
           <View style={[styles.statusBadge, { backgroundColor: statusConfig.bgColor }]}>
@@ -111,15 +121,22 @@ export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack }) =>
           ) : null}
         </View>
 
-        {item.status === 'COMPLETED' ? null : (
-          <View style={styles.cardFooter}>
-            <TouchableOpacity style={styles.detailBtn} activeOpacity={0.7}>
-              <Text style={styles.detailBtnText}>Theo dõi cứu hộ</Text>
-              <Feather name="chevron-right" size={16} color="#0066FF" />
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
+        <View style={styles.cardFooter}>
+          <TouchableOpacity
+            style={styles.detailBtn}
+            activeOpacity={0.7}
+            onPress={() => {
+              setSelectedSosForTracking(item);
+              setTrackingModalVisible(true);
+            }}
+          >
+            <Text style={styles.detailBtnText}>
+              {item.status === 'COMPLETED' ? 'Xem chi tiết cứu nạn' : '📍 Theo dõi hành trình cứu hộ'}
+            </Text>
+            <Feather name="chevron-right" size={16} color="#0066FF" />
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
     );
   };
 
@@ -160,6 +177,22 @@ export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack }) =>
           }
         />
       )}
+
+      {/* Modal Theo dõi hành trình cứu hộ cho người dân */}
+      <CitizenSosTrackingModal
+        visible={trackingModalVisible}
+        sosId={selectedSosForTracking?._id || null}
+        initialSosData={selectedSosForTracking}
+        onClose={() => {
+          setTrackingModalVisible(false);
+          setSelectedSosForTracking(null);
+        }}
+        onSosCompleted={(updatedSos) => {
+          setSosList((prev) =>
+            prev.map((s) => (s._id === updatedSos._id ? { ...s, ...updatedSos } : s))
+          );
+        }}
+      />
     </SafeAreaView>
   );
 };
