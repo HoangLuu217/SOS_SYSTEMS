@@ -289,7 +289,7 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
   const peopleCount = sos?.people || 1;
   const priorityGroups: string[] = sos?.priorityGroups || [];
 
-  // Tạo mã HTML nhúng Leaflet Map với 2 Marker
+  // Tạo mã HTML nhúng Leaflet Map đồng bộ 100% với MapScreen trong app
   const mapHtml = `
     <!DOCTYPE html>
     <html>
@@ -299,77 +299,157 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
       <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
       <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
       <style>
-        html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #f8fafc; font-family: -apple-system, sans-serif; }
-        .pulse-marker {
-          width: 24px;
-          height: 24px;
-          border-radius: 50%;
-          background: #ef4444;
-          border: 3px solid #ffffff;
-          box-shadow: 0 0 10px rgba(239, 68, 68, 0.8);
-          animation: pulse 1.5s infinite;
+        html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #f1f5f9; font-family: -apple-system, sans-serif; }
+        .leaflet-container { background-color: #f1f5f9; }
+        .leaflet-tile { -webkit-backface-visibility: hidden; backface-visibility: hidden; }
+        
+        @keyframes pulseWave {
+          0% { transform: scale(0.6); opacity: 0.95; }
+          70% { transform: scale(1.6); opacity: 0; }
+          100% { transform: scale(1.8); opacity: 0; }
         }
-        @keyframes pulse {
-          0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-          70% { transform: scale(1.15); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-          100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-        }
-        .boat-marker {
-          width: 34px;
-          height: 34px;
-          border-radius: 50%;
-          background: #2563eb;
-          border: 2px solid #ffffff;
+        .sos-radar-container {
+          position: relative;
+          width: 44px;
+          height: 44px;
           display: flex;
           align-items: center;
           justify-content: center;
-          color: #ffffff;
-          font-size: 18px;
-          box-shadow: 0 3px 8px rgba(37, 99, 235, 0.4);
+        }
+        .sos-radar-wave {
+          position: absolute;
+          width: 38px;
+          height: 38px;
+          border-radius: 50%;
+          background-color: rgba(220, 38, 38, 0.45);
+          border: 2px solid #DC2626;
+          animation: pulseWave 1.6s ease-out infinite;
+        }
+        .sos-radar-core {
+          position: relative;
+          width: 28px;
+          height: 28px;
+          background: #DC2626;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          box-shadow: 0 0 10px rgba(220, 38, 38, 0.8), 0 2px 5px rgba(0,0,0,0.3);
+          border: 2px solid white;
+          z-index: 2;
+        }
+
+        .rescuer-pin-wrap {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          cursor: pointer;
+        }
+        .rescuer-pin-circle {
+          background: #2563eb;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 2.5px solid #ffffff;
+          box-shadow: 0 3px 8px rgba(37, 99, 235, 0.45);
+          color: white;
+          font-size: 16px;
+        }
+        .rescuer-pin-arrow {
+          width: 0;
+          height: 0;
+          border-left: 5px solid transparent;
+          border-right: 5px solid transparent;
+          border-top: 6px solid #2563eb;
+          margin-top: -1px;
         }
       </style>
     </head>
     <body>
       <div id="map"></div>
       <script>
-        var map = L.map('map', { zoomControl: false, attributionControl: false });
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-
-        var victimIcon = L.divIcon({
-          className: 'custom-icon',
-          html: '<div class="pulse-marker"></div>',
-          iconSize: [24, 24],
-          iconAnchor: [12, 12]
+        var map = L.map('map', {
+          zoomControl: false,
+          preferCanvas: true
         });
 
-        var boatIcon = L.divIcon({
-          className: 'custom-icon',
-          html: '<div class="boat-marker">🚤</div>',
-          iconSize: [34, 34],
-          iconAnchor: [17, 17]
-        });
+        // 1. Chế độ thu nhỏ (Zoom <= 15) - Chuẩn Google Maps không quán xá như MapScreen
+        var overviewLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&apistyle=s.t:33|p.v:off%2Cs.t:21|s.e:l|p.v:off&x={x}&y={y}&z={z}', {
+          subdomains: ['0', '1', '2', '3'],
+          attribution: '© Google Maps',
+          minZoom: 1,
+          maxZoom: 15,
+          keepBuffer: 6,
+          tileSize: 256,
+          updateWhenIdle: false,
+          updateWhenZooming: false
+        }).addTo(map);
+
+        // 2. Chế độ phóng to gần (Zoom >= 16) - Hiện tên đường ngõ hẻm
+        var detailLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&apistyle=s.t:33|p.v:off%2Cs.t:22|s.e:l|p.v:off&x={x}&y={y}&z={z}', {
+          subdomains: ['0', '1', '2', '3'],
+          attribution: '© Google Maps',
+          minZoom: 16,
+          maxZoom: 20,
+          keepBuffer: 6,
+          tileSize: 256,
+          updateWhenIdle: false,
+          updateWhenZooming: false
+        }).addTo(map);
+
+        L.control.zoom({ position: 'topright' }).addTo(map);
 
         var vLat = ${victimLat};
         var vLng = ${victimLng};
         var rLat = ${rescuerLat};
         var rLng = ${rescuerLng};
 
-        var markerVictim = L.marker([vLat, vLng], { icon: victimIcon }).addTo(map)
-          .bindPopup('<b>📍 Vị trí của bạn</b><br/>Đang chờ cứu hộ');
+        // Icon Radar cứu hộ chuẩn phong cách app
+        var victimRadarIcon = L.divIcon({
+          html: '<div class="sos-radar-container"><div class="sos-radar-wave"></div><div class="sos-radar-core"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M7 12a5 5 0 0 1 5-5v0a5 5 0 0 1 5 5v6H7v-6Z"/><path d="M5 20a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v2H5v-2Z"/><path d="M21 12h1"/><path d="M18.5 4.5 19 4"/><path d="M2 12h1"/><path d="M12 2v1"/><path d="M4.5 4.5 5 4"/><path d="M12 11v3"/></svg></div></div>',
+          className: 'custom-sos-radar-wrapper',
+          iconSize: [44, 44],
+          iconAnchor: [22, 22]
+        });
+
+        var markerVictim = L.marker([vLat, vLng], { icon: victimRadarIcon }).addTo(map)
+          .bindPopup('<b>📍 Vị trí của bạn</b><br/>Đang chờ cứu nạn');
+
+        // Vòng tròn bảo vệ bán kính 300m
+        L.circle([vLat, vLng], {
+          color: '#DC2626',
+          fillColor: '#EF4444',
+          fillOpacity: 0.12,
+          radius: 300,
+          weight: 1.5
+        }).addTo(map);
+
+        // Icon Cano / Đội cứu hộ
+        var rescuerIcon = L.divIcon({
+          html: '<div class="rescuer-pin-wrap"><div class="rescuer-pin-circle">🚤</div><div class="rescuer-pin-arrow"></div></div>',
+          className: 'custom-rescuer-pin',
+          iconSize: [32, 38],
+          iconAnchor: [16, 38]
+        });
 
         ${assignment || currentStatus === 'ON_THE_WAY' || currentStatus === 'ARRIVED' ? `
-          var markerRescuer = L.marker([rLat, rLng], { icon: boatIcon }).addTo(map)
-            .bindPopup('<b>🚤 Đội Cứu Hộ</b><br/>Đang di chuyển tiếp cận');
+          var markerRescuer = L.marker([rLat, rLng], { icon: rescuerIcon }).addTo(map)
+            .bindPopup('<b>🚤 Đội Cứu Hộ Tiếp Ứng</b><br/>Đang di chuyển tiếp cận');
 
           var polyline = L.polyline([[rLat, rLng], [vLat, vLng]], {
-            color: '#2563eb',
-            weight: 3.5,
+            color: '#2563EB',
+            weight: 4,
             dashArray: '6, 8',
-            opacity: 0.85
+            opacity: 0.9
           }).addTo(map);
 
           var group = new L.featureGroup([markerVictim, markerRescuer]);
-          map.fitBounds(group.getBounds().pad(0.3));
+          map.fitBounds(group.getBounds().pad(0.35));
         ` : `
           map.setView([vLat, vLng], 15);
         `}
@@ -510,6 +590,8 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                   scrollEnabled={false}
                   javaScriptEnabled={true}
                   domStorageEnabled={true}
+                  androidLayerType="hardware"
+                  originWhitelist={['*']}
                 />
               </View>
 
@@ -655,18 +737,7 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
               </View>
             </View>
 
-            {/* 6. HƯỚNG DẪN SINH TỒN TRONG KHI CHỜ ĐỢI */}
-            <View style={styles.survivalGuideCard}>
-              <View style={styles.guideHeader}>
-                <Feather name="alert-triangle" size={17} color="#D97706" />
-                <Text style={styles.guideTitle}>Hướng dẫn an toàn trong khi chờ tiếp cận:</Text>
-              </View>
-              <Text style={styles.guideItem}>• <Text style={{ fontWeight: '700' }}>Tạo tín hiệu:</Text> Bật đèn flash hoặc vẫy vải/áo màu sáng khi nghe thấy tiếng còi hoặc động cơ cano.</Text>
-              <Text style={styles.guideItem}>• <Text style={{ fontWeight: '700' }}>Tiết kiệm pin:</Text> Giữ điện thoại khô ráo, hạn chế lướt app khác để giữ liên lạc khẩn cấp.</Text>
-              <Text style={styles.guideItem}>• <Text style={{ fontWeight: '700' }}>Vị trí cao:</Text> Giữ trẻ em và người già ở nơi cao ráo nhất, tránh xa các cột điện và nguồn điện rò rỉ.</Text>
-            </View>
-
-            {/* 7. NÚT HÀNH ĐỘNG DUY NHẤT: XÁC NHẬN ĐÃ ĐƯỢC CỨU AN TOÀN */}
+            {/* 6. NÚT HÀNH ĐỘNG DUY NHẤT: XÁC NHẬN ĐÃ ĐƯỢC CỨU AN TOÀN */}
             {currentStatus !== 'COMPLETED' && currentStatus !== 'CANCELLED' && currentStatus !== 'REJECTED' ? (
               <View style={styles.actionContainer}>
                 <TouchableOpacity
@@ -917,7 +988,7 @@ const styles = StyleSheet.create({
   },
   webViewWrap: {
     width: '100%',
-    height: 190,
+    height: 220,
     backgroundColor: '#F1F5F9',
   },
   webView: {
@@ -1168,31 +1239,6 @@ const styles = StyleSheet.create({
     color: '#1E293B',
     lineHeight: 19,
     fontStyle: 'italic',
-  },
-  survivalGuideCard: {
-    backgroundColor: '#FFFBEB',
-    borderRadius: PROFILE_THEME.radius.card,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    padding: 14,
-    marginBottom: 20,
-  },
-  guideHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 8,
-  },
-  guideTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#92400E',
-  },
-  guideItem: {
-    fontSize: 12,
-    color: '#78350F',
-    lineHeight: 18,
-    marginBottom: 4,
   },
   actionContainer: {
     gap: 10,
