@@ -139,7 +139,7 @@ export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack, onNa
             }}
           >
             <Text style={styles.detailBtnText}>
-              {item.status === 'COMPLETED' ? 'Xem chi tiết cứu nạn' : '📍 Theo dõi hành trình cứu hộ'}
+              {item.status === 'COMPLETED' ? 'Xem chi tiết cứu nạn' : 'Theo dõi hành trình cứu hộ'}
             </Text>
             <Feather name="chevron-right" size={16} color="#0066FF" />
           </TouchableOpacity>
