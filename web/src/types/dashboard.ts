@@ -134,6 +134,12 @@ export interface AuditLogItem {
     fullName: string;
     email?: string;
     phone?: string;
+    authority?: {
+      organizationName?: string;
+      position?: string;
+      department?: string;
+      areaName?: string;
+    };
   } | string;
   actorRole?: string;
   action: string;

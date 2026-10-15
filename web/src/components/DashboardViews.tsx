@@ -1675,7 +1675,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                                 className="photo-preview-chip"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  photoUrl && setPreviewPhoto(photoUrl);
+                                  if (photoUrl) setPreviewPhoto(photoUrl);
                                 }}
                                 title="Bấm để xem ảnh hiện trường"
                               >
@@ -7224,7 +7224,8 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
       UPDATE_SOS: 'Cập nhật yêu cầu cứu nạn',
       COMPLETE_SOS: 'Hoàn tất toàn bộ ca cứu nạn',
       CITIZEN_REPORT_HAZARD: 'Báo cáo điểm nguy hiểm / ngập lụt',
-      AUTHORITY_VERIFY_SOS: 'Xác minh & Phân loại cấp độ SOS',
+      AUTHORITY_VERIFY_SOS: 'Xác minh yêu cầu SOS',
+      VERIFY_SOS: 'Xác minh yêu cầu SOS',
       AUTHORITY_ASSIGN_MISSION: 'Phân công lực lượng cứu nạn cho ca SOS',
       AUTHORITY_REASSIGN_MISSION: 'Điều phối lại lực lượng cứu trợ',
       AUTHORITY_CANCEL_MISSION: 'Hủy lệnh phân công cứu nạn',
@@ -7524,157 +7525,303 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             <div className="sos-audit-timeline-container">
               {filteredLogs.map((log) => {
                 const actor = typeof log.actorId === 'object' && log.actorId !== null ? log.actorId : null;
-                const roleUpper = (log.actorRole || '').toUpperCase();
+                const meta = (log.metadata || {}) as Record<string, unknown>;
 
-                let roleBadgeClass = 'sos-role-tag citizen';
-                let roleLabel = log.actorRole || 'NGƯỜI DÂN';
-                let nodeClass = 'sos-audit-node';
-                let avatarClass = 'sos-audit-avatar citizen';
-                let NodeIcon = LifeBuoy;
-
-                if (roleUpper.includes('ADMIN') || roleUpper.includes('QUẢN TRỊ')) {
-                  roleBadgeClass = 'sos-badge critical';
-                  roleLabel = log.actorRole || 'QUẢN TRỊ VIÊN';
-                  nodeClass = 'sos-audit-node critical';
-                  avatarClass = 'sos-audit-avatar admin';
-                  NodeIcon = Shield;
-                } else if (
-                  roleUpper.includes('AUTHORITY') ||
-                  roleUpper.includes('DISPATCHER') ||
-                  roleUpper.includes('CHỈ HUY') ||
-                  roleUpper.includes('TRỰC BAN') ||
-                  roleUpper.includes('BCH') ||
-                  roleUpper.includes('ĐỊA PHƯƠNG') ||
-                  roleUpper.includes('CHÍNH QUYỀN') ||
-                  roleUpper.includes('ĐIỀU PHỐI')
-                ) {
-                  roleBadgeClass = 'sos-badge verified';
-                  roleLabel = log.actorRole || 'CHÍNH QUYỀN / ĐIỀU PHỐI';
-                  nodeClass = 'sos-audit-node success';
-                  avatarClass = 'sos-audit-avatar authority';
-                  NodeIcon = Radio;
-                } else if (
-                  roleUpper.includes('RESCUER') ||
-                  roleUpper.includes('CỨU HỘ') ||
-                  roleUpper.includes('ĐỘI TRƯỞNG') ||
-                  roleUpper.includes('THỰC ĐỊA')
-                ) {
-                  roleBadgeClass = 'sos-badge medium';
-                  roleLabel = log.actorRole || 'ĐỘI CỨU HỘ';
-                  nodeClass = 'sos-audit-node warning';
-                  avatarClass = 'sos-audit-avatar rescuer';
-                  NodeIcon = Truck;
-                } else if (
-                  roleUpper.includes('CITIZEN') ||
-                  roleUpper.includes('NGƯỜI DÂN') ||
-                  roleUpper.includes('DÂN')
-                ) {
-                  roleBadgeClass = 'sos-role-tag citizen';
-                  roleLabel = log.actorRole || 'NGƯỜI DÂN';
-                  nodeClass = 'sos-audit-node';
-                  avatarClass = 'sos-audit-avatar citizen';
-                  NodeIcon = LifeBuoy;
-                } else {
-                  roleBadgeClass = 'sos-badge pending';
-                  roleLabel = log.actorRole || 'HỆ THỐNG';
-                  nodeClass = 'sos-audit-node purple';
-                  avatarClass = 'sos-audit-avatar';
-                  NodeIcon = Clock;
-                }
-
-                // Tên hiển thị người thực hiện
+                // 1. Thông tin người thực hiện
                 const actorName =
                   actor?.fullName ||
-                  actor?.phone ||
-                  actor?.email ||
-                  (roleUpper.includes('ADMIN') || roleUpper.includes('QUẢN TRỊ')
-                    ? 'Quản trị viên Hệ thống'
-                    : roleUpper.includes('AUTHORITY') ||
-                      roleUpper.includes('DISPATCHER') ||
-                      roleUpper.includes('CHỈ HUY') ||
-                      roleUpper.includes('TRỰC BAN') ||
-                      roleUpper.includes('BCH') ||
-                      roleUpper.includes('ĐỊA PHƯƠNG') ||
-                      roleUpper.includes('CHÍNH QUYỀN') ||
-                      roleUpper.includes('ĐIỀU PHỐI')
-                    ? 'Cán bộ Điều phối Địa phương'
-                    : roleUpper.includes('RESCUER') ||
-                      roleUpper.includes('CỨU HỘ') ||
-                      roleUpper.includes('ĐỘI TRƯỞNG') ||
-                      roleUpper.includes('THỰC ĐỊA')
-                    ? 'Đội Cứu hộ Thực địa'
-                    : 'Người dân Cứu trợ');
+                  (typeof log.actorId === 'string' ? log.actorId : '') ||
+                  (meta.fullName as string) ||
+                  (meta.hoTen as string) ||
+                  '—';
 
-                const initialLetter = actorName.charAt(0).toUpperCase() || 'S';
+                const initialLetter = (actorName !== '—' ? actorName.charAt(0) : 'C').toUpperCase();
+
+                // Vai trò: Badge vai trò nền xanh nhạt, chữ xanh; hiển thị LOCAL_AUTHORITY thành “Chính quyền địa phương”
+                const formatRoleBadge = (roleStr: string) => {
+                  const r = (roleStr || '').toUpperCase();
+                  if (
+                    r.includes('LOCAL_AUTHORITY') ||
+                    r.includes('AUTHORITY') ||
+                    r.includes('CHỈ HUY') ||
+                    r.includes('ĐỊA PHƯƠNG') ||
+                    r.includes('CHÍNH QUYỀN') ||
+                    r.includes('TRỰC BAN') ||
+                    r.includes('BCH') ||
+                    r.includes('DISPATCHER')
+                  ) {
+                    return 'Chính quyền địa phương';
+                  }
+                  if (r.includes('ADMIN') || r.includes('QUẢN TRỊ')) {
+                    return 'Quản trị viên';
+                  }
+                  if (r.includes('RESCUER') || r.includes('CỨU HỘ') || r.includes('ĐỘI TRƯỞNG') || r.includes('THỰC ĐỊA')) {
+                    return 'Đội cứu hộ';
+                  }
+                  if (r.includes('CITIZEN') || r.includes('NGƯỜI DÂN') || r.includes('DÂN')) {
+                    return 'Người dân';
+                  }
+                  return roleStr || '—';
+                };
+
+                const roleLabel = formatRoleBadge(log.actorRole || '');
+
+                // Số điện thoại (không cắt số điện thoại)
+                const actorPhone =
+                  actor?.phone ||
+                  (meta.phone as string) ||
+                  (meta.soDienThoai as string) ||
+                  (meta.sdt as string) ||
+                  '—';
+
+                // Email
+                const actorEmail =
+                  actor?.email ||
+                  (meta.email as string) ||
+                  '—';
+
+                // Cơ quan chỉ huy
+                let orgName =
+                  actor?.authority?.organizationName ||
+                  (typeof meta.authority === 'object' && meta.authority !== null && 'organizationName' in meta.authority
+                    ? (meta.authority as any).organizationName
+                    : typeof meta.authority === 'string' && meta.authority
+                    ? meta.authority
+                    : '') ||
+                  (meta.organizationName as string) ||
+                  (meta.donVi as string) ||
+                  (meta.department as string) ||
+                  (meta.phongBan as string) ||
+                  '';
+
+                if (!orgName) {
+                  const roleUpper = (log.actorRole || '').toUpperCase();
+                  if (
+                    roleUpper.includes('LOCAL_AUTHORITY') ||
+                    roleUpper.includes('AUTHORITY') ||
+                    roleUpper.includes('CHỈ HUY') ||
+                    roleUpper.includes('ĐỊA PHƯƠNG')
+                  ) {
+                    if (log.areaId && typeof log.areaId === 'object' && log.areaId.name) {
+                      orgName = `Ban Chỉ Huy PCTT & TKCN ${log.areaId.name}`;
+                    } else if (actor?.authority?.areaName) {
+                      orgName = `Ban Chỉ Huy PCTT & TKCN ${actor.authority.areaName}`;
+                    } else if (meta.khuVuc) {
+                      orgName = `Ban Chỉ Huy PCTT & TKCN ${meta.khuVuc}`;
+                    } else {
+                      orgName = 'Ban Chỉ Huy PCTT & TKCN Quận Hải Châu';
+                    }
+                  } else if (roleUpper.includes('ADMIN')) {
+                    orgName = 'Trung tâm Quản trị Hệ thống Cứu nạn';
+                  } else if (roleUpper.includes('RESCUER')) {
+                    orgName = (meta.teamName as string) || (meta.doiCuuHo as string) || 'Đội Cứu hộ Thực địa';
+                  } else {
+                    orgName = '—';
+                  }
+                }
+
+                // Chức vụ
+                let position =
+                  actor?.authority?.position ||
+                  (typeof meta.authority === 'object' && meta.authority !== null && 'position' in meta.authority
+                    ? (meta.authority as any).position
+                    : '') ||
+                  (meta.position as string) ||
+                  (meta.chucVu as string) ||
+                  '';
+
+                if (!position) {
+                  const roleUpper = (log.actorRole || '').toUpperCase();
+                  if (
+                    roleUpper.includes('LOCAL_AUTHORITY') ||
+                    roleUpper.includes('AUTHORITY') ||
+                    roleUpper.includes('CHỈ HUY') ||
+                    roleUpper.includes('ĐỊA PHƯƠNG')
+                  ) {
+                    position = 'Chuyên viên Điều phối Tác chiến';
+                  } else if (roleUpper.includes('ADMIN')) {
+                    position = 'Quản trị viên Hệ thống';
+                  } else if (roleUpper.includes('RESCUER')) {
+                    position = 'Cứu hộ viên';
+                  } else {
+                    position = '—';
+                  }
+                }
+
+                // Tên hành động
                 const actionText = actionLabels[log.action] || log.action;
+
+                // Thời gian (HH:mm:ss DD/MM/YYYY)
+                const formatAuditDateTime = (dateStr: string) => {
+                  try {
+                    const d = new Date(dateStr);
+                    if (isNaN(d.getTime())) return '—';
+                    const time = d.toLocaleTimeString('vi-VN', { hour12: false });
+                    const date = d.toLocaleDateString('vi-VN');
+                    return `${time} ${date}`;
+                  } catch {
+                    return dateStr || '—';
+                  }
+                };
+
+                // Chi tiết hành động (chỉ hiển thị khi có dữ liệu riêng, không lặp lại người thực hiện/cơ quan)
+                interface ActionDetailItem {
+                  key: string;
+                  label: string;
+                  value: string;
+                  isVerified?: boolean;
+                }
+
+                const extractActionDetails = (): ActionDetailItem[] => {
+                  if (!meta || typeof meta !== 'object') return [];
+
+                  const ignoredKeys = new Set([
+                    'fullname', 'hoten', 'phone', 'sodienthoai', 'sdt', 'email',
+                    'authority', 'organizationname', 'position', 'chucvu', 'department',
+                    'phongban', 'provincecode', 'wardcode', 'roles', 'role', 'name',
+                    'actorname', 'actoremail', 'actorphone', 'actorrole'
+                  ]);
+
+                  const details: ActionDetailItem[] = [];
+
+                  for (const [rawKey, rawVal] of Object.entries(meta)) {
+                    if (rawVal === null || rawVal === undefined || rawVal === '') continue;
+
+                    const lowerKey = rawKey.toLowerCase();
+                    if (ignoredKeys.has(lowerKey)) continue;
+
+                    if (typeof rawVal === 'object' && !Array.isArray(rawVal) && Object.keys(rawVal).length === 0) continue;
+
+                    let label: string;
+                    if (lowerKey === 'soscode' || lowerKey === 'sosid' || lowerKey === 'masos') label = 'Mã SOS';
+                    else if (lowerKey === 'status' || lowerKey === 'trangthai') label = 'Trạng thái';
+                    else if (lowerKey === 'verificationstatus') label = 'Trạng thái';
+                    else if (lowerKey === 'severity' || lowerKey === 'mucdo') label = 'Mức độ';
+                    else if (lowerKey === 'victimcount' || lowerKey === 'songuoi') label = 'Số người';
+                    else if (lowerKey === 'urgency') label = 'Độ khẩn cấp';
+                    else if (lowerKey === 'teamname' || lowerKey === 'doicuho') label = 'Đội cứu hộ';
+                    else if (lowerKey === 'vehicletype' || lowerKey === 'phuongtien') label = 'Phương tiện';
+                    else if (lowerKey === 'updatedfields' || lowerKey === 'truongcapnhat') label = 'Nội dung thay đổi';
+                    else if (lowerKey === 'note' || lowerKey === 'ghichu') label = 'Ghi chú';
+                    else if (lowerKey === 'reason' || lowerKey === 'lydo') label = 'Lý do';
+                    else {
+                      label = formatAuditMetaKey(rawKey);
+                    }
+
+                    let valStr: string;
+                    let isVerified = false;
+
+                    if (lowerKey === 'status' || lowerKey === 'verificationstatus' || lowerKey === 'trangthai') {
+                      const vUpper = String(rawVal).toUpperCase();
+                      if (vUpper === 'VERIFIED' || vUpper === 'ĐÃ XÁC MINH' || vUpper === 'APPROVED' || vUpper === 'COMPLETED') {
+                        valStr = 'Đã xác minh';
+                        isVerified = true;
+                      } else if (vUpper === 'ASSIGNED') {
+                        valStr = 'Đã phân công';
+                      } else if (vUpper === 'IN_PROGRESS') {
+                        valStr = 'Đang cứu hộ';
+                      } else if (vUpper === 'PENDING') {
+                        valStr = 'Chờ xử lý';
+                      } else if (vUpper === 'REJECTED') {
+                        valStr = 'Đã từ chối';
+                      } else {
+                        valStr = formatAuditMetaValue(rawKey, rawVal);
+                      }
+                    } else {
+                      valStr = formatAuditMetaValue(rawKey, rawVal);
+                    }
+
+                    if (valStr && valStr !== '—') {
+                      details.push({
+                        key: rawKey,
+                        label,
+                        value: valStr,
+                        isVerified,
+                      });
+                    }
+                  }
+
+                  return details;
+                };
+
+                const actionDetails = extractActionDetails();
 
                 return (
                   <div key={log._id} className="sos-audit-item">
-                    <div className={nodeClass}>
-                      <NodeIcon size={12} color="#ffffff" />
-                    </div>
+                    <div className="sos-audit-node" />
 
                     <div className="sos-audit-card">
-                      <div className="sos-audit-header">
-                        <div className="sos-audit-actor">
-                          <div className={avatarClass}>{initialLetter}</div>
-                          <div className="sos-audit-actor-meta">
-                            <div className="sos-audit-actor-name">
-                              <span>{actorName}</span>
-                              <span className={roleBadgeClass} style={{ fontSize: '10.5px' }}>
-                                {roleLabel}
-                              </span>
-                            </div>
-                            <div className="sos-audit-actor-sub">
-                              {actor?.phone && <span>SĐT: {actor.phone} &bull; </span>}
-                              {actor?.email && <span>{actor.email}</span>}
-                            </div>
+                      {/* 1. Hàng thông tin người thực hiện gồm bốn cột */}
+                      <div className="sos-audit-actor-grid">
+                        {/* Cột 1: avatar tròn 40px, họ tên đậm, badge vai trò nhỏ bên dưới tên */}
+                        <div className="sos-audit-col-actor">
+                          <div className="sos-audit-col-avatar">{initialLetter}</div>
+                          <div className="sos-audit-col-actor-info">
+                            <span className="sos-audit-col-name" title={actorName !== '—' ? actorName : undefined}>
+                              {actorName}
+                            </span>
+                            <span className="sos-audit-col-role-badge">
+                              {roleLabel}
+                            </span>
                           </div>
                         </div>
 
-                        <div className="sos-audit-time-badge">
-                          <Clock size={12} />
-                          <span>{new Date(log.createdAt).toLocaleString('vi-VN')}</span>
+                        {/* Cột 2: icon điện thoại + số điện thoại */}
+                        <div className="sos-audit-col-item">
+                          <i className="bi bi-telephone sos-audit-col-icon"></i>
+                          <span className="sos-audit-col-phone">{actorPhone}</span>
+                        </div>
+
+                        {/* Cột 3: icon phong bì + email */}
+                        <div className="sos-audit-col-item" title={actorEmail !== '—' ? actorEmail : undefined}>
+                          <i className="bi bi-envelope sos-audit-col-icon"></i>
+                          <span className="sos-audit-col-email">{actorEmail}</span>
+                        </div>
+
+                        {/* Cột 4: icon cơ quan + tên cơ quan chỉ huy; chức vụ hiển thị nhỏ bên dưới tên cơ quan */}
+                        <div className="sos-audit-col-item">
+                          <i className="bi bi-building sos-audit-col-icon"></i>
+                          <div className="sos-audit-col-org-wrap">
+                            <span className="sos-audit-col-org-name" title={orgName !== '—' ? orgName : undefined}>
+                              {orgName}
+                            </span>
+                            <span className="sos-audit-col-position" title={position !== '—' ? position : undefined}>
+                              {position}
+                            </span>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="sos-audit-action-row">
-                        <span className="sos-audit-action-text">{actionText}</span>
-                        <span className="sos-audit-entity-tag">[{log.entityType}]</span>
-                        {log.areaId && (
-                          <span
-                            className="sos-badge info"
-                            style={{
-                              fontSize: '11px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              background: 'rgba(56, 189, 248, 0.12)',
-                              color: '#38bdf8',
-                              border: '1px solid rgba(56, 189, 248, 0.25)',
-                              fontWeight: 500,
-                            }}
-                          >
-                            <MapPin size={11} />
-                            <span>{typeof log.areaId === 'object' ? log.areaId.name : 'Địa phương'}</span>
-                          </span>
-                        )}
+                      {/* 2. Đường phân cách mảnh bên dưới hàng thông tin */}
+                      <div className="sos-audit-divider" />
+
+                      {/* 3. Hàng hành động */}
+                      <div className="sos-audit-action-bar">
+                        <div className="sos-audit-action-left">
+                          <span className="sos-audit-action-title">{actionText}</span>
+                          <span className="sos-audit-action-badge">[{log.entityType || 'Action'}]</span>
+                        </div>
+
+                        <div className="sos-audit-action-right">
+                          <i className="bi bi-clock"></i>
+                          <span>{formatAuditDateTime(log.createdAt)}</span>
+                        </div>
                       </div>
 
-                      {log.metadata && Object.keys(log.metadata).length > 0 && (
-                        <div className="sos-audit-meta-grid">
-                          {Object.entries(log.metadata).map(([key, val]) => {
-                            const displayKey = formatAuditMetaKey(key);
-                            const displayVal = formatAuditMetaValue(key, val);
-                            return (
-                              <div key={key} className="sos-audit-meta-chip">
-                                <span className="sos-audit-meta-key">{displayKey}:</span>
-                                <span className="sos-audit-meta-val">{displayVal}</span>
+                      {/* 4. Chi tiết hành động: chỉ hiển thị khi có dữ liệu riêng */}
+                      {actionDetails.length > 0 && (
+                        <div className="sos-audit-details-box">
+                          {actionDetails.map((detail, idx) => (
+                            <React.Fragment key={detail.key || idx}>
+                              {idx > 0 && <span className="sos-audit-detail-sep">|</span>}
+                              <div className="sos-audit-detail-item">
+                                <span className="sos-audit-detail-label">{detail.label}:</span>
+                                <span className={`sos-audit-detail-val ${detail.isVerified ? 'verified' : ''}`}>
+                                  {detail.value}
+                                </span>
                               </div>
-                            );
-                          })}
+                            </React.Fragment>
+                          ))}
                         </div>
                       )}
                     </div>

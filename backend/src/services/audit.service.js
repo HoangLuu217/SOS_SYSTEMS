@@ -104,7 +104,7 @@ class AuditService {
 
     const [logs, total] = await Promise.all([
       AuditLog.find(filter)
-        .populate('actorId', 'fullName phone email roles')
+        .populate('actorId', 'fullName phone email roles authority')
         .populate('areaId', 'name code type')
         .sort({ createdAt: -1 })
         .skip(skip)
