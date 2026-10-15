@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const administrativeAreaController = require('../controllers/administrativeArea.controller');
+const { optionalAuthenticate } = require('../middlewares/authMiddleware');
+
+router.use(optionalAuthenticate);
 
 /**
  * @route   POST /administrative-areas
@@ -13,6 +16,12 @@ router.post('/', administrativeAreaController.createArea);
  * @desc    Lấy danh sách các khu vực hành chính (hỗ trợ lọc theo type, parentId, search)
  */
 router.get('/', administrativeAreaController.getAreas);
+
+/**
+ * @route   GET /administrative-areas/boundary
+ * @desc    Lấy ranh giới GeoJSON polygon của khu vực hành chính (tự động truy vấn và cache CSDL)
+ */
+router.get('/boundary', administrativeAreaController.getAreaBoundary);
 
 /**
  * @route   GET /administrative-areas/managers

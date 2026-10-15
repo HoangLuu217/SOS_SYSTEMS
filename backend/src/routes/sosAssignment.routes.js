@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const sosAssignmentController = require('../controllers/sosAssignment.controller');
+const { optionalAuthenticate } = require('../middlewares/authMiddleware');
+
+router.use(optionalAuthenticate);
 
 /**
  * @route   POST /sos/:id/assign

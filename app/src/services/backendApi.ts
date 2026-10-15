@@ -10,9 +10,18 @@ export interface EmergencyContact {
 
 export interface NotificationItem {
   _id: string;
-  type: 'ALERT' | 'RESCUE' | 'WEATHER' | 'SYSTEM' | string;
+  type: 'INSTANT' | 'SYSTEM' | 'ALERT' | 'RESCUE' | 'WEATHER' | string;
   title: string;
   content: string;
+  priority?: 'LOW' | 'NORMAL' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | string;
+  areaId?: any;
+  areaName?: string;
+  createdBy?: {
+    _id: string;
+    fullName: string;
+    roles?: string[];
+  };
+  data?: any;
   isRead: boolean;
   createdAt: string;
   actionUrl?: string;
@@ -387,30 +396,36 @@ class BackendApiService {
   }
 
   /**
-   * Gửi mã OTP xác thực qua Email (sử dụng Resend)
+   * Gửi mã OTP xác thực qua SMS (TextBee) hoặc Email (Resend)
    */
-  async sendOtp(email: string): Promise<ApiResponse> {
+  async sendOtp(target: string): Promise<ApiResponse> {
+    const isEmail = target.includes('@');
+    const payload = isEmail
+      ? { email: target.trim().toLowerCase() }
+      : { phone: target.trim() };
+
     return await this.request('/auth/send-otp', {
       method: 'POST',
-      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      body: JSON.stringify(payload),
     });
   }
 
   /**
-   * Xác thực mã OTP và đăng nhập
+   * Xác thực mã OTP và đăng nhập (hỗ trợ cả SĐT và Email)
    */
   async verifyOtp(
-    email: string,
+    target: string,
     otp: string,
     verifyOnly: boolean = false
   ): Promise<ApiResponse<AuthResponseData>> {
+    const isEmail = target.includes('@');
+    const payload = isEmail
+      ? { email: target.trim().toLowerCase(), otp: otp.trim(), verifyOnly }
+      : { phone: target.trim(), otp: otp.trim(), verifyOnly };
+
     const res = await this.request<AuthResponseData>('/auth/verify-otp', {
       method: 'POST',
-      body: JSON.stringify({
-        email: email.trim().toLowerCase(),
-        otp: otp.trim(),
-        verifyOnly,
-      }),
+      body: JSON.stringify(payload),
     });
 
     if (!verifyOnly && res.success && res.data?.accessToken) {
@@ -545,11 +560,33 @@ class BackendApiService {
   }
 
   /**
-   * Lấy danh sách thông báo
+   * Lấy danh sách thông báo (hỗ trợ lọc theo loại INSTANT, SYSTEM, trạng thái đã đọc)
    */
-  async getNotifications(): Promise<ApiResponse<NotificationItem[]>> {
-    return await this.request<NotificationItem[]>('/notifications', {
+  async getNotifications(query?: {
+    type?: string;
+    isRead?: boolean | string;
+    page?: number;
+    limit?: number;
+  }): Promise<ApiResponse<NotificationItem[]>> {
+    const params = new URLSearchParams();
+    if (query?.type) params.append('type', query.type);
+    if (query?.isRead !== undefined) params.append('isRead', String(query.isRead));
+    if (query?.page) params.append('page', String(query.page));
+    if (query?.limit) params.append('limit', String(query.limit));
+    const qs = params.toString() ? `?${params.toString()}` : '';
+
+    return await this.request<NotificationItem[]>(`/notifications${qs}`, {
       method: 'GET',
+    });
+  }
+
+  /**
+   * Đăng ký mã Expo Push Token của thiết bị người dùng với máy chủ
+   */
+  async registerPushToken(pushToken: string): Promise<ApiResponse<{ pushToken: string }>> {
+    return await this.request<{ pushToken: string }>('/notifications/register-push-token', {
+      method: 'POST',
+      body: JSON.stringify({ pushToken }),
     });
   }
 

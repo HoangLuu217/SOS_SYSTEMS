@@ -6,6 +6,7 @@ export interface User {
   roles: string[];
   status: string;
   isVerified?: boolean;
+  isPhoneVerified?: boolean;
   avatarUrl?: string;
   authority?: {
     organizationId?: string;

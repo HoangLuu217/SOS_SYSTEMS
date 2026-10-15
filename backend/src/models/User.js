@@ -23,6 +23,21 @@ const citizenSchema = new mongoose.Schema(
       },
       relation: { type: String, trim: true, default: null },
     },
+    areaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AdministrativeArea',
+      default: null,
+    },
+    areaName: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    pushToken: {
+      type: String,
+      trim: true,
+      default: null,
+    },
   },
   { _id: false }
 );
@@ -157,6 +172,19 @@ const authoritySchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    organizationName: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    provinceCode: {
+      type: Number,
+      default: null,
+    },
+    wardCode: {
+      type: Number,
+      default: null,
+    },
   },
   { _id: false }
 );
@@ -273,6 +301,10 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    isPhoneVerified: {
+      type: Boolean,
+      default: false,
+    },
     citizen: {
       type: citizenSchema,
       default: () => ({}),
@@ -298,6 +330,16 @@ const userSchema = new mongoose.Schema(
     },
     lastLoginAt: {
       type: Date,
+      default: null,
+    },
+    pushToken: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    areaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AdministrativeArea',
       default: null,
     },
   },

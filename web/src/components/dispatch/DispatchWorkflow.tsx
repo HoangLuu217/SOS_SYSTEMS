@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   MapPin,
   ChevronRight,
+  Check,
 } from 'lucide-react';
 import type {
   SosRequest,
@@ -44,6 +45,8 @@ interface Props {
   onOpenReassign: () => void;
   onOpenCancel: () => void;
   onToggleCollapse?: () => void;
+  selectedTeamIds?: string[];
+  onSelectedTeamsChange?: (teamIds: string[]) => void;
 }
 
 export const DispatchWorkflow = ({
@@ -58,6 +61,8 @@ export const DispatchWorkflow = ({
   onOpenReassign,
   onOpenCancel,
   onToggleCollapse,
+  selectedTeamIds: propSelectedTeamIds,
+  onSelectedTeamsChange,
 }: Props) => {
   const { lang: _lang } = useApp();
   const isAdmin = activeOfficer?.role === 'ADMIN';
@@ -82,30 +87,32 @@ export const DispatchWorkflow = ({
   });
   const availableTeams = districtFilteredTeams.length > 0 ? districtFilteredTeams : rescueTeams;
 
-  // Selected team state
-  const [selectedTeamId, setSelectedTeamId] = useState<string>(
-    assignment?.rescueTeamId || availableTeams[0]?.id || ''
-  );
+  // Selected team IDs state (supports selecting multiple teams)
+  const [localSelectedTeamIds, setLocalSelectedTeamIds] = useState<string[]>(() => {
+    if (assignment?.rescueTeamId) {
+      return assignment.rescueTeamId.split(',').filter(Boolean);
+    }
+    return availableTeams[0]?.id ? [availableTeams[0].id] : [];
+  });
 
-  // Active selected team
-  const currentTeam = availableTeams.find((t) => t.id === selectedTeamId) || availableTeams[0];
+  const activeSelectedTeamIds = propSelectedTeamIds ?? localSelectedTeamIds;
 
-  // Rescuers under this team
+  // Active selected teams list
+  const selectedTeams = availableTeams.filter((t) => activeSelectedTeamIds.includes(t.id));
+  const currentTeam = selectedTeams[0] || availableTeams[0];
+
+  // Rescuers under primary team
   const availableRescuers = currentTeam?.rescuers || [];
-  const [selectedRescuerId, setSelectedRescuerId] = useState<string>(
+  const [_selectedRescuerId, setSelectedRescuerId] = useState<string>(
     assignment?.rescuerId || availableRescuers[0]?.id || ''
   );
-  const currentRescuer =
-    availableRescuers.find((r) => r.id === selectedRescuerId) || availableRescuers[0];
 
-  // Vehicles under this team
+  // Vehicles under primary team
   const teamVehicles = vehicles.filter((v) => v.teamId === currentTeam?.id);
   const availableVehicles = teamVehicles.length > 0 ? teamVehicles : vehicles;
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string>(
+  const [_selectedVehicleId, setSelectedVehicleId] = useState<string>(
     assignment?.vehicleId || availableVehicles[0]?.id || ''
   );
-  const currentVehicle =
-    availableVehicles.find((v) => v.id === selectedVehicleId) || availableVehicles[0];
 
   // Matched authority for the SOS
   const matchedAuthority =
@@ -118,12 +125,16 @@ export const DispatchWorkflow = ({
   // Reset when selectedSos changes or assignment changes
   useEffect(() => {
     if (assignment) {
-      setSelectedTeamId(assignment.rescueTeamId);
+      const ids = assignment.rescueTeamId ? assignment.rescueTeamId.split(',').filter(Boolean) : [];
+      setLocalSelectedTeamIds(ids);
+      onSelectedTeamsChange?.(ids);
       setSelectedRescuerId(assignment.rescuerId);
       setSelectedVehicleId(assignment.vehicleId);
     } else {
       const initialTeam = availableTeams[0];
-      setSelectedTeamId(initialTeam?.id || '');
+      const initialIds = initialTeam ? [initialTeam.id] : [];
+      setLocalSelectedTeamIds(initialIds);
+      onSelectedTeamsChange?.(initialIds);
       if (initialTeam?.rescuers.length > 0) {
         setSelectedRescuerId(initialTeam.rescuers[0].id);
       }
@@ -132,32 +143,51 @@ export const DispatchWorkflow = ({
     }
   }, [selectedSos?.id, assignment?.id]);
 
-  const handleSelectTeam = (teamId: string) => {
-    setSelectedTeamId(teamId);
-    const newTeam = rescueTeams.find((t) => t.id === teamId);
-    if (newTeam && newTeam.rescuers.length > 0) {
-      setSelectedRescuerId(newTeam.rescuers[0].id);
+  const handleToggleTeam = (teamId: string) => {
+    let next: string[];
+    if (activeSelectedTeamIds.includes(teamId)) {
+      // Toggle off if already included
+      next = activeSelectedTeamIds.filter((id) => id !== teamId);
+    } else {
+      // Add team to selection
+      next = [...activeSelectedTeamIds, teamId];
     }
-    const newTeamVehicles = vehicles.filter((v) => v.teamId === teamId);
-    if (newTeamVehicles.length > 0) {
-      setSelectedVehicleId(newTeamVehicles[0].id);
+    setLocalSelectedTeamIds(next);
+    onSelectedTeamsChange?.(next);
+
+    const targetTeam = rescueTeams.find((t) => t.id === teamId);
+    if (targetTeam && targetTeam.rescuers.length > 0) {
+      setSelectedRescuerId(targetTeam.rescuers[0].id);
+    }
+    const tVehicles = vehicles.filter((v) => v.teamId === teamId);
+    if (tVehicles.length > 0) {
+      setSelectedVehicleId(tVehicles[0].id);
     }
   };
 
   const handleExecuteDispatch = () => {
-    if (!currentTeam || !currentRescuer || !currentVehicle) return;
+    if (selectedTeams.length === 0) return;
+
+    const primaryTeam = selectedTeams[0];
+    const primaryRescuer = primaryTeam.rescuers[0];
+    const primaryVehicle = vehicles.find((v) => v.teamId === primaryTeam.id) || vehicles[0];
 
     onConfirmAssign({
       authorityOrganizationId: matchedAuthority?.id || 'auth-general',
       authorityOrganizationName: matchedAuthority?.name || 'Cơ quan Cứu Hộ & Phòng Chống Thiên Tai',
-      rescueTeamId: currentTeam.id,
-      rescueTeamName: currentTeam.name,
-      rescuerId: currentRescuer.id,
-      rescuerName: currentRescuer.name,
-      rescuerRole: currentRescuer.role,
-      vehicleId: currentVehicle.id,
-      vehicleName: currentVehicle.name,
-      vehicleCapacity: currentVehicle.capacity,
+      rescueTeamId: activeSelectedTeamIds.join(','),
+      rescueTeamName: selectedTeams.map((t) => t.name).join(' & '),
+      rescuerId: primaryRescuer?.id || 'rescuer-lead',
+      rescuerName: selectedTeams.map((t) => t.rescuers[0]?.name).filter(Boolean).join(', ') || 'Chỉ huy trưởng',
+      rescuerRole: primaryRescuer?.role || 'Chỉ Huy Trưởng',
+      vehicleId: primaryVehicle?.id || 'veh-main',
+      vehicleName: selectedTeams
+        .map((t) => {
+          const v = vehicles.find((veh) => veh.teamId === t.id);
+          return v?.name || 'Ca-nô';
+        })
+        .join(' + '),
+      vehicleCapacity: `${selectedTeams.reduce((acc, t) => acc + (t.availableRescuersCount || 4), 0)} chiến sĩ`,
     });
     setIsConfirmModalOpen(false);
   };
@@ -513,7 +543,7 @@ export const DispatchWorkflow = ({
             {/* Rescue Team Cards List */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {availableTeams.map((team, index) => {
-                const isSelected = team.id === selectedTeamId;
+                const isSelected = activeSelectedTeamIds.includes(team.id);
                 const leadRescuer = team.rescuers?.[0];
                 const teamVeh = vehicles.find((v) => v.teamId === team.id) || vehicles[0];
                 const isRecommended = index === 0;
@@ -537,12 +567,12 @@ export const DispatchWorkflow = ({
                 return (
                   <div
                     key={team.id}
-                    onClick={() => handleSelectTeam(team.id)}
+                    onClick={() => handleToggleTeam(team.id)}
                     style={{
                       padding: '10px 12px',
                       borderRadius: 9,
                       border: isSelected ? '2px solid #0284c7' : '1px solid var(--sos-border)',
-                      background: isSelected ? 'rgba(2, 132, 199, 0.05)' : 'var(--sos-surface)',
+                      background: isSelected ? 'rgba(2, 132, 199, 0.06)' : 'var(--sos-surface)',
                       boxShadow: isSelected ? '0 3px 10px rgba(2, 132, 199, 0.12)' : '0 1px 2px rgba(0,0,0,0.03)',
                       cursor: 'pointer',
                       transition: 'all 0.14s ease',
@@ -551,24 +581,24 @@ export const DispatchWorkflow = ({
                   >
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minWidth: 0, flex: 1 }}>
-                        {/* Radio selection circle */}
+                        {/* Multi-selection Checkbox */}
                         <div
                           style={{
-                            width: 17,
-                            height: 17,
-                            borderRadius: '50%',
+                            width: 18,
+                            height: 18,
+                            borderRadius: 4,
                             border: `2px solid ${isSelected ? '#0284c7' : '#94a3b8'}`,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             flexShrink: 0,
                             marginTop: 2,
-                            background: isSelected ? '#ffffff' : 'transparent',
+                            background: isSelected ? '#0284c7' : 'transparent',
+                            color: '#ffffff',
+                            transition: 'all 0.12s ease',
                           }}
                         >
-                          {isSelected && (
-                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#0284c7' }} />
-                          )}
+                          {isSelected && <Check size={12} strokeWidth={3} />}
                         </div>
 
                         <div style={{ minWidth: 0, flex: 1 }}>
@@ -627,45 +657,6 @@ export const DispatchWorkflow = ({
                 );
               })}
             </div>
-
-            {/* Tactical Selected Team Dispatch Plan */}
-            {currentTeam && (
-              <div
-                style={{
-                  marginTop: 4,
-                  padding: '10px 12px',
-                  borderRadius: 6,
-                  background: 'var(--sos-surface-subtle)',
-                  border: '1px solid var(--sos-border)',
-                  fontSize: 11.5,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 6,
-                }}
-              >
-                <div style={{ fontWeight: 700, color: 'var(--sos-text-primary)' }}>
-                  KẾ HOẠCH ĐIỀU ĐỘNG:
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11 }}>
-                  <div>
-                    <span style={{ color: 'var(--sos-text-muted)' }}>Mũi xuất kích:</span>{' '}
-                    <strong style={{ color: 'var(--sos-text-primary)' }}>{currentTeam.name.replace('Đội ', '')}</strong>
-                  </div>
-                  <div>
-                    <span style={{ color: 'var(--sos-text-muted)' }}>Tiếp cận dự kiến:</span>{' '}
-                    <strong style={{ color: 'var(--sos-text-primary)' }}>~5-7 phút</strong>
-                  </div>
-                  <div>
-                    <span style={{ color: 'var(--sos-text-muted)' }}>Chỉ huy:</span>{' '}
-                    <strong style={{ color: 'var(--sos-text-primary)' }}>{currentRescuer?.name || 'Trưởng đội'}</strong>
-                  </div>
-                  <div>
-                    <span style={{ color: 'var(--sos-text-muted)' }}>Phương tiện:</span>{' '}
-                    <strong style={{ color: 'var(--sos-text-primary)' }}>{currentVehicle?.name || 'Ca-nô 50HP'}</strong>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         ) : (
           /* Active Mission Console when Assigned - Professional Clean CAD */
@@ -958,17 +949,18 @@ export const DispatchWorkflow = ({
         >
           <button
             type="button"
+            disabled={activeSelectedTeamIds.length === 0}
             onClick={() => setIsConfirmModalOpen(true)}
             style={{
               width: '100%',
               padding: '11px 18px',
-              background: '#dc2626',
+              background: activeSelectedTeamIds.length === 0 ? '#94a3b8' : '#dc2626',
               color: '#ffffff',
               border: 'none',
               borderRadius: 6,
               fontSize: 13,
               fontWeight: 700,
-              cursor: 'pointer',
+              cursor: activeSelectedTeamIds.length === 0 ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -977,7 +969,13 @@ export const DispatchWorkflow = ({
               transition: 'all 0.15s ease',
             }}
           >
-            <span>XÁC NHẬN PHÂN CÔNG & XUẤT KÍCH</span>
+            <span>
+              {activeSelectedTeamIds.length === 0
+                ? 'VUI LÒNG CHỌN ĐỘI CỨU HỘ'
+                : activeSelectedTeamIds.length === 1
+                ? 'XÁC NHẬN PHÂN CÔNG & XUẤT KÍCH (1 ĐỘI)'
+                : `XÁC NHẬN PHÂN CÔNG & XUẤT KÍCH (${activeSelectedTeamIds.length} ĐỘI)`}
+            </span>
           </button>
           <div style={{ textAlign: 'center', fontSize: 10, color: 'var(--sos-text-muted)' }}>
             Lệnh xuất kích sẽ truyền tức thời đến máy bộ đàm &amp; App cứu hộ viên
@@ -1091,7 +1089,7 @@ export const DispatchWorkflow = ({
                   fontSize: 11.5,
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 5,
+                  gap: 6,
                 }}
               >
                 <div>
@@ -1105,16 +1103,33 @@ export const DispatchWorkflow = ({
                 </div>
                 <div style={{ height: 1, background: 'var(--sos-border)', margin: '3px 0' }} />
                 <div>
-                  <strong>Đội cứu nạn tiếp nhận:</strong>{' '}
-                  <span style={{ color: '#0284c7', fontWeight: 700 }}>{currentTeam?.name}</span>
+                  <strong>Đội cứu nạn xuất kích ({selectedTeams.length} đội):</strong>
                 </div>
-                <div>
-                  <strong>Chỉ huy phụ trách:</strong> {currentRescuer?.name} ({currentRescuer?.role})
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
+                  {selectedTeams.map((team, idx) => {
+                    const lead = team.rescuers[0];
+                    const veh = vehicles.find((v) => v.teamId === team.id) || vehicles[0];
+                    return (
+                      <div
+                        key={team.id}
+                        style={{
+                          background: 'rgba(2, 132, 199, 0.06)',
+                          border: '1px solid #bae6fd',
+                          borderRadius: 6,
+                          padding: '7px 10px',
+                        }}
+                      >
+                        <div style={{ color: '#0284c7', fontWeight: 700, fontSize: 12 }}>
+                          {idx + 1}. {team.name}
+                        </div>
+                        <div style={{ color: 'var(--sos-text-secondary)', fontSize: 11, marginTop: 2 }}>
+                          Chỉ huy: <strong>{lead?.name || 'Trưởng đội'}</strong> ({team.availableRescuersCount || 4} chiến sĩ) • Phương tiện: <strong>{veh?.name || 'Ca-nô'}</strong>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                <div>
-                  <strong>Phương tiện:</strong> {currentVehicle?.name} (Sức chứa: {currentVehicle?.capacity})
-                </div>
-                <div>
+                <div style={{ marginTop: 2 }}>
                   <strong>Thời gian dự kiến tiếp cận (ETA):</strong>{' '}
                   <span style={{ color: '#16a34a', fontWeight: 700 }}>~5-7 phút</span>
                 </div>

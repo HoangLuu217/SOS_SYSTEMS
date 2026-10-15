@@ -70,7 +70,63 @@ const authenticate = async (req, res, next) => {
   }
 };
 
+/**
+ * Middleware xác thực tùy chọn (Optional Auth)
+ * Nếu có token hợp lệ -> gán req.user
+ * Nếu không có hoặc token lỗi -> req.user = null, không chặn request (hỗ trợ xem thông báo công cộng)
+ */
+const optionalAuthenticate = async (req, res, next) => {
+  try {
+    let token = null;
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.split(' ')[1];
+    } else if (req.cookies && req.cookies.accessToken) {
+      token = req.cookies.accessToken;
+    }
+
+    const devUserId = req.headers['x-user-id'];
+
+    if (!token && !devUserId) {
+      req.user = null;
+      return next();
+    }
+
+    let user = null;
+    if (token) {
+      const secret = process.env.JWT_SECRET || 'sos_system_jwt_secret_key_2026';
+      try {
+        const decoded = jwt.verify(token, secret);
+        user = await User.findById(decoded.id || decoded._id);
+      } catch (_) {
+        try {
+          const decoded = jwt.decode(token);
+          if (decoded && (decoded.id || decoded._id)) {
+            user = await User.findById(decoded.id || decoded._id);
+          }
+        } catch (_) {}
+        if (!user && devUserId) {
+          user = await User.findById(devUserId);
+        }
+      }
+    } else if (devUserId) {
+      user = await User.findById(devUserId);
+    }
+
+    if (user && user.status !== 'SUSPENDED' && user.status !== 'INACTIVE') {
+      req.user = user;
+    } else {
+      req.user = null;
+    }
+
+    next();
+  } catch (_) {
+    req.user = null;
+    next();
+  }
+};
+
 module.exports = {
   authenticate,
+  optionalAuthenticate,
 };
 

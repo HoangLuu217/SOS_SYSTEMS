@@ -12,10 +12,11 @@ import { parseRoute, buildRouteUrl, navigateTo } from './services/appRouter';
 import type { User } from './types/auth';
 import './App.css';
 
-// Kiểm tra quyền hạn hợp lệ: Chỉ ADMIN hoặc LOCAL_AUTHORITY
-const hasAuthorizedRole = (roles: string[] | undefined): boolean => {
+// Kiểm tra quyền hạn hợp lệ: ADMIN, LOCAL_AUTHORITY hoặc có trường .authority
+const hasAuthorizedRole = (roles: string[] | undefined, authority?: any): boolean => {
+  if (authority && typeof authority === 'object' && Object.keys(authority).length > 0) return true;
   if (!roles || !Array.isArray(roles)) return false;
-  return roles.includes('ADMIN') || roles.includes('LOCAL_AUTHORITY');
+  return roles.includes('ADMIN') || roles.includes('LOCAL_AUTHORITY') || roles.includes('AUTHORITY');
 };
 
 // Đọc và xác minh thông tin tài khoản từ localStorage
@@ -24,7 +25,7 @@ const getAuthorizedUser = (): User | null => {
     const saved = localStorage.getItem('sos_auth_user');
     if (!saved) return null;
     const parsed = JSON.parse(saved) as User;
-    if (hasAuthorizedRole(parsed?.roles)) {
+    if (hasAuthorizedRole(parsed?.roles, parsed?.authority)) {
       return parsed;
     }
     return null;
@@ -63,20 +64,24 @@ const navTitles: Record<NavItemKey, { title: string; desc: string }> = {
     desc: 'Quản lý các trạm sơ tán, điểm tránh lũ và năng lực tiếp nhận người dân trong địa bàn',
   },
   hazard_reports: {
-    title: 'DUYỆT ĐIỂM NGUY HIỂM TỪ NGƯỜI DÂN',
-    desc: 'Thẩm định và xác nhận các vị trí sạt lở, nước dâng sâu do cộng đồng đóng góp',
+    title: 'QUẢN LÝ & TẠO ĐIỂM NGUY HIỂM',
+    desc: 'Tạo mới, thẩm định và chuẩn hóa các vị trí sạt lở, nước dâng sâu, khu vực hiểm họa',
   },
   reports: {
     title: 'BÁO CÁO & THỐNG KÊ ĐỊA PHƯƠNG',
     desc: 'Phân tích số liệu cứu hộ, thời gian phản hồi và tỷ lệ hỗ trợ người dân',
   },
   operation_logs: {
-    title: 'NHẬT KÝ TÁC CHIẾN & SỰ KIỆN',
-    desc: 'Theo dõi chi tiết lịch sử sự kiện, điều động lực lượng và biên bản tác chiến thực địa',
+    title: 'NHẬT KÝ',
+    desc: 'Theo dõi chi tiết lịch sử sự kiện, điều động lực lượng và biên bản cứu hộ thực địa',
+  },
+  chat: {
+    title: 'Trao đổi',
+    desc: 'Kết nối ban chỉ huy và cán bộ địa phương',
   },
   settings: {
     title: 'CÀI ĐẶT HỆ THỐNG',
-    desc: 'Cấu hình tham số điều hành tác chiến, thông báo khẩn cấp và kết nối vệ tinh',
+    desc: 'Cấu hình tham số điều hành, thông báo khẩn cấp và kết nối vệ tinh',
   },
   admin_overview: {
     title: 'TỔNG QUAN & GIÁM SÁT TOÀN DIỆN',
@@ -124,7 +129,7 @@ function MainRouter() {
     const user = getAuthorizedUser();
     const parsed = parseRoute(window.location.pathname, window.location.hash, user);
     // Mặc định Đội cứu hộ địa phương ('rescuers') ở trạng thái Active nếu chưa chọn trang cụ thể
-    if (parsed.navKey === 'map' && (!window.location.hash && (window.location.pathname === '/' || window.location.pathname === '/local_authority' || window.location.pathname === '/localauthor'))) {
+    if (parsed.navKey === 'map' && (!window.location.hash && (window.location.pathname === '/' || window.location.pathname === '/authority' || window.location.pathname === '/local_authority' || window.location.pathname === '/localauthor' || window.location.pathname === '/localauthority'))) {
       return 'rescuers';
     }
     return parsed.navKey || 'rescuers';
@@ -232,9 +237,14 @@ function MainRouter() {
     );
   }
 
-  // 1. KHI ĐÃ ĐĂNG NHẬP VÀ XÁC THỰC ROLE HỢP LỆ (ADMIN hoặc LOCAL_AUTHORITY)
-  if (authUser && hasAuthorizedRole(authUser.roles)) {
+  // 1. KHI ĐÃ ĐĂNG NHẬP VÀ XÁC THỰC ROLE HỢP LỆ (ADMIN, LOCAL_AUTHORITY hoặc có trường .authority)
+  if (authUser && hasAuthorizedRole(authUser.roles, authUser.authority)) {
     const currentMeta = navTitles[activeNavKey] || navTitles.map;
+    const isAuthority =
+      (Boolean(authUser.authority) ||
+        Boolean(authUser.roles?.includes('LOCAL_AUTHORITY')) ||
+        Boolean(authUser.roles?.includes('AUTHORITY'))) &&
+      !authUser.roles?.includes('ADMIN');
 
     return (
       <div className="sos-dashboard-container">
@@ -255,15 +265,15 @@ function MainRouter() {
         <main
           className="sos-main-content"
           style={{
-            overflow: activeNavKey === 'map' ? 'hidden' : 'auto',
+            overflow: (activeNavKey === 'map' && isAuthority) || activeNavKey === 'hazard_reports' || activeNavKey === 'shelters' ? 'hidden' : 'auto',
             height: '100vh',
             display: 'flex',
             flexDirection: 'column',
           }}
         >
           {activeNavKey === 'map' ? (
-            /* Phân biệt rõ: LOCAL_AUTHORITY dùng AuthorPortal (Khóa khu vực & SOS thực địa), ADMIN dùng AdminPortal (Toàn TP Đà Nẵng, không hiện SOS) */
-            authUser.roles.includes('LOCAL_AUTHORITY') && !authUser.roles.includes('ADMIN') ? (
+            /* Phân biệt rõ: Cán bộ địa phương (.authority / LOCAL_AUTHORITY) dùng AuthorPortal (Khóa khu vực & SOS thực địa), ADMIN dùng AdminPortal (Toàn TP Đà Nẵng, không hiện SOS) */
+            isAuthority ? (
               <AuthorPortal
                 user={authUser}
                 embedded={true}
@@ -282,13 +292,23 @@ function MainRouter() {
                 <div className="sos-page-title-wrap">
                   <div>
                     <h1 className="sos-page-title">{currentMeta.title}</h1>
-                    <p className="sos-page-desc">{currentMeta.desc}</p>
+                    {currentMeta.desc && <p className="sos-page-desc">{currentMeta.desc}</p>}
                   </div>
                 </div>
               </header>
 
-              <div className="sos-page-body">
-                <div style={{ width: '100%' }}>
+              <div
+                className="sos-page-body"
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minHeight: 0,
+                  overflow: activeNavKey === 'hazard_reports' || activeNavKey === 'shelters' ? 'hidden' : undefined,
+                  padding: activeNavKey === 'hazard_reports' || activeNavKey === 'shelters' ? '14px 20px 16px' : undefined,
+                }}
+              >
+                <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                   <DashboardViews
                     activeKey={activeNavKey}
                     onOpenMap={(sosId?: string) => handleNavSelect('map', sosId)}

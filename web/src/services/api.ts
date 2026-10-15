@@ -1,4 +1,4 @@
-import type { LoginResponse } from '../types/auth';
+import type { LoginResponse, User } from '../types/auth';
 import type {
   SosRequestItem,
   AdminOverviewStats,
@@ -12,8 +12,9 @@ import type {
   SafeLocationItem,
 } from '../types/dashboard';
 
-const API_BASE = '/api';
-const DIRECT_BACKEND = 'http://127.0.0.1:5000/api';
+const RAW_BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:5000').replace(/\/+$/, '');
+const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '');
+const DIRECT_BACKEND = `${RAW_BACKEND_URL}/api`;
 
 async function safeParseResponse(res: Response): Promise<any> {
   const text = await res.text();
@@ -70,7 +71,7 @@ async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Pr
     try {
       const u = JSON.parse(userStr);
       userId = u._id || u.id || '';
-    } catch {}
+    } catch { }
   }
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -203,8 +204,9 @@ export async function logoutApi(): Promise<void> {
 }
 
 export async function resetPasswordApi(payload: {
+  account?: string;
   email?: string;
-  token: string;
+  token?: string;
   newPassword: string;
 }): Promise<{ success: boolean; message: string }> {
   const res = await fetch(`${API_BASE}/auth/reset-password`, {
@@ -228,7 +230,7 @@ export async function checkBackendHealth(): Promise<boolean> {
   }
 
   try {
-    const res = await fetch('http://127.0.0.1:5000/health', { method: 'GET' });
+    const res = await fetch(`${RAW_BACKEND_URL}/health`, { method: 'GET' });
     return res.ok;
   } catch {
     return false;
@@ -417,6 +419,57 @@ export async function createAlert(payload: {
   });
 }
 
+export interface BroadcastNotificationPayload {
+  title: string;
+  content: string;
+  type: 'INSTANT' | 'SYSTEM' | string;
+  areaId?: string;
+  priority?: 'NORMAL' | 'HIGH' | 'CRITICAL' | string;
+  data?: any;
+}
+
+export interface BroadcastItem {
+  id: string;
+  title: string;
+  content: string;
+  type: 'INSTANT' | 'SYSTEM' | string;
+  priority?: string;
+  areaName?: string;
+  areaId?: string;
+  createdBy?: {
+    _id: string;
+    fullName: string;
+    phone?: string;
+    roles?: string[];
+  };
+  createdAt: string;
+  recipientsCount?: number;
+}
+
+export async function broadcastNotificationApi(
+  payload: BroadcastNotificationPayload
+): Promise<{ success: boolean; data: any; message?: string }> {
+  return fetchWithAuth('/notifications/broadcast', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchBroadcastHistory(query?: {
+  type?: string;
+  areaId?: string;
+}): Promise<{ success: boolean; data: BroadcastItem[] }> {
+  const params = new URLSearchParams();
+  if (query?.type) params.append('type', query.type);
+  if (query?.areaId) params.append('areaId', query.areaId);
+  const qStr = params.toString() ? `?${params.toString()}` : '';
+  return fetchWithAuth(`/notifications/broadcasts${qStr}`, { method: 'GET' });
+}
+
+export async function deleteBroadcastApi(id: string): Promise<{ success: boolean; message: string }> {
+  return fetchWithAuth(`/notifications/broadcasts/${id}`, { method: 'DELETE' });
+}
+
 // ─── ADMINISTRATIVE AREAS & ORGANIZATIONS ────────────────────────────────────
 
 export async function fetchAdministrativeAreas(): Promise<{ success: boolean; data: AdministrativeAreaItem[] }> {
@@ -439,6 +492,44 @@ export async function syncAdministrativeAreasToBackend(payload: {
     });
   } catch (e) {
     console.warn('Sync administrative areas to MongoDB failed:', e);
+    return { success: false, data: null };
+  }
+}
+
+export async function fetchAreaBoundary(params: {
+  areaId?: string;
+  name?: string;
+  province?: string;
+  district?: string;
+}): Promise<{
+  success: boolean;
+  data: {
+    areaId: string;
+    name: string;
+    code: string;
+    boundary: {
+      type: 'Polygon' | 'MultiPolygon';
+      coordinates: any;
+    };
+    source: string;
+  } | null;
+}> {
+  try {
+    const q = new URLSearchParams();
+    if (params.areaId) q.append('areaId', params.areaId);
+    if (params.name) q.append('name', params.name);
+    if (params.province) q.append('province', params.province);
+    if (params.district) q.append('district', params.district);
+
+    const res = await fetchWithAuth<any>(`/administrative-areas/boundary?${q.toString()}`, {
+      method: 'GET',
+    });
+    if (res && res.success && res.data) {
+      return { success: true, data: res.data };
+    }
+    return { success: false, data: null };
+  } catch (e) {
+    console.warn('Lỗi gọi API lấy boundary:', e);
     return { success: false, data: null };
   }
 }
@@ -562,12 +653,15 @@ export async function createHazardReport(payload: {
   title: string;
   description: string;
   hazardType: string;
+  customHazardType?: string;
   severity: string;
   location: { type: 'Point'; coordinates: [number, number] };
   address: string;
   areaId?: string;
   images?: string[];
-}): Promise<{ success: boolean; data: HazardReportItem }> {
+  status?: 'APPROVED' | 'PENDING' | string;
+  reviewNote?: string;
+}): Promise<{ success: boolean; data: HazardReportItem; message?: string }> {
   return fetchWithAuth('/hazard-reports', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -577,6 +671,20 @@ export async function createHazardReport(payload: {
 export async function deleteHazardReport(id: string): Promise<{ success: boolean; message: string }> {
   return fetchWithAuth(`/hazard-reports/${id}`, {
     method: 'DELETE',
+  });
+}
+
+/**
+ * Giải mã liên kết Google Maps hoặc chuỗi tọa độ qua Backend (hỗ trợ cả link rút gọn)
+ */
+export async function resolveMapLink(url: string): Promise<{
+  success: boolean;
+  data?: { lat: number; lng: number; placeName?: string; resolvedUrl?: string; source?: string };
+  message?: string;
+}> {
+  return fetchWithAuth('/hazard-reports/resolve-map-link', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
   });
 }
 
@@ -611,6 +719,38 @@ export function subscribeHazardEvents(onEvent: (payload: { action: 'CREATED' | '
   };
 }
 
+/**
+ * Đăng ký lắng nghe sự kiện Server-Sent Events (SSE) theo thời gian thực cho Thông báo & Cảnh báo khẩn cấp
+ */
+export function subscribeNotificationEvents(onEvent: (payload: { action: 'BROADCAST' | 'USER' | 'DELETED'; data?: any; broadcastId?: string }) => void): () => void {
+  let eventSource: EventSource | null = null;
+  try {
+    eventSource = new EventSource('/api/notifications/stream');
+    eventSource.onmessage = (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        if (payload && (payload.action === 'BROADCAST' || payload.action === 'USER' || payload.action === 'DELETED')) {
+          onEvent(payload);
+        }
+      } catch (err) {
+        console.warn('[SSE] Lỗi giải mã gói tin thông báo thời gian thực:', err);
+      }
+    };
+    eventSource.onerror = () => {
+      // EventSource tự động reconnect khi mất kết nối
+    };
+  } catch (err) {
+    console.warn('[SSE] Không thể kết nối EventSource notifications:', err);
+  }
+
+  return () => {
+    if (eventSource) {
+      eventSource.close();
+    }
+  };
+}
+
+
 // ─── SAFE LOCATIONS (ĐIỂM TRÚ ẨN & TRẠM Y TẾ AN TOÀN) ─────────────────────────
 
 export async function fetchSafeLocations(params: Record<string, string> = {}): Promise<{ success: boolean; data: SafeLocationItem[] }> {
@@ -629,12 +769,167 @@ export async function createSafeLocation(payload: {
   address: string;
   capacity: number;
   currentOccupancy?: number;
+  status?: string;
   areaId: string;
   location: { type: 'Point'; coordinates: [number, number] };
-}): Promise<{ success: boolean; data: SafeLocationItem }> {
+}): Promise<{ success: boolean; data: SafeLocationItem; message?: string }> {
   return fetchWithAuth('/safe-locations', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 }
 
+// ─── SAFE LOCATIONS (ĐIỂM TRÚ ẨN AN TOÀN) ──────────────────────────────────
+
+export async function updateSafeLocation(
+  id: string,
+  payload: Partial<{
+    name: string;
+    type: string;
+    address: string;
+    capacity: number;
+    currentOccupancy: number;
+    status: string;
+    areaId: string;
+    location: { type: 'Point'; coordinates: [number, number] };
+  }>
+): Promise<{ success: boolean; data: SafeLocationItem; message?: string }> {
+  return fetchWithAuth(`/safe-locations/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteSafeLocation(
+  id: string
+): Promise<{ success: boolean; message: string }> {
+  return fetchWithAuth(`/safe-locations/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+// ─── TACTICAL REALTIME CHAT (TRAO ĐỔI TÁC CHIẾN ADMIN & AUTHORITY) ───────────
+
+import type { ChatMessageItem, ChatConversationItem, ChatSSEPayload } from '../types/chat';
+
+export async function fetchChatConversations(): Promise<{ success: boolean; data: ChatConversationItem[] }> {
+  return fetchWithAuth<{ success: boolean; data: ChatConversationItem[] }>('/chat/conversations', {
+    method: 'GET',
+  });
+}
+
+export async function fetchChatMessages(params: { channel?: string; recipientId?: string }): Promise<{
+  success: boolean;
+  data: { channel: string; messages: ChatMessageItem[] };
+}> {
+  const query = new URLSearchParams();
+  if (params.channel) query.set('channel', params.channel);
+  if (params.recipientId) query.set('recipientId', params.recipientId);
+
+  return fetchWithAuth(`/chat/messages?${query.toString()}`, {
+    method: 'GET',
+  });
+}
+
+export async function sendChatMessage(payload: {
+  content: string;
+  recipientId?: string;
+  channel?: string;
+}): Promise<{ success: boolean; data: ChatMessageItem }> {
+  return fetchWithAuth('/chat/messages', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function markChatMessagesRead(payload: {
+  channel?: string;
+  partnerId?: string;
+}): Promise<{ success: boolean; data: any }> {
+  return fetchWithAuth('/chat/read', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Đăng ký luồng tin nhắn thời gian thực (SSE) - Tự động cập nhật không cần F5
+ */
+export function subscribeChatRealtimeEvents(
+  onEvent: (payload: ChatSSEPayload) => void,
+  onStatusChange?: (connected: boolean) => void
+): () => void {
+  let eventSource: EventSource | null = null;
+  try {
+    eventSource = new EventSource(`${API_BASE}/chat/stream`, { withCredentials: true });
+    eventSource.onopen = () => {
+      if (onStatusChange) onStatusChange(true);
+    };
+    eventSource.onmessage = (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        if (payload && payload.action) {
+          onEvent(payload as ChatSSEPayload);
+        }
+      } catch (err) {
+        console.warn('[ChatSSE] Lỗi giải mã gói tin thời gian thực:', err);
+      }
+    };
+    eventSource.onerror = () => {
+      if (onStatusChange) onStatusChange(false);
+      // EventSource tự động reconnect khi đường truyền chập chờn
+    };
+  } catch (err) {
+    if (onStatusChange) onStatusChange(false);
+    console.warn('[ChatSSE] Không thể kết nối EventSource:', err);
+  }
+
+  return () => {
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+  };
+}
+
+/**
+ * Cập nhật hồ sơ cá nhân và chức vụ, địa bàn cán bộ (lưu trực tiếp vào MongoDB)
+ */
+export async function updateUserProfile(payload: {
+  fullName?: string;
+  phone?: string;
+  email?: string;
+  isPhoneVerified?: boolean;
+  authority?: {
+    position?: string;
+    organizationName?: string;
+    areaName?: string;
+    provinceCode?: number;
+    wardCode?: number;
+  };
+}): Promise<{ success: boolean; data?: User; message?: string }> {
+  return fetchWithAuth<{ success: boolean; data?: User; message?: string }>('/users/me', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Gửi mã OTP xác thực số điện thoại cán bộ
+ */
+export async function sendPhoneOtp(phone: string): Promise<{ success: boolean; message?: string; otp?: string }> {
+  return fetchWithAuth<{ success: boolean; message?: string; otp?: string }>('/users/me/send-phone-otp', {
+    method: 'POST',
+    body: JSON.stringify({ phone }),
+  });
+}
+
+/**
+ * Xác thực mã OTP số điện thoại cán bộ và cập nhật vào Database
+ */
+export async function verifyPhoneOtp(phone: string, otp: string): Promise<{ success: boolean; message?: string; user?: User }> {
+  return fetchWithAuth<{ success: boolean; message?: string; user?: User }>('/users/me/verify-phone-otp', {
+    method: 'POST',
+    body: JSON.stringify({ phone, otp }),
+  });
+}
