@@ -279,6 +279,13 @@ class DomainDService {
     return [...this.sosRequests];
   }
 
+  syncRealSosRequests(realRequests: SosRequest[]): SosRequest[] {
+    const realIds = new Set(realRequests.map((r) => r.id));
+    const nonColliding = this.sosRequests.filter((s) => !realIds.has(s.id));
+    this.sosRequests = [...realRequests, ...nonColliding];
+    return [...this.sosRequests];
+  }
+
   createSosRequest(data: Omit<SosRequest, 'id' | 'sosCode' | 'timeAgo' | 'createdAt' | 'status' | 'assignmentId'>): SosRequest {
     const nextCodeNumber = 8925 + this.sosRequests.length;
     const newSos: SosRequest = {
@@ -512,7 +519,7 @@ class DomainDService {
       this.save(STORAGE_ACTIVE_OFFICER, officer.id);
       try {
         localStorage.setItem(STORAGE_JURISDICTION_KEY, key);
-      } catch {}
+      } catch { }
     }
     return officer;
   }
@@ -521,7 +528,7 @@ class DomainDService {
     try {
       const stored = localStorage.getItem(STORAGE_JURISDICTION_KEY);
       if (stored && JURISDICTION_CONFIGS[stored]) return stored;
-    } catch {}
+    } catch { }
     const officer = this.getActiveOfficer();
     if (officer?.role === 'ADMIN' || officer?.jurisdictionAreaId === 'area-dn') return 'toan_thanh_pho';
     const nameLower = (officer?.jurisdictionAreaName || '').toLowerCase();

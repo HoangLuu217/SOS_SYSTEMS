@@ -1,9 +1,9 @@
-const { SosRequest, SosStatusHistory } = require('../models');
+const { SosRequest, SosStatusHistory, AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
 
 const createSosRequest = async (citizenId, sosData) => {
   // Extract fields matching citizen mobile app form
-  const { location, areaId, address, emergencyType, priority, people, description, images, imageUrl } = sosData;
+  const { location, areaId, address, emergencyType, priority, people, description, images, imageUrl, contactPhone, priorityGroups } = sosData;
 
   const normalizedImages = Array.isArray(images)
     ? images
@@ -11,15 +11,36 @@ const createSosRequest = async (citizenId, sosData) => {
     ? [imageUrl]
     : [];
 
+  // Tự động gán areaId mặc định nếu app gửi placeholder hoặc thiếu areaId
+  let assignedAreaId = areaId;
+  const isPlaceholder = !assignedAreaId || assignedAreaId === '650c1f1e1c9d440000a1b1c1';
+  if (isPlaceholder && AdministrativeArea) {
+    let defaultArea = await AdministrativeArea.findOne({ status: 'ACTIVE' });
+    if (!defaultArea) {
+      defaultArea = await AdministrativeArea.findOne();
+    }
+    if (!defaultArea) {
+      defaultArea = await AdministrativeArea.create({
+        name: 'Khu vực cứu hộ trung tâm',
+        code: 'AREA_DANANG_DEFAULT',
+        type: 'DISTRICT',
+        status: 'ACTIVE',
+      });
+    }
+    assignedAreaId = defaultArea._id;
+  }
+
   const newSos = await SosRequest.create({
     citizenId,
     location,
-    areaId,
-    address,
-    emergencyType: emergencyType || 'MEDICAL',
-    priority: priority || 'MEDIUM',
+    areaId: assignedAreaId,
+    address: address || 'Khu vực cứu nạn (Định vị GPS)',
+    emergencyType: emergencyType || 'FLOOD',
+    priority: priority || 'HIGH',
     people: people ? Number(people) : 1,
     description: description || null,
+    contactPhone: contactPhone || null,
+    priorityGroups: Array.isArray(priorityGroups) ? priorityGroups : [],
     images: normalizedImages,
     status: 'PENDING'
   });
@@ -33,7 +54,11 @@ const createSosRequest = async (citizenId, sosData) => {
     note: 'Tạo yêu cầu cứu nạn mới'
   });
 
-  return newSos;
+  const populatedSos = await SosRequest.findById(newSos._id)
+    .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
+    .populate('areaId', 'name');
+
+  return populatedSos || newSos;
 };
 
 const getSosRequests = async (query = {}) => {
@@ -61,12 +86,12 @@ const getSosRequests = async (query = {}) => {
   return await SosRequest.find(filter)
     // Nếu dùng $near, MongoDB sẽ tự sort theo khoảng cách. Nếu không thì sort theo thời gian tạo mới nhất.
     .sort(query.lng ? {} : { createdAt: -1 })
-    .populate('citizenId', 'fullName phone avatarUrl');
+    .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles');
 };
 
 const getSosRequestById = async (id) => {
   const sos = await SosRequest.findById(id)
-    .populate('citizenId', 'fullName phone avatarUrl')
+    .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
     .populate('areaId', 'name');
     
   if (!sos) {

@@ -92,10 +92,10 @@ export const TacticalMap = ({
   const managedWard = areas[0];
   const isSelectedInJurisdiction = selectedSos ? isSosInOfficerJurisdiction(selectedSos, activeOfficer, managedWard) : false;
 
-  // Lọc các ca SOS khác thuộc khu vực
+  // Lọc các ca SOS khác thuộc khu vực (và tất cả ca SOS thật từ người dân)
   const otherSosList = useMemo(() => {
     return sosRequests.filter(
-      (s) => s.id !== selectedSos?.id && isSosInOfficerJurisdiction(s, activeOfficer, managedWard)
+      (s) => s.id !== selectedSos?.id && (s.id.length === 24 || isSosInOfficerJurisdiction(s, activeOfficer, managedWard))
     );
   }, [sosRequests, selectedSos?.id, activeOfficer, managedWard]);
 

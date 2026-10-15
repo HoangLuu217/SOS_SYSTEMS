@@ -119,6 +119,8 @@ export interface SosRequest {
   assignmentId?: string | null;
   images?: string[];
   imageUrl?: string;
+  priorityGroups?: string[];
+  senderRole?: 'CITIZEN' | 'RESCUER' | string;
 }
 
 export interface RescueTeam {

@@ -1,11 +1,16 @@
 const sosService = require('../services/sos.service');
 const fileService = require('../services/file.service');
+const { emitSosCreated, emitSosUpdated } = require('../socket');
 
 const createSos = async (req, res, next) => {
   try {
     const citizenId = req.user._id;
     const sosData = req.body;
     const newSos = await sosService.createSosRequest(citizenId, sosData);
+
+    // Phát sự kiện Realtime Socket.IO cho toàn bộ Web Dashboard & Cán bộ
+    emitSosCreated(newSos);
+
     res.status(201).json({ success: true, data: newSos });
   } catch (error) {
     next(error);
@@ -42,6 +47,7 @@ const getSosById = async (req, res, next) => {
 const updateSos = async (req, res, next) => {
   try {
     const updatedSos = await sosService.updateSosRequest(req.params.id, req.body, req.user._id);
+    emitSosUpdated(updatedSos);
     res.status(200).json({ success: true, data: updatedSos });
   } catch (error) {
     next(error);
@@ -52,6 +58,7 @@ const cancelSos = async (req, res, next) => {
   try {
     const note = req.body.note || 'Yêu cầu hủy từ người dùng';
     const updatedSos = await sosService.changeStatus(req.params.id, 'CANCELLED', req.user._id, note);
+    emitSosUpdated(updatedSos);
     res.status(200).json({ success: true, data: updatedSos });
   } catch (error) {
     next(error);
@@ -62,6 +69,7 @@ const completeSos = async (req, res, next) => {
   try {
     const note = req.body.note || 'Đã hoàn thành cứu nạn';
     const updatedSos = await sosService.changeStatus(req.params.id, 'COMPLETED', req.user._id, note);
+    emitSosUpdated(updatedSos);
     res.status(200).json({ success: true, data: updatedSos });
   } catch (error) {
     next(error);
@@ -84,6 +92,7 @@ const verifySos = async (req, res, next) => {
       req.body, 
       req.user._id
     );
+    emitSosUpdated(verifiedSos);
     res.status(200).json({ success: true, data: verifiedSos });
   } catch (error) {
     next(error);

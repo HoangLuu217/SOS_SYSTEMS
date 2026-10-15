@@ -6,6 +6,16 @@ export interface SosRequestItem {
     fullName: string;
     phone?: string;
     email?: string;
+    avatarUrl?: string;
+    address?: string;
+    citizenProfile?: {
+      emergencyContact?: {
+        name?: string;
+        phone?: string;
+        relation?: string;
+      };
+    };
+    roles?: string[];
   } | string;
   location: {
     type: 'Point';
@@ -21,6 +31,10 @@ export interface SosRequestItem {
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   people: number;
   description?: string;
+  contactPhone?: string;
+  priorityGroups?: string[];
+  images?: string[];
+  imageUrl?: string;
   status:
     | 'PENDING'
     | 'VERIFIED'

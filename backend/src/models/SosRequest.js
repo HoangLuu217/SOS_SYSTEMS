@@ -109,6 +109,15 @@ const sosRequestSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    contactPhone: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    priorityGroups: [{
+      type: String,
+      trim: true,
+    }],
     images: [{
       type: String,
       trim: true,

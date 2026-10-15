@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import type {
   AdministrativeArea,
   AuthorityOrganization,
@@ -9,6 +9,7 @@ import type {
   AssignmentStatus,
 } from '../../types/domainD';
 import { domainDService } from '../../services/domainDService';
+import { fetchSosRequests } from '../../services/api';
 import { MissionDispatch } from '../dispatch/MissionDispatch';
 import { TacticalMap } from '../dispatch/TacticalMap';
 import {
@@ -22,6 +23,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { isSosInOfficerJurisdiction } from '../../services/mapGeoService';
 import { navigateTo, getCurrentSosIdFromUrl } from '../../services/appRouter';
+import { onSosCreated, onSosUpdated } from '../../services/socketService';
 import '../RescueSos.css';
 
 interface ToastState {
@@ -93,9 +95,164 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
     };
   }, []);
 
+  // Đồng bộ SOS thực tế từ cơ sở dữ liệu MongoDB (từ ứng dụng mobile app người dân)
+  const syncRealSosFromApi = useCallback(async (officer: AuthorityOfficer) => {
+    try {
+      const res = await fetchSosRequests();
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        const realMapped: SosRequest[] = res.data.map((item) => {
+          const lng = item.location?.coordinates?.[0] ?? 108.2178;
+          const lat = item.location?.coordinates?.[1] ?? 16.0465;
+          const citizenName =
+            typeof item.citizenId === 'object' && item.citizenId?.fullName
+              ? item.citizenId.fullName
+              : 'Người dân';
+          const citizenPhone =
+            typeof item.citizenId === 'object' && item.citizenId?.phone
+              ? item.citizenId.phone
+              : '0905000000';
+
+          const diffMinutes = Math.max(
+            0,
+            Math.floor((Date.now() - new Date(item.createdAt).getTime()) / 60000)
+          );
+          const timeAgo =
+            diffMinutes < 1
+              ? 'Vừa xong'
+              : diffMinutes < 60
+              ? `${diffMinutes} phút trước`
+              : `${Math.floor(diffMinutes / 60)} giờ trước`;
+
+          return {
+            id: item._id,
+            sosCode: item.sosCode || `#${item._id.slice(-4).toUpperCase()}`,
+            timeAgo,
+            createdAt: item.createdAt,
+            emergencyType:
+              item.emergencyType === 'FLOOD'
+                ? 'Flood'
+                : item.emergencyType === 'FIRE'
+                ? 'Fire'
+                : item.emergencyType === 'MEDICAL'
+                ? 'Medical Emergency'
+                : 'RESCUE',
+            priority: (item.priority || 'HIGH') as any,
+            title: (() => {
+              const rawDesc = item.description || '';
+              if (rawDesc.includes('[Loại yêu cầu:')) {
+                const userContent = rawDesc
+                  .replace(/\[Loại yêu cầu:[^\]]+\]/g, '')
+                  .replace(/\[SĐT:[^\]]+\]/g, '')
+                  .replace(/\[Ưu tiên:[^\]]+\]/g, '')
+                  .trim();
+                const typeMatch = rawDesc.match(/\[Loại yêu cầu:\s*([^\]]+)\]/);
+                if (userContent) {
+                  return userContent.length > 55 ? userContent.slice(0, 52) + '...' : userContent;
+                } else if (typeMatch && typeMatch[1]) {
+                  return typeMatch[1];
+                }
+              }
+              if (rawDesc) {
+                return rawDesc.length > 55 ? rawDesc.slice(0, 52) + '...' : rawDesc;
+              }
+              return item.emergencyType === 'FLOOD' ? 'Cứu hộ ngập lụt / Mắc kẹt' : 'Yêu cầu cứu nạn khẩn cấp';
+            })(),
+            description: item.description || `Yêu cầu cứu nạn khẩn cấp tại ${item.address}`,
+            locationName: item.address || 'Vị trí cứu nạn',
+            wardId: officer.jurisdictionAreaId,
+            wardName: item.address || officer.jurisdictionAreaName,
+            districtId: officer.jurisdictionAreaId,
+            districtName: officer.districtName,
+            citizenName,
+            citizenPhone,
+            affectedPeople: item.people || 1,
+            status: (item.status === 'PENDING' ? 'VERIFIED' : item.status) as any,
+            coordinates: {
+              lat,
+              lng,
+              svgX: 370,
+              svgY: 280,
+            },
+            assignmentId: null,
+            imageUrl: item.imageUrl || (item.images && item.images.length > 0 ? item.images[0] : undefined),
+            images: item.images || (item.imageUrl ? [item.imageUrl] : undefined),
+            priorityGroups: (() => {
+              if (Array.isArray(item.priorityGroups) && item.priorityGroups.length > 0) {
+                return item.priorityGroups;
+              }
+              const desc = item.description || '';
+              if (desc.includes('[Đối tượng ưu tiên:')) {
+                const match = desc.match(/\[Đối tượng ưu tiên:\s*([^\]]+)\]/);
+                if (match && match[1]) {
+                  return match[1].split(',').map((s: string) => s.trim()).filter(Boolean);
+                }
+              }
+              return undefined;
+            })(),
+            senderRole: (() => {
+              const citizen = typeof item.citizenId === 'object' && item.citizenId !== null ? item.citizenId : null;
+              const roles = citizen?.roles;
+              if (Array.isArray(roles) && roles.includes('RESCUER')) return 'RESCUER';
+              return 'CITIZEN';
+            })(),
+          };
+        });
+
+        domainDService.syncRealSosRequests(realMapped);
+        setSosRequests(domainDService.getSosRequests());
+
+        // Nếu URL chưa chỉ định SOS cụ thể, ưu tiên chọn ca SOS mới nhất từ app
+        const currentUrlId = getCurrentSosIdFromUrl();
+        if (!currentUrlId && realMapped.length > 0) {
+          setSelectedSosId((prev) => (prev.startsWith('sos-') && !prev.includes('real') ? realMapped[0].id : prev));
+        }
+      }
+    } catch (err) {
+      console.warn('Lỗi đồng bộ dữ liệu SOS từ server:', err);
+    }
+  }, []);
+
   useEffect(() => {
     loadAllData(activeOfficer.id);
-  }, [activeOfficer.id]);
+
+    // Lắng nghe sự kiện Realtime Socket.IO khi có người dân bấm gửi SOS trên App
+    const unsubCreated = onSosCreated((newSos) => {
+      syncRealSosFromApi(activeOfficer);
+      const citizenName =
+        typeof newSos?.citizenId === 'object' && newSos.citizenId?.fullName
+          ? newSos.citizenId.fullName
+          : 'Người dân';
+      const people = newSos?.people || 1;
+      const addr = newSos?.address || 'Khu vực ngập lụt';
+      showToast(`🚨 [SOS KHẨN CẤP] Nhận yêu cầu cứu trợ mới từ ${citizenName} (${people} người gặp nạn tại ${addr})!`, 'success');
+      if (newSos?._id) {
+        setSelectedSosId(newSos._id);
+      }
+    });
+
+    // Lắng nghe sự kiện Realtime cập nhật trạng thái SOS (xác minh, hoàn thành ca)
+    const unsubUpdated = onSosUpdated((updatedSos) => {
+      syncRealSosFromApi(activeOfficer);
+      if (updatedSos?._id) {
+        showToast(`ℹ️ Cập nhật trạng thái SOS: ${updatedSos.status}`, 'success');
+      }
+    });
+
+    // Định kỳ 15 giây dự phòng kiểm tra lại tín hiệu SOS từ server
+    const interval = setInterval(() => {
+      syncRealSosFromApi(activeOfficer);
+    }, 15000);
+
+    const handleUpdateEvent = () => syncRealSosFromApi(activeOfficer);
+    window.addEventListener('sos_data_updated', handleUpdateEvent);
+
+    return () => {
+      unsubCreated();
+      unsubUpdated();
+      clearInterval(interval);
+      window.removeEventListener('sos_data_updated', handleUpdateEvent);
+    };
+  }, [activeOfficer.id, activeOfficer, syncRealSosFromApi]);
 
   // Lắng nghe URL pathname để đồng bộ SOS được chọn (ví dụ: /localauthor/map/sos-8924)
   useEffect(() => {
@@ -120,6 +277,9 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
     setSosRequests(loadedSos);
     setRescueTeams(domainDService.getRescueTeams());
     setVehicles(domainDService.getVehicles());
+
+    // Đồng bộ ngay dữ liệu thật từ MongoDB
+    syncRealSosFromApi(activeOfficer);
 
     // Ưu tiên SOS ID từ URL pathname (/localauthor/map/:id) nếu có
     const urlSosId = getCurrentSosIdFromUrl();
@@ -166,13 +326,16 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
     return targetArea ? [targetArea] : (areas.length > 0 ? [areas[0]] : []);
   }, [areas, activeOfficer, selectedSosId, sosRequests]);
 
-  // Strictly filter SOS requests: For Admin show all citywide SOS, for Author filter to managed ward
+  // Strictly filter SOS requests: For Admin show all citywide SOS, for Author filter to managed ward, các yêu cầu thật từ app (MongoDB _id) luôn được hiển thị để không bỏ sót cứu nạn
   const authorScopedSosRequests = useMemo(() => {
     if (activeOfficer.role === 'ADMIN') {
       return sosRequests;
     }
     const managedWard = authorScopedAreas[0];
-    return sosRequests.filter((s) => isSosInOfficerJurisdiction(s, activeOfficer, managedWard));
+    return sosRequests.filter((s) => {
+      if (s.id.length === 24) return true; // SOS thật từ MongoDB
+      return isSosInOfficerJurisdiction(s, activeOfficer, managedWard);
+    });
   }, [sosRequests, activeOfficer, authorScopedAreas]);
 
   const selectedSos = useMemo(() => {
