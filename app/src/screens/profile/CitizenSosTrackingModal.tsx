@@ -718,7 +718,7 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
               {sos?.description && (
                 <View style={styles.descBox}>
                   <Text style={styles.descBoxLabel}>Nội dung mô tả tình hình:</Text>
-                  <Text style={styles.descBoxText}>{sos.description}</Text>
+                  <Text style={styles.descBoxText}>{sos.description.replace(/⚡\s*/g, '').trim()}</Text>
                 </View>
               )}
 

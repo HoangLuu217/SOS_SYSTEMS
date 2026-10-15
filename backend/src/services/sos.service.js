@@ -38,7 +38,7 @@ const createSosRequest = async (citizenId, sosData) => {
     emergencyType: emergencyType || 'FLOOD',
     priority: priority || 'HIGH',
     people: people ? Number(people) : 1,
-    description: description || null,
+    description: description ? description.replace(/⚡\s*/g, '').trim() : null,
     contactPhone: contactPhone || null,
     priorityGroups: Array.isArray(priorityGroups) ? priorityGroups : [],
     images: normalizedImages,

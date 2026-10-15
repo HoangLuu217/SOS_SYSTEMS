@@ -124,7 +124,9 @@ export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack, onNa
 
           {item.description ? (
             <View style={styles.descBox}>
-              <Text style={styles.descText} numberOfLines={2}>{item.description}</Text>
+              <Text style={styles.descText} numberOfLines={2}>
+                {item.description.replace(/⚡\s*/g, '').trim()}
+              </Text>
             </View>
           ) : null}
         </View>
