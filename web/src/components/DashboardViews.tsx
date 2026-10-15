@@ -7189,48 +7189,6 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
     // Tính toán các thông số thống kê tác chiến
     const totalCount = displayAuditLogs.length;
-    const sosCount = displayAuditLogs.filter((l) => {
-      const a = (l.action || '').toUpperCase();
-      const e = (l.entityType || '').toUpperCase();
-      return (
-        e === 'SOSREQUEST' ||
-        e === 'MISSION' ||
-        e.includes('CỨU NẠN') ||
-        a.includes('SOS') ||
-        a.includes('MISSION') ||
-        a.includes('CỨU NẠN') ||
-        a.includes('ĐIỀU ĐỘNG') ||
-        a.includes('SƠ TÁN')
-      );
-    }).length;
-    const hazardAlertCount = displayAuditLogs.filter((l) => {
-      const a = (l.action || '').toUpperCase();
-      const e = (l.entityType || '').toUpperCase();
-      return (
-        e === 'HAZARDREPORT' ||
-        e === 'ALERT' ||
-        e.includes('CẢNH BÁO') ||
-        e.includes('NGUY HIỂM') ||
-        a.includes('HAZARD') ||
-        a.includes('ALERT') ||
-        a.includes('CẢNH BÁO') ||
-        a.includes('NGUY HIỂM')
-      );
-    }).length;
-    const adminCount = displayAuditLogs.filter((l) => {
-      const r = (l.actorRole || '').toUpperCase();
-      const e = (l.entityType || '').toUpperCase();
-      const a = (l.action || '').toUpperCase();
-      return (
-        r.includes('ADMIN') ||
-        r.includes('QUẢN TRỊ') ||
-        e === 'USER' ||
-        e === 'ADMINISTRATIVEAREA' ||
-        e.includes('HỆ THỐNG') ||
-        a.includes('PHÂN QUYỀN') ||
-        a.includes('CẤU HÌNH')
-      );
-    }).length;
 
     const citizenCount = displayAuditLogs.filter((l) => isRoleMatch(l.actorRole || '', 'CITIZEN')).length;
     const rescuerCount = displayAuditLogs.filter((l) => isRoleMatch(l.actorRole || '', 'RESCUER')).length;
@@ -7456,49 +7414,6 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
     return (
       <div className="sos-views-container">
-        {/* HÀNG THỐNG KÊ TÁC CHIẾN TỔNG QUAN */}
-        <div className="sos-audit-stats-grid">
-          <div className="sos-audit-stat-card">
-            <div className="sos-audit-stat-icon blue">
-              <History size={22} />
-            </div>
-            <div className="sos-audit-stat-info">
-              <span className="sos-audit-stat-value">{totalCount}</span>
-              <span className="sos-audit-stat-label">Tổng sự kiện ghi nhận</span>
-            </div>
-          </div>
-
-          <div className="sos-audit-stat-card">
-            <div className="sos-audit-stat-icon green">
-              <LifeBuoy size={22} />
-            </div>
-            <div className="sos-audit-stat-info">
-              <span className="sos-audit-stat-value">{sosCount}</span>
-              <span className="sos-audit-stat-label">Cứu nạn &amp; Điều phối</span>
-            </div>
-          </div>
-
-          <div className="sos-audit-stat-card">
-            <div className="sos-audit-stat-icon amber">
-              <AlertTriangle size={22} />
-            </div>
-            <div className="sos-audit-stat-info">
-              <span className="sos-audit-stat-value">{hazardAlertCount}</span>
-              <span className="sos-audit-stat-label">Cảnh báo &amp; Điểm nguy hiểm</span>
-            </div>
-          </div>
-
-          <div className="sos-audit-stat-card">
-            <div className="sos-audit-stat-icon purple">
-              <Shield size={22} />
-            </div>
-            <div className="sos-audit-stat-info">
-              <span className="sos-audit-stat-value">{adminCount}</span>
-              <span className="sos-audit-stat-label">Quản trị &amp; Phân quyền</span>
-            </div>
-          </div>
-        </div>
-
         {/* BẢNG CHÍNH NHẬT KÝ TÁC CHIẾN */}
         <div className="sos-view-card">
           <div className="sos-view-card-header">
