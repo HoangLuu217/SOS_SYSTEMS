@@ -1,11 +1,29 @@
 const sosService = require('../services/sos.service');
 const fileService = require('../services/file.service');
+const auditService = require('../services/audit.service');
 
 const createSos = async (req, res, next) => {
   try {
     const citizenId = req.user._id;
     const sosData = req.body;
     const newSos = await sosService.createSosRequest(citizenId, sosData);
+
+    const userRole = req.user.roles?.[0] || 'CITIZEN';
+    await auditService.log({
+      actorId: citizenId,
+      actorRole: userRole,
+      action: 'CITIZEN_CREATE_SOS',
+      entityType: 'SosRequest',
+      entityId: newSos._id,
+      metadata: {
+        severityLevel: newSos.severityLevel,
+        description: newSos.description,
+        contactPhone: newSos.contactPhone || req.user.phone,
+        victimCount: newSos.victimCount,
+        address: newSos.location?.address,
+      },
+    });
+
     res.status(201).json({ success: true, data: newSos });
   } catch (error) {
     next(error);
@@ -42,6 +60,16 @@ const getSosById = async (req, res, next) => {
 const updateSos = async (req, res, next) => {
   try {
     const updatedSos = await sosService.updateSosRequest(req.params.id, req.body, req.user._id);
+
+    await auditService.log({
+      actorId: req.user._id,
+      actorRole: req.user.roles?.[0] || 'CITIZEN',
+      action: 'UPDATE_SOS',
+      entityType: 'SosRequest',
+      entityId: req.params.id,
+      metadata: { updatedFields: Object.keys(req.body) },
+    });
+
     res.status(200).json({ success: true, data: updatedSos });
   } catch (error) {
     next(error);
@@ -52,6 +80,16 @@ const cancelSos = async (req, res, next) => {
   try {
     const note = req.body.note || 'Yêu cầu hủy từ người dùng';
     const updatedSos = await sosService.changeStatus(req.params.id, 'CANCELLED', req.user._id, note);
+
+    await auditService.log({
+      actorId: req.user._id,
+      actorRole: req.user.roles?.[0] || 'CITIZEN',
+      action: 'CITIZEN_CANCEL_SOS',
+      entityType: 'SosRequest',
+      entityId: req.params.id,
+      metadata: { note, status: 'CANCELLED' },
+    });
+
     res.status(200).json({ success: true, data: updatedSos });
   } catch (error) {
     next(error);
@@ -62,6 +100,16 @@ const completeSos = async (req, res, next) => {
   try {
     const note = req.body.note || 'Đã hoàn thành cứu nạn';
     const updatedSos = await sosService.changeStatus(req.params.id, 'COMPLETED', req.user._id, note);
+
+    await auditService.log({
+      actorId: req.user._id,
+      actorRole: req.user.roles?.[0] || 'RESCUER',
+      action: 'COMPLETE_SOS',
+      entityType: 'SosRequest',
+      entityId: req.params.id,
+      metadata: { note, status: 'COMPLETED' },
+    });
+
     res.status(200).json({ success: true, data: updatedSos });
   } catch (error) {
     next(error);
@@ -84,6 +132,24 @@ const verifySos = async (req, res, next) => {
       req.body, 
       req.user._id
     );
+
+    const actorRole = req.user.roles?.includes('LOCAL_AUTHORITY') 
+      ? 'LOCAL_AUTHORITY' 
+      : (req.user.roles?.[0] || 'LOCAL_AUTHORITY');
+
+    await auditService.log({
+      actorId: req.user._id,
+      actorRole,
+      action: 'AUTHORITY_VERIFY_SOS',
+      entityType: 'SosRequest',
+      entityId: req.params.id,
+      metadata: {
+        priorityLevel: req.body.priorityLevel,
+        status: verifiedSos.status,
+        verificationNotes: req.body.verificationNotes,
+      },
+    });
+
     res.status(200).json({ success: true, data: verifiedSos });
   } catch (error) {
     next(error);

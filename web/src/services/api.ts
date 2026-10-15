@@ -1,4 +1,4 @@
-import type { LoginResponse } from '../types/auth';
+import type { LoginResponse, User } from '../types/auth';
 import type {
   SosRequestItem,
   AdminOverviewStats,
@@ -12,8 +12,9 @@ import type {
   SafeLocationItem,
 } from '../types/dashboard';
 
-const API_BASE = '/api';
-const DIRECT_BACKEND = 'http://127.0.0.1:5000/api';
+const RAW_BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:5000').replace(/\/+$/, '');
+const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/+$/, '');
+const DIRECT_BACKEND = `${RAW_BACKEND_URL}/api`;
 
 async function safeParseResponse(res: Response): Promise<any> {
   const text = await res.text();
@@ -228,7 +229,7 @@ export async function checkBackendHealth(): Promise<boolean> {
   }
 
   try {
-    const res = await fetch('http://127.0.0.1:5000/health', { method: 'GET' });
+    const res = await fetch(`${RAW_BACKEND_URL}/health`, { method: 'GET' });
     return res.ok;
   } catch {
     return false;
@@ -637,4 +638,133 @@ export async function createSafeLocation(payload: {
     body: JSON.stringify(payload),
   });
 }
+
+// ─── TACTICAL REALTIME CHAT (TRAO ĐỔI TÁC CHIẾN ADMIN & AUTHORITY) ───────────
+
+import type { ChatMessageItem, ChatConversationItem, ChatSSEPayload } from '../types/chat';
+
+export async function fetchChatConversations(): Promise<{ success: boolean; data: ChatConversationItem[] }> {
+  return fetchWithAuth<{ success: boolean; data: ChatConversationItem[] }>('/chat/conversations', {
+    method: 'GET',
+  });
+}
+
+export async function fetchChatMessages(params: { channel?: string; recipientId?: string }): Promise<{
+  success: boolean;
+  data: { channel: string; messages: ChatMessageItem[] };
+}> {
+  const query = new URLSearchParams();
+  if (params.channel) query.set('channel', params.channel);
+  if (params.recipientId) query.set('recipientId', params.recipientId);
+
+  return fetchWithAuth(`/chat/messages?${query.toString()}`, {
+    method: 'GET',
+  });
+}
+
+export async function sendChatMessage(payload: {
+  content: string;
+  recipientId?: string;
+  channel?: string;
+}): Promise<{ success: boolean; data: ChatMessageItem }> {
+  return fetchWithAuth('/chat/messages', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function markChatMessagesRead(payload: {
+  channel?: string;
+  partnerId?: string;
+}): Promise<{ success: boolean; data: any }> {
+  return fetchWithAuth('/chat/read', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Đăng ký luồng tin nhắn thời gian thực (SSE) - Tự động cập nhật không cần F5
+ */
+export function subscribeChatRealtimeEvents(
+  onEvent: (payload: ChatSSEPayload) => void,
+  onStatusChange?: (connected: boolean) => void
+): () => void {
+  let eventSource: EventSource | null = null;
+  try {
+    eventSource = new EventSource(`${API_BASE}/chat/stream`, { withCredentials: true });
+    eventSource.onopen = () => {
+      if (onStatusChange) onStatusChange(true);
+    };
+    eventSource.onmessage = (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        if (payload && payload.action) {
+          onEvent(payload as ChatSSEPayload);
+        }
+      } catch (err) {
+        console.warn('[ChatSSE] Lỗi giải mã gói tin thời gian thực:', err);
+      }
+    };
+    eventSource.onerror = () => {
+      if (onStatusChange) onStatusChange(false);
+      // EventSource tự động reconnect khi đường truyền chập chờn
+    };
+  } catch (err) {
+    if (onStatusChange) onStatusChange(false);
+    console.warn('[ChatSSE] Không thể kết nối EventSource:', err);
+  }
+
+  return () => {
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+  };
+}
+
+/**
+ * Cập nhật hồ sơ cá nhân và chức vụ, địa bàn cán bộ (lưu trực tiếp vào MongoDB)
+ */
+export async function updateUserProfile(payload: {
+  fullName?: string;
+  phone?: string;
+  email?: string;
+  isPhoneVerified?: boolean;
+  authority?: {
+    position?: string;
+    organizationName?: string;
+    areaName?: string;
+    provinceCode?: number;
+    wardCode?: number;
+  };
+}): Promise<{ success: boolean; data?: User; message?: string }> {
+  return fetchWithAuth<{ success: boolean; data?: User; message?: string }>('/users/me', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Gửi mã OTP xác thực số điện thoại cán bộ
+ */
+export async function sendPhoneOtp(phone: string): Promise<{ success: boolean; message?: string; otp?: string }> {
+  return fetchWithAuth<{ success: boolean; message?: string; otp?: string }>('/users/me/send-phone-otp', {
+    method: 'POST',
+    body: JSON.stringify({ phone }),
+  });
+}
+
+/**
+ * Xác thực mã OTP số điện thoại cán bộ và cập nhật vào Database
+ */
+export async function verifyPhoneOtp(phone: string, otp: string): Promise<{ success: boolean; message?: string; user?: User }> {
+  return fetchWithAuth<{ success: boolean; message?: string; user?: User }>('/users/me/verify-phone-otp', {
+    method: 'POST',
+    body: JSON.stringify({ phone, otp }),
+  });
+}
+
+
+
 

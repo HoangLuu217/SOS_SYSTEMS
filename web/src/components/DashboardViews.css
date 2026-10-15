@@ -231,47 +231,351 @@
   color: #ffffff;
 }
 
-/* AUDIT LOG TIMELINE */
-.sos-timeline {
+/* ==========================================================================
+   TACTICAL AUDIT & OPERATION TIMELINE (NHẬT KÝ TÁC CHIẾN)
+   ========================================================================== */
+.sos-audit-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.sos-audit-stat-card {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  backdrop-filter: blur(8px);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sos-audit-stat-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.35);
+}
+
+.sos-audit-stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sos-audit-stat-icon.blue {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.sos-audit-stat-icon.green {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.sos-audit-stat-icon.amber {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.sos-audit-stat-icon.purple {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.sos-audit-stat-info {
   display: flex;
   flex-direction: column;
-  gap: 12px;
 }
 
-.sos-timeline-item {
+.sos-audit-stat-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: #f8fafc;
+  line-height: 1.2;
+}
+
+.sos-audit-stat-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Control bar: Filters & Search */
+.sos-audit-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.sos-audit-search-wrap {
+  position: relative;
+  min-width: 260px;
+  flex: 1;
+  max-width: 360px;
+}
+
+.sos-audit-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  pointer-events: none;
+}
+
+.sos-audit-search-input {
+  width: 100%;
+  padding: 8px 14px 8px 36px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  font-size: 12.5px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.sos-audit-search-input:focus {
+  border-color: #64748b;
+  box-shadow: none;
+  outline: none;
+  background: rgba(30, 41, 59, 0.9);
+}
+
+/* Timeline Track & Cards */
+.sos-audit-timeline-container {
+  position: relative;
+  padding-left: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sos-audit-timeline-container::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 14px;
+  bottom: 14px;
+  width: 2px;
+  background: linear-gradient(180deg, #38bdf8 0%, #2563eb 50%, rgba(59, 130, 246, 0.15) 100%);
+  border-radius: 2px;
+}
+
+.sos-audit-item {
+  position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 10px 14px;
-  background: rgba(30, 41, 59, 0.4);
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
-.sos-timeline-dot {
-  width: 8px;
-  height: 8px;
+.sos-audit-node {
+  position: absolute;
+  left: -28px;
+  top: 16px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: #38bdf8;
-  margin-top: 6px;
+  background: #0f172a;
+  border: 2px solid #38bdf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+  z-index: 2;
+  transition: all 0.2s ease;
+}
+
+.sos-audit-node.critical {
+  border-color: #ef4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+}
+
+.sos-audit-node.warning {
+  border-color: #f59e0b;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+}
+
+.sos-audit-node.success {
+  border-color: #22c55e;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
+}
+
+.sos-audit-node.purple {
+  border-color: #a855f7;
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.4);
+}
+
+.sos-audit-item:hover .sos-audit-node {
+  transform: scale(1.15);
+}
+
+.sos-audit-card {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 16px 20px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sos-audit-card:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(30, 41, 59, 0.65);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.35);
+  transform: translateY(-1px);
+}
+
+.sos-audit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.sos-audit-actor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sos-audit-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
   flex-shrink: 0;
-  box-shadow: 0 0 6px #38bdf8;
 }
 
-.sos-timeline-content {
-  flex: 1;
+.sos-audit-avatar.admin {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
 }
 
-.sos-timeline-time {
+.sos-audit-avatar.rescuer {
+  background: linear-gradient(135deg, #d97706, #b45309);
+}
+
+.sos-audit-avatar.authority {
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+}
+
+.sos-audit-avatar.citizen {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+}
+
+.sos-audit-actor-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.sos-audit-actor-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sos-audit-actor-sub {
   font-size: 11px;
   color: #94a3b8;
-  margin-bottom: 2px;
 }
 
-.sos-timeline-text {
-  font-size: 13px;
-  color: #f1f5f9;
+.sos-audit-time-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: #94a3b8;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 4px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
 }
+
+.sos-audit-action-row {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sos-audit-action-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: #38bdf8;
+}
+
+.sos-audit-entity-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Metadata Chips Grid */
+.sos-audit-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.sos-audit-meta-chip {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.sos-audit-meta-key {
+  color: #94a3b8;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sos-audit-meta-val {
+  color: #f1f5f9;
+  font-weight: 500;
+  word-break: break-word;
+}
+
 
 /* FORM CONTROLS & MODALS */
 .sos-form-label {
@@ -412,6 +716,88 @@
   color: #0f172a;
 }
 
+[data-theme="light"] .sos-audit-stat-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .sos-audit-stat-value {
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-audit-stat-label {
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-audit-search-input {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #0f172a;
+  box-shadow: none;
+  outline: none;
+}
+
+[data-theme="light"] .sos-audit-search-input:focus {
+  border-color: #94a3b8;
+  box-shadow: none;
+  outline: none;
+  background: #ffffff;
+}
+
+[data-theme="light"] .sos-audit-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .sos-audit-card:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .sos-audit-node {
+  background: #ffffff;
+}
+
+[data-theme="light"] .sos-audit-actor-name {
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-audit-actor-sub {
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-audit-time-badge {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-audit-action-text {
+  color: #0284c7;
+}
+
+[data-theme="light"] .sos-audit-entity-tag {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+[data-theme="light"] .sos-audit-meta-grid {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme="light"] .sos-audit-meta-key {
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-audit-meta-val {
+  color: #0f172a;
+}
+
 [data-theme="light"] .sos-timeline-item {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -424,6 +810,7 @@
 [data-theme="light"] .sos-timeline-time {
   color: #64748b;
 }
+
 
 [data-theme="light"] .sos-badge.pending {
   background: #f1f5f9;
@@ -720,38 +1107,20 @@
 }
 
 .sos-btn-filter-pill.active {
-  background: #2563eb;
+  background: #1e293b;
   color: #ffffff;
-  border-color: #3b82f6;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+  border-color: #334155;
+  box-shadow: none;
 }
 
-.sos-btn-filter-pill.active-green {
-  background: #16a34a;
-  color: #ffffff;
-  border-color: #22c55e;
-  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.35);
-}
-
-.sos-btn-filter-pill.active-red {
-  background: #dc2626;
-  color: #ffffff;
-  border-color: #ef4444;
-  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);
-}
-
-.sos-btn-filter-pill.active-yellow {
-  background: #d97706;
-  color: #ffffff;
-  border-color: #f59e0b;
-  box-shadow: 0 2px 8px rgba(217, 119, 6, 0.35);
-}
-
+.sos-btn-filter-pill.active-green,
+.sos-btn-filter-pill.active-red,
+.sos-btn-filter-pill.active-yellow,
 .sos-btn-filter-pill.active-blue {
-  background: #0284c7;
+  background: #1e293b;
   color: #ffffff;
-  border-color: #38bdf8;
-  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35);
+  border-color: #334155;
+  box-shadow: none;
 }
 
 /* ==========================================================================
@@ -881,14 +1250,28 @@
 
 /* Light Mode Overrides for Settings & Filters */
 [data-theme="light"] .sos-btn-filter-pill {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-  color: #475569;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  box-shadow: none;
 }
 
 [data-theme="light"] .sos-btn-filter-pill:hover {
-  background: #e2e8f0;
-  color: #0f172a;
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1e293b;
+  box-shadow: none;
+}
+
+[data-theme="light"] .sos-btn-filter-pill.active,
+[data-theme="light"] .sos-btn-filter-pill.active-green,
+[data-theme="light"] .sos-btn-filter-pill.active-red,
+[data-theme="light"] .sos-btn-filter-pill.active-yellow,
+[data-theme="light"] .sos-btn-filter-pill.active-blue {
+  background: #073B60;
+  border-color: #073B60;
+  color: #ffffff;
+  box-shadow: none;
 }
 
 [data-theme="light"] .sos-settings-card {

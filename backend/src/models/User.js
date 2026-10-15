@@ -157,6 +157,19 @@ const authoritySchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    organizationName: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    provinceCode: {
+      type: Number,
+      default: null,
+    },
+    wardCode: {
+      type: Number,
+      default: null,
+    },
   },
   { _id: false }
 );
@@ -270,6 +283,10 @@ const userSchema = new mongoose.Schema(
       default: 'PENDING',
     },
     isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    isPhoneVerified: {
       type: Boolean,
       default: false,
     },

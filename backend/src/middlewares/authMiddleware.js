@@ -70,7 +70,44 @@ const authenticate = async (req, res, next) => {
   }
 };
 
+/**
+ * Middleware tùy chọn xác thực người dùng nếu có token/dev-user-id
+ */
+const optionalAuthenticate = async (req, res, next) => {
+  try {
+    let token = null;
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.split(' ')[1];
+    } else if (req.cookies && req.cookies.accessToken) {
+      token = req.cookies.accessToken;
+    }
+    const devUserId = req.headers['x-user-id'];
+
+    if (token) {
+      const secret = process.env.JWT_SECRET || 'sos_system_jwt_secret_key_2026';
+      try {
+        const decoded = jwt.verify(token, secret);
+        req.user = await User.findById(decoded.id || decoded._id);
+      } catch (err) {
+        try {
+          const decoded = jwt.decode(token);
+          if (decoded && (decoded.id || decoded._id)) {
+            req.user = await User.findById(decoded.id || decoded._id);
+          }
+        } catch (_) {}
+      }
+    }
+    if (!req.user && devUserId) {
+      req.user = await User.findById(devUserId);
+    }
+    next();
+  } catch (error) {
+    next();
+  }
+};
+
 module.exports = {
   authenticate,
+  optionalAuthenticate,
 };
 

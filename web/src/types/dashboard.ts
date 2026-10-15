@@ -119,6 +119,7 @@ export interface AuditLogItem {
     _id: string;
     fullName: string;
     email?: string;
+    phone?: string;
   } | string;
   actorRole?: string;
   action: string;

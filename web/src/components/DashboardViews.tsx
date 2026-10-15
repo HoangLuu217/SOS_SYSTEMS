@@ -86,6 +86,8 @@ import {
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import './DashboardViews.css';
+import { TacticalChatView } from './chat/TacticalChatView';
+
 
 import {
   fetchVietnamProvincesService,
@@ -277,8 +279,10 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   const [vehicles, setVehicles] = useState<VehicleItem[]>([]);
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>([]);
-  const [orgs, setOrgs] = useState<AuthorityOrgItem[]>([]);
+  const [, setOrgs] = useState<AuthorityOrgItem[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
+  const [auditRoleFilter, setAuditRoleFilter] = useState<'ALL' | 'CITIZEN' | 'RESCUER' | 'AUTHORITY' | 'ADMIN'>('ALL');
+  const [auditSearchTerm, setAuditSearchTerm] = useState('');
 
   // State phục vụ modal nhận SOS hotline thủ công (UC-L02)
   const [showHotlineModal, setShowHotlineModal] = useState(false);
@@ -6200,10 +6204,14 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
     // TẦNG 1: DANH MỤC CÁC TỈNH / THÀNH PHỐ VIỆT NAM (CHUẨN 34 TỈNH THÀNH MỚI)
     const filteredProvinces = vietnamProvinces.filter((p) => {
+      const mgr = getProvinceManager(p);
+      if (provinceManagerFilter === 'MANAGED' && !mgr) return false;
+      if (provinceManagerFilter === 'UNMANAGED' && mgr) return false;
       if (!provinceSearchQuery.trim()) return true;
       const q = provinceSearchQuery.toLowerCase();
       return (p.name || '').toLowerCase().includes(q) || (p.ref || '').toLowerCase().includes(q) || (p.isoCode || '').toLowerCase().includes(q);
     });
+
 
     return (
       <div className="sos-views-container">
@@ -6260,6 +6268,31 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             </div>
 
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+              {/* Bộ lọc cán bộ quản lý cấp tỉnh */}
+              <div className="sos-filter-tabs" style={{ marginBottom: 0 }}>
+                <button
+                  type="button"
+                  className={`sos-btn-filter-pill ${provinceManagerFilter === 'ALL' ? 'active' : ''}`}
+                  onClick={() => setProvinceManagerFilter('ALL')}
+                >
+                  Tất cả
+                </button>
+                <button
+                  type="button"
+                  className={`sos-btn-filter-pill ${provinceManagerFilter === 'MANAGED' ? 'active-green' : ''}`}
+                  onClick={() => setProvinceManagerFilter('MANAGED')}
+                >
+                  Đã có cán bộ
+                </button>
+                <button
+                  type="button"
+                  className={`sos-btn-filter-pill ${provinceManagerFilter === 'UNMANAGED' ? 'active-yellow' : ''}`}
+                  onClick={() => setProvinceManagerFilter('UNMANAGED')}
+                >
+                  Chưa phân công
+                </button>
+              </div>
+
               {/* Thanh tìm kiếm tỉnh thành */}
               <div style={{ position: 'relative' }}>
                 <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
@@ -6478,13 +6511,355 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   if (activeKey === 'audit_logs' || activeKey === 'operation_logs') {
     const displayAuditLogs = auditLogs.length > 0 ? auditLogs : FALLBACK_AUDIT_LOGS;
 
+    // Hàm chuẩn hóa kiểm tra vai trò người thực hiện (hỗ trợ cả mã tiếng Anh và tên tiếng Việt)
+    const isRoleMatch = (roleStr: string, filter: string) => {
+      const r = (roleStr || '').toUpperCase();
+      if (filter === 'ALL') return true;
+      if (filter === 'CITIZEN') {
+        return r.includes('CITIZEN') || r.includes('NGƯỜI DÂN') || r.includes('DÂN');
+      }
+      if (filter === 'RESCUER') {
+        return r.includes('RESCUER') || r.includes('CỨU HỘ') || r.includes('ĐỘI TRƯỞNG') || r.includes('THỰC ĐỊA');
+      }
+      if (filter === 'AUTHORITY') {
+        return (
+          r.includes('AUTHORITY') ||
+          r.includes('DISPATCHER') ||
+          r.includes('CHỈ HUY') ||
+          r.includes('TRỰC BAN') ||
+          r.includes('BCH') ||
+          r.includes('ĐỊA PHƯƠNG') ||
+          r.includes('CHÍNH QUYỀN') ||
+          r.includes('ĐIỀU PHỐI')
+        );
+      }
+      if (filter === 'ADMIN') {
+        return r.includes('ADMIN') || r.includes('QUẢN TRỊ');
+      }
+      return true;
+    };
+
+    // Tính toán các thông số thống kê tác chiến
+    const totalCount = displayAuditLogs.length;
+    const sosCount = displayAuditLogs.filter((l) => {
+      const a = (l.action || '').toUpperCase();
+      const e = (l.entityType || '').toUpperCase();
+      return (
+        e === 'SOSREQUEST' ||
+        e === 'MISSION' ||
+        e.includes('CỨU NẠN') ||
+        a.includes('SOS') ||
+        a.includes('MISSION') ||
+        a.includes('CỨU NẠN') ||
+        a.includes('ĐIỀU ĐỘNG') ||
+        a.includes('SƠ TÁN')
+      );
+    }).length;
+    const hazardAlertCount = displayAuditLogs.filter((l) => {
+      const a = (l.action || '').toUpperCase();
+      const e = (l.entityType || '').toUpperCase();
+      return (
+        e === 'HAZARDREPORT' ||
+        e === 'ALERT' ||
+        e.includes('CẢNH BÁO') ||
+        e.includes('NGUY HIỂM') ||
+        a.includes('HAZARD') ||
+        a.includes('ALERT') ||
+        a.includes('CẢNH BÁO') ||
+        a.includes('NGUY HIỂM')
+      );
+    }).length;
+    const adminCount = displayAuditLogs.filter((l) => {
+      const r = (l.actorRole || '').toUpperCase();
+      const e = (l.entityType || '').toUpperCase();
+      const a = (l.action || '').toUpperCase();
+      return (
+        r.includes('ADMIN') ||
+        r.includes('QUẢN TRỊ') ||
+        e === 'USER' ||
+        e === 'ADMINISTRATIVEAREA' ||
+        e.includes('HỆ THỐNG') ||
+        a.includes('PHÂN QUYỀN') ||
+        a.includes('CẤU HÌNH')
+      );
+    }).length;
+
+    const citizenCount = displayAuditLogs.filter((l) => isRoleMatch(l.actorRole || '', 'CITIZEN')).length;
+    const rescuerCount = displayAuditLogs.filter((l) => isRoleMatch(l.actorRole || '', 'RESCUER')).length;
+    const authorityCount = displayAuditLogs.filter((l) => isRoleMatch(l.actorRole || '', 'AUTHORITY')).length;
+    const adminRoleCount = displayAuditLogs.filter((l) => isRoleMatch(l.actorRole || '', 'ADMIN')).length;
+
+    // Lọc theo Role
+    let filteredLogs = displayAuditLogs.filter((log) => isRoleMatch(log.actorRole || '', auditRoleFilter));
+
+    // Lọc theo từ khóa tìm kiếm
+    if (auditSearchTerm.trim()) {
+      const term = auditSearchTerm.toLowerCase();
+      filteredLogs = filteredLogs.filter((log) => {
+        const actor = typeof log.actorId === 'object' && log.actorId !== null ? log.actorId : null;
+        const actorStr = `${actor?.fullName || ''} ${actor?.phone || ''} ${actor?.email || ''}`.toLowerCase();
+        const actionStr = (log.action || '').toLowerCase();
+        const entityStr = (log.entityType || '').toLowerCase();
+        const roleStr = (log.actorRole || '').toLowerCase();
+        const metaStr = JSON.stringify(log.metadata || {}).toLowerCase();
+        return (
+          actorStr.includes(term) ||
+          actionStr.includes(term) ||
+          entityStr.includes(term) ||
+          roleStr.includes(term) ||
+          metaStr.includes(term)
+        );
+      });
+    }
+
+    const actionLabels: Record<string, string> = {
+      CITIZEN_CREATE_SOS: 'Gửi yêu cầu cứu nạn khẩn cấp',
+      CITIZEN_CANCEL_SOS: 'Hủy yêu cầu cứu nạn',
+      UPDATE_SOS: 'Cập nhật yêu cầu cứu nạn',
+      COMPLETE_SOS: 'Hoàn tất toàn bộ ca cứu nạn',
+      CITIZEN_REPORT_HAZARD: 'Báo cáo điểm nguy hiểm / ngập lụt',
+      AUTHORITY_VERIFY_SOS: 'Xác minh & Phân loại cấp độ SOS',
+      AUTHORITY_ASSIGN_MISSION: 'Phân công lực lượng cứu nạn cho ca SOS',
+      AUTHORITY_REASSIGN_MISSION: 'Điều phối lại lực lượng cứu trợ',
+      AUTHORITY_CANCEL_MISSION: 'Hủy lệnh phân công cứu nạn',
+      AUTHORITY_APPROVE_HAZARD: 'Phê duyệt điểm nguy hiểm lên bản đồ',
+      AUTHORITY_REJECT_HAZARD: 'Từ chối duyệt điểm nguy hiểm',
+      AUTHORITY_DELETE_HAZARD: 'Xóa điểm nguy hiểm',
+      RESCUER_ACCEPT_MISSION: 'Tiếp nhận phân công nhiệm vụ cứu hộ',
+      RESCUER_IN_PROGRESS_MISSION: 'Đang di chuyển / Đang triển khai cứu hộ',
+      RESCUER_COMPLETED_MISSION: 'Hoàn thành nhiệm vụ được giao',
+      RESCUER_CANCELLED_MISSION: 'Hủy phân công nhiệm vụ',
+      CREATE_ALERT: 'Phát cảnh báo khẩn cấp diện rộng',
+      CANCEL_ALERT: 'Hủy cảnh báo diện rộng',
+      CREATE_SAFE_LOCATION: 'Thêm mới trạm trú ẩn / điểm sơ tán',
+      UPDATE_SAFE_LOCATION: 'Cập nhật thông tin trạm trú ẩn',
+      ADMIN_CREATE_USER: 'Tạo tài khoản cán bộ mới',
+      ADMIN_UPDATE_USER: 'Cập nhật tài khoản người dùng',
+      ADMIN_UPDATE_USER_STATUS: 'Thay đổi trạng thái tài khoản',
+      ADMIN_VERIFY_USER: 'Xác minh tài khoản người dùng',
+      ADMIN_UPDATE_USER_ROLES: 'Phân quyền vai trò người dùng',
+      ADMIN_DELETE_USER: 'Xóa tài khoản người dùng',
+      ADMIN_VERIFY_RESCUER: 'Xác minh hồ sơ cứu hộ viên',
+      ADMIN_CREATE_AREA: 'Thêm mới khu vực hành chính',
+      ADMIN_UPDATE_AREA: 'Cập nhật khu vực hành chính',
+      ADMIN_SYNC_AREAS: 'Đồng bộ khu vực hành chính từ API',
+      CREATE_RESCUE_TEAM: 'Thành lập đội cứu hộ mới',
+      UPDATE_RESCUE_TEAM: 'Cập nhật thông tin đội cứu hộ',
+      DELETE_RESCUE_TEAM: 'Giải thể đội cứu hộ',
+      TEAM_ADD_MEMBER: 'Bổ sung thành viên vào đội cứu hộ',
+      TEAM_REMOVE_MEMBER: 'Loại thành viên khỏi đội cứu hộ',
+      TEAM_CHANGE_LEADER: 'Thay đổi đội trưởng đội cứu hộ',
+      RESCUER_UPDATE_AVAILABILITY: 'Cập nhật trạng thái sẵn sàng trực chiến',
+      RESCUER_UPDATE_SKILLS: 'Cập nhật kỹ năng tác chiến cứu hộ',
+      RESCUER_UPDATE_PROFILE: 'Cập nhật hồ sơ cứu hộ viên',
+      UPDATE_PROFILE: 'Cập nhật hồ sơ cá nhân & chức vụ',
+      VERIFY_PHONE: 'Xác thực số điện thoại qua OTP',
+    };
+
+    // Từ điển chuyển đổi các khóa metadata thành tiếng Việt có dấu rõ ràng
+    const auditMetaKeyLabels: Record<string, string> = {
+      doiCuuHo: 'Đội cứu hộ',
+      phuongTien: 'Phương tiện',
+      khuVuc: 'Khu vực',
+      mucDo: 'Mức độ',
+      nguoiGoi: 'Người gọi',
+      sosCode: 'Mã SOS',
+      tieuDe: 'Tiêu đề',
+      kenhPhat: 'Kênh phát',
+      soNguoiCuuDuoc: 'Số người cứu được',
+      tramTruAn: 'Trạm trú ẩn',
+      sosId: 'Mã SOS',
+      teamName: 'Đội cứu hộ',
+      teamId: 'Mã đội cứu hộ',
+      rescuerId: 'Cứu hộ viên',
+      leaderId: 'Đội trưởng',
+      areaId: 'Mã địa bàn',
+      areaName: 'Khu vực quản lý',
+      updatedFields: 'Trường cập nhật',
+      status: 'Trạng thái',
+      verificationStatus: 'Trạng thái xác minh',
+      availabilityStatus: 'Trạng thái trực chiến',
+      severity: 'Mức độ',
+      title: 'Tiêu đề',
+      type: 'Loại',
+      note: 'Ghi chú',
+      reason: 'Lý do',
+      fullName: 'Họ và tên',
+      phone: 'Số điện thoại',
+      email: 'Hòm thư điện tử',
+      authority: 'Cơ quan chỉ huy',
+      organizationName: 'Đơn vị công tác',
+      position: 'Chức vụ',
+      department: 'Phòng ban / Đơn vị',
+      provinceCode: 'Mã Tỉnh / TP',
+      wardCode: 'Mã Phường / Xã',
+      code: 'Mã hiệu',
+      level: 'Cấp độ',
+      name: 'Tên',
+      roles: 'Vai trò',
+      role: 'Vai trò',
+      resultSummary: 'Kết quả',
+      channel: 'Kênh',
+      messageId: 'Mã tin nhắn',
+      senderName: 'Người gửi',
+      receiverName: 'Người nhận',
+      priority: 'Độ ưu tiên',
+      victimCount: 'Số lượng người',
+      urgency: 'Mức độ khẩn cấp',
+      description: 'Mô tả',
+      address: 'Địa chỉ',
+      location: 'Vị trí',
+      coordinates: 'Tọa độ GPS',
+      skills: 'Kỹ năng',
+      vehicleType: 'Phương tiện',
+      experience: 'Kinh nghiệm',
+    };
+
+    const formatAuditMetaKey = (rawKey: string): string => {
+      if (auditMetaKeyLabels[rawKey]) {
+        return auditMetaKeyLabels[rawKey];
+      }
+      // Nếu đã là tiếng Việt có dấu hoặc có khoảng cách thì giữ nguyên
+      if (rawKey.includes(' ')) {
+        return rawKey;
+      }
+      // Tách camelCase hoặc snake_case thành chữ có dấu cách
+      const spaced = rawKey
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/[_\-.]+/g, ' ')
+        .trim();
+      return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+    };
+
+    const formatAuditMetaValue = (_rawKey: string, val: any): string => {
+      if (val === null || val === undefined) return '—';
+      if (typeof val === 'boolean') return val ? 'Có' : 'Không';
+      if (Array.isArray(val)) {
+        return val.map((v) => (typeof v === 'object' ? JSON.stringify(v) : String(v))).join(', ');
+      }
+      if (typeof val === 'object') {
+        // Trường hợp Cơ quan chỉ huy (Authority): chỉ hiển thị Tên đơn vị và Chức vụ, lọc sạch toàn bộ mã ID
+        if (
+          _rawKey === 'authority' ||
+          _rawKey === 'Cơ quan chỉ huy' ||
+          (val && (val.organizationName || val.position || val.department))
+        ) {
+          const unit = val.organizationName || val.department || val.areaName || '';
+          const pos = val.position || '';
+          if (unit && pos) {
+            return `${unit} (Chức vụ: ${pos})`;
+          }
+          if (unit) return unit;
+          if (pos) return `Chức vụ: ${pos}`;
+          return '—';
+        }
+
+        // Với các object khác: Lọc bỏ hoàn toàn các trường mã ID kỹ thuật dài dòng
+        const technicalIdKeys = new Set([
+          'id',
+          '_id',
+          'organizationId',
+          'areaId',
+          'provinceCode',
+          'wardCode',
+          'districtCode',
+          'recipientId',
+          'senderId',
+          'actorId',
+          'entityId',
+          'userId',
+          '__v',
+        ]);
+
+        const parts = Object.entries(val)
+          .filter(
+            ([k, v]) =>
+              !technicalIdKeys.has(k) &&
+              !k.toLowerCase().endsWith('id') &&
+              v !== null &&
+              v !== undefined &&
+              v !== ''
+          )
+          .map(([k, v]) => `${auditMetaKeyLabels[k] || k}: ${v}`)
+          .join('; ');
+        return parts || '—';
+      }
+
+      const strVal = String(val).trim();
+      const valueTranslations: Record<string, string> = {
+        CRITICAL: 'Nguy cấp cực độ',
+        HIGH: 'Mức độ cao',
+        MEDIUM: 'Mức độ trung bình',
+        LOW: 'Mức độ thấp',
+        PENDING: 'Chờ tiếp nhận',
+        VERIFIED: 'Đã xác minh',
+        REJECTED: 'Đã từ chối',
+        CANCELLED: 'Đã hủy',
+        COMPLETED: 'Đã hoàn thành',
+        AVAILABLE: 'Sẵn sàng trực chiến',
+        ON_MISSION: 'Đang làm nhiệm vụ',
+        BUSY: 'Đang bận',
+        ACTIVE: 'Đang hoạt động',
+        INACTIVE: 'Ngưng hoạt động',
+      };
+
+      return valueTranslations[strVal] || strVal;
+    };
+
     return (
       <div className="sos-views-container">
+        {/* HÀNG THỐNG KÊ TÁC CHIẾN TỔNG QUAN */}
+        <div className="sos-audit-stats-grid">
+          <div className="sos-audit-stat-card">
+            <div className="sos-audit-stat-icon blue">
+              <History size={22} />
+            </div>
+            <div className="sos-audit-stat-info">
+              <span className="sos-audit-stat-value">{totalCount}</span>
+              <span className="sos-audit-stat-label">Tổng sự kiện ghi nhận</span>
+            </div>
+          </div>
+
+          <div className="sos-audit-stat-card">
+            <div className="sos-audit-stat-icon green">
+              <LifeBuoy size={22} />
+            </div>
+            <div className="sos-audit-stat-info">
+              <span className="sos-audit-stat-value">{sosCount}</span>
+              <span className="sos-audit-stat-label">Cứu nạn &amp; Điều phối</span>
+            </div>
+          </div>
+
+          <div className="sos-audit-stat-card">
+            <div className="sos-audit-stat-icon amber">
+              <AlertTriangle size={22} />
+            </div>
+            <div className="sos-audit-stat-info">
+              <span className="sos-audit-stat-value">{hazardAlertCount}</span>
+              <span className="sos-audit-stat-label">Cảnh báo &amp; Điểm nguy hiểm</span>
+            </div>
+          </div>
+
+          <div className="sos-audit-stat-card">
+            <div className="sos-audit-stat-icon purple">
+              <Shield size={22} />
+            </div>
+            <div className="sos-audit-stat-info">
+              <span className="sos-audit-stat-value">{adminCount}</span>
+              <span className="sos-audit-stat-label">Quản trị &amp; Phân quyền</span>
+            </div>
+          </div>
+        </div>
+
+        {/* BẢNG CHÍNH NHẬT KÝ TÁC CHIẾN */}
         <div className="sos-view-card">
           <div className="sos-view-card-header">
             <div className="sos-view-card-title">
-              <History size={18} color="#eab308" />
-              <span>Nhật Ký Tác Chiến &amp; Lịch Sử Điều Hành Thực Địa ({displayAuditLogs.length} sự kiện)</span>
+              <History size={20} color="#eab308" />
+              <span>Nhật Ký &amp; Dòng Thời Gian Điều Hành Thực Địa</span>
+              <span className="sos-badge verified" style={{ fontSize: '11px', marginLeft: '6px' }}>
+                {filteredLogs.length} / {totalCount} sự kiện
+              </span>
             </div>
             <button
               type="button"
@@ -6496,35 +6871,245 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
               <span>Làm mới</span>
             </button>
           </div>
-          <div className="sos-timeline">
-            {displayAuditLogs.map((log) => {
-              const actor = typeof log.actorId === 'object' && log.actorId !== null ? log.actorId : null;
-              return (
-                <div key={log._id} className="sos-timeline-item">
-                  <div className="sos-timeline-dot" />
-                  <div className="sos-timeline-content">
-                    <div className="sos-timeline-time">
-                      {new Date(log.createdAt).toLocaleString('vi-VN')}
+
+          {/* THANH CÔNG CỤ BỘ LỌC VÀ TÌM KIẾM */}
+          <div className="sos-audit-toolbar">
+            <div className="sos-filter-tabs" style={{ marginBottom: 0 }}>
+              <button
+                type="button"
+                className={`sos-btn-filter-pill ${auditRoleFilter === 'ALL' ? 'active' : ''}`}
+                onClick={() => setAuditRoleFilter('ALL')}
+              >
+                Tất cả ({totalCount})
+              </button>
+              <button
+                type="button"
+                className={`sos-btn-filter-pill ${auditRoleFilter === 'CITIZEN' ? 'active' : ''}`}
+                onClick={() => setAuditRoleFilter('CITIZEN')}
+              >
+                Người dân ({citizenCount})
+              </button>
+              <button
+                type="button"
+                className={`sos-btn-filter-pill ${auditRoleFilter === 'RESCUER' ? 'active' : ''}`}
+                onClick={() => setAuditRoleFilter('RESCUER')}
+              >
+                Đội cứu hộ ({rescuerCount})
+              </button>
+              <button
+                type="button"
+                className={`sos-btn-filter-pill ${auditRoleFilter === 'AUTHORITY' ? 'active' : ''}`}
+                onClick={() => setAuditRoleFilter('AUTHORITY')}
+              >
+                Chính quyền / Điều phối ({authorityCount})
+              </button>
+              <button
+                type="button"
+                className={`sos-btn-filter-pill ${auditRoleFilter === 'ADMIN' ? 'active' : ''}`}
+                onClick={() => setAuditRoleFilter('ADMIN')}
+              >
+                Quản trị viên ({adminRoleCount})
+              </button>
+            </div>
+
+            <div className="sos-audit-search-wrap">
+              <Search size={15} className="sos-audit-search-icon" />
+              <input
+                type="text"
+                className="sos-audit-search-input"
+                placeholder="Tìm kiếm tác chiến, người thực hiện, mã..."
+                value={auditSearchTerm}
+                onChange={(e) => setAuditSearchTerm(e.target.value)}
+              />
+              {auditSearchTerm && (
+                <button
+                  type="button"
+                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+                  onClick={() => setAuditSearchTerm('')}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* DANH SÁCH DÒNG THỜI GIAN KẾT NỐI */}
+          {filteredLogs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8' }}>
+              <History size={40} style={{ margin: '0 auto 12px auto', opacity: 0.4 }} />
+              <div style={{ fontSize: '15px', fontWeight: 600, color: '#cbd5e1', marginBottom: '6px' }}>
+                Không tìm thấy sự kiện tác chiến phù hợp
+              </div>
+              <div style={{ fontSize: '13px' }}>
+                Thử thay đổi bộ lọc vai trò hoặc từ khóa tìm kiếm để xem các nhật ký khác.
+              </div>
+              {(auditRoleFilter !== 'ALL' || auditSearchTerm) && (
+                <button
+                  type="button"
+                  className="sos-btn-action primary"
+                  style={{ marginTop: '14px' }}
+                  onClick={() => {
+                    setAuditRoleFilter('ALL');
+                    setAuditSearchTerm('');
+                  }}
+                >
+                  Xóa bộ lọc
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="sos-audit-timeline-container">
+              {filteredLogs.map((log) => {
+                const actor = typeof log.actorId === 'object' && log.actorId !== null ? log.actorId : null;
+                const roleUpper = (log.actorRole || '').toUpperCase();
+
+                let roleBadgeClass = 'sos-role-tag citizen';
+                let roleLabel = log.actorRole || 'NGƯỜI DÂN';
+                let nodeClass = 'sos-audit-node';
+                let avatarClass = 'sos-audit-avatar citizen';
+                let NodeIcon = LifeBuoy;
+
+                if (roleUpper.includes('ADMIN') || roleUpper.includes('QUẢN TRỊ')) {
+                  roleBadgeClass = 'sos-badge critical';
+                  roleLabel = log.actorRole || 'QUẢN TRỊ VIÊN';
+                  nodeClass = 'sos-audit-node critical';
+                  avatarClass = 'sos-audit-avatar admin';
+                  NodeIcon = Shield;
+                } else if (
+                  roleUpper.includes('AUTHORITY') ||
+                  roleUpper.includes('DISPATCHER') ||
+                  roleUpper.includes('CHỈ HUY') ||
+                  roleUpper.includes('TRỰC BAN') ||
+                  roleUpper.includes('BCH') ||
+                  roleUpper.includes('ĐỊA PHƯƠNG') ||
+                  roleUpper.includes('CHÍNH QUYỀN') ||
+                  roleUpper.includes('ĐIỀU PHỐI')
+                ) {
+                  roleBadgeClass = 'sos-badge verified';
+                  roleLabel = log.actorRole || 'CHÍNH QUYỀN / ĐIỀU PHỐI';
+                  nodeClass = 'sos-audit-node success';
+                  avatarClass = 'sos-audit-avatar authority';
+                  NodeIcon = Radio;
+                } else if (
+                  roleUpper.includes('RESCUER') ||
+                  roleUpper.includes('CỨU HỘ') ||
+                  roleUpper.includes('ĐỘI TRƯỞNG') ||
+                  roleUpper.includes('THỰC ĐỊA')
+                ) {
+                  roleBadgeClass = 'sos-badge medium';
+                  roleLabel = log.actorRole || 'ĐỘI CỨU HỘ';
+                  nodeClass = 'sos-audit-node warning';
+                  avatarClass = 'sos-audit-avatar rescuer';
+                  NodeIcon = Truck;
+                } else if (
+                  roleUpper.includes('CITIZEN') ||
+                  roleUpper.includes('NGƯỜI DÂN') ||
+                  roleUpper.includes('DÂN')
+                ) {
+                  roleBadgeClass = 'sos-role-tag citizen';
+                  roleLabel = log.actorRole || 'NGƯỜI DÂN';
+                  nodeClass = 'sos-audit-node';
+                  avatarClass = 'sos-audit-avatar citizen';
+                  NodeIcon = LifeBuoy;
+                } else {
+                  roleBadgeClass = 'sos-badge pending';
+                  roleLabel = log.actorRole || 'HỆ THỐNG';
+                  nodeClass = 'sos-audit-node purple';
+                  avatarClass = 'sos-audit-avatar';
+                  NodeIcon = Clock;
+                }
+
+                // Tên hiển thị người thực hiện
+                const actorName =
+                  actor?.fullName ||
+                  actor?.phone ||
+                  actor?.email ||
+                  (roleUpper.includes('ADMIN') || roleUpper.includes('QUẢN TRỊ')
+                    ? 'Quản trị viên Hệ thống'
+                    : roleUpper.includes('AUTHORITY') ||
+                      roleUpper.includes('DISPATCHER') ||
+                      roleUpper.includes('CHỈ HUY') ||
+                      roleUpper.includes('TRỰC BAN') ||
+                      roleUpper.includes('BCH') ||
+                      roleUpper.includes('ĐỊA PHƯƠNG') ||
+                      roleUpper.includes('CHÍNH QUYỀN') ||
+                      roleUpper.includes('ĐIỀU PHỐI')
+                    ? 'Cán bộ Điều phối Địa phương'
+                    : roleUpper.includes('RESCUER') ||
+                      roleUpper.includes('CỨU HỘ') ||
+                      roleUpper.includes('ĐỘI TRƯỞNG') ||
+                      roleUpper.includes('THỰC ĐỊA')
+                    ? 'Đội Cứu hộ Thực địa'
+                    : 'Người dân Cứu trợ');
+
+                const initialLetter = actorName.charAt(0).toUpperCase() || 'S';
+                const actionText = actionLabels[log.action] || log.action;
+
+                return (
+                  <div key={log._id} className="sos-audit-item">
+                    <div className={nodeClass}>
+                      <NodeIcon size={12} color="#ffffff" />
                     </div>
-                    <div className="sos-timeline-text">
-                      <strong>[{log.actorRole || 'CHỈ HUY'}] {actor?.fullName || actor?.email || 'Ban Chỉ Huy Tác Chiến'}</strong>
-                      {' '}thực hiện hành động{' '}
-                      <strong style={{ color: '#38bdf8' }}>{log.action}</strong>
-                      {' '}đối với <strong>{log.entityType}</strong>
-                      {log.metadata && (
-                        <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '4px', background: 'rgba(0,0,0,0.03)', padding: '5px 10px', borderRadius: '4px' }}>
-                          Chi tiết: {JSON.stringify(log.metadata)}
+
+                    <div className="sos-audit-card">
+                      <div className="sos-audit-header">
+                        <div className="sos-audit-actor">
+                          <div className={avatarClass}>{initialLetter}</div>
+                          <div className="sos-audit-actor-meta">
+                            <div className="sos-audit-actor-name">
+                              <span>{actorName}</span>
+                              <span className={roleBadgeClass} style={{ fontSize: '10.5px' }}>
+                                {roleLabel}
+                              </span>
+                            </div>
+                            <div className="sos-audit-actor-sub">
+                              {actor?.phone && <span>SĐT: {actor.phone} &bull; </span>}
+                              {actor?.email && <span>{actor.email}</span>}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="sos-audit-time-badge">
+                          <Clock size={12} />
+                          <span>{new Date(log.createdAt).toLocaleString('vi-VN')}</span>
+                        </div>
+                      </div>
+
+                      <div className="sos-audit-action-row">
+                        <span className="sos-audit-action-text">{actionText}</span>
+                        <span className="sos-audit-entity-tag">[{log.entityType}]</span>
+                      </div>
+
+                      {log.metadata && Object.keys(log.metadata).length > 0 && (
+                        <div className="sos-audit-meta-grid">
+                          {Object.entries(log.metadata).map(([key, val]) => {
+                            const displayKey = formatAuditMetaKey(key);
+                            const displayVal = formatAuditMetaValue(key, val);
+                            return (
+                              <div key={key} className="sos-audit-meta-chip">
+                                <span className="sos-audit-meta-key">{displayKey}:</span>
+                                <span className="sos-audit-meta-val">{displayVal}</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     );
+  }
+
+  /* -------------------------------------------------------------
+   * 14b. KÊNH TRAO ĐỔI TÁC CHIẾN CHAT REALTIME (ADMIN & AUTHORITY)
+   * ------------------------------------------------------------- */
+  if (activeKey === 'chat') {
+    return <TacticalChatView currentUser={user} />;
   }
 
   /* -------------------------------------------------------------

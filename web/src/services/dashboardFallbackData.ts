@@ -392,12 +392,17 @@ export const FALLBACK_AUDIT_LOGS: AuditLogItem[] = [
     action: 'ĐIỀU ĐỘNG CA-NÔ TIẾP CẬN',
     entityType: 'YÊU CẦU CỨU NẠN',
     actorRole: 'CHỈ HUY ĐỊA PHƯƠNG',
+    actorId: {
+      _id: 'act-dn-01',
+      fullName: 'Trần Văn Minh',
+      phone: '0905 123 456',
+    },
     createdAt: new Date(Date.now() - 8 * 60000).toISOString(),
     metadata: {
-      sosCode: 'SOS #8924',
-      doiCuuHo: 'Đội Ca-nô Thủy Bộ Hải Châu',
-      phuongTien: '43-HC-01',
-      khuVuc: 'Phường Hòa Cường',
+      'Mã SOS': 'SOS #8924',
+      'Đội cứu hộ': 'Đội Ca-nô Thủy Bộ Hải Châu',
+      'Phương tiện': '43-HC-01',
+      'Khu vực': 'Phường Hòa Cường',
     },
   },
   {
@@ -405,11 +410,16 @@ export const FALLBACK_AUDIT_LOGS: AuditLogItem[] = [
     action: 'XÁC MINH CỨU NẠN KHẨN CẤP',
     entityType: 'YÊU CẦU CỨU NẠN',
     actorRole: 'TRỰC BAN TÁC CHIẾN',
+    actorId: {
+      _id: 'act-dn-02',
+      fullName: 'Lê Hoàng Nam',
+      phone: '0905 654 321',
+    },
     createdAt: new Date(Date.now() - 19 * 60000).toISOString(),
     metadata: {
-      sosCode: 'SOS #8927',
-      mucDo: 'CRITICAL',
-      nguoiGoi: 'Hoàng Văn Vinh (0905 998 331)',
+      'Mã SOS': 'SOS #8927',
+      'Mức độ': 'Nguy cấp cực độ',
+      'Người gọi': 'Hoàng Văn Vinh (0905 998 331)',
     },
   },
   {
@@ -417,10 +427,15 @@ export const FALLBACK_AUDIT_LOGS: AuditLogItem[] = [
     action: 'PHÁT CẢNH BÁO LOA PHƯỜNG & APP',
     entityType: 'BẢN TIN CẢNH BÁO',
     actorRole: 'BCH PCTT ĐỊA PHƯƠNG',
+    actorId: {
+      _id: 'act-dn-03',
+      fullName: 'BCH PCTT & TKCN Quận Hải Châu',
+      phone: '0236 3822 114',
+    },
     createdAt: new Date(Date.now() - 42 * 60000).toISOString(),
     metadata: {
-      tieuDe: 'Cảnh báo lũ dâng cao lưu vực sông Hàn',
-      kenhPhat: ['Ứng dụng người dân', 'SMS', 'Hệ thống Loa truyền thanh'],
+      'Tiêu đề': 'Cảnh báo lũ dâng cao lưu vực sông Hàn',
+      'Kênh phát': ['Ứng dụng người dân', 'SMS', 'Hệ thống Loa truyền thanh'],
     },
   },
   {
@@ -428,11 +443,49 @@ export const FALLBACK_AUDIT_LOGS: AuditLogItem[] = [
     action: 'HOÀN THÀNH NHIỆM VỤ SƠ TÁN',
     entityType: 'YÊU CẦU CỨU NẠN',
     actorRole: 'ĐỘI TRƯỞNG THỰC ĐỊA',
+    actorId: {
+      _id: 'act-dn-04',
+      fullName: 'Nguyễn Văn Hùng',
+      phone: '0912 345 678',
+    },
     createdAt: new Date(Date.now() - 112 * 60000).toISOString(),
     metadata: {
-      sosCode: 'SOS #8915',
-      soNguoiCuuDuoc: 3,
-      tramTruAn: 'Trạm Y Tế Bán Đảo Sơn Trà',
+      'Mã SOS': 'SOS #8915',
+      'Số người cứu được': 3,
+      'Trạm trú ẩn': 'Trạm Y Tế Bán Đảo Sơn Trà',
+    },
+  },
+  {
+    _id: 'log-dn-05',
+    action: 'GỬI YÊU CẦU CỨU NẠN KHẨN CẤP',
+    entityType: 'YÊU CẦU CỨU NẠN',
+    actorRole: 'NGƯỜI DÂN',
+    actorId: {
+      _id: 'act-dn-05',
+      fullName: 'Hoàng Văn Vinh',
+      phone: '0905 998 331',
+    },
+    createdAt: new Date(Date.now() - 125 * 60000).toISOString(),
+    metadata: {
+      'Mã SOS': 'SOS #8927',
+      'Địa chỉ': 'K24/10 Trưng Nữ Vương, P. Bình Thuận',
+      'Số người mắc kẹt': '4 người (2 người già)',
+    },
+  },
+  {
+    _id: 'log-dn-06',
+    action: 'CẬP NHẬT PHÂN QUYỀN VÀ KHU VỰC TÁC CHIẾN',
+    entityType: 'QUẢN TRỊ HỆ THỐNG',
+    actorRole: 'QUẢN TRỊ VIÊN',
+    actorId: {
+      _id: 'act-dn-06',
+      fullName: 'Quản trị viên Hệ thống',
+      phone: '0901 000 001',
+    },
+    createdAt: new Date(Date.now() - 210 * 60000).toISOString(),
+    metadata: {
+      'Hạng mục': 'Bổ sung quyền điều phối khẩn cấp cho Hải Châu',
+      'Trạng thái': 'Đã kích hoạt tự động',
     },
   },
 ];

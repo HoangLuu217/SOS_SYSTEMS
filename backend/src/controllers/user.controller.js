@@ -78,6 +78,32 @@ class UserController {
       next(error);
     }
   }
+
+  /**
+   * POST /users/me/send-phone-otp
+   */
+  async sendPhoneOtp(req, res, next) {
+    try {
+      const { phone } = req.body;
+      const result = await userService.sendPhoneOtp(req.user._id, phone);
+      return sendSuccess(res, 200, result.message || 'Mã OTP đã được gửi thành công!', result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /users/me/verify-phone-otp
+   */
+  async verifyPhoneOtp(req, res, next) {
+    try {
+      const { phone, otp } = req.body;
+      const result = await userService.verifyPhoneOtp(req.user._id, { phone, otp });
+      return sendSuccess(res, 200, result.message || 'Xác thực số điện thoại thành công!', result);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new UserController();
