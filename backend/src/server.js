@@ -1,6 +1,8 @@
 require('dotenv').config();
+const http = require('http');
 const mongoose = require('mongoose');
 const app = require('./app');
+const { initSocket } = require('./socket');
 
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/sos_systems';
@@ -10,8 +12,11 @@ const startServer = async () => {
     await mongoose.connect(MONGODB_URI);
     console.log(' Kết nối MongoDB thành công');
 
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(` Server đang chạy tại http://0.0.0.0:${PORT} (tất cả IP mạng LAN)`);
+    const server = http.createServer(app);
+    initSocket(server);
+
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(` Server đang chạy tại http://0.0.0.0:${PORT} (kèm Realtime Socket.IO cho SOS)`);
       console.log(`📡 SSE Realtime Stream sẵn sàng tại /api/notifications/stream`);
     });
   } catch (error) {
@@ -21,5 +26,3 @@ const startServer = async () => {
 };
 
 startServer();
-
-

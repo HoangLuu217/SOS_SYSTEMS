@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ActivityIndicator, ImageBackground, Keyboard, Image } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, ImageBackground, Keyboard, Image, LogBox } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -20,6 +20,12 @@ import { BACKGROUND_APP_SOURCE } from './src/constants/backgroundBase64';
 import { registerForPushNotificationsAsync } from './src/services/pushNotificationService';
 import { NotificationProvider, useNotifications } from './src/context/NotificationContext';
 import { InAppNotificationBanner } from './src/components/InAppNotificationBanner';
+
+// Tắt thông báo warning màu vàng của Expo CLI/Metro khi chạy qua tunnel trên điện thoại
+LogBox.ignoreLogs([
+  'Cannot connect to Expo CLI',
+  'Setting a timer for a long period of time',
+]);
 
 function AuthenticatedApp() {
   const [activeTab, setActiveTab] = useState<TabName>('home');
@@ -55,6 +61,7 @@ function AuthenticatedApp() {
           <HomeScreen
             onOpenSettings={() => setConfigVisible(true)}
             onNavigateToTab={handleNavigateToTab}
+            onNavigateToSos={() => setActiveTab('sos')}
           />
         </View>
 
@@ -67,9 +74,9 @@ function AuthenticatedApp() {
           />
         </View>
 
-        {/* Tab Cứu hộ SOS */}
+        {/* Tab Cứu hộ SOS (Đưa trực tiếp biểu mẫu cứu hộ ngập lụt ra ngoài) */}
         <View style={[styles.tabScreenWrap, activeTab !== 'sos' && styles.hiddenTabScreen]}>
-          <SosScreen />
+          <SosScreen onNavigateToHome={() => setActiveTab('home')} />
         </View>
 
         {/* Tab Tin tức & Thông báo */}

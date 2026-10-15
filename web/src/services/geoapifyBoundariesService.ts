@@ -210,8 +210,8 @@ export function parseGeoapifyFeaturesToAreas(features: GeoapifyFeature[]): Admin
     const realPop = rawPop && !isNaN(Number(rawPop))
       ? Number(rawPop)
       : isWard
-      ? 65000 + ((index * 3719) % 55000)
-      : 35000 + ((index * 2317) % 25000);
+        ? 65000 + ((index * 3719) % 55000)
+        : 35000 + ((index * 2317) % 25000);
 
     const boundary: GeoJsonPolygon = {
       type: feature.geometry.type,
@@ -404,41 +404,41 @@ export const VIETNAM_34_PROVINCES_STANDARD: Array<{
   pop: number;
   area: number;
 }> = [
-  { code: 1, name: 'Thành phố Hà Nội', type: 'thành phố trung ương', codename: 'ha_noi', iso: 'VN-HN', pop: 8500000, area: 3359.8 },
-  { code: 79, name: 'Thành phố Hồ Chí Minh', type: 'thành phố trung ương', codename: 'ho_chi_minh', iso: 'VN-SG', pop: 9456700, area: 2095.0 },
-  { code: 31, name: 'Thành phố Hải Phòng', type: 'thành phố trung ương', codename: 'hai_phong', iso: 'VN-HP', pop: 2054000, area: 1527.4 },
-  { code: 48, name: 'Thành phố Đà Nẵng', type: 'thành phố trung ương', codename: 'da_nang', iso: 'VN-DN', pop: 1230000, area: 1285.4 },
-  { code: 92, name: 'Thành phố Cần Thơ', type: 'thành phố trung ương', codename: 'can_tho', iso: 'VN-CT', pop: 1235000, area: 1439.0 },
-  { code: 46, name: 'Thành phố Huế', type: 'thành phố trung ương', codename: 'hue', iso: 'VN-26', pop: 1129000, area: 5048.2 },
-  { code: 22, name: 'Thành phố Quảng Ninh', type: 'thành phố trung ương', codename: 'quang_ninh', iso: 'VN-13', pop: 1320000, area: 6178.2 },
-  { code: 24, name: 'Thành phố Bắc Ninh', type: 'thành phố trung ương', codename: 'bac_ninh', iso: 'VN-56', pop: 1369000, area: 822.7 },
-  { code: 75, name: 'Thành phố Đồng Nai', type: 'thành phố trung ương', codename: 'dong_nai', iso: 'VN-39', pop: 3097000, area: 5907.2 },
-  { code: 4, name: 'Tỉnh Cao Bằng', type: 'tỉnh', codename: 'cao_bang', iso: 'VN-04', pop: 530000, area: 6700.3 },
-  { code: 8, name: 'Tỉnh Tuyên Quang', type: 'tỉnh', codename: 'tuyen_quang', iso: 'VN-07', pop: 785000, area: 5867.9 },
-  { code: 11, name: 'Tỉnh Điện Biên', type: 'tỉnh', codename: 'dien_bien', iso: 'VN-71', pop: 600000, area: 9541.2 },
-  { code: 12, name: 'Tỉnh Lai Châu', type: 'tỉnh', codename: 'lai_chau', iso: 'VN-01', pop: 460000, area: 9068.8 },
-  { code: 14, name: 'Tỉnh Sơn La', type: 'tỉnh', codename: 'son_la', iso: 'VN-05', pop: 1250000, area: 14123.7 },
-  { code: 15, name: 'Tỉnh Lào Cai', type: 'tỉnh', codename: 'lao_cai', iso: 'VN-02', pop: 730000, area: 6364.0 },
-  { code: 19, name: 'Tỉnh Thái Nguyên', type: 'tỉnh', codename: 'thai_nguyen', iso: 'VN-69', pop: 1287000, area: 3526.6 },
-  { code: 20, name: 'Tỉnh Lạng Sơn', type: 'tỉnh', codename: 'lang_son', iso: 'VN-09', pop: 782000, area: 8310.2 },
-  { code: 25, name: 'Tỉnh Phú Thọ', type: 'tỉnh', codename: 'phu_tho', iso: 'VN-68', pop: 1464000, area: 3534.6 },
-  { code: 33, name: 'Tỉnh Hưng Yên', type: 'tỉnh', codename: 'hung_yen', iso: 'VN-66', pop: 1253000, area: 930.2 },
-  { code: 37, name: 'Tỉnh Ninh Bình', type: 'tỉnh', codename: 'ninh_binh', iso: 'VN-18', pop: 982000, area: 1386.8 },
-  { code: 38, name: 'Tỉnh Thanh Hóa', type: 'tỉnh', codename: 'thanh_hoa', iso: 'VN-21', pop: 3640000, area: 11114.7 },
-  { code: 40, name: 'Tỉnh Nghệ An', type: 'tỉnh', codename: 'nghe_an', iso: 'VN-22', pop: 3328000, area: 16490.0 },
-  { code: 42, name: 'Tỉnh Hà Tĩnh', type: 'tỉnh', codename: 'ha_tinh', iso: 'VN-23', pop: 1289000, area: 5990.7 },
-  { code: 44, name: 'Tỉnh Quảng Trị', type: 'tỉnh', codename: 'quang_tri', iso: 'VN-25', pop: 632000, area: 4739.8 },
-  { code: 51, name: 'Tỉnh Quảng Ngãi', type: 'tỉnh', codename: 'quang_ngai', iso: 'VN-29', pop: 1231000, area: 5155.8 },
-  { code: 52, name: 'Tỉnh Gia Lai', type: 'tỉnh', codename: 'gia_lai', iso: 'VN-30', pop: 1514000, area: 15510.8 },
-  { code: 56, name: 'Tỉnh Khánh Hòa', type: 'tỉnh', codename: 'khanh_hoa', iso: 'VN-34', pop: 1231000, area: 5137.8 },
-  { code: 66, name: 'Tỉnh Đắk Lắk', type: 'tỉnh', codename: 'dak_lak', iso: 'VN-33', pop: 1869000, area: 13030.5 },
-  { code: 68, name: 'Tỉnh Lâm Đồng', type: 'tỉnh', codename: 'lam_dong', iso: 'VN-35', pop: 1297000, area: 9783.3 },
-  { code: 80, name: 'Tỉnh Tây Ninh', type: 'tỉnh', codename: 'tay_ninh', iso: 'VN-37', pop: 1169000, area: 4048.9 },
-  { code: 82, name: 'Tỉnh Đồng Tháp', type: 'tỉnh', codename: 'dong_thap', iso: 'VN-45', pop: 1599000, area: 3383.8 },
-  { code: 86, name: 'Tỉnh Vĩnh Long', type: 'tỉnh', codename: 'vinh_long', iso: 'VN-47', pop: 1023000, area: 1525.6 },
-  { code: 91, name: 'Tỉnh An Giang', type: 'tỉnh', codename: 'an_giang', iso: 'VN-44', pop: 1908000, area: 3536.7 },
-  { code: 96, name: 'Tỉnh Cà Mau', type: 'tỉnh', codename: 'ca_mau', iso: 'VN-59', pop: 1194000, area: 5221.2 },
-];
+    { code: 1, name: 'Thành phố Hà Nội', type: 'thành phố trung ương', codename: 'ha_noi', iso: 'VN-HN', pop: 8500000, area: 3359.8 },
+    { code: 79, name: 'Thành phố Hồ Chí Minh', type: 'thành phố trung ương', codename: 'ho_chi_minh', iso: 'VN-SG', pop: 9456700, area: 2095.0 },
+    { code: 31, name: 'Thành phố Hải Phòng', type: 'thành phố trung ương', codename: 'hai_phong', iso: 'VN-HP', pop: 2054000, area: 1527.4 },
+    { code: 48, name: 'Thành phố Đà Nẵng', type: 'thành phố trung ương', codename: 'da_nang', iso: 'VN-DN', pop: 1230000, area: 1285.4 },
+    { code: 92, name: 'Thành phố Cần Thơ', type: 'thành phố trung ương', codename: 'can_tho', iso: 'VN-CT', pop: 1235000, area: 1439.0 },
+    { code: 46, name: 'Thành phố Huế', type: 'thành phố trung ương', codename: 'hue', iso: 'VN-26', pop: 1129000, area: 5048.2 },
+    { code: 22, name: 'Thành phố Quảng Ninh', type: 'thành phố trung ương', codename: 'quang_ninh', iso: 'VN-13', pop: 1320000, area: 6178.2 },
+    { code: 24, name: 'Thành phố Bắc Ninh', type: 'thành phố trung ương', codename: 'bac_ninh', iso: 'VN-56', pop: 1369000, area: 822.7 },
+    { code: 75, name: 'Thành phố Đồng Nai', type: 'thành phố trung ương', codename: 'dong_nai', iso: 'VN-39', pop: 3097000, area: 5907.2 },
+    { code: 4, name: 'Tỉnh Cao Bằng', type: 'tỉnh', codename: 'cao_bang', iso: 'VN-04', pop: 530000, area: 6700.3 },
+    { code: 8, name: 'Tỉnh Tuyên Quang', type: 'tỉnh', codename: 'tuyen_quang', iso: 'VN-07', pop: 785000, area: 5867.9 },
+    { code: 11, name: 'Tỉnh Điện Biên', type: 'tỉnh', codename: 'dien_bien', iso: 'VN-71', pop: 600000, area: 9541.2 },
+    { code: 12, name: 'Tỉnh Lai Châu', type: 'tỉnh', codename: 'lai_chau', iso: 'VN-01', pop: 460000, area: 9068.8 },
+    { code: 14, name: 'Tỉnh Sơn La', type: 'tỉnh', codename: 'son_la', iso: 'VN-05', pop: 1250000, area: 14123.7 },
+    { code: 15, name: 'Tỉnh Lào Cai', type: 'tỉnh', codename: 'lao_cai', iso: 'VN-02', pop: 730000, area: 6364.0 },
+    { code: 19, name: 'Tỉnh Thái Nguyên', type: 'tỉnh', codename: 'thai_nguyen', iso: 'VN-69', pop: 1287000, area: 3526.6 },
+    { code: 20, name: 'Tỉnh Lạng Sơn', type: 'tỉnh', codename: 'lang_son', iso: 'VN-09', pop: 782000, area: 8310.2 },
+    { code: 25, name: 'Tỉnh Phú Thọ', type: 'tỉnh', codename: 'phu_tho', iso: 'VN-68', pop: 1464000, area: 3534.6 },
+    { code: 33, name: 'Tỉnh Hưng Yên', type: 'tỉnh', codename: 'hung_yen', iso: 'VN-66', pop: 1253000, area: 930.2 },
+    { code: 37, name: 'Tỉnh Ninh Bình', type: 'tỉnh', codename: 'ninh_binh', iso: 'VN-18', pop: 982000, area: 1386.8 },
+    { code: 38, name: 'Tỉnh Thanh Hóa', type: 'tỉnh', codename: 'thanh_hoa', iso: 'VN-21', pop: 3640000, area: 11114.7 },
+    { code: 40, name: 'Tỉnh Nghệ An', type: 'tỉnh', codename: 'nghe_an', iso: 'VN-22', pop: 3328000, area: 16490.0 },
+    { code: 42, name: 'Tỉnh Hà Tĩnh', type: 'tỉnh', codename: 'ha_tinh', iso: 'VN-23', pop: 1289000, area: 5990.7 },
+    { code: 44, name: 'Tỉnh Quảng Trị', type: 'tỉnh', codename: 'quang_tri', iso: 'VN-25', pop: 632000, area: 4739.8 },
+    { code: 51, name: 'Tỉnh Quảng Ngãi', type: 'tỉnh', codename: 'quang_ngai', iso: 'VN-29', pop: 1231000, area: 5155.8 },
+    { code: 52, name: 'Tỉnh Gia Lai', type: 'tỉnh', codename: 'gia_lai', iso: 'VN-30', pop: 1514000, area: 15510.8 },
+    { code: 56, name: 'Tỉnh Khánh Hòa', type: 'tỉnh', codename: 'khanh_hoa', iso: 'VN-34', pop: 1231000, area: 5137.8 },
+    { code: 66, name: 'Tỉnh Đắk Lắk', type: 'tỉnh', codename: 'dak_lak', iso: 'VN-33', pop: 1869000, area: 13030.5 },
+    { code: 68, name: 'Tỉnh Lâm Đồng', type: 'tỉnh', codename: 'lam_dong', iso: 'VN-35', pop: 1297000, area: 9783.3 },
+    { code: 80, name: 'Tỉnh Tây Ninh', type: 'tỉnh', codename: 'tay_ninh', iso: 'VN-37', pop: 1169000, area: 4048.9 },
+    { code: 82, name: 'Tỉnh Đồng Tháp', type: 'tỉnh', codename: 'dong_thap', iso: 'VN-45', pop: 1599000, area: 3383.8 },
+    { code: 86, name: 'Tỉnh Vĩnh Long', type: 'tỉnh', codename: 'vinh_long', iso: 'VN-47', pop: 1023000, area: 1525.6 },
+    { code: 91, name: 'Tỉnh An Giang', type: 'tỉnh', codename: 'an_giang', iso: 'VN-44', pop: 1908000, area: 3536.7 },
+    { code: 96, name: 'Tỉnh Cà Mau', type: 'tỉnh', codename: 'ca_mau', iso: 'VN-59', pop: 1194000, area: 5221.2 },
+  ];
 
 /**
  * Tầng 1: Lấy danh sách 34 Tỉnh / Thành phố mới của Việt Nam (Mô hình mới 2025)
@@ -479,7 +479,7 @@ export async function fetchVietnamProvincesService(): Promise<VietnamProvinceIte
         provinces.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
         try {
           localStorage.setItem(cacheKey, JSON.stringify(provinces));
-        } catch {}
+        } catch { }
         return provinces;
       }
     }
@@ -550,11 +550,11 @@ export async function fetchProvinceSubUnitsService(
           provinceName,
           provinceCode: provCode,
           units: parsed,
-        }).catch(() => {});
+        }).catch(() => { });
         return parsed;
       }
     }
-  } catch {}
+  } catch { }
 
   const units: ProvinceSubUnitItem[] = [];
 
@@ -663,7 +663,7 @@ export async function fetchProvinceSubUnitsService(
 
   try {
     localStorage.setItem(cacheKey, JSON.stringify(units));
-  } catch {}
+  } catch { }
 
   // Tự động đồng bộ vào MongoDB
   syncAdministrativeAreasToBackend({

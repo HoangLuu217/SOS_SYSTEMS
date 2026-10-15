@@ -8,13 +8,13 @@ import {
   StatusBar,
   Platform,
   Alert,
-  Modal,
   Image,
   ImageBackground,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import * as Location from 'expo-location';
@@ -29,6 +29,7 @@ import { backendApi } from '../services/backendApi';
 export interface HomeScreenProps {
   onOpenSettings: () => void;
   onNavigateToTab?: (tab: TabName, options?: { filter?: 'ALL' | 'HAZARD' | 'SAFE' | 'RELIEF'; areaId?: string }) => void;
+  onNavigateToSos?: () => void;
 }
 
 interface NewsItem {

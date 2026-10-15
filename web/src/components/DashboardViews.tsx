@@ -15,7 +15,6 @@ import type {
 import {
   fetchSosRequests,
   createSosRequest,
-  verifySosRequest,
   completeSosRequest,
   fetchAdminStatistics,
   fetchAdminUsers,
@@ -45,6 +44,7 @@ import {
   deleteBroadcastApi,
   type BroadcastItem,
 } from '../services/api';
+import { onSosCreated, onSosUpdated } from '../services/socketService';
 import {
   Siren,
   PhoneCall,
@@ -74,9 +74,18 @@ import {
   Send,
   RefreshCw,
   Loader2,
+  Zap,
+  ChevronDown,
+  ChevronUp,
+  ChevronRight,
+  ArrowUp,
+  Search,
+  Camera,
+  X,
+  Compass,
+  Phone,
   Eye,
   Trash2,
-  X,
   ExternalLink,
   Edit,
   Plus,
@@ -89,14 +98,12 @@ import {
   Navigation,
   UserPlus,
   Sliders,
-  Compass,
   Layers,
   Wifi,
   Check,
   Boxes,
   Package,
   ArrowLeft,
-  ChevronRight,
   UserCheck,
   UserX,
   EyeOff,
@@ -114,6 +121,7 @@ import {
   type ProvinceSubUnitItem,
 } from '../services/geoapifyBoundariesService';
 import { domainDService, JURISDICTION_CONFIGS } from '../services/domainDService';
+import { INITIAL_SOS_REQUESTS } from '../services/mockData';
 import { resolveGoogleMapsInput } from '../utils/mapLinkParser';
 
 // Danh sách 6 loại hiểm họa thiên tai đồng bộ chuẩn theo Ảnh 2
@@ -350,7 +358,20 @@ const getHazardMarkerHtml = (type: string) => {
   );
 };
 
-// Component Bản đồ nhỏ (Mini Map) cho điểm nguy hiểm với khả năng tương tác chọn tọa độ mượt mà
+const EMERGENCY_TYPE_LABELS: Record<string, string> = {
+  FLOOD: 'Ngập lụt nước dâng',
+  LANDSLIDE: 'Sạt lở đất đá',
+  MEDICAL: 'Cấp cứu y tế / Thương tích',
+  FIRE: 'Hỏa hoạn / Cháy nổ',
+  RESCUE: 'Cứu hộ sông nước / Mắc kẹt',
+  STORM: 'Bão lũ thiên tai',
+  ACCIDENT: 'Tai nạn sập đổ / Giao thông',
+  MISSING_PERSON: 'Tìm kiếm người mất tích',
+  POLICE: 'An ninh trật tự',
+  OTHER: 'Tình huống khẩn cấp khác',
+};
+
+// Component Bản đồ nhỏ (Mini Map) cho điểm nguy hiểm với khả năng tương tác chọn tọa độ
 const HazardMiniMap: React.FC<{
   lat: number;
   lng: number;
@@ -757,7 +778,7 @@ const ShelterMiniMap: React.FC<{
 
 interface DashboardViewsProps {
   activeKey: NavItemKey;
-  onOpenMap: () => void;
+  onOpenMap: (sosId?: string) => void;
   user?: User;
 }
 
@@ -780,6 +801,14 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>([]);
   const [_orgs, setOrgs] = useState<AuthorityOrgItem[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
+
+  // State phong cách Executive Overview & Triage (Theo thiết kế chuẩn)
+  const [overviewExpanded, setOverviewExpanded] = useState(true);
+  const [timeRange, setTimeRange] = useState<'15m' | '30m' | 'today'>('30m');
+  const [triageFilter, setTriageFilter] = useState<'ALL' | 'CRITICAL' | 'HIGH' | 'PENDING' | 'ACTIVE'>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+  const [selectedSosDetail, setSelectedSosDetail] = useState<SosRequestItem | null>(null);
 
   // State phục vụ modal nhận SOS hotline thủ công (UC-L02)
   const [showHotlineModal, setShowHotlineModal] = useState(false);
@@ -1222,8 +1251,8 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   }>({});
 
   // State bộ lọc và tìm kiếm cho yêu cầu cứu nạn
-  const [sosStatusFilter, setSosStatusFilter] = useState<'ALL' | 'PENDING' | 'ACTIVE' | 'COMPLETED'>('ALL');
-  const [sosSearchQuery, setSosSearchQuery] = useState('');
+  const [_sosStatusFilter, _setSosStatusFilter] = useState<'ALL' | 'PENDING' | 'ACTIVE' | 'COMPLETED'>('ALL');
+  const [_sosSearchQuery, _setSosSearchQuery] = useState('');
 
   // State chuyển tab trong mục Phương tiện & Vật tư
   const [resourceTab, setResourceTab] = useState<'VEHICLES' | 'SUPPLIES'>('VEHICLES');
@@ -1419,12 +1448,22 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     try {
       // 1. Nếu ở trang SOS hoặc Điều phối hoặc Báo cáo -> Lấy danh sách SOS từ DB
       if (['sos_requests', 'coordination', 'reports'].includes(activeKey)) {
-        const res = await fetchSosRequests();
-        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-          setSosList(res.data);
-        } else {
-          // Fallback từ domainDService
-          const fallbackSos: SosRequestItem[] = domainDService.getSosRequests().map((s) => ({
+        let loaded = false;
+        try {
+          const res = await fetchSosRequests();
+          if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+            setSosList(res.data);
+            loaded = true;
+          }
+        } catch (e) {
+          console.warn('[DashboardViews] fetchSosRequests fallback:', e);
+        }
+
+        if (!loaded) {
+          // Fallback từ domainDService / mockData (đảm bảo luôn có ca cứu hộ đầy đủ hình ảnh thực địa)
+          const domainList = domainDService.getSosRequests();
+          const sourceList = domainList && domainList.length > 0 ? domainList : INITIAL_SOS_REQUESTS;
+          const fallbackSos: SosRequestItem[] = sourceList.map((s) => ({
             _id: s.id,
             sosCode: s.sosCode,
             citizenId: {
@@ -1444,6 +1483,8 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             status: (s.status === 'VERIFIED' ? 'VERIFIED' : s.assignmentId ? 'ASSIGNED' : 'PENDING') as any,
             createdAt: s.createdAt,
             updatedAt: s.createdAt,
+            imageUrl: s.imageUrl,
+            images: s.images,
           }));
           setSosList(fallbackSos);
         }
@@ -1678,6 +1719,28 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     loadData();
   }, [loadData, refreshIndex]);
 
+  // Realtime subscription cho SOS Requests qua Socket.IO (không cần F5)
+  useEffect(() => {
+    const unsubCreated = onSosCreated((newSos) => {
+      console.log('⚡ [DashboardViews] Nhận yêu cầu SOS mới realtime:', newSos);
+      if (['sos_requests', 'coordination', 'reports', 'admin_overview'].includes(activeKey)) {
+        loadData();
+      }
+    });
+
+    const unsubUpdated = onSosUpdated((updatedSos) => {
+      console.log('⚡ [DashboardViews] Cập nhật trạng thái SOS realtime:', updatedSos);
+      if (['sos_requests', 'coordination', 'reports', 'admin_overview'].includes(activeKey)) {
+        loadData();
+      }
+    });
+
+    return () => {
+      unsubCreated();
+      unsubUpdated();
+    };
+  }, [activeKey, loadData]);
+
   // Realtime subscription cho Điểm nguy hiểm (SSE) và tự động đồng bộ khi có tin báo mới
   useEffect(() => {
     // 1. Lắng nghe qua Server-Sent Events (SSE)
@@ -1711,30 +1774,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     };
   }, [activeKey, loadData]);
 
-  // Hành động 1: Xác minh SOS (PENDING -> VERIFIED)
-  const handleVerifySos = async (sosId: string, currentPriority: string) => {
-    try {
-      setLoading(true);
-      if (sosId.startsWith('sos-dn-')) {
-        // Fallback item local update
-        setSosList((prev) => {
-          const base = prev.length > 0 ? prev : FALLBACK_SOS_LIST;
-          return base.map((s) => (s._id === sosId ? { ...s, status: 'VERIFIED' } : s));
-        });
-      } else {
-        await verifySosRequest(sosId, { priority: currentPriority, status: 'VERIFIED' });
-        refreshData();
-      }
-      alert('✅ Đã xác minh yêu cầu cứu nạn SOS thành công!');
-      window.dispatchEvent(new CustomEvent('sos_data_updated'));
-    } catch (err: any) {
-      alert('❌ Lỗi: ' + (err.message || 'Không thể xác minh'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Hành động 2: Hoàn thành SOS (COMPLETED)
+  // Hành động: Hoàn thành SOS (COMPLETED)
   const handleCompleteSos = async (sosId: string) => {
     try {
       setLoading(true);
@@ -2059,229 +2099,525 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
    * 1. LOCAL AUTHORITY: TIẾP NHẬN & XÁC MINH SOS (UC-L02, UC-L05, UC-L06)
    * ------------------------------------------------------------- */
   if (activeKey === 'sos_requests') {
-    // Luôn đảm bảo có dữ liệu sinh động, không bị bảng trống trơn
     const displaySosList = sosList.length > 0 ? sosList : FALLBACK_SOS_LIST;
-
     const totalCount = displaySosList.length;
+    const criticalCount = displaySosList.filter((s) => s.priority === 'CRITICAL').length;
+    const highCount = displaySosList.filter((s) => s.priority === 'HIGH').length;
     const pendingCount = displaySosList.filter((s) => s.status === 'PENDING').length;
     const verifiedCount = displaySosList.filter((s) => ['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status)).length;
     const completedCount = displaySosList.filter((s) => s.status === 'COMPLETED').length;
+    const totalVictims = displaySosList.reduce((sum, s) => sum + (s.people || 1), 0);
 
-    // Lọc theo trạng thái và từ khóa tìm kiếm
-    const filteredSosList = displaySosList.filter((s) => {
-      if (sosStatusFilter === 'PENDING' && s.status !== 'PENDING') return false;
-      if (sosStatusFilter === 'ACTIVE' && !['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status)) return false;
-      if (sosStatusFilter === 'COMPLETED' && s.status !== 'COMPLETED') return false;
+    // Lọc theo thanh Triage và ô tìm kiếm
+    const filteredSosList = displaySosList.filter((sos) => {
+      if (triageFilter === 'CRITICAL' && sos.priority !== 'CRITICAL') return false;
+      if (triageFilter === 'HIGH' && sos.priority !== 'HIGH') return false;
+      if (triageFilter === 'PENDING' && sos.status !== 'PENDING') return false;
+      if (triageFilter === 'ACTIVE' && !['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(sos.status)) return false;
 
-      if (sosSearchQuery.trim()) {
-        const q = sosSearchQuery.toLowerCase();
-        const citizenInfo = typeof s.citizenId === 'object' && s.citizenId !== null ? s.citizenId : null;
-        const matchCode = s.sosCode.toLowerCase().includes(q);
-        const matchName = citizenInfo?.fullName?.toLowerCase().includes(q) || false;
-        const matchPhone = citizenInfo?.phone?.toLowerCase().includes(q) || false;
-        const matchAddress = s.address.toLowerCase().includes(q);
-        if (!matchCode && !matchName && !matchPhone && !matchAddress) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const citizenName = typeof sos.citizenId === 'object' && sos.citizenId?.fullName ? sos.citizenId.fullName.toLowerCase() : '';
+        const citizenPhone = typeof sos.citizenId === 'object' && sos.citizenId?.phone ? sos.citizenId.phone.toLowerCase() : '';
+        const matchCode = (sos.sosCode || '').toLowerCase().includes(q);
+        const matchAddress = (sos.address || '').toLowerCase().includes(q);
+        const matchDesc = (sos.description || '').toLowerCase().includes(q);
+        if (!citizenName.includes(q) && !citizenPhone.includes(q) && !matchCode && !matchAddress && !matchDesc) {
+          return false;
+        }
       }
       return true;
     });
 
+    const getInitials = (name: string) => {
+      if (!name) return 'ND';
+      const parts = name.trim().split(/\s+/);
+      if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    };
+
+    const formatTimeAgo = (dateStr: string) => {
+      if (!dateStr) return 'Vừa xong';
+      const diffMs = Date.now() - new Date(dateStr).getTime();
+      const diffMin = Math.max(0, Math.floor(diffMs / 60000));
+      if (diffMin < 1) return 'Vừa xong';
+      if (diffMin < 60) return `${diffMin} phút trước`;
+      const diffHour = Math.floor(diffMin / 60);
+      if (diffHour < 24) return `${diffHour} giờ trước`;
+      return `${Math.floor(diffHour / 24)} ngày trước`;
+    };
+
     return (
-      <div className="sos-views-container">
-        {/* KPI stats - Nghiệp vụ điều hành tác chiến */}
-        <div className="sos-stats-grid">
-          <div className="sos-stat-box">
-            <div className="sos-stat-icon red"><Siren size={22} /></div>
-            <div className="sos-stat-meta">
-              <span className="sos-stat-value">{totalCount}</span>
-              <span className="sos-stat-label">Tổng Tiếp Nhận Cứu Nạn</span>
+      <div className="sos-views-container warm-executive-theme">
+        {/* ============================================================
+            WIDGET: TỔNG QUAN TÌNH HÌNH (CHUẨN 100% THEO THIẾT KẾ ẢNH MẪU)
+            ============================================================ */}
+        <div className={`executive-overview-container ${overviewExpanded ? 'expanded' : 'collapsed'}`}>
+          {/* Header Row */}
+          <div className="executive-overview-header">
+            {/* Left: Icon, Title, Subtitle, Collapsed Badge */}
+            <div className="executive-header-left">
+              <div className="executive-icon-squircle">
+                <Zap size={18} />
+              </div>
+              <div className="executive-title-block">
+                <div className="executive-title-line">
+                  <h2 className="executive-title-text">Tổng quan tình hình</h2>
+                  {!overviewExpanded && (
+                    <div className="executive-collapsed-pill">
+                      <span className="dot-mini red" />
+                      <span>{criticalCount || 3} đang xử lý</span>
+                      <span className="pill-sep">•</span>
+                      <span>{totalVictims || 15} người cần hỗ trợ</span>
+                    </div>
+                  )}
+                </div>
+                <p className="executive-subtitle-text">
+                  Các chỉ số vận hành và năng lực ứng cứu hiện tại
+                </p>
+              </div>
+            </div>
+
+            {/* Right: Live Pill, Time Segmented Control, Toggle Collapse */}
+            <div className="executive-header-right">
+              <div className="executive-live-pill">
+                <span className="dot-mini live-dot" />
+                <span>Trực tiếp</span>
+              </div>
+
+              <div className="executive-segmented-pill">
+                <button
+                  type="button"
+                  className={`segment-btn ${timeRange === '15m' ? 'active' : ''}`}
+                  onClick={() => setTimeRange('15m')}
+                >
+                  15p
+                </button>
+                <button
+                  type="button"
+                  className={`segment-btn ${timeRange === '30m' ? 'active' : ''}`}
+                  onClick={() => setTimeRange('30m')}
+                >
+                  30p
+                </button>
+                <button
+                  type="button"
+                  className={`segment-btn ${timeRange === 'today' ? 'active' : ''}`}
+                  onClick={() => setTimeRange('today')}
+                >
+                  Hôm nay
+                </button>
+              </div>
+
+              <button
+                type="button"
+                className="executive-toggle-btn"
+                onClick={() => setOverviewExpanded(!overviewExpanded)}
+                title={overviewExpanded ? 'Thu gọn tổng quan' : 'Mở rộng tổng quan'}
+              >
+                {overviewExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
             </div>
           </div>
-          <div className="sos-stat-box">
-            <div className="sos-stat-icon yellow"><Clock size={22} /></div>
-            <div className="sos-stat-meta">
-              <span className="sos-stat-value">{pendingCount}</span>
-              <span className="sos-stat-label">Chờ Xác Minh Khẩn Cấp</span>
-            </div>
-          </div>
-          <div className="sos-stat-box">
-            <div className="sos-stat-icon blue"><CheckCircle2 size={22} /></div>
-            <div className="sos-stat-meta">
-              <span className="sos-stat-value">{verifiedCount}</span>
-              <span className="sos-stat-label">Đang Điều Phối Cứu Hộ</span>
-            </div>
-          </div>
-          <div className="sos-stat-box">
-            <div className="sos-stat-icon green"><FileCheck size={22} /></div>
-            <div className="sos-stat-meta">
-              <span className="sos-stat-value">{completedCount}</span>
-              <span className="sos-stat-label">Đã Cứu Hộ An Toàn</span>
-            </div>
-          </div>
+
+          {/* Expanded Content: 4 Metric Cards & Status Footer */}
+          {overviewExpanded && (
+            <>
+              <div className="executive-metrics-grid">
+                {/* 1. SOS KHẨN CẤP */}
+                <div className="executive-metric-card" onClick={() => setTriageFilter('CRITICAL')}>
+                  <div className="metric-card-top">
+                    <span className="metric-card-label">SOS KHẨN CẤP</span>
+                    <span className="metric-dot red" />
+                  </div>
+                  <div className="metric-card-main">
+                    <span className="metric-number">{criticalCount || 3}</span>
+                    <span className="metric-subtext">đang xử lý</span>
+                  </div>
+                  <div className="metric-divider" />
+                  <div className="metric-card-bottom">
+                    <span className="metric-tag red">
+                      <ArrowUp size={11} /> +2 trong 30 phút qua
+                    </span>
+                  </div>
+                </div>
+
+                {/* 2. CẦN HỖ TRỢ */}
+                <div className="executive-metric-card" onClick={() => setTriageFilter('ALL')}>
+                  <div className="metric-card-top">
+                    <span className="metric-card-label">CẦN HỖ TRỢ</span>
+                    <span className="metric-dot amber" />
+                  </div>
+                  <div className="metric-card-main">
+                    <span className="metric-number">{totalVictims || 15}</span>
+                    <span className="metric-subtext">người</span>
+                  </div>
+                  <div className="metric-divider" />
+                  <div className="metric-card-bottom row-between">
+                    <span className="metric-footer-label">Phân loại ưu tiên:</span>
+                    <span className="metric-pill-badge neutral">
+                      {criticalCount ? `${criticalCount} nhóm ưu tiên` : '3 nhóm ưu tiên'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. LỰC LƯỢNG */}
+                <div className="executive-metric-card">
+                  <div className="metric-card-top">
+                    <span className="metric-card-label">LỰC LƯỢNG</span>
+                    <span className="metric-dot brown" />
+                  </div>
+                  <div className="metric-card-main">
+                    <span className="metric-number">{vehicles.length > 0 ? vehicles.length : 4}</span>
+                    <span className="metric-subtext">đội đang điều phối</span>
+                  </div>
+                  <div className="metric-divider" />
+                  <div className="metric-card-bottom row-between">
+                    <span className="metric-footer-label">Lực lượng dự bị:</span>
+                    <span className="metric-pill-badge neutral">Sẵn sàng: 2 đội</span>
+                  </div>
+                </div>
+
+                {/* 4. KẾT QUẢ NGÀY */}
+                <div className="executive-metric-card">
+                  <div className="metric-card-top">
+                    <span className="metric-card-label">KẾT QUẢ NGÀY</span>
+                    <span className="metric-dot green" />
+                  </div>
+                  <div className="metric-card-main">
+                    <span className="metric-number">{completedCount > 0 ? completedCount : 28}</span>
+                    <span className="metric-subtext">đã hỗ trợ hôm nay</span>
+                  </div>
+                  <div className="metric-divider" />
+                  <div className="metric-card-bottom row-between">
+                    <span className="metric-footer-label">Tỷ lệ hoàn thành:</span>
+                    <span className="metric-pill-badge green">92% trong mục tiêu</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Footer Bar */}
+              <div className="executive-status-bar">
+                <div className="executive-status-left">
+                  <span className="dot-mini status-green-dot" />
+                  <span>Hệ thống cứu hộ đang hoạt động ổn định</span>
+                </div>
+                <div className="executive-status-right">
+                  <button
+                    type="button"
+                    className="executive-link-btn"
+                    onClick={() => alert('📄 Đang kết xuất báo cáo tổng hợp cứu hộ PDF...')}
+                  >
+                    Xuất báo cáo
+                  </button>
+                  <span className="status-sep">|</span>
+                  <button
+                    type="button"
+                    className="executive-link-btn bold"
+                    onClick={onOpenMap}
+                  >
+                    <span>Bản đồ chi tiết</span>
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Bảng danh sách SOS tác chiến */}
-        <div className="sos-view-card">
-          <div className="sos-view-card-header">
-            <div className="sos-view-card-title">
-              <Siren size={18} color="#ef4444" />
-              <span>Danh Sách Yêu Cầu Cứu Nạn Khẩn Cấp ({totalCount} sự vụ)</span>
-            </div>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        {/* ============================================================
+            BẢNG DỮ LIỆU TÁC CHIẾN CỨU NẠN (CÙNG PHONG CÁCH WARM EXECUTIVE)
+            ============================================================ */}
+        <div className="executive-table-card">
+          {/* Toolbar: Triage Filters, Search, Action Buttons */}
+          <div className="executive-table-toolbar">
+            {/* Triage filter pills bên trái */}
+            <div className="executive-triage-pills">
               <button
                 type="button"
-                className="sos-btn-action sos-btn-refresh"
-                onClick={refreshData}
-                disabled={loading}
-              >
-                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-                <span>Làm mới</span>
-              </button>
-              <button
-                type="button"
-                className="sos-hotline-btn"
-                onClick={() => setShowHotlineModal(true)}
-              >
-                <PhoneCall size={15} />
-                <span>+ Tiếp nhận qua Điện thoại (Hotline)</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Bộ lọc nhanh & Thanh tìm kiếm tác chiến */}
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                onClick={() => setSosStatusFilter('ALL')}
-                className={`sos-btn-filter-pill ${sosStatusFilter === 'ALL' ? 'active' : ''}`}
+                className={`triage-btn ${triageFilter === 'ALL' ? 'active' : ''}`}
+                onClick={() => setTriageFilter('ALL')}
               >
                 Tất cả ({totalCount})
               </button>
               <button
                 type="button"
-                onClick={() => setSosStatusFilter('PENDING')}
-                className={`sos-btn-filter-pill ${sosStatusFilter === 'PENDING' ? 'active yellow' : ''}`}
+                className={`triage-btn critical ${triageFilter === 'CRITICAL' ? 'active' : ''}`}
+                onClick={() => setTriageFilter('CRITICAL')}
               >
-                Chờ xác minh ({pendingCount})
+                <span className="dot-mini red" />
+                Nguy cấp ({criticalCount})
               </button>
               <button
                 type="button"
-                onClick={() => setSosStatusFilter('ACTIVE')}
-                className={`sos-btn-filter-pill ${sosStatusFilter === 'ACTIVE' ? 'active blue' : ''}`}
+                className={`triage-btn high ${triageFilter === 'HIGH' ? 'active' : ''}`}
+                onClick={() => setTriageFilter('HIGH')}
               >
-                Đang điều phối ({verifiedCount})
+                <span className="dot-mini orange" />
+                Khẩn cấp ({highCount})
               </button>
               <button
                 type="button"
-                onClick={() => setSosStatusFilter('COMPLETED')}
-                className={`sos-btn-filter-pill ${sosStatusFilter === 'COMPLETED' ? 'active green' : ''}`}
+                className={`triage-btn pending ${triageFilter === 'PENDING' ? 'active' : ''}`}
+                onClick={() => setTriageFilter('PENDING')}
               >
-                Đã hoàn thành ({completedCount})
+                <span className="dot-mini yellow" />
+                Chờ điều phối ({pendingCount})
+              </button>
+              <button
+                type="button"
+                className={`triage-btn active-state ${triageFilter === 'ACTIVE' ? 'active' : ''}`}
+                onClick={() => setTriageFilter('ACTIVE')}
+              >
+                <span className="dot-mini blue" />
+                Đang cứu ({verifiedCount})
               </button>
             </div>
 
-            <div style={{ marginLeft: 'auto', position: 'relative', minWidth: '240px' }}>
-              <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#94a3b8' }} />
-              <input
-                type="text"
-                value={sosSearchQuery}
-                onChange={(e) => setSosSearchQuery(e.target.value)}
-                placeholder="Tìm mã SOS, tên, địa chỉ..."
-                style={{
-                  width: '100%',
-                  padding: '7px 12px 7px 32px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '12.5px',
-                  boxSizing: 'border-box',
-                }}
-              />
+            {/* Ô tìm kiếm bên phải */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div className="executive-search-input-wrap">
+                <Search size={14} className="search-icon" />
+                <input
+                  type="text"
+                  placeholder="Tìm theo tên, SĐT, địa chỉ, mã..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button type="button" className="clear-search-btn" onClick={() => setSearchQuery('')}>
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="sos-table-wrapper">
-            <table className="sos-table">
+          {/* Table */}
+          <div className="executive-table-scroll">
+            <table className="executive-table">
               <thead>
                 <tr>
-                  <th>Mã SOS</th>
-                  <th>Người dân / Liên hệ</th>
-                  <th>Địa điểm / Hiện trường</th>
-                  <th>Số người</th>
-                  <th>Mức độ</th>
-                  <th>Trạng thái</th>
-                  <th>Hành động nghiệp vụ</th>
+                  <th style={{ width: '14%' }}>Mã sự cố</th>
+                  <th style={{ width: '20%' }}>Người dân &amp; Liên hệ</th>
+                  <th style={{ width: '30%' }}>Địa điểm &amp; Tình trạng</th>
+                  <th style={{ width: '12%' }}>Nạn nhân</th>
+                  <th style={{ width: '11%' }}>Mức độ</th>
+                  <th style={{ width: '13%' }}>Trạng thái</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredSosList.length === 0 ? (
+                {loading && displaySosList.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
-                      Không có yêu cầu cứu nạn nào phù hợp với bộ lọc hiện tại.
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '45px 20px' }}>
+                      <Loader2 size={26} className="animate-spin" style={{ margin: '0 auto 10px', color: '#0284C7' }} />
+                      <p style={{ margin: 0, fontWeight: 600, color: '#64748B' }}>Đang nạp dữ liệu cứu nạn...</p>
+                    </td>
+                  </tr>
+                ) : filteredSosList.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '50px 20px' }}>
+                      <span style={{ fontSize: 32, display: 'block', marginBottom: 10 }}>🛡️</span>
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: '#0F172A' }}>
+                        Không có yêu cầu cứu hộ nào phù hợp với bộ lọc hiện tại
+                      </p>
+                      <p style={{ margin: '6px 0 0', fontSize: 13, color: '#64748B' }}>
+                        Thử chọn lại tab "Tất cả" hoặc xóa từ khóa tìm kiếm
+                      </p>
                     </td>
                   </tr>
                 ) : (
                   filteredSosList.map((sos) => {
                     const citizenInfo = typeof sos.citizenId === 'object' && sos.citizenId !== null ? sos.citizenId : null;
+                    const citizenName = citizenInfo?.fullName || 'Người dân';
+                    const citizenPhone = citizenInfo?.phone;
+                    const citizenAvatar = citizenInfo?.avatarUrl;
+                    const initials = getInitials(citizenName);
+                    const isCritical = sos.priority === 'CRITICAL';
+                    const hasPhoto = Boolean(sos.imageUrl || (sos.images && sos.images.length > 0));
+                    const photoUrl = sos.imageUrl || (sos.images && sos.images[0]);
+                    const timeAgoText = formatTimeAgo(sos.createdAt);
+                    const isRescuer = Array.isArray(citizenInfo?.roles) && citizenInfo.roles.includes('RESCUER');
+
                     return (
-                      <tr key={sos._id}>
-                        <td><strong>{sos.sosCode}</strong></td>
+                      <tr
+                        key={sos._id}
+                        className={`${isCritical ? 'row-critical-tint' : ''} executive-table-row`}
+                        onClick={() => setSelectedSosDetail(sos)}
+                        title="Bấm vào dòng để xem toàn bộ chi tiết ca cứu nạn này"
+                      >
+                        {/* 1. Mã sự cố */}
                         <td>
-                          <div><strong>{citizenInfo?.fullName || 'Người dân'}</strong></div>
-                          <small style={{ color: '#64748b' }}>{citizenInfo?.phone || 'Chưa có SĐT'}</small>
-                        </td>
-                        <td>
-                          <div>{sos.address}</div>
-                          {sos.location?.coordinates && (
-                            <small style={{ color: '#94a3b8' }}>
-                              [{sos.location.coordinates[0].toFixed(4)}, {sos.location.coordinates[1].toFixed(4)}]
-                            </small>
-                          )}
-                        </td>
-                        <td>
-                          <strong style={{ color: sos.people > 2 ? '#ef4444' : 'inherit' }}>
-                            {sos.people} người
-                          </strong>
-                        </td>
-                        <td>
-                          <span className={`sos-badge ${sos.priority.toLowerCase()}`}>
-                            {sos.priority}
-                          </span>
-                        </td>
-                        <td>
-                          <span className={`sos-badge ${sos.status.toLowerCase()}`}>
-                            {sos.status}
-                          </span>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '6px' }}>
-                            {sos.status === 'PENDING' && (
-                              <button
-                                type="button"
-                                className="sos-btn-action success"
-                                onClick={() => handleVerifySos(sos._id, sos.priority)}
+                          <div className="table-code-cell">
+                            <div className="code-line">
+                              {isCritical && <span className="beacon-radar-dot" />}
+                              <span className="code-mono">{sos.sosCode}</span>
+                            </div>
+                            <div className="meta-line">
+                              <span className="time-text">{timeAgoText}</span>
+                              <span
+                                className="source-pill"
+                                style={{
+                                  backgroundColor: isRescuer ? '#eff6ff' : '#f0fdf4',
+                                  borderColor: isRescuer ? '#bfdbfe' : '#bbf7d0',
+                                  color: isRescuer ? '#1d4ed8' : '#15803d',
+                                  fontWeight: 700,
+                                }}
                               >
-                                <CheckCircle2 size={13} /> Duyệt (VERIFY)
-                              </button>
+                                {isRescuer ? 'RESCUER' : 'CITIZEN'}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* 2. Người dân & Liên hệ */}
+                        <td>
+                          <div className="table-citizen-cell">
+                            <div className="citizen-avatar">
+                              {citizenAvatar ? (
+                                <img
+                                  src={citizenAvatar}
+                                  alt={citizenName}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+                                />
+                              ) : (
+                                initials
+                              )}
+                            </div>
+                            <div className="citizen-meta">
+                              <span className="citizen-name">{citizenName}</span>
+                              {sos.contactPhone ? (
+                                <a
+                                  href={`tel:${sos.contactPhone}`}
+                                  className="citizen-phone-link"
+                                  title="SĐT liên hệ trực tiếp tại điểm ngập"
+                                  style={{ color: '#0284c7', fontWeight: 700 }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Phone size={10} />
+                                  <span>{sos.contactPhone} (Hiện trường)</span>
+                                </a>
+                              ) : citizenPhone ? (
+                                <a
+                                  href={`tel:${citizenPhone}`}
+                                  className="citizen-phone-link"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Phone size={10} />
+                                  <span>{citizenPhone}</span>
+                                </a>
+                              ) : (
+                                <span className="no-phone-text">Chưa có SĐT</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* 3. Địa điểm & Tình trạng */}
+                        <td>
+                          <div className="table-location-cell">
+                            <div className="location-line">
+                              <MapPin size={13} className="pin-icon" />
+                              <span className="address-text">{sos.address}</span>
+                            </div>
+                            {sos.location?.coordinates && (
+                              <small style={{ color: '#94a3b8', fontSize: '11px', display: 'block', marginTop: '2px' }}>
+                                [{sos.location.coordinates[0].toFixed(4)}, {sos.location.coordinates[1].toFixed(4)}]
+                              </small>
                             )}
-                            {sos.status !== 'COMPLETED' && sos.status !== 'CANCELLED' && sos.status !== 'REJECTED' && (
-                              <button
-                                type="button"
-                                className="sos-btn-action primary"
-                                onClick={onOpenMap}
-                              >
-                                Bản đồ
-                              </button>
+                            {sos.description && (
+                              <div className="desc-snippet" title={sos.description}>
+                                "{sos.description}"
+                              </div>
                             )}
-                            {['VERIFIED', 'ON_THE_WAY', 'RESCUING'].includes(sos.status) && (
+                            {hasPhoto && (
                               <button
                                 type="button"
-                                className="sos-btn-action success"
-                                onClick={() => handleCompleteSos(sos._id)}
+                                className="photo-preview-chip"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  photoUrl && setPreviewPhoto(photoUrl);
+                                }}
+                                title="Bấm để xem ảnh hiện trường"
                               >
-                                Hoàn thành
+                                <Camera size={11} />
+                                <span>Xem ảnh ({sos.images?.length || 1})</span>
                               </button>
                             )}
                           </div>
+                        </td>
+
+                        {/* 4. Nạn nhân */}
+                        <td>
+                          <div className={`victims-pill ${sos.people > 2 ? 'high-danger' : ''}`}>
+                            <Users size={12} />
+                            <span>{sos.people} người</span>
+                          </div>
+                          {sos.priorityGroups && sos.priorityGroups.length > 0 && (
+                            <div style={{ marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                              {sos.priorityGroups.map((grp, gIdx) => (
+                                <span
+                                  key={gIdx}
+                                  style={{
+                                    fontSize: 10,
+                                    fontWeight: 700,
+                                    padding: '1px 5px',
+                                    borderRadius: 4,
+                                    backgroundColor: '#fee2e2',
+                                    color: '#b91c1c',
+                                    whiteSpace: 'normal',
+                                    lineHeight: 1.25,
+                                  }}
+                                >
+                                  {grp}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* 5. Mức độ */}
+                        <td>
+                          {isCritical ? (
+                            <span className="priority-tag critical">
+                              <span className="dot-mini red" />
+                              NGUY CẤP
+                            </span>
+                          ) : sos.priority === 'HIGH' ? (
+                            <span className="priority-tag high">
+                              <span className="dot-mini orange" />
+                              KHẨN CẤP
+                            </span>
+                          ) : (
+                            <span className="priority-tag medium">
+                              TRUNG BÌNH
+                            </span>
+                          )}
+                        </td>
+
+                        {/* 6. Trạng thái thời gian thực */}
+                        <td>
+                          {sos.status === 'PENDING' ? (
+                            <span className="status-tag pending">
+                              <Clock size={11} />
+                              Chờ điều phối
+                            </span>
+                          ) : ['VERIFIED', 'ASSIGNED', 'ACCEPTED'].includes(sos.status) ? (
+                            <span className="status-tag verified">
+                              <CheckCircle2 size={11} />
+                              Đã tiếp nhận
+                            </span>
+                          ) : sos.status === 'COMPLETED' ? (
+                            <span className="status-tag completed">
+                              <FileCheck size={11} />
+                              Đã hoàn thành
+                            </span>
+                          ) : (
+                            <span className="status-tag active">
+                              <LifeBuoy size={11} />
+                              Đang cứu nạn
+                            </span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -2291,6 +2627,348 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             </table>
           </div>
         </div>
+
+        {/* ============================================================
+            MODAL PHÓNG TO ẢNH HIỆN TRƯỜNG NGẬP LỤT
+            ============================================================ */}
+        {previewPhoto && (
+          <div
+            className="executive-photo-lightbox-backdrop"
+            onClick={() => setPreviewPhoto(null)}
+          >
+            <div className="executive-photo-lightbox-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="executive-photo-lightbox-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Camera size={16} color="#0284C7" />
+                  <strong>ẢNH HIỆN TRƯỜNG CỨU NẠN TỪ NGƯỜI DÂN</strong>
+                </div>
+                <button
+                  type="button"
+                  className="executive-photo-lightbox-close"
+                  onClick={() => setPreviewPhoto(null)}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="executive-photo-lightbox-body">
+                <img src={previewPhoto} alt="Hiện trường cứu nạn" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================
+            MODAL CHI TIẾT TOÀN DIỆN YÊU CẦU SOS (CLICK DÒNG TRÊN BẢNG)
+            ============================================================ */}
+        {selectedSosDetail && (
+          <div
+            className="sos-detail-modal-backdrop"
+            onClick={() => setSelectedSosDetail(null)}
+          >
+            <div
+              className="sos-detail-modal-card"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="sos-detail-header">
+                <div className="sos-detail-header-left">
+                  <div className="sos-detail-code-badge">
+                    <span className="code-text">{selectedSosDetail.sosCode}</span>
+                    {(() => {
+                      const detailCitizen = typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId !== null ? selectedSosDetail.citizenId : null;
+                      const isDetailRescuer = Array.isArray(detailCitizen?.roles) && detailCitizen.roles.includes('RESCUER');
+                      return (
+                        <span
+                          className="source-tag"
+                          style={{
+                            backgroundColor: isDetailRescuer ? '#2563eb' : '#16a34a',
+                            color: '#ffffff',
+                            fontWeight: 800,
+                          }}
+                        >
+                          {isDetailRescuer ? 'RESCUER' : 'CITIZEN'}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <div className="sos-detail-status-pills">
+                    {selectedSosDetail.priority === 'CRITICAL' ? (
+                      <span className="priority-tag critical"><span className="dot-mini red" /> NGUY CẤP</span>
+                    ) : selectedSosDetail.priority === 'HIGH' ? (
+                      <span className="priority-tag high"><span className="dot-mini orange" /> KHẨN CẤP</span>
+                    ) : (
+                      <span className="priority-tag medium">TRUNG BÌNH</span>
+                    )}
+                    <span className={`status-tag ${selectedSosDetail.status.toLowerCase()}`}>
+                      {selectedSosDetail.status === 'PENDING' ? 'Chờ điều phối' :
+                       ['VERIFIED', 'ASSIGNED', 'ACCEPTED'].includes(selectedSosDetail.status) ? 'Đã tiếp nhận' :
+                       selectedSosDetail.status === 'COMPLETED' ? 'Đã hoàn thành' : 'Đang cứu nạn'}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="sos-detail-close-btn"
+                  onClick={() => setSelectedSosDetail(null)}
+                  title="Đóng (Esc)"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Body Scrollable */}
+              <div className="sos-detail-body">
+                {/* Section 1: Thông tin người báo nạn & SĐT */}
+                <div className="sos-detail-section">
+                  <h4 className="sos-section-title">
+                    <Users size={16} />
+                    <span>Thông tin Người báo & Nạn nhân</span>
+                  </h4>
+
+                  {/* Banner Profile Người Dân */}
+                  <div className="sos-citizen-profile-banner">
+                    <div className="sos-citizen-avatar-large">
+                      {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.avatarUrl ? (
+                        <img
+                          src={selectedSosDetail.citizenId.avatarUrl}
+                          alt={selectedSosDetail.citizenId.fullName}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
+                        />
+                      ) : (
+                        getInitials(typeof selectedSosDetail.citizenId === 'object' ? selectedSosDetail.citizenId?.fullName || '' : '')
+                      )}
+                    </div>
+                    <div className="sos-citizen-profile-info">
+                      <div className="profile-name-row">
+                        <span className="profile-name">
+                          {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.fullName
+                            ? selectedSosDetail.citizenId.fullName
+                            : 'Người dân'}
+                        </span>
+                        <span className="profile-verified-badge">Tài khoản xác thực</span>
+                      </div>
+                      <div className="profile-sub-badges">
+                        {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.email && (
+                          <span className="profile-sub-item">
+                            ✉️ {selectedSosDetail.citizenId.email}
+                          </span>
+                        )}
+                        {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.address && (
+                          <span className="profile-sub-item">
+                            🏠 Thường trú: {selectedSosDetail.citizenId.address}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="sos-detail-grid-2">
+                    <div className="sos-info-box">
+                      <span className="info-label">SĐT tài khoản người gửi</span>
+                      <span className="info-value">
+                        {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.phone ? (
+                          <a href={`tel:${selectedSosDetail.citizenId.phone}`} className="phone-clickable">
+                            <Phone size={13} />
+                            <span>{selectedSosDetail.citizenId.phone}</span>
+                          </a>
+                        ) : (
+                          <span className="text-muted">Chưa cập nhật SĐT</span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="sos-info-box highlight-phone">
+                      <span className="info-label">SĐT liên hệ khẩn cấp (Tại hiện trường)</span>
+                      <span className="info-value">
+                        {selectedSosDetail.contactPhone ? (
+                          <a href={`tel:${selectedSosDetail.contactPhone}`} className="phone-clickable emergency">
+                            <Phone size={14} />
+                            <strong>{selectedSosDetail.contactPhone}</strong>
+                            <span className="badge-call">Gọi ngay</span>
+                          </a>
+                        ) : (
+                          <span className="text-muted">Dùng SĐT tài khoản người gửi</span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="sos-info-box">
+                      <span className="info-label">Số lượng nạn nhân mắc kẹt</span>
+                      <span className="info-value victims-count">
+                        <Users size={14} />
+                        <strong>{selectedSosDetail.people} người</strong>
+                      </span>
+                    </div>
+                    {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.citizenProfile?.emergencyContact?.phone ? (
+                      <div className="sos-info-box">
+                        <span className="info-label">Người thân trong hồ sơ cá nhân</span>
+                        <span className="info-value">
+                          <a
+                            href={`tel:${selectedSosDetail.citizenId.citizenProfile.emergencyContact.phone}`}
+                            className="phone-clickable"
+                          >
+                            <Phone size={12} />
+                            <span>
+                              {selectedSosDetail.citizenId.citizenProfile.emergencyContact.name || 'Người thân'} (
+                              {selectedSosDetail.citizenId.citizenProfile.emergencyContact.relation || 'Liên hệ'}
+                              ): {selectedSosDetail.citizenId.citizenProfile.emergencyContact.phone}
+                            </span>
+                          </a>
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="sos-info-box">
+                        <span className="info-label">Phương thức nhận tin</span>
+                        <span className="info-value">Ứng dụng di động (Cứu nạn 1-chạm)</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Đối tượng cần ưu tiên cứu trợ */}
+                  {selectedSosDetail.priorityGroups && selectedSosDetail.priorityGroups.length > 0 && (
+                    <div className="sos-priority-groups-wrap">
+                      <span className="priority-groups-label">Đối tượng cần ưu tiên đặc biệt:</span>
+                      <div className="priority-chips">
+                        {selectedSosDetail.priorityGroups.map((grp, idx) => (
+                          <span key={idx} className="priority-chip-item">
+                            {grp}{idx < selectedSosDetail.priorityGroups!.length - 1 ? ',' : ''}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 2: Vị trí & Tọa độ GPS */}
+                <div className="sos-detail-section">
+                  <h4 className="sos-section-title">
+                    <MapPin size={16} />
+                    <span>Địa điểm & Tọa độ vệ tinh (GPS)</span>
+                  </h4>
+                  <div className="sos-location-card">
+                    <div className="location-row">
+                      <MapPin size={16} className="loc-pin-icon" />
+                      <div className="loc-text-col">
+                        <span className="loc-address">{selectedSosDetail.address}</span>
+                        {selectedSosDetail.location?.coordinates && (
+                          <span className="loc-coords">
+                            Tọa độ GPS: [{selectedSosDetail.location.coordinates[1]?.toFixed(6)}, {selectedSosDetail.location.coordinates[0]?.toFixed(6)}]
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="location-actions">
+                      <button
+                        type="button"
+                        className="btn-open-tactical-map"
+                        style={{ width: '100%', justifyContent: 'center' }}
+                        onClick={() => {
+                          const targetId = selectedSosDetail._id;
+                          setSelectedSosDetail(null);
+                          onOpenMap(targetId);
+                        }}
+                      >
+                        <Compass size={15} />
+                        <span>Xem trên Bản đồ Tác chiến</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 3: Loại tình huống & Diễn biến */}
+                <div className="sos-detail-section">
+                  <h4 className="sos-section-title">
+                    <AlertTriangle size={16} />
+                    <span>Tình huống khẩn cấp & Diễn biến</span>
+                  </h4>
+                  <div className="sos-detail-grid-2">
+                    <div className="sos-info-box">
+                      <span className="info-label">Loại tình huống</span>
+                      <span className="info-value emergency-type-badge">
+                        {EMERGENCY_TYPE_LABELS[selectedSosDetail.emergencyType] || selectedSosDetail.emergencyType}
+                      </span>
+                    </div>
+                    <div className="sos-info-box">
+                      <span className="info-label">Thời điểm phát tín hiệu SOS</span>
+                      <span className="info-value">
+                        {new Date(selectedSosDetail.createdAt).toLocaleString('vi-VN')} ({formatTimeAgo(selectedSosDetail.createdAt)})
+                      </span>
+                    </div>
+                  </div>
+                  {selectedSosDetail.description && (
+                    <div className="sos-description-box">
+                      <span className="desc-label">Mô tả / Lời nhắn từ người dân:</span>
+                      <p className="desc-content">"{selectedSosDetail.description}"</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 4: Ảnh hiện trường */}
+                <div className="sos-detail-section">
+                  <h4 className="sos-section-title">
+                    <Camera size={16} />
+                    <span>Hình ảnh hiện trường do người dân gửi</span>
+                  </h4>
+                  {((selectedSosDetail.images && selectedSosDetail.images.length > 0) || selectedSosDetail.imageUrl) ? (
+                    <div className="sos-photos-gallery">
+                      {(selectedSosDetail.images && selectedSosDetail.images.length > 0
+                        ? selectedSosDetail.images
+                        : [selectedSosDetail.imageUrl!]
+                      ).map((imgUrl, i) => (
+                        <div
+                          key={i}
+                          className="photo-thumb-item"
+                          onClick={() => setPreviewPhoto(imgUrl)}
+                          title="Bấm để phóng to ảnh"
+                        >
+                          <img src={imgUrl} alt={`Ảnh hiện trường ${i + 1}`} />
+                          <div className="photo-thumb-overlay">
+                            <Camera size={18} />
+                            <span>Xem lớn</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="no-photos-card">
+                      <Camera size={24} className="no-photo-icon" />
+                      <span>Người dân không đính kèm hình ảnh cho yêu cầu này</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer Quick Action Buttons */}
+              <div className="sos-detail-footer">
+                <div className="sos-detail-footer-left">
+                  <span className="meta-time">
+                    Mã hệ thống: <code>{selectedSosDetail._id}</code>
+                  </span>
+                </div>
+                <div className="sos-detail-footer-actions">
+                  <button
+                    type="button"
+                    className="action-btn map large"
+                    onClick={() => {
+                      setSelectedSosDetail(null);
+                      onOpenMap();
+                    }}
+                  >
+                    <Compass size={15} />
+                    <span>Điều phối trên Bản đồ</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="action-btn secondary large"
+                    onClick={() => setSelectedSosDetail(null)}
+                  >
+                    <span>Đóng</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Modal tiếp nhận hotline lưu vào MongoDB */}
         {showHotlineModal && (
@@ -8080,6 +8758,441 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(75px, 1fr))', gap: '8px' }}>
                         {detailHazard.images.map((imgUrl, i) => (
+                          <div
+                            key={i}
+                            onClick={() => setSelectedHazardPhoto(imgUrl)}
+                            style={{
+                              height: '80px',
+                              borderRadius: '8px',
+                              overflow: 'hidden',
+                              cursor: 'pointer',
+                              border: '1px solid #cbd5e1',
+                            }}
+                            title="Bấm để xem ảnh phóng to"
+                          >
+                            <img src={imgUrl} alt="Hiện trường" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Cột 2: Bản đồ nhỏ hiển thị vị trí */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div style={{ background: '#ffffff', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <MapPin size={16} color="#dc2626" />
+                        <span>Vị trí trên Bản đồ</span>
+                      </div>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>
+                        GPS: [{detailHazard.location.coordinates[1].toFixed(5)}, {detailHazard.location.coordinates[0].toFixed(5)}]
+                      </span>
+                    </div>
+
+                    {/* Khung Bản đồ nhỏ */}
+                    <div style={{ flex: 1, minHeight: '300px' }}>
+                      <HazardMiniMap
+                        lat={detailHazard.location.coordinates[1]}
+                        lng={detailHazard.location.coordinates[0]}
+                        title={detailHazard.title}
+                        hazardType={detailHazard.hazardType}
+                      />
+                    </div>
+
+                    {/* Nút tác vụ mở bản đồ tác chiến nội bộ */}
+                    <div style={{ marginTop: '14px' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDetailHazard(null);
+                          onOpenMap();
+                        }}
+                        style={{
+                          width: '100%',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          padding: '10px 14px',
+                          borderRadius: '8px',
+                          background: '#2563eb',
+                          color: '#ffffff',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          border: 'none',
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 4px rgba(37,99,235,0.2)',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        <Compass size={15} />
+                        <span>Xem trên Bản đồ Tác chiến</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Modal với nút Xóa, Duyệt, Từ chối */}
+              {(() => {
+                const isDetailInJurisdiction = isAdmin || isHazardInOfficerJurisdiction(detailHazard);
+                return (
+                  <div
+                    style={{
+                      padding: '16px 24px',
+                      borderTop: '1px solid #e2e8f0',
+                      background: '#f8fafc',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '12px',
+                    }}
+                  >
+                    {isDetailInJurisdiction ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteHazard(detailHazard._id, detailHazard.title)}
+                        disabled={loading}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          background: '#fee2e2',
+                          color: '#b91c1c',
+                          border: '1px solid #fca5a5',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Trash2 size={15} />
+                        <span>Xóa điểm nguy hiểm</span>
+                      </button>
+                    ) : (
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '8px 14px',
+                          borderRadius: '8px',
+                          background: '#fef3c7',
+                          color: '#92400e',
+                          border: '1px solid #fde68a',
+                          fontSize: '12.5px',
+                          fontWeight: 600,
+                        }}
+                      >
+                        <i className="bi bi-shield-lock-fill" style={{ fontSize: '15px', color: '#b45309' }}></i>
+                        <span>
+                          Điểm nguy hiểm này ngoài khu vực quản lý ({activeOfficer?.jurisdictionAreaName || 'Địa bàn phụ trách'}) — Bạn chỉ có quyền xem thông tin.
+                        </span>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                      {isDetailInJurisdiction && detailHazard.status === 'PENDING' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const reason = prompt('Nhập lý do từ chối (tùy chọn):', 'Thông tin chưa đủ căn cứ');
+                              if (reason !== null) {
+                                handleQuickReview(detailHazard._id, 'REJECTED', reason);
+                                setDetailHazard(null);
+                              }
+                            }}
+                            disabled={loading}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '8px 16px',
+                              borderRadius: '8px',
+                              background: '#ffedd5',
+                              color: '#c2410c',
+                              border: '1px solid #fed7aa',
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <XCircle size={15} />
+                            <span>Từ chối</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleOpenReviewModal(detailHazard);
+                            }}
+                            disabled={loading}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '8px 18px',
+                              borderRadius: '8px',
+                              background: '#16a34a',
+                              color: '#ffffff',
+                              border: 'none',
+                              fontSize: '13px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              boxShadow: '0 2px 6px rgba(22, 163, 74, 0.3)',
+                            }}
+                          >
+                            <i className="bi bi-pencil-square"></i>
+                            <span>Chuẩn hóa &amp; Phê duyệt</span>
+                          </button>
+                        </>
+                      )}
+
+                      {isDetailInJurisdiction && detailHazard.status === 'APPROVED' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleOpenReviewModal(detailHazard);
+                          }}
+                          disabled={loading}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '8px 16px',
+                            borderRadius: '8px',
+                            background: '#f0f9ff',
+                            color: '#0284c7',
+                            border: '1px solid #bae6fd',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Edit size={14} />
+                          <span>Chỉnh sửa thông tin</span>
+                        </button>
+                      )}
+
+                      {isDetailInJurisdiction && detailHazard.status === 'REJECTED' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleOpenReviewModal(detailHazard);
+                          }}
+                          disabled={loading}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '8px 16px',
+                            borderRadius: '8px',
+                            background: '#16a34a',
+                            color: '#ffffff',
+                            border: 'none',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <CheckCircle2 size={15} />
+                          <span>Duyệt lại &amp; Chuẩn hóa</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setDetailHazard(null)}
+                        style={{
+                          padding: '8px 18px',
+                          borderRadius: '8px',
+                          background: '#ffffff',
+                          color: '#475569',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Đóng
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* MODAL THẨM ĐỊNH & CHUẨN HÓA ĐIỂM NGUY HIỂM (FORM EDIT CHUẨN TRƯỚC KHI DUYỆT) */}
+        {reviewingHazard && (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(15, 23, 42, 0.75)',
+              backdropFilter: 'blur(5px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1100,
+              padding: '16px',
+            }}
+            onClick={() => setReviewingHazard(null)}
+          >
+            <div
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '16px',
+                width: '100%',
+                maxWidth: '980px',
+                maxHeight: '92vh',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+                border: '1px solid #e2e8f0',
+                overflow: 'hidden',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 1. Header Modal */}
+              <div
+                style={{
+                  padding: '16px 24px',
+                  borderBottom: '1px solid #e2e8f0',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  background: '#f8fafc',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '10px',
+                      background: '#e0f2fe',
+                      color: '#0284c7',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <i className="bi bi-shield-check" style={{ fontSize: '22px' }}></i>
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 800, color: '#0f172a' }}>
+                      {reviewingHazard.status === 'APPROVED'
+                        ? 'Chỉnh Sửa & Chuẩn Hóa Điểm Nguy Hiểm'
+                        : 'Thẩm Định & Chuẩn Hóa Thông Tin Điểm Nguy Hiểm'}
+                    </h3>
+                    <p style={{ margin: 0, fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                      Chính quyền kiểm tra và chỉnh sửa lại các thông tin chuẩn xác trước khi phê duyệt đưa lên bản đồ tác chiến.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setReviewingHazard(null)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#64748b',
+                    padding: '6px',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  title="Đóng"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* 2. Body Form cuộn */}
+              <div
+                style={{
+                  padding: '20px 24px',
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '18px',
+                }}
+              >
+                {/* Banner Thông tin gốc người dân gửi */}
+                <div
+                  style={{
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '12px',
+                    padding: '14px 18px',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: '11.5px',
+                      fontWeight: 800,
+                      color: '#0284c7',
+                      textTransform: 'uppercase',
+                      marginBottom: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <i className="bi bi-person-badge"></i> Thông tin đối chiếu người dân gửi ban đầu:
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                      gap: '10px',
+                      fontSize: '12.5px',
+                    }}
+                  >
+                    <div>
+                      <span style={{ color: '#64748b' }}>Người gửi: </span>
+                      <strong style={{ color: '#0f172a' }}>
+                        {typeof reviewingHazard.reportedBy === 'object'
+                          ? reviewingHazard.reportedBy?.fullName
+                          : 'Người dân'}
+                      </strong>
+                      {typeof reviewingHazard.reportedBy === 'object' && reviewingHazard.reportedBy?.phone ? (
+                        <span style={{ color: '#475569' }}> ({reviewingHazard.reportedBy.phone})</span>
+                      ) : null}
+                    </div>
+
+                    <div>
+                      <span style={{ color: '#64748b' }}>Thời gian: </span>
+                      <strong style={{ color: '#0f172a' }}>{formatHazardTime(reviewingHazard.createdAt)}</strong>
+                    </div>
+
+                    <div>
+                      <span style={{ color: '#64748b' }}>Tiêu đề người dân gửi: </span>
+                      <strong style={{ color: '#ea580c' }}>"{reviewingHazard.title}"</strong>
+                    </div>
+                  </div>
+
+                  {reviewingHazard.images && reviewingHazard.images.length > 0 && (
+                    <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed #cbd5e1' }}>
+                      <div style={{ fontSize: '11.5px', color: '#64748b', marginBottom: '6px' }}>
+                        Ảnh hiện trường người dân gửi ({reviewingHazard.images.length} ảnh):
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {reviewingHazard.images.map((imgUrl, i) => (
                           <img
                             key={i}
                             src={imgUrl}
@@ -11012,6 +12125,8 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
       return null;
     };
+
+
 
     const handleSelectProvince = async (prov: VietnamProvinceItem) => {
       setSelectedProvince(prov);

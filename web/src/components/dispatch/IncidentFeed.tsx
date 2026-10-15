@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Search, MapPin, ChevronLeft } from 'lucide-react';
+import { Search, MapPin, ChevronLeft, RefreshCw } from 'lucide-react';
 import type { SosRequest, AuthorityOfficer } from '../../types/domainD';
 import { useApp } from '../../context/AppContext';
 
@@ -31,6 +31,9 @@ export const IncidentFeed = ({
   // Baseline scoped incidents for this officer (before status/search filter)
   const scopedIncidents = useMemo(() => {
     return sosRequests.filter((s) => {
+      // Yêu cầu SOS thật từ MongoDB (từ app mobile người dân) luôn hiển thị trực quan
+      if (s.id.length === 24) return true;
+
       if (!isAdmin) {
         const keyword = activeOfficer?.jurisdictionAreaName
           ? activeOfficer.jurisdictionAreaName
@@ -143,7 +146,16 @@ export const IncidentFeed = ({
             </span>
           </div>
 
-          <div className="feed-title-actions">
+          <div className="feed-title-actions" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <button
+              type="button"
+              className="btn-feed-collapse"
+              onClick={() => window.dispatchEvent(new CustomEvent('sos_data_updated'))}
+              title="Làm mới dữ liệu SOS từ máy chủ"
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <RefreshCw size={13} />
+            </button>
             {onToggleCollapse && (
               <button
                 type="button"
@@ -218,7 +230,7 @@ export const IncidentFeed = ({
         <div className="feed-filter-tabs-pills">
           {[
             { id: 'ALL', label: 'Tất cả', count: tabCounts.all },
-            { id: 'UNASSIGNED', label: 'Chưa gán', count: tabCounts.unassigned },
+            { id: 'UNASSIGNED', label: lang === 'vi' ? 'Chờ điều phối' : 'Pending', count: tabCounts.unassigned },
             { id: 'URGENT', label: 'Khẩn cấp', count: tabCounts.urgent },
             { id: 'ACTIVE', label: 'Đang cứu', count: tabCounts.active },
             { id: 'RESOLVED', label: 'Hoàn thành', count: tabCounts.resolved },
@@ -243,19 +255,52 @@ export const IncidentFeed = ({
           const priorityClass =
             sos.priority === 'CRITICAL' ? 'critical' : sos.priority === 'HIGH' ? 'high' : 'medium';
 
-          const typeLabelMap: Record<string, { labelVi: string; labelEn: string }> = {
-            MEDICAL: { labelVi: 'Y Tế', labelEn: 'Medical' },
-            FIRE: { labelVi: 'Cháy Nổ', labelEn: 'Fire' },
-            POLICE: { labelVi: 'An Ninh', labelEn: 'Police' },
-            RESCUE: { labelVi: 'Cứu Nạn', labelEn: 'Rescue' },
-          };
+          // Chỉ hiển thị Loại yêu cầu cứu trợ (ngắn gọn, chuẩn chỉ, không hiển thị text mô tả dài dòng)
+          const emergencyTypeLabel = (() => {
+            const desc = sos.description || sos.title || '';
+            if (desc.includes('[Loại yêu cầu:')) {
+              const match = desc.match(/\[Loại yêu cầu:\s*([^\]]+)\]/);
+              if (match && match[1]) {
+                return match[1].trim();
+              }
+            }
 
-          const typeInfo = typeLabelMap[sos.emergencyType] || {
-            labelVi: sos.emergencyType,
-            labelEn: sos.emergencyType,
-          };
+            const typeMap: Record<string, string> = {
+              FLOOD: 'Cứu hộ ngập lụt / Mắc kẹt',
+              FIRE: 'Hỏa hoạn / Cháy nổ',
+              MEDICAL: 'Cấp cứu y tế / Thương tích',
+              RESCUE: 'Cứu nạn sông nước',
+              LANDSLIDE: 'Sạt lở đất đá',
+              STORM: 'Bão lũ thiên tai',
+              ACCIDENT: 'Tai nạn sập đổ / Giao thông',
+              MISSING_PERSON: 'Tìm kiếm người mất tích',
+              POLICE: 'An ninh trật tự',
+              OTHER: 'Cứu hộ khẩn cấp',
+            };
 
-          const isAssigned = Boolean(sos.assignmentId && sos.status !== 'CANCELLED');
+            return typeMap[sos.emergencyType] || sos.emergencyType || 'Cứu hộ ngập lụt / Mắc kẹt';
+          })();
+
+          // Danh sách đối tượng ưu tiên
+          const priorityList = (() => {
+            if (Array.isArray(sos.priorityGroups) && sos.priorityGroups.length > 0) {
+              return sos.priorityGroups;
+            }
+            const desc = (sos.description || '') + ' ' + (sos.title || '');
+            if (desc.includes('[Đối tượng ưu tiên:')) {
+              const match = desc.match(/\[Đối tượng ưu tiên:\s*([^\]]+)\]/);
+              if (match && match[1]) {
+                return match[1].split(',').map((s) => s.trim()).filter(Boolean);
+              }
+            }
+            const keywords: string[] = [];
+            if (/người già|người cao tuổi/i.test(desc)) keywords.push('Người già');
+            if (/trẻ nhỏ|trẻ em|em bé|sơ sinh/i.test(desc)) keywords.push('Trẻ em');
+            if (/mang thai|bầu|thai phụ/i.test(desc)) keywords.push('Phụ nữ có thai');
+            if (/khuyết tật|tàn tật|liệt/i.test(desc)) keywords.push('Người khuyết tật');
+            if (/bệnh nặng|thở oxy|tai biến/i.test(desc)) keywords.push('Bệnh nhân nặng');
+            return keywords;
+          })();
 
           return (
             <div
@@ -268,6 +313,28 @@ export const IncidentFeed = ({
                 <div className="code-beacon-wrapper">
                   <span className="beacon-dot" />
                   <span className="card-code-mono">{sos.sosCode}</span>
+                  {sos.id.length === 24 && (
+                    <span
+                      style={{
+                        fontSize: 8.5,
+                        fontWeight: 800,
+                        backgroundColor: sos.senderRole === 'RESCUER' ? '#2563eb' : '#16a34a',
+                        color: '#ffffff',
+                        padding: '1px 5px',
+                        borderRadius: 3,
+                        marginLeft: 3,
+                        letterSpacing: '0.2px',
+                        flexShrink: 0,
+                      }}
+                      title={
+                        sos.senderRole === 'RESCUER'
+                          ? 'Tín hiệu khẩn cấp từ lực lượng cứu hộ hiện trường'
+                          : 'Tín hiệu gửi trực tiếp từ ứng dụng SOS người dân'
+                      }
+                    >
+                      {sos.senderRole === 'RESCUER' ? 'RESCUER' : 'CITIZEN'}
+                    </span>
+                  )}
                 </div>
 
                 <div className="card-meta-top">
@@ -278,45 +345,34 @@ export const IncidentFeed = ({
                 </div>
               </div>
 
-              {/* Card Middle: Title + Chips + (Side Thumbnail) */}
+              {/* Card Middle: Request Type + Priority Targets + (Side Thumbnail) */}
               <div className="compact-card-content">
                 <div className="compact-card-text">
-                  <h3 className="compact-card-title" title={sos.title}>
-                    {sos.title}
+                  <h3 className="compact-card-title" title={emergencyTypeLabel}>
+                    {emergencyTypeLabel}
                   </h3>
-
-                  <div className="compact-chips-row">
-                    <span className="compact-type-chip">
-                      {lang === 'vi' ? typeInfo.labelVi : typeInfo.labelEn}
-                    </span>
-
-                    {!isAssigned ? (
-                      <span className="compact-status-chip unassigned">
-                        {lang === 'vi' ? 'Chưa gán' : 'Unassigned'}
+                  {priorityList.length > 0 && (
+                    <div className="compact-priority-groups">
+                      <span className="compact-priority-groups-label">
+                        {lang === 'vi' ? 'Ưu tiên: ' : 'Priority: '}
                       </span>
-                    ) : sos.status === 'COMPLETED' ? (
-                      <span className="compact-status-chip completed">
-                        {lang === 'vi' ? 'Hoàn thành' : 'Completed'}
-                      </span>
-                    ) : (
-                      <span className="compact-status-chip enroute">
-                        {lang === 'vi' ? 'Đang cứu' : 'Active'}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="compact-card-location" title={sos.locationName}>
-                    <MapPin size={11} className="compact-pin-icon" style={{ flexShrink: 0 }} />
-                    <span className="compact-location-text">{sos.locationName}</span>
-                  </div>
+                      <span className="compact-priority-groups-val">{priorityList.join(', ')}</span>
+                    </div>
+                  )}
                 </div>
 
-                {/* Elegant 48x48 Thumbnail on the right */}
+                {/* Elegant Thumbnail on the right */}
                 {sos.imageUrl && (
                   <div className="compact-card-thumb" title={lang === 'vi' ? 'Ảnh hiện trường' : 'Scene Photo'}>
                     <img src={sos.imageUrl} alt="Hiện trường" />
                   </div>
                 )}
+              </div>
+
+              {/* Vị trí nằm trọn vẹn bên trên vạch nét đứt */}
+              <div className="compact-card-location" title={sos.locationName}>
+                <MapPin size={11} className="compact-pin-icon" style={{ flexShrink: 0 }} />
+                <span className="compact-location-text">{sos.locationName}</span>
               </div>
 
               {/* Card Footer: Citizen name & Victim count (Clean, no emojis) */}

@@ -133,9 +133,9 @@ function MainRouter() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Điều hướng tab và cập nhật URL sạch (e.g. /localauthor/sos_requests hoặc /admin/map)
-  const handleNavSelect = (key: NavItemKey) => {
+  const handleNavSelect = (key: NavItemKey, subPath?: string) => {
     setActiveNavKey(key);
-    navigateTo(key, authUser);
+    navigateTo(key, authUser, subPath);
   };
 
   // Route Guard: Kiểm tra phiên và quyền hạn
@@ -307,7 +307,7 @@ function MainRouter() {
                 <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                   <DashboardViews
                     activeKey={activeNavKey}
-                    onOpenMap={() => handleNavSelect('map')}
+                    onOpenMap={(sosId?: string) => handleNavSelect('map', sosId)}
                     user={authUser || undefined}
                   />
                 </div>
