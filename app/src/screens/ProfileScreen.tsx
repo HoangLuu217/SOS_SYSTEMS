@@ -105,7 +105,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       )}
 
       {currentScreen === 'sos_history' && (
-        <SosHistoryScreen onBack={handleBackToOverview} />
+        <SosHistoryScreen
+          onBack={handleBackToOverview}
+          onNavigateToSos={() => onNavigateToTab?.('sos')}
+        />
       )}
 
       {currentScreen === 'professional_profile' && (

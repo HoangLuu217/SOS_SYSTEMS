@@ -17,6 +17,7 @@ import { CitizenSosTrackingModal } from './CitizenSosTrackingModal';
 
 interface SosHistoryScreenProps {
   onBack: () => void;
+  onNavigateToSos?: () => void;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: any }> = {
@@ -43,23 +44,30 @@ const TYPE_CONFIG: Record<string, string> = {
   OTHER: '⚠️ Khác',
 };
 
-export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack }) => {
+export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack, onNavigateToSos }) => {
   const [sosList, setSosList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedSosForTracking, setSelectedSosForTracking] = useState<any | null>(null);
   const [trackingModalVisible, setTrackingModalVisible] = useState<boolean>(false);
 
   const fetchSosHistory = async () => {
     try {
+      setErrorMessage(null);
       const res = await backendApi.get('/sos');
       if (res.success && Array.isArray(res.data)) {
         // Sort descending by createdAt
         const sorted = res.data.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setSosList(sorted);
+      } else {
+        if (!res.success && res.message) {
+          setErrorMessage(res.message);
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Lỗi lấy lịch sử SOS:', error);
+      setErrorMessage(error?.message || 'Không thể kết nối đến máy chủ.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -167,13 +175,43 @@ export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack }) =>
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={
-            <View style={styles.emptyBox}>
-              <View style={styles.emptyIconWrap}>
-                <Feather name="shield" size={48} color="#94A3B8" />
+            errorMessage ? (
+              <View style={styles.emptyBox}>
+                <View style={[styles.emptyIconWrap, { backgroundColor: '#FEF2F2' }]}>
+                  <Feather name="alert-triangle" size={40} color="#DC2626" />
+                </View>
+                <Text style={[styles.emptyTitle, { color: '#DC2626' }]}>Không thể tải dữ liệu</Text>
+                <Text style={styles.emptyDesc}>{errorMessage}</Text>
+                <TouchableOpacity
+                  style={[styles.emptyActionBtn, { backgroundColor: '#0066FF' }]}
+                  onPress={fetchSosHistory}
+                  activeOpacity={0.8}
+                >
+                  <Feather name="refresh-cw" size={15} color="#FFFFFF" />
+                  <Text style={styles.emptyActionBtnText}>Thử lại ngay</Text>
+                </TouchableOpacity>
               </View>
-              <Text style={styles.emptyTitle}>Chưa có dữ liệu</Text>
-              <Text style={styles.emptyDesc}>Bạn chưa gửi yêu cầu cứu nạn nào từ hệ thống này.</Text>
-            </View>
+            ) : (
+              <View style={styles.emptyBox}>
+                <View style={styles.emptyIconWrap}>
+                  <Feather name="shield" size={44} color="#94A3B8" />
+                </View>
+                <Text style={styles.emptyTitle}>Chưa có yêu cầu cứu nạn nào</Text>
+                <Text style={styles.emptyDesc}>
+                  Tài khoản của bạn chưa gửi ca báo nạn nào. Khi bạn gửi cứu trợ từ Tab SOS, toàn bộ tiến trình sẽ hiển thị tại đây.
+                </Text>
+                {onNavigateToSos && (
+                  <TouchableOpacity
+                    style={[styles.emptyActionBtn, { backgroundColor: '#DC2626' }]}
+                    onPress={onNavigateToSos}
+                    activeOpacity={0.85}
+                  >
+                    <Feather name="alert-octagon" size={16} color="#FFFFFF" />
+                    <Text style={styles.emptyActionBtnText}>Bấm gửi SOS khẩn cấp ngay</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )
           }
         />
       )}
@@ -352,5 +390,24 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 40,
     lineHeight: 22,
+  },
+  emptyActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 14,
+    marginTop: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  emptyActionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });
