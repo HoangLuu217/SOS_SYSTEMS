@@ -74,7 +74,6 @@ import {
   Phone,
   Eye,
   Trash2,
-  ExternalLink,
   Edit,
   Plus,
   Home,
@@ -276,7 +275,7 @@ const HazardMiniMap: React.FC<{
 
 interface DashboardViewsProps {
   activeKey: NavItemKey;
-  onOpenMap: (sosId?: string) => void;
+  onOpenMap: (sosId?: any) => void;
   user?: User;
 }
 
@@ -1450,7 +1449,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                   <button
                     type="button"
                     className="executive-link-btn bold"
-                    onClick={onOpenMap}
+                    onClick={() => onOpenMap()}
                   >
                     <span>Bản đồ chi tiết</span>
                     <ChevronRight size={13} />
@@ -2273,7 +2272,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
               <Radio size={18} color="#0284c7" />
               <span>Bảng Điều Phối &amp; Giám Sát Tiến Trình Thực Địa ({activeMissions.length} vụ đang xử lý)</span>
             </div>
-            <button type="button" className="sos-btn-action primary" onClick={onOpenMap}>
+            <button type="button" className="sos-btn-action primary" onClick={() => onOpenMap()}>
               Mở Bản Đồ Realtime
             </button>
           </div>
@@ -2893,7 +2892,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                       <td>
                         <button
                           type="button"
-                          onClick={onOpenMap}
+                          onClick={() => onOpenMap()}
                           className="sos-btn-action view"
                           title="Định vị điểm trú ẩn này trên Bản đồ tác chiến"
                         >
@@ -3462,7 +3461,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
               </span>
             </div>
 
-            <button type="button" className="sos-btn-action primary" onClick={onOpenMap} style={{ padding: '8px 14px' }}>
+            <button type="button" className="sos-btn-action primary" onClick={() => onOpenMap()} style={{ padding: '8px 14px' }}>
               <MapPin size={15} />
               <span>Mở Bản Đồ Tác Chiến</span>
             </button>
@@ -3940,7 +3939,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                                   type="button"
                                   className="sos-btn-action"
                                   style={{ background: '#f1f5f9', color: '#1e293b', border: '1px solid #cbd5e1' }}
-                                  onClick={onOpenMap}
+                                  onClick={() => onOpenMap()}
                                   title="Xem vị trí điểm nguy hiểm trên bản đồ tác chiến"
                                 >
                                   <MapPin size={13} color="#dc2626" />
