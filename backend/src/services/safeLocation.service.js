@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { SafeLocation, AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
 
@@ -8,17 +9,32 @@ class SafeLocationService {
   async createSafeLocation(data, actorId) {
     const { name, type, location, areaId, address, capacity, currentOccupancy, status } = data;
 
-    // Kiểm tra khu vực hành chính
-    const area = await AdministrativeArea.findById(areaId);
+    // Kiểm tra và gán khu vực hành chính linh hoạt
+    let area = null;
+    if (areaId && mongoose.isValidObjectId(areaId)) {
+      area = await AdministrativeArea.findById(areaId);
+    }
+    if (!area && areaId) {
+      area = await AdministrativeArea.findOne({
+        $or: [{ code: areaId }, { name: new RegExp(areaId, 'i') }],
+      });
+    }
     if (!area) {
-      throw new ApiError(404, 'Không tìm thấy Khu vực hành chính (areaId)');
+      area = await AdministrativeArea.findOne();
+    }
+    if (!area) {
+      area = await AdministrativeArea.create({
+        name: 'Thành phố Đà Nẵng',
+        code: 'DANANG_DEFAULT',
+        type: 'PROVINCE',
+      });
     }
 
     const safeLocation = await SafeLocation.create({
       name,
       type,
       location,
-      areaId,
+      areaId: area._id,
       address,
       capacity: capacity ?? 0,
       currentOccupancy: currentOccupancy ?? 0,
@@ -37,7 +53,7 @@ class SafeLocationService {
    */
   async getSafeLocations(query = {}) {
     const page = Math.max(1, parseInt(query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 10));
+    const limit = query.all === 'true' ? 500 : Math.min(200, Math.max(1, parseInt(query.limit, 10) || 10));
     const skip = (page - 1) * limit;
 
     const filter = {};
@@ -143,9 +159,18 @@ class SafeLocationService {
     }
 
     if (updateData.areaId) {
-      const area = await AdministrativeArea.findById(updateData.areaId);
-      if (!area) throw new ApiError(404, 'Khu vực hành chính mới (areaId) không tồn tại');
-      safeLocation.areaId = updateData.areaId;
+      let area = null;
+      if (mongoose.isValidObjectId(updateData.areaId)) {
+        area = await AdministrativeArea.findById(updateData.areaId);
+      }
+      if (!area) {
+        area = await AdministrativeArea.findOne({
+          $or: [{ code: updateData.areaId }, { name: new RegExp(updateData.areaId, 'i') }],
+        });
+      }
+      if (area) {
+        safeLocation.areaId = area._id;
+      }
     }
 
     await safeLocation.save();

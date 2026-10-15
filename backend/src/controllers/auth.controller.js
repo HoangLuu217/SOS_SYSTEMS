@@ -139,8 +139,8 @@ class AuthController {
    */
   async resetPassword(req, res, next) {
     try {
-      const { email, token, newPassword } = req.body;
-      const result = await authService.resetPassword({ email, token, newPassword });
+      const { email, account, identifier, token, newPassword } = req.body;
+      const result = await authService.resetPassword({ email, account, identifier, token, newPassword });
 
       // Đảm bảo xóa mọi phiên cookie cũ
       clearAuthCookies(res);

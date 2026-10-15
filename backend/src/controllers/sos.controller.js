@@ -37,13 +37,19 @@ const createSos = async (req, res, next) => {
 
 const getSosRequests = async (req, res, next) => {
   try {
-    const query = req.query;
-    const userRoles = req.user.roles || [];
+    const query = { ...req.query };
+    const userRoles = req.user?.roles || [];
     
     // Nếu user chỉ là CITIZEN (không phải Admin hay Authority), họ chỉ xem được SOS của họ
     const isCitizenOnly = userRoles.includes('CITIZEN') && !userRoles.some(r => ['ADMIN', 'LOCAL_AUTHORITY'].includes(r));
     if (isCitizenOnly) {
       query.citizenId = req.user._id;
+    }
+
+    // Cán bộ địa phương (LOCAL_AUTHORITY) chỉ get các ca SOS thuộc khu vực phân công
+    const isLocalAuthorityOnly = userRoles.includes('LOCAL_AUTHORITY') && !userRoles.includes('ADMIN');
+    if (isLocalAuthorityOnly && req.user?.authority?.areaId) {
+      query.areaId = req.user.authority.areaId;
     }
     
     const list = await sosService.getSosRequests(query);

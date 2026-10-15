@@ -28,7 +28,13 @@ class HazardReportController {
         },
       });
 
-      return sendSuccess(res, 201, 'Gửi đóng góp điểm nguy hiểm thành công! Đang ở trạng thái PENDING chờ chính quyền duyệt.', report);
+      const isAuth = userRoles.includes('LOCAL_AUTHORITY') || userRoles.includes('ADMIN');
+      const message = isAuth
+        ? (report.status === 'APPROVED'
+            ? 'Tạo điểm nguy hiểm thành công và đã được công bố trên bản đồ!'
+            : 'Tạo điểm nguy hiểm thành công (Lưu nháp / Chờ duyệt)!')
+        : 'Gửi đóng góp điểm nguy hiểm thành công! Đang ở trạng thái PENDING chờ chính quyền duyệt.';
+      return sendSuccess(res, 201, message, report);
     } catch (error) {
       next(error);
     }
@@ -154,6 +160,20 @@ class HazardReportController {
       clearInterval(heartbeatTimer);
       eventBus.off('hazard_event', onHazardEvent);
     });
+  }
+
+  /**
+   * POST /hazard-reports/resolve-map-link
+   * Giải mã liên kết Google Maps (kể cả shortlink) thành tọa độ GPS
+   */
+  async resolveMapLink(req, res, next) {
+    try {
+      const url = req.body?.url || req.query?.url;
+      const result = await hazardReportService.resolveMapLink(url);
+      return sendSuccess(res, 200, 'Giải mã liên kết Google Maps thành công', result);
+    } catch (error) {
+      next(error);
+    }
   }
 }
 

@@ -11,14 +11,24 @@ const {
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
 const nodemailer = require('nodemailer');
+const path = require('path');
+const fs = require('fs');
 const ApiError = require('../utils/apiError');
 const { hashToken } = require('../utils/token.util');
+
+const getLogoPath = () => {
+  const backendAsset = path.join(__dirname, '../../assets/logoSOS.png');
+  if (fs.existsSync(backendAsset)) return backendAsset;
+  const appAsset = path.join(__dirname, '../../../app/assets/logoSOS.png');
+  if (fs.existsSync(appAsset)) return appAsset;
+  return null;
+};
 
 function generateRandomPassword(length = 10) {
   const uppers = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const lowers = 'abcdefghjkmnpqrstuvwxyz';
   const numbers = '23456789';
-  const specials = '!@#$%&*';
+  const specials = '!@$*._';
   const all = uppers + lowers + numbers + specials;
   let pwd = '';
   pwd += uppers[Math.floor(Math.random() * uppers.length)];
@@ -154,26 +164,6 @@ class AdminService {
       const newAreaId = authInput.areaId || data.areaId || user.authority?.areaId;
       const newPosition = (authInput.position || data.position || user.authority?.position || 'Chỉ Huy Trực Ban Tác Chiến').trim();
       const newDepartment = (authInput.department || data.department || user.authority?.department || (newAreaName ? `Ban Chỉ Huy PCTT ${newAreaName}` : 'Ban Chỉ Huy PCTT')).trim();
-
-      // Kiểm tra nếu đổi sang địa bàn khác mà địa bàn đó đã có cán bộ khác quản lý
-      if (newAreaName && (!user.authority?.areaName || user.authority.areaName.toLowerCase() !== newAreaName.toLowerCase())) {
-        const normalizedAreaName = newAreaName.replace(/^(Phường|Xã|Quận|Huyện)\s+/i, '').trim();
-        const existingOfficer = await User.findOne({
-          _id: { $ne: id },
-          roles: 'LOCAL_AUTHORITY',
-          status: { $ne: 'DELETED' },
-          $or: [
-            { 'authority.areaName': new RegExp(`^${newAreaName}$`, 'i') },
-            { 'authority.areaName': new RegExp(normalizedAreaName, 'i') },
-          ],
-        });
-        if (existingOfficer) {
-          throw new ApiError(
-            400,
-            `Khu vực "${newAreaName}" đã được quản lý bởi cán bộ ${existingOfficer.fullName} (${existingOfficer.phone}).`
-          );
-        }
-      }
 
       let matchedAreaDoc = null;
       if (newAreaId && mongoose.Types.ObjectId.isValid(newAreaId)) {
@@ -322,32 +312,6 @@ class AdminService {
       const finalAreaId = matchedAreaDoc ? matchedAreaDoc._id : new mongoose.Types.ObjectId();
       const finalAreaName = inputAreaName || matchedAreaDoc?.name || 'Phường Hòa Cường';
 
-      // Kiểm tra độc quyền địa bàn: Mỗi phường/xã chỉ được phép có 1 tài khoản cán bộ quản lý
-      const normalizedAreaName = (finalAreaName || inputAreaName)
-        .replace(/^(Phường|Xã|Quận|Huyện)\s+/i, '')
-        .trim();
-
-      const queryOr = [
-        { 'authority.areaName': new RegExp(`^${finalAreaName}$`, 'i') },
-        { 'authority.areaName': new RegExp(normalizedAreaName, 'i') },
-      ];
-      if (finalAreaId && mongoose.Types.ObjectId.isValid(finalAreaId)) {
-        queryOr.push({ 'authority.areaId': finalAreaId });
-      }
-
-      const existingAuthorityUser = await User.findOne({
-        roles: 'LOCAL_AUTHORITY',
-        status: { $ne: 'DELETED' },
-        $or: queryOr,
-      });
-
-      if (existingAuthorityUser) {
-        throw new ApiError(
-          400,
-          `Khu vực "${finalAreaName}" đã có tài khoản cán bộ quản lý (${existingAuthorityUser.fullName} - SĐT: ${existingAuthorityUser.phone}). Mỗi phường/khu vực chỉ được phép có 1 tài khoản điều phối.`
-        );
-      }
-
       authorityData = {
         organizationId: orgId,
         areaId: finalAreaId,
@@ -376,75 +340,121 @@ class AdminService {
     if (email && email.trim()) {
       try {
         const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-        const changePasswordUrl = `${clientUrl}/login?view=reset&email=${encodeURIComponent(email.trim().toLowerCase())}&token=${resetToken}`;
+        const changePasswordUrl = `${clientUrl}/login?view=reset&account=${encodeURIComponent(cleanPhone)}`;
         const loginUrl = `${clientUrl}/login`;
 
         const sender = process.env.EMAIL_FROM || 'auth@rescuesos.hoangluu.id.vn';
         const fromAddress = sender.includes('<') ? sender : `SOS Systems <${sender}>`;
 
+        const cityName =
+          data.city ||
+          (data.department?.match(/\(([^)]+)\)/)?.[1]) ||
+          (authority?.department?.match(/\(([^)]+)\)/)?.[1]) ||
+          'TP Đà Nẵng';
+        const areaLabel = authorityData?.areaName || 'Địa bàn phụ trách';
+
+        const logoFile = getLogoPath();
+        const attachments = logoFile
+          ? [
+              {
+                filename: 'logoSOS.png',
+                path: logoFile,
+                cid: 'logoSOS',
+              },
+            ]
+          : [];
+
+        const logoHtml = logoFile
+          ? `<div style="text-align: center; margin-bottom: 14px;">
+               <img src="cid:logoSOS" alt="Logo SOS" style="width: 58px; height: 58px; object-fit: contain; display: inline-block; border-radius: 12px;" />
+             </div>`
+          : '';
+
         const mailOptions = {
           from: fromAddress,
           to: email.trim().toLowerCase(),
-          subject: `[SOS SYSTEMS] Cấp tài khoản Cán bộ & Quyền quản lý ${authorityData?.areaName || 'Địa bàn'}`,
+          subject: `[SOS SYSTEMS] Cấp tài khoản Cán bộ & Quyền điều phối tác chiến ${areaLabel} (${cityName})`,
+          attachments,
           html: `
-            <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 28px 24px; border: 1px solid #E2E8F0; border-radius: 20px; background-color: #FFFFFF;">
-              <div style="text-align: center; margin-bottom: 16px;">
-                <h2 style="color: #0066FF; margin: 0 0 6px; font-size: 22px; font-weight: 800; letter-spacing: 0.5px;">HỆ THỐNG CỨU HỘ SOS ĐÀ NẴNG</h2>
-                <p style="color: #64748B; font-size: 13.5px; margin: 0;">Thông Báo Cấp Tài Khoản Điều Phối Tác Chiến Địa Bàn</p>
+            <div style="background-color: #f1f5f9; padding: 32px 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
+              <div style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);">
+                <div style="height: 4px; background: #0284c7;"></div>
+                <div style="padding: 32px 28px 28px;">
+                  ${logoHtml}
+                  <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="display: inline-block; padding: 4px 12px; background-color: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 9999px; font-size: 11px; font-weight: 700; color: #475569; letter-spacing: 0.6px; text-transform: uppercase;">
+                      HỆ THỐNG ĐIỀU PHỐI CỨU HỘ KHẨN CẤP SOS
+                    </div>
+                    <h1 style="color: #0f172a; margin: 12px 0 6px; font-size: 21px; font-weight: 700; letter-spacing: -0.3px; line-height: 1.3;">
+                      Thông Báo Cấp Quyền Điều Hành Tác Chiến
+                    </h1>
+                    <p style="color: #64748b; font-size: 13.5px; margin: 0;">
+                      Địa bàn phụ trách: <strong style="color: #0f172a;">${areaLabel}</strong> • ${cityName}
+                    </p>
+                  </div>
+
+                  <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 20px 0;" />
+
+                  <p style="font-size: 14.5px; color: #1e293b; margin: 0 0 12px; line-height: 1.6;">
+                    Kính gửi Đồng chí <strong>${fullName}</strong>,
+                  </p>
+                  <p style="font-size: 14px; color: #475569; margin: 0 0 20px; line-height: 1.6;">
+                    Ban Điều Hành Hệ Thống xin trân trọng thông báo: Tài khoản cán bộ điều phối tác chiến cứu hộ của đồng chí đã được khởi tạo và sẵn sàng đưa vào vận hành tại địa bàn được phân công. Thông tin tiếp nhận nhiệm vụ cụ thể như sau:
+                  </p>
+
+                  <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 16px 20px; margin: 0 0 24px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 13.5px;">
+                      <tr>
+                        <td style="padding: 8px 0; color: #64748b; width: 38%; vertical-align: middle;">Tài khoản đăng nhập</td>
+                        <td style="padding: 8px 0; color: #0f172a; font-weight: 700; font-size: 15px; vertical-align: middle;">${cleanPhone}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #64748b; border-top: 1px solid #f1f5f9; vertical-align: middle;">Mật khẩu khởi tạo</td>
+                        <td style="padding: 8px 0; border-top: 1px solid #f1f5f9; vertical-align: middle;">
+                          <code style="font-family: Consolas, Monaco, 'Courier New', monospace; font-size: 14px; font-weight: 700; color: #0369a1; background: #e0f2fe; padding: 4px 10px; border-radius: 6px; border: 1px solid #bae6fd; letter-spacing: 0.5px;">${plainPassword}</code>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #64748b; border-top: 1px solid #f1f5f9; vertical-align: middle;">Địa bàn phụ trách</td>
+                        <td style="padding: 8px 0; color: #0f172a; font-weight: 600; border-top: 1px solid #f1f5f9; vertical-align: middle;">
+                          ${areaLabel} <span style="font-weight: 400; color: #64748b; font-size: 12.5px;">(${cityName})</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #64748b; border-top: 1px solid #f1f5f9; vertical-align: middle;">Chức danh trực ban</td>
+                        <td style="padding: 8px 0; color: #334155; font-weight: 500; border-top: 1px solid #f1f5f9; vertical-align: middle;">${authorityData?.position || 'Chỉ Huy Trực Ban Tác Chiến'}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #64748b; border-top: 1px solid #f1f5f9; vertical-align: middle;">Đơn vị trực thuộc</td>
+                        <td style="padding: 8px 0; color: #334155; border-top: 1px solid #f1f5f9; vertical-align: middle;">${authorityData?.department || `Ban Chỉ Huy PCTT ${areaLabel}`}</td>
+                      </tr>
+                    </table>
+                  </div>
+
+                  <div style="text-align: center; margin: 24px 0 14px;">
+                    <a href="${changePasswordUrl}" style="display: inline-block; background-color: #0284c7; color: #ffffff; font-weight: 600; font-size: 14px; text-decoration: none; padding: 12px 28px; border-radius: 8px; box-shadow: 0 1px 3px rgba(2, 132, 199, 0.3);">
+                      Đổi Mật Khẩu
+                    </a>
+                  </div>
+                  <div style="text-align: center; margin-bottom: 22px;">
+                    <a href="${loginUrl}" style="font-size: 13px; color: #475569; text-decoration: underline;">
+                      Hoặc truy cập trực tiếp trang đăng nhập hệ thống
+                    </a>
+                  </div>
+
+                  <div style="background-color: #f8fafc; border-left: 3px solid #0284c7; border-radius: 0 6px 6px 0; padding: 12px 14px; font-size: 12.5px; color: #475569; line-height: 1.5; margin-bottom: 24px;">
+                    <strong style="color: #0f172a;">Lưu ý bảo mật:</strong> Vì lý do an toàn thông tin điều hành tác chiến, đồng chí vui lòng đổi mật khẩu cá nhân ngay sau lần đăng nhập đầu tiên. Liên kết đổi mật khẩu có hiệu lực trong vòng 7 ngày.
+                  </div>
+
+                  <div style="border-top: 1px solid #f1f5f9; padding-top: 18px; text-align: center;">
+                    <p style="font-size: 12px; font-weight: 600; color: #64748b; margin: 0 0 4px;">Hệ Thống Thông Tin Điều Phối &amp; Cứu Nạn SOS (${cityName})</p>
+                    <p style="font-size: 11.5px; color: #94A3B8; margin: 0; line-height: 1.5;">Thư điện tử thông báo công vụ gửi tự động từ máy chủ chỉ huy tác chiến • Vui lòng không phản hồi thư này.</p>
+                  </div>
+                </div>
               </div>
-              <hr style="border: 0; border-top: 1px solid #E2E8F0; margin: 18px 0;" />
-
-              <p style="font-size: 15px; color: #1E293B;">Kính gửi đồng chí <strong>${fullName}</strong>,</p>
-              <p style="font-size: 14.5px; color: #334155; line-height: 1.6;">
-                Tài khoản Cán bộ Điều phối Tác chiến của đồng chí đã được Tổng Chỉ Huy TP Đà Nẵng khởi tạo thành công trên hệ thống với thông tin đăng nhập như sau:
-              </p>
-
-              <div style="background-color: #F8FAFC; border: 1.5px solid #CBD5E1; border-radius: 12px; padding: 18px; margin: 20px 0;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                  <tr>
-                    <td style="padding: 6px 0; color: #64748B; width: 40%;">Tài khoản (Số ĐT):</td>
-                    <td style="padding: 6px 0; color: #0F172A; font-weight: 700; font-family: monospace; font-size: 16px;">${cleanPhone}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 6px 0; color: #64748B;">Mật khẩu khởi tạo / Mã Token:</td>
-                    <td style="padding: 6px 0; color: #0284C7; font-weight: 700; font-family: monospace; font-size: 16px;">
-                      <span style="background: #E0F2FE; padding: 3px 10px; border-radius: 6px; border: 1px solid #BAE6FD; letter-spacing: 1px;">${plainPassword}</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 6px 0; color: #64748B;">Địa bàn quản lý:</td>
-                    <td style="padding: 6px 0; color: #10B981; font-weight: 700;">${authorityData?.areaName || 'TP Đà Nẵng'}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 6px 0; color: #64748B;">Chức vụ tác chiến:</td>
-                    <td style="padding: 6px 0; color: #334155;">${authorityData?.position || 'Chỉ Huy Trực Ban Tác Chiến'}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 6px 0; color: #64748B;">Đơn vị trực thuộc:</td>
-                    <td style="padding: 6px 0; color: #334155;">${authorityData?.department || 'Ban Chỉ Huy PCTT Địa Phương'}</td>
-                  </tr>
-                </table>
-              </div>
-
-              <div style="margin: 24px 0 16px; text-align: center;">
-                <a href="${changePasswordUrl}" style="display: inline-block; background: #0284C7; color: #FFFFFF; font-weight: 700; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-size: 14px; margin-right: 8px;">
-                  🔐 Đổi Mật Khẩu Ngay
-                </a>
-                <a href="${loginUrl}" style="display: inline-block; background: #0F172A; color: #FFFFFF; font-weight: 700; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-size: 14px;">
-                  🚀 Đăng Nhập Hệ Thống
-                </a>
-              </div>
-
-              <p style="font-size: 12.5px; color: #64748B; line-height: 1.5; margin-top: 18px;">
-                <em>* Lưu ý:</em> Vì lý do an toàn bảo mật, đồng chí vui lòng truy cập đường link trên để đổi mật khẩu cá nhân trong lần đăng nhập đầu tiên.
-              </p>
-              <hr style="border: 0; border-top: 1px solid #E2E8F0; margin: 18px 0;" />
-              <p style="font-size: 12px; color: #94A3B8; text-align: center; margin: 0;">
-                SOS Systems – Trung Tâm Điều Phối Tác Chiến Phòng Chống Thiên Tai & Cứu Hộ TP Đà Nẵng
-              </p>
             </div>
           `,
-          text: `Tài khoản Cán bộ SOS: SĐT: ${cleanPhone} | Mật khẩu: ${plainPassword} | Địa bàn: ${authorityData?.areaName}. Link đổi mật khẩu: ${changePasswordUrl}`,
+          text: `Kính gửi đồng chí ${fullName},\nTài khoản Cán bộ Điều phối Tác chiến SOS của đồng chí:\n- Số ĐT: ${cleanPhone}\n- Mật khẩu khởi tạo: ${plainPassword}\n- Địa bàn: ${areaLabel} (${cityName})\n- Chức danh: ${authorityData?.position || 'Chỉ Huy Trực Ban Tác Chiến'}\nLiên kết kích hoạt & đổi mật khẩu: ${changePasswordUrl}\nĐăng nhập: ${loginUrl}`,
         };
 
         const apiKey = process.env.RESEND_API_KEY;
@@ -472,6 +482,21 @@ class AdminService {
     userObj.initialPassword = plainPassword;
     userObj.emailSent = emailSent;
     if (emailError) userObj.emailError = emailError;
+
+    // Tự động nạp trước và cache ranh giới boundary GeoJSON cho địa bàn nếu là cán bộ địa phương
+    if (roles.includes('LOCAL_AUTHORITY') && authorityData?.areaId) {
+      try {
+        const administrativeAreaService = require('./administrativeArea.service');
+        const provName = data.city || (data.department ? data.department.match(/\((.*?)\)/)?.[1] : null) || '';
+        administrativeAreaService.getBoundaryForArea({
+          areaId: authorityData.areaId,
+          name: authorityData.areaName,
+          province: provName,
+        }).catch((err) => console.warn('Lỗi tải trước boundary:', err.message));
+      } catch (err) {
+        // ignore
+      }
+    }
 
     return userObj;
   }

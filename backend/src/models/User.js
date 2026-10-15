@@ -23,6 +23,21 @@ const citizenSchema = new mongoose.Schema(
       },
       relation: { type: String, trim: true, default: null },
     },
+    areaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AdministrativeArea',
+      default: null,
+    },
+    areaName: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    pushToken: {
+      type: String,
+      trim: true,
+      default: null,
+    },
   },
   { _id: false }
 );
@@ -315,6 +330,16 @@ const userSchema = new mongoose.Schema(
     },
     lastLoginAt: {
       type: Date,
+      default: null,
+    },
+    pushToken: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    areaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AdministrativeArea',
       default: null,
     },
   },

@@ -139,7 +139,7 @@ export const TerritorialMapCanvas = ({
   activeOfficer,
   onSwitchScreen: _onSwitchScreen,
 }: Props) => {
-  const { t, mapMode, mapCleanMode } = useApp();
+  const { t, mapMode } = useApp();
   const isAdmin = activeOfficer?.role === 'ADMIN';
   const officerAreaId = activeOfficer?.jurisdictionAreaId || '';
   const officerArea = areas.find((a) => a.id === officerAreaId);
@@ -196,7 +196,7 @@ export const TerritorialMapCanvas = ({
   // Google Maps Tile URL
   const googleTilesUrl = mapMode === 'satellite'
     ? GOOGLE_MAP_TILES.SATELLITE
-    : (mapCleanMode ? GOOGLE_MAP_TILES.STREETS_CLEAN : GOOGLE_MAP_TILES.STREETS_FULL);
+    : GOOGLE_MAP_TILES.STREETS_CLEAN;
 
   // Manual Zoom controls
   const handleZoom = (delta: number) => {
@@ -493,6 +493,7 @@ export const TerritorialMapCanvas = ({
       <MapContainer
         center={mapTarget.center}
         zoom={mapTarget.zoom}
+        preferCanvas={true}
         zoomControl={false}
         attributionControl={false}
         style={{ width: '100%', height: '100%' }}

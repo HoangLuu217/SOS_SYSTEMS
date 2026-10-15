@@ -82,6 +82,29 @@ export const MissionDispatch = ({
   // Left Feed Collapse state
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
 
+  // Multi-selected rescue teams for live GPS preview and dispatching
+  const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (assignment?.rescueTeamId) {
+      setSelectedTeamIds(assignment.rescueTeamId.split(',').filter(Boolean));
+    } else {
+      const officerAreaId = !activeOfficer?.role?.includes('ADMIN') ? activeOfficer?.jurisdictionAreaId : undefined;
+      const targetDistrictId =
+        selectedSos?.districtId || (officerAreaId && !officerAreaId.startsWith('area-h') ? officerAreaId : 'area-hc');
+      const filtered = rescueTeams.filter((t) => {
+        if (officerAreaId && (t as any).wardId === officerAreaId) return true;
+        if (selectedSos?.wardId && (t as any).wardId === selectedSos.wardId) return true;
+        if (targetDistrictId && t.districtId === targetDistrictId) return true;
+        return false;
+      });
+      const defaultTeam = filtered[0] || rescueTeams[0];
+      if (defaultTeam) {
+        setSelectedTeamIds([defaultTeam.id]);
+      }
+    }
+  }, [selectedSos?.id, assignment?.rescueTeamId, rescueTeams]);
+
   // Right Panel Slide & Resizable state ("kéo ra kéo vào")
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
   const [rightPanelWidth, setRightPanelWidth] = useState(390);
@@ -186,6 +209,9 @@ export const MissionDispatch = ({
           areas={areas}
           sosRequests={sosRequests}
           onSelectSos={onSelectSos}
+          previewTeamIds={selectedTeamIds}
+          rescueTeams={rescueTeams}
+          vehicles={vehicles}
         />
 
         {/* Floating Incident Queue Overlaid on Map */}
@@ -322,6 +348,8 @@ export const MissionDispatch = ({
           onOpenReassign={() => setIsReassignOpen(true)}
           onOpenCancel={() => setIsCancelOpen(true)}
           onToggleCollapse={toggleRightPanel}
+          selectedTeamIds={selectedTeamIds}
+          onSelectedTeamsChange={setSelectedTeamIds}
         />
       </div>
 

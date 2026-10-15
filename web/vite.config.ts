@@ -19,8 +19,12 @@ export default defineConfig(({ mode }) => {
           target: backendUrl,
           changeOrigin: true,
           ws: true,
+          secure: false,
         },
       },
+    },
+    optimizeDeps: {
+      include: ['socket.io-client'],
     },
   }
 })

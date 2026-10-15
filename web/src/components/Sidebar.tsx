@@ -4,6 +4,7 @@ import {
   fetchSosRequests,
   fetchAdminUsers,
   fetchHazardReports,
+  fetchSafeLocations,
   updateUserProfile,
   sendPhoneOtp,
   verifyPhoneOtp,
@@ -22,10 +23,10 @@ import {
   LifeBuoy,
   Package,
   Bell,
+  Home,
   AlertTriangle,
   BarChart3,
   History,
-  Settings,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -34,7 +35,6 @@ import {
   UserCheck,
   Building2,
   Globe2,
-  Shield,
   Check,
   MessageSquare,
 } from 'lucide-react';
@@ -111,6 +111,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     active: 6, // Mặc định 6 vụ như yêu cầu hiển thị badge
   });
   const [hazardCount, setHazardCount] = useState<number>(0);
+  const [shelterCount, setShelterCount] = useState<number>(0);
   const [pendingRescuersCount, setPendingRescuersCount] = useState<number>(0);
 
   // Đồng bộ số liệu thời gian thực
@@ -140,6 +141,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const hazardRes = await fetchHazardReports({ status: 'PENDING' });
       if (hazardRes.success && hazardRes.data) {
         setHazardCount(hazardRes.data.counts?.PENDING ?? hazardRes.data.reports?.length ?? 0);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const shelterRes = await fetchSafeLocations();
+      if (shelterRes.success && Array.isArray(shelterRes.data)) {
+        setShelterCount(shelterRes.data.length);
       }
     } catch {
       // ignore
@@ -235,12 +245,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           key: 'alerts',
-          label: 'Phát cảnh báo & Trạm trú ẩn',
+          label: 'Phát cảnh báo khẩn cấp',
           icon: <Bell size={18} className="sos-nav-icon" />,
         },
         {
+          key: 'shelters',
+          label: 'Điểm trú ẩn & Trạm an toàn',
+          useCase: 'UC-L12',
+          icon: <Home size={18} className="sos-nav-icon" />,
+          badge: shelterCount > 0 ? `${shelterCount}` : undefined,
+          badgeType: 'info',
+        },
+        {
           key: 'hazard_reports',
-          label: 'Duyệt điểm nguy hiểm',
+          label: 'Quản lý điểm nguy hiểm',
+          useCase: 'UC-L15',
           icon: <AlertTriangle size={18} className="sos-nav-icon" />,
           badge: hazardCount > 0 ? `${hazardCount}` : undefined,
           badgeType: 'info',
@@ -305,11 +324,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           key: 'areas',
           label: 'Khu vực hành chính',
           icon: <Globe2 size={18} className="sos-nav-icon" />,
-        },
-        {
-          key: 'rbac',
-          label: 'Phân quyền & Vai trò',
-          icon: <Shield size={18} className="sos-nav-icon" />,
         },
       ],
     },
@@ -752,18 +766,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           3. FOOTER CỦA SIDEBAR (GHIM CỐ ĐỊNH Ở DƯỚI CÙNG)
           =================================================================== */}
       <div className="sos-sidebar-footer">
-        {/* Cài đặt hệ thống (Icon: Settings/Gear) */}
-        <div
-          className={`sos-settings-item ${isItemActive('settings') ? 'active' : ''}`}
-          onClick={() => handleItemClick('settings')}
-          title="Cài đặt hệ thống"
-          role="button"
-          tabIndex={0}
-        >
-          <Settings size={18} className="sos-nav-icon" />
-          {!collapsed && <span className="sos-settings-label">Cài đặt hệ thống</span>}
-        </div>
-
         {/* Khung User Profile (Avatar, Tên, Chức vụ, Nút Đăng xuất) */}
         <div className="sos-user-profile-card">
           <div

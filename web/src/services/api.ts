@@ -71,7 +71,7 @@ async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Pr
     try {
       const u = JSON.parse(userStr);
       userId = u._id || u.id || '';
-    } catch {}
+    } catch { }
   }
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -204,8 +204,9 @@ export async function logoutApi(): Promise<void> {
 }
 
 export async function resetPasswordApi(payload: {
+  account?: string;
   email?: string;
-  token: string;
+  token?: string;
   newPassword: string;
 }): Promise<{ success: boolean; message: string }> {
   const res = await fetch(`${API_BASE}/auth/reset-password`, {
@@ -418,6 +419,57 @@ export async function createAlert(payload: {
   });
 }
 
+export interface BroadcastNotificationPayload {
+  title: string;
+  content: string;
+  type: 'INSTANT' | 'SYSTEM' | string;
+  areaId?: string;
+  priority?: 'NORMAL' | 'HIGH' | 'CRITICAL' | string;
+  data?: any;
+}
+
+export interface BroadcastItem {
+  id: string;
+  title: string;
+  content: string;
+  type: 'INSTANT' | 'SYSTEM' | string;
+  priority?: string;
+  areaName?: string;
+  areaId?: string;
+  createdBy?: {
+    _id: string;
+    fullName: string;
+    phone?: string;
+    roles?: string[];
+  };
+  createdAt: string;
+  recipientsCount?: number;
+}
+
+export async function broadcastNotificationApi(
+  payload: BroadcastNotificationPayload
+): Promise<{ success: boolean; data: any; message?: string }> {
+  return fetchWithAuth('/notifications/broadcast', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchBroadcastHistory(query?: {
+  type?: string;
+  areaId?: string;
+}): Promise<{ success: boolean; data: BroadcastItem[] }> {
+  const params = new URLSearchParams();
+  if (query?.type) params.append('type', query.type);
+  if (query?.areaId) params.append('areaId', query.areaId);
+  const qStr = params.toString() ? `?${params.toString()}` : '';
+  return fetchWithAuth(`/notifications/broadcasts${qStr}`, { method: 'GET' });
+}
+
+export async function deleteBroadcastApi(id: string): Promise<{ success: boolean; message: string }> {
+  return fetchWithAuth(`/notifications/broadcasts/${id}`, { method: 'DELETE' });
+}
+
 // ─── ADMINISTRATIVE AREAS & ORGANIZATIONS ────────────────────────────────────
 
 export async function fetchAdministrativeAreas(): Promise<{ success: boolean; data: AdministrativeAreaItem[] }> {
@@ -440,6 +492,44 @@ export async function syncAdministrativeAreasToBackend(payload: {
     });
   } catch (e) {
     console.warn('Sync administrative areas to MongoDB failed:', e);
+    return { success: false, data: null };
+  }
+}
+
+export async function fetchAreaBoundary(params: {
+  areaId?: string;
+  name?: string;
+  province?: string;
+  district?: string;
+}): Promise<{
+  success: boolean;
+  data: {
+    areaId: string;
+    name: string;
+    code: string;
+    boundary: {
+      type: 'Polygon' | 'MultiPolygon';
+      coordinates: any;
+    };
+    source: string;
+  } | null;
+}> {
+  try {
+    const q = new URLSearchParams();
+    if (params.areaId) q.append('areaId', params.areaId);
+    if (params.name) q.append('name', params.name);
+    if (params.province) q.append('province', params.province);
+    if (params.district) q.append('district', params.district);
+
+    const res = await fetchWithAuth<any>(`/administrative-areas/boundary?${q.toString()}`, {
+      method: 'GET',
+    });
+    if (res && res.success && res.data) {
+      return { success: true, data: res.data };
+    }
+    return { success: false, data: null };
+  } catch (e) {
+    console.warn('Lỗi gọi API lấy boundary:', e);
     return { success: false, data: null };
   }
 }
@@ -563,12 +653,15 @@ export async function createHazardReport(payload: {
   title: string;
   description: string;
   hazardType: string;
+  customHazardType?: string;
   severity: string;
   location: { type: 'Point'; coordinates: [number, number] };
   address: string;
   areaId?: string;
   images?: string[];
-}): Promise<{ success: boolean; data: HazardReportItem }> {
+  status?: 'APPROVED' | 'PENDING' | string;
+  reviewNote?: string;
+}): Promise<{ success: boolean; data: HazardReportItem; message?: string }> {
   return fetchWithAuth('/hazard-reports', {
     method: 'POST',
     body: JSON.stringify(payload),
@@ -578,6 +671,20 @@ export async function createHazardReport(payload: {
 export async function deleteHazardReport(id: string): Promise<{ success: boolean; message: string }> {
   return fetchWithAuth(`/hazard-reports/${id}`, {
     method: 'DELETE',
+  });
+}
+
+/**
+ * Giải mã liên kết Google Maps hoặc chuỗi tọa độ qua Backend (hỗ trợ cả link rút gọn)
+ */
+export async function resolveMapLink(url: string): Promise<{
+  success: boolean;
+  data?: { lat: number; lng: number; placeName?: string; resolvedUrl?: string; source?: string };
+  message?: string;
+}> {
+  return fetchWithAuth('/hazard-reports/resolve-map-link', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
   });
 }
 
@@ -612,6 +719,38 @@ export function subscribeHazardEvents(onEvent: (payload: { action: 'CREATED' | '
   };
 }
 
+/**
+ * Đăng ký lắng nghe sự kiện Server-Sent Events (SSE) theo thời gian thực cho Thông báo & Cảnh báo khẩn cấp
+ */
+export function subscribeNotificationEvents(onEvent: (payload: { action: 'BROADCAST' | 'USER' | 'DELETED'; data?: any; broadcastId?: string }) => void): () => void {
+  let eventSource: EventSource | null = null;
+  try {
+    eventSource = new EventSource('/api/notifications/stream');
+    eventSource.onmessage = (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        if (payload && (payload.action === 'BROADCAST' || payload.action === 'USER' || payload.action === 'DELETED')) {
+          onEvent(payload);
+        }
+      } catch (err) {
+        console.warn('[SSE] Lỗi giải mã gói tin thông báo thời gian thực:', err);
+      }
+    };
+    eventSource.onerror = () => {
+      // EventSource tự động reconnect khi mất kết nối
+    };
+  } catch (err) {
+    console.warn('[SSE] Không thể kết nối EventSource notifications:', err);
+  }
+
+  return () => {
+    if (eventSource) {
+      eventSource.close();
+    }
+  };
+}
+
+
 // ─── SAFE LOCATIONS (ĐIỂM TRÚ ẨN & TRẠM Y TẾ AN TOÀN) ─────────────────────────
 
 export async function fetchSafeLocations(params: Record<string, string> = {}): Promise<{ success: boolean; data: SafeLocationItem[] }> {
@@ -630,12 +769,42 @@ export async function createSafeLocation(payload: {
   address: string;
   capacity: number;
   currentOccupancy?: number;
+  status?: string;
   areaId: string;
   location: { type: 'Point'; coordinates: [number, number] };
-}): Promise<{ success: boolean; data: SafeLocationItem }> {
+}): Promise<{ success: boolean; data: SafeLocationItem; message?: string }> {
   return fetchWithAuth('/safe-locations', {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+}
+
+// ─── SAFE LOCATIONS (ĐIỂM TRÚ ẨN AN TOÀN) ──────────────────────────────────
+
+export async function updateSafeLocation(
+  id: string,
+  payload: Partial<{
+    name: string;
+    type: string;
+    address: string;
+    capacity: number;
+    currentOccupancy: number;
+    status: string;
+    areaId: string;
+    location: { type: 'Point'; coordinates: [number, number] };
+  }>
+): Promise<{ success: boolean; data: SafeLocationItem; message?: string }> {
+  return fetchWithAuth(`/safe-locations/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteSafeLocation(
+  id: string
+): Promise<{ success: boolean; message: string }> {
+  return fetchWithAuth(`/safe-locations/${id}`, {
+    method: 'DELETE',
   });
 }
 
@@ -678,7 +847,7 @@ export async function markChatMessagesRead(payload: {
   partnerId?: string;
 }): Promise<{ success: boolean; data: any }> {
   return fetchWithAuth('/chat/read', {
-    method: 'PATCH',
+    method: 'POST',
     body: JSON.stringify(payload),
   });
 }
@@ -764,7 +933,3 @@ export async function verifyPhoneOtp(phone: string, otp: string): Promise<{ succ
     body: JSON.stringify({ phone, otp }),
   });
 }
-
-
-
-

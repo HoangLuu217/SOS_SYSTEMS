@@ -6,7 +6,7 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { SignupScreen } from './src/screens/SignupScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
-import { MapScreen } from './src/screens/MapScreen';
+import { MapScreen, MapFilterType } from './src/screens/MapScreen';
 import { SosScreen } from './src/screens/SosScreen';
 import { NewsScreen } from './src/screens/NewsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
@@ -17,6 +17,10 @@ import { BottomNav, TabName } from './src/components/BottomNav';
 import { LogoSOS } from './src/components/LogoSOS';
 import { BACKGROUND_APP_SOURCE } from './src/constants/backgroundBase64';
 
+import { registerForPushNotificationsAsync } from './src/services/pushNotificationService';
+import { NotificationProvider, useNotifications } from './src/context/NotificationContext';
+import { InAppNotificationBanner } from './src/components/InAppNotificationBanner';
+
 // Tắt thông báo warning màu vàng của Expo CLI/Metro khi chạy qua tunnel trên điện thoại
 LogBox.ignoreLogs([
   'Cannot connect to Expo CLI',
@@ -26,23 +30,48 @@ LogBox.ignoreLogs([
 function AuthenticatedApp() {
   const [activeTab, setActiveTab] = useState<TabName>('home');
   const [configVisible, setConfigVisible] = useState(false);
+  const [mapFilter, setMapFilter] = useState<MapFilterType>('ALL');
+  const [mapNavKey, setMapNavKey] = useState(0);
+
+  const { unreadCount, setNavigateHandler } = useNotifications();
+
+  const handleNavigateToTab = (tab: TabName, options?: { filter?: MapFilterType; areaId?: string }) => {
+    setActiveTab(tab);
+    if (tab === 'map') {
+      if (options?.filter) {
+        setMapFilter(options.filter);
+      }
+      setMapNavKey(prev => prev + 1);
+    }
+  };
+
+  React.useEffect(() => {
+    setNavigateHandler((tab) => handleNavigateToTab(tab as TabName));
+  }, [setNavigateHandler]);
 
   return (
     <View style={styles.container}>
+      {/* Banner thông báo khẩn cấp nổi góc trên (Heads-up alert banner) */}
+      <InAppNotificationBanner onNavigateToNews={() => handleNavigateToTab('news')} />
+
       {/* Các màn hình Tab luôn được giữ trong bộ nhớ (Pre-warmed Tab Layer) */}
       <View style={styles.screenContainer}>
         {/* Tab Trang chủ */}
         <View style={[styles.tabScreenWrap, activeTab !== 'home' && styles.hiddenTabScreen]}>
           <HomeScreen
             onOpenSettings={() => setConfigVisible(true)}
-            onNavigateToTab={(tab) => setActiveTab(tab as TabName)}
+            onNavigateToTab={handleNavigateToTab}
             onNavigateToSos={() => setActiveTab('sos')}
           />
         </View>
 
         {/* Tab Bản đồ */}
         <View style={[styles.tabScreenWrap, activeTab !== 'map' && styles.hiddenTabScreen]}>
-          <MapScreen />
+          <MapScreen
+            initialFilter={mapFilter}
+            navigationKey={mapNavKey}
+            onFilterChange={setMapFilter}
+          />
         </View>
 
         {/* Tab Cứu hộ SOS (Đưa trực tiếp biểu mẫu cứu hộ ngập lụt ra ngoài) */}
@@ -50,9 +79,11 @@ function AuthenticatedApp() {
           <SosScreen onNavigateToHome={() => setActiveTab('home')} />
         </View>
 
-        {/* Tab Tin tức */}
+        {/* Tab Tin tức & Thông báo */}
         <View style={[styles.tabScreenWrap, activeTab !== 'news' && styles.hiddenTabScreen]}>
-          <NewsScreen />
+          <NewsScreen
+            onNavigateToTab={(tab) => handleNavigateToTab(tab as TabName)}
+          />
         </View>
 
         {/* Tab Hồ sơ người dùng - Đảm bảo logo và thông tin luôn duy trì trong RAM */}
@@ -64,7 +95,11 @@ function AuthenticatedApp() {
       </View>
 
       <View style={styles.bottomNavWrapper}>
-        <BottomNav activeTab={activeTab} onTabPress={setActiveTab} />
+        <BottomNav
+          activeTab={activeTab}
+          onTabPress={setActiveTab}
+          unreadNewsCount={unreadCount}
+        />
       </View>
 
       <ConfigModal
@@ -204,6 +239,9 @@ function MainNavigator() {
         message={toast.message}
         onClose={() => setToast(prev => ({ ...prev, visible: false }))}
       />
+
+      {/* Banner thông báo khẩn cấp khi người dùng chưa đăng nhập */}
+      {!user && <InAppNotificationBanner onNavigateToNews={() => {}} />}
     </View>
   );
 }
@@ -212,7 +250,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <MainNavigator />
+        <NotificationProvider>
+          <MainNavigator />
+        </NotificationProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

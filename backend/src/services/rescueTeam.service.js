@@ -89,17 +89,37 @@ class RescueTeamService {
 
     const [teams, total] = await Promise.all([
       RescueTeam.find(filter)
-        .populate('leaderId', 'fullName phone email')
-        .populate('authorityId', 'name code')
-        .populate('areaId', 'name code')
+        .populate('leaderId', 'fullName phone email rescuer status')
+        .populate('authorityId', 'name code phone type')
+        .populate('areaId', 'name code type')
+        .populate({
+          path: 'members.rescuerId',
+          select: 'fullName phone email avatarUrl rescuer status isVerified',
+        })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
       RescueTeam.countDocuments(filter),
     ]);
 
+    // Đính kèm các phương tiện do từng đội trực tiếp quản lý
+    const teamIds = teams.map((t) => t._id);
+    const vehicles = await Vehicle.find({ teamId: { $in: teamIds } });
+    const vehicleMap = {};
+    vehicles.forEach((v) => {
+      const tId = v.teamId.toString();
+      if (!vehicleMap[tId]) vehicleMap[tId] = [];
+      vehicleMap[tId].push(v);
+    });
+
+    const enrichedTeams = teams.map((team) => {
+      const obj = team.toObject ? team.toObject() : { ...team };
+      obj.vehicles = vehicleMap[team._id.toString()] || [];
+      return obj;
+    });
+
     return {
-      teams,
+      teams: enrichedTeams,
       pagination: {
         page,
         limit,

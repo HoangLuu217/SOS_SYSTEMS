@@ -18,6 +18,12 @@ router.post('/', administrativeAreaController.createArea);
 router.get('/', administrativeAreaController.getAreas);
 
 /**
+ * @route   GET /administrative-areas/boundary
+ * @desc    Lấy ranh giới GeoJSON polygon của khu vực hành chính (tự động truy vấn và cache CSDL)
+ */
+router.get('/boundary', administrativeAreaController.getAreaBoundary);
+
+/**
  * @route   GET /administrative-areas/managers
  * @desc    Lấy danh sách cán bộ / đơn vị địa phương đang quản lý từng khu vực
  */
