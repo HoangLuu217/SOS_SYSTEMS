@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { User } from '../types/auth';
-import { fetchSosRequests, fetchAdminUsers, fetchHazardReports } from '../services/api';
+import { fetchSosRequests, fetchAdminUsers, fetchHazardReports, fetchSafeLocations } from '../services/api';
 import { domainDService } from '../services/domainDService';
 import {
   Map,
@@ -9,6 +9,7 @@ import {
   LifeBuoy,
   Package,
   Bell,
+  Home,
   AlertTriangle,
   BarChart3,
   History,
@@ -100,6 +101,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     active: 6, // Mặc định 6 vụ như yêu cầu hiển thị badge
   });
   const [hazardCount, setHazardCount] = useState<number>(0);
+  const [shelterCount, setShelterCount] = useState<number>(0);
   const [pendingRescuersCount, setPendingRescuersCount] = useState<number>(0);
 
   // Đồng bộ số liệu thời gian thực
@@ -129,6 +131,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const hazardRes = await fetchHazardReports({ status: 'PENDING' });
       if (hazardRes.success && hazardRes.data) {
         setHazardCount(hazardRes.data.counts?.PENDING ?? hazardRes.data.reports?.length ?? 0);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const shelterRes = await fetchSafeLocations();
+      if (shelterRes.success && Array.isArray(shelterRes.data)) {
+        setShelterCount(shelterRes.data.length);
       }
     } catch {
       // ignore
@@ -224,12 +235,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           key: 'alerts',
-          label: 'Phát cảnh báo & Trạm trú ẩn',
+          label: 'Phát cảnh báo khẩn cấp',
           icon: <Bell size={18} className="sos-nav-icon" />,
         },
         {
+          key: 'shelters',
+          label: 'Điểm trú ẩn & Trạm an toàn',
+          useCase: 'UC-L12',
+          icon: <Home size={18} className="sos-nav-icon" />,
+          badge: shelterCount > 0 ? `${shelterCount}` : undefined,
+          badgeType: 'info',
+        },
+        {
           key: 'hazard_reports',
-          label: 'Duyệt điểm nguy hiểm',
+          label: 'Quản lý điểm nguy hiểm',
+          useCase: 'UC-L15',
           icon: <AlertTriangle size={18} className="sos-nav-icon" />,
           badge: hazardCount > 0 ? `${hazardCount}` : undefined,
           badgeType: 'info',
@@ -293,6 +313,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           key: 'rbac',
           label: 'Phân quyền & Vai trò',
           icon: <Shield size={18} className="sos-nav-icon" />,
+        },
+        {
+          key: 'audit_logs',
+          label: 'Nhật ký hệ thống (Audit Logs)',
+          icon: <History size={18} className="sos-nav-icon" />,
         },
       ],
     },

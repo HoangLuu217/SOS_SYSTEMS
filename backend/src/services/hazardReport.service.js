@@ -44,6 +44,21 @@ class HazardReportService {
 
     // Xác định khu vực hành chính (areaId)
     let targetAreaId = areaId;
+    if (targetAreaId && !mongoose.Types.ObjectId.isValid(targetAreaId)) {
+      const codeCandidate = String(targetAreaId).replace(/^area-/i, '').toUpperCase();
+      const matchedArea = await AdministrativeArea.findOne({
+        $or: [
+          { code: targetAreaId },
+          { code: codeCandidate },
+        ],
+      });
+      if (matchedArea) {
+        targetAreaId = matchedArea._id;
+      } else {
+        targetAreaId = null;
+      }
+    }
+
     if (!targetAreaId || !mongoose.Types.ObjectId.isValid(targetAreaId)) {
       const addressStr = String(address || '').toLowerCase();
       const allAreas = await AdministrativeArea.find({ status: 'ACTIVE' });
@@ -70,6 +85,12 @@ class HazardReportService {
       reporterRole = 'ADMIN';
     }
 
+    const isAuthority = userRoles.includes('LOCAL_AUTHORITY') || userRoles.includes('ADMIN');
+    // Khi Cán bộ chính quyền (LOCAL_AUTHORITY) hoặc Quản trị viên (ADMIN) chủ động tạo điểm nguy hiểm:
+    // Mặc định công bố trực tiếp 'APPROVED' (trừ khi chỉ định PENDING để lưu nháp)
+    const finalStatus = isAuthority ? (data.status || 'APPROVED') : 'PENDING';
+    const isApproved = finalStatus === 'APPROVED';
+
     const newReport = await HazardReport.create({
       title: String(title).trim(),
       description: String(description).trim(),
@@ -85,13 +106,37 @@ class HazardReportService {
       reportedBy: userId,
       reporterRole,
       images: Array.isArray(images) ? images : [],
-      status: 'PENDING', // Bắt buộc ở trạng thái PENDING chờ chính quyền duyệt
+      status: finalStatus,
+      reviewedBy: isApproved ? userId : undefined,
+      reviewedAt: isApproved ? new Date() : undefined,
+      reviewNote: isApproved
+        ? (data.reviewNote || 'Điểm nguy hiểm được tạo trực tiếp bởi Cán bộ chính quyền địa phương')
+        : undefined,
     });
 
     const populated = await newReport.populate([
       { path: 'reportedBy', select: 'fullName phone email roles avatarUrl' },
+      { path: 'reviewedBy', select: 'fullName phone email' },
       { path: 'areaId', select: 'name code type' },
     ]);
+
+    // Nếu điểm nguy hiểm được DUYỆT / CÔNG BỐ NGAY LẬP TỨC, tự động tạo 1 Alert tương ứng để hiển thị trên bản đồ tác chiến
+    if (isApproved && targetAreaId) {
+      try {
+        await Alert.create({
+          createdBy: userId,
+          areaId: targetAreaId,
+          title: `[Cảnh báo nguy hiểm] ${newReport.title}`,
+          content: `${newReport.description}. Địa chỉ: ${newReport.address}`,
+          type: ['FLOOD', 'LANDSLIDE'].includes(newReport.hazardType) ? newReport.hazardType : 'DANGEROUS_AREA',
+          severity: newReport.severity || 'HIGH',
+          isActive: true,
+          startTime: new Date(),
+        });
+      } catch (err) {
+        console.warn('Không thể tự động tạo Alert cho điểm nguy hiểm:', err.message);
+      }
+    }
 
     // Bắn sự kiện realtime cho Web và các bên liên quan
     eventBus.emit('hazard_event', { action: 'CREATED', data: populated });
@@ -423,6 +468,209 @@ class HazardReportService {
     eventBus.emit('hazard_event', { action: 'DELETED', data: { _id: id } });
 
     return { message: 'Đã xóa điểm nguy hiểm thành công' };
+  }
+
+  /**
+   * Phân tích và trích xuất tọa độ GPS từ chuỗi / link Google Maps
+   */
+  parseGoogleMapsText(input) {
+    if (!input || typeof input !== 'string') return null;
+    const str = input.trim();
+
+    // 1. Tọa độ DMS: 16°03'37.8"N 108°13'01.4"E
+    const dmsRegex = /(\d{1,2})[°\s]+(\d{1,2})['\s]+([\d.]+)"?\s*([NSns])[\s,]+(\d{1,3})[°\s]+(\d{1,2})['\s]+([\d.]+)"?\s*([EWew])/;
+    const dmsMatch = str.match(dmsRegex);
+    if (dmsMatch) {
+      let lat = parseInt(dmsMatch[1], 10) + parseInt(dmsMatch[2], 10) / 60 + parseFloat(dmsMatch[3]) / 3600;
+      if (dmsMatch[4].toUpperCase() === 'S') lat = -lat;
+      let lng = parseInt(dmsMatch[5], 10) + parseInt(dmsMatch[6], 10) / 60 + parseFloat(dmsMatch[7]) / 3600;
+      if (dmsMatch[8].toUpperCase() === 'W') lng = -lng;
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        return { lat: Number(lat.toFixed(5)), lng: Number(lng.toFixed(5)), source: 'dms' };
+      }
+    }
+
+    // 2. Định dạng @lat,lng e.g. /@16.0605123,108.2170456,17z
+    const atMatch = str.match(/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/);
+    if (atMatch) {
+      const lat = parseFloat(atMatch[1]);
+      const lng = parseFloat(atMatch[2]);
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        let placeName = null;
+        const placeMatch = str.match(/\/place\/([^/@?#]+)/);
+        if (placeMatch) {
+          try {
+            placeName = decodeURIComponent(placeMatch[1].replace(/\+/g, ' '));
+          } catch (_) {}
+        }
+        return { lat: Number(lat.toFixed(5)), lng: Number(lng.toFixed(5)), placeName, source: '@' };
+      }
+    }
+
+    // 3. Query params: ?q=lat,lng or ?query=lat,lng or ll=lat,lng or destination=lat,lng
+    const queryMatch = str.match(/[?&](?:q|query|ll|destination|daddr|saddr)=(-?\d{1,2}\.\d+)[,%20\s]+(-?\d{1,3}\.\d+)/i);
+    if (queryMatch) {
+      const lat = parseFloat(queryMatch[1]);
+      const lng = parseFloat(queryMatch[2]);
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        return { lat: Number(lat.toFixed(5)), lng: Number(lng.toFixed(5)), source: 'query' };
+      }
+    }
+
+    // 4. Data / embed params: !3d16.0605123!4d108.2170456 or !2d108.2170456!3d16.0605123
+    const d3d4 = str.match(/!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/);
+    if (d3d4) {
+      const lat = parseFloat(d3d4[1]);
+      const lng = parseFloat(d3d4[2]);
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        return { lat: Number(lat.toFixed(5)), lng: Number(lng.toFixed(5)), source: '!3d!4d' };
+      }
+    }
+    const d2d3 = str.match(/!2d(-?\d{1,3}\.\d+)!3d(-?\d{1,2}\.\d+)/);
+    if (d2d3) {
+      const lng = parseFloat(d2d3[1]);
+      const lat = parseFloat(d2d3[2]);
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        return { lat: Number(lat.toFixed(5)), lng: Number(lng.toFixed(5)), source: '!2d!3d' };
+      }
+    }
+
+    // 5. Search path: /search/16.0605,+108.2170
+    const searchMatch = str.match(/\/search\/(-?\d{1,2}\.\d+)[,\s+]+(-?\d{1,3}\.\d+)/);
+    if (searchMatch) {
+      const lat = parseFloat(searchMatch[1]);
+      const lng = parseFloat(searchMatch[2]);
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        return { lat: Number(lat.toFixed(5)), lng: Number(lng.toFixed(5)), source: 'search_path' };
+      }
+    }
+
+    // 6. Directions path: /dir/.../16.0605,108.2170
+    const dirMatch = str.match(/\/dir\/.*?(-?\d{1,2}\.\d+)[,\s+]+(-?\d{1,3}\.\d+)/);
+    if (dirMatch) {
+      const lat = parseFloat(dirMatch[1]);
+      const lng = parseFloat(dirMatch[2]);
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        return { lat: Number(lat.toFixed(5)), lng: Number(lng.toFixed(5)), source: 'dir_path' };
+      }
+    }
+
+    // 7. OpenStreetMap: /#map=17/16.0605/108.2170
+    const osmMatch = str.match(/#map=\d+\/(-?\d{1,2}\.\d+)\/(-?\d{1,3}\.\d+)/);
+    if (osmMatch) {
+      const lat = parseFloat(osmMatch[1]);
+      const lng = parseFloat(osmMatch[2]);
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        return { lat: Number(lat.toFixed(5)), lng: Number(lng.toFixed(5)), source: 'osm' };
+      }
+    }
+
+    // 8. Tọa độ thô: "16.060512, 108.217045" hoặc "[16.060512, 108.217045]"
+    const rawCoordRegex = /(-?\d{1,3}\.\d{3,})[,\s;]+(-?\d{1,3}\.\d{3,})/;
+    const rawMatch = str.match(rawCoordRegex);
+    if (rawMatch) {
+      let lat = parseFloat(rawMatch[1]);
+      let lng = parseFloat(rawMatch[2]);
+      // Kiểm tra hoán đổi [lng, lat] nếu kinh độ đứng trước vĩ độ (ví dụ 108.2 đứng trước 16.06)
+      if (Math.abs(lat) > 90 && Math.abs(lng) <= 90) {
+        const temp = lat;
+        lat = lng;
+        lng = temp;
+      } else if (lat >= 100 && lat <= 115 && lng >= 8 && lng <= 25) {
+        const temp = lat;
+        lat = lng;
+        lng = temp;
+      }
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        return { lat: Number(lat.toFixed(5)), lng: Number(lng.toFixed(5)), source: 'raw' };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Giải mã liên kết Google Maps (bao gồm liên kết rút gọn maps.app.goo.gl)
+   */
+  async resolveMapLink(rawInput) {
+    if (!rawInput || typeof rawInput !== 'string') {
+      throw new ApiError(400, 'Vui lòng cung cấp liên kết hoặc tọa độ Google Maps');
+    }
+
+    // 1. Thử parse trực tiếp chuỗi đầu vào
+    let parsed = this.parseGoogleMapsText(rawInput);
+    if (parsed) {
+      return parsed;
+    }
+
+    let targetUrl = rawInput.trim();
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+      targetUrl = 'https://' + targetUrl;
+    }
+
+    try {
+      const response = await fetch(targetUrl, {
+        method: 'GET',
+        redirect: 'follow',
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+        },
+      });
+
+      const finalUrl = response.url || targetUrl;
+      parsed = this.parseGoogleMapsText(finalUrl);
+      if (parsed) {
+        return { ...parsed, resolvedUrl: finalUrl };
+      }
+
+      // 2. Tìm trong nội dung HTML trả về (meta tags hoặc window.APP_INITIALIZATION_STATE)
+      const html = await response.text();
+      parsed = this.parseGoogleMapsText(html);
+
+      let placeName = null;
+      const ogTitleMatch = html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']+)["']/i);
+      if (ogTitleMatch) {
+        placeName = ogTitleMatch[1].replace(/ - Google Maps$/, '').trim();
+      } else {
+        const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+        if (titleMatch) {
+          placeName = titleMatch[1].replace(/ - Google Maps$/, '').trim();
+        }
+      }
+
+      if (parsed) {
+        return {
+          ...parsed,
+          placeName: placeName || parsed.placeName,
+          resolvedUrl: finalUrl,
+        };
+      }
+
+      // 3. Quét cấu trúc dữ liệu nhúng tọa độ trong mã nguồn Google Maps
+      const coordPattern = /\[null,null,(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)\]/;
+      const coordMatch = html.match(coordPattern);
+      if (coordMatch) {
+        const lat = parseFloat(coordMatch[1]);
+        const lng = parseFloat(coordMatch[2]);
+        if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+          return {
+            lat: Number(lat.toFixed(5)),
+            lng: Number(lng.toFixed(5)),
+            placeName,
+            resolvedUrl: finalUrl,
+            source: 'html_init_state',
+          };
+        }
+      }
+
+      throw new ApiError(400, 'Không tìm thấy tọa độ GPS từ liên kết Google Maps này. Vui lòng kiểm tra lại liên kết hoặc dán tọa độ trực tiếp.');
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      throw new ApiError(400, `Không thể kết nối hoặc giải mã liên kết: ${err.message || 'Lỗi mạng'}`);
+    }
   }
 }
 

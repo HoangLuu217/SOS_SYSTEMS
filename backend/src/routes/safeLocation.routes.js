@@ -35,29 +35,29 @@ router.use(authenticate);
  */
 router.post(
   '/',
-  authorize('LOCAL_AUTHORITY', 'ADMIN'),
+  authorize('LOCAL_AUTHORITY', 'AUTHORITY', 'ADMIN'),
   safeLocationController.createSafeLocation
 );
 
 /**
  * @route   PATCH /safe-locations/:id
  * @desc    Cập nhật thông tin địa điểm an toàn
- * @access  LOCAL_AUTHORITY, ADMIN
+ * @access  LOCAL_AUTHORITY, AUTHORITY, ADMIN
  */
 router.patch(
   '/:id',
-  authorize('LOCAL_AUTHORITY', 'ADMIN'),
+  authorize('LOCAL_AUTHORITY', 'AUTHORITY', 'ADMIN'),
   safeLocationController.updateSafeLocation
 );
 
 /**
  * @route   DELETE /safe-locations/:id
  * @desc    Xóa địa điểm an toàn
- * @access  LOCAL_AUTHORITY, ADMIN
+ * @access  LOCAL_AUTHORITY, AUTHORITY, ADMIN
  */
 router.delete(
   '/:id',
-  authorize('LOCAL_AUTHORITY', 'ADMIN'),
+  authorize('LOCAL_AUTHORITY', 'AUTHORITY', 'ADMIN'),
   safeLocationController.deleteSafeLocation
 );
 
