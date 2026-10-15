@@ -12,8 +12,6 @@ import {
   Moon,
   ExternalLink,
   LogOut,
-  Eye,
-  EyeOff,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { GOOGLE_MAP_TILES } from '../../services/mapGeoService';
@@ -41,7 +39,7 @@ const MapController = ({ onMount }: { onMount?: (map: L.Map) => void }) => {
 };
 
 export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Props) => {
-  const { theme, setTheme, mapMode, setMapMode, mapCleanMode, toggleMapCleanMode } = useApp();
+  const { theme, setTheme, mapMode, setMapMode } = useApp();
   const mapRef = useRef<L.Map | null>(null);
 
   const defaultCenter: [number, number] = [16.0544, 108.2022];
@@ -50,7 +48,7 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
   const tileUrl =
     mapMode === 'satellite'
       ? GOOGLE_MAP_TILES.SATELLITE
-      : (mapCleanMode ? GOOGLE_MAP_TILES.STREETS_CLEAN : GOOGLE_MAP_TILES.STREETS_FULL);
+      : GOOGLE_MAP_TILES.STREETS_CLEAN;
 
   const handleZoom = (delta: number) => {
     if (mapRef.current) {
@@ -144,35 +142,6 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
               <span>Vệ tinh</span>
             </button>
           </div>
-
-          {mapMode === 'street' && (
-            <button
-              type="button"
-              onClick={toggleMapCleanMode}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '4px 9px',
-                borderRadius: 6,
-                border: '1px solid var(--sos-border)',
-                background: mapCleanMode ? 'rgba(16, 185, 129, 0.12)' : 'transparent',
-                color: mapCleanMode ? '#10b981' : 'var(--sos-text-secondary)',
-                fontWeight: 600,
-                fontSize: 11.5,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-              title={
-                mapCleanMode
-                  ? 'Đang ẩn các ký hiệu nhỏ (quán xá, bến xe buýt...). Bấm để hiện đầy đủ'
-                  : 'Đang hiện đầy đủ mọi ký hiệu. Bấm để ẩn bớt ký hiệu không cần thiết'
-              }
-            >
-              {mapCleanMode ? <EyeOff size={13} /> : <Eye size={13} />}
-              <span>{mapCleanMode ? 'Ẩn ký hiệu phụ' : 'Hiện đầy đủ'}</span>
-            </button>
-          )}
 
           <button
             type="button"

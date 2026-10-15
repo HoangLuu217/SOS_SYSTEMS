@@ -203,8 +203,9 @@ export async function logoutApi(): Promise<void> {
 }
 
 export async function resetPasswordApi(payload: {
+  account?: string;
   email?: string;
-  token: string;
+  token?: string;
   newPassword: string;
 }): Promise<{ success: boolean; message: string }> {
   const res = await fetch(`${API_BASE}/auth/reset-password`, {
@@ -490,6 +491,44 @@ export async function syncAdministrativeAreasToBackend(payload: {
     });
   } catch (e) {
     console.warn('Sync administrative areas to MongoDB failed:', e);
+    return { success: false, data: null };
+  }
+}
+
+export async function fetchAreaBoundary(params: {
+  areaId?: string;
+  name?: string;
+  province?: string;
+  district?: string;
+}): Promise<{
+  success: boolean;
+  data: {
+    areaId: string;
+    name: string;
+    code: string;
+    boundary: {
+      type: 'Polygon' | 'MultiPolygon';
+      coordinates: any;
+    };
+    source: string;
+  } | null;
+}> {
+  try {
+    const q = new URLSearchParams();
+    if (params.areaId) q.append('areaId', params.areaId);
+    if (params.name) q.append('name', params.name);
+    if (params.province) q.append('province', params.province);
+    if (params.district) q.append('district', params.district);
+
+    const res = await fetchWithAuth<any>(`/administrative-areas/boundary?${q.toString()}`, {
+      method: 'GET',
+    });
+    if (res && res.success && res.data) {
+      return { success: true, data: res.data };
+    }
+    return { success: false, data: null };
+  } catch (e) {
+    console.warn('Lỗi gọi API lấy boundary:', e);
     return { success: false, data: null };
   }
 }

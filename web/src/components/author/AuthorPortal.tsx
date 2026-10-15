@@ -99,19 +99,27 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
   // Đồng bộ SOS thực tế từ cơ sở dữ liệu MongoDB (từ ứng dụng mobile app người dân)
   const syncRealSosFromApi = useCallback(async (officer: AuthorityOfficer) => {
     try {
-      const res = await fetchSosRequests();
+      const fetchParams: Record<string, string> = {};
+      if (officer.role !== 'ADMIN' && officer.jurisdictionAreaId) {
+        fetchParams.areaId = officer.jurisdictionAreaId;
+      }
+      const res = await fetchSosRequests(fetchParams);
       if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        const realMapped: SosRequest[] = res.data.map((item) => {
+        const realMapped: SosRequest[] = res.data.map((item: any) => {
           const lng = item.location?.coordinates?.[0] ?? 108.2178;
           const lat = item.location?.coordinates?.[1] ?? 16.0465;
+
+          const citizenObj =
+            typeof item.citizenId === 'object' && item.citizenId !== null
+              ? item.citizenId
+              : null;
           const citizenName =
-            typeof item.citizenId === 'object' && item.citizenId?.fullName
-              ? item.citizenId.fullName
-              : 'Người dân';
+            citizenObj?.fullName ||
+            (typeof item.citizenName === 'string' && item.citizenName ? item.citizenName : 'Người dân');
           const citizenPhone =
-            typeof item.citizenId === 'object' && item.citizenId?.phone
-              ? item.citizenId.phone
-              : '0905000000';
+            item.contactPhone ||
+            citizenObj?.phone ||
+            (typeof item.citizenPhone === 'string' && item.citizenPhone ? item.citizenPhone : '0905000000');
 
           const diffMinutes = Math.max(
             0,
@@ -124,19 +132,38 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
               ? `${diffMinutes} phút trước`
               : `${Math.floor(diffMinutes / 60)} giờ trước`;
 
+          const areaObj =
+            typeof item.areaId === 'object' && item.areaId !== null
+              ? item.areaId
+              : null;
+          const itemAreaId = areaObj?._id || (typeof item.areaId === 'string' ? item.areaId : '') || '';
+          const itemAreaName = areaObj?.name || item.address || '';
+
+          // Chuẩn hóa loại khẩn cấp sang định dạng UPPERCASE chuẩn (MEDICAL, FLOOD, FIRE, RESCUE, ...)
+          const rawType = (item.emergencyType || 'RESCUE').toUpperCase();
+          const emergencyType =
+            rawType === 'FLOOD' || rawType === 'NGAP_LUT'
+              ? 'FLOOD'
+              : rawType === 'FIRE' || rawType === 'CHAY'
+              ? 'FIRE'
+              : rawType === 'MEDICAL' || rawType === 'Y_TE'
+              ? 'MEDICAL'
+              : rawType === 'POLICE'
+              ? 'POLICE'
+              : 'RESCUE';
+
+          // Đồng bộ khu vực với cán bộ đang đăng nhập
+          const wardId = officer.jurisdictionAreaId || itemAreaId || 'area-cl';
+          const wardName = itemAreaName || officer.jurisdictionAreaName || 'Địa bàn phụ trách';
+          const districtId = officer.jurisdictionAreaId || itemAreaId || 'area-cl';
+          const districtName = officer.districtName || 'Quận Cẩm Lệ';
+
           return {
             id: item._id,
             sosCode: item.sosCode || `#${item._id.slice(-4).toUpperCase()}`,
             timeAgo,
             createdAt: item.createdAt,
-            emergencyType:
-              item.emergencyType === 'FLOOD'
-                ? 'Flood'
-                : item.emergencyType === 'FIRE'
-                ? 'Fire'
-                : item.emergencyType === 'MEDICAL'
-                ? 'Medical Emergency'
-                : 'RESCUE',
+            emergencyType: emergencyType as any,
             priority: (item.priority || 'HIGH') as any,
             title: (() => {
               const rawDesc = item.description || '';
@@ -156,14 +183,14 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
               if (rawDesc) {
                 return rawDesc.length > 55 ? rawDesc.slice(0, 52) + '...' : rawDesc;
               }
-              return item.emergencyType === 'FLOOD' ? 'Cứu hộ ngập lụt / Mắc kẹt' : 'Yêu cầu cứu nạn khẩn cấp';
+              return emergencyType === 'FLOOD' ? 'Cứu hộ ngập lụt / Mắc kẹt' : 'Yêu cầu cứu nạn khẩn cấp';
             })(),
             description: item.description || `Yêu cầu cứu nạn khẩn cấp tại ${item.address}`,
             locationName: item.address || 'Vị trí cứu nạn',
-            wardId: officer.jurisdictionAreaId,
-            wardName: item.address || officer.jurisdictionAreaName,
-            districtId: officer.jurisdictionAreaId,
-            districtName: officer.districtName,
+            wardId,
+            wardName,
+            districtId,
+            districtName,
             citizenName,
             citizenPhone,
             affectedPeople: item.people || 1,
@@ -282,6 +309,15 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
     // Đồng bộ ngay dữ liệu thật từ MongoDB
     syncRealSosFromApi(activeOfficer);
 
+    // Nạp tự động ranh giới GeoJSON cho cán bộ địa phương (đặc biệt ngoài Đà Nẵng)
+    if (activeOfficer.role !== 'ADMIN' && (activeOfficer.jurisdictionAreaId || activeOfficer.jurisdictionAreaName)) {
+      domainDService.loadBoundaryForOfficer(activeOfficer).then((updatedArea) => {
+        if (updatedArea) {
+          setAreas(domainDService.getAreas());
+        }
+      });
+    }
+
     // Ưu tiên SOS ID từ URL pathname (/localauthor/map/:id) nếu có
     const urlSosId = getCurrentSosIdFromUrl();
 
@@ -298,6 +334,16 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
       }
     }
   };
+
+  useEffect(() => {
+    if (activeOfficer && activeOfficer.role !== 'ADMIN' && (activeOfficer.jurisdictionAreaId || activeOfficer.jurisdictionAreaName)) {
+      domainDService.loadBoundaryForOfficer(activeOfficer).then((updatedArea) => {
+        if (updatedArea) {
+          setAreas(domainDService.getAreas());
+        }
+      });
+    }
+  }, [activeOfficer.jurisdictionAreaId, activeOfficer.jurisdictionAreaName, activeOfficer.districtName]);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     const id = Date.now();
@@ -317,24 +363,39 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
       }
       return areas.length > 0 ? [areas[0]] : [];
     }
+    const cleanJurisdictionName = activeOfficer.jurisdictionAreaName
+      ? activeOfficer.jurisdictionAreaName.replace(/^(phường|xã|quận|huyện)\s+/i, '').toLowerCase()
+      : '';
     const targetArea = areas.find(
       (a) =>
         a.id === activeOfficer.jurisdictionAreaId ||
         a.code === activeOfficer.jurisdictionAreaId ||
-        (activeOfficer.jurisdictionAreaName &&
-          a.name.toLowerCase().includes(activeOfficer.jurisdictionAreaName.replace('Phường ', '').toLowerCase()))
+        (cleanJurisdictionName &&
+          a.name.toLowerCase().includes(cleanJurisdictionName))
     );
-    return targetArea ? [targetArea] : (areas.length > 0 ? [areas[0]] : []);
+    if (targetArea) return [targetArea];
+
+    // Fallback: Trả về stub khu vực quản lý của chính cán bộ, tuyệt đối không fallback về Đà Nẵng nếu cán bộ thuộc tỉnh thành khác
+    if (activeOfficer.jurisdictionAreaName || activeOfficer.jurisdictionAreaId) {
+      return [{
+        id: activeOfficer.jurisdictionAreaId || 'temp-officer-area',
+        name: activeOfficer.jurisdictionAreaName || 'Địa Bàn Phụ Trách',
+        code: `VN-${activeOfficer.jurisdictionAreaId || 'OFFICER'}`,
+        type: 'WARD' as any,
+        parentId: null,
+        status: 'ACTIVE' as any,
+      }];
+    }
+    return areas.length > 0 ? [areas[0]] : [];
   }, [areas, activeOfficer, selectedSosId, sosRequests]);
 
-  // Strictly filter SOS requests: For Admin show all citywide SOS, for Author filter to managed ward, các yêu cầu thật từ app (MongoDB _id) luôn được hiển thị để không bỏ sót cứu nạn
+  // Strictly filter SOS requests: For Admin show all citywide SOS, for Author filter strictly to managed area
   const authorScopedSosRequests = useMemo(() => {
     if (activeOfficer.role === 'ADMIN') {
       return sosRequests;
     }
     const managedWard = authorScopedAreas[0];
     return sosRequests.filter((s) => {
-      if (s.id.length === 24) return true; // SOS thật từ MongoDB
       return isSosInOfficerJurisdiction(s, activeOfficer, managedWard);
     });
   }, [sosRequests, activeOfficer, authorScopedAreas]);

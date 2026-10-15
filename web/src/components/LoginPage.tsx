@@ -13,8 +13,6 @@ import {
   FileText,
   X,
   CheckCircle2,
-  KeyRound,
-  Mail,
   Check,
 } from 'lucide-react';
 import { loginApi, logoutApi, resetPasswordApi } from '../services/api';
@@ -36,7 +34,7 @@ export const LoginPage = ({
   isResetPasswordMode = false,
   onCloseResetMode,
 }: LoginPageProps = {}) => {
-  const { lang, toggleLang, theme, toggleTheme } = useApp();
+  const { lang, toggleLang } = useApp();
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -59,9 +57,12 @@ export const LoginPage = ({
   const [resetSuccess, setResetSuccess] = useState<string | null>(null);
 
   // Validation rules real-time
-  const isValidEmailFormat = (emailStr: string): boolean => {
-    if (!emailStr || !emailStr.trim()) return false;
-    return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(emailStr.trim());
+  const isValidAccountFormat = (str: string): boolean => {
+    if (!str || !str.trim()) return false;
+    const clean = str.trim();
+    const isPhone = /^[0-9+() -]{8,15}$/.test(clean);
+    const isEmail = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(clean);
+    return isPhone || isEmail;
   };
 
   const passLengthOk = newPassword.length >= 8;
@@ -70,18 +71,33 @@ export const LoginPage = ({
   const passNumberOk = /[0-9]/.test(newPassword);
   const passSpecialOk = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/.test(newPassword);
   const passScore = [passLengthOk, passUpperOk, passLowerOk, passNumberOk, passSpecialOk].filter(Boolean).length;
+  const isPasswordValid = passLengthOk && passUpperOk && passLowerOk && passNumberOk && passSpecialOk;
+  const hasPasswordError = (newPassword.length > 0 && !isPasswordValid) || (Boolean(resetError) && !isPasswordValid);
   const isConfirmMatch = confirmNewPassword.length > 0 && newPassword === confirmNewPassword;
-  const isEmailValid = isValidEmailFormat(resetEmail);
 
   // Restore saved session or remembered password on mount & check reset link from email
   useEffect(() => {
-    // 0. Check reset password link query params: ?view=reset&email=...&token=...
+    // 0. Check reset password link query params: ?view=reset&account=...&email=...&token=...
     const urlParams = new URLSearchParams(window.location.search);
     const viewParam = urlParams.get('view');
     const emailParam = urlParams.get('email');
-    const tokenParam = urlParams.get('token');
-    if (viewParam === 'reset' || tokenParam) {
-      if (emailParam) setResetEmail(emailParam);
+    const accountParam = urlParams.get('account') || urlParams.get('phone') || urlParams.get('username') || urlParams.get('user');
+    let tokenParam = urlParams.get('token') || '';
+
+    // Khôi phục token đầy đủ nếu token chứa ký tự '#' bị trình duyệt tách vào window.location.hash
+    if (window.location.hash && window.location.hash.length > 1) {
+      const hashPart = window.location.hash;
+      if (!hashPart.includes('=') && !hashPart.includes('/')) {
+        tokenParam = tokenParam ? `${tokenParam}${hashPart}` : hashPart.substring(1);
+      }
+    }
+
+    if (viewParam === 'reset' || tokenParam || accountParam) {
+      if (accountParam) {
+        setResetEmail(accountParam);
+      } else if (emailParam) {
+        setResetEmail(emailParam);
+      }
       if (tokenParam) setResetToken(tokenParam);
       setShowResetModal(true);
     }
@@ -221,23 +237,15 @@ export const LoginPage = ({
 
     const cleanEmail = resetEmail.trim();
     if (!cleanEmail) {
-      setResetError('Email tài khoản không được để trống.');
+      setResetError('Tài khoản đăng nhập (Số điện thoại hoặc Email) không được để trống.');
       return;
     }
-    if (!cleanEmail.includes('@')) {
-      setResetError('Email phải có ký tự "@". Ví dụ: canbo@danang.gov.vn');
-      return;
-    }
-    if (!isValidEmailFormat(cleanEmail)) {
-      setResetError('Định dạng email không hợp lệ (cần có ký tự @ và tên miền, ví dụ: canbo@danang.gov.vn).');
+    if (!isValidAccountFormat(cleanEmail)) {
+      setResetError('Tài khoản không hợp lệ (Vui lòng nhập đúng Số điện thoại hoặc Email).');
       return;
     }
 
     const cleanToken = resetToken.trim();
-    if (!cleanToken) {
-      setResetError('Vui lòng cung cấp Mã OTP / Token xác nhận hoặc Mật khẩu khởi tạo từ email.');
-      return;
-    }
 
     if (!newPassword) {
       setResetError('Mật khẩu mới không được để trống.');
@@ -272,8 +280,9 @@ export const LoginPage = ({
     setResetSubmitting(true);
     try {
       const res = await resetPasswordApi({
+        account: cleanEmail,
         email: cleanEmail,
-        token: cleanToken,
+        token: cleanToken || undefined,
         newPassword: newPassword,
       });
       setResetSuccess(res.message || '✅ Đặt lại mật khẩu thành công! Đang chuyển đến trang đăng nhập...');
@@ -300,26 +309,23 @@ export const LoginPage = ({
       <div>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 50,
-              height: 50,
-              borderRadius: 14,
-              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-              boxShadow: '0 8px 18px -4px rgba(2, 132, 199, 0.45)',
-              marginBottom: 12,
-            }}
-          >
-            <KeyRound size={26} color="#ffffff" />
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+            <img
+              src="/logoSOS.png"
+              alt="SOS Logo"
+              style={{
+                width: 68,
+                height: 68,
+                objectFit: 'contain',
+                filter: 'drop-shadow(0 4px 12px rgba(2, 132, 199, 0.25))',
+              }}
+            />
           </div>
           <h2 style={{ margin: '0 0 6px', fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
             Thiết Lập Mật Khẩu Mới
           </h2>
           <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>
-            Nhập email và mã xác thực để kích hoạt mật khẩu bảo mật cao cho tài khoản của bạn
+            Thiết lập mật khẩu mới bảo mật cao cho tài khoản của bạn
           </p>
         </div>
 
@@ -366,77 +372,38 @@ export const LoginPage = ({
         )}
 
         <form onSubmit={handleResetPasswordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {/* Field 1: Email */}
+          {/* Field 1: Tài khoản đăng nhập (Khóa cố định, không cho thay đổi) */}
           <div>
             <label style={{ fontSize: '12.5px', display: 'block', marginBottom: '6px', fontWeight: 700, color: '#1e293b' }}>
-              Email tài khoản <span style={{ color: '#ef4444' }}>*</span>
+              Tài khoản / Email đăng nhập <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <div style={{ position: 'relative' }}>
-              <Mail size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-              <input
-                type="email"
-                required
-                placeholder="Ví dụ: canbo@danang.gov.vn"
-                value={resetEmail}
-                onChange={(e) => setResetEmail(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '11px 12px 11px 38px',
-                  borderRadius: '10px',
-                  border: resetEmail && !isEmailValid ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
-                  fontSize: '14px',
-                  boxSizing: 'border-box',
-                  background: '#ffffff',
-                  outline: 'none',
-                }}
-              />
-            </div>
-            {resetEmail && !resetEmail.includes('@') && (
-              <div style={{ fontSize: '11.5px', color: '#ef4444', marginTop: 4, fontWeight: 500 }}>
-                ⚠️ Email phải chứa ký tự '@'
-              </div>
-            )}
-            {resetEmail && resetEmail.includes('@') && !isEmailValid && (
-              <div style={{ fontSize: '11.5px', color: '#f59e0b', marginTop: 4, fontWeight: 500 }}>
-                ⚠️ Vui lòng nhập đúng định dạng email (ví dụ: canbo@danang.gov.vn)
-              </div>
-            )}
-            {resetEmail && isEmailValid && (
-              <div style={{ fontSize: '11.5px', color: '#10b981', marginTop: 4, fontWeight: 500 }}>
-                ✓ Định dạng email hợp lệ
-              </div>
-            )}
-          </div>
-
-          {/* Field 2: Token / OTP */}
-          <div>
-            <label style={{ fontSize: '12.5px', display: 'block', marginBottom: '6px', fontWeight: 700, color: '#1e293b' }}>
-              Mã OTP / Token xác nhận hoặc Mật khẩu khởi tạo từ Email <span style={{ color: '#ef4444' }}>*</span>
-            </label>
-            <div style={{ position: 'relative' }}>
-              <KeyRound size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <UserIcon size={18} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
               <input
                 type="text"
-                required
-                placeholder="Nhập mã OTP hoặc mật khẩu khởi tạo từ email"
-                value={resetToken}
-                onChange={(e) => setResetToken(e.target.value)}
+                readOnly
+                disabled
+                tabIndex={-1}
+                placeholder="Tài khoản cán bộ"
+                value={resetEmail}
                 style={{
                   width: '100%',
                   padding: '11px 12px 11px 38px',
                   borderRadius: '10px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '15px',
-                  fontFamily: 'monospace',
-                  letterSpacing: '1px',
-                  fontWeight: 700,
+                  border: '1px solid #e2e8f0',
+                  fontSize: '14.5px',
+                  fontWeight: 600,
                   boxSizing: 'border-box',
-                  background: '#ffffff',
+                  background: '#f1f5f9',
+                  color: '#334155',
+                  cursor: 'not-allowed',
                   outline: 'none',
+                  userSelect: 'none',
                 }}
               />
             </div>
           </div>
+
 
           {/* Field 3: Mật khẩu mới */}
           <div>
@@ -448,7 +415,7 @@ export const LoginPage = ({
               <input
                 type={showNewPassword ? 'text' : 'password'}
                 required
-                placeholder="Tối thiểu 8 ký tự, có in hoa, thường, số, ký tự đặc biệt"
+                placeholder="Nhập mật khẩu mới"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 style={{
@@ -521,41 +488,44 @@ export const LoginPage = ({
               </div>
             )}
 
-            {/* Checklist Tiêu Chuẩn Bảo Mật */}
-            <div
-              style={{
-                background: 'rgba(248, 250, 252, 0.85)',
-                border: '1px solid #e2e8f0',
-                borderRadius: 8,
-                padding: '8px 10px',
-                marginTop: 8,
-                fontSize: '11.5px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 4,
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: passLengthOk ? '#10b981' : '#64748b', fontWeight: passLengthOk ? 600 : 400 }}>
-                {passLengthOk ? <Check size={13} strokeWidth={3} /> : <span style={{ width: 13, textAlign: 'center' }}>•</span>}
-                <span>Tối thiểu 8 ký tự</span>
+            {/* Checklist Tiêu Chuẩn Bảo Mật - Chỉ hiện khi nhập có lỗi / chưa hợp lệ để form gọn gàng */}
+            {hasPasswordError && (
+              <div
+                style={{
+                  background: 'rgba(248, 250, 252, 0.95)',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 8,
+                  padding: '8px 10px',
+                  marginTop: 8,
+                  fontSize: '11.5px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 4,
+                  animation: 'sosFadeIn 0.2s ease-out',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: passLengthOk ? '#10b981' : '#64748b', fontWeight: passLengthOk ? 600 : 400 }}>
+                  {passLengthOk ? <Check size={13} strokeWidth={3} /> : <span style={{ width: 13, textAlign: 'center' }}>•</span>}
+                  <span>Tối thiểu 8 ký tự</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: passUpperOk ? '#10b981' : '#64748b', fontWeight: passUpperOk ? 600 : 400 }}>
+                  {passUpperOk ? <Check size={13} strokeWidth={3} /> : <span style={{ width: 13, textAlign: 'center' }}>•</span>}
+                  <span>Có ít nhất 1 chữ cái in hoa (A-Z)</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: passLowerOk ? '#10b981' : '#64748b', fontWeight: passLowerOk ? 600 : 400 }}>
+                  {passLowerOk ? <Check size={13} strokeWidth={3} /> : <span style={{ width: 13, textAlign: 'center' }}>•</span>}
+                  <span>Có ít nhất 1 chữ cái in thường (a-z)</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: passNumberOk ? '#10b981' : '#64748b', fontWeight: passNumberOk ? 600 : 400 }}>
+                  {passNumberOk ? <Check size={13} strokeWidth={3} /> : <span style={{ width: 13, textAlign: 'center' }}>•</span>}
+                  <span>Có ít nhất 1 chữ số (0-9)</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: passSpecialOk ? '#10b981' : '#64748b', fontWeight: passSpecialOk ? 600 : 400 }}>
+                  {passSpecialOk ? <Check size={13} strokeWidth={3} /> : <span style={{ width: 13, textAlign: 'center' }}>•</span>}
+                  <span>Có ít nhất 1 ký tự đặc biệt (!@#$%^&*...)</span>
+                </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: passUpperOk ? '#10b981' : '#64748b', fontWeight: passUpperOk ? 600 : 400 }}>
-                {passUpperOk ? <Check size={13} strokeWidth={3} /> : <span style={{ width: 13, textAlign: 'center' }}>•</span>}
-                <span>Có ít nhất 1 chữ cái in hoa (A-Z)</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: passLowerOk ? '#10b981' : '#64748b', fontWeight: passLowerOk ? 600 : 400 }}>
-                {passLowerOk ? <Check size={13} strokeWidth={3} /> : <span style={{ width: 13, textAlign: 'center' }}>•</span>}
-                <span>Có ít nhất 1 chữ cái in thường (a-z)</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: passNumberOk ? '#10b981' : '#64748b', fontWeight: passNumberOk ? 600 : 400 }}>
-                {passNumberOk ? <Check size={13} strokeWidth={3} /> : <span style={{ width: 13, textAlign: 'center' }}>•</span>}
-                <span>Có ít nhất 1 chữ số (0-9)</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: passSpecialOk ? '#10b981' : '#64748b', fontWeight: passSpecialOk ? 600 : 400 }}>
-                {passSpecialOk ? <Check size={13} strokeWidth={3} /> : <span style={{ width: 13, textAlign: 'center' }}>•</span>}
-                <span>Có ít nhất 1 ký tự đặc biệt (!@#$%^&*...)</span>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Field 4: Xác nhận mật khẩu mới */}
@@ -719,29 +689,6 @@ export const LoginPage = ({
           title={lang === 'vi' ? 'Chuyển sang Tiếng Anh' : 'Switch to Vietnamese'}
         >
           {lang === 'vi' ? '🇻🇳 VI' : '🇬🇧 EN'}
-        </button>
-
-        <button
-          type="button"
-          onClick={toggleTheme}
-          style={{
-            background: 'rgba(255, 255, 255, 0.9)',
-            backdropFilter: 'blur(8px)',
-            border: '1px solid rgba(226, 232, 240, 0.8)',
-            borderRadius: 8,
-            padding: '6px 14px',
-            fontSize: 13,
-            fontWeight: 700,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            color: '#0f172a',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          }}
-          title={theme === 'light' ? 'Chuyển sang Chế độ Tối' : 'Switch to Light Mode'}
-        >
-          {theme === 'light' ? '☀️ Sáng' : '🌙 Tối'}
         </button>
       </div>
 

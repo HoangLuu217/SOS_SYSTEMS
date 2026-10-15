@@ -485,13 +485,18 @@ export function isSosInOfficerJurisdiction(
     return false;
   }
 
+  const officerAreaId = officer.jurisdictionAreaId;
+  // If ward ID or district ID explicitly matches officer's area, it directly belongs to this jurisdiction
+  if (officerAreaId && (sos.wardId === officerAreaId || sos.districtId === officerAreaId)) {
+    return true;
+  }
+
   // 1. Authoritative GIS spatial check: If boundary polygon is defined, coordinates MUST be inside it
   if (managedArea && managedArea.boundary && managedArea.boundary.coordinates) {
     return isPointInAreaBoundary(sos.coordinates, managedArea);
   }
 
   // 2. Fallback if polygon boundary is not yet loaded: check administrative ward ID and name
-  const officerAreaId = officer.jurisdictionAreaId;
   const wardKeyword = officer.jurisdictionAreaName
     ? officer.jurisdictionAreaName
         .toLowerCase()
@@ -504,6 +509,7 @@ export function isSosInOfficerJurisdiction(
 
   const matchesWard =
     sos.wardId === officerAreaId ||
+    sos.districtId === officerAreaId ||
     (wardKeyword && sos.wardName && sos.wardName.toLowerCase().includes(wardKeyword));
 
   return !!matchesWard;
