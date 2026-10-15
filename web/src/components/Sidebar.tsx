@@ -35,14 +35,7 @@ import {
   Building2,
   Globe2,
   Shield,
-  Edit3,
-  Phone,
-  Mail,
-  MapPin,
   Check,
-  CheckCircle2,
-  KeyRound,
-  X,
   MessageSquare,
 } from 'lucide-react';
 
@@ -837,7 +830,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="sos-profile-modal-header">
               <div className="sos-profile-modal-title">
                 <div className="sos-profile-modal-icon">
-                  <UserCheck size={20} color="#2563eb" />
+                  <i className="bi bi-person"></i>
                 </div>
                 <div>
                   <h3>Hồ Sơ Cán Bộ &amp; Đơn Vị Địa Phương</h3>
@@ -850,180 +843,201 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => setIsProfileModalOpen(false)}
                 aria-label="Đóng"
               >
-                <X size={18} />
+                <i className="bi bi-x-lg"></i>
               </button>
             </div>
 
             <form onSubmit={handleSaveProfile} className="sos-profile-form">
-              <div className="sos-profile-avatar-preview">
-                <div className="sos-profile-big-avatar">
-                  {localProfile.fullName.trim().charAt(0).toUpperCase() || 'U'}
-                </div>
-                <div className="sos-profile-preview-text">
-                  <strong>{localProfile.fullName || 'Cán bộ trực ban'}</strong>
-                  <span>{localProfile.position || 'Chỉ huy cứu hộ'}</span>
-                  <small>{localProfile.organizationName || 'Ban Chỉ Huy PCTT & TKCN'}</small>
-                </div>
-              </div>
-
-              <div className="sos-profile-fields-grid">
-                <div className="sos-profile-field">
-                  <label>
-                    <Edit3 size={14} />
-                    <span>Họ và tên cán bộ:</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={localProfile.fullName}
-                    onChange={(e) => setLocalProfile({ ...localProfile, fullName: e.target.value })}
-                    placeholder="VD: Đại úy Lê Hoàng Nam"
-                  />
+              <div className="sos-profile-modal-body">
+                {/* Khối tóm tắt hồ sơ */}
+                <div className="sos-profile-avatar-preview">
+                  <div className="sos-profile-big-avatar">
+                    {localProfile.fullName.trim().charAt(0).toUpperCase() || 'U'}
+                  </div>
+                  <div className="sos-profile-preview-text">
+                    <strong>{localProfile.fullName || 'Cán bộ trực ban'}</strong>
+                    <span>{localProfile.position || 'Chỉ huy cứu hộ'}</span>
+                    <small>{localProfile.organizationName || 'Ban Chỉ Huy PCTT & TKCN'}</small>
+                  </div>
                 </div>
 
-                <div className="sos-profile-field">
-                  <label>
-                    <Shield size={14} />
-                    <span>Chức vụ / Vị trí:</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={localProfile.position}
-                    onChange={(e) => setLocalProfile({ ...localProfile, position: e.target.value })}
-                    placeholder="VD: Chỉ Huy Trưởng"
-                  />
-                </div>
+                {/* Bố cục hai cột độc lập */}
+                <div className="sos-profile-columns-grid">
+                  {/* Cột trái: Họ và tên cán bộ → Cơ quan/Đơn vị công tác → Hòm thư điện tử công vụ */}
+                  <div className="sos-profile-col sos-profile-col-left">
+                    <div className="sos-profile-field sos-field-fullname">
+                      <label>
+                        <i className="bi bi-pencil"></i>
+                        <span>Họ và tên cán bộ:</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={localProfile.fullName}
+                        onChange={(e) => setLocalProfile({ ...localProfile, fullName: e.target.value })}
+                        placeholder="VD: Cán Bộ Điều Hành SOS"
+                      />
+                    </div>
 
-                <div className="sos-profile-field">
-                  <label>
-                    <Building2 size={14} />
-                    <span>Cơ quan / Đơn vị công tác:</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={localProfile.organizationName}
-                    onChange={(e) => setLocalProfile({ ...localProfile, organizationName: e.target.value })}
-                    placeholder="VD: Ban Chỉ Huy PCTT & TKCN Quận Hải Châu"
-                  />
-                </div>
+                    <div className="sos-profile-field sos-field-organization">
+                      <label>
+                        <i className="bi bi-building"></i>
+                        <span>Cơ quan / Đơn vị công tác:</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={localProfile.organizationName}
+                        onChange={(e) => setLocalProfile({ ...localProfile, organizationName: e.target.value })}
+                        placeholder="VD: Ban Chỉ Huy PCTT & TKCN Quận Hải Châu"
+                      />
+                    </div>
 
-                <div className="sos-profile-field">
-                  <div className="sos-profile-field-header">
-                    <label>
-                      <Phone size={14} />
-                      <span>Số điện thoại trực ban / Hotline:</span>
-                    </label>
-                    {isPhoneVerified ? (
-                      <span className="sos-phone-badge-verified">
-                        <CheckCircle2 size={12} /> Đã xác thực
-                      </span>
-                    ) : (
-                      <span className="sos-phone-badge-unverified">
-                        Chưa xác thực
-                      </span>
-                    )}
+                    <div className="sos-profile-field sos-field-email">
+                      <label>
+                        <i className="bi bi-envelope"></i>
+                        <span>Hòm thư điện tử công vụ:</span>
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={localProfile.email}
+                        onChange={(e) => setLocalProfile({ ...localProfile, email: e.target.value })}
+                        placeholder="VD: authority@sos.vn"
+                      />
+                    </div>
                   </div>
 
-                  <div className="sos-phone-input-wrap">
-                    <input
-                      type="tel"
-                      required
-                      value={localProfile.phone}
-                      onChange={handlePhoneChange}
-                      placeholder="VD: 0905 114 115"
-                      className={isPhoneVerified ? 'phone-verified' : ''}
-                    />
-                    {!isPhoneVerified && (
-                      <button
-                        type="button"
-                        className="sos-btn-send-otp"
-                        onClick={handleSendPhoneOtp}
-                        disabled={sendingOtp || otpCountdown > 0 || !localProfile.phone.trim()}
-                        title="Gửi mã OTP xác minh số điện thoại này"
-                      >
-                        {sendingOtp
-                          ? 'Đang gửi...'
-                          : otpCountdown > 0
-                          ? `Gửi lại (${otpCountdown}s)`
-                          : showOtpBox
-                          ? 'Gửi lại mã'
-                          : 'Xác thực SĐT'}
-                      </button>
-                    )}
-                  </div>
+                  {/* Cột phải: Chức vụ/Vị trí → Số điện thoại trực ban → Khối xác thực OTP */}
+                  <div className="sos-profile-col sos-profile-col-right">
+                    <div className="sos-profile-field sos-field-position">
+                      <label>
+                        <i className="bi bi-shield"></i>
+                        <span>Chức vụ / Vị trí:</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={localProfile.position}
+                        onChange={(e) => setLocalProfile({ ...localProfile, position: e.target.value })}
+                        placeholder="VD: Chuyên viên Điều phối Tác chiến"
+                      />
+                    </div>
 
-                  {/* Ô NHẬP MÃ OTP GỌN GÀNG HIỆN ĐẠI */}
-                  {showOtpBox && !isPhoneVerified && (
-                    <div className="sos-otp-compact-row">
-                      <div className="sos-otp-input-wrap">
-                        <KeyRound size={13} className="sos-otp-icon" />
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          maxLength={6}
-                          className="sos-otp-compact-input"
-                          placeholder="Mã OTP 6 số"
-                          value={otpCode}
-                          onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              handleVerifyPhoneOtp();
-                            }
-                          }}
-                          autoFocus
-                        />
+                    <div className="sos-profile-field sos-field-phone">
+                      <div className="sos-phone-label-row">
+                        <label>
+                          <i className="bi bi-telephone"></i>
+                          <span>Số điện thoại trực ban / Hotline:</span>
+                        </label>
+                        {isPhoneVerified ? (
+                          <span className="sos-phone-badge sos-phone-badge-verified">
+                            Đã xác thực
+                          </span>
+                        ) : (
+                          <span className="sos-phone-badge sos-phone-badge-unverified">
+                            Chưa xác thực
+                          </span>
+                        )}
                       </div>
 
-                      <button
-                        type="button"
-                        className="sos-btn-compact-verify"
-                        onClick={handleVerifyPhoneOtp}
-                        disabled={verifyingOtp || otpCode.trim().length !== 6}
-                      >
-                        {verifyingOtp ? 'Kiểm tra...' : 'Xác nhận'}
-                      </button>
-                    </div>
-                  )}
+                      <div className="sos-phone-auth-group">
+                        {/* Hàng đầu: input số điện thoại và nút “Gửi mã” hoặc “Gửi lại (58s)” */}
+                        <div className="sos-phone-input-row">
+                          <input
+                            type="tel"
+                            required
+                            value={localProfile.phone}
+                            onChange={handlePhoneChange}
+                            placeholder="VD: 0909876543"
+                            className={isPhoneVerified ? 'phone-verified' : ''}
+                          />
+                          {!isPhoneVerified && (
+                            <button
+                              type="button"
+                              className="sos-btn-send-otp"
+                              onClick={handleSendPhoneOtp}
+                              disabled={sendingOtp || otpCountdown > 0 || !localProfile.phone.trim()}
+                              title="Gửi mã OTP xác minh số điện thoại này"
+                            >
+                              {sendingOtp
+                                ? 'Đang gửi...'
+                                : otpCountdown > 0
+                                ? `Gửi lại (${otpCountdown}s)`
+                                : showOtpBox
+                                ? 'Gửi lại'
+                                : 'Gửi mã'}
+                            </button>
+                          )}
+                        </div>
 
-                  {otpError && (
-                    <div className="sos-otp-error-inline">
-                      ⚠️ {otpError}
+                        {/* Hàng tiếp theo: input “Mã OTP 6 số” và nút “Xác nhận” */}
+                        {showOtpBox && !isPhoneVerified && (
+                          <div className="sos-otp-row">
+                            <div className="sos-otp-input-wrap">
+                              <i className="bi bi-key sos-otp-icon"></i>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                maxLength={6}
+                                className="sos-otp-input"
+                                placeholder="Mã OTP 6 số"
+                                value={otpCode}
+                                onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleVerifyPhoneOtp();
+                                  }
+                                }}
+                                autoFocus
+                              />
+                            </div>
+
+                            <button
+                              type="button"
+                              className="sos-btn-verify-otp"
+                              onClick={handleVerifyPhoneOtp}
+                              disabled={verifyingOtp || otpCode.trim().length !== 6}
+                            >
+                              {verifyingOtp ? 'Kiểm tra...' : 'Xác nhận'}
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Ghi chú nhỏ dưới OTP: chỉ hiển thị sau khi gửi thành công */}
+                        {showOtpBox && !isPhoneVerified && (
+                          <div className="sos-otp-note">
+                            Mã xác thực đã gửi đến số điện thoại của bạn.
+                          </div>
+                        )}
+
+                        {/* Lỗi hiển thị ngay dưới trường liên quan, không đưa xuống cuối form */}
+                        {otpError && (
+                          <div className="sos-field-error">
+                            <i className="bi bi-exclamation-triangle"></i> {otpError}
+                          </div>
+                        )}
+                        {otpSuccessNotice && (
+                          <div className="sos-field-success">
+                            <i className="bi bi-check-circle"></i> {otpSuccessNotice}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  )}
-                  {otpSuccessNotice && (
-                    <div className="sos-otp-success-inline">
-                      {otpSuccessNotice}
-                    </div>
-                  )}
+                  </div>
                 </div>
 
-                <div className="sos-profile-field">
-                  <label>
-                    <Mail size={14} />
-                    <span>Hòm thư điện tử công vụ:</span>
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={localProfile.email}
-                    onChange={(e) => setLocalProfile({ ...localProfile, email: e.target.value })}
-                    placeholder="VD: chihuy.pctt@danang.gov.vn"
-                  />
-                </div>
-
-                {/* Chọn địa bàn chuẩn Vietnam Provinces online API 2025 */}
-                <div className="sos-profile-field full-width">
-                  <label>
-                    <MapPin size={14} color="#2563eb" />
+                {/* Phần địa bàn phụ trách quản lý nằm dưới hai cột và chiếm toàn bộ chiều rộng */}
+                <div className="sos-profile-area-section">
+                  <label className="sos-profile-section-label">
+                    <i className="bi bi-geo-alt" style={{ color: '#2563eb' }}></i>
                     <span>Địa bàn phụ trách quản lý:</span>
                   </label>
 
-                  <div className="sos-profile-area-selects">
-                    <div className="sos-profile-select-group">
-                      <span className="sos-profile-sublabel">Tỉnh / Thành phố trực thuộc TW:</span>
+                  <div className="sos-profile-area-dropdowns">
+                    <div className="sos-profile-area-col">
+                      <span className="sos-profile-sublabel">Tỉnh / Thành phố:</span>
                       <select
                         value={selectedProvinceCode}
                         onChange={handleProvinceChange}
@@ -1040,10 +1054,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </select>
                     </div>
 
-                    <div className="sos-profile-select-group">
+                    <div className="sos-profile-area-col">
                       <span className="sos-profile-sublabel">
-                        Phường / Xã / Đơn vị cơ sở:
-                        {loadingWards && <span style={{ marginLeft: 6, fontSize: 10, color: '#2563eb' }}>(Đang nạp...)</span>}
+                        Phường / Xã:
+                        {loadingWards && <span style={{ marginLeft: 6, fontSize: 11, color: '#2563eb' }}>(Đang nạp...)</span>}
                       </span>
                       <select
                         value={selectedWardCode}
@@ -1060,8 +1074,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                   </div>
 
-                  <div className="sos-profile-area-preview">
-                    <span className="sos-profile-sublabel">Tên địa bàn hiển thị trong hồ sơ &amp; phân quyền:</span>
+                  <div className="sos-profile-managed-area">
+                    <span className="sos-profile-sublabel">Địa bàn hiển thị trong hồ sơ &amp; phân quyền:</span>
                     <input
                       type="text"
                       required
@@ -1071,14 +1085,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     />
                   </div>
                 </div>
+
+                {profileErrorMsg && (
+                  <div className="sos-profile-form-error">
+                    <i className="bi bi-exclamation-triangle"></i> {profileErrorMsg}
+                  </div>
+                )}
               </div>
 
-              {profileErrorMsg && (
-                <div style={{ color: '#ef4444', fontSize: 12, padding: '4px 8px', background: '#fef2f2', borderRadius: 6 }}>
-                  ⚠️ {profileErrorMsg}
-                </div>
-              )}
-
+              {/* Footer có viền trên nhẹ và các nút căn phải */}
               <div className="sos-profile-modal-actions">
                 <button
                   type="button"
@@ -1089,8 +1104,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   Hủy bỏ
                 </button>
                 <button type="submit" className="sos-profile-btn-save" disabled={savingProfile}>
-                  <Check size={16} />
-                  <span>{savingProfile ? 'Đang lưu vào Database...' : 'Lưu Hồ Sơ Cán Bộ'}</span>
+                  <i className="bi bi-check2"></i>
+                  <span>{savingProfile ? 'Đang lưu...' : 'Lưu hồ sơ'}</span>
                 </button>
               </div>
             </form>

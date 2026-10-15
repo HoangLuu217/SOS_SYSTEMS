@@ -770,20 +770,24 @@
   }
 }
 
-/* Modal Card */
+/* Modal Card - Compact no-scroll view */
 .sos-profile-modal-card {
-  width: 100%;
-  max-width: 580px;
+  width: min(720px, calc(100vw - 32px));
+  max-width: 720px;
+  max-height: 92dvh;
   background: #ffffff;
-  border-radius: 16px;
-  box-shadow: 0 20px 40px -8px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 20px 40px -8px rgba(15, 23, 42, 0.18), 0 1px 3px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
-  animation: modalScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes modalScaleIn {
   from {
-    transform: scale(0.95);
+    transform: scale(0.96);
     opacity: 0;
   }
   to {
@@ -796,47 +800,53 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 24px;
-  background: #f8fafc;
+  padding: 10px 18px;
+  background: #ffffff;
   border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
 }
 
 .sos-profile-modal-title {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .sos-profile-modal-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
   background: #eff6ff;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #2563eb;
+  font-size: 18px;
+  flex-shrink: 0;
 }
 
 .sos-profile-modal-title h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  color: #0f172a;
+  color: #142235;
+  line-height: 1.25;
 }
 
 .sos-profile-modal-title p {
-  margin: 2px 0 0;
-  font-size: 12px;
-  color: #64748b;
+  margin: 1px 0 0;
+  font-size: 11.5px;
+  color: #718096;
+  line-height: 1.3;
 }
 
 .sos-profile-modal-close {
   background: transparent;
   border: none;
-  color: #94a3b8;
+  color: #64748b;
+  font-size: 16px;
   cursor: pointer;
-  padding: 6px;
+  padding: 5px;
   border-radius: 6px;
   display: flex;
   align-items: center;
@@ -845,96 +855,129 @@
 }
 
 .sos-profile-modal-close:hover {
-  background: #e2e8f0;
-  color: #0f172a;
+  background: #f1f5f9;
+  color: #142235;
 }
 
 .sos-profile-form {
-  padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
+.sos-profile-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Khối tóm tắt hồ sơ gọn nhẹ */
 .sos-profile-avatar-preview {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 12px 16px;
-  background: #f1f5f9;
-  border-radius: 12px;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #f4f7fb;
+  border-radius: 10px;
   border: 1px solid #e2e8f0;
 }
 
 .sos-profile-big-avatar {
-  width: 52px;
-  height: 52px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: #2563eb;
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
-  font-weight: 800;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  font-size: 15px;
+  font-weight: 700;
   flex-shrink: 0;
 }
 
 .sos-profile-preview-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .sos-profile-preview-text strong {
-  font-size: 15px;
-  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+  color: #142235;
+  line-height: 1.25;
 }
 
 .sos-profile-preview-text span {
-  font-size: 12.5px;
-  color: #2563eb;
+  font-size: 12px;
   font-weight: 600;
+  color: #2563eb;
+  line-height: 1.25;
 }
 
 .sos-profile-preview-text small {
-  font-size: 11.5px;
-  color: #64748b;
+  font-size: 11px;
+  font-weight: 400;
+  color: #718096;
+  line-height: 1.2;
 }
 
-.sos-profile-fields-grid {
+/* Bố cục 2 cột độc lập */
+.sos-profile-columns-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 18px;
+  align-items: start;
+}
+
+.sos-profile-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .sos-profile-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .sos-profile-field label {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
-  color: #334155;
+  color: #142235;
+  margin: 0;
+}
+
+.sos-profile-field label i {
+  font-size: 12.5px;
+  color: #142235;
 }
 
 .sos-profile-field input,
-.sos-profile-field select {
+.sos-profile-field select,
+.sos-profile-area-section input,
+.sos-profile-area-section select {
   width: 100%;
-  padding: 9px 12px;
+  height: 34px;
+  padding: 0 10px;
   border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font-size: 13px;
-  color: #0f172a;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: #142235;
   background: #ffffff;
   box-sizing: border-box;
-  transition: all 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .sos-profile-field select {
@@ -942,10 +985,12 @@
 }
 
 .sos-profile-field input:focus,
-.sos-profile-field select:focus {
+.sos-profile-field select:focus,
+.sos-profile-area-section input:focus,
+.sos-profile-area-section select:focus {
   outline: none;
   border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
 }
 
 .sos-profile-field select:disabled {
@@ -954,92 +999,100 @@
   cursor: not-allowed;
 }
 
-/* Phone Verification Header & Badges */
-.sos-profile-field-header {
+/* Khối xác thực số điện thoại */
+.sos-phone-label-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
 
-.sos-phone-badge-verified {
+.sos-phone-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #16a34a;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  padding: 1px 7px;
-  border-radius: 12px;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  white-space: nowrap;
+  line-height: 1.35;
 }
 
 .sos-phone-badge-unverified {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10.5px;
-  font-weight: 600;
-  color: #d97706;
   background: #fffbeb;
+  color: #d97706;
   border: 1px solid #fde68a;
-  padding: 1px 6px;
-  border-radius: 12px;
 }
 
-.sos-phone-input-wrap {
+.sos-phone-badge-verified {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+.sos-phone-auth-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.sos-phone-input-row {
   display: flex;
   gap: 6px;
   align-items: center;
-  position: relative;
+  height: 34px;
 }
 
-.sos-phone-input-wrap input {
+.sos-phone-input-row input {
   flex: 1;
+  height: 34px;
+  min-width: 0;
 }
 
-.sos-phone-input-wrap input.phone-verified {
+.sos-phone-input-row input.phone-verified {
   border-color: #86efac;
   background: #f0fdf4;
 }
 
 .sos-btn-send-otp {
-  height: 38px;
-  padding: 0 13px;
-  background: #0284c7;
-  color: #ffffff;
-  border: 1px solid transparent;
-  border-radius: 8px;
+  height: 34px;
+  width: 96px;
+  min-width: 96px;
+  max-width: 96px;
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s ease;
-  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
+  padding: 0 4px;
+  transition: all 0.15s ease;
 }
 
 .sos-btn-send-otp:hover:not(:disabled) {
-  background: #0369a1;
+  background: #e2e8f0;
+  color: #0f172a;
 }
 
 .sos-btn-send-otp:disabled {
-  background: #f1f5f9;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #94a3b8;
+  border-color: #e2e8f0;
   cursor: not-allowed;
-  opacity: 0.9;
 }
 
-/* Hàng nhập OTP gọn gàng hiện đại */
-.sos-otp-compact-row {
+/* Hàng nhập OTP */
+.sos-otp-row {
   display: flex;
-  align-items: center;
   gap: 6px;
-  margin-top: 4px;
+  align-items: center;
+  height: 34px;
   animation: slideToastIn 0.2s ease;
 }
 
@@ -1047,198 +1100,271 @@
   flex: 1;
   display: flex;
   align-items: center;
+  height: 34px;
+  border: 1.5px solid #0284c7;
+  border-radius: 6px;
   background: #ffffff;
-  border: 1.5px solid #38bdf8;
-  border-radius: 8px;
-  padding: 0 6px 0 10px;
-  height: 36px;
-  box-shadow: 0 1px 2px rgba(14, 165, 233, 0.06);
+  padding: 0 8px;
+  box-sizing: border-box;
+  min-width: 0;
   transition: all 0.15s ease;
 }
 
 .sos-otp-input-wrap:focus-within {
   border-color: #0284c7;
-  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
 }
 
 .sos-otp-icon {
   color: #0284c7;
-  flex-shrink: 0;
+  font-size: 14px;
   margin-right: 6px;
+  flex-shrink: 0;
 }
 
-.sos-otp-compact-input {
+.sos-otp-input {
   flex: 1;
   border: none !important;
+  outline: none !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  color: #142235 !important;
   background: transparent !important;
   padding: 0 !important;
   height: 100% !important;
-  font-size: 13px !important;
-  font-weight: 600 !important;
-  color: #0f172a !important;
-  outline: none !important;
-  box-shadow: none !important;
   min-width: 0;
+  box-shadow: none !important;
 }
 
-.sos-otp-compact-input::placeholder {
+.sos-otp-input::placeholder {
   font-size: 12px;
   font-weight: 400;
   color: #94a3b8;
-  letter-spacing: normal;
 }
 
-.sos-otp-compact-input:not(:placeholder-shown) {
-  letter-spacing: 2px;
-  font-weight: 700;
-}
-
-
-
-.sos-btn-compact-verify {
-  height: 36px;
-  padding: 0 14px;
-  background: #16a34a;
+.sos-btn-verify-otp {
+  height: 34px;
+  width: 96px;
+  min-width: 96px;
+  max-width: 96px;
+  background: #2563eb;
   color: #ffffff;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s ease;
-  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
 }
 
-.sos-btn-compact-verify:hover:not(:disabled) {
-  background: #15803d;
+.sos-btn-verify-otp:hover:not(:disabled) {
+  background: #1d4ed8;
 }
 
-.sos-btn-compact-verify:disabled {
-  opacity: 0.5;
+.sos-btn-verify-otp:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
   background: #94a3b8;
 }
 
-.sos-otp-error-inline {
-  font-size: 11.5px;
-  color: #dc2626;
-  margin-top: 3px;
+.sos-otp-note {
+  font-size: 11px;
+  color: #718096;
+  margin-top: 1px;
 }
 
-.sos-otp-success-inline {
+.sos-field-error {
+  font-size: 11.5px;
+  color: #dc2626;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sos-field-success {
   font-size: 11.5px;
   font-weight: 600;
   color: #16a34a;
-  margin-top: 3px;
-  animation: slideToastIn 0.2s ease;
-}
-
-.sos-profile-field.full-width {
-  grid-column: 1 / -1;
-}
-
-.sos-profile-area-header {
+  margin-top: 2px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 2px;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.sos-profile-api-badge {
-  display: inline-flex;
-  align-items: center;
   gap: 4px;
-  padding: 3px 8px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #1d4ed8;
-  font-size: 11px;
-  font-weight: 600;
-  border-radius: 12px;
-  text-decoration: none;
-  transition: all 0.15s ease;
 }
 
-.sos-profile-api-badge:hover {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.sos-profile-area-selects {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.sos-profile-select-group {
+/* Phần địa bàn phụ trách quản lý */
+.sos-profile-area-section {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  margin-top: 0;
+}
+
+.sos-profile-section-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #142235;
+  margin: 0;
+}
+
+.sos-profile-area-dropdowns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.sos-profile-area-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .sos-profile-sublabel {
   font-size: 11px;
-  color: #64748b;
   font-weight: 500;
+  color: #718096;
 }
 
-.sos-profile-area-preview {
+.sos-profile-managed-area {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 4px;
+  gap: 3px;
 }
 
+.sos-profile-form-error {
+  color: #dc2626;
+  font-size: 11.5px;
+  padding: 6px 10px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Modal Actions Footer */
 .sos-profile-modal-actions {
+  flex-shrink: 0;
+  padding: 10px 18px;
+  border-top: 1px solid #e2e8f0;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 10px;
-  margin-top: 6px;
-  padding-top: 14px;
-  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
 }
 
 .sos-profile-btn-cancel {
-  padding: 9px 16px;
+  height: 34px;
+  padding: 0 16px;
   border: 1px solid #cbd5e1;
-  border-radius: 8px;
+  border-radius: 6px;
   background: #ffffff;
-  color: #475569;
-  font-size: 13px;
+  color: #334155;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.sos-profile-btn-cancel:hover {
+.sos-profile-btn-cancel:hover:not(:disabled) {
   background: #f8fafc;
   color: #0f172a;
 }
 
 .sos-profile-btn-save {
+  height: 34px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 9px 18px;
-  border: none;
-  border-radius: 8px;
-  background: #2563eb;
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
   transition: all 0.15s ease;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
 }
 
-.sos-profile-btn-save:hover {
+.sos-profile-btn-save:hover:not(:disabled) {
   background: #1d4ed8;
-  transform: translateY(-1px);
 }
+
+.sos-profile-btn-save:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Responsive layout (< 640px): 1 column with exact specified order */
+@media (max-width: 640px) {
+  .sos-profile-modal-card {
+    width: calc(100vw - 20px);
+    max-height: 94dvh;
+    border-radius: 10px;
+  }
+
+  .sos-profile-modal-header {
+    padding: 10px 14px;
+  }
+
+  .sos-profile-modal-body {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .sos-profile-modal-actions {
+    padding: 10px 14px;
+  }
+
+  .sos-profile-columns-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .sos-profile-col {
+    display: contents;
+  }
+
+  .sos-field-fullname {
+    order: 1;
+  }
+
+  .sos-field-position {
+    order: 2;
+  }
+
+  .sos-field-organization {
+    order: 3;
+  }
+
+  .sos-field-email {
+    order: 4;
+  }
+
+  .sos-field-phone {
+    order: 5;
+  }
+
+  .sos-profile-area-section {
+    order: 6;
+  }
+
+  .sos-profile-area-dropdowns {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
 
