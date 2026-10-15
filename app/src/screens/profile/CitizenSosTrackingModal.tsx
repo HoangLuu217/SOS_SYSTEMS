@@ -637,7 +637,7 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
               {/* Danh sách vật phẩm cứu trợ mang theo */}
               <View style={styles.gearBox}>
                 <Text style={styles.gearBoxTitle}>🎒 Trang bị & Vật phẩm cứu trợ mang theo:</Text>
-                
+
                 <View style={styles.gearGrid}>
                   <View style={styles.gearItem}>
                     <Text style={styles.gearIcon}>🦺</Text>
@@ -698,15 +698,10 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
               {/* Danh sách đối tượng ưu tiên */}
               {priorityGroups && priorityGroups.length > 0 && (
                 <View style={styles.priorityBox}>
-                  <Text style={styles.priorityBoxTitle}>⚠️ Đối tượng ưu tiên cần bảo vệ đặc biệt:</Text>
-                  <View style={styles.priorityTagsWrap}>
-                    {priorityGroups.map((p, pIdx) => (
-                      <View key={pIdx} style={styles.priorityTag}>
-                        <Feather name="alert-circle" size={12} color="#DC2626" />
-                        <Text style={styles.priorityTagText}>{p}</Text>
-                      </View>
-                    ))}
-                  </View>
+                  <Text style={styles.priorityBoxTitle}>Đối tượng ưu tiên cần bảo vệ đặc biệt:</Text>
+                  <Text style={styles.priorityText}>
+                    {priorityGroups.join(', ')}
+                  </Text>
                 </View>
               )}
 
@@ -1159,7 +1154,7 @@ const styles = StyleSheet.create({
   requestMiniValueBold: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#DC2626',
+    color: '#0F172A',
     marginTop: 3,
   },
   requestMiniValue: {
@@ -1169,39 +1164,19 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   priorityBox: {
-    backgroundColor: '#FEF2F2',
-    padding: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#FECACA',
     marginBottom: 12,
   },
   priorityBoxTitle: {
     fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  priorityText: {
+    fontSize: 13,
     fontWeight: '700',
-    color: '#991B1B',
-    marginBottom: 6,
-  },
-  priorityTagsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  priorityTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-  },
-  priorityTagText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#DC2626',
+    color: '#0F172A',
+    marginTop: 3,
+    lineHeight: 19,
   },
   infoRow: {
     flexDirection: 'row',
