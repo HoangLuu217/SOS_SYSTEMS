@@ -19,6 +19,7 @@ class HazardReportController {
         action: 'CITIZEN_REPORT_HAZARD',
         entityType: 'HazardReport',
         entityId: report._id,
+        areaId: report.areaId || null,
         metadata: {
           hazardType: report.hazardType,
           severity: report.severity,
@@ -81,6 +82,7 @@ class HazardReportController {
         action: reviewAction,
         entityType: 'HazardReport',
         entityId: updated._id,
+        areaId: updated.areaId || authorityUser?.authority?.areaId || null,
         metadata: {
           status: updated.status,
           reviewNotes: req.body?.reviewNotes,
@@ -114,6 +116,7 @@ class HazardReportController {
         action: 'AUTHORITY_DELETE_HAZARD',
         entityType: 'HazardReport',
         entityId: req.params.id,
+        areaId: authorityUser?.authority?.areaId || null,
       });
 
       return sendSuccess(res, 200, result.message);

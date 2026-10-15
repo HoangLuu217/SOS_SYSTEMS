@@ -16,6 +16,7 @@ const createSos = async (req, res, next) => {
       action: 'CITIZEN_CREATE_SOS',
       entityType: 'SosRequest',
       entityId: newSos._id,
+      areaId: newSos.areaId || null,
       metadata: {
         severityLevel: newSos.severityLevel,
         description: newSos.description,
@@ -71,6 +72,7 @@ const updateSos = async (req, res, next) => {
       action: 'UPDATE_SOS',
       entityType: 'SosRequest',
       entityId: req.params.id,
+      areaId: updatedSos?.areaId || null,
       metadata: { updatedFields: Object.keys(req.body) },
     });
 
@@ -92,6 +94,7 @@ const cancelSos = async (req, res, next) => {
       action: 'CITIZEN_CANCEL_SOS',
       entityType: 'SosRequest',
       entityId: req.params.id,
+      areaId: updatedSos?.areaId || null,
       metadata: { note, status: 'CANCELLED' },
     });
 
@@ -113,6 +116,7 @@ const completeSos = async (req, res, next) => {
       action: 'COMPLETE_SOS',
       entityType: 'SosRequest',
       entityId: req.params.id,
+      areaId: updatedSos?.areaId || null,
       metadata: { note, status: 'COMPLETED' },
     });
 
@@ -150,6 +154,7 @@ const verifySos = async (req, res, next) => {
       action: 'AUTHORITY_VERIFY_SOS',
       entityType: 'SosRequest',
       entityId: req.params.id,
+      areaId: verifiedSos?.areaId || req.user.authority?.areaId || null,
       metadata: {
         priorityLevel: req.body.priorityLevel,
         status: verifiedSos.status,

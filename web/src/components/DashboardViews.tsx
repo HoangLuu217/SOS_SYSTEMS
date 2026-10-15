@@ -7641,6 +7641,26 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                       <div className="sos-audit-action-row">
                         <span className="sos-audit-action-text">{actionText}</span>
                         <span className="sos-audit-entity-tag">[{log.entityType}]</span>
+                        {log.areaId && (
+                          <span
+                            className="sos-badge info"
+                            style={{
+                              fontSize: '11px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              background: 'rgba(56, 189, 248, 0.12)',
+                              color: '#38bdf8',
+                              border: '1px solid rgba(56, 189, 248, 0.25)',
+                              fontWeight: 500,
+                            }}
+                          >
+                            <MapPin size={11} />
+                            <span>{typeof log.areaId === 'object' ? log.areaId.name : 'Địa phương'}</span>
+                          </span>
+                        )}
                       </div>
 
                       {log.metadata && Object.keys(log.metadata).length > 0 && (

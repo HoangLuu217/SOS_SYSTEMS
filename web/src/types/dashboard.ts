@@ -139,6 +139,12 @@ export interface AuditLogItem {
   action: string;
   entityType: string;
   entityId?: string;
+  areaId?: {
+    _id: string;
+    name: string;
+    code?: string;
+    type?: string;
+  } | string;
   metadata?: Record<string, unknown>;
   createdAt: string;
 }

@@ -397,6 +397,11 @@ export const FALLBACK_AUDIT_LOGS: AuditLogItem[] = [
       fullName: 'Trần Văn Minh',
       phone: '0905 123 456',
     },
+    areaId: {
+      _id: 'area-hc-01',
+      name: 'Phường Hòa Cường Bắc',
+      type: 'WARD',
+    },
     createdAt: new Date(Date.now() - 8 * 60000).toISOString(),
     metadata: {
       'Mã SOS': 'SOS #8924',
@@ -415,6 +420,11 @@ export const FALLBACK_AUDIT_LOGS: AuditLogItem[] = [
       fullName: 'Lê Hoàng Nam',
       phone: '0905 654 321',
     },
+    areaId: {
+      _id: 'area-hc-02',
+      name: 'Phường Bình Thuận',
+      type: 'WARD',
+    },
     createdAt: new Date(Date.now() - 19 * 60000).toISOString(),
     metadata: {
       'Mã SOS': 'SOS #8927',
@@ -432,6 +442,11 @@ export const FALLBACK_AUDIT_LOGS: AuditLogItem[] = [
       fullName: 'BCH PCTT & TKCN Quận Hải Châu',
       phone: '0236 3822 114',
     },
+    areaId: {
+      _id: 'area-hc-00',
+      name: 'Quận Hải Châu',
+      type: 'DISTRICT',
+    },
     createdAt: new Date(Date.now() - 42 * 60000).toISOString(),
     metadata: {
       'Tiêu đề': 'Cảnh báo lũ dâng cao lưu vực sông Hàn',
@@ -447,6 +462,11 @@ export const FALLBACK_AUDIT_LOGS: AuditLogItem[] = [
       _id: 'act-dn-04',
       fullName: 'Nguyễn Văn Hùng',
       phone: '0912 345 678',
+    },
+    areaId: {
+      _id: 'area-st-01',
+      name: 'Bán đảo Sơn Trà',
+      type: 'DISTRICT',
     },
     createdAt: new Date(Date.now() - 112 * 60000).toISOString(),
     metadata: {
@@ -465,6 +485,11 @@ export const FALLBACK_AUDIT_LOGS: AuditLogItem[] = [
       fullName: 'Hoàng Văn Vinh',
       phone: '0905 998 331',
     },
+    areaId: {
+      _id: 'area-hc-02',
+      name: 'Phường Bình Thuận',
+      type: 'WARD',
+    },
     createdAt: new Date(Date.now() - 125 * 60000).toISOString(),
     metadata: {
       'Mã SOS': 'SOS #8927',
@@ -481,6 +506,11 @@ export const FALLBACK_AUDIT_LOGS: AuditLogItem[] = [
       _id: 'act-dn-06',
       fullName: 'Quản trị viên Hệ thống',
       phone: '0901 000 001',
+    },
+    areaId: {
+      _id: 'area-hc-00',
+      name: 'Quận Hải Châu',
+      type: 'DISTRICT',
     },
     createdAt: new Date(Date.now() - 210 * 60000).toISOString(),
     metadata: {

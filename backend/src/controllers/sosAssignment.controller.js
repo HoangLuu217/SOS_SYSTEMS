@@ -24,6 +24,7 @@ class SosAssignmentController {
         action: 'AUTHORITY_ASSIGN_MISSION',
         entityType: 'SosAssignment',
         entityId: assignment._id,
+        areaId: req.user?.authority?.areaId || null,
         metadata: {
           sosId: assignment.sosId,
           rescueTeamId: assignment.rescueTeamId,
@@ -123,6 +124,7 @@ class SosAssignmentController {
         action: 'AUTHORITY_REASSIGN_MISSION',
         entityType: 'SosAssignment',
         entityId: assignment._id,
+        areaId: req.user?.authority?.areaId || null,
         metadata: {
           sosId: assignment.sosId,
           rescueTeamId: assignment.rescueTeamId,
@@ -155,6 +157,7 @@ class SosAssignmentController {
         action: 'AUTHORITY_CANCEL_MISSION',
         entityType: 'SosAssignment',
         entityId: assignment._id,
+        areaId: req.user?.authority?.areaId || null,
         metadata: {
           sosId: assignment.sosId,
           cancelReason,

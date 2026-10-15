@@ -16,6 +16,7 @@ class RescueTeamController {
         action: 'CREATE_RESCUE_TEAM',
         entityType: 'RescueTeam',
         entityId: team._id,
+        areaId: team.areaId || req.user?.authority?.areaId || null,
         metadata: { teamName: team.name, type: team.type, areaId: team.areaId },
       });
 
