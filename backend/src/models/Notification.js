@@ -7,6 +7,21 @@ const notificationSchema = new mongoose.Schema(
       ref: 'User',
       required: [true, 'Người nhận thông báo (userId) là bắt buộc'],
     },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    areaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AdministrativeArea',
+      default: null,
+    },
+    areaName: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     sosId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'SosRequest',
@@ -28,6 +43,11 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Nội dung thông báo là bắt buộc'],
       trim: true,
+    },
+    priority: {
+      type: String,
+      enum: ['LOW', 'NORMAL', 'MEDIUM', 'HIGH', 'CRITICAL'],
+      default: 'NORMAL',
     },
     data: {
       type: mongoose.Schema.Types.Mixed,
@@ -52,6 +72,8 @@ const notificationSchema = new mongoose.Schema(
 // Indexes
 notificationSchema.index({ userId: 1 });
 notificationSchema.index({ isRead: 1 });
+notificationSchema.index({ areaId: 1 });
+notificationSchema.index({ type: 1 });
 notificationSchema.index({ createdAt: -1 });
 notificationSchema.index({ userId: 1, isRead: 1, createdAt: -1 });
 

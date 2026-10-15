@@ -130,10 +130,11 @@ export const LoginPage = ({
     }
   }, [isResetPasswordMode]);
 
-  // Strict check: Only LOCAL_AUTHORITY and ADMIN
-  const hasAuthorizedRole = (roles: string[] | undefined): boolean => {
+  // Strict check: Only LOCAL_AUTHORITY, accounts with .authority, and ADMIN
+  const hasAuthorizedRole = (roles: string[] | undefined, authority?: any): boolean => {
+    if (authority && typeof authority === 'object' && Object.keys(authority).length > 0) return true;
     if (!roles || !Array.isArray(roles)) return false;
-    return roles.includes('ADMIN') || roles.includes('LOCAL_AUTHORITY');
+    return roles.includes('ADMIN') || roles.includes('LOCAL_AUTHORITY') || roles.includes('AUTHORITY');
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -153,11 +154,11 @@ export const LoginPage = ({
       if (res.success && res.data?.user) {
         const loggedInUser = res.data.user;
 
-        // BẮT BUỘC: Kiểm tra quyền LOCAL_AUTHORITY hoặc ADMIN
-        if (!hasAuthorizedRole(loggedInUser.roles)) {
+        // BẮT BUỘC: Kiểm tra quyền LOCAL_AUTHORITY, có trường .authority hoặc ADMIN
+        if (!hasAuthorizedRole(loggedInUser.roles, loggedInUser.authority)) {
           await logoutApi();
           setErrorMsg(
-            `⛔ Quyền truy cập bị từ chối: Cổng này chỉ dành riêng cho Cán bộ Quản lý (LOCAL_AUTHORITY) và Quản trị viên (ADMIN). Tài khoản "${loggedInUser.fullName || account}" thuộc vai trò [${loggedInUser.roles.join(', ')}].`
+            `⛔ Quyền truy cập bị từ chối: Cổng này chỉ dành riêng cho Cán bộ Quản lý (.authority / LOCAL_AUTHORITY) và Quản trị viên (ADMIN). Tài khoản "${loggedInUser.fullName || account}" thuộc vai trò [${(loggedInUser.roles || []).join(', ')}].`
           );
           setLoading(false);
           return;
@@ -186,9 +187,13 @@ export const LoginPage = ({
         }
 
         // Tự động chuyển hướng ngay lập tức vào giao diện điều hành tương ứng
-        const isAuth = loggedInUser.roles.includes('LOCAL_AUTHORITY') && !loggedInUser.roles.includes('ADMIN');
+        const isAuth =
+          (Boolean(loggedInUser.authority) ||
+            Boolean(loggedInUser.roles?.includes('LOCAL_AUTHORITY')) ||
+            Boolean(loggedInUser.roles?.includes('AUTHORITY'))) &&
+          !loggedInUser.roles?.includes('ADMIN');
         const target = isAuth ? 'author' : 'admin';
-        const targetPath = isAuth ? '/local_authority/map' : '/admin/map';
+        const targetPath = isAuth ? '/authority/map' : '/admin/map';
         localStorage.setItem('sos_active_portal', target);
         window.history.replaceState(null, '', targetPath);
         if (onLoginSuccess) {
@@ -731,9 +736,13 @@ export const LoginPage = ({
                 if (user) {
                   domainDService.syncLoggedInUser(user);
                 }
-                const isAuth = user?.roles.includes('LOCAL_AUTHORITY') && !user?.roles.includes('ADMIN');
+                const isAuth =
+                  (Boolean(user?.authority) ||
+                    Boolean(user?.roles?.includes('LOCAL_AUTHORITY')) ||
+                    Boolean(user?.roles?.includes('AUTHORITY'))) &&
+                  !user?.roles?.includes('ADMIN');
                 const target = isAuth ? 'author' : 'admin';
-                const targetPath = isAuth ? '/local_authority/map' : '/admin/map';
+                const targetPath = isAuth ? '/authority/map' : '/admin/map';
                 localStorage.setItem('sos_active_portal', target);
                 window.history.replaceState(null, '', targetPath);
                 if (onLoginSuccess && user) {

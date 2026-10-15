@@ -12,6 +12,8 @@ import {
   Image,
   Dimensions,
   Linking,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
@@ -24,12 +26,116 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export type MapFilterType = 'ALL' | 'HAZARD' | 'SAFE' | 'RELIEF';
 
+export interface DanangAreaZone {
+  id: string;
+  name: string;
+  shortName: string;
+  lat: number;
+  lng: number;
+  zoom: number;
+  keywords: string[];
+}
+
+export const DANANG_AREAS: DanangAreaZone[] = [
+  {
+    id: 'ALL',
+    name: 'Toàn TP. Đà Nẵng',
+    shortName: 'Toàn TP',
+    lat: 16.0544,
+    lng: 108.2022,
+    zoom: 12,
+    keywords: ['đà nẵng', 'da nang'],
+  },
+  {
+    id: 'HAI_CHAU',
+    name: 'Quận Hải Châu',
+    shortName: 'Hải Châu',
+    lat: 16.0471,
+    lng: 108.2195,
+    zoom: 14,
+    keywords: ['hải châu', 'hai chau'],
+  },
+  {
+    id: 'THANH_KHE',
+    name: 'Quận Thanh Khê',
+    shortName: 'Thanh Khê',
+    lat: 16.0620,
+    lng: 108.1880,
+    zoom: 14,
+    keywords: ['thanh khê', 'thanh khe'],
+  },
+  {
+    id: 'SON_TRA',
+    name: 'Quận Sơn Trà',
+    shortName: 'Sơn Trà',
+    lat: 16.0825,
+    lng: 108.2435,
+    zoom: 14,
+    keywords: ['sơn trà', 'son tra'],
+  },
+  {
+    id: 'NGU_HANH_SON',
+    name: 'Quận Ngũ Hành Sơn',
+    shortName: 'Ngũ Hành Sơn',
+    lat: 16.0028,
+    lng: 108.2514,
+    zoom: 14,
+    keywords: ['ngũ hành sơn', 'ngu hanh son'],
+  },
+  {
+    id: 'CAM_LE',
+    name: 'Quận Cẩm Lệ',
+    shortName: 'Cẩm Lệ',
+    lat: 15.9986,
+    lng: 108.1963,
+    zoom: 14,
+    keywords: ['cẩm lệ', 'cam le'],
+  },
+  {
+    id: 'LIEN_CHIEU',
+    name: 'Quận Liên Chiểu',
+    shortName: 'Liên Chiểu',
+    lat: 16.0965,
+    lng: 108.1408,
+    zoom: 13,
+    keywords: ['liên chiểu', 'lien chieu'],
+  },
+  {
+    id: 'HOA_VANG',
+    name: 'Huyện Hòa Vang',
+    shortName: 'Hòa Vang',
+    lat: 16.0125,
+    lng: 108.1065,
+    zoom: 12,
+    keywords: ['hòa vang', 'hoa vang'],
+  },
+  {
+    id: 'HOANG_SA',
+    name: 'Huyện Hoàng Sa',
+    shortName: 'Hoàng Sa',
+    lat: 16.5367,
+    lng: 111.6033,
+    zoom: 10,
+    keywords: ['hoàng sa', 'hoang sa'],
+  },
+];
+
+export interface MapScreenProps {
+  initialFilter?: MapFilterType;
+  navigationKey?: number;
+  onFilterChange?: (filter: MapFilterType) => void;
+}
+
 interface SelectedDetailItem {
   category: 'HAZARD' | 'SAFE' | 'RELIEF';
   data: any;
 }
 
-export const MapScreen: React.FC = () => {
+export const MapScreen: React.FC<MapScreenProps> = ({
+  initialFilter = 'ALL',
+  navigationKey = 0,
+  onFilterChange,
+}) => {
   const insets = useSafeAreaInsets();
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [loadingMsg, setLoadingMsg] = useState('Đang tìm vị trí của bạn...');
@@ -37,8 +143,31 @@ export const MapScreen: React.FC = () => {
   const [hazards, setHazards] = useState<any[]>([]);
   const [safeLocations, setSafeLocations] = useState<any[]>([]);
   const [reliefLocations, setReliefLocations] = useState<any[]>([]);
-  const [activeFilter, setActiveFilter] = useState<MapFilterType>('ALL');
+  const [activeFilter, setActiveFilter] = useState<MapFilterType>(initialFilter);
+  const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
+  const [selectedArea, setSelectedArea] = useState<DanangAreaZone>(DANANG_AREAS[0]);
+  const [showAreaModal, setShowAreaModal] = useState(false);
   const [baseUrl, setBaseUrl] = useState<string>('');
+
+  // Chế độ bản đồ hiện tại (Top dropdown)
+  const [mapMode, setMapMode] = useState<'HAZARD' | 'SOS' | 'SAFE' | 'ALL'>(
+    initialFilter === 'HAZARD' ? 'HAZARD' : initialFilter === 'RELIEF' ? 'SOS' : 'ALL'
+  );
+  const [showModeModal, setShowModeModal] = useState(false);
+
+  // Bộ lọc chi tiết (Center floating card theo ảnh mẫu)
+  const [showFilterCard, setShowFilterCard] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterState, setFilterState] = useState({
+    all: true,
+    unsupported: true,
+    supported: false,
+    safeShelter: true,
+    hospital: true,
+    supplies: true,
+    medical: true,
+    hazards: true,
+  });
   
   // Modal Chi tiết điểm (Detail Bottom Sheet / Modal)
   const [selectedDetail, setSelectedDetail] = useState<SelectedDetailItem | null>(null);
@@ -246,10 +375,226 @@ export const MapScreen: React.FC = () => {
     }
   }, [hazards]);
 
+  // Lắng nghe thay đổi bộ lọc từ bên ngoài (ví dụ bấm nút tiện ích từ HomeScreen)
+  useEffect(() => {
+    if (initialFilter) {
+      setActiveFilter(initialFilter);
+      if (initialFilter === 'HAZARD') {
+        setMapMode('HAZARD');
+        setFilterState({
+          all: false,
+          unsupported: true,
+          supported: false,
+          safeShelter: false,
+          hospital: false,
+          supplies: false,
+          medical: false,
+          hazards: true,
+        });
+      } else if (initialFilter === 'RELIEF') {
+        setMapMode('SOS');
+        setFilterState({
+          all: false,
+          unsupported: true,
+          supported: true,
+          safeShelter: false,
+          hospital: true,
+          supplies: true,
+          medical: true,
+          hazards: false,
+        });
+      } else if (initialFilter === 'SAFE') {
+        setMapMode('SAFE');
+        setFilterState({
+          all: false,
+          unsupported: false,
+          supported: true,
+          safeShelter: true,
+          hospital: true,
+          supplies: false,
+          medical: false,
+          hazards: false,
+        });
+      } else {
+        setMapMode('ALL');
+        setFilterState({
+          all: true,
+          unsupported: true,
+          supported: true,
+          safeShelter: true,
+          hospital: true,
+          supplies: true,
+          medical: true,
+          hazards: true,
+        });
+      }
+      webViewRef.current?.injectJavaScript(`
+        if (window.setMapFilter) {
+          window.setMapFilter('${initialFilter}');
+        }
+        true;
+      `);
+    }
+  }, [initialFilter, navigationKey]);
+
+  // Xử lý chuyển đổi chế độ bản đồ (Top dropdown)
+  const handleSelectMapMode = (mode: 'HAZARD' | 'SOS' | 'SAFE' | 'ALL') => {
+    setMapMode(mode);
+    setShowModeModal(false);
+    const filterKey = mode === 'HAZARD' ? 'HAZARD' : mode === 'SOS' ? 'RELIEF' : mode === 'SAFE' ? 'SAFE' : 'ALL';
+    setActiveFilter(filterKey);
+    onFilterChange?.(filterKey);
+    if (mode === 'HAZARD') {
+      const st = {
+        all: false,
+        unsupported: true,
+        supported: false,
+        safeShelter: false,
+        hospital: false,
+        supplies: false,
+        medical: false,
+        hazards: true,
+      };
+      setFilterState(st);
+      applyFilterToMap(st);
+    } else if (mode === 'SOS') {
+      const st = {
+        all: false,
+        unsupported: true,
+        supported: true,
+        safeShelter: false,
+        hospital: true,
+        supplies: true,
+        medical: true,
+        hazards: false,
+      };
+      setFilterState(st);
+      applyFilterToMap(st);
+    } else if (mode === 'SAFE') {
+      const st = {
+        all: false,
+        unsupported: false,
+        supported: true,
+        safeShelter: true,
+        hospital: true,
+        supplies: false,
+        medical: false,
+        hazards: false,
+      };
+      setFilterState(st);
+      applyFilterToMap(st);
+    } else {
+      const st = {
+        all: true,
+        unsupported: true,
+        supported: true,
+        safeShelter: true,
+        hospital: true,
+        supplies: true,
+        medical: true,
+        hazards: true,
+      };
+      setFilterState(st);
+      applyFilterToMap(st);
+    }
+    webViewRef.current?.injectJavaScript(`window.setMapFilter && window.setMapFilter('${filterKey}'); true;`);
+  };
+
+  // Áp dụng bộ lọc chi tiết vào WebView
+  const applyFilterToMap = (st: typeof filterState) => {
+    webViewRef.current?.injectJavaScript(`
+      if (window.applyDetailedFilter) {
+        window.applyDetailedFilter(${JSON.stringify(st)});
+      }
+      true;
+    `);
+  };
+
+  // Toggle "Tất cả"
+  const handleToggleSelectAll = () => {
+    const nextVal = !filterState.all;
+    const nextState = {
+      all: nextVal,
+      unsupported: nextVal,
+      supported: nextVal,
+      safeShelter: nextVal,
+      hospital: nextVal,
+      supplies: nextVal,
+      medical: nextVal,
+      hazards: nextVal,
+    };
+    setFilterState(nextState);
+    applyFilterToMap(nextState);
+  };
+
+  // Toggle từng mục bộ lọc
+  const handleToggleFilterKey = (key: keyof typeof filterState) => {
+    const nextState = {
+      ...filterState,
+      [key]: !filterState[key],
+      all: false,
+    };
+    setFilterState(nextState);
+    applyFilterToMap(nextState);
+  };
+
+  // Tìm kiếm theo số điện thoại / từ khóa
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query);
+    const safeQ = query.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    webViewRef.current?.injectJavaScript(`
+      if (window.searchPins) {
+        window.searchPins('${safeQ}');
+      }
+      true;
+    `);
+  };
+
   // Xử lý bộ lọc
   const handleFilterSelect = (filterKey: MapFilterType) => {
     setActiveFilter(filterKey);
+    onFilterChange?.(filterKey);
     webViewRef.current?.injectJavaScript(`window.setMapFilter && window.setMapFilter('${filterKey}'); true;`);
+  };
+
+  // Chuyển đổi bản đồ Vệ tinh / Chuẩn
+  const toggleMapType = () => {
+    const nextType = mapType === 'standard' ? 'satellite' : 'standard';
+    setMapType(nextType);
+    webViewRef.current?.injectJavaScript(`window.setMapType && window.setMapType('${nextType}'); true;`);
+  };
+
+  // Chọn vùng / quận huyện
+  const handleSelectArea = (zone: DanangAreaZone) => {
+    setSelectedArea(zone);
+    setShowAreaModal(false);
+    webViewRef.current?.injectJavaScript(`
+      if (window.flyToZone) {
+        window.flyToZone(${zone.lat}, ${zone.lng}, ${zone.zoom});
+      }
+      true;
+    `);
+  };
+
+  // Bay về vị trí GPS hiện tại
+  const handleFlyToMyLocation = () => {
+    if (location) {
+      webViewRef.current?.injectJavaScript(`
+        if (window.flyToMyLocation) {
+          window.flyToMyLocation();
+        }
+        true;
+      `);
+    }
+  };
+
+  // Đếm số điểm nguy hiểm trong từng khu vực quận / huyện
+  const getAreaHazardCount = (zone: DanangAreaZone) => {
+    if (zone.id === 'ALL') return hazards.length;
+    return hazards.filter((h) => {
+      const text = `${h.address || ''} ${h.title || ''} ${h.description || ''}`.toLowerCase();
+      return zone.keywords.some((kw) => text.includes(kw));
+    }).length;
   };
 
   // Nhận thông điệp từ Leaflet WebView
@@ -326,7 +671,7 @@ export const MapScreen: React.FC = () => {
       case 'HIGH':
         return { label: 'Cao', color: '#F97316', bg: '#FFEDD5' };
       case 'CRITICAL':
-        return { label: 'Cực kỳ nguy cấp', color: '#EF4444', bg: '#FEF2F2' };
+        return { label: 'Nguy hiểm', color: '#EF4444', bg: '#FEF2F2' };
       default:
         return { label: 'Cảnh báo', color: '#64748B', bg: '#F1F5F9' };
     }
@@ -358,40 +703,35 @@ export const MapScreen: React.FC = () => {
           -webkit-backface-visibility: hidden;
           backface-visibility: hidden;
         }
-        @keyframes pulseWave {
-          0% { transform: scale(0.6); opacity: 0.95; }
-          70% { transform: scale(1.6); opacity: 0; }
-          100% { transform: scale(1.8); opacity: 0; }
+        @keyframes userLocationPulse {
+          0% { transform: scale(0.9); opacity: 0.75; }
+          70% { transform: scale(2.2); opacity: 0; }
+          100% { transform: scale(2.4); opacity: 0; }
         }
-        .sos-radar-container {
+        .user-location-container {
           position: relative;
-          width: 44px;
-          height: 44px;
+          width: 32px;
+          height: 32px;
           display: flex;
           align-items: center;
           justify-content: center;
         }
-        .sos-radar-wave {
+        .user-location-pulse {
           position: absolute;
-          width: 38px;
-          height: 38px;
+          width: 24px;
+          height: 24px;
           border-radius: 50%;
-          background-color: rgba(220, 38, 38, 0.45);
-          border: 2px solid #DC2626;
-          animation: pulseWave 1.6s ease-out infinite;
+          background-color: rgba(0, 102, 255, 0.35);
+          animation: userLocationPulse 2s ease-out infinite;
         }
-        .sos-radar-core {
+        .user-location-dot {
           position: relative;
-          width: 30px;
-          height: 30px;
-          background: #DC2626;
+          width: 16px;
+          height: 16px;
+          background-color: #0066FF;
           border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          box-shadow: 0 0 10px rgba(220, 38, 38, 0.8), 0 2px 5px rgba(0,0,0,0.3);
-          border: 2px solid white;
+          border: 3px solid #FFFFFF;
+          box-shadow: 0 2px 6px rgba(0, 102, 255, 0.45), 0 1px 3px rgba(0, 0, 0, 0.25);
           z-index: 2;
         }
       </style>
@@ -404,7 +744,10 @@ export const MapScreen: React.FC = () => {
           preferCanvas: true
         }).setView([${location.coords.latitude}, ${location.coords.longitude}], 15);
 
-        L.control.zoom({ position: 'topright' }).addTo(map);
+        L.control.zoom({ position: 'bottomleft' }).addTo(map);
+
+        var currentMapType = '${mapType}';
+        var userCoords = { lat: ${location.coords.latitude}, lng: ${location.coords.longitude} };
 
         // 1. Chế độ thu nhỏ / Tổng quan (Zoom <= 15):
         // Ẩn toàn bộ quán cà phê / cửa hàng (s.t:33|p.v:off)
@@ -418,7 +761,7 @@ export const MapScreen: React.FC = () => {
           tileSize: 256,
           updateWhenIdle: false,
           updateWhenZooming: false
-        }).addTo(map);
+        });
 
         // 2. Chế độ phóng to gần (Zoom >= 16):
         // Hiển thị tên các tuyến đường phố nội đô, ngõ hẻm; ẩn quán cà phê (s.t:33|p.v:off) và ẩn biển quốc lộ (s.t:22|s.e:l|p.v:off)
@@ -431,26 +774,70 @@ export const MapScreen: React.FC = () => {
           tileSize: 256,
           updateWhenIdle: false,
           updateWhenZooming: false
-        }).addTo(map);
+        });
 
-        // Ghim vị trí người dùng với hiệu ứng radar cứu hộ
+        // 3. Chế độ bản đồ Vệ tinh Hybrid (Ảnh vệ tinh sắc nét + Tên đường xá & địa danh):
+        var satelliteLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+          subdomains: ['0', '1', '2', '3'],
+          attribution: '© Google Maps Satellite',
+          minZoom: 1,
+          maxZoom: 20,
+          keepBuffer: 6,
+          tileSize: 256,
+          updateWhenIdle: false,
+          updateWhenZooming: false
+        });
+
+        if (currentMapType === 'satellite') {
+          satelliteLayer.addTo(map);
+        } else {
+          overviewLayer.addTo(map);
+          detailLayer.addTo(map);
+        }
+
+        // Chuyển đổi qua lại giữa bản đồ chuẩn và vệ tinh
+        window.setMapType = function(type) {
+          currentMapType = type;
+          if (type === 'satellite') {
+            if (map.hasLayer(overviewLayer)) map.removeLayer(overviewLayer);
+            if (map.hasLayer(detailLayer)) map.removeLayer(detailLayer);
+            if (!map.hasLayer(satelliteLayer)) satelliteLayer.addTo(map);
+          } else {
+            if (map.hasLayer(satelliteLayer)) map.removeLayer(satelliteLayer);
+            if (!map.hasLayer(overviewLayer)) overviewLayer.addTo(map);
+            if (!map.hasLayer(detailLayer)) detailLayer.addTo(map);
+          }
+        };
+
+        // Bay tới vị trí một quận / huyện bất kỳ
+        window.flyToZone = function(lat, lng, zoom) {
+          if (map) {
+            map.flyTo([lat, lng], zoom, {
+              animate: true,
+              duration: 1.2
+            });
+          }
+        };
+
+        // Bay về vị trí GPS hiện tại của người dùng
+        window.flyToMyLocation = function() {
+          if (map && userCoords) {
+            map.flyTo([userCoords.lat, userCoords.lng], 16, {
+              animate: true,
+              duration: 1.0
+            });
+          }
+        };
+
+        // Ghim vị trí hiện tại của tôi (Dấu chấm tròn xanh nước biển GPS)
         var myIcon = L.divIcon({
-          html: '<div class="sos-radar-container"><div class="sos-radar-wave"></div><div class="sos-radar-core"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M7 12a5 5 0 0 1 5-5v0a5 5 0 0 1 5 5v6H7v-6Z"/><path d="M5 20a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v2H5v-2Z"/><path d="M21 12h1"/><path d="M18.5 4.5 19 4"/><path d="M2 12h1"/><path d="M12 2v1"/><path d="M4.5 4.5 5 4"/><path d="M12 11v3"/></svg></div></div>',
-          className: 'custom-sos-radar-wrapper',
-          iconSize: [44, 44],
-          iconAnchor: [22, 22]
+          html: '<div class="user-location-container"><div class="user-location-pulse"></div><div class="user-location-dot"></div></div>',
+          className: '',
+          iconSize: [32, 32],
+          iconAnchor: [16, 16]
         });
 
         L.marker([${location.coords.latitude}, ${location.coords.longitude}], { icon: myIcon }).addTo(map);
-        
-        L.circle([${location.coords.latitude}, ${location.coords.longitude}], {
-          color: '#DC2626',
-          fillColor: '#EF4444',
-          fillOpacity: 0.12,
-          radius: 500,
-          weight: 1.8,
-          dashArray: '5, 5'
-        }).addTo(map);
 
         // Cấu hình Icon ghim nhỏ gọn (Compact 26px x 30px) chuẩn theo đúng 6 icon trong tab loại nguy hiểm
         function getHazardMarkerHtml(type) {
@@ -638,10 +1025,19 @@ export const MapScreen: React.FC = () => {
         renderSafeMarkers(${JSON.stringify(safeLocations)});
         renderReliefMarkers(${JSON.stringify(reliefLocations)});
 
-        // Đưa các layer vào bản đồ
-        hazardLayer.addTo(map);
-        safeLayer.addTo(map);
-        reliefLayer.addTo(map);
+        // Đưa các layer vào bản đồ theo bộ lọc ban đầu
+        var initialFilter = '${activeFilter}';
+        if (initialFilter === 'HAZARD') {
+          hazardLayer.addTo(map);
+        } else if (initialFilter === 'SAFE') {
+          safeLayer.addTo(map);
+        } else if (initialFilter === 'RELIEF') {
+          reliefLayer.addTo(map);
+        } else {
+          hazardLayer.addTo(map);
+          safeLayer.addTo(map);
+          reliefLayer.addTo(map);
+        }
 
         // Hàm điều khiển lọc tầng dữ liệu cực nhanh không cần reload trang
         window.setMapFilter = function(filter) {
@@ -664,8 +1060,70 @@ export const MapScreen: React.FC = () => {
           }
         };
 
+        var allHazards = ${JSON.stringify(hazards)};
+        var allSafe = ${JSON.stringify(safeLocations)};
+        var allRelief = ${JSON.stringify(reliefLocations)};
+
+        // Hàm lọc chi tiết từng danh mục theo Popup Card
+        window.applyDetailedFilter = function(st) {
+          if (!st) return;
+          if (st.all) {
+            if (!map.hasLayer(hazardLayer)) map.addLayer(hazardLayer);
+            if (!map.hasLayer(safeLayer)) map.addLayer(safeLayer);
+            if (!map.hasLayer(reliefLayer)) map.addLayer(reliefLayer);
+            return;
+          }
+
+          if (st.hazards) {
+            if (!map.hasLayer(hazardLayer)) map.addLayer(hazardLayer);
+          } else {
+            if (map.hasLayer(hazardLayer)) map.removeLayer(hazardLayer);
+          }
+
+          if (st.safeShelter || st.hospital) {
+            if (!map.hasLayer(safeLayer)) map.addLayer(safeLayer);
+          } else {
+            if (map.hasLayer(safeLayer)) map.removeLayer(safeLayer);
+          }
+
+          if (st.supplies || st.medical) {
+            if (!map.hasLayer(reliefLayer)) map.addLayer(reliefLayer);
+          } else {
+            if (map.hasLayer(reliefLayer)) map.removeLayer(reliefLayer);
+          }
+        };
+
+        // Hàm tìm kiếm theo số điện thoại hoặc từ khóa
+        window.searchPins = function(keyword) {
+          var kw = (keyword || '').toLowerCase().trim();
+          if (!kw) {
+            renderHazardMarkers(allHazards);
+            renderSafeMarkers(allSafe);
+            renderReliefMarkers(allRelief);
+            return;
+          }
+          var matchedH = allHazards.filter(function(h) {
+            var str = ((h.title || '') + ' ' + (h.address || '') + ' ' + (h.description || '')).toLowerCase();
+            return str.indexOf(kw) !== -1;
+          });
+          renderHazardMarkers(matchedH);
+
+          var matchedS = allSafe.filter(function(s) {
+            var str = ((s.name || '') + ' ' + (s.address || '') + ' ' + (s.contactPhone || '')).toLowerCase();
+            return str.indexOf(kw) !== -1;
+          });
+          renderSafeMarkers(matchedS);
+
+          var matchedR = allRelief.filter(function(r) {
+            var str = ((r.name || '') + ' ' + (r.address || '') + ' ' + (r.contactPhone || '')).toLowerCase();
+            return str.indexOf(kw) !== -1;
+          });
+          renderReliefMarkers(matchedR);
+        };
+
         // Hàm cập nhật dữ liệu Realtime động từ React Native
         window.updateHazardsData = function(newHazards) {
+          allHazards = newHazards;
           renderHazardMarkers(newHazards);
         };
 
@@ -710,106 +1168,19 @@ export const MapScreen: React.FC = () => {
   ` : '';
 
   const totalCount = hazards.length + safeLocations.length + reliefLocations.length;
+  const unsupportedCount = hazards.filter(h => h.severity === 'CRITICAL' || h.severity === 'HIGH').length || 1;
+  const supportedCount = hazards.filter(h => h.severity === 'LOW' || h.severity === 'MEDIUM').length || 0;
+  const safeShelterCount = safeLocations.filter(s => s.type !== 'HOSPITAL').length;
+  const hospitalCount = safeLocations.filter(s => s.type === 'HOSPITAL').length;
+  const suppliesCount = reliefLocations.filter(r => r.type !== 'RESCUE_STATION').length;
+  const medicalCount = reliefLocations.filter(r => r.type === 'RESCUE_STATION').length;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.appBadge}>HỆ THỐNG CỨU HỘ SOS</Text>
-          <Text style={styles.title}>Bản đồ cứu hộ</Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.hazardHeaderBtn}
-          onPress={() => setShowHazardModal(true)}
-          activeOpacity={0.8}
-        >
-          <Feather name="alert-triangle" size={14} color="#EA580C" />
-          <Text style={styles.hazardHeaderBtnText}>Báo nguy hiểm</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Thanh Bộ Lọc Phân Loại Điểm (Filter Chips Bar) */}
-      <View style={styles.filterBarWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScrollContent}
-        >
-          {/* 1. Tất cả */}
-          <TouchableOpacity
-            style={[styles.filterChip, activeFilter === 'ALL' && styles.filterChipActiveAll]}
-            onPress={() => handleFilterSelect('ALL')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterChipText, activeFilter === 'ALL' && styles.filterChipTextActiveAll]}>
-              Tất cả
-            </Text>
-            <View style={[styles.filterBadge, activeFilter === 'ALL' && styles.filterBadgeActiveAll]}>
-              <Text style={[styles.filterBadgeText, activeFilter === 'ALL' && styles.filterBadgeTextActiveAll]}>
-                {totalCount}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* 2. Điểm nguy hiểm */}
-          <TouchableOpacity
-            style={[styles.filterChip, activeFilter === 'HAZARD' && styles.filterChipActiveHazard]}
-            onPress={() => handleFilterSelect('HAZARD')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.chipEmoji}>⚠️</Text>
-            <Text style={[styles.filterChipText, activeFilter === 'HAZARD' && styles.filterChipTextActiveHazard]}>
-              Điểm nguy hiểm
-            </Text>
-            <View style={[styles.filterBadge, activeFilter === 'HAZARD' && styles.filterBadgeActiveHazard]}>
-              <Text style={[styles.filterBadgeText, activeFilter === 'HAZARD' && styles.filterBadgeTextActiveHazard]}>
-                {hazards.length}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* 3. Điểm an toàn */}
-          <TouchableOpacity
-            style={[styles.filterChip, activeFilter === 'SAFE' && styles.filterChipActiveSafe]}
-            onPress={() => handleFilterSelect('SAFE')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.chipEmoji}>🛡️</Text>
-            <Text style={[styles.filterChipText, activeFilter === 'SAFE' && styles.filterChipTextActiveSafe]}>
-              Điểm an toàn
-            </Text>
-            <View style={[styles.filterBadge, activeFilter === 'SAFE' && styles.filterBadgeActiveSafe]}>
-              <Text style={[styles.filterBadgeText, activeFilter === 'SAFE' && styles.filterBadgeTextActiveSafe]}>
-                {safeLocations.length}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* 4. Điểm cứu trợ */}
-          <TouchableOpacity
-            style={[styles.filterChip, activeFilter === 'RELIEF' && styles.filterChipActiveRelief]}
-            onPress={() => handleFilterSelect('RELIEF')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.chipEmoji}>🛟</Text>
-            <Text style={[styles.filterChipText, activeFilter === 'RELIEF' && styles.filterChipTextActiveRelief]}>
-              Điểm cứu trợ
-            </Text>
-            <View style={[styles.filterBadge, activeFilter === 'RELIEF' && styles.filterBadgeActiveRelief]}>
-              <Text style={[styles.filterBadgeText, activeFilter === 'RELIEF' && styles.filterBadgeTextActiveRelief]}>
-                {reliefLocations.length}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-
-      {/* Body bản đồ */}
-      <View style={styles.body}>
+      {/* Bản đồ WebView chiếm trọn toàn bộ nền */}
+      <View style={styles.mapContainer}>
         {!location ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color="#0066FF" />
@@ -830,6 +1201,91 @@ export const MapScreen: React.FC = () => {
             onMessage={handleWebViewMessage}
           />
         )}
+      </View>
+
+      {/* 1. CỤM HEADER NỔI TRÊN CÙNG (TOP OVERLAY THEO ẢNH MẪU) */}
+      <View
+        style={[styles.topOverlayContainer, { paddingTop: insets.top + (Platform.OS === 'ios' ? 8 : 12) }]}
+        pointerEvents="box-none"
+      >
+        {/* Hàng 1: Nút Dropdown bản đồ cứu trợ / nguy hiểm */}
+        <TouchableOpacity
+          style={styles.topModeDropdown}
+          onPress={() => setShowModeModal(true)}
+          activeOpacity={0.85}
+        >
+          <View style={styles.topModeIconWrap}>
+            <MaterialCommunityIcons
+              name={mapMode === 'HAZARD' ? 'alert-octagon' : 'alert-circle'}
+              size={18}
+              color="#DC2626"
+            />
+          </View>
+          <Text style={styles.topModeText}>
+            {mapMode === 'HAZARD'
+              ? 'Bản đồ nơi nguy hiểm'
+              : mapMode === 'SOS'
+              ? 'Bản đồ cứu trợ'
+              : mapMode === 'SAFE'
+              ? 'Bản đồ điểm an toàn'
+              : 'Bản đồ tổng hợp'}
+          </Text>
+          <Feather name="chevron-down" size={17} color="#475569" />
+        </TouchableOpacity>
+      </View>
+
+      {/* 2. CỘT NÚT CHỨC NĂNG BÊN PHẢI (RIGHT FLOATING BUTTONS THEO ẢNH MẪU) */}
+      <View
+        style={[
+          styles.rightButtonsColumn,
+          { top: insets.top + (Platform.OS === 'ios' ? 62 : 68) },
+        ]}
+        pointerEvents="box-none"
+      >
+        {/* Nút 1: GPS Re-center */}
+        <TouchableOpacity
+          style={styles.rightActionBtn}
+          onPress={handleFlyToMyLocation}
+          activeOpacity={0.85}
+        >
+          <MaterialCommunityIcons name="crosshairs-gps" size={20} color="#475569" />
+        </TouchableOpacity>
+
+        {/* Nút 2: Vệ tinh / Bản đồ */}
+        <TouchableOpacity
+          style={[
+            styles.rightActionBtn,
+            mapType === 'satellite' && styles.rightActionBtnActiveSatellite,
+          ]}
+          onPress={toggleMapType}
+          activeOpacity={0.85}
+        >
+          <MaterialCommunityIcons
+            name="earth"
+            size={20}
+            color={mapType === 'satellite' ? '#0066FF' : '#475569'}
+          />
+        </TouchableOpacity>
+
+        {/* Nút 3: Thời gian */}
+        <TouchableOpacity
+          style={styles.rightActionBtn}
+          onPress={() => {
+            Alert.alert('Cập nhật mới', 'Dữ liệu các điểm cứu hộ và nguy hiểm được đồng bộ thời gian thực.');
+          }}
+          activeOpacity={0.85}
+        >
+          <Feather name="clock" size={18} color="#475569" />
+        </TouchableOpacity>
+
+        {/* Nút 4: Đóng góp điểm cứu trợ / nguy hiểm (không hiển thị số 12) */}
+        <TouchableOpacity
+          style={styles.rightActionBtn}
+          onPress={() => setShowHazardModal(true)}
+          activeOpacity={0.85}
+        >
+          <MaterialCommunityIcons name="human-handsup" size={20} color="#0066FF" />
+        </TouchableOpacity>
       </View>
 
       {/* MODAL CHI TIẾT ĐIỂM (DETAIL BOTTOM SHEET) */}
@@ -1179,162 +1635,609 @@ export const MapScreen: React.FC = () => {
         onSuccess={fetchMapData}
         initialCoords={location ? { latitude: location.coords.latitude, longitude: location.coords.longitude } : undefined}
       />
-    </SafeAreaView>
+
+      {/* MODAL CHUYỂN ĐỔI CHẾ ĐỘ BẢN ĐỒ (TOP DROPDOWN MODAL) */}
+      <Modal
+        visible={showModeModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowModeModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <TouchableOpacity
+            style={styles.modalDismissArea}
+            activeOpacity={1}
+            onPress={() => setShowModeModal(false)}
+          />
+
+          <View style={[styles.areaSheetContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+            <View style={styles.dragHandle} />
+
+            <View style={styles.areaHeader}>
+              <View>
+                <Text style={styles.areaModalTitle}>Chế độ hiển thị bản đồ</Text>
+                <Text style={styles.areaModalSubtitle}>
+                  Chọn loại dữ liệu bạn muốn tập trung theo dõi trên bản đồ
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.detailCloseBtn}
+                onPress={() => setShowModeModal(false)}
+              >
+                <Feather name="x" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: 8, paddingVertical: 10 }}>
+              {[
+                {
+                  id: 'SOS',
+                  title: 'Bản đồ cứu trợ khẩn cấp',
+                  desc: 'Nhu yếu phẩm, trạm cứu hộ, tiếp tế lương thực & hỗ trợ y tế',
+                  icon: 'life-buoy',
+                  color: '#EA580C',
+                },
+                {
+                  id: 'HAZARD',
+                  title: 'Bản đồ nơi nguy hiểm',
+                  desc: 'Điểm ngập sâu, sạt lở, cô lập & các cảnh báo rủi ro thiên tai',
+                  icon: 'alert-triangle',
+                  color: '#DC2626',
+                },
+                {
+                  id: 'SAFE',
+                  title: 'Bản đồ điểm an toàn',
+                  desc: 'Khu trú ẩn, trạm sơ tán, bệnh viện & trung tâm y tế',
+                  icon: 'shield',
+                  color: '#059669',
+                },
+                {
+                  id: 'ALL',
+                  title: 'Bản đồ tổng hợp toàn diện',
+                  desc: 'Hiển thị tất cả các điểm trên địa bàn thành phố Đà Nẵng',
+                  icon: 'layers',
+                  color: '#0066FF',
+                },
+              ].map((item) => {
+                const isSelected = mapMode === item.id;
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[styles.areaItemRow, isSelected && styles.areaItemRowActive]}
+                    onPress={() => handleSelectMapMode(item.id as any)}
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.areaItemLeft}>
+                      <View
+                        style={[
+                          styles.areaItemIconWrap,
+                          { backgroundColor: `${item.color}15` },
+                          isSelected && { backgroundColor: item.color },
+                        ]}
+                      >
+                        <Feather
+                          name={item.icon as any}
+                          size={17}
+                          color={isSelected ? '#FFFFFF' : item.color}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={[
+                            styles.areaItemName,
+                            isSelected && { color: item.color, fontWeight: '700' },
+                          ]}
+                        >
+                          {item.title}
+                        </Text>
+                        <Text style={styles.areaItemSub}>{item.desc}</Text>
+                      </View>
+                    </View>
+                    {isSelected && (
+                      <Feather name="check" size={18} color={item.color} style={{ marginLeft: 8 }} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL CHỌN CÁC VÙNG / ĐỊA BÀN (AREA SELECTION BOTTOM SHEET) */}
+      <Modal
+        visible={showAreaModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAreaModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <TouchableOpacity
+            style={styles.modalDismissArea}
+            activeOpacity={1}
+            onPress={() => setShowAreaModal(false)}
+          />
+
+          <View style={[styles.areaSheetContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+            <View style={styles.dragHandle} />
+
+            <View style={styles.areaHeader}>
+              <View>
+                <Text style={styles.areaModalTitle}>Chọn khu vực / Địa bàn</Text>
+                <Text style={styles.areaModalSubtitle}>
+                  Nhấn vào quận, huyện để bay tới xem nhanh tình hình thực tế
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.detailCloseBtn}
+                onPress={() => setShowAreaModal(false)}
+              >
+                <Feather name="x" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.areaListScroll} showsVerticalScrollIndicator={false}>
+              {DANANG_AREAS.map((zone) => {
+                const isSelected = selectedArea.id === zone.id;
+                const count = getAreaHazardCount(zone);
+
+                return (
+                  <TouchableOpacity
+                    key={zone.id}
+                    style={[styles.areaItemRow, isSelected && styles.areaItemRowActive]}
+                    onPress={() => handleSelectArea(zone)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.areaItemLeft}>
+                      <View style={[styles.areaItemIconWrap, isSelected && styles.areaItemIconWrapActive]}>
+                        <Feather
+                          name={zone.id === 'ALL' ? 'globe' : 'map-pin'}
+                          size={16}
+                          color={isSelected ? '#FFFFFF' : '#0066FF'}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.areaItemName, isSelected && styles.areaItemNameActive]}>
+                          {zone.name}
+                        </Text>
+                        <Text style={styles.areaItemSub}>
+                          {zone.id === 'ALL'
+                            ? `Toàn thành phố (${hazards.length} điểm nguy hiểm)`
+                            : count > 0
+                            ? `${count} điểm nguy hiểm ghi nhận`
+                            : 'Không có điểm nguy hiểm ghi nhận'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.areaItemRight}>
+                      {count > 0 && (
+                        <View style={styles.areaHazardBadge}>
+                          <Text style={styles.areaHazardBadgeText}>{count} ⚠️</Text>
+                        </View>
+                      )}
+                      {isSelected && (
+                        <Feather name="check" size={18} color="#0066FF" style={{ marginLeft: 8 }} />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? 36 : 10,
-    paddingBottom: 12,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    zIndex: 10,
-  },
-  hazardHeaderBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FFF7ED',
-    borderWidth: 1,
-    borderColor: '#FFEDD5',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-  },
-  hazardHeaderBtnText: {
-    color: '#EA580C',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  appBadge: {
-    fontSize: 11,
-    color: '#0066FF',
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 2,
-  },
-  filterBarWrapper: {
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    paddingVertical: 9,
-    zIndex: 9,
-  },
-  filterScrollContent: {
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: 6,
-  },
-  filterChipActiveAll: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
-  },
-  filterChipActiveHazard: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#EF4444',
-  },
-  filterChipActiveSafe: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#10B981',
-  },
-  filterChipActiveRelief: {
-    backgroundColor: '#FFF7ED',
-    borderColor: '#F97316',
-  },
-  chipEmoji: {
-    fontSize: 13,
-  },
-  filterChipText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  filterChipTextActiveAll: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  filterChipTextActiveHazard: {
-    color: '#DC2626',
-    fontWeight: '700',
-  },
-  filterChipTextActiveSafe: {
-    color: '#059669',
-    fontWeight: '700',
-  },
-  filterChipTextActiveRelief: {
-    color: '#EA580C',
-    fontWeight: '700',
-  },
-  filterBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 10,
-    backgroundColor: '#E2E8F0',
-  },
-  filterBadgeActiveAll: {
-    backgroundColor: '#334155',
-  },
-  filterBadgeActiveHazard: {
-    backgroundColor: '#DC2626',
-  },
-  filterBadgeActiveSafe: {
-    backgroundColor: '#059669',
-  },
-  filterBadgeActiveRelief: {
-    backgroundColor: '#EA580C',
-  },
-  filterBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  filterBadgeTextActiveAll: {
-    color: '#FFFFFF',
-  },
-  filterBadgeTextActiveHazard: {
-    color: '#FFFFFF',
-  },
-  filterBadgeTextActiveSafe: {
-    color: '#FFFFFF',
-  },
-  filterBadgeTextActiveRelief: {
-    color: '#FFFFFF',
-  },
-  body: {
-    flex: 1,
     backgroundColor: '#F1F5F9',
+  },
+  mapContainer: {
+    ...StyleSheet.absoluteFill,
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // 1. CỤM HEADER NỔI TRÊN CÙNG
+  topOverlayContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 90,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  topModeDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1.5,
+    borderColor: '#F87171',
+    borderRadius: 24,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  topModeIconWrap: {
+    marginRight: 8,
+  },
+  topModeText: {
+    flex: 1,
+    fontSize: 15.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  subControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  subAreaBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    height: 40,
+  },
+  subAreaText: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  subSearchBox: {
+    flex: 1.15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    height: 40,
+  },
+  subSearchInput: {
+    flex: 1,
+    fontSize: 13.5,
+    color: '#0F172A',
+    paddingVertical: 0,
+  },
+
+  // 2. CỘT NÚT CHỨC NĂNG BÊN PHẢI
+  rightButtonsColumn: {
+    position: 'absolute',
+    right: 12,
+    zIndex: 95,
+    alignItems: 'center',
+    gap: 10,
+  },
+  rightActionBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.14,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  rightActionBtnActiveSatellite: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#0066FF',
+  },
+  rightFilterBtnRed: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
+    elevation: 6,
+  },
+  rightBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  rightBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
+
+  // 3. CARD BỘ LỌC NỔI Ở TRUNG TÂM BẢN ĐỒ
+  centerFilterCard: {
+    position: 'absolute',
+    left: 14,
+    right: 64,
+    maxHeight: SCREEN_HEIGHT * 0.58,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    zIndex: 92,
+  },
+  filterCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEE2E2',
+    marginHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  filterCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1E293B',
+    textAlign: 'center',
+    flex: 1,
+  },
+  filterCardCloseBtn: {
+    padding: 4,
+  },
+  filterCardScroll: {
+    maxHeight: SCREEN_HEIGHT * 0.50,
+  },
+  filterCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+  },
+  filterCardRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  filterCardRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  filterCardRowText: {
+    fontSize: 14.5,
+    color: '#334155',
+    fontWeight: '500',
+  },
+  statusDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+  },
+  filterCardCount: {
+    fontSize: 13.5,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  filterCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterCheckboxActive: {
+    backgroundColor: '#EF4444',
+    borderColor: '#EF4444',
+  },
+  filterSectionHeaderWrap: {
+    alignItems: 'center',
+    marginVertical: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  filterSectionHeaderTitle: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  filterPinkBoxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FEE2E2',
+    borderRadius: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    marginVertical: 3.5,
+  },
+  filterPinkBoxRowActive: {
+    backgroundColor: '#FEE2E2',
+  },
+  filterBoxIcon: {
+    fontSize: 16,
+  },
+  filterBoxText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1E293B',
+    flexShrink: 1,
+  },
+  filterRedCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterRedCheckboxActive: {
+    backgroundColor: '#EF4444',
+    borderColor: '#EF4444',
+  },
+
+  // 4. DẢI BĂNG THÔNG BÁO KHẨN CẤP ĐỎ Ở ĐÁY
+  bottomBannerRed: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    backgroundColor: '#DC2626',
+    borderRadius: 24,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
+    elevation: 6,
+    zIndex: 85,
+  },
+  bottomBannerText: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '600',
+  },
+  areaSheetContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: SCREEN_HEIGHT * 0.72,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  areaHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 8,
+  },
+  areaModalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  areaModalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  areaListScroll: {
+    maxHeight: SCREEN_HEIGHT * 0.55,
+  },
+  areaItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginVertical: 3,
+    backgroundColor: '#F8FAFC',
+  },
+  areaItemRowActive: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  areaItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  areaItemIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  areaItemIconWrapActive: {
+    backgroundColor: '#0066FF',
+  },
+  areaItemName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  areaItemNameActive: {
+    color: '#0066FF',
+    fontWeight: '700',
+  },
+  areaItemSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  areaItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  areaHazardBadge: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  areaHazardBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#DC2626',
   },
 
   // Modal Chi tiết Điểm (Detail Sheet)

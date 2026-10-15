@@ -51,12 +51,17 @@ const TABS: TabItem[] = [
   },
 ];
 
-interface BottomNavProps {
+export interface BottomNavProps {
   activeTab: TabName;
   onTabPress: (tab: TabName) => void;
+  unreadNewsCount?: number;
 }
 
-export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabPress }) => {
+export const BottomNav: React.FC<BottomNavProps> = ({
+  activeTab,
+  onTabPress,
+  unreadNewsCount = 0,
+}) => {
   const insets = useSafeAreaInsets();
 
   return (
@@ -96,11 +101,20 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabPress }) =
               activeOpacity={0.7}
             >
               {isActive && <View style={styles.activeIndicator} />}
-              <Ionicons
-                name={isActive ? tab.iconActive : tab.icon}
-                size={24}
-                color={isActive ? '#0066FF' : '#94A3B8'}
-              />
+              <View style={styles.iconContainer}>
+                <Ionicons
+                  name={isActive ? tab.iconActive : tab.icon}
+                  size={24}
+                  color={isActive ? '#0066FF' : '#94A3B8'}
+                />
+                {tab.name === 'news' && unreadNewsCount > 0 && (
+                  <View style={styles.badgePill}>
+                    <Text style={styles.badgePillText}>
+                      {unreadNewsCount > 99 ? '99+' : unreadNewsCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
               <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
                 {tab.label}
               </Text>
@@ -144,6 +158,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: 4,
     position: 'relative',
+  },
+  iconContainer: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgePill: {
+    position: 'absolute',
+    top: -4,
+    right: -10,
+    backgroundColor: '#EF4444',
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  badgePillText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   activeIndicator: {
     position: 'absolute',

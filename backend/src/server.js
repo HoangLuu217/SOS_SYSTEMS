@@ -16,7 +16,8 @@ const startServer = async () => {
     initSocket(server);
 
     server.listen(PORT, '0.0.0.0', () => {
-      console.log(` Server đang chạy tại http://0.0.0.0:${PORT} (kèm Realtime Socket.IO)`);
+      console.log(` Server đang chạy tại http://0.0.0.0:${PORT} (kèm Realtime Socket.IO cho SOS)`);
+      console.log(`📡 SSE Realtime Stream sẵn sàng tại /api/notifications/stream`);
     });
   } catch (error) {
     console.error('❌ Lỗi kết nối CSDL hoặc khởi động Server:', error);

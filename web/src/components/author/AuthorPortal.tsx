@@ -19,6 +19,7 @@ import {
   Moon,
   Map as MapIcon,
   Layers,
+  AlertTriangle,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { isSosInOfficerJurisdiction } from '../../services/mapGeoService';
@@ -558,6 +559,23 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
               <span>Vệ tinh</span>
             </button>
           </div>
+
+          {/* Điểm Nguy Hiểm Shortcut */}
+          <button
+            type="button"
+            onClick={() => navigateTo('hazard_reports', user ?? null)}
+            className="author-map-btn"
+            style={{
+              borderColor: '#f97316',
+              color: '#ea580c',
+              fontWeight: 600,
+              gap: '5px',
+            }}
+            title="Quản lý & Tạo Điểm Nguy Hiểm trên địa bàn (UC-L15)"
+          >
+            <AlertTriangle size={12} color="#ea580c" />
+            <span>Điểm Nguy Hiểm</span>
+          </button>
 
           {/* Theme Switcher */}
           <button

@@ -10,9 +10,18 @@ export interface EmergencyContact {
 
 export interface NotificationItem {
   _id: string;
-  type: 'ALERT' | 'RESCUE' | 'WEATHER' | 'SYSTEM' | string;
+  type: 'INSTANT' | 'SYSTEM' | 'ALERT' | 'RESCUE' | 'WEATHER' | string;
   title: string;
   content: string;
+  priority?: 'LOW' | 'NORMAL' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | string;
+  areaId?: any;
+  areaName?: string;
+  createdBy?: {
+    _id: string;
+    fullName: string;
+    roles?: string[];
+  };
+  data?: any;
   isRead: boolean;
   createdAt: string;
   actionUrl?: string;
@@ -545,11 +554,33 @@ class BackendApiService {
   }
 
   /**
-   * Lấy danh sách thông báo
+   * Lấy danh sách thông báo (hỗ trợ lọc theo loại INSTANT, SYSTEM, trạng thái đã đọc)
    */
-  async getNotifications(): Promise<ApiResponse<NotificationItem[]>> {
-    return await this.request<NotificationItem[]>('/notifications', {
+  async getNotifications(query?: {
+    type?: string;
+    isRead?: boolean | string;
+    page?: number;
+    limit?: number;
+  }): Promise<ApiResponse<NotificationItem[]>> {
+    const params = new URLSearchParams();
+    if (query?.type) params.append('type', query.type);
+    if (query?.isRead !== undefined) params.append('isRead', String(query.isRead));
+    if (query?.page) params.append('page', String(query.page));
+    if (query?.limit) params.append('limit', String(query.limit));
+    const qs = params.toString() ? `?${params.toString()}` : '';
+
+    return await this.request<NotificationItem[]>(`/notifications${qs}`, {
       method: 'GET',
+    });
+  }
+
+  /**
+   * Đăng ký mã Expo Push Token của thiết bị người dùng với máy chủ
+   */
+  async registerPushToken(pushToken: string): Promise<ApiResponse<{ pushToken: string }>> {
+    return await this.request<{ pushToken: string }>('/notifications/register-push-token', {
+      method: 'POST',
+      body: JSON.stringify({ pushToken }),
     });
   }
 

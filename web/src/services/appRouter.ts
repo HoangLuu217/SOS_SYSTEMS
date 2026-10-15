@@ -1,17 +1,21 @@
 import type { User } from '../types/auth';
 import type { NavItemKey } from '../components/Sidebar';
 
-export const getRolePrefix = (user: User | null): '/local_authority' | '/admin' => {
+export const getRolePrefix = (user: User | null): '/authority' | '/admin' => {
   if (!user) {
     const savedRole = localStorage.getItem('sos_active_portal');
-    return savedRole === 'admin' ? '/admin' : '/local_authority';
+    return savedRole === 'admin' ? '/admin' : '/authority';
   }
-  const isAuthority = user.roles.includes('LOCAL_AUTHORITY') && !user.roles.includes('ADMIN');
-  return isAuthority ? '/local_authority' : '/admin';
+  const isAuthority =
+    (Boolean(user.authority) ||
+      Boolean(user.roles?.includes('LOCAL_AUTHORITY')) ||
+      Boolean(user.roles?.includes('AUTHORITY'))) &&
+    !user.roles?.includes('ADMIN');
+  return isAuthority ? '/authority' : '/admin';
 };
 
 export interface ParsedRoute {
-  rolePrefix: '/local_authority' | '/admin';
+  rolePrefix: '/authority' | '/admin';
   navKey: NavItemKey;
   subPath?: string;
   sosId?: string;
@@ -25,6 +29,7 @@ const VALID_KEYS: Set<string> = new Set([
   'rescuers',
   'resources',
   'alerts',
+  'shelters',
   'hazard_reports',
   'reports',
   'operation_logs',
@@ -45,6 +50,8 @@ const KEY_ALIASES: Record<string, NavItemKey> = {
   sos: 'sos_requests',
   requests: 'sos_requests',
   dispatch: 'coordination',
+  shelter: 'shelters',
+  safe_locations: 'shelters',
   danger_points: 'hazard_reports',
   logs: 'operation_logs',
   history: 'operation_logs',
@@ -89,16 +96,17 @@ export function parseRoute(
     .split('/')
     .filter(Boolean);
 
-  let rolePrefix: '/local_authority' | '/admin' = defaultPrefix;
+  let rolePrefix: '/authority' | '/admin' = defaultPrefix;
   let keyIndex = 0;
 
   if (
+    segments[0] === 'authority' ||
     segments[0] === 'local_authority' ||
     segments[0] === 'localauthority' ||
     segments[0] === 'localauthor' ||
     segments[0] === 'local-authority'
   ) {
-    rolePrefix = '/local_authority';
+    rolePrefix = '/authority';
     keyIndex = 1;
   } else if (segments[0] === 'admin') {
     rolePrefix = '/admin';
