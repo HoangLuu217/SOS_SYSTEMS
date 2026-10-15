@@ -203,7 +203,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           key: 'sos_requests',
-          label: 'Tiếp nhận & Xác minh SOS',
+          label: 'Theo dõi yêu cầu SOS',
           icon: <Siren size={18} className="sos-nav-icon" />,
           badge: sosCounts.pending > 0 ? `${sosCounts.pending} Mới` : undefined,
           badgeType: 'danger',
@@ -709,7 +709,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {group.title}
               </div>
             )}
-
             {/* Danh sách các item thuộc nhóm */}
             <div className="sos-nav-group-items">
               {group.items.map((item) => {

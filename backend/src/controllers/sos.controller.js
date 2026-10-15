@@ -1,6 +1,7 @@
 const sosService = require('../services/sos.service');
 const fileService = require('../services/file.service');
 const auditService = require('../services/audit.service');
+const { emitSosCreated, emitSosUpdated } = require('../socket');
 
 const createSos = async (req, res, next) => {
   try {
@@ -23,6 +24,9 @@ const createSos = async (req, res, next) => {
         address: newSos.location?.address,
       },
     });
+
+    // Phát sự kiện Realtime Socket.IO cho toàn bộ Web Dashboard & Cán bộ
+    emitSosCreated(newSos);
 
     res.status(201).json({ success: true, data: newSos });
   } catch (error) {
@@ -70,6 +74,7 @@ const updateSos = async (req, res, next) => {
       metadata: { updatedFields: Object.keys(req.body) },
     });
 
+    emitSosUpdated(updatedSos);
     res.status(200).json({ success: true, data: updatedSos });
   } catch (error) {
     next(error);
@@ -90,6 +95,7 @@ const cancelSos = async (req, res, next) => {
       metadata: { note, status: 'CANCELLED' },
     });
 
+    emitSosUpdated(updatedSos);
     res.status(200).json({ success: true, data: updatedSos });
   } catch (error) {
     next(error);
@@ -110,6 +116,7 @@ const completeSos = async (req, res, next) => {
       metadata: { note, status: 'COMPLETED' },
     });
 
+    emitSosUpdated(updatedSos);
     res.status(200).json({ success: true, data: updatedSos });
   } catch (error) {
     next(error);
@@ -150,6 +157,7 @@ const verifySos = async (req, res, next) => {
       },
     });
 
+    emitSosUpdated(verifiedSos);
     res.status(200).json({ success: true, data: verifiedSos });
   } catch (error) {
     next(error);

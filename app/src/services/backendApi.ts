@@ -150,11 +150,10 @@ class BackendApiService {
     if (process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_API_URL.trim()) {
       return process.env.EXPO_PUBLIC_API_URL.trim();
     }
-
-    // 2. Nếu trong phiên chạy có gán customBaseUrl
+    if (ENV.API_BASE_URL) return ENV.API_BASE_URL;
     if (this.customBaseUrl) return this.customBaseUrl;
 
-    // 3. Nếu người dùng lưu URL tùy chỉnh trong Storage
+    // 2. Nếu người dùng lưu URL tùy chỉnh trong Storage
     try {
       const stored = await AsyncStorage.getItem(ENV.STORAGE_KEYS.CUSTOM_API_URL);
       if (stored && stored.trim()) {
@@ -190,12 +189,19 @@ class BackendApiService {
       'Content-Type': 'application/json',
       Accept: 'application/json',
       'Bypass-Tunnel-Reminder': 'true',
+      'X-Tunnel-Skip-Anti-Phishing-Page': 'true',
+      'ngrok-skip-browser-warning': 'true',
       ...(options.headers as Record<string, string>),
     };
 
     const token = await AsyncStorage.getItem(ENV.STORAGE_KEYS.ACCESS_TOKEN);
     if (token && !headers['Authorization']) {
       headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const storedUser = await this.getStoredUser();
+    if (storedUser?._id && !headers['x-user-id']) {
+      headers['x-user-id'] = storedUser._id;
     }
 
     try {
@@ -221,6 +227,7 @@ class BackendApiService {
         return {
           success: false,
           message: errorMsg,
+          data: json?.data,
           error: json?.error,
         };
       }

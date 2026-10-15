@@ -16,7 +16,7 @@ const startServer = async () => {
     initSocket(server);
 
     server.listen(PORT, '0.0.0.0', () => {
-      console.log(` Server đang chạy tại http://0.0.0.0:${PORT} (hỗ trợ Socket.IO & REST)`);
+      console.log(` Server đang chạy tại http://0.0.0.0:${PORT} (hỗ trợ Realtime Socket.IO & REST)`);
     });
   } catch (error) {
     console.error('❌ Lỗi kết nối CSDL hoặc khởi động Server:', error);
@@ -25,4 +25,3 @@ const startServer = async () => {
 };
 
 startServer();
-// trigger restart
