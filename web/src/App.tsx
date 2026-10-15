@@ -261,7 +261,7 @@ function MainRouter() {
         <main
           className="sos-main-content"
           style={{
-            overflow: (activeNavKey === 'map' && isAuthority) || activeNavKey === 'hazard_reports' ? 'hidden' : 'auto',
+            overflow: (activeNavKey === 'map' && isAuthority) || activeNavKey === 'hazard_reports' || activeNavKey === 'shelters' ? 'hidden' : 'auto',
             height: '100vh',
             display: 'flex',
             flexDirection: 'column',
@@ -300,8 +300,8 @@ function MainRouter() {
                   display: 'flex',
                   flexDirection: 'column',
                   minHeight: 0,
-                  overflow: activeNavKey === 'hazard_reports' ? 'hidden' : undefined,
-                  padding: activeNavKey === 'hazard_reports' ? '14px 20px 16px' : undefined,
+                  overflow: activeNavKey === 'hazard_reports' || activeNavKey === 'shelters' ? 'hidden' : undefined,
+                  padding: activeNavKey === 'hazard_reports' || activeNavKey === 'shelters' ? '14px 20px 16px' : undefined,
                 }}
               >
                 <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>

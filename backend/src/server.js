@@ -12,6 +12,7 @@ const startServer = async () => {
 
     app.listen(PORT, '0.0.0.0', () => {
       console.log(` Server đang chạy tại http://0.0.0.0:${PORT} (tất cả IP mạng LAN)`);
+      console.log(`📡 SSE Realtime Stream sẵn sàng tại /api/notifications/stream`);
     });
   } catch (error) {
     console.error('❌ Lỗi kết nối CSDL hoặc khởi động Server:', error);
@@ -20,4 +21,5 @@ const startServer = async () => {
 };
 
 startServer();
-// trigger restart
+
+

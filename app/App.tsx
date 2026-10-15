@@ -17,11 +17,17 @@ import { BottomNav, TabName } from './src/components/BottomNav';
 import { LogoSOS } from './src/components/LogoSOS';
 import { BACKGROUND_APP_SOURCE } from './src/constants/backgroundBase64';
 
+import { registerForPushNotificationsAsync } from './src/services/pushNotificationService';
+import { NotificationProvider, useNotifications } from './src/context/NotificationContext';
+import { InAppNotificationBanner } from './src/components/InAppNotificationBanner';
+
 function AuthenticatedApp() {
   const [activeTab, setActiveTab] = useState<TabName>('home');
   const [configVisible, setConfigVisible] = useState(false);
   const [mapFilter, setMapFilter] = useState<MapFilterType>('ALL');
   const [mapNavKey, setMapNavKey] = useState(0);
+
+  const { unreadCount, setNavigateHandler } = useNotifications();
 
   const handleNavigateToTab = (tab: TabName, options?: { filter?: MapFilterType; areaId?: string }) => {
     setActiveTab(tab);
@@ -33,8 +39,15 @@ function AuthenticatedApp() {
     }
   };
 
+  React.useEffect(() => {
+    setNavigateHandler((tab) => handleNavigateToTab(tab as TabName));
+  }, [setNavigateHandler]);
+
   return (
     <View style={styles.container}>
+      {/* Banner thông báo khẩn cấp nổi góc trên (Heads-up alert banner) */}
+      <InAppNotificationBanner onNavigateToNews={() => handleNavigateToTab('news')} />
+
       {/* Các màn hình Tab luôn được giữ trong bộ nhớ (Pre-warmed Tab Layer) */}
       <View style={styles.screenContainer}>
         {/* Tab Trang chủ */}
@@ -59,9 +72,11 @@ function AuthenticatedApp() {
           <SosScreen />
         </View>
 
-        {/* Tab Tin tức */}
+        {/* Tab Tin tức & Thông báo */}
         <View style={[styles.tabScreenWrap, activeTab !== 'news' && styles.hiddenTabScreen]}>
-          <NewsScreen />
+          <NewsScreen
+            onNavigateToTab={(tab) => handleNavigateToTab(tab as TabName)}
+          />
         </View>
 
         {/* Tab Hồ sơ người dùng - Đảm bảo logo và thông tin luôn duy trì trong RAM */}
@@ -73,7 +88,11 @@ function AuthenticatedApp() {
       </View>
 
       <View style={styles.bottomNavWrapper}>
-        <BottomNav activeTab={activeTab} onTabPress={setActiveTab} />
+        <BottomNav
+          activeTab={activeTab}
+          onTabPress={setActiveTab}
+          unreadNewsCount={unreadCount}
+        />
       </View>
 
       <ConfigModal
@@ -213,6 +232,9 @@ function MainNavigator() {
         message={toast.message}
         onClose={() => setToast(prev => ({ ...prev, visible: false }))}
       />
+
+      {/* Banner thông báo khẩn cấp khi người dùng chưa đăng nhập */}
+      {!user && <InAppNotificationBanner onNavigateToNews={() => {}} />}
     </View>
   );
 }
@@ -221,7 +243,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <MainNavigator />
+        <NotificationProvider>
+          <MainNavigator />
+        </NotificationProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

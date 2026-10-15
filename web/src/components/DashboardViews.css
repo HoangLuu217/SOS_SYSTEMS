@@ -1058,6 +1058,16 @@
   background: #dcfce7;
 }
 
+.sos-btn-flat.warning {
+  color: #b45309;
+  border-color: #fde68a;
+  background: #ffffff;
+}
+.sos-btn-flat.warning:hover {
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
 /* Scope switch tabs (Local vs City) */
 .sos-scope-tabs {
   display: flex;
@@ -1466,3 +1476,132 @@
   background-color: #cbd5e1;
   border-color: #94a3b8;
 }
+
+/* ==================== NOTIFICATION BROADCAST COMPONENT ==================== */
+.sos-notif-category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.sos-notif-category-card {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.4);
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.sos-notif-category-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.sos-notif-category-card.instant-active {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: #ef4444;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.15);
+}
+
+.sos-notif-category-card.system-active {
+  background: rgba(37, 99, 235, 0.12);
+  border-color: #2563eb;
+  box-shadow: 0 0 20px rgba(37, 99, 235, 0.15);
+}
+
+.sos-notif-card-header {
+  display: flex;
+  align-items: center;
+  justifyContent: space-between;
+  margin-bottom: 6px;
+}
+
+.sos-notif-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.sos-notif-card-desc {
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.sos-notif-card-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sos-notif-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+}
+
+.sos-badge.instant {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  font-weight: 800;
+}
+
+.sos-badge.system {
+  background: rgba(37, 99, 235, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(37, 99, 235, 0.4);
+  font-weight: 800;
+}
+
+[data-theme="light"] .sos-notif-category-card {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+[data-theme="light"] .sos-notif-category-card.instant-active {
+  background: #fef2f2;
+  border-color: #ef4444;
+}
+
+[data-theme="light"] .sos-notif-category-card.system-active {
+  background: #eff6ff;
+  border-color: #2563eb;
+}
+
+[data-theme="light"] .sos-notif-card-title {
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-notif-card-desc {
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-notif-tag {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+[data-theme="light"] .sos-badge.instant {
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #fca5a5;
+}
+
+[data-theme="light"] .sos-badge.system {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-color: #93c5fd;
+}

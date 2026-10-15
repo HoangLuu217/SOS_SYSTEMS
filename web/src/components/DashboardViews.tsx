@@ -34,10 +34,16 @@ import {
   subscribeHazardEvents,
   fetchSafeLocations,
   createSafeLocation,
+  updateSafeLocation,
+  deleteSafeLocation,
   createAdminUser,
   updateAdminUser,
   fetchAreaManagers,
   type AreaManagerInfo,
+  broadcastNotificationApi,
+  fetchBroadcastHistory,
+  deleteBroadcastApi,
+  type BroadcastItem,
 } from '../services/api';
 import {
   Siren,
@@ -48,9 +54,13 @@ import {
   Truck,
   Users,
   Shield,
+  Hospital,
   LifeBuoy,
   BellRing,
   AlertTriangle,
+  Zap,
+  Megaphone,
+  Smartphone,
   Info,
   BarChart3,
   Building2,
@@ -89,6 +99,8 @@ import {
   ChevronRight,
   UserCheck,
   UserX,
+  EyeOff,
+  RotateCcw,
 } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -495,6 +507,254 @@ const HazardMiniMap: React.FC<{
   );
 };
 
+// Component Render Icon Loại cơ sở an toàn / Điểm trú ẩn
+export const ShelterTypeIcon: React.FC<{
+  type: string;
+  size?: number;
+  color?: string;
+  style?: React.CSSProperties;
+}> = ({ type, size = 20, color = 'currentColor', style }) => {
+  switch (type) {
+    case 'EVACUATION_CENTER':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+      );
+    case 'HOSPITAL':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M12 6v12M6 12h12"></path>
+          <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+        </svg>
+      );
+    case 'RESCUE_STATION':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          <path d="m9 12 2 2 4-4"></path>
+        </svg>
+      );
+    case 'MEETING_POINT':
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path>
+          <line x1="4" y1="22" x2="4" y2="15"></line>
+        </svg>
+      );
+    case 'SHELTER':
+    default:
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style}>
+          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+          <polyline points="9 22 9 12 15 12 15 22"></polyline>
+        </svg>
+      );
+  }
+};
+
+// Danh mục loại cơ sở an toàn cho form chọn dạng thẻ grid
+export const SHELTER_TYPE_CARDS = [
+  { key: 'EVACUATION_CENTER', label: 'Trung tâm sơ tán', desc: 'Trường học, nhà văn hóa, trung tâm thi đấu' },
+  { key: 'HOSPITAL', label: 'Trạm Y tế Dã chiến', desc: 'Bệnh viện, trung tâm cấp cứu khẩn cấp' },
+  { key: 'SHELTER', label: 'Điểm trú kiên cố', desc: 'Trụ sở UBND, nhà cộng đồng cao tầng' },
+  { key: 'RESCUE_STATION', label: 'Trạm cứu hộ tác chiến', desc: 'Đồn biên phòng, bến cano vượt lũ' },
+  { key: 'MEETING_POINT', label: 'Điểm tập kết an toàn', desc: 'Khu đất cao, bãi đỗ tập trung di tản dân' },
+];
+
+// Hàm sinh mã icon ghim điểm an toàn trên Leaflet
+export const getShelterMarkerHtml = (type: string) => {
+  const configs: Record<string, { bg: string; svg: string }> = {
+    EVACUATION_CENTER: {
+      bg: '#0284c7',
+      svg: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>',
+    },
+    HOSPITAL: {
+      bg: '#059669',
+      svg: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v12M6 12h12"></path></svg>',
+    },
+    RESCUE_STATION: {
+      bg: '#d97706',
+      svg: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>',
+    },
+    MEETING_POINT: {
+      bg: '#0891b2',
+      svg: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>',
+    },
+    SHELTER: {
+      bg: '#7c3aed',
+      svg: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>',
+    },
+  };
+
+  const c = configs[type] || configs.SHELTER;
+  return (
+    '<div style="position:relative;display:flex;flex-direction:column;align-items:center;cursor:pointer;">' +
+      '<div style="background:' + c.bg + ';width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #ffffff;box-shadow:0 3px 8px rgba(0,0,0,0.3);">' +
+        c.svg +
+      '</div>' +
+      '<div style="width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid ' + c.bg + ';margin-top:-1px;"></div>' +
+    '</div>'
+  );
+};
+
+// Component Bản đồ nhỏ (Mini Map) cho điểm trú ẩn an toàn với tương tác chọn tọa độ mượt mà
+const ShelterMiniMap: React.FC<{
+  lat: number;
+  lng: number;
+  name: string;
+  type: string;
+  interactive?: boolean;
+  onLocationChange?: (lat: number, lng: number) => void;
+}> = ({ lat, lng, name, type, interactive, onLocationChange }) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
+  const isDraggingRef = useRef<boolean>(false);
+  const onLocationChangeRef = useRef(onLocationChange);
+  onLocationChangeRef.current = onLocationChange;
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    if (mapRef.current) return;
+
+    const validLat = typeof lat === 'number' && !isNaN(lat) ? lat : 16.0570;
+    const validLng = typeof lng === 'number' && !isNaN(lng) ? lng : 108.2170;
+
+    const map = L.map(containerRef.current, {
+      center: [validLat, validLng],
+      zoom: 16,
+      zoomControl: true,
+      attributionControl: false,
+      preferCanvas: true,
+      wheelDebounceTime: 40,
+    });
+
+    L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+      subdomains: ['0', '1', '2', '3'],
+      maxZoom: 20,
+    }).addTo(map);
+
+    const pinHtml = getShelterMarkerHtml(type);
+    const customIcon = L.divIcon({
+      html: pinHtml,
+      className: '',
+      iconSize: [28, 34],
+      iconAnchor: [14, 34],
+      popupAnchor: [0, -34],
+    });
+
+    const marker = L.marker([validLat, validLng], {
+      icon: customIcon,
+      draggable: !!interactive,
+    }).addTo(map);
+
+    marker
+      .bindPopup(
+        `<div style="font-family:sans-serif;font-size:12px;font-weight:600;color:#0f172a;line-height:1.4;">${
+          name || 'Vị trí điểm trú ẩn'
+        }<br/><span style="color:#64748b;font-weight:normal;">[${validLat.toFixed(5)}, ${validLng.toFixed(5)}]</span></div>`
+      )
+      .openPopup();
+
+    if (interactive) {
+      marker.on('dragstart', () => {
+        isDraggingRef.current = true;
+      });
+      marker.on('dragend', (e: any) => {
+        isDraggingRef.current = false;
+        const pos = e.target.getLatLng();
+        onLocationChangeRef.current?.(pos.lat, pos.lng);
+        marker
+          .setPopupContent(
+            `<div style="font-family:sans-serif;font-size:12px;font-weight:600;color:#0f172a;line-height:1.4;">${
+              name || 'Vị trí điểm trú ẩn'
+            }<br/><span style="color:#64748b;font-weight:normal;">[${pos.lat.toFixed(5)}, ${pos.lng.toFixed(5)}]</span></div>`
+          )
+          .openPopup();
+      });
+      map.on('click', (e: any) => {
+        const { lat: clickLat, lng: clickLng } = e.latlng;
+        marker.setLatLng([clickLat, clickLng]);
+        onLocationChangeRef.current?.(clickLat, clickLng);
+        marker
+          .setPopupContent(
+            `<div style="font-family:sans-serif;font-size:12px;font-weight:600;color:#0f172a;line-height:1.4;">${
+              name || 'Vị trí điểm trú ẩn'
+            }<br/><span style="color:#64748b;font-weight:normal;">[${clickLat.toFixed(5)}, ${clickLng.toFixed(5)}]</span></div>`
+          )
+          .openPopup();
+      });
+    }
+
+    markerRef.current = marker;
+    mapRef.current = map;
+
+    const t1 = setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
+    const t2 = setTimeout(() => {
+      map.invalidateSize();
+    }, 350);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!mapRef.current || !markerRef.current || isDraggingRef.current) return;
+    const validLat = typeof lat === 'number' && !isNaN(lat) ? lat : 16.0570;
+    const validLng = typeof lng === 'number' && !isNaN(lng) ? lng : 108.2170;
+    const curr = markerRef.current.getLatLng();
+    if (Math.abs(curr.lat - validLat) > 0.00001 || Math.abs(curr.lng - validLng) > 0.00001) {
+      markerRef.current.setLatLng([validLat, validLng]);
+      mapRef.current.panTo([validLat, validLng], { animate: true, duration: 0.25 });
+      markerRef.current.setPopupContent(
+        `<div style="font-family:sans-serif;font-size:12px;font-weight:600;color:#0f172a;line-height:1.4;">${
+          name || 'Vị trí điểm trú ẩn'
+        }<br/><span style="color:#64748b;font-weight:normal;">[${validLat.toFixed(5)}, ${validLng.toFixed(5)}]</span></div>`
+      );
+    }
+  }, [lat, lng, name]);
+
+  useEffect(() => {
+    if (!markerRef.current) return;
+    const pinHtml = getShelterMarkerHtml(type);
+    const customIcon = L.divIcon({
+      html: pinHtml,
+      className: '',
+      iconSize: [28, 34],
+      iconAnchor: [14, 34],
+      popupAnchor: [0, -34],
+    });
+    markerRef.current.setIcon(customIcon);
+  }, [type]);
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        width: '100%',
+        height: '100%',
+        minHeight: '260px',
+        borderRadius: '10px',
+        border: '1px solid #cbd5e1',
+        overflow: 'hidden',
+        position: 'relative',
+      }}
+    />
+  );
+};
+
 interface DashboardViewsProps {
   activeKey: NavItemKey;
   onOpenMap: () => void;
@@ -542,6 +802,12 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     severity: 'HIGH',
     areaId: '',
   });
+
+  // State phục vụ Phát thông báo (Tin tức thời & Thông báo hệ thống)
+  const [notificationCategory, setNotificationCategory] = useState<'INSTANT' | 'SYSTEM'>('INSTANT');
+  const [broadcastHistory, setBroadcastHistory] = useState<BroadcastItem[]>([]);
+  const [broadcastFilterTab, setBroadcastFilterTab] = useState<'ALL' | 'INSTANT' | 'SYSTEM'>('ALL');
+  const [broadcastSearch, setBroadcastSearch] = useState('');
 
   // State phục vụ Duyệt điểm nguy hiểm (UC-L15)
   const [hazardReports, setHazardReports] = useState<HazardReportItem[]>([]);
@@ -895,16 +1161,65 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
   // State phục vụ Quản lý Điểm trú ẩn & Trạm an toàn (UC-L12)
   const [shelters, setShelters] = useState<SafeLocationItem[]>([]);
-  const [showShelterModal, setShowShelterModal] = useState(false);
-  const [shelterForm, setShelterForm] = useState({
-    name: '',
-    type: 'EVACUATION_CENTER',
-    address: '',
-    capacity: 100,
-    currentOccupancy: 0,
-    areaId: '',
-    coordinates: '108.2540, 15.9720',
-  });
+  const [shelterFilter, setShelterFilter] = useState<'ALL' | 'ACTIVE' | 'FULL' | 'MAINTENANCE' | 'INACTIVE'>('ALL');
+  const [shelterTypeFilter, setShelterTypeFilter] = useState<'ALL' | 'EVACUATION_CENTER' | 'HOSPITAL' | 'SHELTER' | 'RESCUE_STATION' | 'MEETING_POINT'>('ALL');
+  const [shelterManagementScope, setShelterManagementScope] = useState<'LOCAL' | 'CITY'>('LOCAL');
+  const [shelterSearchText, setShelterSearchText] = useState('');
+  const [shelterPage, setShelterPage] = useState<number>(1);
+  const [shelterSortField, setShelterSortField] = useState<'createdAt' | 'name' | 'capacity' | 'occupancyRate' | 'district' | 'address' | 'status'>('createdAt');
+  const [shelterSortOrder, setShelterSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [shelterJumpInputPage, setShelterJumpInputPage] = useState<string>('');
+
+  // Modal Chi tiết Điểm trú ẩn
+  const [detailShelter, setDetailShelter] = useState<SafeLocationItem | null>(null);
+
+  // Modal Tạo Điểm Trú Ẩn Mới
+  const [isCreateShelterOpen, setIsCreateShelterOpen] = useState(false);
+  const [createShelterName, setCreateShelterName] = useState('');
+  const [createShelterType, setCreateShelterType] = useState<'EVACUATION_CENTER' | 'HOSPITAL' | 'SHELTER' | 'RESCUE_STATION' | 'MEETING_POINT'>('EVACUATION_CENTER');
+  const [createShelterAreaId, setCreateShelterAreaId] = useState('');
+  const [createShelterAddress, setCreateShelterAddress] = useState('');
+  const [createShelterCapacity, setCreateShelterCapacity] = useState<number>(200);
+  const [createShelterOccupancy, setCreateShelterOccupancy] = useState<number>(0);
+  const [createShelterStatus, setCreateShelterStatus] = useState<'ACTIVE' | 'FULL' | 'MAINTENANCE' | 'INACTIVE'>('ACTIVE');
+  const [createShelterLat, setCreateShelterLat] = useState<number>(16.0570);
+  const [createShelterLng, setCreateShelterLng] = useState<number>(108.2170);
+  const [createShelterNotes, setCreateShelterNotes] = useState('');
+  const [createShelterMapLinkInput, setCreateShelterMapLinkInput] = useState('');
+  const [resolvingCreateShelterMapLink, setResolvingCreateShelterMapLink] = useState(false);
+  const [createShelterMapLinkStatus, setCreateShelterMapLinkStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [submittingCreateShelter, setSubmittingCreateShelter] = useState(false);
+  const [createShelterErrors, setCreateShelterErrors] = useState<{
+    name?: string;
+    address?: string;
+    capacity?: string;
+    coordinates?: string;
+    general?: string;
+  }>({});
+
+  // Modal Chỉnh Sửa Điểm Trú Ẩn
+  const [editingShelter, setEditingShelter] = useState<SafeLocationItem | null>(null);
+  const [editShelterName, setEditShelterName] = useState('');
+  const [editShelterType, setEditShelterType] = useState<'EVACUATION_CENTER' | 'HOSPITAL' | 'SHELTER' | 'RESCUE_STATION' | 'MEETING_POINT'>('EVACUATION_CENTER');
+  const [editShelterAreaId, setEditShelterAreaId] = useState('');
+  const [editShelterAddress, setEditShelterAddress] = useState('');
+  const [editShelterCapacity, setEditShelterCapacity] = useState<number>(200);
+  const [editShelterOccupancy, setEditShelterOccupancy] = useState<number>(0);
+  const [editShelterStatus, setEditShelterStatus] = useState<'ACTIVE' | 'FULL' | 'MAINTENANCE' | 'INACTIVE'>('ACTIVE');
+  const [editShelterLat, setEditShelterLat] = useState<number>(16.0570);
+  const [editShelterLng, setEditShelterLng] = useState<number>(108.2170);
+  const [editShelterNotes, setEditShelterNotes] = useState('');
+  const [editShelterMapLinkInput, setEditShelterMapLinkInput] = useState('');
+  const [resolvingEditShelterMapLink, setResolvingEditShelterMapLink] = useState(false);
+  const [editShelterMapLinkStatus, setEditShelterMapLinkStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [submittingEditShelter, setSubmittingEditShelter] = useState(false);
+  const [editShelterErrors, setEditShelterErrors] = useState<{
+    name?: string;
+    address?: string;
+    capacity?: string;
+    coordinates?: string;
+    general?: string;
+  }>({});
 
   // State bộ lọc và tìm kiếm cho yêu cầu cứu nạn
   const [sosStatusFilter, setSosStatusFilter] = useState<'ALL' | 'PENDING' | 'ACTIVE' | 'COMPLETED'>('ALL');
@@ -1261,6 +1576,16 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
           ];
           setAlerts(fallbackAlerts);
         }
+
+        // Tải lịch sử thông báo đã phát tới các tài khoản
+        try {
+          const bRes = await fetchBroadcastHistory();
+          if (bRes.success && Array.isArray(bRes.data)) {
+            setBroadcastHistory(bRes.data);
+          }
+        } catch (bErr) {
+          console.log('Lỗi khi tải lịch sử phát thông báo:', bErr);
+        }
       }
 
       // 8. Nếu ở trang Duyệt điểm nguy hiểm (UC-L15) -> Lấy danh sách Hazard Reports từ DB
@@ -1276,44 +1601,17 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
       // 7b. Nếu ở trang Điểm trú ẩn & Trạm an toàn -> Lấy Safe Locations từ DB
       if (activeKey === 'shelters') {
-        const res = await fetchSafeLocations();
-        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        const [res, areasRes] = await Promise.all([
+          fetchSafeLocations({ all: 'true', limit: '100' }),
+          areas.length === 0 ? fetchAdministrativeAreas() : Promise.resolve(null),
+        ]);
+        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
           setShelters(res.data);
         } else {
-          // Fallback các điểm trú ẩn an toàn nếu DB chưa có
-          const fallbackShelters: SafeLocationItem[] = [
-            {
-              _id: 'shelter-dn-01',
-              name: 'Điểm sơ tán Trường Đại học FPT Đà Nẵng',
-              type: 'EVACUATION_CENTER',
-              address: 'Khu đô thị FPT City, Phường Hòa Hải, Ngũ Hành Sơn, Đà Nẵng',
-              capacity: 1000,
-              currentOccupancy: 120,
-              status: 'ACTIVE',
-              location: { type: 'Point', coordinates: [108.2612, 15.9698] },
-            },
-            {
-              _id: 'shelter-dn-02',
-              name: 'Trạm Y tế Dã chiến Cấp cứu - BV Phụ sản Nhi',
-              type: 'HOSPITAL',
-              address: '402 Lê Văn Hiến, Phường Khuê Mỹ, Ngũ Hành Sơn, Đà Nẵng',
-              capacity: 250,
-              currentOccupancy: 45,
-              status: 'ACTIVE',
-              location: { type: 'Point', coordinates: [108.2435, 16.0221] },
-            },
-            {
-              _id: 'shelter-dn-03',
-              name: 'Nhà Văn hóa Cộng đồng Trà Khê',
-              type: 'SHELTER',
-              address: 'Đường Nam Kỳ Khởi Nghĩa, Phường Hòa Quý, Ngũ Hành Sơn, Đà Nẵng',
-              capacity: 150,
-              currentOccupancy: 85,
-              status: 'ACTIVE',
-              location: { type: 'Point', coordinates: [108.2395, 15.9812] },
-            },
-          ];
-          setShelters(fallbackShelters);
+          setShelters(FALLBACK_SHELTERS);
+        }
+        if (areasRes && areasRes.success && Array.isArray(areasRes.data)) {
+          setAreas(areasRes.data);
         }
       }
 
@@ -1546,70 +1844,77 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     }
   };
 
-  // Hành động 6: Phát cảnh báo khẩn cấp (Lưu vào MongoDB)
+  // Hành động 6: Phát thông báo / cảnh báo (Lưu vào MongoDB & gửi push ra ngoài app điện thoại)
   const handleCreateAlertSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      setLoading(true);
-      await createAlert({
-        areaId: alertForm.areaId || (areas[0]?._id as string),
-        title: alertForm.title,
-        content: alertForm.content,
-        type: alertForm.type,
-        severity: alertForm.severity,
-      });
-      alert('✅ Đã lưu và phát cảnh báo thiên tai thành công trên toàn hệ thống!');
-      setAlertForm({ title: '', content: '', type: 'FLOOD', severity: 'HIGH', areaId: user?.authority?.areaId || areas[0]?._id || '' });
-      refreshData();
-    } catch (err: any) {
-      alert('❌ Lỗi phát cảnh báo: ' + err.message);
-    } finally {
-      setLoading(false);
+    if (!alertForm.title.trim()) {
+      showToast('Vui lòng nhập tiêu đề thông báo', 'warning');
+      return;
     }
-  };
+    if (!alertForm.content.trim()) {
+      showToast('Vui lòng nhập nội dung thông báo', 'warning');
+      return;
+    }
 
-  // Hành động 7: Thêm điểm trú ẩn an toàn mới
-  const handleCreateShelterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
     try {
       setLoading(true);
-      const coords = shelterForm.coordinates.split(',').map((c) => parseFloat(c.trim()));
-      const lng = isNaN(coords[0]) ? 108.2540 : coords[0];
-      const lat = isNaN(coords[1]) ? 15.9720 : coords[1];
-      const targetAreaId = shelterForm.areaId || user?.authority?.areaId || (areas[0]?._id as string);
+      const isAuthority = user?.roles?.includes('LOCAL_AUTHORITY') && !user?.roles?.includes('ADMIN');
+      const targetAreaId = isAuthority
+        ? user?.authority?.areaId
+        : (alertForm.areaId || (areas[0]?._id as string) || 'ALL');
 
-      await createSafeLocation({
-        name: shelterForm.name,
-        type: shelterForm.type,
-        address: shelterForm.address,
-        capacity: Number(shelterForm.capacity) || 50,
-        currentOccupancy: Number(shelterForm.currentOccupancy) || 0,
+      await broadcastNotificationApi({
+        title: alertForm.title.trim(),
+        content: alertForm.content.trim(),
+        type: notificationCategory, // 'INSTANT' or 'SYSTEM'
         areaId: targetAreaId,
-        location: {
-          type: 'Point',
-          coordinates: [lng, lat],
+        priority: notificationCategory === 'INSTANT' ? alertForm.severity : 'NORMAL',
+        data: {
+          disasterType: alertForm.type,
         },
       });
 
-      showToast('Đã kích hoạt điểm trú ẩn / trạm an toàn mới thành công!', 'success');
-      setShowShelterModal(false);
-      setShelterForm({
-        name: '',
-        type: 'EVACUATION_CENTER',
-        address: '',
-        capacity: 100,
-        currentOccupancy: 0,
+      showToast(
+        `✅ Đã phát ${notificationCategory === 'INSTANT' ? 'Tin tức thời' : 'Thông báo hệ thống'} thành công tới các tài khoản trong khu vực và đẩy thông báo ra ngoài app điện thoại!`,
+        'success'
+      );
+      setAlertForm({
+        title: '',
+        content: '',
+        type: 'FLOOD',
+        severity: 'HIGH',
         areaId: user?.authority?.areaId || (areas[0]?._id as string) || '',
-        coordinates: '108.2540, 15.9720',
       });
       refreshData();
-      window.dispatchEvent(new CustomEvent('sos_data_updated'));
     } catch (err: any) {
-      showToast('Lỗi thêm điểm trú ẩn: ' + (err.message || 'Lỗi server'), 'error');
+      showToast('❌ Lỗi phát thông báo: ' + (err.message || 'Không thể gửi'), 'error');
     } finally {
       setLoading(false);
     }
   };
+
+  // Hành động 6b: Thu hồi / Xóa thông báo đã phát
+  const handleDeleteBroadcast = (broadcastId: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Thu hồi / Xóa thông báo đã phát',
+      message: 'Bạn có chắc chắn muốn thu hồi bản tin thông báo này khỏi tất cả tài khoản người nhận trong khu vực?',
+      type: 'danger',
+      confirmText: 'Xác nhận xóa',
+      cancelText: 'Hủy',
+      onConfirm: async () => {
+        try {
+          await deleteBroadcastApi(broadcastId);
+          showToast('✅ Đã thu hồi thông báo thành công', 'success');
+          setBroadcastHistory((prev) => prev.filter((b) => b.id !== broadcastId));
+          setConfirmModal((c) => ({ ...c, isOpen: false }));
+        } catch (err: any) {
+          showToast('❌ Không thể xóa thông báo: ' + err.message, 'error');
+        }
+      },
+    });
+  };
+
 
   // Hành động 8: Tạo tài khoản Cán bộ địa phương (LOCAL_AUTHORITY) gán địa bàn quản lý
   const handleCreateAuthorityUser = async (e: React.FormEvent) => {
@@ -2430,61 +2735,177 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
    * 5. LOCAL AUTHORITY: PHÁT CẢNH BÁO CHO NGƯỜI DÂN ĐỊA PHƯƠNG (UC-L12)
    * ------------------------------------------------------------- */
   if (activeKey === 'alerts') {
-    const displayAlerts = alerts.length > 0 ? alerts : FALLBACK_ALERTS;
+    const isAuthority = Boolean(user?.roles?.includes('LOCAL_AUTHORITY') && !user?.roles?.includes('ADMIN'));
     const currentArea = areas.find((a) => a._id === alertForm.areaId || a._id === user?.authority?.areaId) || areas[0];
+    const authorityAreaName = user?.authority?.areaName || currentArea?.name || 'Khu vực quản lý của bạn';
 
-    const quickTemplates = [
+    // Mẫu thông báo nhanh cho "Tin tức thời" (Khẩn cấp / Bão lũ)
+    const instantTemplates = [
       {
         title: '🌊 Cảnh báo ngập lụt dâng cao',
         type: 'FLOOD',
         severity: 'CRITICAL',
-        headline: `Cảnh báo ngập lụt khẩn cấp lưu vực ${currentArea?.name || 'địa phương'}`,
-        content: `Mực nước dâng nhanh trên 0.8m do mưa lớn kéo dài. Toàn bộ người dân vùng trũng thấp khẩn trương ngắt nguồn điện, di dời người già và trẻ nhỏ đến điểm trú ẩn an toàn của phường.`,
+        headline: `Cảnh báo ngập lụt khẩn cấp lưu vực ${authorityAreaName}`,
+        content: `Mực nước dâng nhanh trên 0.8m do mưa lớn kéo dài. Toàn bộ người dân vùng trũng thấp khẩn trương ngắt nguồn điện, di dời người già và trẻ nhỏ đến điểm trú ẩn an toàn của phường. Lực lượng cứu hộ đang túc trực ca-nô hỗ trợ.`,
       },
       {
         title: '⚡ Cảnh báo bão & gió giật mạnh',
         type: 'STORM',
         severity: 'HIGH',
-        headline: `Cảnh báo bão đổ bộ sức gió cấp 9-10 tại ${currentArea?.name || 'địa phương'}`,
-        content: `Gió giật mạnh nguy hiểm. Yêu cầu toàn bộ người dân ở yên trong nhà kiên cố, chằng chống cửa nẻo, tuyệt đối không di chuyển trên đường hoặc đứng gần cây to, cột điện.`,
+        headline: `Cảnh báo bão đổ bộ sức gió cấp 9-10 tại ${authorityAreaName}`,
+        content: `Gió giật mạnh nguy hiểm kèm mưa lớn. Yêu cầu toàn bộ người dân ở yên trong nhà kiên cố, chằng chống cửa nẻo, tuyệt đối không di chuyển trên đường hoặc đứng gần cây to, cột điện cao thế.`,
       },
       {
         title: '⛰️ Báo động sạt lở ven sông / taluy',
         type: 'LANDSLIDE',
         severity: 'HIGH',
-        headline: `Cảnh báo sạt lở nguy hiểm ven sông và triền dốc tại ${currentArea?.name || 'địa bàn'}`,
+        headline: `Cảnh báo sạt lở nguy hiểm ven sông và triền dốc tại ${authorityAreaName}`,
         content: `Xuất hiện dấu hiệu nứt trượt bờ sông và taluy dốc. Yêu cầu các hộ dân nằm trong bán kính 100m khẩn cấp sơ tán ngay đến nhà văn hóa hoặc trường học an toàn đã bố trí.`,
       },
       {
         title: '📢 Hiệu lệnh sơ tán dân khẩn cấp',
         type: 'EVACUATION',
         severity: 'CRITICAL',
-        headline: `Lệnh sơ tán khẩn cấp toàn bộ cư dân khu vực nguy hiểm ${currentArea?.name || ''}`,
-        content: `Mức nước vượt ngưỡng báo động khẩn. Lực lượng cứu hộ địa phương đang bố trí ca-nô và xe đặc chủng tại đầu đường chính để đón người dân đến Trạm sơ tán. Gọi Hotline SOS nếu cần hỗ trợ đặc biệt.`,
+        headline: `Lệnh sơ tán khẩn cấp toàn bộ cư dân khu vực nguy hiểm ${authorityAreaName}`,
+        content: `Mức nước vượt ngưỡng báo động khẩn. Lực lượng cứu hộ địa phương đang bố trí ca-nô và xe đặc chủng tại đầu đường chính để đón người dân đến Trạm sơ tán. Gọi Hotline SOS nếu cần hỗ trợ khẩn cấp.`,
       },
     ];
 
+    // Mẫu thông báo nhanh cho "Thông báo hệ thống" (Bảo trì, chính sách, hướng dẫn)
+    const systemTemplates = [
+      {
+        title: '🛠️ Lịch bảo trì hạ tầng máy chủ',
+        type: 'GENERAL',
+        severity: 'LOW',
+        headline: 'Thông báo nâng cấp hệ thống điều phối cứu nạn SOS',
+        content: 'Hệ thống máy chủ sẽ tiến hành bảo trì định kỳ từ 01:00 đến 02:00 sáng. Đường dây nóng cứu nạn 112 và ứng dụng di động vẫn tiếp nhận cuộc gọi khẩn cấp bình thường.',
+      },
+      {
+        title: '📦 Hướng dẫn nhận gói cứu trợ & nước sạch',
+        type: 'GENERAL',
+        severity: 'LOW',
+        headline: `Thông báo điểm tiếp nhận & cấp phát nhu yếu phẩm tại ${authorityAreaName}`,
+        content: 'Ban cứu trợ địa phương đã bố trí 3 điểm cấp phát gạo, mì tôm, nước khoáng tinh khiết và thuốc khử trùng tại Trạm Y tế và Nhà văn hóa phường. Người dân mang CCCD/số điện thoại đăng ký đến nhận hỗ trợ.',
+      },
+      {
+        title: '📱 Cập nhật ứng dụng di động nhận tin khẩn',
+        type: 'GENERAL',
+        severity: 'LOW',
+        headline: 'Hướng dẫn cài đặt & bật quyền nhận thông báo khẩn cấp trên app điện thoại',
+        content: 'Đề nghị toàn thể người dân và đội viên cứu trợ kiểm tra cấp quyền Thông báo (Push Notification) cho ứng dụng RescueSOS để nhận còi báo động tức thì khi có thiên tai bão lũ bất ngờ.',
+      },
+      {
+        title: '👮 Quy chế trực ban & điều phối ca-nô cứu nạn',
+        type: 'GENERAL',
+        severity: 'MEDIUM',
+        headline: `Quy chế trực chiến 24/24 giờ của lực lượng cứu nạn tại ${authorityAreaName}`,
+        content: 'Yêu cầu các đội cứu hộ tình nguyện và cán bộ địa phương duy trì trạng thái trực máy thoại và định vị GPS trên app. Ca-nô sẵn sàng xuất phát trong vòng 5 phút kể từ khi nhận phân công.',
+      },
+    ];
+
+    const currentTemplates = notificationCategory === 'INSTANT' ? instantTemplates : systemTemplates;
+
+    // Lọc lịch sử phát thông báo theo tab & từ khóa tìm kiếm
+    const filteredBroadcasts = broadcastHistory.filter((item) => {
+      if (broadcastFilterTab === 'INSTANT') {
+        const t = String(item.type || '').toUpperCase();
+        if (t !== 'INSTANT' && t !== 'TIN_TUC_THOI' && t !== 'ALERT' && t !== 'WEATHER') return false;
+      }
+      if (broadcastFilterTab === 'SYSTEM') {
+        const t = String(item.type || '').toUpperCase();
+        if (t !== 'SYSTEM' && t !== 'THONG_BAO_HE_THONG') return false;
+      }
+      if (broadcastSearch.trim()) {
+        const q = broadcastSearch.trim().toLowerCase();
+        const matchTitle = item.title?.toLowerCase().includes(q);
+        const matchContent = item.content?.toLowerCase().includes(q);
+        const matchArea = item.areaName?.toLowerCase().includes(q);
+        if (!matchTitle && !matchContent && !matchArea) return false;
+      }
+      return true;
+    });
+
     return (
       <div className="sos-views-container">
-        {/* Form Phát cảnh báo */}
+        {/* ==================== 1. FORM SOẠN & PHÁT THÔNG BÁO ==================== */}
         <div className="sos-view-card">
           <div className="sos-view-card-header">
-            <div className="sos-view-card-title">
-              <BellRing size={18} color="#ef4444" />
-              <span>Soạn &amp; Phát Cảnh Báo Khẩn Cấp Cho Người Dân</span>
+            <div>
+              <div className="sos-view-card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <BellRing size={20} color="#ef4444" />
+                <span>Trung Tâm Phát Thông Báo &amp; Cảnh Báo Cho Người Dân</span>
+              </div>
+              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                Do Quản trị viên (ADMIN) hoặc Cán bộ địa phương (LOCAL_AUTHORITY) khởi tạo tới các tài khoản trong khu vực &amp; đẩy thông báo trực tiếp ra ngoài ứng dụng điện thoại.
+              </div>
             </div>
-            <span style={{ fontSize: '12px', color: '#64748b' }}>
-              Truyền phát đồng thời qua Ứng Dụng Cứu Nạn, Tin Nhắn SMS &amp; Hệ Thống Loa Truyền Thanh
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="sos-badge" style={{ background: '#ecfdf5', color: '#059669', border: '1px solid #a7f3d0' }}>
+                <Smartphone size={13} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                Expo Push Service Ready
+              </span>
+            </div>
           </div>
 
-          {/* Mẫu cảnh báo nhanh một chạm */}
-          <div>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: '#94a3b8', marginBottom: '6px' }}>
-              Mẫu cảnh báo địa phương soạn sẵn (Nhấp để điền nhanh):
+          {/* BỘ CHUYỂN ĐỔI: TIN TỨC THỜI VS THÔNG BÁO HỆ THỐNG */}
+          <div style={{ marginBottom: '14px' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#475569', marginBottom: '8px' }}>
+              1. Lựa chọn phân loại thông báo muốn phát sóng:
+            </div>
+            <div className="sos-notif-category-grid">
+              {/* Card 1: Tin tức thời */}
+              <div
+                className={`sos-notif-category-card ${notificationCategory === 'INSTANT' ? 'instant-active' : ''}`}
+                onClick={() => setNotificationCategory('INSTANT')}
+              >
+                <div className="sos-notif-card-header">
+                  <div className="sos-notif-card-title">
+                    <Zap size={18} color="#ef4444" />
+                    <span>⚡ Tin tức thời (Cảnh báo khẩn cấp)</span>
+                  </div>
+                  <span className="sos-badge instant">Khẩn cấp &amp; Bão lũ</span>
+                </div>
+                <div className="sos-notif-card-desc">
+                  Phát báo động bão lũ ngập lụt dâng cao, sạt lở ven sông, lốc xoáy hoặc hiệu lệnh sơ tán khẩn cấp. Tự động kích hoạt còi hú và đẩy thông báo nổi ra ngoài màn hình điện thoại người dân.
+                </div>
+                <div className="sos-notif-card-tags">
+                  <span className="sos-notif-tag">🚨 Báo động đỏ</span>
+                  <span className="sos-notif-tag">📱 Push khẩn cấp ra app</span>
+                  <span className="sos-notif-tag">🗺️ Tích hợp bản đồ</span>
+                </div>
+              </div>
+
+              {/* Card 2: Thông báo hệ thống */}
+              <div
+                className={`sos-notif-category-card ${notificationCategory === 'SYSTEM' ? 'system-active' : ''}`}
+                onClick={() => setNotificationCategory('SYSTEM')}
+              >
+                <div className="sos-notif-card-header">
+                  <div className="sos-notif-card-title">
+                    <Megaphone size={18} color="#2563eb" />
+                    <span>📢 Thông báo hệ thống</span>
+                  </div>
+                  <span className="sos-badge system">Chính sách &amp; Quản trị</span>
+                </div>
+                <div className="sos-notif-card-desc">
+                  Thông báo lịch bảo trì máy chủ, hướng dẫn nhận nhu yếu phẩm cứu trợ, quy chế tác chiến điều phối, cập nhật phần mềm di động và thông tin chỉ đạo điều hành chung.
+                </div>
+                <div className="sos-notif-card-tags">
+                  <span className="sos-notif-tag">ℹ️ Hướng dẫn người dân</span>
+                  <span className="sos-notif-tag">📦 Phân bổ cứu trợ</span>
+                  <span className="sos-notif-tag">📋 Lưu hộp thư cá nhân</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* MẪU SOẠN SẴN MỘT CHẠM THEO PHÂN LOẠI */}
+          <div style={{ marginBottom: '14px' }}>
+            <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#64748b', marginBottom: '6px' }}>
+              Mẫu soạn sẵn {notificationCategory === 'INSTANT' ? 'Tin tức thời khẩn cấp' : 'Thông báo hệ thống'} (Nhấp để điền nhanh):
             </div>
             <div className="sos-quick-broadcast-grid">
-              {quickTemplates.map((t, idx) => (
+              {currentTemplates.map((t, idx) => (
                 <button
                   type="button"
                   key={idx}
@@ -2496,7 +2917,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
                       content: t.content,
                       type: t.type,
                       severity: t.severity as any,
-                      areaId: alertForm.areaId || user?.authority?.areaId || (areas[0]?._id as string),
+                      areaId: isAuthority ? (user?.authority?.areaId as string) : (alertForm.areaId || (areas[0]?._id as string)),
                     });
                   }}
                 >
@@ -2507,129 +2928,300 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
             </div>
           </div>
 
-          <form onSubmit={handleCreateAlertSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '12px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
+          {/* FORM NHẬP LIỆU THÔNG BÁO */}
+          <form onSubmit={handleCreateAlertSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
+              {/* Tiêu đề thông báo */}
               <div>
-                <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Tiêu đề cảnh báo:</label>
+                <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>
+                  Tiêu đề thông báo: <span style={{ color: '#ef4444' }}>*</span>
+                </label>
                 <input
                   type="text"
                   required
                   value={alertForm.title}
                   onChange={(e) => setAlertForm({ ...alertForm, title: e.target.value })}
-                  placeholder="VD: Cảnh báo nước sông dâng cao vượt báo động 3"
+                  placeholder={
+                    notificationCategory === 'INSTANT'
+                      ? 'VD: Cảnh báo nước sông dâng cao vượt báo động 3 tại Hòa Cường'
+                      : 'VD: Thông báo lịch tiếp nhận nhu yếu phẩm và nước uống tinh khiết'
+                  }
                   className="sos-form-input"
                   style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
                 />
               </div>
 
+              {/* Địa bàn tiếp nhận thông báo */}
               <div>
-                <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Địa bàn người dân tiếp nhận cảnh báo:</label>
-                <select
-                  value={alertForm.areaId}
-                  onChange={(e) => setAlertForm({ ...alertForm, areaId: e.target.value })}
-                  className="sos-form-select"
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
-                >
-                  {areas.map((a) => (
-                    <option key={a._id} value={a._id}>
-                      {a.name} ({a.code}) {user?.authority?.areaId === a._id ? '★ Địa bàn quản lý' : ''}
-                    </option>
-                  ))}
-                </select>
+                <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>
+                  Địa bàn các tài khoản tiếp nhận thông báo:
+                </label>
+                {isAuthority ? (
+                  // Cán bộ địa phương: Cố định địa bàn phân công quản lý
+                  <div
+                    style={{
+                      padding: '10px 14px',
+                      background: '#f1f5f9',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontSize: '13px',
+                      color: '#0f172a',
+                      fontWeight: 600,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Lock size={14} color="#64748b" />
+                      <span>{authorityAreaName}</span>
+                    </div>
+                    <span className="sos-badge verified" style={{ fontSize: '11px' }}>
+                      ★ Địa bàn quản lý của tài khoản
+                    </span>
+                  </div>
+                ) : (
+                  // Admin: Chọn khu vực cụ thể hoặc toàn thành phố
+                  <select
+                    value={alertForm.areaId}
+                    onChange={(e) => setAlertForm({ ...alertForm, areaId: e.target.value })}
+                    className="sos-form-select"
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
+                  >
+                    <option value="ALL">🌐 Toàn thành phố Đà Nẵng (Tất cả khu vực)</option>
+                    {areas.map((a) => (
+                      <option key={a._id} value={a._id}>
+                        {a.name} ({a.code})
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
-              <div>
-                <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Loại thiên tai / tình huống:</label>
-                <select
-                  value={alertForm.type}
-                  onChange={(e) => setAlertForm({ ...alertForm, type: e.target.value })}
-                  className="sos-form-select"
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
-                >
-                  <option value="FLOOD">LŨ LỤT &amp; NGẬP ÚNG</option>
-                  <option value="STORM">BÃO LỚN &amp; LỐC XOÁY</option>
-                  <option value="LANDSLIDE">SẠT LỞ ĐẤT ĐÁ</option>
-                  <option value="EVACUATION">HIỆU LỆNH SƠ TÁN</option>
-                  <option value="GENERAL">CẢNH BÁO CHUNG</option>
-                </select>
-              </div>
+              {/* Tùy chọn chuyên biệt cho Tin tức thời */}
+              {notificationCategory === 'INSTANT' && (
+                <>
+                  <div>
+                    <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>
+                      Loại thiên tai / Tình huống khẩn cấp:
+                    </label>
+                    <select
+                      value={alertForm.type}
+                      onChange={(e) => setAlertForm({ ...alertForm, type: e.target.value })}
+                      className="sos-form-select"
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
+                    >
+                      <option value="FLOOD">🌊 LŨ LỤT &amp; NGẬP ÚNG SÂU</option>
+                      <option value="STORM">⚡ BÃO LỚN &amp; LỐC XOÁY</option>
+                      <option value="LANDSLIDE">⛰️ SẠT LỞ ĐẤT ĐÁ VEN SÔNG</option>
+                      <option value="EVACUATION">📢 HIỆU LỆNH SƠ TÁN DÂN</option>
+                      <option value="GENERAL">⚠️ CẢNH BÁO THIÊN TAI CHUNG</option>
+                    </select>
+                  </div>
 
-              <div>
-                <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Mức độ nghiêm trọng:</label>
-                <select
-                  value={alertForm.severity}
-                  onChange={(e) => setAlertForm({ ...alertForm, severity: e.target.value as any })}
-                  className="sos-form-select"
-                  style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
-                >
-                  <option value="CRITICAL">NGUY CẤP (Báo động đỏ - Còi hú &amp; Khẩn cấp)</option>
-                  <option value="HIGH">CAO (Cảnh báo cam - Nguy hiểm cao)</option>
-                  <option value="MEDIUM">TRUNG BÌNH (Cảnh báo vàng)</option>
-                  <option value="LOW">THÔNG BÁO (Hướng dẫn phòng ngừa)</option>
-                </select>
-              </div>
+                  <div>
+                    <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>
+                      Mức độ nghiêm trọng &amp; Âm báo:
+                    </label>
+                    <select
+                      value={alertForm.severity}
+                      onChange={(e) => setAlertForm({ ...alertForm, severity: e.target.value as any })}
+                      className="sos-form-select"
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
+                    >
+                      <option value="CRITICAL">🔴 NGUY CẤP (Báo động đỏ - Còi hú &amp; Đẩy Push)</option>
+                      <option value="HIGH">🟠 CAO (Cảnh báo cam - Nguy hiểm cao)</option>
+                      <option value="MEDIUM">🟡 TRUNG BÌNH (Cảnh báo vàng)</option>
+                      <option value="LOW">🔵 THÔNG BÁO (Hướng dẫn phòng ngừa)</option>
+                    </select>
+                  </div>
+                </>
+              )}
             </div>
 
+            {/* Nội dung thông báo */}
             <div>
-              <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Nội dung cảnh báo &amp; hướng dẫn hành động cho người dân:</label>
+              <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>
+                Nội dung chi tiết thông báo &amp; hướng dẫn hành động cho người dân: <span style={{ color: '#ef4444' }}>*</span>
+              </label>
               <textarea
                 rows={3}
                 required
                 value={alertForm.content}
                 onChange={(e) => setAlertForm({ ...alertForm, content: e.target.value })}
-                placeholder="Nhập thông tin hướng dẫn sơ tán, địa điểm trạm trú ẩn, số hotline liên hệ khẩn cấp..."
+                placeholder="Nhập thông tin hướng dẫn an toàn, địa điểm trạm trú ẩn, số hotline liên hệ trực ban cứu nạn..."
                 className="sos-form-textarea"
                 style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
               />
             </div>
 
-            <div>
-              <button type="submit" disabled={loading} className="sos-hotline-btn">
-                <Send size={15} />
-                <span>{loading ? 'Đang phát cảnh báo...' : '📢 Phát Cảnh Báo Khẩn Cấp Cho Người Dân'}</span>
+            {/* Nút hành động phát thông báo */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+              <div style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Smartphone size={15} color="#0066FF" />
+                <span>
+                  Thông báo sẽ được truyền tới toàn bộ tài khoản trong khu vực và phát ra ngoài điện thoại.
+                </span>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="sos-hotline-btn"
+                style={{
+                  padding: '11px 22px',
+                  fontSize: '13.5px',
+                  background: notificationCategory === 'INSTANT' ? '#ef4444' : '#2563eb',
+                }}
+              >
+                {loading ? <Loader2 size={16} className="sos-spin" /> : <Send size={16} />}
+                <span>
+                  {loading
+                    ? 'Đang truyền phát thông báo...'
+                    : `📢 Phát ${notificationCategory === 'INSTANT' ? 'Tin Tức Thời' : 'Thông Báo Hệ Thống'} Ra App Điện Thoại`}
+                </span>
               </button>
             </div>
           </form>
         </div>
 
-        {/* Danh sách cảnh báo đang phát sóng */}
-        <div className="sos-view-card">
+        {/* ==================== 2. BẢNG LỊCH SỬ CÁC BẢN TIN ĐÃ PHÁT ==================== */}
+        <div className="sos-view-card" style={{ marginTop: '20px' }}>
           <div className="sos-view-card-header">
-            <div className="sos-view-card-title">
-              <BellRing size={18} color="#0284c7" />
-              <span>Cảnh Báo Đang Hoạt Động Trên Địa Bàn ({displayAlerts.length} bản tin)</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Radio size={18} color="#0284c7" />
+              <span className="sos-view-card-title">
+                Lịch Sử Các Bản Tin Đã Phát Tới Người Dân &amp; Điện Thoại ({filteredBroadcasts.length} bản tin)
+              </span>
             </div>
-            <button type="button" onClick={refreshData} className="sos-btn-refresh">
-              <RefreshCw size={14} />
-              <span>Làm mới</span>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {/* Ô tìm kiếm bản tin */}
+              <div style={{ position: 'relative' }}>
+                <Search size={14} style={{ position: 'absolute', left: '10px', top: '10px', color: '#94a3b8' }} />
+                <input
+                  type="text"
+                  value={broadcastSearch}
+                  onChange={(e) => setBroadcastSearch(e.target.value)}
+                  placeholder="Tìm theo tiêu đề, khu vực..."
+                  className="sos-form-input"
+                  style={{ paddingLeft: '32px', paddingRight: '12px', paddingVertical: '6px', fontSize: '12.5px', width: '220px' }}
+                />
+              </div>
+
+              <button type="button" onClick={refreshData} className="sos-btn-refresh">
+                <RefreshCw size={14} />
+                <span>Làm mới</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Sub-filter tabs */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', borderBottom: '1px solid #f1f5f9', paddingBottom: '10px' }}>
+            <button
+              type="button"
+              className={`sos-btn-filter-pill ${broadcastFilterTab === 'ALL' ? 'active' : ''}`}
+              onClick={() => setBroadcastFilterTab('ALL')}
+            >
+              Tất cả ({broadcastHistory.length})
+            </button>
+            <button
+              type="button"
+              className={`sos-btn-filter-pill ${broadcastFilterTab === 'INSTANT' ? 'active red' : ''}`}
+              onClick={() => setBroadcastFilterTab('INSTANT')}
+            >
+              ⚡ Tin tức thời
+            </button>
+            <button
+              type="button"
+              className={`sos-btn-filter-pill ${broadcastFilterTab === 'SYSTEM' ? 'active' : ''}`}
+              onClick={() => setBroadcastFilterTab('SYSTEM')}
+            >
+              📢 Thông báo hệ thống
             </button>
           </div>
+
+          {/* Bảng dữ liệu */}
           <div className="sos-table-wrapper">
             <table className="sos-table">
               <thead>
                 <tr>
-                  <th>Tiêu đề cảnh báo</th>
-                  <th>Loại</th>
+                  <th style={{ minWidth: '220px' }}>Tiêu đề &amp; Nội dung bản tin</th>
+                  <th>Phân loại</th>
                   <th>Mức độ</th>
-                  <th>Địa bàn áp dụng</th>
-                  <th>Nội dung hướng dẫn</th>
-                  <th>Trạng thái</th>
+                  <th>Khu vực tiếp nhận</th>
+                  <th>Người phát hành</th>
+                  <th>Thời gian phát</th>
+                  <th>Tài khoản nhận</th>
+                  <th style={{ textAlign: 'center' }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
-                {displayAlerts.map((al) => {
-                  const areaName = typeof al.areaId === 'object' && al.areaId !== null ? al.areaId.name : 'Địa bàn toàn quận';
-                  return (
-                    <tr key={al._id}>
-                      <td><strong>{al.title}</strong></td>
-                      <td>{al.type}</td>
-                      <td><span className={`sos-badge ${al.severity?.toLowerCase()}`}>{al.severity}</span></td>
-                      <td><span className="sos-badge verified">{areaName}</span></td>
-                      <td style={{ maxWidth: '320px' }}>{al.content}</td>
-                      <td><span className="sos-badge active">{al.isActive ? 'ĐANG PHÁT TỚI DÂN' : 'HẾT HẠN'}</span></td>
-                    </tr>
-                  );
-                })}
+                {filteredBroadcasts.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>
+                      <BellRing size={32} style={{ margin: '0 auto 8px auto', opacity: 0.4, display: 'block' }} />
+                      Chưa có bản tin nào được phát sóng theo bộ lọc này. Hãy dùng form phía trên để phát thông báo mới.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredBroadcasts.map((b) => {
+                    const isInst = String(b.type || '').toUpperCase() === 'INSTANT' || String(b.type || '').toUpperCase() === 'ALERT';
+                    return (
+                      <tr key={b.id || b.title + b.createdAt}>
+                        <td>
+                          <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: '3px' }}>
+                            {b.title}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#64748b', maxWidth: '320px', lineHeight: 1.4 }}>
+                            {b.content}
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`sos-badge ${isInst ? 'instant' : 'system'}`}>
+                            {isInst ? '⚡ TIN TỨC THỜI' : '📢 HỆ THỐNG'}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`sos-badge ${String(b.priority || 'NORMAL').toLowerCase()}`}>
+                            {b.priority || 'NORMAL'}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="sos-badge verified">
+                            {b.areaName || 'Toàn thành phố'}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ fontSize: '12.5px', fontWeight: 600, color: '#334155' }}>
+                            {b.createdBy?.fullName || 'Cán bộ quản lý'}
+                          </div>
+                          <small style={{ color: '#94a3b8' }}>{b.createdBy?.phone || 'Hệ thống SOS'}</small>
+                        </td>
+                        <td style={{ fontSize: '12px', color: '#64748b' }}>
+                          {b.createdAt ? new Date(b.createdAt).toLocaleString('vi-VN') : 'Vừa xong'}
+                        </td>
+                        <td>
+                          <span className="sos-badge active" style={{ fontSize: '11.5px' }}>
+                            {b.recipientsCount ? `${b.recipientsCount} tài khoản` : 'Đã gửi tới dân'}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteBroadcast(b.id)}
+                            className="sos-btn-action"
+                            style={{ padding: '6px 10px', background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5' }}
+                            title="Thu hồi / Xóa thông báo khỏi các tài khoản"
+                          >
+                            <Trash2 size={14} />
+                            <span>Thu hồi</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -2639,293 +3231,3142 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   }
 
   /* -------------------------------------------------------------
-   * 5b. LOCAL AUTHORITY: ĐIỂM TRÚ ẨN & TRẠM AN TOÀN (UC-L12)
+   * 5b. LOCAL AUTHORITY: ĐIỂM TRÚ ẨN & TRẠM Y TẾ AN TOÀN (UC-L12)
+   * Giao diện chuẩn mực tác chiến hành chính, đồng bộ tuyệt đối với hazard_reports.
+   * Đầy đủ bộ lọc, tab phạm vi, tìm kiếm, sắp xếp, phân trang.
+   * Modal Chi tiết (2 cột + MiniMap), Modal Tạo mới & Chỉnh sửa (2 cột + Ghim tọa độ Leaflet).
    * ------------------------------------------------------------- */
   if (activeKey === 'shelters') {
-    const displayShelters = shelters.length > 0 ? shelters : FALLBACK_SHELTERS;
-    const totalCapacity = displayShelters.reduce((acc, curr) => acc + (curr.capacity || 0), 0);
-    const totalOccupancy = displayShelters.reduce((acc, curr) => acc + (curr.currentOccupancy || 0), 0);
-    const availableSlots = Math.max(0, totalCapacity - totalOccupancy);
+    domainDService.syncFromStoredAuthUser();
+    const authUserStr = typeof localStorage !== 'undefined' ? localStorage.getItem('sos_auth_user') : null;
+    const authUser = user || (authUserStr ? JSON.parse(authUserStr) : null);
+    const activeOfficer = domainDService.getActiveOfficer();
 
-    const typeLabels: Record<string, string> = {
-      EVACUATION_CENTER: 'Trung tâm sơ tán tập trung',
-      HOSPITAL: 'Trạm Y tế Dã chiến',
-      SHELTER: 'Điểm tránh trú bão lũ',
-      RESCUE_STATION: 'Trạm cứu hộ tác chiến',
-      MEETING_POINT: 'Điểm tập kết an toàn',
+    // 1. XÁC ĐỊNH ĐỊA BÀN PHÂN CÔNG QUẢN LÝ CỐ ĐỊNH TỪ TÀI KHOẢN (KHÔNG CHO PHÉP THAY ĐỔI)
+    const determineOfficerJurKey = (): string => {
+      // 1. Kiểm tra nếu có mã hoặc ID khu vực trực tiếp từ tài khoản
+      const directAreaId = (user?.authority?.areaId || authUser?.authority?.areaId || '').toLowerCase();
+      if (directAreaId) {
+        if (directAreaId.includes('nhs') || directAreaId.includes('ngu_hanh_son')) return 'ngu_hanh_son';
+        if (directAreaId.includes('hc') || directAreaId.includes('hai_chau')) return 'hai_chau';
+        if (directAreaId.includes('st') || directAreaId.includes('son_tra')) return 'son_tra';
+        if (directAreaId.includes('tk') || directAreaId.includes('thanh_khe')) return 'thanh_khe';
+        if (directAreaId.includes('cl') || directAreaId.includes('cam_le')) return 'cam_le';
+        if (directAreaId.includes('lc') || directAreaId.includes('lien_chieu')) return 'lien_chieu';
+        if (directAreaId.includes('hv') || directAreaId.includes('hoa_vang')) return 'hoa_vang';
+        if (directAreaId.includes('hs') || directAreaId.includes('hoang_sa')) return 'hoang_sa';
+      }
+
+      // 2. Tìm tên từ khu vực trong cơ sở dữ liệu nếu có areaId
+      const userAreaObj = areas.find((a) => a._id === (user?.authority?.areaId || authUser?.authority?.areaId));
+      const userAreaText = userAreaObj ? `${userAreaObj.name} ${userAreaObj.code || ''}` : '';
+
+      const dept = (
+        (user?.authority?.areaName || '') + ' ' +
+        (user?.authority?.department || '') + ' ' +
+        (user?.authority?.position || '') + ' ' +
+        (user?.authority?.organizationName || '') + ' ' +
+        (authUser?.authority?.areaName || '') + ' ' +
+        (authUser?.authority?.department || '') + ' ' +
+        (authUser?.authority?.position || '') + ' ' +
+        (authUser?.authority?.organizationName || '') + ' ' +
+        userAreaText + ' ' +
+        (activeOfficer?.jurisdictionAreaName || '') + ' ' +
+        (activeOfficer?.districtName || '') + ' ' +
+        (activeOfficer?.department || '')
+      ).toLowerCase();
+
+      if (dept.includes('ngũ hành sơn') || dept.includes('ngu hanh son')) return 'ngu_hanh_son';
+      if (dept.includes('hải châu') || dept.includes('hai chau')) return 'hai_chau';
+      if (dept.includes('sơn trà') || dept.includes('son tra')) return 'son_tra';
+      if (dept.includes('thanh khê') || dept.includes('thanh khe')) return 'thanh_khe';
+      if (dept.includes('cẩm lệ') || dept.includes('cam le')) return 'cam_le';
+      if (dept.includes('liên chiểu') || dept.includes('lien chieu')) return 'lien_chieu';
+      if (dept.includes('hòa vang') || dept.includes('hoa vang')) return 'hoa_vang';
+      if (dept.includes('hoàng sa') || dept.includes('hoang sa')) return 'hoang_sa';
+
+      const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('sos_authority_jurisdiction_key') : null;
+      if (stored && JURISDICTION_CONFIGS[stored] && stored !== 'toan_thanh_pho') return stored;
+      return 'ngu_hanh_son';
+    };
+
+    const fixedJurKey = determineOfficerJurKey();
+    const fixedJurisdictionConfig = JURISDICTION_CONFIGS[fixedJurKey] || JURISDICTION_CONFIGS.ngu_hanh_son;
+
+    try {
+      localStorage.setItem('sos_authority_jurisdiction_key', fixedJurKey);
+    } catch {}
+
+    // Tìm đơn vị hành chính quản lý tương ứng từ tài khoản người dùng
+    const userAreaIdFromAuth = user?.authority?.areaId || authUser?.authority?.areaId;
+    const userAreaNameFromAuth = user?.authority?.areaName || authUser?.authority?.areaName;
+
+    const resolvedAccountArea = (() => {
+      if (userAreaIdFromAuth) {
+        const found = areas.find((a) => a._id === userAreaIdFromAuth || a.code === userAreaIdFromAuth);
+        if (found) return found;
+      }
+      if (userAreaNameFromAuth) {
+        const lowerName = userAreaNameFromAuth.toLowerCase();
+        const found = areas.find((a) => {
+          const aName = (a.name || '').toLowerCase();
+          return aName.includes(lowerName) || lowerName.includes(aName);
+        });
+        if (found) return found;
+      }
+      const cfg = fixedJurisdictionConfig;
+      const foundByCfg = areas.find((a) => {
+        const aName = (a.name || '').toLowerCase();
+        const aCode = (a.code || '').toLowerCase();
+        return (
+          aCode.includes(fixedJurKey) ||
+          cfg.keywords.some((kw) => aName.includes(kw)) ||
+          aName.includes(cfg.name.toLowerCase())
+        );
+      });
+      if (foundByCfg) return foundByCfg;
+      return areas[0] || null;
+    })();
+
+    const accountAreaDisplayName =
+      userAreaNameFromAuth ||
+      resolvedAccountArea?.name ||
+      activeOfficer?.jurisdictionAreaName ||
+      fixedJurisdictionConfig.name;
+
+    const accountAreaId =
+      resolvedAccountArea?._id ||
+      userAreaIdFromAuth ||
+      fixedJurisdictionConfig.areaId;
+
+    // 2. HÀM KIỂM TRA ĐIỂM TRÚ ẨN CÓ THUỘC ĐỊA BÀN PHÂN CÔNG HAY KHÔNG
+    const isShelterInOfficerJurisdiction = (sh: SafeLocationItem): boolean => {
+      const cfg = fixedJurisdictionConfig;
+      const addrLower = (sh.address || '').toLowerCase();
+      const nameLower = (sh.name || '').toLowerCase();
+      const fullText = `${addrLower} ${nameLower}`;
+
+      // 1. So khớp từ khóa đặc trưng của địa bàn phụ trách
+      const matchesKeyword = cfg.keywords.some((kw) => fullText.includes(kw));
+      if (matchesKeyword) return true;
+
+      // 2. So khớp tọa độ GPS nằm trong bounding box địa lý của quận/huyện
+      const coords = sh.location?.coordinates;
+      if (Array.isArray(coords) && coords.length === 2) {
+        const lng = Number(coords[0]);
+        const lat = Number(coords[1]);
+        if (!isNaN(lat) && !isNaN(lng) && cfg.bounds) {
+          if (
+            lat >= cfg.bounds.minLat &&
+            lat <= cfg.bounds.maxLat &&
+            lng >= cfg.bounds.minLng &&
+            lng <= cfg.bounds.maxLng
+          ) {
+            const otherConfigs = Object.entries(JURISDICTION_CONFIGS).filter(
+              ([k]) => k !== fixedJurKey && k !== 'toan_thanh_pho'
+            );
+            const inOtherDistrict = otherConfigs.some(([, other]) =>
+              other.keywords.some((k) => addrLower.includes(k))
+            );
+            if (!inOtherDistrict) {
+              return true;
+            }
+          }
+        }
+      }
+
+      // 3. So khớp ID khu vực nếu có
+      const shAreaId = (sh.areaId as any)?._id || (sh.areaId as any)?.id || (sh.areaId as any)?.code || sh.areaId;
+      if (shAreaId && (shAreaId === cfg.areaId || (sh.areaId as any)?.name === cfg.name)) {
+        return true;
+      }
+
+      return false;
+    };
+
+    // 3. HÀM XÁC ĐỊNH TÊN ĐỊA PHƯƠNG QUẢN LÝ CHO TỪNG ĐIỂM TRÚ ẨN
+    const getShelterDistrictName = (sh: SafeLocationItem): string => {
+      if (isShelterInOfficerJurisdiction(sh)) {
+        return fixedJurisdictionConfig.name;
+      }
+      const shAreaName = (sh.areaId as any)?.name;
+      if (shAreaName && typeof shAreaName === 'string') {
+        return shAreaName;
+      }
+      const fullText = `${sh.address || ''} ${sh.name || ''}`.toLowerCase();
+      for (const [key, cfg] of Object.entries(JURISDICTION_CONFIGS)) {
+        if (key === 'toan_thanh_pho') continue;
+        if (cfg.keywords && cfg.keywords.some((kw) => fullText.includes(kw))) {
+          return cfg.name;
+        }
+      }
+      const coords = sh.location?.coordinates;
+      if (Array.isArray(coords) && coords.length === 2) {
+        const lng = Number(coords[0]);
+        const lat = Number(coords[1]);
+        if (!isNaN(lat) && !isNaN(lng)) {
+          for (const [key, cfg] of Object.entries(JURISDICTION_CONFIGS)) {
+            if (key === 'toan_thanh_pho' || !cfg.bounds) continue;
+            if (
+              lat >= cfg.bounds.minLat &&
+              lat <= cfg.bounds.maxLat &&
+              lng >= cfg.bounds.minLng &&
+              lng <= cfg.bounds.maxLng
+            ) {
+              return cfg.name;
+            }
+          }
+        }
+      }
+      return 'Quận Hải Châu';
+    };
+
+    const getShelterTypeLabel = (type: string) => {
+      switch (type) {
+        case 'EVACUATION_CENTER':
+          return 'Trung tâm sơ tán';
+        case 'HOSPITAL':
+          return 'Trạm Y tế Dã chiến';
+        case 'SHELTER':
+          return 'Điểm tránh trú kiên cố';
+        case 'RESCUE_STATION':
+          return 'Trạm cứu hộ tác chiến';
+        case 'MEETING_POINT':
+          return 'Điểm tập kết an toàn';
+        default:
+          return 'Cơ sở an toàn';
+      }
+    };
+
+    const getShelterStatusBadge = (status: string, currentOccupancy = 0, capacity = 0) => {
+      const isFull = (capacity > 0 && currentOccupancy >= capacity) || status === 'FULL';
+      if (isFull) {
+        return { label: 'Đã đầy', bg: '#fef2f2', color: '#b91c1c', border: '#fecaca', dot: '#dc2626' };
+      }
+      switch (status) {
+        case 'ACTIVE':
+          return { label: 'Sẵn sàng tiếp nhận', bg: '#f0fdf4', color: '#15803d', border: '#dcfce7', dot: '#16a34a' };
+        case 'MAINTENANCE':
+          return { label: 'Đang bảo trì / Sửa chữa', bg: '#fffbeb', color: '#b45309', border: '#fef3c7', dot: '#d97706' };
+        case 'INACTIVE':
+          return { label: 'Tạm ngưng hoạt động', bg: '#f8fafc', color: '#475569', border: '#e2e8f0', dot: '#94a3b8' };
+        default:
+          return { label: 'Sẵn sàng tiếp nhận', bg: '#f0fdf4', color: '#15803d', border: '#dcfce7', dot: '#16a34a' };
+      }
+    };
+
+    const formatShelterTime = (iso?: string) => {
+      if (!iso) return 'Vừa cập nhật';
+      try {
+        const d = new Date(iso);
+        const time = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        const date = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        return `${time} ${date}`;
+      } catch {
+        return iso;
+      }
+    };
+
+    // 4. TẬP DỮ LIỆU ĐỊA PHƯƠNG & THÀNH PHỐ QUẢN LÝ
+    const displayShelters = shelters.length > 0 ? shelters : FALLBACK_SHELTERS;
+    const localShelters = displayShelters.filter((s) => isShelterInOfficerJurisdiction(s));
+    const baseScopedShelters = shelterManagementScope === 'LOCAL' ? localShelters : displayShelters;
+
+    // Thống kê nhanh theo phạm vi đang chọn
+    const scopeTotalCapacity = baseScopedShelters.reduce((acc, curr) => acc + (curr.capacity || 0), 0);
+    const scopeTotalOccupancy = baseScopedShelters.reduce((acc, curr) => acc + (curr.currentOccupancy || 0), 0);
+    const scopeAvailableSlots = Math.max(0, scopeTotalCapacity - scopeTotalOccupancy);
+
+    // Lọc theo Tab trạng thái, Phân loại cơ sở & Tìm kiếm từ khóa
+    const filteredShelters = baseScopedShelters.filter((s) => {
+      const isFull = (s.capacity > 0 && (s.currentOccupancy || 0) >= s.capacity) || s.status === 'FULL';
+      if (shelterFilter === 'ACTIVE' && (isFull || s.status !== 'ACTIVE')) return false;
+      if (shelterFilter === 'FULL' && !isFull) return false;
+      if (shelterFilter === 'MAINTENANCE' && s.status !== 'MAINTENANCE' && s.status !== 'INACTIVE') return false;
+
+      if (shelterTypeFilter !== 'ALL' && s.type !== shelterTypeFilter) return false;
+
+      if (shelterSearchText.trim()) {
+        const q = shelterSearchText.toLowerCase();
+        const typeLabel = getShelterTypeLabel(s.type).toLowerCase();
+        const district = getShelterDistrictName(s).toLowerCase();
+        const creatorName = typeof s.createdBy === 'object' ? (s.createdBy?.fullName || '') : '';
+        const match =
+          (s.name || '').toLowerCase().includes(q) ||
+          (s.address || '').toLowerCase().includes(q) ||
+          typeLabel.includes(q) ||
+          district.includes(q) ||
+          creatorName.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      return true;
+    });
+
+    // Sắp xếp dữ liệu đa tiêu chí
+    const sortedShelters = [...filteredShelters].sort((a, b) => {
+      let cmp = 0;
+      switch (shelterSortField) {
+        case 'name':
+          cmp = (a.name || '').localeCompare(b.name || '', 'vi', { sensitivity: 'base' });
+          break;
+        case 'capacity':
+          cmp = (a.capacity || 0) - (b.capacity || 0);
+          break;
+        case 'occupancyRate': {
+          const rateA = (a.capacity || 0) > 0 ? (a.currentOccupancy || 0) / (a.capacity || 1) : 0;
+          const rateB = (b.capacity || 0) > 0 ? (b.currentOccupancy || 0) / (b.capacity || 1) : 0;
+          cmp = rateA - rateB;
+          break;
+        }
+        case 'district': {
+          const dA = getShelterDistrictName(a);
+          const dB = getShelterDistrictName(b);
+          cmp = dA.localeCompare(dB, 'vi', { sensitivity: 'base' });
+          break;
+        }
+        case 'address':
+          cmp = (a.address || '').localeCompare(b.address || '', 'vi', { sensitivity: 'base' });
+          break;
+        case 'status':
+          cmp = (a.status || '').localeCompare(b.status || '');
+          break;
+        case 'createdAt':
+        default: {
+          const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          cmp = tA - tB;
+          break;
+        }
+      }
+      return shelterSortOrder === 'asc' ? cmp : -cmp;
+    });
+
+    // Phân trang 10 điểm
+    const SHELTER_PAGE_SIZE = 10;
+    const totalShelterItems = sortedShelters.length;
+    const totalShelterPages = Math.max(1, Math.ceil(totalShelterItems / SHELTER_PAGE_SIZE));
+    const safeShelterPage = Math.min(Math.max(1, shelterPage), totalShelterPages);
+    const shelterStartIndex = (safeShelterPage - 1) * SHELTER_PAGE_SIZE;
+    const paginatedShelters = sortedShelters.slice(shelterStartIndex, shelterStartIndex + SHELTER_PAGE_SIZE);
+
+    const handleSort = (field: typeof shelterSortField) => {
+      if (shelterSortField === field) {
+        setShelterSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      } else {
+        setShelterSortField(field);
+        if (field === 'createdAt' || field === 'capacity' || field === 'occupancyRate') {
+          setShelterSortOrder('desc');
+        } else {
+          setShelterSortOrder('asc');
+        }
+      }
+      setShelterPage(1);
+    };
+
+    const renderSortIcon = (field: typeof shelterSortField) => {
+      if (shelterSortField !== field) {
+        return <ArrowUpDown size={12} style={{ color: '#94a3b8', marginLeft: '6px', opacity: 0.6 }} />;
+      }
+      return shelterSortOrder === 'asc' ? (
+        <ArrowUp size={12} style={{ color: '#0284c7', marginLeft: '6px' }} />
+      ) : (
+        <ArrowDown size={12} style={{ color: '#0284c7', marginLeft: '6px' }} />
+      );
+    };
+
+    // Mở Form Thêm Điểm Trú Ẩn Mới
+    const handleOpenCreateShelterModal = () => {
+      let defaultLat = 16.0570;
+      let defaultLng = 108.2170;
+      if (fixedJurisdictionConfig.bounds) {
+        defaultLat = Number(((fixedJurisdictionConfig.bounds.minLat + fixedJurisdictionConfig.bounds.maxLat) / 2).toFixed(5));
+        defaultLng = Number(((fixedJurisdictionConfig.bounds.minLng + fixedJurisdictionConfig.bounds.maxLng) / 2).toFixed(5));
+      }
+
+      setCreateShelterName('');
+      setCreateShelterType('EVACUATION_CENTER');
+      setCreateShelterAreaId((resolvedAccountArea?._id as string) || accountAreaId || '');
+      setCreateShelterAddress(`${accountAreaDisplayName}, TP Đà Nẵng`);
+      setCreateShelterCapacity(300);
+      setCreateShelterOccupancy(0);
+      setCreateShelterStatus('ACTIVE');
+      setCreateShelterLat(defaultLat);
+      setCreateShelterLng(defaultLng);
+      setCreateShelterNotes(`Điểm trú ẩn an toàn thuộc quản lý Ban Chỉ Huy PCTT ${accountAreaDisplayName}`);
+      setCreateShelterMapLinkInput('');
+      setCreateShelterMapLinkStatus(null);
+      setCreateShelterErrors({});
+      setIsCreateShelterOpen(true);
+    };
+
+    // Mở Form Chỉnh Sửa Điểm Trú Ẩn
+    const handleOpenEditShelterModal = (sh: SafeLocationItem) => {
+      setDetailShelter(null);
+      setEditingShelter(sh);
+      setEditShelterName(sh.name || '');
+      setEditShelterType(sh.type || 'EVACUATION_CENTER');
+      const curAreaId = typeof sh.areaId === 'object' && sh.areaId !== null ? (sh.areaId._id || (sh.areaId as any).id) : (sh.areaId || '');
+      setEditShelterAreaId((resolvedAccountArea?._id as string) || accountAreaId || curAreaId || (areas[0]?._id as string) || fixedJurisdictionConfig.areaId || '');
+      setEditShelterAddress(sh.address || '');
+      setEditShelterCapacity(sh.capacity ?? 200);
+      setEditShelterOccupancy(sh.currentOccupancy ?? 0);
+      setEditShelterStatus(sh.status || 'ACTIVE');
+      const coords = sh.location?.coordinates;
+      if (Array.isArray(coords) && coords.length === 2) {
+        setEditShelterLng(coords[0]);
+        setEditShelterLat(coords[1]);
+      } else {
+        setEditShelterLng(108.2170);
+        setEditShelterLat(16.0570);
+      }
+      setEditShelterNotes('');
+      setEditShelterMapLinkInput('');
+      setEditShelterMapLinkStatus(null);
+      setEditShelterErrors({});
+    };
+
+    // Chuyển đổi liên kết Google Maps sang tọa độ khi tạo mới
+    const handleConvertCreateMapLink = async (customText?: string) => {
+      const textToResolve = (typeof customText === 'string' ? customText : createShelterMapLinkInput).trim();
+      if (!textToResolve) return;
+
+      setResolvingCreateShelterMapLink(true);
+      setCreateShelterMapLinkStatus(null);
+
+      try {
+        const res = await resolveGoogleMapsInput(textToResolve);
+        setCreateShelterLat(res.lat);
+        setCreateShelterLng(res.lng);
+        setCreateShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
+        if (res.placeName && (!createShelterAddress || createShelterAddress.includes('TP Đà Nẵng'))) {
+          setCreateShelterAddress(res.placeName);
+          setCreateShelterErrors((prev) => ({ ...prev, address: undefined }));
+        }
+        setCreateShelterMapLinkStatus({
+          type: 'success',
+          message: `Đã ghim tọa độ: [${res.lat}, ${res.lng}]${res.placeName ? ` - ${res.placeName}` : ''}`,
+        });
+      } catch (err: any) {
+        setCreateShelterMapLinkStatus({
+          type: 'error',
+          message: err.message || 'Không thể nhận diện tọa độ từ liên kết này.',
+        });
+      } finally {
+        setResolvingCreateShelterMapLink(false);
+      }
+    };
+
+    // Chuyển đổi liên kết Google Maps sang tọa độ khi chỉnh sửa
+    const handleConvertEditMapLink = async (customText?: string) => {
+      const textToResolve = (typeof customText === 'string' ? customText : editShelterMapLinkInput).trim();
+      if (!textToResolve) return;
+
+      setResolvingEditShelterMapLink(true);
+      setEditShelterMapLinkStatus(null);
+
+      try {
+        const res = await resolveGoogleMapsInput(textToResolve);
+        setEditShelterLat(res.lat);
+        setEditShelterLng(res.lng);
+        setEditShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
+        if (res.placeName && (!editShelterAddress || editShelterAddress.trim().length <= 3)) {
+          setEditShelterAddress(res.placeName);
+          setEditShelterErrors((prev) => ({ ...prev, address: undefined }));
+        }
+        setEditShelterMapLinkStatus({
+          type: 'success',
+          message: `Đã ghim tọa độ: [${res.lat}, ${res.lng}]${res.placeName ? ` - ${res.placeName}` : ''}`,
+        });
+      } catch (err: any) {
+        setEditShelterMapLinkStatus({
+          type: 'error',
+          message: err.message || 'Không thể nhận diện tọa độ từ liên kết này.',
+        });
+      } finally {
+        setResolvingEditShelterMapLink(false);
+      }
+    };
+
+    // Gửi yêu cầu Tạo Điểm Trú Ẩn Mới lên server
+    const handleSubmitCreateShelter = () => {
+      const errors: typeof createShelterErrors = {};
+
+      if (!createShelterName.trim()) {
+        errors.name = 'Vui lòng nhập tên điểm trú ẩn / cơ sở an toàn!';
+      }
+      if (!createShelterAddress.trim()) {
+        errors.address = 'Vui lòng nhập địa chỉ cụ thể của cơ sở!';
+      }
+      if (isNaN(createShelterCapacity) || createShelterCapacity <= 0) {
+        errors.capacity = 'Sức chứa tối đa phải là số nguyên lớn hơn 0!';
+      }
+      if (
+        isNaN(createShelterLat) ||
+        isNaN(createShelterLng) ||
+        createShelterLat < -90 ||
+        createShelterLat > 90 ||
+        createShelterLng < -180 ||
+        createShelterLng > 180
+      ) {
+        errors.coordinates = 'Tọa độ GPS không hợp lệ. Vui lòng chọn điểm trên bản đồ hoặc dán link Google Maps!';
+      }
+
+      if (Object.keys(errors).length > 0) {
+        errors.general = 'Vui lòng hoàn thiện các trường thông tin bắt buộc còn thiếu!';
+        setCreateShelterErrors(errors);
+        return;
+      }
+      setCreateShelterErrors({});
+
+      const typeLabel = getShelterTypeLabel(createShelterType);
+
+      setConfirmModal({
+        isOpen: true,
+        title: 'Xác nhận tạo điểm trú ẩn an toàn',
+        message: `Bạn có chắc chắn muốn khởi tạo cơ sở "${createShelterName.trim()}" với sức chứa ${createShelterCapacity} người không?`,
+        type: 'primary',
+        confirmText: 'Xác nhận tạo',
+        cancelText: 'Quay lại',
+        details: [
+          { label: 'Tên cơ sở an toàn', value: createShelterName.trim() },
+          { label: 'Phân loại cơ sở', value: typeLabel },
+          { label: 'Sức chứa tối đa', value: `${createShelterCapacity.toLocaleString()} người` },
+          { label: 'Địa chỉ cụ thể', value: createShelterAddress.trim() },
+          { label: 'Trạng thái ban đầu', value: createShelterStatus === 'ACTIVE' ? 'Sẵn sàng tiếp nhận' : createShelterStatus },
+        ],
+        onConfirm: async () => {
+          await executeSubmitCreateShelter();
+        },
+      });
+    };
+
+    // Thực hiện gọi API tạo điểm trú ẩn
+    const executeSubmitCreateShelter = async () => {
+      try {
+        setSubmittingCreateShelter(true);
+        const resolvedAreaId = (resolvedAccountArea?._id as string) || accountAreaId || createShelterAreaId || fixedJurisdictionConfig.areaId || (areas[0]?._id as string);
+        const payload = {
+          name: createShelterName.trim(),
+          type: createShelterType,
+          address: createShelterAddress.trim(),
+          capacity: Number(createShelterCapacity) || 100,
+          currentOccupancy: Number(createShelterOccupancy) || 0,
+          status: createShelterStatus,
+          areaId: resolvedAreaId,
+          location: {
+            type: 'Point' as const,
+            coordinates: [Number(createShelterLng), Number(createShelterLat)] as [number, number],
+          },
+        };
+
+        const res = await createSafeLocation(payload);
+        if (res.success && res.data) {
+          const newShelter = res.data;
+          setShelters((prev) => [newShelter, ...prev]);
+          setIsCreateShelterOpen(false);
+          refreshData();
+          window.dispatchEvent(new CustomEvent('sos_data_updated'));
+          showToast(res.message || 'Khởi tạo điểm trú ẩn / cơ sở an toàn mới thành công!', 'success');
+        } else {
+          setCreateShelterErrors((prev) => ({
+            ...prev,
+            general: 'Không thể tạo điểm trú ẩn. Vui lòng kiểm tra lại thông tin!',
+          }));
+          showToast('Không thể tạo điểm trú ẩn. Vui lòng kiểm tra lại!', 'error');
+        }
+      } catch (err: any) {
+        setCreateShelterErrors((prev) => ({
+          ...prev,
+          general: err.message || 'Lỗi khi tạo điểm trú ẩn an toàn',
+        }));
+        showToast(err.message || 'Lỗi khi tạo điểm trú ẩn an toàn', 'error');
+      } finally {
+        setSubmittingCreateShelter(false);
+      }
+    };
+
+    // Gửi yêu cầu Chỉnh Sửa Điểm Trú Ẩn
+    const handleSubmitEditShelter = () => {
+      if (!editingShelter) return;
+      const errors: typeof editShelterErrors = {};
+
+      if (!editShelterName.trim()) {
+        errors.name = 'Vui lòng nhập tên điểm trú ẩn / cơ sở an toàn!';
+      }
+      if (!editShelterAddress.trim()) {
+        errors.address = 'Vui lòng nhập địa chỉ cụ thể!';
+      }
+      if (isNaN(editShelterCapacity) || editShelterCapacity <= 0) {
+        errors.capacity = 'Sức chứa tối đa phải lớn hơn 0!';
+      }
+      if (
+        isNaN(editShelterLat) ||
+        isNaN(editShelterLng) ||
+        editShelterLat < -90 ||
+        editShelterLat > 90 ||
+        editShelterLng < -180 ||
+        editShelterLng > 180
+      ) {
+        errors.coordinates = 'Tọa độ GPS không hợp lệ!';
+      }
+
+      if (Object.keys(errors).length > 0) {
+        errors.general = 'Vui lòng hoàn thiện các trường thông tin chuẩn hóa trước khi cập nhật!';
+        setEditShelterErrors(errors);
+        return;
+      }
+      setEditShelterErrors({});
+
+      setConfirmModal({
+        isOpen: true,
+        title: 'Xác nhận cập nhật thông tin điểm trú ẩn',
+        message: `Bạn có chắc chắn muốn lưu thông tin cập nhật cho cơ sở "${editShelterName.trim()}" không?`,
+        type: 'primary',
+        confirmText: 'Lưu thay đổi',
+        cancelText: 'Quay lại',
+        details: [
+          { label: 'Tên cơ sở an toàn', value: editShelterName.trim() },
+          { label: 'Phân loại cơ sở', value: getShelterTypeLabel(editShelterType) },
+          { label: 'Sức chứa / Hiện có', value: `${editShelterOccupancy} / ${editShelterCapacity} người` },
+          { label: 'Địa chỉ cụ thể', value: editShelterAddress.trim() },
+        ],
+        onConfirm: async () => {
+          await executeSubmitEditShelter();
+        },
+      });
+    };
+
+    // Thực hiện lưu chỉnh sửa lên server
+    const executeSubmitEditShelter = async () => {
+      if (!editingShelter) return;
+      try {
+        setSubmittingEditShelter(true);
+        const resolvedAreaId = (resolvedAccountArea?._id as string) || accountAreaId || editShelterAreaId || fixedJurisdictionConfig.areaId || (areas[0]?._id as string);
+        const payload = {
+          name: editShelterName.trim(),
+          type: editShelterType,
+          address: editShelterAddress.trim(),
+          capacity: Number(editShelterCapacity) || 100,
+          currentOccupancy: Number(editShelterOccupancy) || 0,
+          status: editShelterStatus,
+          areaId: resolvedAreaId,
+          location: {
+            type: 'Point' as const,
+            coordinates: [Number(editShelterLng), Number(editShelterLat)] as [number, number],
+          },
+        };
+
+        const res = await updateSafeLocation(editingShelter._id, payload);
+        if (res.success) {
+          const updatedItem = res.data;
+          setShelters((prev) => prev.map((s) => (s._id === editingShelter._id ? updatedItem : s)));
+          if (detailShelter && detailShelter._id === editingShelter._id) {
+            setDetailShelter(updatedItem);
+          }
+          setEditingShelter(null);
+          refreshData();
+          window.dispatchEvent(new CustomEvent('sos_data_updated'));
+          showToast(res.message || 'Cập nhật thông tin điểm trú ẩn an toàn thành công!', 'success');
+        } else {
+          setEditShelterErrors((prev) => ({
+            ...prev,
+            general: 'Không thể cập nhật điểm trú ẩn. Vui lòng kiểm tra lại!',
+          }));
+          showToast('Không thể cập nhật điểm trú ẩn. Vui lòng kiểm tra lại!', 'error');
+        }
+      } catch (err: any) {
+        setEditShelterErrors((prev) => ({
+          ...prev,
+          general: err.message || 'Lỗi khi cập nhật điểm trú ẩn',
+        }));
+        showToast(err.message || 'Lỗi khi cập nhật điểm trú ẩn', 'error');
+      } finally {
+        setSubmittingEditShelter(false);
+      }
+    };
+
+    // Đổi trạng thái điểm trú ẩn (ẩn sang INACTIVE trước khi xóa, hoặc mở lại sang ACTIVE)
+    const executeChangeShelterStatus = async (id: string, newStatus: string, successMessage: string) => {
+      try {
+        setLoading(true);
+        const res = await updateSafeLocation(id, { status: newStatus });
+        if (res.success && res.data) {
+          const updated = res.data;
+          setShelters((prev) => prev.map((s) => (s._id === id ? updated : s)));
+          if (detailShelter && detailShelter._id === id) {
+            setDetailShelter(updated);
+          }
+          refreshData();
+          window.dispatchEvent(new CustomEvent('sos_data_updated'));
+          showToast(successMessage, 'success');
+        } else {
+          showToast(res.message || 'Không thể cập nhật trạng thái cơ sở', 'error');
+        }
+      } catch (err: any) {
+        showToast(err.message || 'Lỗi khi cập nhật trạng thái', 'error');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Mở modal xác nhận Ẩn cơ sở an toàn (đổi status sang INACTIVE trước)
+    const handleToggleHideShelter = (sh: SafeLocationItem) => {
+      setConfirmModal({
+        isOpen: true,
+        title: 'Xác nhận ẩn điểm trú ẩn an toàn',
+        message: `Bạn có chắc chắn muốn ẩn cơ sở "${sh.name || 'này'}" không? Hệ thống sẽ chuyển trạng thái sang Tạm ngưng hoạt động (INACTIVE) trước khi cho phép xóa vĩnh viễn.`,
+        type: 'warning',
+        confirmText: 'Xác nhận ẩn cơ sở',
+        cancelText: 'Hủy bỏ',
+        details: [
+          { label: 'Tên cơ sở an toàn', value: sh.name || '' },
+          { label: 'Trạng thái chuyển đổi', value: 'Tạm ngưng hoạt động (INACTIVE)' },
+        ],
+        onConfirm: async () => {
+          await executeChangeShelterStatus(sh._id, 'INACTIVE', 'Đã ẩn cơ sở an toàn (chuyển sang Tạm ngưng hoạt động)!');
+        },
+      });
+    };
+
+    // Mở modal xác nhận Kích hoạt mở lại cơ sở an toàn
+    const handleActivateShelter = (sh: SafeLocationItem) => {
+      setConfirmModal({
+        isOpen: true,
+        title: 'Mở lại hoạt động cơ sở an toàn',
+        message: `Bạn có muốn mở lại hoạt động đón tiếp người dân cho cơ sở "${sh.name || 'này'}" không? Trạng thái sẽ được chuyển về Sẵn sàng đón tiếp (ACTIVE).`,
+        type: 'primary',
+        confirmText: 'Mở lại cơ sở',
+        cancelText: 'Hủy bỏ',
+        details: [
+          { label: 'Tên cơ sở an toàn', value: sh.name || '' },
+          { label: 'Trạng thái chuyển đổi', value: 'Sẵn sàng đón tiếp (ACTIVE)' },
+        ],
+        onConfirm: async () => {
+          await executeChangeShelterStatus(sh._id, 'ACTIVE', 'Đã mở lại hoạt động đón tiếp cho cơ sở an toàn thành công!');
+        },
+      });
+    };
+
+    // Mở modal xác nhận trước khi xóa (chỉ xóa khi đã được ẩn/INACTIVE)
+    const handleDeleteShelter = (id: string, name?: string) => {
+      setConfirmModal({
+        isOpen: true,
+        title: 'Xác nhận xóa vĩnh viễn điểm trú ẩn an toàn',
+        message: `Bạn có chắc chắn muốn xóa vĩnh viễn cơ sở "${name || 'này'}" không? Thao tác này sẽ gỡ bỏ dữ liệu hoàn toàn khỏi cơ sở dữ liệu và bản đồ tác chiến cứu hộ.`,
+        type: 'danger',
+        confirmText: 'Xác nhận xóa vĩnh viễn',
+        cancelText: 'Hủy bỏ',
+        details: name ? [{ label: 'Tên cơ sở', value: name }, { label: 'Tình trạng', value: 'Đã tạm ngưng / ẩn' }] : undefined,
+        onConfirm: async () => {
+          await executeDeleteShelter(id);
+        },
+      });
+    };
+
+    // Thực hiện xóa điểm trú ẩn
+    const executeDeleteShelter = async (id: string) => {
+      try {
+        setLoading(true);
+        const res = await deleteSafeLocation(id);
+        if (res.success) {
+          setShelters((prev) => prev.filter((s) => s._id !== id));
+          if (detailShelter && detailShelter._id === id) {
+            setDetailShelter(null);
+          }
+          refreshData();
+          window.dispatchEvent(new CustomEvent('sos_data_updated'));
+          showToast('Đã xóa vĩnh viễn điểm trú ẩn an toàn thành công!', 'success');
+        }
+      } catch (err: any) {
+        showToast(err.message || 'Lỗi khi xóa điểm trú ẩn', 'error');
+      } finally {
+        setLoading(false);
+      }
     };
 
     return (
-      <div className="sos-views-container">
-        {/* KPI Thống kê sức chứa trú ẩn an toàn */}
-        <div className="sos-stats-grid">
-          <div className="sos-stat-box">
-            <div className="sos-stat-icon blue"><Shield size={22} /></div>
-            <div className="sos-stat-meta">
-              <span className="sos-stat-value">{displayShelters.length} Điểm</span>
-              <span className="sos-stat-label">Tổng Điểm Trú Ẩn &amp; Trạm An Toàn</span>
+      <div
+        className="sos-views-container"
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+          gap: '12px',
+        }}
+      >
+        {/* 1. TIÊU ĐỀ TRANG & ĐỊA BÀN PHỤ TRÁCH (CỐ ĐỊNH) */}
+        <div
+          style={{
+            flexShrink: 0,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '14px 20px',
+            background: '#ffffff',
+            border: '1px solid #cbd5e1',
+            borderRadius: '8px',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+            flexWrap: 'wrap',
+            gap: '12px',
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Shield size={20} color="#0284c7" />
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: '18px',
+                  fontWeight: 800,
+                  color: '#0f172a',
+                  letterSpacing: '0.2px',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Quản Lý &amp; Thiết Lập Điểm Trú Ẩn / Trạm An Toàn
+              </h2>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '5px', fontSize: '13.5px' }}>
+              <MapPin size={15} color="#64748b" />
+              <span style={{ color: '#64748b', fontWeight: 500 }}>Địa bàn phụ trách:</span>
+              <strong style={{ color: '#0f172a', fontWeight: 700 }}>{accountAreaDisplayName}</strong>
             </div>
           </div>
 
-          <div className="sos-stat-box">
-            <div className="sos-stat-icon green"><Users size={22} /></div>
-            <div className="sos-stat-meta">
-              <span className="sos-stat-value">{totalCapacity.toLocaleString()} Chỗ</span>
-              <span className="sos-stat-label">Tổng Sức Chứa Tiếp Nhận Tối Đa</span>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              type="button"
+              className="sos-btn-flat primary"
+              onClick={handleOpenCreateShelterModal}
+              style={{
+                padding: '8px 16px',
+                fontSize: '13px',
+                backgroundColor: '#0284c7',
+                color: '#ffffff',
+                borderColor: '#0284c7',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <PlusCircle size={15} />
+              <span>Thêm Điểm Trú Ẩn Mới</span>
+            </button>
+
+            <button
+              type="button"
+              className="sos-btn-flat"
+              onClick={onOpenMap}
+              style={{ padding: '8px 16px', fontSize: '13px' }}
+            >
+              <MapPin size={15} />
+              <span>Mở Bản Đồ Tác Chiến</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 2. CHỌN PHẠM VI XEM: TÊN ĐỊA PHƯƠNG & TỔNG THÀNH PHỐ + KPI NĂNG LỰC */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', flexShrink: 0 }}>
+          <div className="sos-scope-tabs">
+            <button
+              type="button"
+              className={`sos-scope-tab ${shelterManagementScope === 'LOCAL' ? 'active' : ''}`}
+              onClick={() => {
+                setShelterManagementScope('LOCAL');
+                setShelterPage(1);
+              }}
+            >
+              <span>{accountAreaDisplayName}</span>
+              <span className="sos-scope-badge">{localShelters.length}</span>
+            </button>
+
+            <button
+              type="button"
+              className={`sos-scope-tab ${shelterManagementScope === 'CITY' ? 'active' : ''}`}
+              onClick={() => {
+                setShelterManagementScope('CITY');
+                setShelterPage(1);
+              }}
+            >
+              <span>Thành phố Đà Nẵng</span>
+              <span className="sos-scope-badge">{displayShelters.length}</span>
+            </button>
           </div>
 
-          <div className="sos-stat-box">
-            <div className="sos-stat-icon yellow"><Home size={22} /></div>
-            <div className="sos-stat-meta">
-              <span className="sos-stat-value">{totalOccupancy.toLocaleString()} Người</span>
-              <span className="sos-stat-label">Người Dân Đang Tạm Trú An Toàn</span>
+          {/* Quick Stats Strip */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', fontSize: '12.5px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ color: '#64748b' }}>Tổng sức chứa:</span>
+              <strong style={{ color: '#0284c7' }}>{scopeTotalCapacity.toLocaleString()} chỗ</strong>
             </div>
-          </div>
-
-          <div className="sos-stat-box">
-            <div className="sos-stat-icon purple"><CheckCircle2 size={22} /></div>
-            <div className="sos-stat-meta">
-              <span className="sos-stat-value">{availableSlots.toLocaleString()} Chỗ</span>
-              <span className="sos-stat-label">Sức Chứa Còn Khả Dụng Tiếp Nhận</span>
+            <div style={{ width: 1, height: 14, background: '#cbd5e1' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ color: '#64748b' }}>Đang lưu trú:</span>
+              <strong style={{ color: '#b45309' }}>{scopeTotalOccupancy.toLocaleString()} người</strong>
+            </div>
+            <div style={{ width: 1, height: 14, background: '#cbd5e1' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ color: '#64748b' }}>Còn khả dụng:</span>
+              <strong style={{ color: '#16a34a' }}>{scopeAvailableSlots.toLocaleString()} chỗ</strong>
             </div>
           </div>
         </div>
 
-        {/* Danh sách các Điểm Trú Ẩn */}
-        <div className="sos-view-card">
-          <div className="sos-view-card-header">
-            <div className="sos-view-card-title">
-              <Shield size={18} color="#22c55e" />
-              <span>Danh Sách Điểm Trú Ẩn &amp; Trạm Y Tế An Toàn Địa Phương ({displayShelters.length} cơ sở)</span>
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                type="button"
-                onClick={() => setShowShelterModal(true)}
-                className="sos-hotline-btn"
-                style={{ padding: '8px 14px', fontSize: '13px' }}
-              >
-                <Plus size={15} />
-                <span>Thêm Điểm Trú Ẩn Mới</span>
-              </button>
-              <button type="button" onClick={refreshData} className="sos-btn-refresh">
-                <RefreshCw size={14} />
-                <span>Làm mới</span>
-              </button>
-            </div>
+        {/* 3. THANH CÔNG CỤ: TAB LỌC TRẠNG THÁI, LOẠI CƠ SỞ, SẮP XẾP & TÌM KIẾM */}
+        <div className="sos-clean-toolbar" style={{ flexShrink: 0 }}>
+          <div className="sos-clean-tabs">
+            <button
+              type="button"
+              className={`sos-clean-tab ${shelterFilter === 'ALL' ? 'active' : ''}`}
+              onClick={() => {
+                setShelterFilter('ALL');
+                setShelterPage(1);
+              }}
+            >
+              Tất cả <span className="sos-clean-tab-count">{baseScopedShelters.length}</span>
+            </button>
+            <button
+              type="button"
+              className={`sos-clean-tab ${shelterFilter === 'ACTIVE' ? 'active' : ''}`}
+              onClick={() => {
+                setShelterFilter('ACTIVE');
+                setShelterPage(1);
+              }}
+            >
+              Sẵn sàng đón tiếp <span className="sos-clean-tab-count">{baseScopedShelters.filter((s) => s.status === 'ACTIVE' && (s.capacity <= 0 || (s.currentOccupancy || 0) < s.capacity)).length}</span>
+            </button>
+            <button
+              type="button"
+              className={`sos-clean-tab ${shelterFilter === 'FULL' ? 'active' : ''}`}
+              onClick={() => {
+                setShelterFilter('FULL');
+                setShelterPage(1);
+              }}
+            >
+              Đã đầy <span className="sos-clean-tab-count">{baseScopedShelters.filter((s) => s.status === 'FULL' || (s.capacity > 0 && (s.currentOccupancy || 0) >= s.capacity)).length}</span>
+            </button>
+            <button
+              type="button"
+              className={`sos-clean-tab ${shelterFilter === 'MAINTENANCE' ? 'active' : ''}`}
+              onClick={() => {
+                setShelterFilter('MAINTENANCE');
+                setShelterPage(1);
+              }}
+            >
+              Tạm ngưng / Bảo trì <span className="sos-clean-tab-count">{baseScopedShelters.filter((s) => s.status === 'MAINTENANCE' || s.status === 'INACTIVE').length}</span>
+            </button>
           </div>
 
-          <div className="sos-table-wrapper">
-            <table className="sos-table">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {/* Lọc theo Loại cơ sở */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Loại cơ sở:</span>
+              <select
+                className="sos-clean-sort-select"
+                value={shelterTypeFilter}
+                onChange={(e) => {
+                  setShelterTypeFilter(e.target.value as any);
+                  setShelterPage(1);
+                }}
+              >
+                <option value="ALL">Tất cả loại cơ sở</option>
+                <option value="EVACUATION_CENTER">Trung tâm sơ tán</option>
+                <option value="HOSPITAL">Trạm Y tế Dã chiến</option>
+                <option value="SHELTER">Điểm tránh trú kiên cố</option>
+                <option value="RESCUE_STATION">Trạm cứu hộ tác chiến</option>
+                <option value="MEETING_POINT">Điểm tập kết an toàn</option>
+              </select>
+            </div>
+
+            {/* Sắp xếp đa tiêu chí */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Sắp xếp:</span>
+              <select
+                className="sos-clean-sort-select"
+                value={`${shelterSortField}-${shelterSortOrder}`}
+                onChange={(e) => {
+                  const [f, o] = e.target.value.split('-') as [any, any];
+                  setShelterSortField(f);
+                  setShelterSortOrder(o);
+                  setShelterPage(1);
+                }}
+              >
+                <option value="createdAt-desc">Mới nhất trước</option>
+                <option value="createdAt-asc">Cũ nhất trước</option>
+                <option value="name-asc">Tên cơ sở (A → Z)</option>
+                <option value="name-desc">Tên cơ sở (Z → A)</option>
+                <option value="capacity-desc">Sức chứa: Cao đến thấp</option>
+                <option value="capacity-asc">Sức chứa: Thấp đến cao</option>
+                <option value="occupancyRate-desc">Tỷ lệ lưu trú: Đầy nhất</option>
+                <option value="district-asc">Địa phương (A → Z)</option>
+                <option value="status-asc">Trạng thái cơ sở</option>
+              </select>
+            </div>
+
+            {/* Ô tìm kiếm từ khóa */}
+            <div className="sos-clean-search">
+              <Search size={15} color="#94a3b8" />
+              <input
+                type="text"
+                placeholder="Tìm theo tên điểm, địa chỉ, người quản lý..."
+                value={shelterSearchText}
+                onChange={(e) => {
+                  setShelterSearchText(e.target.value);
+                  setShelterPage(1);
+                }}
+              />
+              {shelterSearchText && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShelterSearchText('');
+                    setShelterPage(1);
+                  }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#94a3b8' }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 4. BẢNG DỮ LIỆU ĐIỂM TRÚ ẨN: THEAD CỐ ĐỊNH, CUỘN NỘI DUNG MƯỢT MÀ */}
+        <div
+          className="sos-clean-table-container"
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', minHeight: 0 }}>
+            <table className="sos-clean-table">
               <thead>
                 <tr>
-                  <th>Tên cơ sở an toàn</th>
-                  <th>Phân loại</th>
-                  <th>Địa chỉ cụ thể</th>
-                  <th>Sức chứa &amp; Tỷ lệ lưu trú</th>
-                  <th>Trạng thái</th>
-                  <th>Hành động</th>
+                  <th
+                    className={`sortable ${shelterSortField === 'name' ? 'sorted' : ''}`}
+                    onClick={() => handleSort('name')}
+                    style={{ width: '24%' }}
+                    title="Nhấn để sắp xếp theo tên cơ sở an toàn"
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                      <span>Điểm trú ẩn / Loại cơ sở</span>
+                      {renderSortIcon('name')}
+                    </div>
+                  </th>
+                  <th
+                    className={`sortable ${shelterSortField === 'district' ? 'sorted' : ''}`}
+                    onClick={() => handleSort('district')}
+                    style={{ width: '15%' }}
+                    title="Nhấn để sắp xếp theo địa phương quản lý"
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                      <span>Địa phương quản lý</span>
+                      {renderSortIcon('district')}
+                    </div>
+                  </th>
+                  <th
+                    className={`sortable ${shelterSortField === 'capacity' || shelterSortField === 'occupancyRate' ? 'sorted' : ''}`}
+                    onClick={() => handleSort('capacity')}
+                    style={{ width: '18%' }}
+                    title="Nhấn để sắp xếp theo sức chứa & tỷ lệ lưu trú"
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                      <span>Sức chứa &amp; Tỷ lệ lưu trú</span>
+                      {renderSortIcon('capacity')}
+                    </div>
+                  </th>
+                  <th
+                    className={`sortable ${shelterSortField === 'address' ? 'sorted' : ''}`}
+                    onClick={() => handleSort('address')}
+                    style={{ width: '21%' }}
+                    title="Nhấn để sắp xếp theo địa chỉ"
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                      <span>Địa chỉ cụ thể</span>
+                      {renderSortIcon('address')}
+                    </div>
+                  </th>
+                  <th
+                    className={`sortable ${shelterSortField === 'createdAt' ? 'sorted' : ''}`}
+                    onClick={() => handleSort('createdAt')}
+                    style={{ width: '11%' }}
+                    title="Nhấn để sắp xếp theo thời gian"
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                      <span>Thời gian cập nhật</span>
+                      {renderSortIcon('createdAt')}
+                    </div>
+                  </th>
+                  <th
+                    className={`sortable ${shelterSortField === 'status' ? 'sorted' : ''}`}
+                    onClick={() => handleSort('status')}
+                    style={{ width: '9%', textAlign: 'center' }}
+                    title="Nhấn để sắp xếp theo trạng thái"
+                  >
+                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span>Trạng thái</span>
+                      {renderSortIcon('status')}
+                    </div>
+                  </th>
+                  <th style={{ width: '11%', textAlign: 'center' }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
-                {displayShelters.map((sh) => {
-                  const capacity = sh.capacity || 1;
-                  const occupancy = sh.currentOccupancy || 0;
-                  const percent = Math.min(100, Math.round((occupancy / capacity) * 100));
-                  const barColor = percent >= 90 ? 'full' : percent >= 60 ? 'warning' : 'safe';
+                {totalShelterItems === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b', fontSize: '13px' }}>
+                      <Shield size={32} color="#94a3b8" style={{ marginBottom: '8px' }} />
+                      <div>Không có điểm trú ẩn an toàn nào trong danh mục này.</div>
+                      <button
+                        type="button"
+                        onClick={handleOpenCreateShelterModal}
+                        style={{
+                          marginTop: '12px',
+                          padding: '6px 14px',
+                          fontSize: '12px',
+                          color: '#0284c7',
+                          background: '#f0f9ff',
+                          border: '1px solid #bae6fd',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                        }}
+                      >
+                        <PlusCircle size={13} />
+                        <span>Thêm điểm trú ẩn mới ngay</span>
+                      </button>
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedShelters.map((sh) => {
+                    const capacity = sh.capacity || 1;
+                    const occupancy = sh.currentOccupancy || 0;
+                    const percent = Math.min(100, Math.round((occupancy / capacity) * 100));
+                    const isLocal = isShelterInOfficerJurisdiction(sh);
+                    const districtName = getShelterDistrictName(sh);
+                    const typeLabel = getShelterTypeLabel(sh.type);
+                    const statusBadge = getShelterStatusBadge(sh.status, occupancy, capacity);
 
-                  return (
-                    <tr key={sh._id}>
-                      <td>
-                        <strong>{sh.name}</strong>
-                        {sh.location?.coordinates && (
-                          <div style={{ fontSize: '11px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
-                            <MapPin size={11} />
-                            <span>{sh.location.coordinates[1].toFixed(4)}, {sh.location.coordinates[0].toFixed(4)}</span>
-                          </div>
-                        )}
-                      </td>
-                      <td>
-                        <span className="sos-badge verified">
-                          {typeLabels[sh.type] || sh.type}
-                        </span>
-                      </td>
-                      <td style={{ maxWidth: '280px' }}>{sh.address}</td>
-                      <td>
-                        <div className="sos-occupancy-cell">
-                          <div className="sos-occupancy-meta">
-                            <span>{occupancy} / {capacity} người</span>
-                            <span>{percent}%</span>
-                          </div>
-                          <div className="sos-occupancy-bar-bg">
+                    return (
+                      <tr key={sh._id}>
+                        {/* 1. Tên điểm & Phân loại cơ sở */}
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <div
-                              className={`sos-occupancy-bar-fill ${barColor}`}
-                              style={{ width: `${percent}%` }}
-                            />
+                              style={{
+                                width: 38,
+                                height: 38,
+                                borderRadius: '8px',
+                                backgroundColor: '#f0fdf4',
+                                border: '1px solid #bbf7d0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}
+                              title={typeLabel}
+                            >
+                              <ShelterTypeIcon type={sh.type} size={18} color="#16a34a" />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px', lineHeight: '1.4' }}>
+                                {sh.name}
+                              </div>
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  padding: '2px 7px',
+                                  borderRadius: '5px',
+                                  fontSize: '11.5px',
+                                  fontWeight: 600,
+                                  backgroundColor: '#f8fafc',
+                                  color: '#475569',
+                                  border: '1px solid #e2e8f0',
+                                  marginTop: '3px',
+                                }}
+                              >
+                                <ShelterTypeIcon type={sh.type} size={12} color="#64748b" />
+                                {typeLabel}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td>
-                        <span className={`sos-badge ${percent >= 100 ? 'critical' : 'active'}`}>
-                          {percent >= 100 ? 'ĐÃ ĐẦY' : sh.status === 'ACTIVE' ? 'SẴN SÀNG TIẾP NHẬN' : sh.status}
-                        </span>
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          onClick={onOpenMap}
-                          className="sos-btn-action view"
-                          title="Định vị điểm trú ẩn này trên Bản đồ tác chiến"
-                        >
-                          <MapPin size={13} />
-                          <span>Bản đồ</span>
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        </td>
+
+                        {/* 2. Địa phương quản lý */}
+                        <td>
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: isLocal ? 700 : 500,
+                              background: isLocal ? '#f0fdf4' : '#f8fafc',
+                              color: isLocal ? '#15803d' : '#475569',
+                              border: `1px solid ${isLocal ? '#bbf7d0' : '#cbd5e1'}`,
+                              whiteSpace: 'nowrap',
+                            }}
+                            title={`Địa bàn quản lý: ${districtName}`}
+                          >
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: isLocal ? '#16a34a' : '#94a3b8' }} />
+                            {districtName}
+                          </span>
+                        </td>
+
+                        {/* 3. Sức chứa & Tỷ lệ lưu trú */}
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                              <span style={{ color: '#0f172a', fontWeight: 600 }}>
+                                <strong>{occupancy.toLocaleString()}</strong> / {capacity.toLocaleString()} người
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  color: percent >= 90 ? '#b91c1c' : percent >= 60 ? '#b45309' : '#15803d',
+                                }}
+                              >
+                                {percent}%
+                              </span>
+                            </div>
+                            <div
+                              style={{
+                                width: '100%',
+                                height: 6,
+                                background: '#e2e8f0',
+                                borderRadius: 3,
+                                overflow: 'hidden',
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: `${percent}%`,
+                                  height: '100%',
+                                  background: percent >= 90 ? '#ef4444' : percent >= 60 ? '#f59e0b' : '#22c55e',
+                                  borderRadius: 3,
+                                  transition: 'width 0.3s ease',
+                                }}
+                              />
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#64748b' }}>
+                              Còn trống: <strong style={{ color: capacity - occupancy > 0 ? '#16a34a' : '#dc2626' }}>{Math.max(0, capacity - occupancy).toLocaleString()} chỗ</strong>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* 4. Địa chỉ cụ thể */}
+                        <td>
+                          <div style={{ fontSize: '13px', color: '#1e293b', fontWeight: 500, lineHeight: '1.45' }}>
+                            {sh.address}
+                          </div>
+                        </td>
+
+                        {/* 5. Thời gian cập nhật & Người phụ trách */}
+                        <td>
+                          <div style={{ fontSize: '12.5px', color: '#0f172a', fontWeight: 600 }}>
+                            {formatShelterTime(sh.createdAt)}
+                          </div>
+                          <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '2px' }}>
+                            {typeof sh.createdBy === 'object' ? (sh.createdBy?.fullName || 'Ban chỉ huy PCTT') : 'Ban chỉ huy PCTT'}
+                          </div>
+                        </td>
+
+                        {/* 6. Trạng thái */}
+                        <td style={{ textAlign: 'center' }}>
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                              padding: '3px 8px',
+                              borderRadius: '5px',
+                              fontSize: '11.5px',
+                              fontWeight: 600,
+                              background: statusBadge.bg,
+                              color: statusBadge.color,
+                              border: `1px solid ${statusBadge.border}`,
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusBadge.dot }} />
+                            {statusBadge.label}
+                          </span>
+                        </td>
+
+                        {/* 7. Thao tác */}
+                        <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center' }}>
+                            <button
+                              type="button"
+                              className="sos-btn-flat"
+                              onClick={() => setDetailShelter(sh)}
+                              title="Xem chi tiết điểm trú ẩn, vị trí bản đồ và năng lực tiếp nhận"
+                            >
+                              <Eye size={13} />
+                              <span>Chi tiết</span>
+                            </button>
+
+                            {isLocal ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="sos-btn-flat"
+                                  onClick={() => handleOpenEditShelterModal(sh)}
+                                  title="Chỉnh sửa thông tin điểm trú ẩn"
+                                >
+                                  <Edit size={13} />
+                                  <span>Sửa</span>
+                                </button>
+
+                                {sh.status === 'INACTIVE' ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="sos-btn-flat success"
+                                      onClick={() => handleActivateShelter(sh)}
+                                      title="Mở lại hoạt động cơ sở an toàn"
+                                    >
+                                      <RotateCcw size={13} />
+                                      <span>Mở lại</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      className="sos-btn-flat danger"
+                                      disabled={loading}
+                                      onClick={() => handleDeleteShelter(sh._id, sh.name)}
+                                      title="Xóa vĩnh viễn điểm trú ẩn này (đã được ẩn)"
+                                    >
+                                      <Trash2 size={13} />
+                                      <span>Xóa</span>
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="sos-btn-flat warning"
+                                    disabled={loading}
+                                    onClick={() => handleToggleHideShelter(sh)}
+                                    title="Ẩn điểm trú ẩn này (Đổi trạng thái sang Tạm ngưng trước khi xóa)"
+                                  >
+                                    <EyeOff size={13} />
+                                    <span>Ẩn</span>
+                                  </button>
+                                )}
+                              </>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
-        </div>
 
-        {/* Modal Thêm Điểm Trú Ẩn Mới */}
-        {showShelterModal && (
-          <div className="sos-modal-overlay">
-            <div className="sos-modal-card" style={{ maxWidth: '560px' }}>
-              <div className="sos-modal-header">
-                <div className="sos-modal-title">
-                  <Shield size={20} color="#22c55e" />
-                  <span>Thêm Điểm Trú Ẩn / Trạm An Toàn Mới</span>
-                </div>
+          {/* 5. THANH PHÂN TRANG 10 ĐIỂM (CỐ ĐỊNH Ở ĐÁY BẢNG) */}
+          <div className="sos-clean-pagination">
+            <div className="sos-pagination-info">
+              {totalShelterItems === 0 ? (
+                'Không có dữ liệu'
+              ) : (
+                <>
+                  Hiển thị <strong style={{ color: '#0f172a' }}>{shelterStartIndex + 1}</strong> – <strong style={{ color: '#0f172a' }}>{Math.min(shelterStartIndex + SHELTER_PAGE_SIZE, totalShelterItems)}</strong> trên tổng số <strong style={{ color: '#0284c7' }}>{totalShelterItems}</strong> cơ sở an toàn
+                </>
+              )}
+            </div>
+
+            {totalShelterPages > 1 && (
+              <div className="sos-pagination-controls">
                 <button
                   type="button"
-                  onClick={() => setShowShelterModal(false)}
-                  className="sos-modal-close"
+                  className="sos-pagination-btn"
+                  disabled={safeShelterPage === 1}
+                  onClick={() => setShelterPage(1)}
+                  title="Trang đầu"
                 >
-                  ✕
+                  « Đầu
+                </button>
+                <button
+                  type="button"
+                  className="sos-pagination-btn"
+                  disabled={safeShelterPage === 1}
+                  onClick={() => setShelterPage((p) => Math.max(1, p - 1))}
+                  title="Trang trước"
+                >
+                  ‹ Trước
+                </button>
+
+                {(() => {
+                  const pages: (number | string)[] = [];
+                  if (totalShelterPages <= 7) {
+                    for (let i = 1; i <= totalShelterPages; i++) pages.push(i);
+                  } else {
+                    pages.push(1);
+                    if (safeShelterPage > 3) pages.push('...');
+                    const start = Math.max(2, safeShelterPage - 1);
+                    const end = Math.min(totalShelterPages - 1, safeShelterPage + 1);
+                    for (let i = start; i <= end; i++) {
+                      pages.push(i);
+                    }
+                    if (safeShelterPage < totalShelterPages - 2) pages.push('...');
+                    pages.push(totalShelterPages);
+                  }
+
+                  return pages.map((p, idx) => {
+                    if (p === '...') {
+                      return (
+                        <span key={`dots-sh-${idx}`} style={{ padding: '0 4px', color: '#94a3b8', fontSize: '13px' }}>
+                          ...
+                        </span>
+                      );
+                    }
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        className={`sos-pagination-btn ${p === safeShelterPage ? 'active' : ''}`}
+                        onClick={() => setShelterPage(Number(p))}
+                      >
+                        {p}
+                      </button>
+                    );
+                  });
+                })()}
+
+                <button
+                  type="button"
+                  className="sos-pagination-btn"
+                  disabled={safeShelterPage === totalShelterPages}
+                  onClick={() => setShelterPage((p) => Math.min(totalShelterPages, p + 1))}
+                  title="Trang sau"
+                >
+                  Sau ›
+                </button>
+                <button
+                  type="button"
+                  className="sos-pagination-btn"
+                  disabled={safeShelterPage === totalShelterPages}
+                  onClick={() => setShelterPage(totalShelterPages)}
+                  title="Trang cuối"
+                >
+                  Cuối »
+                </button>
+
+                {/* Ô NHẬP SỐ TRANG TRỰC TIẾP */}
+                <div className="sos-pagination-jump">
+                  <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, whiteSpace: 'nowrap' }}>Đến trang:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalShelterPages}
+                    value={shelterJumpInputPage}
+                    placeholder={String(safeShelterPage)}
+                    onChange={(e) => setShelterJumpInputPage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const target = parseInt(shelterJumpInputPage, 10);
+                        if (!isNaN(target) && target >= 1 && target <= totalShelterPages) {
+                          setShelterPage(target);
+                          setShelterJumpInputPage('');
+                        } else {
+                          showToast(`Vui lòng nhập số trang từ 1 đến ${totalShelterPages}`, 'warning');
+                        }
+                      }
+                    }}
+                    className="sos-pagination-jump-input"
+                    title={`Nhập số trang từ 1 đến ${totalShelterPages}`}
+                  />
+                  <button
+                    type="button"
+                    className="sos-pagination-btn"
+                    style={{ padding: '4px 9px', fontSize: '12px' }}
+                    onClick={() => {
+                      const target = parseInt(shelterJumpInputPage, 10);
+                      if (!isNaN(target) && target >= 1 && target <= totalShelterPages) {
+                        setShelterPage(target);
+                        setShelterJumpInputPage('');
+                      } else {
+                        showToast(`Vui lòng nhập số trang từ 1 đến ${totalShelterPages}`, 'warning');
+                      }
+                    }}
+                  >
+                    Đi
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ============================================================ */}
+        {/* MODAL CHI TIẾT ĐIỂM TRÚ ẨN (2 CỘT TƯƠNG ĐỒNG VỚI HAZARD) */}
+        {/* ============================================================ */}
+        {detailShelter && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(15, 23, 42, 0.65)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 9999,
+              padding: '20px',
+            }}
+            onClick={() => setDetailShelter(null)}
+          >
+            <div
+              style={{
+                background: '#ffffff',
+                borderRadius: '10px',
+                width: '100%',
+                maxWidth: '920px',
+                maxHeight: '90vh',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15)',
+                border: '1px solid #cbd5e1',
+                overflow: 'hidden',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header Modal */}
+              <div
+                style={{
+                  padding: '14px 20px',
+                  borderBottom: '1px solid #e2e8f0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: '#f8fafc',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: '6px',
+                      backgroundColor: '#f0fdf4',
+                      border: '1px solid #bbf7d0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <ShelterTypeIcon type={detailShelter.type} size={18} color="#16a34a" />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
+                      {detailShelter.name}
+                    </h3>
+                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '1px' }}>
+                      Mã: {detailShelter._id} • Cập nhật: {formatShelterTime(detailShelter.createdAt)}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setDetailShelter(null)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#64748b',
+                    cursor: 'pointer',
+                    padding: '4px',
+                  }}
+                  title="Đóng"
+                >
+                  <X size={18} />
                 </button>
               </div>
 
-              <form onSubmit={handleCreateShelterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '16px' }}>
-                <div>
-                  <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Tên điểm sơ tán / trạm an toàn:</label>
-                  <input
-                    type="text"
-                    required
-                    value={shelterForm.name}
-                    onChange={(e) => setShelterForm({ ...shelterForm, name: e.target.value })}
-                    placeholder="VD: Trường Tiểu học Lê Quý Đôn - Điểm Tránh Trú"
-                    className="sos-form-input"
-                    style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
-                  />
+              {/* Body: 2 Columns */}
+              <div
+                style={{
+                  padding: '20px',
+                  overflowY: 'auto',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+                  gap: '20px',
+                }}
+              >
+                {/* Cột 1: Thông tin năng lực & Quản lý */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '8px' }}>
+                      Phân loại &amp; Địa phương
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          background: '#ffffff',
+                          color: '#0f172a',
+                          fontWeight: 600,
+                          fontSize: '12.5px',
+                          border: '1px solid #cbd5e1',
+                        }}
+                      >
+                        <ShelterTypeIcon type={detailShelter.type} size={15} color="#16a34a" />
+                        {getShelterTypeLabel(detailShelter.type)}
+                      </span>
+
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          background: '#f8fafc',
+                          color: '#0f172a',
+                          fontWeight: 600,
+                          fontSize: '12px',
+                          border: '1px solid #cbd5e1',
+                        }}
+                      >
+                        <MapPin size={13} color="#2563eb" />
+                        {getShelterDistrictName(detailShelter)}
+                      </span>
+
+                      {(() => {
+                        const st = getShelterStatusBadge(detailShelter.status, detailShelter.currentOccupancy, detailShelter.capacity);
+                        return (
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              background: st.bg,
+                              color: st.color,
+                              border: `1px solid ${st.border}`,
+                            }}
+                          >
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: st.dot }} />
+                            {st.label}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Thống kê năng lực tiếp nhận */}
+                  <div style={{ background: '#ffffff', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '8px' }}>
+                      Năng lực tiếp nhận &amp; Lưu trú an toàn
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '12px' }}>
+                      <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>Sức chứa tối đa</div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', marginTop: '2px' }}>
+                          {(detailShelter.capacity || 0).toLocaleString()}
+                        </div>
+                      </div>
+                      <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>Đang lưu trú</div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#b45309', marginTop: '2px' }}>
+                          {(detailShelter.currentOccupancy || 0).toLocaleString()}
+                        </div>
+                      </div>
+                      <div style={{ background: '#f8fafc', padding: '10px', borderRadius: '6px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>Chỗ còn trống</div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#16a34a', marginTop: '2px' }}>
+                          {Math.max(0, (detailShelter.capacity || 0) - (detailShelter.currentOccupancy || 0)).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Thanh tỷ lệ % */}
+                    {(() => {
+                      const cap = detailShelter.capacity || 1;
+                      const occ = detailShelter.currentOccupancy || 0;
+                      const pct = Math.min(100, Math.round((occ / cap) * 100));
+                      return (
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
+                            <span style={{ color: '#64748b' }}>Tỷ lệ tiếp nhận:</span>
+                            <strong style={{ color: pct >= 90 ? '#b91c1c' : pct >= 60 ? '#b45309' : '#15803d' }}>
+                              {pct}%
+                            </strong>
+                          </div>
+                          <div style={{ width: '100%', height: 8, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
+                            <div
+                              style={{
+                                width: `${pct}%`,
+                                height: '100%',
+                                background: pct >= 90 ? '#ef4444' : pct >= 60 ? '#f59e0b' : '#22c55e',
+                                borderRadius: 4,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div style={{ background: '#ffffff', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>
+                      Địa chỉ cụ thể
+                    </div>
+                    <div style={{ fontSize: '13px', fontWeight: 500, color: '#0f172a', lineHeight: '1.4' }}>
+                      {detailShelter.address}
+                    </div>
+
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginTop: '12px', marginBottom: '4px' }}>
+                      Đơn vị quản lý cơ sở
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#334155', lineHeight: '1.5' }}>
+                      {typeof detailShelter.createdBy === 'object' ? (detailShelter.createdBy?.fullName || 'Ban chỉ huy PCTT địa phương') : 'Ban chỉ huy PCTT địa phương'}
+                    </div>
+                  </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Loại cơ sở:</label>
-                    <select
-                      value={shelterForm.type}
-                      onChange={(e) => setShelterForm({ ...shelterForm, type: e.target.value as any })}
-                      className="sos-form-select"
-                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
+                {/* Cột 2: Bản đồ nhỏ hiển thị vị trí */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ background: '#ffffff', padding: '14px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', height: '100%' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                      <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#0f172a' }}>
+                        Vị trí trên bản đồ
+                      </span>
+                      {detailShelter.location?.coordinates && (
+                        <span style={{ fontSize: '11px', color: '#64748b' }}>
+                          [{detailShelter.location.coordinates[1].toFixed(5)}, {detailShelter.location.coordinates[0].toFixed(5)}]
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ flex: 1, minHeight: '280px' }}>
+                      {detailShelter.location?.coordinates ? (
+                        <ShelterMiniMap
+                          lat={detailShelter.location.coordinates[1]}
+                          lng={detailShelter.location.coordinates[0]}
+                          name={detailShelter.name}
+                          type={detailShelter.type}
+                        />
+                      ) : (
+                        <div style={{ height: '280px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', color: '#94a3b8' }}>
+                          Chưa có dữ liệu tọa độ
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                      {detailShelter.location?.coordinates && (
+                        <a
+                          href={`https://www.google.com/maps?q=${detailShelter.location.coordinates[1]},${detailShelter.location.coordinates[0]}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="sos-btn-flat"
+                          style={{ flex: 1, justifyContent: 'center' }}
+                        >
+                          <ExternalLink size={13} />
+                          <span>Google Maps</span>
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        className="sos-btn-flat primary"
+                        style={{ flex: 1, justifyContent: 'center' }}
+                        onClick={() => {
+                          setDetailShelter(null);
+                          onOpenMap();
+                        }}
+                      >
+                        <MapPin size={13} />
+                        <span>Bản đồ Tác chiến</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Modal */}
+              <div
+                style={{
+                  padding: '12px 20px',
+                  borderTop: '1px solid #e2e8f0',
+                  background: '#f8fafc',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                {detailShelter.status === 'INACTIVE' ? (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      className="sos-btn-flat danger"
+                      onClick={() => handleDeleteShelter(detailShelter._id, detailShelter.name)}
+                      disabled={loading}
                     >
-                      <option value="EVACUATION_CENTER">Trung tâm sơ tán tập trung</option>
-                      <option value="HOSPITAL">Trạm Y tế dã chiến</option>
-                      <option value="SHELTER">Điểm trú ẩn kiên cố</option>
-                      <option value="RESCUE_STATION">Trạm chỉ huy cứu hộ</option>
-                      <option value="MEETING_POINT">Điểm hẹn tập kết</option>
-                    </select>
-                  </div>
+                      <Trash2 size={14} />
+                      <span>Xóa vĩnh viễn</span>
+                    </button>
 
-                  <div>
-                    <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Khu vực hành chính:</label>
-                    <select
-                      value={shelterForm.areaId}
-                      onChange={(e) => setShelterForm({ ...shelterForm, areaId: e.target.value })}
-                      className="sos-form-select"
-                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
+                    <button
+                      type="button"
+                      className="sos-btn-flat success"
+                      onClick={() => handleActivateShelter(detailShelter)}
+                      disabled={loading}
                     >
-                      {areas.map((a) => (
-                        <option key={a._id} value={a._id}>{a.name} ({a.code})</option>
-                      ))}
-                    </select>
+                      <RotateCcw size={14} />
+                      <span>Mở lại cơ sở</span>
+                    </button>
                   </div>
-                </div>
-
-                <div>
-                  <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Địa chỉ cụ thể:</label>
-                  <input
-                    type="text"
-                    required
-                    value={shelterForm.address}
-                    onChange={(e) => setShelterForm({ ...shelterForm, address: e.target.value })}
-                    placeholder="VD: Số 45 đường Nguyễn Du, Phường Hòa Cường"
-                    className="sos-form-input"
-                    style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
-                  />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Sức chứa tối đa (người):</label>
-                    <input
-                      type="number"
-                      required
-                      min={1}
-                      value={shelterForm.capacity}
-                      onChange={(e) => setShelterForm({ ...shelterForm, capacity: parseInt(e.target.value, 10) || 50 })}
-                      className="sos-form-input"
-                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Đang lưu trú hiện tại:</label>
-                    <input
-                      type="number"
-                      required
-                      min={0}
-                      value={shelterForm.currentOccupancy}
-                      onChange={(e) => setShelterForm({ ...shelterForm, currentOccupancy: parseInt(e.target.value, 10) || 0 })}
-                      className="sos-form-input"
-                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="sos-form-label" style={{ fontSize: '13px', display: 'block', marginBottom: '6px' }}>Tọa độ GPS (Kinh độ, Vĩ độ):</label>
-                  <input
-                    type="text"
-                    required
-                    value={shelterForm.coordinates}
-                    onChange={(e) => setShelterForm({ ...shelterForm, coordinates: e.target.value })}
-                    placeholder="VD: 108.2540, 15.9720"
-                    className="sos-form-input"
-                    style={{ width: '100%', padding: '10px 14px', borderRadius: '8px' }}
-                  />
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+                ) : (
                   <button
                     type="button"
-                    onClick={() => setShowShelterModal(false)}
-                    className="sos-btn-refresh"
-                  >
-                    Hủy bỏ
-                  </button>
-                  <button
-                    type="submit"
+                    className="sos-btn-flat warning"
+                    onClick={() => handleToggleHideShelter(detailShelter)}
                     disabled={loading}
-                    className="sos-hotline-btn"
                   >
-                    <Send size={15} />
-                    <span>{loading ? 'Đang lưu...' : 'Lưu & Kích Hoạt Điểm Trú Ẩn'}</span>
+                    <EyeOff size={14} />
+                    <span>Ẩn cơ sở này (Tạm ngưng)</span>
+                  </button>
+                )}
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="sos-btn-flat"
+                    onClick={() => handleOpenEditShelterModal(detailShelter)}
+                    disabled={loading}
+                  >
+                    <Edit size={14} />
+                    <span>Chỉnh sửa thông tin</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="sos-btn-flat"
+                    onClick={() => setDetailShelter(null)}
+                  >
+                    Đóng
                   </button>
                 </div>
-              </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* MODAL TẠO ĐIỂM TRÚ ẨN MỚI (2 CỘT TƯƠNG ĐỒNG VỚI HAZARD) */}
+        {/* ============================================================ */}
+        {isCreateShelterOpen && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(15, 23, 42, 0.7)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1100,
+              padding: '16px',
+            }}
+            onClick={() => !submittingCreateShelter && setIsCreateShelterOpen(false)}
+          >
+            <div
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '12px',
+                width: '100%',
+                maxWidth: '960px',
+                maxHeight: '92vh',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                border: '1px solid #cbd5e1',
+                overflow: 'hidden',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header Modal */}
+              <div
+                style={{
+                  padding: '14px 20px',
+                  borderBottom: '1px solid #e2e8f0',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  background: '#f8fafc',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '8px',
+                      backgroundColor: '#e0f2fe',
+                      color: '#0284c7',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <PlusCircle size={20} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800, color: '#0f172a' }}>
+                      Khởi Tạo Điểm Trú Ẩn / Trạm An Toàn Mới
+                    </h3>
+                    <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                      Cán bộ địa phương {accountAreaDisplayName} thiết lập cơ sở sơ tán và công bố phục vụ ứng cứu thiên tai.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => !submittingCreateShelter && setIsCreateShelterOpen(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#64748b',
+                    padding: '4px',
+                  }}
+                  title="Đóng"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Body Form 2 Cột */}
+              <div
+                style={{
+                  padding: '18px 20px',
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                }}
+              >
+                {/* Thông báo lỗi tổng quát */}
+                {createShelterErrors.general && (
+                  <div
+                    style={{
+                      background: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      borderRadius: '8px',
+                      padding: '10px 14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      color: '#b91c1c',
+                      fontSize: '12.5px',
+                      fontWeight: 500,
+                    }}
+                  >
+                    <AlertTriangle size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
+                    <span>{createShelterErrors.general}</span>
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+                    gap: '18px',
+                  }}
+                >
+                  {/* CỘT TRÁI: TÊN CƠ SỞ, CHỌN LOẠI CƠ SỞ (CARDS GRID), ĐỊA BÀN, SỨC CHỨA, ĐỊA CHỈ */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {/* 1. Tên cơ sở */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                        Tên điểm trú ẩn / cơ sở an toàn <span style={{ color: '#dc2626' }}>*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={createShelterName}
+                        onChange={(e) => {
+                          setCreateShelterName(e.target.value);
+                          if (createShelterErrors.name) {
+                            setCreateShelterErrors((prev) => ({ ...prev, name: undefined, general: undefined }));
+                          }
+                        }}
+                        placeholder="Ví dụ: Trường Tiểu học Lê Quý Đôn - Điểm Sơ Tán Bão Lũ"
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          border: createShelterErrors.name ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                          background: createShelterErrors.name ? '#fff5f5' : '#ffffff',
+                          fontSize: '13px',
+                          color: '#0f172a',
+                          boxSizing: 'border-box',
+                          outline: 'none',
+                        }}
+                      />
+                      {createShelterErrors.name && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                          <span>{createShelterErrors.name}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 2. CHỌN LOẠI CƠ SỞ (CARDS GRID) */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '6px' }}>
+                        Phân loại cơ sở an toàn <span style={{ color: '#dc2626' }}>*</span>
+                      </label>
+                      <div className="sos-hazard-type-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))' }}>
+                        {SHELTER_TYPE_CARDS.map((item) => {
+                          const isSelected = createShelterType === item.key;
+                          return (
+                            <button
+                              key={item.key}
+                              type="button"
+                              onClick={() => setCreateShelterType(item.key as any)}
+                              className={`sos-hazard-type-card ${isSelected ? 'selected' : ''}`}
+                            >
+                              <div className="sos-hazard-type-card-icon">
+                                <ShelterTypeIcon
+                                  type={item.key}
+                                  size={24}
+                                  color={isSelected ? '#ffffff' : '#334155'}
+                                />
+                              </div>
+                              <span className="sos-hazard-type-card-label">{item.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* 3. Khu vực hành chính (Lấy cố định từ tài khoản quản lý) & Trạng thái ban đầu */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                          Khu vực quản lý
+                        </label>
+                        <div
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            background: '#f8fafc',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            boxSizing: 'border-box',
+                            minHeight: '36px',
+                          }}
+                        >
+                          <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
+                            {accountAreaDisplayName}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                          Trạng thái ban đầu
+                        </label>
+                        <select
+                          value={createShelterStatus}
+                          onChange={(e) => setCreateShelterStatus(e.target.value as any)}
+                          style={{
+                            width: '100%',
+                            padding: '8px 10px',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '12.5px',
+                            color: '#0f172a',
+                            background: '#ffffff',
+                            boxSizing: 'border-box',
+                          }}
+                        >
+                          <option value="ACTIVE">Sẵn sàng đón tiếp (ACTIVE)</option>
+                          <option value="MAINTENANCE">Bảo trì / Sửa chữa</option>
+                          <option value="FULL">Đã đầy công suất (FULL)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Sức chứa tối đa & Đang lưu trú ban đầu */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                          Sức chứa tối đa (người) <span style={{ color: '#dc2626' }}>*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={createShelterCapacity}
+                          onChange={(e) => {
+                            setCreateShelterCapacity(parseInt(e.target.value, 10) || 0);
+                            if (createShelterErrors.capacity) {
+                              setCreateShelterErrors((prev) => ({ ...prev, capacity: undefined, general: undefined }));
+                            }
+                          }}
+                          placeholder="VD: 500"
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            borderRadius: '6px',
+                            border: createShelterErrors.capacity ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                            background: createShelterErrors.capacity ? '#fff5f5' : '#ffffff',
+                            fontSize: '13px',
+                            color: '#0f172a',
+                            boxSizing: 'border-box',
+                            outline: 'none',
+                          }}
+                        />
+                        {createShelterErrors.capacity && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                            <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                            <span>{createShelterErrors.capacity}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                          Đang lưu trú ban đầu
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={createShelterOccupancy}
+                          onChange={(e) => setCreateShelterOccupancy(parseInt(e.target.value, 10) || 0)}
+                          placeholder="VD: 0"
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '13px',
+                            color: '#0f172a',
+                            background: '#ffffff',
+                            boxSizing: 'border-box',
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 4. Địa chỉ cụ thể */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                        Địa chỉ cụ thể cơ sở <span style={{ color: '#dc2626' }}>*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={createShelterAddress}
+                        onChange={(e) => {
+                          setCreateShelterAddress(e.target.value);
+                          if (createShelterErrors.address) {
+                            setCreateShelterErrors((prev) => ({ ...prev, address: undefined, general: undefined }));
+                          }
+                        }}
+                        placeholder="Số nhà, tên đường, phường/xã..."
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          border: createShelterErrors.address ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                          background: createShelterErrors.address ? '#fff5f5' : '#ffffff',
+                          fontSize: '13px',
+                          color: '#0f172a',
+                          boxSizing: 'border-box',
+                          outline: 'none',
+                        }}
+                      />
+                      {createShelterErrors.address && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                          <span>{createShelterErrors.address}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* CỘT PHẢI: GOOGLE MAPS LINK RESOLVER, TỌA ĐỘ GPS, BẢN ĐỒ MINI & GHI CHÚ */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {/* Nhập link Google Maps hoặc tọa độ */}
+                    <div
+                      style={{
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        padding: '10px 12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '7px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <label
+                          style={{
+                            fontSize: '12.5px',
+                            fontWeight: 600,
+                            color: '#1e293b',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            margin: 0,
+                          }}
+                        >
+                          <MapPin size={14} color="#0284c7" />
+                          <span>Link Google Map - Tọa độ</span>
+                        </label>
+                        <span style={{ fontSize: '11px', color: '#64748b' }}>
+                          Hỗ trợ cả link rút gọn (maps.app.goo.gl)
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <div style={{ position: 'relative', flex: 1 }}>
+                          <input
+                            type="text"
+                            value={createShelterMapLinkInput}
+                            onChange={(e) => {
+                              setCreateShelterMapLinkInput(e.target.value);
+                              if (createShelterMapLinkStatus) setCreateShelterMapLinkStatus(null);
+                            }}
+                            onPaste={(e) => {
+                              const pastedText = e.clipboardData.getData('text');
+                              if (
+                                pastedText &&
+                                (pastedText.includes('google') ||
+                                  pastedText.includes('goo.gl') ||
+                                  pastedText.includes('http') ||
+                                  pastedText.includes(',') ||
+                                  pastedText.includes('°'))
+                              ) {
+                                setTimeout(() => handleConvertCreateMapLink(pastedText), 50);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleConvertCreateMapLink();
+                              }
+                            }}
+                            placeholder="Dán link Google Maps hoặc tọa độ (ví dụ 16.0605, 108.2170)..."
+                            style={{
+                              width: '100%',
+                              padding: '7px 10px',
+                              paddingRight: createShelterMapLinkInput ? '28px' : '10px',
+                              borderRadius: '6px',
+                              border: '1px solid #cbd5e1',
+                              fontSize: '12px',
+                              color: '#0f172a',
+                              background: '#ffffff',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                          {createShelterMapLinkInput && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCreateShelterMapLinkInput('');
+                                setCreateShelterMapLinkStatus(null);
+                              }}
+                              style={{
+                                position: 'absolute',
+                                right: '6px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: 'none',
+                                border: 'none',
+                                color: '#94a3b8',
+                                cursor: 'pointer',
+                                padding: '2px',
+                                display: 'flex',
+                                alignItems: 'center',
+                              }}
+                              title="Xóa nội dung"
+                            >
+                              <X size={13} />
+                            </button>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleConvertCreateMapLink()}
+                          disabled={resolvingCreateShelterMapLink || !createShelterMapLinkInput.trim()}
+                          className="sos-btn-flat"
+                          style={{
+                            padding: '6px 12px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            background: resolvingCreateShelterMapLink ? '#f1f5f9' : '#0284c7',
+                            color: resolvingCreateShelterMapLink ? '#94a3b8' : '#ffffff',
+                            borderColor: resolvingCreateShelterMapLink ? '#cbd5e1' : '#0284c7',
+                            cursor: resolvingCreateShelterMapLink || !createShelterMapLinkInput.trim() ? 'not-allowed' : 'pointer',
+                            whiteSpace: 'nowrap',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
+                        >
+                          {resolvingCreateShelterMapLink ? (
+                            <>
+                              <Loader2 size={13} className="animate-spin" />
+                              <span>Đang xử lý...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Navigation size={13} />
+                              <span>Ghim vị trí</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {createShelterMapLinkStatus && (
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            padding: '5px 8px',
+                            borderRadius: '5px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: createShelterMapLinkStatus.type === 'success' ? '#f0fdf4' : '#fef2f2',
+                            color: createShelterMapLinkStatus.type === 'success' ? '#166534' : '#991b1b',
+                            border: `1px solid ${createShelterMapLinkStatus.type === 'success' ? '#bbf7d0' : '#fecaca'}`,
+                          }}
+                        >
+                          {createShelterMapLinkStatus.type === 'success' ? (
+                            <CheckCircle2 size={12} style={{ flexShrink: 0 }} />
+                          ) : (
+                            <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                          )}
+                          <span>{createShelterMapLinkStatus.message}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tọa độ GPS */}
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', margin: 0 }}>
+                          Tọa độ GPS [Vĩ độ, Kinh độ]
+                        </label>
+                        <span style={{ fontSize: '11px', color: '#64748b' }}>
+                          Kéo ghim hoặc click trên bản đồ
+                        </span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div>
+                          <input
+                            type="number"
+                            step="0.00001"
+                            value={createShelterLat}
+                            onChange={(e) => {
+                              setCreateShelterLat(parseFloat(e.target.value) || 0);
+                              if (createShelterErrors.coordinates) {
+                                setCreateShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
+                              }
+                            }}
+                            title="Vĩ độ (Latitude)"
+                            style={{
+                              width: '100%',
+                              padding: '7px 10px',
+                              borderRadius: '6px',
+                              border: createShelterErrors.coordinates ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                              background: createShelterErrors.coordinates ? '#fff5f5' : '#ffffff',
+                              fontSize: '12.5px',
+                              color: '#0f172a',
+                              boxSizing: 'border-box',
+                              outline: 'none',
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <input
+                            type="number"
+                            step="0.00001"
+                            value={createShelterLng}
+                            onChange={(e) => {
+                              setCreateShelterLng(parseFloat(e.target.value) || 0);
+                              if (createShelterErrors.coordinates) {
+                                setCreateShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
+                              }
+                            }}
+                            title="Kinh độ (Longitude)"
+                            style={{
+                              width: '100%',
+                              padding: '7px 10px',
+                              borderRadius: '6px',
+                              border: createShelterErrors.coordinates ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                              background: createShelterErrors.coordinates ? '#fff5f5' : '#ffffff',
+                              fontSize: '12.5px',
+                              color: '#0f172a',
+                              boxSizing: 'border-box',
+                              outline: 'none',
+                            }}
+                          />
+                        </div>
+                      </div>
+                      {createShelterErrors.coordinates && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                          <span>{createShelterErrors.coordinates}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Bản đồ mini tương tác */}
+                    <div style={{ flex: 1, minHeight: '220px' }}>
+                      <ShelterMiniMap
+                        lat={createShelterLat}
+                        lng={createShelterLng}
+                        name={createShelterName || 'Vị trí điểm trú ẩn'}
+                        type={createShelterType}
+                        interactive={true}
+                        onLocationChange={(newLat, newLng) => {
+                          setCreateShelterLat(Number(newLat.toFixed(5)));
+                          setCreateShelterLng(Number(newLng.toFixed(5)));
+                          if (createShelterErrors.coordinates) {
+                            setCreateShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
+                          }
+                        }}
+                      />
+                    </div>
+
+                    {/* Ghi chú cơ sở vật chất / Hướng dẫn */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                        Ghi chú trang thiết bị &amp; Hướng dẫn tiếp cận
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={createShelterNotes}
+                        onChange={(e) => setCreateShelterNotes(e.target.value)}
+                        placeholder="Ví dụ: Có máy phát điện dự phòng, 2 bồn chứa nước sạch, phụ trách bởi Đ/c Minh..."
+                        style={{
+                          width: '100%',
+                          padding: '7px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '12.5px',
+                          color: '#0f172a',
+                          background: '#ffffff',
+                          boxSizing: 'border-box',
+                          resize: 'vertical',
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Modal Actions */}
+              <div
+                style={{
+                  padding: '12px 20px',
+                  borderTop: '1px solid #e2e8f0',
+                  background: '#f8fafc',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <button
+                  type="button"
+                  className="sos-btn-flat"
+                  disabled={submittingCreateShelter}
+                  onClick={() => setIsCreateShelterOpen(false)}
+                >
+                  Hủy bỏ
+                </button>
+
+                <button
+                  type="button"
+                  className="sos-btn-flat primary"
+                  disabled={submittingCreateShelter}
+                  onClick={handleSubmitCreateShelter}
+                  style={{
+                    padding: '7px 18px',
+                    backgroundColor: '#0284c7',
+                    color: '#ffffff',
+                    borderColor: '#0284c7',
+                  }}
+                >
+                  {submittingCreateShelter ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <CheckCircle2 size={14} />
+                  )}
+                  <span>Xác nhận tạo điểm trú ẩn</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* MODAL CHỈNH SỬA ĐIỂM TRÚ ẨN (2 CỘT TƯƠNG ĐỒNG VỚI HAZARD) */}
+        {/* ============================================================ */}
+        {editingShelter && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(15, 23, 42, 0.7)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1100,
+              padding: '16px',
+            }}
+            onClick={() => !submittingEditShelter && setEditingShelter(null)}
+          >
+            <div
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '12px',
+                width: '100%',
+                maxWidth: '960px',
+                maxHeight: '92vh',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                border: '1px solid #cbd5e1',
+                overflow: 'hidden',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header Modal */}
+              <div
+                style={{
+                  padding: '14px 20px',
+                  borderBottom: '1px solid #e2e8f0',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  background: '#f8fafc',
+                }}
+              >
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
+                    Chỉnh Sửa &amp; Cập Nhật Thông Tin Điểm Trú Ẩn
+                  </h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                    Cập nhật chuẩn hóa thông tin cơ sở, sức chứa và vị trí địa lý trên bản đồ tác chiến.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => !submittingEditShelter && setEditingShelter(null)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#64748b',
+                    padding: '4px',
+                  }}
+                  title="Đóng"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Body Form 2 Cột */}
+              <div
+                style={{
+                  padding: '18px 20px',
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                }}
+              >
+                {/* Thông báo lỗi nếu có */}
+                {editShelterErrors.general && (
+                  <div
+                    style={{
+                      background: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      borderRadius: '8px',
+                      padding: '10px 14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      color: '#b91c1c',
+                      fontSize: '12.5px',
+                      fontWeight: 500,
+                    }}
+                  >
+                    <AlertTriangle size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
+                    <span>{editShelterErrors.general}</span>
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+                    gap: '18px',
+                  }}
+                >
+                  {/* CỘT TRÁI */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {/* Tên cơ sở */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                        Tên điểm trú ẩn chuẩn hóa <span style={{ color: '#dc2626' }}>*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={editShelterName}
+                        onChange={(e) => {
+                          setEditShelterName(e.target.value);
+                          if (editShelterErrors.name) {
+                            setEditShelterErrors((prev) => ({ ...prev, name: undefined, general: undefined }));
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          border: editShelterErrors.name ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                          background: editShelterErrors.name ? '#fff5f5' : '#ffffff',
+                          fontSize: '13px',
+                          color: '#0f172a',
+                          boxSizing: 'border-box',
+                          outline: 'none',
+                        }}
+                      />
+                      {editShelterErrors.name && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                          <span>{editShelterErrors.name}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Phân loại cơ sở */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '6px' }}>
+                        Phân loại cơ sở an toàn <span style={{ color: '#dc2626' }}>*</span>
+                      </label>
+                      <div className="sos-hazard-type-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))' }}>
+                        {SHELTER_TYPE_CARDS.map((item) => {
+                          const isSelected = editShelterType === item.key;
+                          return (
+                            <button
+                              key={item.key}
+                              type="button"
+                              onClick={() => setEditShelterType(item.key as any)}
+                              className={`sos-hazard-type-card ${isSelected ? 'selected' : ''}`}
+                            >
+                              <div className="sos-hazard-type-card-icon">
+                                <ShelterTypeIcon
+                                  type={item.key}
+                                  size={24}
+                                  color={isSelected ? '#ffffff' : '#334155'}
+                                />
+                              </div>
+                              <span className="sos-hazard-type-card-label">{item.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Khu vực & Trạng thái */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                          Khu vực quản lý
+                        </label>
+                        <div
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            background: '#f8fafc',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            boxSizing: 'border-box',
+                            minHeight: '36px',
+                          }}
+                        >
+                          <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
+                            {accountAreaDisplayName}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                          Trạng thái hoạt động
+                        </label>
+                        <select
+                          value={editShelterStatus}
+                          onChange={(e) => setEditShelterStatus(e.target.value as any)}
+                          style={{
+                            width: '100%',
+                            padding: '8px 10px',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '12.5px',
+                            color: '#0f172a',
+                            background: '#ffffff',
+                            boxSizing: 'border-box',
+                          }}
+                        >
+                          <option value="ACTIVE">Sẵn sàng tiếp nhận (ACTIVE)</option>
+                          <option value="FULL">Đã đầy công suất (FULL)</option>
+                          <option value="MAINTENANCE">Bảo trì / Sửa chữa</option>
+                          <option value="INACTIVE">Tạm ngưng hoạt động</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Sức chứa tối đa & Đang lưu trú */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                          Sức chứa tối đa (người) <span style={{ color: '#dc2626' }}>*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={editShelterCapacity}
+                          onChange={(e) => {
+                            setEditShelterCapacity(parseInt(e.target.value, 10) || 0);
+                            if (editShelterErrors.capacity) {
+                              setEditShelterErrors((prev) => ({ ...prev, capacity: undefined, general: undefined }));
+                            }
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            borderRadius: '6px',
+                            border: editShelterErrors.capacity ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                            background: editShelterErrors.capacity ? '#fff5f5' : '#ffffff',
+                            fontSize: '13px',
+                            color: '#0f172a',
+                            boxSizing: 'border-box',
+                            outline: 'none',
+                          }}
+                        />
+                        {editShelterErrors.capacity && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                            <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                            <span>{editShelterErrors.capacity}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                          Đang lưu trú hiện tại
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={editShelterOccupancy}
+                          onChange={(e) => setEditShelterOccupancy(parseInt(e.target.value, 10) || 0)}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '13px',
+                            color: '#0f172a',
+                            background: '#ffffff',
+                            boxSizing: 'border-box',
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Địa chỉ cụ thể */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                        Địa chỉ cụ thể <span style={{ color: '#dc2626' }}>*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={editShelterAddress}
+                        onChange={(e) => {
+                          setEditShelterAddress(e.target.value);
+                          if (editShelterErrors.address) {
+                            setEditShelterErrors((prev) => ({ ...prev, address: undefined, general: undefined }));
+                          }
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          border: editShelterErrors.address ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                          background: editShelterErrors.address ? '#fff5f5' : '#ffffff',
+                          fontSize: '13px',
+                          color: '#0f172a',
+                          boxSizing: 'border-box',
+                          outline: 'none',
+                        }}
+                      />
+                      {editShelterErrors.address && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                          <span>{editShelterErrors.address}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* CỘT PHẢI */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {/* Link Google Maps */}
+                    <div
+                      style={{
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        padding: '10px 12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '7px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <label
+                          style={{
+                            fontSize: '12.5px',
+                            fontWeight: 600,
+                            color: '#1e293b',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            margin: 0,
+                          }}
+                        >
+                          <MapPin size={14} color="#0284c7" />
+                          <span>Link Google Map - Tọa độ</span>
+                        </label>
+                        <span style={{ fontSize: '11px', color: '#64748b' }}>
+                          Hỗ trợ cả link rút gọn
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <div style={{ position: 'relative', flex: 1 }}>
+                          <input
+                            type="text"
+                            value={editShelterMapLinkInput}
+                            onChange={(e) => {
+                              setEditShelterMapLinkInput(e.target.value);
+                              if (editShelterMapLinkStatus) setEditShelterMapLinkStatus(null);
+                            }}
+                            onPaste={(e) => {
+                              const pastedText = e.clipboardData.getData('text');
+                              if (
+                                pastedText &&
+                                (pastedText.includes('google') ||
+                                  pastedText.includes('goo.gl') ||
+                                  pastedText.includes('http') ||
+                                  pastedText.includes(',') ||
+                                  pastedText.includes('°'))
+                              ) {
+                                setTimeout(() => handleConvertEditMapLink(pastedText), 50);
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleConvertEditMapLink();
+                              }
+                            }}
+                            placeholder="Dán link Google Maps hoặc tọa độ..."
+                            style={{
+                              width: '100%',
+                              padding: '7px 10px',
+                              paddingRight: editShelterMapLinkInput ? '28px' : '10px',
+                              borderRadius: '6px',
+                              border: '1px solid #cbd5e1',
+                              fontSize: '12px',
+                              color: '#0f172a',
+                              background: '#ffffff',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                          {editShelterMapLinkInput && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditShelterMapLinkInput('');
+                                setEditShelterMapLinkStatus(null);
+                              }}
+                              style={{
+                                position: 'absolute',
+                                right: '6px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: 'none',
+                                border: 'none',
+                                color: '#94a3b8',
+                                cursor: 'pointer',
+                                padding: '2px',
+                                display: 'flex',
+                                alignItems: 'center',
+                              }}
+                              title="Xóa nội dung"
+                            >
+                              <X size={13} />
+                            </button>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleConvertEditMapLink()}
+                          disabled={resolvingEditShelterMapLink || !editShelterMapLinkInput.trim()}
+                          className="sos-btn-flat"
+                          style={{
+                            padding: '6px 12px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            background: resolvingEditShelterMapLink ? '#f1f5f9' : '#0284c7',
+                            color: resolvingEditShelterMapLink ? '#94a3b8' : '#ffffff',
+                            borderColor: resolvingEditShelterMapLink ? '#cbd5e1' : '#0284c7',
+                            cursor: resolvingEditShelterMapLink || !editShelterMapLinkInput.trim() ? 'not-allowed' : 'pointer',
+                            whiteSpace: 'nowrap',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
+                        >
+                          {resolvingEditShelterMapLink ? (
+                            <>
+                              <Loader2 size={13} className="animate-spin" />
+                              <span>Đang xử lý...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Navigation size={13} />
+                              <span>Ghim vị trí</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {editShelterMapLinkStatus && (
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            padding: '5px 8px',
+                            borderRadius: '5px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: editShelterMapLinkStatus.type === 'success' ? '#f0fdf4' : '#fef2f2',
+                            color: editShelterMapLinkStatus.type === 'success' ? '#166534' : '#991b1b',
+                            border: `1px solid ${editShelterMapLinkStatus.type === 'success' ? '#bbf7d0' : '#fecaca'}`,
+                          }}
+                        >
+                          {editShelterMapLinkStatus.type === 'success' ? (
+                            <CheckCircle2 size={12} style={{ flexShrink: 0 }} />
+                          ) : (
+                            <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                          )}
+                          <span>{editShelterMapLinkStatus.message}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Tọa độ GPS */}
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
+                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', margin: 0 }}>
+                          Tọa độ GPS [Vĩ độ, Kinh độ]
+                        </label>
+                        <span style={{ fontSize: '11px', color: '#64748b' }}>
+                          Kéo ghim hoặc click trên bản đồ
+                        </span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div>
+                          <input
+                            type="number"
+                            step="0.00001"
+                            value={editShelterLat}
+                            onChange={(e) => {
+                              setEditShelterLat(parseFloat(e.target.value) || 0);
+                              if (editShelterErrors.coordinates) {
+                                setEditShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
+                              }
+                            }}
+                            title="Vĩ độ (Latitude)"
+                            style={{
+                              width: '100%',
+                              padding: '7px 10px',
+                              borderRadius: '6px',
+                              border: editShelterErrors.coordinates ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                              background: editShelterErrors.coordinates ? '#fff5f5' : '#ffffff',
+                              fontSize: '12.5px',
+                              color: '#0f172a',
+                              boxSizing: 'border-box',
+                              outline: 'none',
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <input
+                            type="number"
+                            step="0.00001"
+                            value={editShelterLng}
+                            onChange={(e) => {
+                              setEditShelterLng(parseFloat(e.target.value) || 0);
+                              if (editShelterErrors.coordinates) {
+                                setEditShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
+                              }
+                            }}
+                            title="Kinh độ (Longitude)"
+                            style={{
+                              width: '100%',
+                              padding: '7px 10px',
+                              borderRadius: '6px',
+                              border: editShelterErrors.coordinates ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                              background: editShelterErrors.coordinates ? '#fff5f5' : '#ffffff',
+                              fontSize: '12.5px',
+                              color: '#0f172a',
+                              boxSizing: 'border-box',
+                              outline: 'none',
+                            }}
+                          />
+                        </div>
+                      </div>
+                      {editShelterErrors.coordinates && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                          <span>{editShelterErrors.coordinates}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Bản đồ mini tương tác */}
+                    <div style={{ flex: 1, minHeight: '220px' }}>
+                      <ShelterMiniMap
+                        lat={editShelterLat}
+                        lng={editShelterLng}
+                        name={editShelterName || 'Vị trí điểm trú ẩn'}
+                        type={editShelterType}
+                        interactive={true}
+                        onLocationChange={(newLat, newLng) => {
+                          setEditShelterLat(Number(newLat.toFixed(5)));
+                          setEditShelterLng(Number(newLng.toFixed(5)));
+                          if (editShelterErrors.coordinates) {
+                            setEditShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
+                          }
+                        }}
+                      />
+                    </div>
+
+                    {/* Ghi chú */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                        Ghi chú trang thiết bị &amp; Hướng dẫn tiếp cận
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={editShelterNotes}
+                        onChange={(e) => setEditShelterNotes(e.target.value)}
+                        placeholder="Ví dụ: Đã nâng cấp sức chứa và chuẩn bị 200 suất cứu trợ..."
+                        style={{
+                          width: '100%',
+                          padding: '7px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '12.5px',
+                          color: '#0f172a',
+                          background: '#ffffff',
+                          boxSizing: 'border-box',
+                          resize: 'vertical',
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Modal Actions */}
+              <div
+                style={{
+                  padding: '12px 20px',
+                  borderTop: '1px solid #e2e8f0',
+                  background: '#f8fafc',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <button
+                  type="button"
+                  className="sos-btn-flat"
+                  disabled={submittingEditShelter}
+                  onClick={() => setEditingShelter(null)}
+                >
+                  Hủy bỏ
+                </button>
+
+                <button
+                  type="button"
+                  className="sos-btn-flat primary"
+                  disabled={submittingEditShelter}
+                  onClick={handleSubmitEditShelter}
+                  style={{
+                    padding: '7px 18px',
+                    backgroundColor: '#0284c7',
+                    color: '#ffffff',
+                    borderColor: '#0284c7',
+                  }}
+                >
+                  {submittingEditShelter ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <CheckCircle2 size={14} />
+                  )}
+                  <span>Xác nhận cập nhật thông tin</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -2945,14 +6386,36 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
   if (activeKey === 'hazard_reports') {
     domainDService.syncFromStoredAuthUser();
     const authUserStr = typeof localStorage !== 'undefined' ? localStorage.getItem('sos_auth_user') : null;
-    const authUser = authUserStr ? JSON.parse(authUserStr) : null;
+    const authUser = user || (authUserStr ? JSON.parse(authUserStr) : null);
     const activeOfficer = domainDService.getActiveOfficer();
 
-    // 1. XÁC ĐỊNH ĐỊA BÀN PHÂN CÔNG QUẢN LÝ CỐ ĐỊNH (KHÔNG CHO PHÉP THAY ĐỔI)
+    // 1. XÁC ĐỊNH ĐỊA BÀN PHÂN CÔNG QUẢN LÝ CỐ ĐỊNH TỪ TÀI KHOẢN (KHÔNG CHO PHÉP THAY ĐỔI)
     const determineOfficerJurKey = (): string => {
+      const directAreaId = (user?.authority?.areaId || authUser?.authority?.areaId || '').toLowerCase();
+      if (directAreaId) {
+        if (directAreaId.includes('nhs') || directAreaId.includes('ngu_hanh_son')) return 'ngu_hanh_son';
+        if (directAreaId.includes('hc') || directAreaId.includes('hai_chau')) return 'hai_chau';
+        if (directAreaId.includes('st') || directAreaId.includes('son_tra')) return 'son_tra';
+        if (directAreaId.includes('tk') || directAreaId.includes('thanh_khe')) return 'thanh_khe';
+        if (directAreaId.includes('cl') || directAreaId.includes('cam_le')) return 'cam_le';
+        if (directAreaId.includes('lc') || directAreaId.includes('lien_chieu')) return 'lien_chieu';
+        if (directAreaId.includes('hv') || directAreaId.includes('hoa_vang')) return 'hoa_vang';
+        if (directAreaId.includes('hs') || directAreaId.includes('hoang_sa')) return 'hoang_sa';
+      }
+
+      const userAreaObj = areas.find((a) => a._id === (user?.authority?.areaId || authUser?.authority?.areaId));
+      const userAreaText = userAreaObj ? `${userAreaObj.name} ${userAreaObj.code || ''}` : '';
+
       const dept = (
+        (user?.authority?.areaName || '') + ' ' +
+        (user?.authority?.department || '') + ' ' +
+        (user?.authority?.position || '') + ' ' +
+        (user?.authority?.organizationName || '') + ' ' +
+        (authUser?.authority?.areaName || '') + ' ' +
         (authUser?.authority?.department || '') + ' ' +
         (authUser?.authority?.position || '') + ' ' +
+        (authUser?.authority?.organizationName || '') + ' ' +
+        userAreaText + ' ' +
         (activeOfficer?.jurisdictionAreaName || '') + ' ' +
         (activeOfficer?.districtName || '') + ' ' +
         (activeOfficer?.department || '')
@@ -2967,16 +6430,14 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
       if (dept.includes('hòa vang') || dept.includes('hoa vang')) return 'hoa_vang';
       if (dept.includes('hoàng sa') || dept.includes('hoang sa')) return 'hoang_sa';
 
-      // Fallback: nếu trong localStorage trước đó đã lưu key hợp lệ thì sử dụng, mặc định là Hải Châu
       const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('sos_authority_jurisdiction_key') : null;
       if (stored && JURISDICTION_CONFIGS[stored] && stored !== 'toan_thanh_pho') return stored;
-      return 'hai_chau';
+      return 'ngu_hanh_son';
     };
 
     const fixedJurKey = determineOfficerJurKey();
-    const fixedJurisdictionConfig = JURISDICTION_CONFIGS[fixedJurKey] || JURISDICTION_CONFIGS.hai_chau;
+    const fixedJurisdictionConfig = JURISDICTION_CONFIGS[fixedJurKey] || JURISDICTION_CONFIGS.ngu_hanh_son;
 
-    // Lưu lại key cố định này
     try {
       localStorage.setItem('sos_authority_jurisdiction_key', fixedJurKey);
     } catch {}
