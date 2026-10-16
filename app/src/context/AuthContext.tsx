@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { backendApi, UserProfile } from '../services/backendApi';
+import { backendApi, UserProfile } from '@/api';
 import {
   supabase,
   signInWithGoogleOAuth,
@@ -10,7 +10,8 @@ import {
 } from '../config/supabase';
 import { ENV, syncConfigFromBackend } from '../config/env';
 
-export type AuthMode = 'backend' | 'supabase' | 'hybrid';
+import type { AuthMode } from '@/types';
+export type { AuthMode };
 
 export interface AuthContextType {
   user: UserProfile | null;

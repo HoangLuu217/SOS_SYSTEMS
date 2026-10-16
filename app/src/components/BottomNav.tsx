@@ -9,7 +9,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export type TabName = 'home' | 'map' | 'sos' | 'news' | 'profile';
+import type { TabName } from '@/types';
+export type { TabName };
 
 interface TabItem {
   name: TabName;
