@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { backendApi } from './backendApi';
+import { backendApi } from '@/api';
 
 // Cấu hình cách hiển thị thông báo khi ứng dụng đang chạy ở foreground
 Notifications.setNotificationHandler({
@@ -22,17 +22,22 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
   try {
     // Thiết lập kênh thông báo ưu tiên cao nhất trên Android (Heads-up notification + Rung + Chuông)
     if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('emergency-alerts', {
-        name: 'Cảnh báo khẩn cấp & Tin tức SOS',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 500, 250, 500],
-        lightColor: '#EF4444',
-        sound: 'default',
-        enableVibrate: true,
-        showBadge: true,
-        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-        bypassDnd: true,
-      });
+      try {
+        await Notifications.setNotificationChannelAsync('emergency-alerts', {
+          name: 'Cảnh báo khẩn cấp & Tin tức SOS',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 500, 250, 500],
+          lightColor: '#EF4444',
+          sound: 'default',
+          enableVibrate: true,
+          showBadge: true,
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          bypassDnd: true,
+        });
+      } catch (channelErr) {
+        // Trong Expo Go từ SDK 53+, Android không hỗ trợ NotificationsChannelsProvider
+        console.log('ℹ️ [PushNotification] Bỏ qua thiết lập NotificationChannel (Expo Go environment)');
+      }
     }
 
     // Kiểm tra và xin quyền nhận thông báo
@@ -84,19 +89,23 @@ export async function triggerLocalNotification(options: {
   priority?: 'NORMAL' | 'HIGH' | 'CRITICAL' | string;
 }): Promise<void> {
   try {
-    // Đảm bảo kênh Android đã sẵn sàng trước khi bắn thông báo
+    // Đảm bảo kênh Android đã sẵn sàng trước khi bắn thông báo (nếu được hỗ trợ)
     if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('emergency-alerts', {
-        name: 'Cảnh báo khẩn cấp & Tin tức SOS',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 500, 250, 500],
-        lightColor: '#EF4444',
-        sound: 'default',
-        enableVibrate: true,
-        showBadge: true,
-        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-        bypassDnd: true,
-      });
+      try {
+        await Notifications.setNotificationChannelAsync('emergency-alerts', {
+          name: 'Cảnh báo khẩn cấp & Tin tức SOS',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 500, 250, 500],
+          lightColor: '#EF4444',
+          sound: 'default',
+          enableVibrate: true,
+          showBadge: true,
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          bypassDnd: true,
+        });
+      } catch (_) {
+        // Expo Go fallback
+      }
     }
 
     const notificationContent: any = {

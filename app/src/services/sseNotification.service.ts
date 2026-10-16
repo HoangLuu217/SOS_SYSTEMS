@@ -1,4 +1,5 @@
-import { backendApi, NotificationItem } from './backendApi';
+import { backendApi } from '@/api';
+import { NotificationItem } from '@/types';
 
 type NotificationListener = (item: NotificationItem) => void;
 type ConnectionListener = (connected: boolean) => void;
@@ -95,7 +96,6 @@ class SSENotificationService {
           processChunks();
         }
       };
-
 
       xhr.onerror = () => {
         if (this.xhr !== xhr) return;
