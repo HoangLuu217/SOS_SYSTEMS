@@ -1,24 +1,36 @@
 import { io, Socket } from 'socket.io-client';
+import type { ChatMessageItem, ChatSSEPayload } from '@/types/chat';
 
 let socket: Socket | null = null;
 
+const getSocketUrl = (): string => {
+  if (import.meta.env.VITE_BACKEND_URL) {
+    return import.meta.env.VITE_BACKEND_URL.replace(/\/+$/, '');
+  }
+  if (typeof window !== 'undefined') {
+    return window.location.port === '5173'
+      ? `http://${window.location.hostname}:5000`
+      : window.location.origin;
+  }
+  return 'http://127.0.0.1:5000';
+};
+
 /**
- * Lấy hoặc khởi tạo kết nối Socket.IO tới Backend
+ * Khởi tạo hoặc lấy kết nối Socket.IO duy nhất (Singleton) tới Backend
  */
 export const getSocket = (): Socket => {
   if (!socket) {
-    // Kết nối thông qua Vite proxy hoặc trực tiếp backend port 5000
-    const socketUrl =
-      typeof window !== 'undefined'
-        ? window.location.port === '5173'
-          ? `http://${window.location.hostname}:5000`
-          : window.location.origin
-        : 'http://127.0.0.1:5000';
+    const socketUrl = getSocketUrl();
 
     socket = io(socketUrl, {
       transports: ['websocket', 'polling'],
+      withCredentials: true,
+      autoConnect: true,
+      reconnection: true,
       reconnectionAttempts: 10,
-      reconnectionDelay: 2000,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
     });
 
     socket.on('connect', () => {
@@ -36,6 +48,10 @@ export const getSocket = (): Socket => {
 
   return socket;
 };
+
+// ==========================================
+// 1. CÁC HÀM XỬ LÝ SỰ KIỆN CỨU NẠN SOS
+// ==========================================
 
 /**
  * Đăng ký lắng nghe sự kiện có yêu cầu SOS mới gửi lên
@@ -78,3 +94,100 @@ export const onSosUpdated = (callback: (updatedSos: any) => void): (() => void) 
     s.off('sos:status_changed', handler);
   };
 };
+
+// ==========================================
+// 2. CÁC HÀM XỬ LÝ CHAT TÁC CHIẾN NỘI BỘ
+// ==========================================
+
+/**
+ * Tham gia vào phòng chat của một kênh
+ */
+export function joinChannelRoom(channel: string) {
+  const s = getSocket();
+  if (s.connected) {
+    s.emit('join_channel', channel);
+  } else {
+    s.once('connect', () => {
+      s.emit('join_channel', channel);
+    });
+  }
+}
+
+/**
+ * Rời khỏi phòng chat của một kênh
+ */
+export function leaveChannelRoom(channel: string) {
+  const s = getSocket();
+  if (s.connected) {
+    s.emit('leave_channel', channel);
+  }
+}
+
+/**
+ * Đăng ký ID người dùng để nhận tin nhắn trực tiếp
+ */
+export function registerUserSocket(userId: string) {
+  const s = getSocket();
+  if (s.connected) {
+    s.emit('register_user', userId);
+  } else {
+    s.once('connect', () => {
+      s.emit('register_user', userId);
+    });
+  }
+}
+
+/**
+ * Lắng nghe tin nhắn mới qua Socket.IO
+ */
+export function subscribeSocketChatEvents(
+  onEvent: (payload: ChatSSEPayload) => void,
+  onStatusChange?: (connected: boolean) => void
+): () => void {
+  const s = getSocket();
+
+  const handleConnect = () => {
+    if (onStatusChange) onStatusChange(true);
+  };
+
+  const handleDisconnect = () => {
+    if (onStatusChange) onStatusChange(false);
+  };
+
+  const handleConnectError = () => {
+    if (onStatusChange) onStatusChange(false);
+  };
+
+  const handleChatEvent = (payload: ChatSSEPayload) => {
+    if (payload && payload.action) {
+      onEvent(payload);
+    }
+  };
+
+  const handleNewMessage = (msg: ChatMessageItem) => {
+    if (msg) {
+      onEvent({
+        action: 'NEW_MESSAGE',
+        data: msg,
+      });
+    }
+  };
+
+  s.on('connect', handleConnect);
+  s.on('disconnect', handleDisconnect);
+  s.on('connect_error', handleConnectError);
+  s.on('chat_event', handleChatEvent);
+  s.on('new_message', handleNewMessage);
+
+  if (onStatusChange) {
+    onStatusChange(s.connected);
+  }
+
+  return () => {
+    s.off('connect', handleConnect);
+    s.off('disconnect', handleDisconnect);
+    s.off('connect_error', handleConnectError);
+    s.off('chat_event', handleChatEvent);
+    s.off('new_message', handleNewMessage);
+  };
+}

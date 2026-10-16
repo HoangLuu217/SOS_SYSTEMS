@@ -1,4 +1,4 @@
-import { resolveMapLink } from '../services/api';
+import { resolveMapLink } from '@/api';
 
 export interface ParsedMapLocation {
   lat: number;

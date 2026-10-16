@@ -1,5 +1,5 @@
-import type { User } from '../types/auth';
-import type { NavItemKey } from '../components/Sidebar';
+import type { User } from '@/types/auth';
+import type { NavItemKey } from '@/components/layout';
 
 export const getRolePrefix = (user: User | null): '/authority' | '/admin' => {
   if (!user) {

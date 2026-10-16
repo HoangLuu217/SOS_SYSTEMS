@@ -1,0 +1,83 @@
+/* ==========================================================================
+   SAFE LOCATIONS & SHELTERS VISUALS
+   ========================================================================== */
+/* SHELTER PROGRESS & VISUALS */
+.sos-occupancy-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 140px;
+}
+
+.sos-occupancy-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sos-occupancy-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.sos-occupancy-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.sos-occupancy-bar-fill.safe {
+  background: #22c55e;
+}
+
+.sos-occupancy-bar-fill.warning {
+  background: #f59e0b;
+}
+
+.sos-occupancy-bar-fill.full {
+  background: #ef4444;
+}
+
+/* LIGHT THEME OVERRIDES FOR NEW COMPONENTS */
+[data-theme="light"] .sos-authority-locality-banner {
+  background: linear-gradient(135deg, #fef2f2, #fff1f2);
+  border: 1px solid #fecaca;
+}
+
+[data-theme="light"] .sos-authority-locality-title {
+  color: #dc2626;
+}
+
+[data-theme="light"] .sos-authority-locality-desc {
+  color: #475569;
+}
+
+[data-theme="light"] .sos-authority-locality-badge {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
+[data-theme="light"] .sos-quick-template-btn {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-quick-template-btn:hover {
+  background: #fff1f2;
+  border-color: #fca5a5;
+}
+
+[data-theme="light"] .sos-quick-template-snippet {
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-occupancy-bar-bg {
+  background: #e2e8f0;
+}
+

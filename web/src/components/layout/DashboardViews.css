@@ -1,0 +1,681 @@
+/* ==========================================================================
+   SHARED DASHBOARD LAYOUT & UI PRIMITIVES
+   Extracted domain-specific styles into src/features/{sos,hazards,settings,alerts,shelters}/
+   ========================================================================== */
+.sos-views-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* CARDS & PANELS */
+.sos-view-card {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 20px;
+  backdrop-filter: blur(8px);
+}
+
+.sos-view-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.sos-view-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* STATS GRID */
+.sos-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.sos-stat-box {
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.sos-stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sos-stat-icon.red {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.sos-stat-icon.blue {
+  background: rgba(2, 132, 199, 0.15);
+  color: #38bdf8;
+}
+
+.sos-stat-icon.green {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.sos-stat-icon.yellow {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.sos-stat-icon.purple {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+}
+
+.sos-stat-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.sos-stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: #f8fafc;
+  line-height: 1.2;
+}
+
+.sos-stat-label {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+/* DATA TABLE */
+.sos-table-wrapper {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sos-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+
+.sos-table th {
+  background: rgba(30, 41, 59, 0.7);
+  padding: 12px 14px;
+  color: #94a3b8;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+}
+
+.sos-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: #e2e8f0;
+}
+
+.sos-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* STATUS BADGES */
+.sos-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sos-badge.critical {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.sos-badge.high {
+  background: rgba(249, 115, 22, 0.2);
+  color: #fb923c;
+  border: 1px solid rgba(249, 115, 22, 0.4);
+}
+
+.sos-badge.medium {
+  background: rgba(234, 179, 8, 0.2);
+  color: #facc15;
+  border: 1px solid rgba(234, 179, 8, 0.4);
+}
+
+.sos-badge.verified {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+
+.sos-badge.active {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.sos-badge.pending {
+  background: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+/* ACTION BUTTONS */
+.sos-btn-action {
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sos-btn-action.primary {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.sos-btn-action.primary:hover {
+  background: #1d4ed8;
+}
+
+.sos-btn-action.success {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.sos-btn-action.success:hover {
+  background: #22c55e;
+  color: #ffffff;
+}
+
+.sos-btn-action.danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.sos-btn-action.danger:hover {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+/* ==========================================================================
+   TACTICAL AUDIT & OPERATION TIMELINE (NHẬT KÝ TÁC CHIẾN)
+/* Audit Logs & Timeline styles have been extracted to components/audit/AuditLogsView.css */
+
+
+/* FORM CONTROLS & MODALS */
+.sos-form-label {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.sos-form-input,
+.sos-form-select,
+.sos-form-textarea {
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.18s ease;
+}
+
+.sos-form-input:focus,
+.sos-form-select:focus,
+.sos-form-textarea:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+.sos-btn-refresh {
+  background: #1e293b;
+  color: #f1f5f9;
+  border: 1px solid #475569;
+}
+
+.sos-btn-refresh:hover {
+  background: #334155;
+  color: #ffffff;
+}
+
+.sos-modal-card {
+  background: #0f172a;
+  border: 1px solid #334155;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.sos-modal-title {
+  color: #f8fafc;
+}
+
+/* ============================================================
+   LIGHT THEME SYNCHRONIZATION FOR ALL DASHBOARD VIEWS
+   ============================================================ */
+[data-theme="light"] .sos-view-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .sos-view-card-header {
+  border-bottom: 1px solid #f1f5f9;
+}
+
+[data-theme="light"] .sos-view-card-title {
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-stat-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .sos-stat-value {
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-stat-label {
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-table-wrapper {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+[data-theme="light"] .sos-table th {
+  background: #f8fafc;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+[data-theme="light"] .sos-table td {
+  color: #1e293b;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+[data-theme="light"] .sos-table tr:hover td {
+  background: #f8fafc;
+}
+
+[data-theme="light"] .sos-form-label {
+  color: #475569;
+}
+
+[data-theme="light"] .sos-form-input,
+[data-theme="light"] .sos-form-select,
+[data-theme="light"] .sos-form-textarea {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-form-input:focus,
+[data-theme="light"] .sos-form-select:focus,
+[data-theme="light"] .sos-form-textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+[data-theme="light"] .sos-btn-refresh {
+  background: #ffffff;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+[data-theme="light"] .sos-btn-refresh:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-modal-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .sos-modal-title {
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-audit-stat-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .sos-audit-stat-value {
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-audit-stat-label {
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-audit-search-input {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #0f172a;
+  box-shadow: none;
+  outline: none;
+}
+
+[data-theme="light"] .sos-audit-search-input:focus {
+  border-color: #94a3b8;
+  box-shadow: none;
+  outline: none;
+  background: #ffffff;
+}
+
+[data-theme="light"] .sos-audit-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .sos-audit-card:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .sos-audit-node {
+  background: #ffffff;
+}
+
+[data-theme="light"] .sos-audit-actor-name {
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-audit-actor-sub {
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-audit-time-badge {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-audit-action-text {
+  color: #0284c7;
+}
+
+[data-theme="light"] .sos-audit-entity-tag {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+[data-theme="light"] .sos-audit-meta-grid {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme="light"] .sos-audit-meta-key {
+  color: #64748b;
+}
+
+[data-theme="light"] .sos-audit-meta-val {
+  color: #0f172a;
+}
+
+[data-theme="light"] .sos-timeline-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+[data-theme="light"] .sos-timeline-text {
+  color: #1e293b;
+}
+
+[data-theme="light"] .sos-timeline-time {
+  color: #64748b;
+}
+
+
+[data-theme="light"] .sos-badge.pending {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+}
+
+[data-theme="light"] .sos-badge.verified {
+  background: #e0f2fe;
+  color: #0284c7;
+  border: 1px solid #bae6fd;
+}
+
+[data-theme="light"] .sos-badge.active {
+  background: #dcfce7;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+
+/* ==========================================================================
+   FILTER PILLS & TABS (SHARED)
+   ========================================================================== */
+/* ==========================================================================
+   FILTER PILLS & TABS
+   ========================================================================== */
+.sos-btn-filter-pill {
+  padding: 5px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.6);
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sos-btn-filter-pill:hover {
+  background: rgba(30, 41, 59, 0.8);
+  color: #f1f5f9;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.sos-btn-filter-pill.active {
+  background: #1e293b;
+  color: #ffffff;
+  border-color: #334155;
+  box-shadow: none;
+}
+
+.sos-btn-filter-pill.active-green,
+.sos-btn-filter-pill.active-red,
+.sos-btn-filter-pill.active-yellow,
+.sos-btn-filter-pill.active-blue {
+  background: #1e293b;
+  color: #ffffff;
+  border-color: #334155;
+  box-shadow: none;
+}
+
+
+/* ==========================================================================
+   PAGE-SPECIFIC THEME ISOLATION (CHỈNH SÁNG 6 TRANG, CÒN LẠI GIỮ TỐI)
+   ========================================================================== */
+/* ============================================================
+   PAGE-SPECIFIC THEME ISOLATION (CHỈNH SÁNG 6 TRANG, CÒN LẠI GIỮ TỐI)
+   1. Các trang SÁNG dễ nhìn: Điều phối, Đội cứu hộ, Phương tiện, Xác minh cứu nạn, Cán bộ tổ chức, Khu vực hành chính
+   2. Các trang còn lại: Trả lại giao diện màu TỐI chuẩn tác chiến
+   ============================================================ */
+
+/* --- 1. SÁNG CHO 6 TRANG QUẢN TRỊ NGHIỆP VỤ --- */
+.sos-main-content.sos-page-theme-light {
+  background-color: #f8fafc !important;
+}
+
+.sos-main-content.sos-page-theme-light .sos-main-header {
+  background: #ffffff !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03) !important;
+}
+
+.sos-main-content.sos-page-theme-light .sos-page-title {
+  color: #0f172a !important;
+}
+
+.sos-main-content.sos-page-theme-light .sos-page-desc {
+  color: #64748b !important;
+}
+
+.sos-light-view,
+.sos-page-theme-light .sos-views-container {
+  color: #0f172a;
+}
+
+.sos-light-view .sos-view-card,
+.sos-page-theme-light .sos-view-card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05) !important;
+  color: #0f172a !important;
+}
+
+.sos-light-view .sos-view-card-header,
+.sos-page-theme-light .sos-view-card-header {
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.sos-light-view .sos-view-card-title,
+.sos-page-theme-light .sos-view-card-title {
+  color: #0f172a !important;
+}
+
+.sos-light-view .sos-stat-box,
+.sos-page-theme-light .sos-stat-box {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+.sos-light-view .sos-stat-value,
+.sos-page-theme-light .sos-stat-value {
+  color: #0f172a !important;
+}
+
+.sos-light-view .sos-stat-label,
+.sos-page-theme-light .sos-stat-label {
+  color: #64748b !important;
+}
+
+.sos-light-view .sos-table-wrapper,
+.sos-page-theme-light .sos-table-wrapper {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+}
+
+.sos-light-view .sos-table th,
+.sos-page-theme-light .sos-table th {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.sos-light-view .sos-table td,
+.sos-page-theme-light .sos-table td {
+  color: #1e293b !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.sos-light-view .sos-table tr:hover td,
+.sos-page-theme-light .sos-table tr:hover td {
+  background: #f8fafc !important;
+}
+
+.sos-light-view .sos-form-label,
+.sos-page-theme-light .sos-form-label {
+  color: #475569 !important;
+}
+
+.sos-light-view .sos-form-input,
+.sos-light-view .sos-form-select,
+.sos-light-view .sos-form-textarea,
+.sos-page-theme-light .sos-form-input,
+.sos-page-theme-light .sos-form-select,
+.sos-page-theme-light .sos-form-textarea {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.sos-light-view .sos-btn-refresh,
+.sos-page-theme-light .sos-btn-refresh {
+  background: #ffffff !important;
+  color: #475569 !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+.sos-light-view .sos-btn-refresh:hover,
+.sos-page-theme-light .sos-btn-refresh:hover {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+.sos-light-view .sos-btn-filter-pill,
+.sos-page-theme-light .sos-btn-filter-pill {
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #475569 !important;
+}
+
+.sos-light-view .sos-btn-filter-pill:hover,
+.sos-page-theme-light .sos-btn-filter-pill:hover {
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+.sos-light-view .sos-btn-filter-pill.active-blue,
+.sos-page-theme-light .sos-btn-filter-pill.active-blue {
+  background: #e0f2fe !important;
+  color: #0284c7 !important;
+  border-color: #bae6fd !important;
+}
+

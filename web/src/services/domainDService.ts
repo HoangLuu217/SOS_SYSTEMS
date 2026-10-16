@@ -8,7 +8,7 @@ import type {
   SosAssignment,
   AssignmentStatus,
   GeoJsonPolygon,
-} from '../types/domainD';
+} from '@/types/domainD';
 import {
   INITIAL_AREAS,
   INITIAL_AUTHORITIES,
@@ -17,9 +17,9 @@ import {
   INITIAL_VEHICLES,
   INITIAL_ASSIGNMENTS,
   SAMPLE_OFFICERS,
-} from './mockData';
+} from '@/constants/mockData';
 import { fetchGeoapifyBoundaries, GEOAPIFY_CENTROIDS } from './geoapifyBoundariesService';
-import { fetchAreaBoundary } from './api';
+import { fetchAreaBoundary } from '@/api';
 
 // Storage keys (v25 with all 15 official merged Da Nang wards & communes from user's API)
 const STORAGE_AREAS = 'rescuesos_areas_v25_all_15_official_merged_danang_wards';
