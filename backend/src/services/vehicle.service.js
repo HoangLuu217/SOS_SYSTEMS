@@ -51,7 +51,14 @@ class VehicleService {
 
     const [vehicles, total] = await Promise.all([
       Vehicle.find(filter)
-        .populate('teamId', 'name type areaId status')
+        .populate({
+          path: 'teamId',
+          select: 'name type areaId status leaderId',
+          populate: [
+            { path: 'leaderId', select: 'fullName phone email' },
+            { path: 'areaId', select: 'name code' },
+          ],
+        })
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),

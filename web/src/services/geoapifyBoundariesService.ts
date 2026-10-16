@@ -1,6 +1,6 @@
-import type { AdministrativeArea, GeoJsonPolygon } from '../types/domainD';
-import { GEOAPIFY_PRELOADED_FEATURES } from './geoapifyBaseline';
-import { syncAdministrativeAreasToBackend } from './api';
+import type { AdministrativeArea, GeoJsonPolygon } from '@/types/domainD';
+import { GEOAPIFY_PRELOADED_FEATURES } from '@/constants/geoapifyBaseline';
+import { syncAdministrativeAreasToBackend } from '@/api';
 
 export const GEOAPIFY_BOUNDARIES_URL =
   'https://api.geoapify.com/v1/boundaries/consists-of?id=51ce209969560e5b405949be124889113040f00101f9015adc1c0000000000c002089203185468c3a06e68207068e1bb9120c490c3a0204ee1bab56e67&boundary=administrative&sublevel=1&geometry=geometry_1000&lang=vi&apiKey=3383e3ba2267489985bbe6d9bf7aa05d';

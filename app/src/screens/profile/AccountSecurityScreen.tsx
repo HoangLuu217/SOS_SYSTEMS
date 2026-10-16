@@ -17,7 +17,7 @@ import { PROFILE_THEME } from './theme';
 import { useAuth } from '../../context/AuthContext';
 import { backendApi } from '../../services/backendApi';
 import { ForgotPasswordModal } from '../ForgotPasswordModal';
-import { sendPhoneOtpFirebase, verifyPhoneOtpFirebase } from '../../services/phoneAuthService';
+import { sendPhoneOtp, verifyPhoneOtp } from '../../services/phoneAuthService';
 
 interface AccountSecurityScreenProps {
   onBack: () => void;
@@ -37,7 +37,7 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
     supabaseUser?.identities?.some((id: any) => id.provider === 'google')
   );
 
-  // States cho tính năng xác thực Số điện thoại (Firebase)
+  // States cho tính năng xác thực Số điện thoại (SMS OTP)
   const [phoneInput, setPhoneInput] = useState(user?.phone || '');
   const [phoneOtpCode, setPhoneOtpCode] = useState('');
   const [phoneSessionInfo, setPhoneSessionInfo] = useState('');
@@ -94,7 +94,7 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
     }
   }, [user?.phone, isEditingPhone]);
 
-  // Xử lý gửi mã xác thực SMS OTP qua Firebase
+  // Xử lý gửi mã xác thực SMS OTP qua Backend Gateway
   const handleSendPhoneOtp = async () => {
     setPhoneErrorMsg(null);
     setPhoneSuccessMsg(null);
@@ -112,7 +112,7 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
 
     setIsSendingPhoneOtp(true);
     try {
-      const res = await sendPhoneOtpFirebase(cleanPhone);
+      const res = await sendPhoneOtp(cleanPhone);
       if (res.success && res.sessionInfo) {
         setPhoneSessionInfo(res.sessionInfo);
         setPhoneOtpSent(true);
@@ -140,7 +140,7 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
 
     setIsVerifyingPhoneOtp(true);
     try {
-      const verifyRes = await verifyPhoneOtpFirebase(phoneSessionInfo, cleanCode);
+      const verifyRes = await verifyPhoneOtp(phoneSessionInfo, cleanCode);
       if (!verifyRes.success) {
         setPhoneErrorMsg(verifyRes.message || 'Mã OTP không chính xác hoặc đã hết hạn.');
         setIsVerifyingPhoneOtp(false);

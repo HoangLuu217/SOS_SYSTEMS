@@ -1,4 +1,5 @@
 const administrativeAreaService = require('../services/administrativeArea.service');
+const auditService = require('../services/audit.service');
 const { sendSuccess } = require('../utils/apiResponse');
 
 class AdministrativeAreaController {
@@ -8,6 +9,16 @@ class AdministrativeAreaController {
   async createArea(req, res, next) {
     try {
       const area = await administrativeAreaService.createArea(req.body);
+
+      await auditService.log({
+        actorId: req.user?._id || null,
+        actorRole: req.user?.roles?.[0] || 'ADMIN',
+        action: 'ADMIN_CREATE_AREA',
+        entityType: 'AdministrativeArea',
+        entityId: area._id,
+        metadata: { name: area.name, code: area.code, level: area.level },
+      });
+
       return sendSuccess(res, 201, 'Tạo khu vực hành chính thành công', area);
     } catch (error) {
       next(error);
@@ -44,6 +55,16 @@ class AdministrativeAreaController {
   async updateArea(req, res, next) {
     try {
       const updatedArea = await administrativeAreaService.updateArea(req.params.id, req.body);
+
+      await auditService.log({
+        actorId: req.user?._id || null,
+        actorRole: req.user?.roles?.[0] || 'ADMIN',
+        action: 'ADMIN_UPDATE_AREA',
+        entityType: 'AdministrativeArea',
+        entityId: req.params.id,
+        metadata: { updatedFields: Object.keys(req.body) },
+      });
+
       return sendSuccess(res, 200, 'Cập nhật khu vực hành chính thành công', updatedArea);
     } catch (error) {
       next(error);
@@ -56,7 +77,37 @@ class AdministrativeAreaController {
   async syncFromApi(req, res, next) {
     try {
       const result = await administrativeAreaService.syncAreasFromApi(req.body);
+
+      await auditService.log({
+        actorId: req.user?._id || null,
+        actorRole: req.user?.roles?.[0] || 'ADMIN',
+        action: 'ADMIN_SYNC_AREAS',
+        entityType: 'AdministrativeArea',
+        metadata: { resultSummary: result },
+      });
+
       return sendSuccess(res, 200, 'Đồng bộ khu vực hành chính từ API thành công', result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /administrative-areas/boundary
+   */
+  async getAreaBoundary(req, res, next) {
+    try {
+      const { areaId, name, province, district } = req.query;
+      const data = await administrativeAreaService.getBoundaryForArea({
+        areaId,
+        name,
+        province,
+        district,
+      });
+      if (!data) {
+        return sendSuccess(res, 200, 'Không tìm thấy ranh giới cho khu vực này', null);
+      }
+      return sendSuccess(res, 200, 'Lấy ranh giới khu vực thành công', data);
     } catch (error) {
       next(error);
     }

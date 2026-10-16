@@ -3,21 +3,43 @@ const { Server } = require('socket.io');
 let io = null;
 
 /**
- * Khởi tạo Socket.IO gắn vào HTTP Server
+ * Khởi tạo Socket.IO Server gắn vào HTTP Server
  * @param {import('http').Server} httpServer
  */
 const initSocket = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
-      origin: '*', // Hỗ trợ kết nối từ Web (localhost:5173), Mobile App (Expo) và LAN
+      origin: '*', // Hỗ trợ kết nối từ Web, Mobile App và LAN
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
       credentials: true,
     },
     transports: ['websocket', 'polling'],
+    pingTimeout: 60000,
+    pingInterval: 25000,
   });
 
   io.on('connection', (socket) => {
     console.log(`🔌 [Socket.IO] Thiết bị kết nối mới: ${socket.id}`);
+
+    // Cán bộ / Admin tham gia phòng chat theo kênh
+    socket.on('join_channel', (channel) => {
+      if (channel) {
+        socket.join(channel);
+      }
+    });
+
+    socket.on('leave_channel', (channel) => {
+      if (channel) {
+        socket.leave(channel);
+      }
+    });
+
+    // Định danh người dùng để nhận tin nhắn trực tiếp
+    socket.on('register_user', (userId) => {
+      if (userId) {
+        socket.join(`user_${userId}`);
+      }
+    });
 
     // Cho phép client join vào room khu vực (nếu có lọc theo xã/phường)
     socket.on('join:area', (areaId) => {

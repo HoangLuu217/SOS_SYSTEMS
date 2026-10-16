@@ -7,7 +7,8 @@ import type {
   Vehicle,
   SosAssignment,
   AssignmentStatus,
-} from '../types/domainD';
+  GeoJsonPolygon,
+} from '@/types/domainD';
 import {
   INITIAL_AREAS,
   INITIAL_AUTHORITIES,
@@ -16,8 +17,9 @@ import {
   INITIAL_VEHICLES,
   INITIAL_ASSIGNMENTS,
   SAMPLE_OFFICERS,
-} from './mockData';
-import { fetchGeoapifyBoundaries } from './geoapifyBoundariesService';
+} from '@/constants/mockData';
+import { fetchGeoapifyBoundaries, GEOAPIFY_CENTROIDS } from './geoapifyBoundariesService';
+import { fetchAreaBoundary } from '@/api';
 
 // Storage keys (v25 with all 15 official merged Da Nang wards & communes from user's API)
 const STORAGE_AREAS = 'rescuesos_areas_v25_all_15_official_merged_danang_wards';
@@ -557,6 +559,11 @@ class DomainDService {
 
     const storedJurKey = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_JURISDICTION_KEY) : null;
 
+    // Detect province/city from authority.department (ví dụ: "Ban Chỉ Huy PCTT Phường Cầu Giấy (Thành phố Hà Nội)")
+    const deptStr = String(user.authority?.department || '');
+    const deptCityMatch = deptStr.match(/\((.*?)\)/);
+    const detectedCity = deptCityMatch ? deptCityMatch[1].trim() : (user.authority?.cityName || user.authority?.districtName || '');
+
     // Check if matching officer already exists
     const matched = this.officers.find(
       (o) =>
@@ -572,15 +579,10 @@ class DomainDService {
         matched.jurisdictionAreaId = cfg.areaId;
         matched.jurisdictionAreaName = cfg.name;
         matched.districtName = cfg.district;
-      } else if (user.authority?.areaId) {
-        const directArea = this.areas.find(
-          (a) =>
-            a.id === user.authority.areaId ||
-            a.code === user.authority.areaId ||
-            (user.authority.areaName && a.name.toLowerCase().includes(user.authority.areaName.toLowerCase()))
-        );
-        matched.jurisdictionAreaId = directArea ? directArea.id : user.authority.areaId;
-        matched.jurisdictionAreaName = directArea ? directArea.name : (user.authority.areaName || 'Khu vực quản lý');
+      } else if (user.authority?.areaId || user.authority?.areaName) {
+        matched.jurisdictionAreaId = String(user.authority.areaId || matched.jurisdictionAreaId);
+        matched.jurisdictionAreaName = user.authority.areaName || matched.jurisdictionAreaName;
+        if (detectedCity) matched.districtName = detectedCity;
       }
       this.activeOfficerId = matched.id;
       this.save(STORAGE_ACTIVE_OFFICER, matched.id);
@@ -588,7 +590,7 @@ class DomainDService {
     }
 
     // Determine managed area from stored key or user authority department/position
-    const dept = (user.authority?.department || '').toLowerCase();
+    const dept = deptStr.toLowerCase();
     const pos = (user.authority?.position || '').toLowerCase();
 
     let jurKey = storedJurKey && JURISDICTION_CONFIGS[storedJurKey] ? storedJurKey : '';
@@ -613,15 +615,14 @@ class DomainDService {
       } else if (dept.includes('hoàng sa') || pos.includes('hoàng sa')) {
         jurKey = 'hoang_sa';
       } else {
-        // Mặc định địa bàn Ngũ Hành Sơn (nơi tiếp nhận các tin báo đóng góp từ App)
         jurKey = 'ngu_hanh_son';
       }
     }
 
     const cfg = JURISDICTION_CONFIGS[jurKey] || JURISDICTION_CONFIGS.ngu_hanh_son;
-    const areaId = cfg.areaId;
-    const areaName = cfg.name;
-    const districtName = cfg.district;
+    const finalAreaId = user.authority?.areaId ? String(user.authority.areaId) : cfg.areaId;
+    const finalAreaName = user.authority?.areaName || cfg.name;
+    const finalDistrictName = detectedCity || cfg.district;
 
     const newOfficer: AuthorityOfficer = {
       id: `off-${Date.now()}`,
@@ -630,16 +631,99 @@ class DomainDService {
       email: user.email || '',
       phone: user.phone || '',
       position: user.authority?.position || 'Cán bộ Chỉ huy Địa bàn',
-      department: user.authority?.department || 'UBND Phường',
-      jurisdictionAreaId: areaId,
-      jurisdictionAreaName: areaName,
-      districtName: districtName,
+      department: user.authority?.department || `Ban Chỉ Huy PCTT ${finalAreaName}`,
+      jurisdictionAreaId: finalAreaId,
+      jurisdictionAreaName: finalAreaName,
+      districtName: finalDistrictName,
     };
 
     this.officers.unshift(newOfficer);
     this.activeOfficerId = newOfficer.id;
     this.save(STORAGE_ACTIVE_OFFICER, newOfficer.id);
     return newOfficer;
+  }
+
+  /**
+   * Tự động kiểm tra và tải ranh giới GeoJSON boundary cho địa bàn của cán bộ quản lý
+   * (Đặc biệt dành cho các đơn vị ngoài Đà Nẵng như Hà Nội, TP.HCM, các tỉnh thành khác)
+   */
+  async loadBoundaryForOfficer(officer: AuthorityOfficer): Promise<AdministrativeArea | null> {
+    if (!officer || !officer.jurisdictionAreaId) return null;
+
+    let area = this.areas.find(
+      (a) =>
+        a.id === officer.jurisdictionAreaId ||
+        a.code === officer.jurisdictionAreaId ||
+        (officer.jurisdictionAreaName &&
+          a.name.toLowerCase().includes(officer.jurisdictionAreaName.replace(/^(phường|xã)\s+/i, '').toLowerCase()))
+    );
+
+    if (!area) {
+      area = {
+        id: officer.jurisdictionAreaId,
+        name: officer.jurisdictionAreaName || 'Địa Bàn Phụ Trách',
+        code: `WARD-${officer.jurisdictionAreaId.slice(-6)}`,
+        type: 'WARD',
+        parentId: null,
+        status: 'ACTIVE',
+        boundaryRef: officer.jurisdictionAreaId,
+        areaKm2: 8,
+        population: 30000,
+        activeRescueTeams: 3,
+        assignedAuthorityId: 'auth-default',
+        assignedAuthorityName: officer.department,
+      };
+      this.areas.push(area);
+    }
+
+    if (area.boundary && Array.isArray(area.boundary.coordinates) && area.boundary.coordinates.length > 0) {
+      this.cacheAreaCentroid(officer.jurisdictionAreaId, area);
+      return area;
+    }
+
+    try {
+      const res = await fetchAreaBoundary({
+        areaId: officer.jurisdictionAreaId,
+        name: officer.jurisdictionAreaName,
+        province: officer.districtName,
+      });
+
+      if (res.success && res.data && res.data.boundary) {
+        area.boundary = res.data.boundary as GeoJsonPolygon;
+        area.id = officer.jurisdictionAreaId;
+        area.name = res.data.name || officer.jurisdictionAreaName;
+        this.save(STORAGE_AREAS, this.areas);
+        this.cacheAreaCentroid(officer.jurisdictionAreaId, area);
+        return area;
+      }
+    } catch (err) {
+      console.warn('Lỗi load boundary cho cán bộ:', err);
+    }
+
+    return area;
+  }
+
+  private cacheAreaCentroid(areaId: string, area: AdministrativeArea) {
+    if (!area.boundary?.coordinates) return;
+    try {
+      const coords: number[][] =
+        area.boundary.type === 'MultiPolygon'
+          ? (area.boundary.coordinates as number[][][][])[0][0]
+          : (area.boundary.coordinates as number[][][])[0];
+      if (coords && coords.length > 0) {
+        let sumLng = 0;
+        let sumLat = 0;
+        for (const [lng, lat] of coords) {
+          sumLng += lng;
+          sumLat += lat;
+        }
+        const centroid: [number, number] = [sumLng / coords.length, sumLat / coords.length];
+        GEOAPIFY_CENTROIDS[areaId] = centroid;
+        GEOAPIFY_CENTROIDS[area.id] = centroid;
+      }
+    } catch {
+      // ignore
+    }
   }
 
   resetAll() {

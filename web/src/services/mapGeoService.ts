@@ -1,6 +1,6 @@
 import type { FeatureCollection, Feature } from 'geojson';
-import type { AdministrativeArea, SosRequest, SosAssignment, AuthorityOfficer } from '../types/domainD';
-import { getRegionColor } from './geoapifyBoundariesService';
+import type { AdministrativeArea, SosRequest, SosAssignment, AuthorityOfficer } from '@/types/domainD';
+import { getRegionColor, GEOAPIFY_CENTROIDS } from './geoapifyBoundariesService';
 
 // Tinh chỉnh apistyle chuyên dụng cho bản đồ cứu hộ & phòng chống thiên tai:
 // - ẨN các địa điểm thương mại không cần thiết: quán cafe, quán ăn, nhà hàng, shop bán lẻ (s.t:33|p.v:off)
@@ -485,13 +485,18 @@ export function isSosInOfficerJurisdiction(
     return false;
   }
 
+  const officerAreaId = officer.jurisdictionAreaId;
+  // If ward ID or district ID explicitly matches officer's area, it directly belongs to this jurisdiction
+  if (officerAreaId && (sos.wardId === officerAreaId || sos.districtId === officerAreaId)) {
+    return true;
+  }
+
   // 1. Authoritative GIS spatial check: If boundary polygon is defined, coordinates MUST be inside it
   if (managedArea && managedArea.boundary && managedArea.boundary.coordinates) {
     return isPointInAreaBoundary(sos.coordinates, managedArea);
   }
 
   // 2. Fallback if polygon boundary is not yet loaded: check administrative ward ID and name
-  const officerAreaId = officer.jurisdictionAreaId;
   const wardKeyword = officer.jurisdictionAreaName
     ? officer.jurisdictionAreaName
         .toLowerCase()
@@ -504,7 +509,64 @@ export function isSosInOfficerJurisdiction(
 
   const matchesWard =
     sos.wardId === officerAreaId ||
+    sos.districtId === officerAreaId ||
     (wardKeyword && sos.wardName && sos.wardName.toLowerCase().includes(wardKeyword));
 
   return !!matchesWard;
 }
+
+// Centroid coordinates for flying to districts and wards (Geoapify live boundaries)
+export const WARD_CENTROIDS: Record<string, [number, number]> = {
+  ...GEOAPIFY_CENTROIDS,
+  'area-dn': [108.1600, 16.0600],
+  'area-hs': [112.0, 16.5],
+  'area-hs-arch': [112.0, 16.5],
+  'area-htd': [108.2175, 16.0416], // Phường Hòa Cường
+  'area-hc': [108.2195, 16.0590],  // Phường Hải Châu
+  'area-tk': [108.1966, 16.0684],  // Phường Thanh Khê
+  'area-ak': [108.1855, 16.0500],  // Phường An Khê
+  'area-st': [108.2486, 16.1022],  // Phường Sơn Trà
+  'area-ah': [108.2364, 16.0701],  // Phường An Hải
+  'area-nhs': [108.2532, 16.0108], // Phường Ngũ Hành Sơn
+  'area-cl': [108.2013, 16.0153],  // Phường Cẩm Lệ
+  'area-hx': [108.2204, 16.0049],  // Phường Hòa Xuân
+  'area-lc': [108.1392, 16.0767],  // Phường Liên Chiểu
+  'area-hk': [108.1546, 16.0503],  // Phường Hòa Khánh
+  'area-hvan': [108.1149, 16.1348], // Phường Hải Vân
+  'area-hv': [108.0283, 15.9704],  // Xã Hòa Vang
+  'area-bana': [108.0240, 16.0502], // Xã Bà Nà
+  'area-htien': [108.1326, 15.9603], // Xã Hòa Tiến
+};
+
+export function getAreaCentroid(
+  areaOrId?: AdministrativeArea | string | null,
+  allAreas?: AdministrativeArea[]
+): [number, number] | null {
+  if (!areaOrId) return null;
+  const id = typeof areaOrId === 'string' ? areaOrId : areaOrId.id;
+  if (WARD_CENTROIDS[id]) return WARD_CENTROIDS[id];
+
+  const area = typeof areaOrId === 'object' ? areaOrId : allAreas?.find((a) => a.id === id);
+  if (area?.boundary?.coordinates) {
+    const coords: number[][] =
+      area.boundary.type === 'MultiPolygon'
+        ? (area.boundary.coordinates as number[][][][])[0][0]
+        : (area.boundary.coordinates as number[][][])[0];
+    if (coords && coords.length > 0) {
+      let sumLng = 0;
+      let sumLat = 0;
+      for (const [lng, lat] of coords) {
+        sumLng += lng;
+        sumLat += lat;
+      }
+      return [sumLng / coords.length, sumLat / coords.length];
+    }
+  }
+
+  if (area?.parentId && WARD_CENTROIDS[area.parentId]) {
+    return WARD_CENTROIDS[area.parentId];
+  }
+
+  return [108.2020, 16.0540];
+}
+

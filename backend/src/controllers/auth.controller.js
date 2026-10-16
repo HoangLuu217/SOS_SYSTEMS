@@ -139,8 +139,8 @@ class AuthController {
    */
   async resetPassword(req, res, next) {
     try {
-      const { email, token, newPassword } = req.body;
-      const result = await authService.resetPassword({ email, token, newPassword });
+      const { email, account, identifier, token, newPassword } = req.body;
+      const result = await authService.resetPassword({ email, account, identifier, token, newPassword });
 
       // Đảm bảo xóa mọi phiên cookie cũ
       clearAuthCookies(res);
@@ -166,12 +166,12 @@ class AuthController {
 
   /**
    * POST /auth/send-otp
-   * Gửi mã OTP qua email dùng Resend
+   * Gửi mã OTP qua SMS (TextBee Gateway) hoặc email (Resend)
    */
   async sendOtp(req, res, next) {
     try {
-      const { email } = req.body;
-      const result = await authService.sendOtp(email);
+      const { email, phone } = req.body;
+      const result = await authService.sendOtp(phone || email);
       return sendSuccess(res, 200, result.message, result);
     } catch (error) {
       next(error);
@@ -180,16 +180,17 @@ class AuthController {
 
   /**
    * POST /auth/verify-otp
-   * Xác thực mã OTP và cấp token
+   * Xác thực mã OTP và cấp token (hỗ trợ cả SĐT và Email)
    */
   async verifyOtp(req, res, next) {
     try {
       const userAgent = req.headers['user-agent'];
       const ipAddress = req.ip;
-      const { email, otp, verifyOnly } = req.body;
+      const { email, phone, otp, verifyOnly } = req.body;
 
       const result = await authService.verifyOtp({
         email,
+        phone,
         otp,
         verifyOnly: !!verifyOnly,
         userAgent,

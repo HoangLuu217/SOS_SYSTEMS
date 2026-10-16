@@ -73,7 +73,7 @@ const SEVERITIES = [
   { key: 'LOW', label: 'Thấp', color: '#10B981' },
   { key: 'MEDIUM', label: 'Trung bình', color: '#F59E0B' },
   { key: 'HIGH', label: 'Cao', color: '#F97316' },
-  { key: 'CRITICAL', label: 'Cực kỳ nguy cấp', color: '#EF4444' },
+  { key: 'CRITICAL', label: 'Nguy hiểm', color: '#EF4444' },
 ];
 
 export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
@@ -341,8 +341,13 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
       return;
     }
 
+    if (selectedImages.length === 0) {
+      Alert.alert('Thiếu hình ảnh', 'Hình ảnh hiện trường là bắt buộc. Vui lòng chọn hoặc chụp ít nhất 1 ảnh.');
+      return;
+    }
+
     setSending(true);
-    setUploadStatusText('Đang nén và tải ảnh lên Cloudinary...');
+    setUploadStatusText('Đang nén và tải ảnh lên máy chủ...');
 
     try {
       // 1. Upload danh sách ảnh lên Cloudinary
@@ -398,7 +403,7 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
           '🎉 Đóng góp thành công!',
           `Điểm nguy hiểm "${title.trim()}" đã được lưu ở trạng thái Chờ duyệt.\n${
             uploadedImageUrls.length > 0
-              ? `Đã lưu an toàn ${uploadedImageUrls.length} ảnh hiện trường lên Cloudinary.`
+              ? `Đã tải lên thành công ${uploadedImageUrls.length} ảnh hiện trường.`
               : ''
           }\n\nCảm ơn bạn đã hỗ trợ cộng đồng!`,
           [
@@ -634,7 +639,7 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
             <Feather
               name="edit-3"
               size={15}
-              color={modalTab === 'CREATE' ? '#EA580C' : '#64748B'}
+              color={modalTab === 'CREATE' ? '#0066FF' : '#64748B'}
             />
             <Text style={[styles.tabText, modalTab === 'CREATE' && styles.tabTextActive]}>
               Đóng góp mới
@@ -652,7 +657,7 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
             <Feather
               name="list"
               size={15}
-              color={modalTab === 'HISTORY' ? '#EA580C' : '#64748B'}
+              color={modalTab === 'HISTORY' ? '#0066FF' : '#64748B'}
             />
             <Text style={[styles.tabText, modalTab === 'HISTORY' && styles.tabTextActive]}>
               Đóng góp đã gửi
@@ -815,8 +820,8 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
                     }}
                     activeOpacity={0.7}
                   >
-                    <Feather name="map-pin" size={12} color="#EA580C" />
-                    <Text style={[styles.actionGpsText, { color: '#EA580C' }]}>Ghim bản đồ</Text>
+                    <Feather name="map-pin" size={12} color="#0066FF" />
+                    <Text style={[styles.actionGpsText, { color: '#0066FF' }]}>Ghim bản đồ</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -865,7 +870,9 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
             {/* 7. Hình ảnh hiện trường (Gửi nhiều ảnh - Lưu trữ lên Cloudinary) */}
             <View style={styles.formGroup}>
               <View style={styles.imageHeaderRow}>
-                <Text style={styles.label}>Hình ảnh hiện trường (Lưu Cloudinary)</Text>
+                <Text style={styles.label}>
+                  Hình ảnh hiện trường <Text style={styles.required}>*</Text>
+                </Text>
                 <Text style={styles.imageCountText}>{selectedImages.length}/10 ảnh</Text>
               </View>
 
@@ -1151,7 +1158,7 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
                       {item.images && item.images.length > 0 && (
                         <View style={styles.cardImagesSection}>
                           <Text style={styles.cardImagesTitle}>
-                            📸 {item.images.length} ảnh hiện trường (Cloudinary):
+                            📸 {item.images.length} ảnh hiện trường:
                           </Text>
                           <ScrollView
                             horizontal
@@ -1365,7 +1372,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabItemActive: {
-    borderBottomColor: '#EA580C',
+    borderBottomColor: '#0066FF',
   },
   tabText: {
     fontSize: 13.5,
@@ -1373,11 +1380,11 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   tabTextActive: {
-    color: '#EA580C',
+    color: '#0066FF',
     fontWeight: '700',
   },
   tabBadge: {
-    backgroundColor: '#EA580C',
+    backgroundColor: '#0066FF',
     paddingHorizontal: 6,
     paddingVertical: 1,
     borderRadius: 10,
@@ -1534,7 +1541,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   mapPickerBtn: {
-    backgroundColor: '#FFF7ED',
+    backgroundColor: '#EFF6FF',
   },
   actionGpsText: {
     fontSize: 12,
@@ -1685,7 +1692,7 @@ const styles = StyleSheet.create({
   },
 
   submitButton: {
-    backgroundColor: '#EA580C',
+    backgroundColor: '#0066FF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1693,6 +1700,11 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 14,
     marginTop: 10,
+    shadowColor: '#0066FF',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 4,
   },
   submitButtonDisabled: {
     opacity: 0.6,
@@ -1725,7 +1737,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
   },
   filterChipActive: {
-    backgroundColor: '#EA580C',
+    backgroundColor: '#0066FF',
   },
   filterChipText: {
     fontSize: 12.5,
@@ -1779,7 +1791,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#EA580C',
+    backgroundColor: '#0066FF',
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 12,
@@ -2045,7 +2057,7 @@ const styles = StyleSheet.create({
     color: '#C2410C',
   },
   confirmPinButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#0066FF',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

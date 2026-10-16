@@ -73,6 +73,19 @@ export interface VehicleItem {
   teamId?: {
     _id: string;
     name: string;
+    type?: string;
+    leaderId?: {
+      _id?: string;
+      fullName?: string;
+      phone?: string;
+      email?: string;
+    };
+    areaId?: {
+      _id?: string;
+      name?: string;
+      code?: string;
+    };
+    status?: string;
   } | string;
   type: 'BOAT' | 'AMBULANCE' | 'TRUCK' | 'MOTORBIKE' | 'OTHER';
   plateNumber: string;
@@ -80,6 +93,27 @@ export interface VehicleItem {
   status: 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | 'INACTIVE';
   description?: string;
   createdAt?: string;
+}
+
+export interface RescueTeamMemberItem {
+  _id?: string;
+  role: 'LEADER' | 'MEMBER' | string;
+  joinedAt?: string;
+  rescuerId: {
+    _id: string;
+    fullName: string;
+    phone?: string;
+    email?: string;
+    status?: string;
+    isVerified?: boolean;
+    rescuer?: {
+      skills?: string[];
+      experience?: string;
+      vehicleType?: string;
+      verificationStatus?: string;
+      availabilityStatus?: string;
+    };
+  } | string;
 }
 
 export interface RescueTeamItem {
@@ -90,25 +124,34 @@ export interface RescueTeamItem {
     _id: string;
     fullName: string;
     phone?: string;
+    email?: string;
+    status?: string;
+    rescuer?: {
+      skills?: string[];
+      experience?: string;
+      vehicleType?: string;
+      verificationStatus?: string;
+      availabilityStatus?: string;
+    };
   } | string;
   authorityId?: {
     _id: string;
     name: string;
+    code?: string;
+    phone?: string;
+    type?: string;
   } | string;
   areaId?: {
     _id: string;
     name: string;
+    code?: string;
+    type?: string;
   } | string;
-  members?: Array<{
-    rescuerId: {
-      _id: string;
-      fullName: string;
-      phone?: string;
-    } | string;
-    role: string;
-  }>;
+  members?: RescueTeamMemberItem[];
+  vehicles?: VehicleItem[];
   description?: string;
   status: string;
+  createdAt?: string;
 }
 
 export interface AlertItem {
@@ -133,11 +176,24 @@ export interface AuditLogItem {
     _id: string;
     fullName: string;
     email?: string;
+    phone?: string;
+    authority?: {
+      organizationName?: string;
+      position?: string;
+      department?: string;
+      areaName?: string;
+    };
   } | string;
   actorRole?: string;
   action: string;
   entityType: string;
   entityId?: string;
+  areaId?: {
+    _id: string;
+    name: string;
+    code?: string;
+    type?: string;
+  } | string;
   metadata?: Record<string, unknown>;
   createdAt: string;
 }

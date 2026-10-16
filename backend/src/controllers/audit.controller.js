@@ -7,7 +7,7 @@ class AuditController {
    */
   async getAuditLogs(req, res, next) {
     try {
-      const { logs, pagination } = await auditService.getAuditLogs(req.query);
+      const { logs, pagination } = await auditService.getAuditLogs(req.query, req.user);
       return sendSuccess(res, 200, 'Lấy danh sách audit logs thành công', logs, pagination);
     } catch (error) {
       next(error);

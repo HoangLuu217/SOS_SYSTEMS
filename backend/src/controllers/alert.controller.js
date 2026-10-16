@@ -16,6 +16,7 @@ class AlertController {
         action: 'CREATE_ALERT',
         entityType: 'Alert',
         entityId: alert._id,
+        areaId: alert.areaId || req.user?.authority?.areaId || null,
         metadata: { title: alert.title, type: alert.type, severity: alert.severity },
       });
 
@@ -74,6 +75,7 @@ class AlertController {
         action: 'UPDATE_ALERT',
         entityType: 'Alert',
         entityId: updated._id,
+        areaId: updated?.areaId || req.user?.authority?.areaId || null,
         metadata: req.body,
       });
 
@@ -96,6 +98,7 @@ class AlertController {
         action: 'DELETE_ALERT',
         entityType: 'Alert',
         entityId: req.params.id,
+        areaId: req.user?.authority?.areaId || null,
       });
 
       return sendSuccess(res, 200, result.message);
