@@ -14,10 +14,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { PROFILE_THEME } from './theme';
-import { useAuth } from '../../context/AuthContext';
-import { backendApi } from '../../services/backendApi';
-import { ForgotPasswordModal } from '../ForgotPasswordModal';
-import { sendPhoneOtp, verifyPhoneOtp } from '../../services/phoneAuthService';
+import { useAuth } from '@/context/AuthContext';
+import { backendApi, sendPhoneOtp, verifyPhoneOtp } from '@/api';
+import { ForgotPasswordModal } from '@/features/auth';
 
 interface AccountSecurityScreenProps {
   onBack: () => void;
@@ -801,7 +800,7 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
       <ForgotPasswordModal
         visible={forgotPasswordVisible}
         onClose={() => setForgotPasswordVisible(false)}
-        onSuccess={(msg) => {
+        onSuccess={(msg: string) => {
           setForgotPasswordVisible(false);
           setSuccessMessage(msg || 'Mật khẩu đã được đặt lại thành công.');
         }}

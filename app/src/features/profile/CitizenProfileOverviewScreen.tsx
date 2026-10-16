@@ -17,9 +17,9 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PROFILE_THEME } from './theme';
-import { useAuth } from '../../context/AuthContext';
-import { backendApi, EmergencyContact } from '../../services/backendApi';
-import { LogoSOS } from '../../components/LogoSOS';
+import { useAuth } from '@/context/AuthContext';
+import { backendApi, EmergencyContact } from '@/api';
+import { LogoSOS } from '@/components';
 
 export interface CitizenProfileOverviewScreenProps {
   onNavigateToEditProfile: () => void;

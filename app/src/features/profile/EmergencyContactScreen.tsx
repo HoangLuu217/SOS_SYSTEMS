@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { PROFILE_THEME } from './theme';
-import { backendApi, EmergencyContact } from '../../services/backendApi';
+import { backendApi, EmergencyContact } from '@/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface EmergencyContactScreenProps {

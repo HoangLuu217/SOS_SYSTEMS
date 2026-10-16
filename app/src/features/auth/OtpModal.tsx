@@ -13,8 +13,9 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useAuth } from '../context/AuthContext';
-import { LogoSOS } from '../components/LogoSOS';
+import { useAuth } from '@/context/AuthContext';
+import { LogoSOS } from '@/components';
+import { useCountdown } from '@/hooks';
 
 interface OtpModalProps {
   visible: boolean;
@@ -44,7 +45,7 @@ export const OtpModal: React.FC<OtpModalProps> = ({
   const [otpCode, setOtpCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [countdown, setCountdown] = useState(60);
+  const { seconds: countdown, start: startCountdown } = useCountdown({ initialSeconds: 60 });
 
   const otpInputRef = useRef<TextInput>(null);
 
@@ -53,24 +54,13 @@ export const OtpModal: React.FC<OtpModalProps> = ({
       setOtpCode('');
       setError('');
       setLoading(false);
-      setCountdown(60);
+      startCountdown(60);
       setTimeout(() => {
         otpInputRef.current?.focus();
       }, 350);
     }
-  }, [visible, type]);
+  }, [visible, type, startCountdown]);
 
-  useEffect(() => {
-    let timer: ReturnType<typeof setInterval> | null = null;
-    if (visible && countdown > 0) {
-      timer = setInterval(() => {
-        setCountdown(prev => prev - 1);
-      }, 1000);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [visible, countdown]);
 
   const handleVerifyOtp = async (codeToVerify?: string) => {
     const code = (codeToVerify || otpCode).trim();
@@ -127,7 +117,7 @@ export const OtpModal: React.FC<OtpModalProps> = ({
     setLoading(false);
 
     if (res.success) {
-      setCountdown(60);
+      startCountdown(60);
       setOtpCode('');
       setTimeout(() => {
         otpInputRef.current?.focus();

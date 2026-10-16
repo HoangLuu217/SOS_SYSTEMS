@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { backendApi } from '../../services/backendApi';
+import { backendApi } from '@/api';
 import { PROFILE_THEME } from './theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');

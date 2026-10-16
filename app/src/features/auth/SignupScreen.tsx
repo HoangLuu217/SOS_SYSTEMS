@@ -13,14 +13,10 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { CustomInput } from '../components/CustomInput';
-import { PrimaryButton } from '../components/PrimaryButton';
-import { GoogleButton } from '../components/GoogleButton';
-import { AlertModal } from '../components/AlertModal';
+import { CustomInput, PrimaryButton, GoogleButton, AlertModal, LogoSOS } from '@/components';
 import { OtpModal } from './OtpModal';
-import { useAuth } from '../context/AuthContext';
-import { sendPhoneOtp, verifyPhoneOtp } from '../services/phoneAuthService';
-import { LogoSOS } from '../components/LogoSOS';
+import { useAuth } from '@/context/AuthContext';
+import { sendPhoneOtp, verifyPhoneOtp } from '@/api';
 
 interface SignupScreenProps {
   onNavigateToLogin: () => void;

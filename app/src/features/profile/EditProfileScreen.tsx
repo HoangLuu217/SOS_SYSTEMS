@@ -20,8 +20,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { PROFILE_THEME } from './theme';
-import { useAuth } from '../../context/AuthContext';
-import { provinceApi, Province, Ward, FALLBACK_PROVINCES } from '../../services/provinceApi';
+import { useAuth } from '@/context/AuthContext';
+import { provinceApi, Province, Ward, FALLBACK_PROVINCES } from '@/api';
 
 interface EditProfileScreenProps {
   onBack: () => void;

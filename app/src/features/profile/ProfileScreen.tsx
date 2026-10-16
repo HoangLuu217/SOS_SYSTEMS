@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, BackHandler } from 'react-native';
-import { ProfileOverviewScreen } from './profile/ProfileOverviewScreen';
-import { EditProfileScreen } from './profile/EditProfileScreen';
-import { EmergencyContactScreen } from './profile/EmergencyContactScreen';
-import { SosHistoryScreen } from './profile/SosHistoryScreen';
-import { ProfessionalProfileScreen } from './profile/ProfessionalProfileScreen';
-import { AccountSecurityScreen } from './profile/AccountSecurityScreen';
-import { NotificationSettingsScreen } from './profile/NotificationSettingsScreen';
-import { NotificationsScreen } from './profile/NotificationsScreen';
-import { backendApi } from '../services/backendApi';
+import { ProfileOverviewScreen } from './ProfileOverviewScreen';
+import { EditProfileScreen } from './EditProfileScreen';
+import { EmergencyContactScreen } from './EmergencyContactScreen';
+import { SosHistoryScreen } from './SosHistoryScreen';
+import { ProfessionalProfileScreen } from './ProfessionalProfileScreen';
+import { AccountSecurityScreen } from './AccountSecurityScreen';
+import { NotificationSettingsScreen } from './NotificationSettingsScreen';
+import { NotificationsScreen } from './NotificationsScreen';
+import { backendApi } from '@/api';
 
 export type ProfileSubScreen =
   | 'overview'

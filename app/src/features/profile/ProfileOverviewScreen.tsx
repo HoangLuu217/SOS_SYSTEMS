@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '@/context/AuthContext';
 import { CitizenProfileOverviewScreen } from './CitizenProfileOverviewScreen';
 import { RescuerProfileOverviewScreen } from './RescuerProfileOverviewScreen';
 

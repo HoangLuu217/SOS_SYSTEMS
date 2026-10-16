@@ -14,9 +14,9 @@ import {
   ScrollView,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { CustomInput } from '../components/CustomInput';
-import { useAuth } from '../context/AuthContext';
-import { LogoSOS } from '../components/LogoSOS';
+import { CustomInput, LogoSOS } from '@/components';
+import { useAuth } from '@/context/AuthContext';
+import { useCountdown } from '@/hooks';
 
 interface ForgotPasswordModalProps {
   visible: boolean;
@@ -38,7 +38,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [countdown, setCountdown] = useState(60);
+  const { seconds: countdown, start: startCountdown } = useCountdown({ initialSeconds: 60 });
 
   const otpInputRef = useRef<TextInput>(null);
 
@@ -50,21 +50,10 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
       setConfirmPassword('');
       setError('');
       setLoading(false);
-      setCountdown(60);
+      startCountdown(60);
     }
-  }, [visible]);
+  }, [visible, startCountdown]);
 
-  useEffect(() => {
-    let timer: ReturnType<typeof setInterval> | null = null;
-    if (step === 'otp' && countdown > 0) {
-      timer = setInterval(() => {
-        setCountdown(prev => prev - 1);
-      }, 1000);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [step, countdown]);
 
   // 1. Gửi mã OTP khôi phục mật khẩu
   const handleSendOtp = async () => {
@@ -82,7 +71,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
 
     if (res.success) {
       setStep('otp');
-      setCountdown(60);
+      startCountdown(60);
       setOtp('');
       setTimeout(() => {
         otpInputRef.current?.focus();
@@ -124,7 +113,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     setLoading(false);
 
     if (res.success) {
-      setCountdown(60);
+      startCountdown(60);
       setOtp('');
       setTimeout(() => {
         otpInputRef.current?.focus();

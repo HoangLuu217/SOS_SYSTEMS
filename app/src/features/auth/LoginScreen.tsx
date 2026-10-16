@@ -13,13 +13,9 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
-import { CustomInput } from '../components/CustomInput';
-import { PrimaryButton } from '../components/PrimaryButton';
-import { GoogleButton } from '../components/GoogleButton';
-import { AlertModal } from '../components/AlertModal';
-import { useAuth } from '../context/AuthContext';
+import { CustomInput, PrimaryButton, GoogleButton, AlertModal, LogoSOS } from '@/components';
+import { useAuth } from '@/context/AuthContext';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { LogoSOS } from '../components/LogoSOS';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 

@@ -18,8 +18,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { PROFILE_THEME } from './theme';
-import { useAuth } from '../../context/AuthContext';
-import { LogoSOS } from '../../components/LogoSOS';
+import { useAuth } from '@/context/AuthContext';
+import { LogoSOS } from '@/components';
 
 export type RescuerAvailability =
   | 'OFFLINE'      // Ngoại tuyến

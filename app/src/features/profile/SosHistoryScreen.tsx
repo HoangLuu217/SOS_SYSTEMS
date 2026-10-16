@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { backendApi } from '../../services/backendApi';
+import { backendApi } from '@/api';
 import { PROFILE_THEME } from './theme';
 import { CitizenSosTrackingModal } from './CitizenSosTrackingModal';
 
