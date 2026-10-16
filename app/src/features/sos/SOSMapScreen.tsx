@@ -19,8 +19,8 @@ import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { Feather, MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
-import { backendApi } from '../services/backendApi';
-import { useAuth } from '../context/AuthContext';
+import { backendApi } from '@/api';
+import { useAuth } from '@/context/AuthContext';
 
 // Danh sách các loại yêu cầu cứu trợ
 const REQUEST_TYPES = [

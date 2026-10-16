@@ -18,13 +18,12 @@ import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import * as Location from 'expo-location';
-import { useAuth } from '../context/AuthContext';
-import { LogoSOS } from '../components/LogoSOS';
-import { BACKGROUND_APP_SOURCE } from '../constants/backgroundBase64';
-import { SOSMapScreen } from './SOSMapScreen';
-import { ContributeHazardModal } from './ContributeHazardModal';
-import { TabName } from '../components/BottomNav';
-import { backendApi } from '../services/backendApi';
+import { useAuth } from '@/context/AuthContext';
+import { LogoSOS } from '@/components';
+import { BACKGROUND_APP_SOURCE } from '@/constants/backgroundBase64';
+import { SOSMapScreen, ContributeHazardModal } from '@/features/sos';
+import { TabName } from '@/types';
+import { backendApi } from '@/api';
 
 export interface HomeScreenProps {
   onOpenSettings: () => void;
@@ -64,14 +63,14 @@ const BootstrapGeoAltFill: React.FC<{ size?: number; color?: string }> = ({
 
 // Icon thời tiết tách nền trong thư mục assets/thoitiet
 const WEATHER_ICONS = {
-  comay: require('../../assets/thoitiet/comay.png'),
-  maydem: require('../../assets/thoitiet/maydem.png'),
-  dem: require('../../assets/thoitiet/dem.png'),
-  mua: require('../../assets/thoitiet/mua.png'),
-  muadem: require('../../assets/thoitiet/muadem.png'),
-  muagiong: require('../../assets/thoitiet/muagiong.png'),
-  nang: require('../../assets/thoitiet/nang.png'),
-  tuyetroi: require('../../assets/thoitiet/tuyetroi.png'),
+  comay: require('../../../assets/thoitiet/comay.png'),
+  maydem: require('../../../assets/thoitiet/maydem.png'),
+  dem: require('../../../assets/thoitiet/dem.png'),
+  mua: require('../../../assets/thoitiet/mua.png'),
+  muadem: require('../../../assets/thoitiet/muadem.png'),
+  muagiong: require('../../../assets/thoitiet/muagiong.png'),
+  nang: require('../../../assets/thoitiet/nang.png'),
+  tuyetroi: require('../../../assets/thoitiet/tuyetroi.png'),
 };
 
 const FEATURED_NEWS: NewsItem[] = [
@@ -624,7 +623,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               >
                 <View style={styles.utilityIconBoxStandalone}>
                   <Image
-                    source={require('../../assets/appicon/bandocuutro.png')}
+                    source={require('../../../assets/appicon/bandocuutro.png')}
                     style={styles.utilityImage}
                     resizeMode="contain"
                   />
@@ -640,7 +639,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               >
                 <View style={styles.utilityIconBoxStandalone}>
                   <Image
-                    source={require('../../assets/appicon/bandodiemcuutro.png')}
+                    source={require('../../../assets/appicon/bandodiemcuutro.png')}
                     style={styles.utilityImage}
                     resizeMode="contain"
                   />
@@ -656,7 +655,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               >
                 <View style={styles.utilityIconBoxStandalone}>
                   <Image
-                    source={require('../../assets/appicon/bandodiemnguyhiem.png')}
+                    source={require('../../../assets/appicon/bandodiemnguyhiem.png')}
                     style={styles.utilityImage}
                     resizeMode="contain"
                   />
@@ -672,7 +671,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               >
                 <View style={styles.utilityIconBoxStandalone}>
                   <Image
-                    source={require('../../assets/appicon/danhdauantoan.png')}
+                    source={require('../../../assets/appicon/danhdauantoan.png')}
                     style={styles.utilityImage}
                     resizeMode="contain"
                   />
@@ -691,7 +690,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               >
                 <View style={styles.utilityIconBoxStandalone}>
                   <Image
-                    source={require('../../assets/appicon/dangkihienmau.png')}
+                    source={require('../../../assets/appicon/dangkihienmau.png')}
                     style={styles.utilityImage}
                     resizeMode="contain"
                   />
@@ -707,7 +706,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               >
                 <View style={styles.utilityIconBoxStandalone}>
                   <Image
-                    source={require('../../assets/appicon/donggopdiemnguyhiem.png')}
+                    source={require('../../../assets/appicon/donggopdiemnguyhiem.png')}
                     style={styles.utilityImage}
                     resizeMode="contain"
                   />

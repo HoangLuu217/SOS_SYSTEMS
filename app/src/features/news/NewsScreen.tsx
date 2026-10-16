@@ -13,12 +13,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { backendApi, NotificationItem } from '../services/backendApi';
+import { backendApi } from '@/api';
+import { NotificationItem } from '@/types';
 import {
   registerForPushNotificationsAsync,
   triggerLocalNotification,
-} from '../services/pushNotificationService';
-import { useNotifications } from '../context/NotificationContext';
+} from '@/services';
+import { useNotifications } from '@/context/NotificationContext';
+import { formatRelativeTime } from '@/utils';
 
 interface NewsScreenProps {
   onNavigateToTab?: (tab: string) => void;
@@ -94,23 +96,6 @@ const FALLBACK_NEWS: NotificationItem[] = [
   },
 ];
 
-// Định dạng thời gian tiếng Việt
-function formatRelativeTime(dateString?: string): string {
-  if (!dateString) return 'Vừa xong';
-  const now = new Date();
-  const date = new Date(dateString);
-  const diffInSec = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  if (diffInSec < 60) return 'Vừa xong';
-  const diffInMin = Math.floor(diffInSec / 60);
-  if (diffInMin < 60) return `${diffInMin} phút trước`;
-  const diffInHours = Math.floor(diffInMin / 60);
-  if (diffInHours < 24) return `${diffInHours} giờ trước`;
-  const diffInDays = Math.floor(diffInHours / 24);
-  if (diffInDays === 1) return 'Hôm qua';
-  if (diffInDays < 7) return `${diffInDays} ngày trước`;
-  return date.toLocaleDateString('vi-VN');
-}
 
 export const NewsScreen: React.FC<NewsScreenProps> = ({ onNavigateToTab }) => {
   const {

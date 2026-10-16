@@ -11,11 +11,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { CustomInput } from '../components/CustomInput';
-import { backendApi } from '../services/backendApi';
-import { ENV } from '../config/env';
-import { useAuth, AuthMode } from '../context/AuthContext';
-import { isSupabaseConfigured } from '../config/supabase';
+import { CustomInput } from '@/components';
+import { backendApi } from '@/api';
+import { ENV } from '@/config/env';
+import { useAuth, AuthMode } from '@/context/AuthContext';
+import { isSupabaseConfigured } from '@/config/supabase';
 
 interface ConfigModalProps {
   visible: boolean;

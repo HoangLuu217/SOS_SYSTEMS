@@ -19,12 +19,14 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { backendApi } from '../services/backendApi';
-import { ContributeHazardModal } from './ContributeHazardModal';
+import { backendApi } from '@/api';
+import { ContributeHazardModal } from '@/features/sos';
+import { formatDateTime } from '@/utils';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-export type MapFilterType = 'ALL' | 'HAZARD' | 'SAFE' | 'RELIEF';
+import type { MapFilterType } from '@/types';
+export type { MapFilterType };
 
 export interface DanangAreaZone {
   id: string;
@@ -629,18 +631,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({
     });
   };
 
-  // Định dạng ngày giờ
-  const formatDateTime = (dateStr?: string) => {
-    if (!dateStr) return 'Vừa xong';
-    try {
-      const d = new Date(dateStr);
-      const time = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-      const date = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      return `${time} ngày ${date}`;
-    } catch {
-      return dateStr;
-    }
-  };
 
   // Helper thông tin loại nguy hiểm
   const getHazardTypeMeta = (type: string) => {
