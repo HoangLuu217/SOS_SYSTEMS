@@ -237,6 +237,22 @@ class UserService {
       throw new ApiError(404, 'Không tìm thấy thông tin tài khoản.');
     }
 
+    // Đảm bảo đồng bộ tuyệt đối giữa emergencyContacts và emergencyContact đơn
+    if (user.citizen) {
+      if (Array.isArray(user.citizen.emergencyContacts)) {
+        if (user.citizen.emergencyContacts.length === 0) {
+          user.citizen.emergencyContact = { name: null, phone: null, relation: null };
+        } else {
+          const first = user.citizen.emergencyContacts[0];
+          user.citizen.emergencyContact = {
+            name: first.name,
+            phone: first.phone,
+            relation: first.relation,
+          };
+        }
+      }
+    }
+
     return {
       userId: user._id,
       citizen: user.citizen || {},
@@ -244,36 +260,139 @@ class UserService {
   }
 
   /**
-   * Cập nhật thông tin liên hệ khẩn cấp trong hồ sơ Citizen
+   * Cập nhật thông tin liên hệ khẩn cấp trong hồ sơ Citizen (Hỗ trợ danh sách nhiều liên hệ)
    */
-  async updateEmergencyContact(userId, contactData) {
+  async updateEmergencyContact(userId, payload) {
     const user = await User.findById(userId);
     if (!user) {
       throw new ApiError(404, 'Không tìm thấy thông tin tài khoản.');
-    }
-
-    const { name, phone, relation } = contactData || {};
-    const cleanPhone = phone ? phone.replace(/\s+/g, '') : null;
-
-    if (cleanPhone && !isValidPhone(cleanPhone)) {
-      throw new ApiError(400, 'Số điện thoại người liên hệ khẩn cấp không hợp lệ.');
     }
 
     if (!user.citizen) {
       user.citizen = {};
     }
 
-    user.citizen.emergencyContact = {
-      name: name ? name.trim() : user.citizen.emergencyContact?.name || null,
-      phone: cleanPhone || user.citizen.emergencyContact?.phone || null,
-      relation: relation ? relation.trim() : user.citizen.emergencyContact?.relation || null,
-    };
+    if (!Array.isArray(user.citizen.emergencyContacts)) {
+      user.citizen.emergencyContacts = [];
+    }
+
+    // Tự động di chuyển liên hệ đơn cũ vào danh sách nếu có
+    if (user.citizen.emergencyContact?.name && user.citizen.emergencyContacts.length === 0) {
+      user.citizen.emergencyContacts.push({
+        id: new mongoose.Types.ObjectId().toString(),
+        name: user.citizen.emergencyContact.name,
+        phone: user.citizen.emergencyContact.phone,
+        relation: user.citizen.emergencyContact.relation,
+      });
+    }
+
+    // Trường hợp 1: Gửi toàn bộ mảng danh sách contacts
+    const contactsList = Array.isArray(payload) ? payload : (Array.isArray(payload?.contacts) ? payload.contacts : null);
+    if (contactsList) {
+      const validated = [];
+      for (const item of contactsList) {
+        if (!item?.name && !item?.phone) continue;
+        const cleanPhone = item.phone ? String(item.phone).replace(/\s+/g, '') : '';
+        if (cleanPhone && !isValidPhone(cleanPhone)) {
+          throw new ApiError(400, `Số điện thoại "${item.phone}" không hợp lệ.`);
+        }
+        validated.push({
+          id: item.id || new mongoose.Types.ObjectId().toString(),
+          name: item.name ? String(item.name).trim() : '',
+          phone: cleanPhone,
+          relation: item.relation ? String(item.relation).trim() : 'Người thân',
+        });
+      }
+      user.citizen.emergencyContacts = validated;
+    } else {
+      // Trường hợp 2: Gửi 1 liên hệ cụ thể (thêm mới hoặc sửa theo id)
+      const { id, name, phone, relation } = payload || {};
+
+      if (!name && !phone) {
+        throw new ApiError(400, 'Vui lòng cung cấp họ tên và số điện thoại người liên hệ.');
+      }
+
+      const cleanPhone = phone ? String(phone).replace(/\s+/g, '') : '';
+      if (cleanPhone && !isValidPhone(cleanPhone)) {
+        throw new ApiError(400, 'Số điện thoại người liên hệ khẩn cấp không hợp lệ.');
+      }
+
+      if (id) {
+        // Cập nhật liên hệ đã có trong mảng
+        const idx = user.citizen.emergencyContacts.findIndex((c) => c.id === id);
+        if (idx !== -1) {
+          user.citizen.emergencyContacts[idx] = {
+            id,
+            name: name ? String(name).trim() : user.citizen.emergencyContacts[idx].name,
+            phone: cleanPhone || user.citizen.emergencyContacts[idx].phone,
+            relation: relation ? String(relation).trim() : user.citizen.emergencyContacts[idx].relation,
+          };
+        } else {
+          user.citizen.emergencyContacts.push({
+            id,
+            name: name ? String(name).trim() : '',
+            phone: cleanPhone,
+            relation: relation ? String(relation).trim() : 'Người thân',
+          });
+        }
+      } else {
+        // Thêm mới một liên hệ vào danh sách
+        user.citizen.emergencyContacts.push({
+          id: new mongoose.Types.ObjectId().toString(),
+          name: name ? String(name).trim() : '',
+          phone: cleanPhone,
+          relation: relation ? String(relation).trim() : 'Người thân',
+        });
+      }
+    }
+
+    // Đồng bộ contact đầu tiên vào emergencyContact đơn để duy trì tương thích ngược
+    const primary = user.citizen.emergencyContacts[0] || null;
+    user.citizen.emergencyContact = primary
+      ? { name: primary.name, phone: primary.phone, relation: primary.relation }
+      : { name: null, phone: null, relation: null };
 
     await user.save();
 
     return {
       userId: user._id,
       citizen: user.citizen,
+    };
+  }
+
+  /**
+   * Xóa / Gỡ thông tin người liên hệ khẩn cấp theo contactId (hoặc gỡ hết nếu không truyền id)
+   */
+  async deleteEmergencyContact(userId, contactId) {
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new ApiError(404, 'Không tìm thấy thông tin tài khoản.');
+    }
+
+    if (user.citizen) {
+      if (!Array.isArray(user.citizen.emergencyContacts)) {
+        user.citizen.emergencyContacts = [];
+      }
+
+      if (contactId) {
+        user.citizen.emergencyContacts = user.citizen.emergencyContacts.filter(
+          (c) => c.id !== contactId && String(c._id) !== contactId
+        );
+      } else {
+        user.citizen.emergencyContacts = [];
+      }
+
+      const primary = user.citizen.emergencyContacts[0] || null;
+      user.citizen.emergencyContact = primary
+        ? { name: primary.name, phone: primary.phone, relation: primary.relation }
+        : { name: null, phone: null, relation: null };
+
+      await user.save();
+    }
+
+    return {
+      userId: user._id,
+      citizen: user.citizen || {},
     };
   }
 

@@ -6,4 +6,5 @@ export * from './map.api';
 export * from './notification.api';
 export * from './province.api';
 export * from './phoneAuth.api';
+export * from './chat.api';
 export * from './backendApi';

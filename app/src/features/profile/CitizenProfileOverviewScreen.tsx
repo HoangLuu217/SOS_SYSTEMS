@@ -29,6 +29,7 @@ export interface CitizenProfileOverviewScreenProps {
   onNavigateToNotificationSettings: () => void;
   onNavigateToNotifications: () => void;
   unreadNotificationsCount?: number;
+  refreshTrigger?: number;
 }
 
 export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreenProps> = ({
@@ -39,6 +40,7 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
   onNavigateToNotificationSettings,
   onNavigateToNotifications,
   unreadNotificationsCount = 3,
+  refreshTrigger,
 }) => {
   const { user, logout, updateUserAvatar } = useAuth();
 
@@ -59,23 +61,46 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
   const displayPhone = user?.phone || 'Chưa cập nhật SĐT';
   const displayEmail = user?.email || 'Chưa có email';
 
-  // Tải thông tin người liên hệ khẩn cấp
+  // Tải thông tin người liên hệ khẩn cấp (đồng bộ real-time khi quay lại màn hình)
   useEffect(() => {
     let isMounted = true;
     const loadEmergencyContact = async () => {
       try {
         const stored = await AsyncStorage.getItem('@sos_emergency_contact');
         if (stored && isMounted) {
-          setEmergencyContact(JSON.parse(stored));
+          try {
+            const parsed = JSON.parse(stored);
+            if (parsed && parsed.name && String(parsed.name).trim()) {
+              setEmergencyContact(parsed);
+            } else {
+              setEmergencyContact(null);
+            }
+          } catch {
+            setEmergencyContact(null);
+          }
+        } else if (isMounted) {
+          setEmergencyContact(null);
         }
 
         const res = await backendApi.getCitizenProfile();
-        if (res.success && res.data?.citizen?.emergencyContact && isMounted) {
-          setEmergencyContact(res.data.citizen.emergencyContact);
-          await AsyncStorage.setItem(
-            '@sos_emergency_contact',
-            JSON.stringify(res.data.citizen.emergencyContact)
-          );
+        if (res.success && isMounted) {
+          const contactsList = res.data?.citizen?.emergencyContacts;
+          const single = res.data?.citizen?.emergencyContact;
+
+          if (Array.isArray(contactsList) && contactsList.length > 0) {
+            const first = contactsList[0];
+            setEmergencyContact(first);
+            await AsyncStorage.setItem('@sos_emergency_contact', JSON.stringify(first));
+            await AsyncStorage.setItem('@sos_emergency_contacts', JSON.stringify(contactsList));
+          } else if (single && single.name && String(single.name).trim()) {
+            setEmergencyContact(single);
+            await AsyncStorage.setItem('@sos_emergency_contact', JSON.stringify(single));
+          } else {
+            // Khi không còn liên hệ nào, gỡ sạch khỏi state & bộ nhớ đệm
+            setEmergencyContact(null);
+            await AsyncStorage.removeItem('@sos_emergency_contact');
+            await AsyncStorage.setItem('@sos_emergency_contacts', '[]');
+          }
         }
       } catch {
         // Giữ fallback đã lưu
@@ -86,7 +111,7 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [refreshTrigger]);
 
   // Chụp ảnh bằng camera
   const handleTakePhoto = async () => {
@@ -231,27 +256,6 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
 
           {/* Citizen Name */}
           <Text style={styles.profileName}>{displayName}</Text>
-
-          {/* Badges Row: Role & Verification */}
-          <View style={styles.badgesRow}>
-            {/* Role Badge: Người dân */}
-            <View style={styles.roleBadge}>
-              <Feather name="user" size={12} color="#FFFFFF" />
-              <Text style={styles.roleBadgeText}>Người dân</Text>
-            </View>
-
-            {/* Verification Badge */}
-            <View style={styles.verifiedBadge}>
-              <Feather name="check-circle" size={12} color="#059669" />
-              <Text style={styles.verifiedBadgeText}>Đã xác minh</Text>
-            </View>
-          </View>
-
-          {/* Account Status */}
-          <View style={styles.accountStatusRow}>
-            <View style={styles.activeDot} />
-            <Text style={styles.accountStatusText}>Tài khoản đang hoạt động</Text>
-          </View>
 
           {/* Contact Row: Phone & Email */}
           <View style={styles.contactDivider} />
@@ -681,10 +685,10 @@ const styles = StyleSheet.create({
     borderColor: '#FFFFFF',
   },
   profileName: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 8,
+    marginBottom: 14,
     textAlign: 'center',
   },
   badgesRow: {

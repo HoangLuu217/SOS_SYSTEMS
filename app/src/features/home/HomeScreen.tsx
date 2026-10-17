@@ -22,6 +22,7 @@ import { useAuth } from '@/context/AuthContext';
 import { LogoSOS } from '@/components';
 import { BACKGROUND_APP_SOURCE } from '@/constants/backgroundBase64';
 import { SOSMapScreen, ContributeHazardModal } from '@/features/sos';
+import { LocalAuthorityChatModal } from './LocalAuthorityChatModal';
 import { TabName } from '@/types';
 import { backendApi } from '@/api';
 
@@ -194,6 +195,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const { user } = useAuth();
   const [showSOSMap, setShowSOSMap] = useState(false);
   const [showHazardModal, setShowHazardModal] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
   const [unreadNotifCount, setUnreadNotifCount] = useState<number>(0);
 
@@ -397,17 +399,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         break;
 
       case 'chat_admin':
-        // Chat với Admin / Trực ban cứu trợ
-        Alert.alert(
-          'Tổng đài hỗ trợ SOS',
-          'Kết nối trực tiếp đường dây nóng khẩn cấp quốc gia:',
-          [
-            { text: '112 (Tìm kiếm cứu nạn)', onPress: () => {} },
-            { text: '114 (Cứu nạn phòng cháy)', onPress: () => {} },
-            { text: '115 (Cấp cứu y tế)', onPress: () => {} },
-            { text: 'Đóng', style: 'cancel' },
-          ]
-        );
+      case 'chat_local_authority':
+        // Chat trực tiếp với chính quyền địa phương qua Socket.IO
+        setShowChatModal(true);
         break;
 
       case 'post_news':
@@ -714,20 +708,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <Text style={styles.utilityLabel}>Đóng góp{'\n'}điểm nguy hiểm</Text>
               </TouchableOpacity>
 
-              {/* 7. Chat với Admin */}
+              {/* 7. Chat với địa phương */}
               <TouchableOpacity
                 style={styles.utilityItem}
-                onPress={() => handleUtilityPress('chat_admin')}
+                onPress={() => handleUtilityPress('chat_local_authority')}
                 activeOpacity={0.7}
               >
                 <View style={[styles.utilityIconBox, { backgroundColor: '#E0F2FE' }]}>
                   <Ionicons
-                    name="chatbubble-ellipses-outline"
+                    name="chatbubbles"
                     size={28}
                     color="#0284C7"
                   />
                 </View>
-                <Text style={styles.utilityLabel}>Chat với{'\n'}Admin</Text>
+                <Text style={styles.utilityLabel}>Chat với{'\n'}địa phương</Text>
               </TouchableOpacity>
 
               {/* 8. Đăng tin (Admin) */}
@@ -802,6 +796,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </View>
         </View>
       </Modal>
+
+      {/* Modal Chat trực tuyến thời gian thực với Ban chỉ huy địa phương */}
+      <LocalAuthorityChatModal
+        visible={showChatModal}
+        onClose={() => setShowChatModal(false)}
+      />
     </View>
   );
 };

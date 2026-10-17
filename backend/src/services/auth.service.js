@@ -56,17 +56,13 @@ class AuthService {
   async register(data, userAgent = null, ipAddress = null) {
     const { fullName, email, phone, password, gender, dateOfBirth, address, roles, otp } = data;
 
-    // 1. Kiểm tra đầu vào bắt buộc
-    if (!fullName || !email || !phone || !password) {
-      throw new ApiError(400, 'Họ tên, email, số điện thoại và mật khẩu là bắt buộc.');
+    // 1. Kiểm tra đầu vào bắt buộc: họ tên, số điện thoại và mật khẩu
+    if (!fullName || !phone || !password) {
+      throw new ApiError(400, 'Họ tên, số điện thoại và mật khẩu là bắt buộc.');
     }
 
     if (typeof fullName !== 'string' || fullName.trim().length < 2) {
       throw new ApiError(400, 'Họ và tên phải có ít nhất 2 ký tự.');
-    }
-
-    if (!isValidEmail(email)) {
-      throw new ApiError(400, 'Định dạng email không hợp lệ.');
     }
 
     if (!isValidPhone(phone)) {
@@ -77,13 +73,24 @@ class AuthService {
       throw new ApiError(400, 'Mật khẩu phải có độ dài tối thiểu 6 ký tự.');
     }
 
-    // 2. Kiểm tra trùng lặp email hoặc số điện thoại
-    const normalizedEmail = email.toLowerCase().trim();
+    // Email là tùy chọn: nếu có nhập thì phải đúng định dạng
+    let normalizedEmail = null;
+    if (email && typeof email === 'string' && email.trim()) {
+      if (!isValidEmail(email)) {
+        throw new ApiError(400, 'Định dạng email không hợp lệ.');
+      }
+      normalizedEmail = email.toLowerCase().trim();
+    }
+
+    // 2. Kiểm tra trùng lặp email (nếu có) hoặc số điện thoại
     const cleanPhone = phone.trim();
 
-    const existingEmail = await User.findOne({ email: normalizedEmail });
-    if (existingEmail && existingEmail.passwordHash) {
-      throw new ApiError(409, 'Email này đã được sử dụng trong hệ thống.');
+    let existingEmail = null;
+    if (normalizedEmail) {
+      existingEmail = await User.findOne({ email: normalizedEmail });
+      if (existingEmail && existingEmail.passwordHash) {
+        throw new ApiError(409, 'Email này đã được sử dụng trong hệ thống.');
+      }
     }
 
     const existingPhone = await User.findOne({ phone: cleanPhone });
@@ -91,8 +98,8 @@ class AuthService {
       throw new ApiError(409, 'Số điện thoại này đã được sử dụng trong hệ thống.');
     }
 
-    // 3. Nếu có OTP xác thực đi kèm, kiểm tra mã OTP
-    if (otp) {
+    // 3. Nếu có OTP xác thực qua email đi kèm, kiểm tra mã OTP
+    if (otp && normalizedEmail) {
       const cleanOtp = String(otp).trim();
       const record = otpStore.get(normalizedEmail);
       if (!record || record.expiresAt < Date.now()) {
@@ -116,7 +123,7 @@ class AuthService {
     let user = existingEmail || existingPhone;
     if (user) {
       user.fullName = fullName.trim();
-      user.email = normalizedEmail;
+      if (normalizedEmail) user.email = normalizedEmail;
       user.phone = cleanPhone;
       user.passwordHash = passwordHash;
       user.gender = gender || user.gender || null;
@@ -125,11 +132,11 @@ class AuthService {
       user.roles = userRoles;
       user.status = 'ACTIVE';
       user.isVerified = true;
+      user.isPhoneVerified = true;
       user.lastLoginAt = new Date();
     } else {
-      user = new User({
+      const userData = {
         fullName: fullName.trim(),
-        email: normalizedEmail,
         phone: cleanPhone,
         passwordHash,
         gender: gender || null,
@@ -138,8 +145,13 @@ class AuthService {
         roles: userRoles,
         status: 'ACTIVE',
         isVerified: true,
+        isPhoneVerified: true,
         lastLoginAt: new Date(),
-      });
+      };
+      if (normalizedEmail) {
+        userData.email = normalizedEmail;
+      }
+      user = new User(userData);
     }
 
     // 5. Tạo bộ Token và phiên làm việc

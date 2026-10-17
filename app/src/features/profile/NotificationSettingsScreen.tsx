@@ -132,7 +132,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
         {/* Banner giới thiệu */}
         <View style={styles.bannerCard}>
           <View style={styles.bannerIconBox}>
-            <Feather name="bell" size={22} color="#D97706" />
+            <Feather name="bell" size={22} color="#0066FF" />
           </View>
           <View style={styles.bannerTextBox}>
             <Text style={styles.bannerTitle}>Tùy chỉnh nhận thông báo</Text>
@@ -154,10 +154,10 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
         {/* Section 1: 4 Tùy chọn thông báo chính */}
         <Text style={styles.sectionHeader}>CÁC LOẠI THÔNG BÁO</Text>
         <View style={styles.cardGroup}>
-          {/* 1. Alert (Cảnh báo khẩn cấp) */}
+          {/* 1. Alert (Cảnh báo khẩn cấp) - MÀU ĐỎ */}
           <View style={styles.settingItem}>
-            <View style={[styles.settingIconBox, { backgroundColor: '#EFF6FF' }]}>
-              <Feather name="alert-triangle" size={20} color="#0066FF" />
+            <View style={[styles.settingIconBox, { backgroundColor: '#FEF2F2' }]}>
+              <Feather name="alert-triangle" size={20} color="#DC2626" />
             </View>
             <View style={styles.settingTextBox}>
               <View style={styles.settingTitleRow}>
@@ -172,20 +172,21 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
               </Text>
             </View>
             <Switch
+              style={styles.switchControl}
               value={settings.alert}
               onValueChange={(val) => updateSetting('alert', val)}
-              trackColor={{ false: '#CBD5E1', true: '#BFDBFE' }}
-              thumbColor={settings.alert ? '#0066FF' : '#F1F5F9'}
+              trackColor={{ false: '#CBD5E1', true: '#FECACA' }}
+              thumbColor={settings.alert ? '#DC2626' : '#F1F5F9'}
               ios_backgroundColor="#CBD5E1"
             />
           </View>
 
           <View style={styles.itemDivider} />
 
-          {/* 2. Safe Location (Vị trí an toàn) */}
+          {/* 2. Safe Location (Vị trí an toàn) - MÀU XANH DƯƠNG */}
           <View style={styles.settingItem}>
-            <View style={[styles.settingIconBox, { backgroundColor: '#ECFDF5' }]}>
-              <MaterialCommunityIcons name="shield-home" size={20} color="#10B981" />
+            <View style={[styles.settingIconBox, { backgroundColor: '#EFF6FF' }]}>
+              <MaterialCommunityIcons name="shield-home" size={20} color="#0066FF" />
             </View>
             <View style={styles.settingTextBox}>
               <View style={styles.settingTitleRow}>
@@ -200,20 +201,21 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
               </Text>
             </View>
             <Switch
+              style={styles.switchControl}
               value={settings.safeLocation}
               onValueChange={(val) => updateSetting('safeLocation', val)}
-              trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
-              thumbColor={settings.safeLocation ? '#10B981' : '#F1F5F9'}
+              trackColor={{ false: '#CBD5E1', true: '#BFDBFE' }}
+              thumbColor={settings.safeLocation ? '#0066FF' : '#F1F5F9'}
               ios_backgroundColor="#CBD5E1"
             />
           </View>
 
           <View style={styles.itemDivider} />
 
-          {/* 3. Notification (Thông báo hệ thống) */}
+          {/* 3. Notification (Thông báo hệ thống) - MÀU XANH DƯƠNG */}
           <View style={styles.settingItem}>
-            <View style={[styles.settingIconBox, { backgroundColor: '#F0F9FF' }]}>
-              <Feather name="bell" size={20} color="#0284C7" />
+            <View style={[styles.settingIconBox, { backgroundColor: '#EFF6FF' }]}>
+              <Feather name="bell" size={20} color="#0066FF" />
             </View>
             <View style={styles.settingTextBox}>
               <Text style={styles.settingTitle}>Thông báo hệ thống</Text>
@@ -223,20 +225,21 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
               </Text>
             </View>
             <Switch
+              style={styles.switchControl}
               value={settings.systemNotification}
               onValueChange={(val) => updateSetting('systemNotification', val)}
-              trackColor={{ false: '#CBD5E1', true: '#BAE6FD' }}
-              thumbColor={settings.systemNotification ? '#0284C7' : '#F1F5F9'}
+              trackColor={{ false: '#CBD5E1', true: '#BFDBFE' }}
+              thumbColor={settings.systemNotification ? '#0066FF' : '#F1F5F9'}
               ios_backgroundColor="#CBD5E1"
             />
           </View>
 
           <View style={styles.itemDivider} />
 
-          {/* 4. Tin tức (Bản tin thiên tai & thời tiết) */}
+          {/* 4. Tin tức (Bản tin thiên tai & thời tiết) - MÀU XANH DƯƠNG */}
           <View style={styles.settingItem}>
-            <View style={[styles.settingIconBox, { backgroundColor: '#F5F3FF' }]}>
-              <Feather name="file-text" size={20} color="#7C3AED" />
+            <View style={[styles.settingIconBox, { backgroundColor: '#EFF6FF' }]}>
+              <Feather name="file-text" size={20} color="#0066FF" />
             </View>
             <View style={styles.settingTextBox}>
               <Text style={styles.settingTitle}>Tin tức & Thời tiết</Text>
@@ -246,22 +249,32 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
               </Text>
             </View>
             <Switch
+              style={styles.switchControl}
               value={settings.news}
               onValueChange={(val) => updateSetting('news', val)}
-              trackColor={{ false: '#CBD5E1', true: '#DDD6FE' }}
-              thumbColor={settings.news ? '#7C3AED' : '#F1F5F9'}
+              trackColor={{ false: '#CBD5E1', true: '#BFDBFE' }}
+              thumbColor={settings.news ? '#0066FF' : '#F1F5F9'}
               ios_backgroundColor="#CBD5E1"
             />
           </View>
         </View>
 
-        {/* Section 2: Tùy chọn âm thanh & rung */}
+        {/* Section 2: Tùy chọn âm thanh & rung - MÀU XANH DƯƠNG */}
         <Text style={styles.sectionHeader}>PHẢN HỒI THIẾT BỊ</Text>
         <View style={styles.cardGroup}>
           {/* Âm thanh */}
           <View style={styles.settingItem}>
-            <View style={[styles.settingIconBox, { backgroundColor: '#F8FAFC' }]}>
-              <Feather name="volume-2" size={20} color="#475569" />
+            <View
+              style={[
+                styles.settingIconBox,
+                { backgroundColor: settings.sound ? '#EFF6FF' : '#F8FAFC' },
+              ]}
+            >
+              <Feather
+                name="volume-2"
+                size={20}
+                color={settings.sound ? '#0066FF' : '#64748B'}
+              />
             </View>
             <View style={styles.settingTextBox}>
               <Text style={styles.settingTitle}>Âm thanh chuông báo</Text>
@@ -270,10 +283,11 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
               </Text>
             </View>
             <Switch
+              style={styles.switchControl}
               value={settings.sound}
               onValueChange={(val) => updateSetting('sound', val)}
-              trackColor={{ false: '#CBD5E1', true: '#94A3B8' }}
-              thumbColor={settings.sound ? '#334155' : '#F1F5F9'}
+              trackColor={{ false: '#CBD5E1', true: '#BFDBFE' }}
+              thumbColor={settings.sound ? '#0066FF' : '#F1F5F9'}
               ios_backgroundColor="#CBD5E1"
             />
           </View>
@@ -282,8 +296,17 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
 
           {/* Rung */}
           <View style={styles.settingItem}>
-            <View style={[styles.settingIconBox, { backgroundColor: '#F8FAFC' }]}>
-              <Feather name="smartphone" size={20} color="#475569" />
+            <View
+              style={[
+                styles.settingIconBox,
+                { backgroundColor: settings.vibration ? '#EFF6FF' : '#F8FAFC' },
+              ]}
+            >
+              <Feather
+                name="smartphone"
+                size={20}
+                color={settings.vibration ? '#0066FF' : '#64748B'}
+              />
             </View>
             <View style={styles.settingTextBox}>
               <Text style={styles.settingTitle}>Rung thiết bị</Text>
@@ -292,10 +315,11 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
               </Text>
             </View>
             <Switch
+              style={styles.switchControl}
               value={settings.vibration}
               onValueChange={(val) => updateSetting('vibration', val)}
-              trackColor={{ false: '#CBD5E1', true: '#94A3B8' }}
-              thumbColor={settings.vibration ? '#334155' : '#F1F5F9'}
+              trackColor={{ false: '#CBD5E1', true: '#BFDBFE' }}
+              thumbColor={settings.vibration ? '#0066FF' : '#F1F5F9'}
               ios_backgroundColor="#CBD5E1"
             />
           </View>
@@ -376,11 +400,11 @@ const styles = StyleSheet.create({
   bannerCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#FFFBEB',
+    backgroundColor: '#EFF6FF',
     borderRadius: PROFILE_THEME.radius.card,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: '#DBEAFE',
     marginBottom: 16,
     gap: 12,
   },
@@ -388,7 +412,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#DBEAFE',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -398,13 +422,13 @@ const styles = StyleSheet.create({
   bannerTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#92400E',
+    color: '#1E3A8A',
     marginBottom: 4,
   },
   bannerDesc: {
     fontSize: 12.5,
     lineHeight: 18,
-    color: '#B45309',
+    color: '#1E40AF',
   },
   savedBanner: {
     flexDirection: 'row',
@@ -459,17 +483,22 @@ const styles = StyleSheet.create({
   },
   settingTextBox: {
     flex: 1,
+    paddingRight: 10,
   },
   settingTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 3,
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 4,
   },
   settingTitle: {
-    fontSize: 14.5,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  switchControl: {
+    flexShrink: 0,
   },
   settingDesc: {
     fontSize: 12,
@@ -477,26 +506,26 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   urgentBadge: {
-    backgroundColor: '#DBEAFE',
-    paddingHorizontal: 6,
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
   },
   urgentBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#0066FF',
+    color: '#DC2626',
   },
   recBadge: {
-    backgroundColor: '#D1FAE5',
-    paddingHorizontal: 6,
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
   },
   recBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#059669',
+    color: '#0066FF',
   },
   itemDivider: {
     height: 1,

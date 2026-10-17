@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const chatService = require('../services/chat.service');
 const eventBus = require('../services/eventBus');
 const { sendSuccess } = require('../utils/apiResponse');
@@ -92,6 +93,29 @@ class ChatController {
       clearInterval(heartbeat);
       eventBus.off('chat_event', onChatEvent);
     });
+  }
+
+  /**
+   * GET /chat/local-authority
+   * Lấy thông tin Ban chỉ huy / Cán bộ địa phương theo GPS hoặc địa chỉ
+   */
+  async getLocalAuthority(req, res, next) {
+    try {
+      const { areaName, province, ward, lat, lng, userId } = req.query;
+      const targetUserId = req.user?._id || (userId && mongoose.Types.ObjectId.isValid(userId) ? userId : null);
+      const result = await chatService.getLocalAuthorityForArea({
+        areaName,
+        province,
+        ward,
+        lat: lat ? parseFloat(lat) : undefined,
+        lng: lng ? parseFloat(lng) : undefined,
+        userId: targetUserId,
+        currentUser: req.user,
+      });
+      return sendSuccess(res, 200, 'Lấy thông tin địa phương thành công', result);
+    } catch (error) {
+      next(error);
+    }
   }
 }
 

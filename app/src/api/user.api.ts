@@ -54,15 +54,25 @@ export class UserApi {
   /**
    * Lấy thông tin hồ sơ Citizen (kèm người liên hệ khẩn cấp)
    */
-  async getCitizenProfile(): Promise<ApiResponse<{ citizen?: { emergencyContact?: EmergencyContact } }>> {
+  async getCitizenProfile(): Promise<ApiResponse<{ citizen?: { emergencyContact?: EmergencyContact; emergencyContacts?: EmergencyContact[] } }>> {
     return await this.client.get('/users/me/citizen');
   }
 
   /**
-   * Cập nhật người liên hệ khẩn cấp
+   * Cập nhật người liên hệ khẩn cấp (Hỗ trợ đơn lẻ hoặc mảng)
    */
-  async updateEmergencyContact(contact: EmergencyContact): Promise<ApiResponse> {
+  async updateEmergencyContact(contact: EmergencyContact | EmergencyContact[]): Promise<ApiResponse> {
     return await this.client.patch('/users/me/citizen/emergency-contact', contact);
+  }
+
+  /**
+   * Xóa / Gỡ người liên hệ khẩn cấp (theo contactId hoặc toàn bộ)
+   */
+  async deleteEmergencyContact(contactId?: string): Promise<ApiResponse> {
+    const endpoint = contactId
+      ? `/users/me/citizen/emergency-contact/${contactId}`
+      : '/users/me/citizen/emergency-contact';
+    return await this.client.delete(endpoint);
   }
 
   /**

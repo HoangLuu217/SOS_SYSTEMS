@@ -39,7 +39,7 @@ export interface ChatConversationItem {
   name: string;
   phone?: string;
   email?: string;
-  role: 'ADMIN' | 'LOCAL_AUTHORITY' | 'ALL';
+  role: 'ADMIN' | 'LOCAL_AUTHORITY' | 'CITIZEN' | 'ALL';
   areaName?: string;
   position?: string;
   unreadCount: number;

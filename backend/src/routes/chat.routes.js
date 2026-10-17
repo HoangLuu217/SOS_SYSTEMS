@@ -9,6 +9,12 @@ const { authenticate, optionalAuthenticate } = require('../middlewares/authMiddl
  */
 router.get('/stream', optionalAuthenticate, chatController.streamChatEvents);
 
+/**
+ * @route   GET /chat/local-authority
+ * @desc    Lấy thông tin Ban chỉ huy / Cán bộ địa phương theo GPS hoặc địa chỉ
+ */
+router.get('/local-authority', optionalAuthenticate, chatController.getLocalAuthority);
+
 // Các routes còn lại yêu cầu đăng nhập
 router.use(authenticate);
 
