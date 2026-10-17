@@ -708,7 +708,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 <Text style={styles.utilityLabel}>Đóng góp{'\n'}điểm nguy hiểm</Text>
               </TouchableOpacity>
 
-              {/* 7. Chat với địa phương */}
+              {/* 7. Nhắn tin với địa phương */}
               <TouchableOpacity
                 style={styles.utilityItem}
                 onPress={() => handleUtilityPress('chat_local_authority')}
@@ -721,7 +721,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     color="#0284C7"
                   />
                 </View>
-                <Text style={styles.utilityLabel}>Chat với{'\n'}địa phương</Text>
+                <Text style={styles.utilityLabel}>Nhắn tin với{'\n'}địa phương</Text>
               </TouchableOpacity>
 
               {/* 8. Đăng tin (Admin) */}
