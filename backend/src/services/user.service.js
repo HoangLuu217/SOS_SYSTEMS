@@ -252,21 +252,35 @@ class UserService {
       throw new ApiError(404, 'Không tìm thấy thông tin tài khoản.');
     }
 
-    const { name, phone, relation } = contactData || {};
-    const cleanPhone = phone ? phone.replace(/\s+/g, '') : null;
-
-    if (cleanPhone && !isValidPhone(cleanPhone)) {
-      throw new ApiError(400, 'Số điện thoại người liên hệ khẩn cấp không hợp lệ.');
-    }
-
     if (!user.citizen) {
       user.citizen = {};
     }
 
+    const { name, phone, relation } = contactData || {};
+
+    // Nếu gửi dữ liệu rỗng hoặc null, coi như xoá người liên hệ
+    if (!name && !phone) {
+      user.citizen.emergencyContact = {
+        name: null,
+        phone: null,
+        relation: null,
+      };
+      await user.save();
+      return {
+        userId: user._id,
+        citizen: user.citizen,
+      };
+    }
+
+    const cleanPhone = phone ? phone.replace(/\s+/g, '') : null;
+    if (cleanPhone && !isValidPhone(cleanPhone)) {
+      throw new ApiError(400, 'Số điện thoại người liên hệ khẩn cấp không hợp lệ.');
+    }
+
     user.citizen.emergencyContact = {
-      name: name ? name.trim() : user.citizen.emergencyContact?.name || null,
-      phone: cleanPhone || user.citizen.emergencyContact?.phone || null,
-      relation: relation ? relation.trim() : user.citizen.emergencyContact?.relation || null,
+      name: name ? name.trim() : null,
+      phone: cleanPhone || null,
+      relation: relation ? relation.trim() : null,
     };
 
     await user.save();
@@ -274,6 +288,30 @@ class UserService {
     return {
       userId: user._id,
       citizen: user.citizen,
+    };
+  }
+
+  /**
+   * Xóa / Gỡ thông tin người liên hệ khẩn cấp
+   */
+  async deleteEmergencyContact(userId) {
+    const user = await User.findById(userId);
+    if (!user) {
+      throw new ApiError(404, 'Không tìm thấy thông tin tài khoản.');
+    }
+
+    if (user.citizen) {
+      user.citizen.emergencyContact = {
+        name: null,
+        phone: null,
+        relation: null,
+      };
+      await user.save();
+    }
+
+    return {
+      userId: user._id,
+      citizen: user.citizen || {},
     };
   }
 

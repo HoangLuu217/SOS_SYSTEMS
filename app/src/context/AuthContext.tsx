@@ -529,7 +529,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await backendApi.updateProfile(data);
       if (res.success && res.data) {
         setUser(res.data);
-        return { success: true, message: 'Cập nhật hồ sơ thành công' };
+        await AsyncStorage.setItem(ENV.STORAGE_KEYS.USER_DATA, JSON.stringify(res.data));
+        return { success: true, message: 'Cập nhật hồ sơ thành công', data: res.data };
       }
       return { success: false, message: res.message || 'Cập nhật thất bại.' };
     } catch (err: any) {

@@ -560,6 +560,15 @@ class BackendApiService {
   }
 
   /**
+   * Xóa / Gỡ người liên hệ khẩn cấp
+   */
+  async deleteEmergencyContact(): Promise<ApiResponse> {
+    return await this.request('/users/me/citizen/emergency-contact', {
+      method: 'DELETE',
+    });
+  }
+
+  /**
    * Lấy danh sách thông báo (hỗ trợ lọc theo loại INSTANT, SYSTEM, trạng thái đã đọc)
    */
   async getNotifications(query?: {

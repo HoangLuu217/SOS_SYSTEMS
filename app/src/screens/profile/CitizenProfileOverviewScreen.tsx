@@ -70,12 +70,15 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
         }
 
         const res = await backendApi.getCitizenProfile();
-        if (res.success && res.data?.citizen?.emergencyContact && isMounted) {
+        if (res.success && res.data?.citizen?.emergencyContact?.name && isMounted) {
           setEmergencyContact(res.data.citizen.emergencyContact);
           await AsyncStorage.setItem(
             '@sos_emergency_contact',
             JSON.stringify(res.data.citizen.emergencyContact)
           );
+        } else if (res.success && !res.data?.citizen?.emergencyContact?.name && isMounted) {
+          setEmergencyContact(null);
+          await AsyncStorage.removeItem('@sos_emergency_contact');
         }
       } catch {
         // Giữ fallback đã lưu

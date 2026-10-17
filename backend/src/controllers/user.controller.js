@@ -80,6 +80,18 @@ class UserController {
   }
 
   /**
+   * DELETE /users/me/citizen/emergency-contact
+   */
+  async deleteEmergencyContact(req, res, next) {
+    try {
+      const result = await userService.deleteEmergencyContact(req.user._id);
+      return sendSuccess(res, 200, 'Xoá người liên hệ khẩn cấp thành công', result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * POST /users/me/send-phone-otp
    */
   async sendPhoneOtp(req, res, next) {
