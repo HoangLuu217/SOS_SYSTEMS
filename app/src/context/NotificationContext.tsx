@@ -2,12 +2,12 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { Platform, Vibration } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
-import { backendApi, NotificationItem } from '../services/backendApi';
+import { backendApi, NotificationItem } from '@/api';
 import {
   registerForPushNotificationsAsync,
   triggerLocalNotification,
-} from '../services/pushNotificationService';
-import { sseNotificationService } from '../services/sseNotificationService';
+  sseNotificationService,
+} from '@/services';
 import { useAuth } from './AuthContext';
 
 const SEEN_NOTIFICATIONS_STORAGE_KEY = 'sos_seen_notification_ids_v1';
