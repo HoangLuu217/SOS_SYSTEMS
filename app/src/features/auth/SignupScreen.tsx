@@ -9,6 +9,8 @@ import {
   Platform,
   ScrollView,
   StatusBar,
+  Modal,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -44,6 +46,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
     }
   }, [user]);
   const [otpModalVisible, setOtpModalVisible] = useState(false);
+  const [methodModalVisible, setMethodModalVisible] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
   const [verifyMethod, setVerifyMethod] = useState<'phone' | 'email'>('phone');
   const [phoneSessionInfo, setPhoneSessionInfo] = useState('');
@@ -77,20 +80,23 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
         visible: true,
         type: 'warning',
         title: 'Lỗi thông tin',
-        message: 'Số điện thoại không hợp lệ (hỗ trợ định dạng VN 10 số).',
+        message: 'Vui lòng nhập số điện thoại hợp lệ (bắt buộc).',
       });
       return false;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!email.trim() || !emailRegex.test(email.trim())) {
-      setAlertInfo({
-        visible: true,
-        type: 'warning',
-        title: 'Lỗi thông tin',
-        message: 'Định dạng email không hợp lệ.',
-      });
-      return false;
+    // Email là tùy chọn (không bắt buộc)
+    if (email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        setAlertInfo({
+          visible: true,
+          type: 'warning',
+          title: 'Lỗi thông tin',
+          message: 'Định dạng email không hợp lệ.',
+        });
+        return false;
+      }
     }
 
     if (!password || password.length < 6) {
@@ -119,9 +125,24 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
   const handleSignup = async () => {
     if (!validate()) return;
 
+    const hasPhone = Boolean(phone.trim());
+    const hasEmail = Boolean(email.trim());
+
+    if (hasPhone && hasEmail) {
+      // Có cả SĐT và Email -> Hiển thị bước chọn phương thức nhận mã
+      setMethodModalVisible(true);
+    } else {
+      // Chỉ có SĐT -> Gửi thẳng mã về số điện thoại và mở ô nhập OTP
+      sendOtpForMethod('phone');
+    }
+  };
+
+  const sendOtpForMethod = async (method: 'phone' | 'email') => {
+    setVerifyMethod(method);
+    setMethodModalVisible(false);
     setSendingOtp(true);
 
-    if (verifyMethod === 'phone') {
+    if (method === 'phone') {
       const res = await sendPhoneOtp(phone.trim());
       setSendingOtp(false);
       if (res.success && res.sessionInfo) {
@@ -165,7 +186,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
       const res = await signup({
         fullName: fullName.trim(),
         phone: phone.trim(),
-        email: email.trim(),
+        email: email.trim() || undefined,
         password,
       });
 
@@ -226,33 +247,16 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
 
   const handleChangeVerifyMethod = async () => {
     const nextMethod = verifyMethod === 'phone' ? 'email' : 'phone';
-    setVerifyMethod(nextMethod);
-    setSendingOtp(true);
-    if (nextMethod === 'phone') {
-      const res = await sendPhoneOtp(phone.trim());
-      setSendingOtp(false);
-      if (res.success && res.sessionInfo) {
-        setPhoneSessionInfo(res.sessionInfo);
-      } else {
-        setAlertInfo({
-          visible: true,
-          type: 'error',
-          title: 'Lỗi gửi mã OTP qua SMS',
-          message: res.message || 'Không thể gửi mã xác thực qua số điện thoại.',
-        });
-      }
-    } else {
-      const res = await sendOtp(email.trim());
-      setSendingOtp(false);
-      if (!res.success) {
-        setAlertInfo({
-          visible: true,
-          type: 'error',
-          title: 'Lỗi gửi mã OTP qua Email',
-          message: res.message,
-        });
-      }
+    if (nextMethod === 'email' && !email.trim()) {
+      setAlertInfo({
+        visible: true,
+        type: 'warning',
+        title: 'Chưa có Email',
+        message: 'Bạn chưa nhập địa chỉ Email khi đăng ký.',
+      });
+      return;
     }
+    await sendOtpForMethod(nextMethod);
   };
 
   const handleGoogleSignup = async () => {
@@ -344,20 +348,20 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
                           returnKeyType="next"
                         />
 
-                        {/* 2. Số điện thoại */}
+                        {/* 2. Số điện thoại (Bắt buộc) */}
                         <CustomInput
                           iconName="phone"
-                          placeholder="Số điện thoại"
+                          placeholder="Số điện thoại *"
                           value={phone}
                           onChangeText={setPhone}
                           keyboardType="phone-pad"
                           returnKeyType="next"
                         />
 
-                        {/* 3. Địa chỉ Email */}
+                        {/* 3. Địa chỉ Email (Tùy chọn) */}
                         <CustomInput
                           iconName="mail"
-                          placeholder="Địa chỉ Email"
+                          placeholder="Địa chỉ Email (tùy chọn)"
                           value={email}
                           onChangeText={setEmail}
                           keyboardType="email-address"
@@ -385,60 +389,6 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
                           returnKeyType="done"
                           onSubmitEditing={handleSignup}
                         />
-
-                        {/* Phương thức nhận mã xác thực OTP: SĐT hoặc Email */}
-                        <View style={styles.methodSelectorWrap}>
-                          <Text style={styles.methodSelectorLabel}>Nhận mã OTP qua:</Text>
-                          <View style={styles.methodPillsRow}>
-                            <TouchableOpacity
-                              style={[
-                                styles.methodPill,
-                                verifyMethod === 'phone' && styles.methodPillActive,
-                              ]}
-                              onPress={() => setVerifyMethod('phone')}
-                              activeOpacity={0.8}
-                            >
-                              <Feather
-                                name="phone"
-                                size={13}
-                                color={verifyMethod === 'phone' ? '#0066FF' : '#475569'}
-                                style={{ marginRight: 4 }}
-                              />
-                              <Text
-                                style={[
-                                  styles.methodPillText,
-                                  verifyMethod === 'phone' && styles.methodPillTextActive,
-                                ]}
-                              >
-                                Số điện thoại
-                              </Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                              style={[
-                                styles.methodPill,
-                                verifyMethod === 'email' && styles.methodPillActive,
-                              ]}
-                              onPress={() => setVerifyMethod('email')}
-                              activeOpacity={0.8}
-                            >
-                              <Feather
-                                name="mail"
-                                size={13}
-                                color={verifyMethod === 'email' ? '#0066FF' : '#475569'}
-                                style={{ marginRight: 4 }}
-                              />
-                              <Text
-                                style={[
-                                  styles.methodPillText,
-                                  verifyMethod === 'email' && styles.methodPillTextActive,
-                                ]}
-                              >
-                                Email
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
 
                         {/* Nút Đăng ký màu xanh với mũi tên */}
                         <PrimaryButton
@@ -483,7 +433,74 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
         </SafeAreaView>
       </View>
 
-      {/* Modal Xác thực OTP Đăng ký (Hỗ trợ cả SĐT và Email) */}
+      {/* Modal Chọn Phương Thức Nhận Mã OTP (Khi có cả SĐT và Email) */}
+      <Modal
+        visible={methodModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMethodModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setMethodModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback onPress={e => e.stopPropagation()}>
+              <View style={styles.methodModalCard}>
+                <View style={styles.methodModalHeader}>
+                  <View style={styles.methodModalIconWrap}>
+                    <Feather name="shield" size={24} color="#0066FF" />
+                  </View>
+                  <Text style={styles.methodModalTitle}>Chọn phương thức nhận mã</Text>
+                  <Text style={styles.methodModalSubtitle}>
+                    Mã xác thực 6 số sẽ được gửi để kích hoạt tài khoản của bạn. Vui lòng chọn nơi nhận mã:
+                  </Text>
+                </View>
+
+                {/* Tùy chọn 1: Số điện thoại */}
+                <TouchableOpacity
+                  style={styles.methodOptionCard}
+                  onPress={() => sendOtpForMethod('phone')}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.methodOptionIcon, { backgroundColor: '#EFF6FF' }]}>
+                    <Feather name="phone-call" size={20} color="#0066FF" />
+                  </View>
+                  <View style={styles.methodOptionTextWrap}>
+                    <Text style={styles.methodOptionTitle}>Gửi qua Số điện thoại (SMS)</Text>
+                    <Text style={styles.methodOptionValue}>{phone.trim()}</Text>
+                  </View>
+                  <Feather name="chevron-right" size={18} color="#94A3B8" />
+                </TouchableOpacity>
+
+                {/* Tùy chọn 2: Email */}
+                <TouchableOpacity
+                  style={styles.methodOptionCard}
+                  onPress={() => sendOtpForMethod('email')}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.methodOptionIcon, { backgroundColor: '#FFF7ED' }]}>
+                    <Feather name="mail" size={20} color="#EA580C" />
+                  </View>
+                  <View style={styles.methodOptionTextWrap}>
+                    <Text style={styles.methodOptionTitle}>Gửi qua Hòm thư Email</Text>
+                    <Text style={styles.methodOptionValue} numberOfLines={1}>{email.trim()}</Text>
+                  </View>
+                  <Feather name="chevron-right" size={18} color="#94A3B8" />
+                </TouchableOpacity>
+
+                {/* Nút Hủy */}
+                <TouchableOpacity
+                  style={styles.methodModalCancelBtn}
+                  onPress={() => setMethodModalVisible(false)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.methodModalCancelText}>Hủy bỏ</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* Modal Xác thực OTP Đăng ký */}
       <OtpModal
         visible={otpModalVisible}
         type={verifyMethod}
@@ -492,7 +509,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
         onClose={() => setOtpModalVisible(false)}
         onVerify={handleVerifyAndSignup}
         onResend={handleResendOtp}
-        onChangeMethod={handleChangeVerifyMethod}
+        onChangeMethod={email.trim() ? handleChangeVerifyMethod : undefined}
       />
 
       <AlertModal
@@ -614,50 +631,102 @@ const styles = StyleSheet.create({
   form: {
     width: '100%',
   },
-  /* Selector phương thức OTP */
-  methodSelectorWrap: {
-    marginBottom: 10,
-    marginTop: 2,
+  /* Modal Chọn Phương Thức Nhận Mã */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
-  methodSelectorLabel: {
-    fontSize: 12,
-    fontWeight: '700',
+  methodModalCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 10,
+      },
+    }),
+  },
+  methodModalHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  methodModalIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  methodModalTitle: {
+    fontSize: 18.5,
+    fontWeight: '800',
     color: '#0F172A',
     marginBottom: 6,
-    paddingLeft: 2,
+    textAlign: 'center',
   },
-  methodPillsRow: {
-    flexDirection: 'row',
-    gap: 8,
+  methodModalSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 19,
+    paddingHorizontal: 8,
   },
-  methodPill: {
-    flex: 1,
+  methodOptionCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    marginBottom: 12,
+  },
+  methodOptionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.65)',
-    borderRadius: 12,
-    paddingVertical: 8,
-    borderWidth: 1.2,
-    borderColor: 'rgba(255, 255, 255, 0.9)',
+    alignItems: 'center',
+    marginRight: 12,
   },
-  methodPillActive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#0066FF',
-    shadowColor: '#0066FF',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    elevation: 2,
+  methodOptionTextWrap: {
+    flex: 1,
   },
-  methodPillText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  methodPillTextActive: {
-    color: '#0066FF',
+  methodOptionTitle: {
+    fontSize: 13,
     fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 2,
+  },
+  methodOptionValue: {
+    fontSize: 12.5,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  methodModalCancelBtn: {
+    marginTop: 6,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+  },
+  methodModalCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748B',
   },
   dividerRow: {
     flexDirection: 'row',

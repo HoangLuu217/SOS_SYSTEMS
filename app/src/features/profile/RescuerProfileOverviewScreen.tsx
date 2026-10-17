@@ -35,6 +35,7 @@ export interface RescuerProfileOverviewScreenProps {
   onNavigateToNotificationSettings: () => void;
   onNavigateToNotifications: () => void;
   unreadNotificationsCount?: number;
+  refreshTrigger?: number;
 }
 
 export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreenProps> = ({
@@ -281,8 +282,8 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
           {/* Rescuer Name */}
           <Text style={styles.rescuerName}>{displayName}</Text>
 
-          {/* Badges Row: Role & Professional Verification */}
-          <View style={styles.badgesRow}>
+          {/* Huy hiệu xếp chồng lên nhau theo chiều dọc */}
+          <View style={styles.badgesStack}>
             {/* Role Badge */}
             <View style={styles.roleBadge}>
               <MaterialCommunityIcons name="shield-account" size={13} color="#FFFFFF" />
@@ -294,12 +295,6 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
               <Feather name="check-circle" size={13} color="#059669" />
               <Text style={styles.verifiedBadgeText}>Hồ sơ cứu hộ đã xác minh</Text>
             </View>
-          </View>
-
-          {/* Separate Account Status */}
-          <View style={styles.accountStatusRow}>
-            <View style={styles.activeDot} />
-            <Text style={styles.accountStatusText}>Tài khoản đang hoạt động</Text>
           </View>
 
           {/* Contact Row: Phone & Email */}
@@ -790,6 +785,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
+    overflow: 'hidden',
   },
   avatarWrap: {
     position: 'relative',
@@ -834,23 +830,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  badgesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
     marginBottom: 10,
+    textAlign: 'center',
+    paddingHorizontal: 12,
+  },
+  badgesStack: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 7,
+    marginBottom: 14,
   },
   roleBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 5,
     backgroundColor: '#2563EB',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: PROFILE_THEME.radius.badge,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
   },
   roleBadgeText: {
     fontSize: 12,
@@ -860,11 +858,12 @@ const styles = StyleSheet.create({
   verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
+    gap: 5,
     backgroundColor: '#ECFDF5',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: PROFILE_THEME.radius.badge,
+    paddingHorizontal: 12,
+    paddingVertical: 4.5,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#A7F3D0',
   },
@@ -872,12 +871,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#059669',
-  },
-  accountStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 14,
   },
   activeDot: {
     width: 7,

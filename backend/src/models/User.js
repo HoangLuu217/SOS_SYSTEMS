@@ -23,6 +23,15 @@ const citizenSchema = new mongoose.Schema(
       },
       relation: { type: String, trim: true, default: null },
     },
+    emergencyContacts: [
+      {
+        _id: false,
+        id: { type: String, default: () => new mongoose.Types.ObjectId().toString() },
+        name: { type: String, trim: true },
+        phone: { type: String, trim: true },
+        relation: { type: String, trim: true },
+      },
+    ],
     areaId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'AdministrativeArea',
@@ -216,12 +225,14 @@ const userSchema = new mongoose.Schema(
     },
     email: {
       type: String,
-      required: [true, 'Email là bắt buộc'],
+      required: false,
       unique: true,
+      sparse: true,
       lowercase: true,
       trim: true,
       validate: {
         validator: function (v) {
+          if (!v) return true;
           return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
         },
         message: props => `${props.value} không phải là định dạng email hợp lệ!`,

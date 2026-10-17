@@ -4,6 +4,7 @@ import { userApi } from './user.api';
 import { alertApi } from './alert.api';
 import { mapApi } from './map.api';
 import { notificationApi } from './notification.api';
+import { chatApi } from './chat.api';
 import type {
   EmergencyContact,
   UserProfile,
@@ -54,7 +55,7 @@ class BackendApiService {
   // Auth API
   register = (data: {
     fullName: string;
-    email: string;
+    email?: string;
     phone: string;
     password: string;
     address?: string;
@@ -106,8 +107,10 @@ class BackendApiService {
 
   getCitizenProfile = () => userApi.getCitizenProfile();
 
-  updateEmergencyContact = (contact: EmergencyContact) =>
+  updateEmergencyContact = (contact: EmergencyContact | EmergencyContact[]) =>
     userApi.updateEmergencyContact(contact);
+
+  deleteEmergencyContact = (contactId?: string) => userApi.deleteEmergencyContact(contactId);
 
   getRescuerProfile = () => userApi.getRescuerProfile();
 
@@ -161,6 +164,19 @@ class BackendApiService {
     page?: number;
     limit?: number;
   } = {}) => alertApi.getAlerts(params);
+
+  // Chat with Local Authority API
+  getLocalAuthority = (params: Parameters<typeof chatApi.getLocalAuthority>[0]) =>
+    chatApi.getLocalAuthority(params);
+
+  getChatMessages = (params: Parameters<typeof chatApi.getMessages>[0]) =>
+    chatApi.getMessages(params);
+
+  sendChatMessage = (data: Parameters<typeof chatApi.sendMessage>[0]) =>
+    chatApi.sendMessage(data);
+
+  markChatAsRead = (params: Parameters<typeof chatApi.markAsRead>[0]) =>
+    chatApi.markAsRead(params);
 
   // Storage helpers
   saveTokens = (accessToken: string, refreshToken?: string) =>
