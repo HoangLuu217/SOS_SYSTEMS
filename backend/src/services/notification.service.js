@@ -249,7 +249,7 @@ class NotificationService {
       }
     }
 
-    const targetAreaName = targetAreaDoc ? targetAreaDoc.name : 'Toàn thành phố Đà Nẵng';
+    const targetAreaName = targetAreaDoc ? targetAreaDoc.name : 'Toàn địa bàn quản lý';
     const effectivePriority = priority || (normalizedType === 'INSTANT' ? 'CRITICAL' : 'NORMAL');
 
     // Tìm kiếm các tài khoản người dùng mục tiêu trong khu vực

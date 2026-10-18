@@ -502,16 +502,37 @@
   margin: 0 auto;
 }
 
-/* Khung User Profile (Avatar, Tên, Chức vụ, Nút Đăng xuất) */
+/* Khung User Profile (Avatar, Tên, Chức vụ, Nút Đăng xuất) - Premium Oceanic Executive Styling */
 .sos-user-profile-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 8px 10px;
-  background: var(--sos-user-profile-bg);
-  border: 1px solid var(--sos-user-profile-border);
-  border-radius: 10px;
+  padding: 9px 11px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px -1px rgba(2, 132, 199, 0.08), 0 1px 3px rgba(0, 0, 0, 0.03);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.sos-user-profile-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(180deg, #0284c7 0%, #38bdf8 100%);
+  opacity: 0.9;
+  border-radius: 12px 0 0 12px;
+}
+
+.sos-user-profile-card:hover {
+  border-color: #bae6fd;
+  box-shadow: 0 4px 16px -2px rgba(2, 132, 199, 0.14), 0 2px 5px rgba(0, 0, 0, 0.04);
 }
 
 .sos-user-profile-left {
@@ -520,91 +541,136 @@
   gap: 10px;
   min-width: 0;
   flex: 1;
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 2px 0;
+  transition: opacity 0.15s ease;
+}
+
+.sos-user-profile-left:hover {
+  opacity: 0.9;
 }
 
 .sos-user-avatar-wrap {
   position: relative;
   flex-shrink: 0;
+  width: 38px;
+  height: 38px;
 }
 
 .sos-user-avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+  font-size: 14.5px;
+  font-weight: 800;
+  box-shadow: 0 3px 10px rgba(2, 132, 199, 0.3);
   user-select: none;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  border: 1.5px solid #ffffff;
+  letter-spacing: 0.2px;
+  transition: transform 0.2s ease;
 }
 
-.sos-user-avatar.authority {
-  background: var(--sos-avatar-authority-bg);
+.sos-user-profile-card:hover .sos-user-avatar {
+  transform: scale(1.05);
 }
 
 .sos-user-avatar.admin {
-  background: var(--sos-avatar-admin-bg);
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 3px 10px rgba(239, 68, 68, 0.3);
+}
+
+.sos-user-avatar.authority {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
 }
 
 .sos-user-online-dot {
   position: absolute;
-  bottom: -1px;
-  right: -1px;
-  width: 8.5px;
-  height: 8.5px;
+  bottom: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: #22c55e;
+  background: #10b981;
   border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25), 0 0 6px #10b981;
 }
 
 .sos-user-meta {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  flex: 1;
+  gap: 3px;
   line-height: 1.25;
 }
 
 .sos-user-name {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--sos-sidebar-title);
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #0f172a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-transform: capitalize;
+  letter-spacing: -0.15px;
 }
 
-.sos-user-role {
+.sos-user-profile-card .sos-user-role-badge,
+.sos-user-role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
-  font-weight: 500;
-  color: var(--sos-sidebar-subtitle);
+  font-weight: 600;
+  color: #0284c7;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  padding: 2px 7px;
+  border-radius: 6px;
+  width: fit-content;
+  max-width: none;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  letter-spacing: 0;
+  text-transform: none;
+  margin-bottom: 0;
+}
+
+.sos-user-profile-card .sos-user-role-badge.admin,
+.sos-user-role-badge.admin {
+  color: #dc2626;
+  background: #fee2e2;
+  border-color: #fecaca;
 }
 
 /* Nút Đăng xuất */
 .sos-btn-logout-icon {
-  background: transparent;
-  border: none;
-  color: var(--sos-logout-color);
-  width: 30px;
-  height: 30px;
-  border-radius: 6px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 .sos-btn-logout-icon:hover {
-  background: var(--sos-logout-hover-bg);
-  color: var(--sos-logout-hover-color);
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
   transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(220, 38, 38, 0.18);
 }
 
 .sos-sidebar.collapsed .sos-user-profile-card {

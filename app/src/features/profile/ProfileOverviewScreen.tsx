@@ -38,6 +38,7 @@ export const ProfileOverviewScreen: React.FC<ProfileOverviewScreenProps> = ({
       <RescuerProfileOverviewScreen
         onNavigateToEditProfile={onNavigateToEditProfile}
         onNavigateToProfessional={onNavigateToProfessional}
+        onNavigateToSosHistory={onNavigateToSosHistory}
         onNavigateToSecurity={onNavigateToSecurity}
         onNavigateToNotificationSettings={onNavigateToNotificationSettings}
         onNavigateToNotifications={onNavigateToNotifications}

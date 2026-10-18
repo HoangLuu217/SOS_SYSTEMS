@@ -89,13 +89,13 @@ export const TacticalMap = ({
   const { mapMode } = useApp();
   const mapInstanceRef = useRef<L.Map | null>(null);
 
-  const defaultLng = 108.2178;
-  const defaultLat = 16.0465;
+  const defaultLng = selectedSos?.coordinates?.lng ?? 107.5;
+  const defaultLat = selectedSos?.coordinates?.lat ?? 16.0;
 
   const managedWard = areas[0];
-  const targetAreaId = managedWard?.id || activeOfficer?.jurisdictionAreaId || 'area-htd';
+  const targetAreaId = managedWard?.id || activeOfficer?.jurisdictionAreaId || '';
   const computedCentroid = managedWard ? getAreaCentroid(managedWard, areas) : null;
-  const areaCentroid = computedCentroid || WARD_CENTROIDS[targetAreaId] || [defaultLng, defaultLat];
+  const areaCentroid = computedCentroid || (targetAreaId ? WARD_CENTROIDS[targetAreaId] : null) || [defaultLng, defaultLat];
 
   const sosLng = selectedSos?.coordinates?.lng ?? areaCentroid[0];
   const sosLat = selectedSos?.coordinates?.lat ?? areaCentroid[1];

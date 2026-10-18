@@ -5,14 +5,12 @@ import {
   CheckCircle2,
   RefreshCw,
   Globe2,
-  Layers,
   ChevronRight,
-  Shield,
   ArrowLeft,
   UserCheck,
   UserX,
   Home,
-  Loader2
+  Loader2,
 } from 'lucide-react';
 import type { AdministrativeAreaItem } from '@/types/dashboard';
 import {
@@ -23,9 +21,11 @@ import {
 import {
   fetchVietnamProvincesService,
   fetchProvinceSubUnitsService,
+  VIETNAM_34_PROVINCES_STANDARD,
   type VietnamProvinceItem,
   type ProvinceSubUnitItem,
 } from '@/services/geoapifyBoundariesService';
+import './AdministrativeAreasView.css';
 
 export interface AdministrativeAreasViewProps {
   onOpenMap?: (sosId?: any) => void;
@@ -41,7 +41,22 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
   const [refreshIndex, setRefreshIndex] = useState(0);
   const [provincesLoading, setProvincesLoading] = useState(false);
 
-  const [vietnamProvinces, setVietnamProvinces] = useState<VietnamProvinceItem[]>([]);
+  const [vietnamProvinces, setVietnamProvinces] = useState<VietnamProvinceItem[]>(() => {
+    const initialList: VietnamProvinceItem[] = VIETNAM_34_PROVINCES_STANDARD.map((s) => ({
+      id: `prov-${s.code}`,
+      code: s.code,
+      name: s.name,
+      placeId: `prov-${s.code}`,
+      ref: `VN-${s.code}`,
+      isoCode: s.iso,
+      divisionType: s.type,
+      population: s.pop,
+      areaKm2: s.area,
+      isDaNang: s.code === 48,
+    }));
+    initialList.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+    return initialList;
+  });
   
   const [selectedProvince, setSelectedProvince] = useState<VietnamProvinceItem | null>(null);
   const [subUnits, setSubUnits] = useState<ProvinceSubUnitItem[]>([]);
@@ -53,7 +68,6 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
   const [subUnitSearchQuery, setSubUnitSearchQuery] = useState('');
   const [areaManagers, setAreaManagers] = useState<Record<string, AreaManagerInfo>>({});
 
-
   // Tải danh sách đơn vị hành chính và cán bộ quản lý
   useEffect(() => {
     let isMounted = true;
@@ -61,9 +75,9 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
       try {
         setProvincesLoading(true);
         const [areasRes, mgrRes, provRes] = await Promise.all([
-          propAreas.length === 0 ? fetchAdministrativeAreas() : Promise.resolve(null),
-          fetchAreaManagers(),
-          fetchVietnamProvincesService(),
+          fetchAdministrativeAreas().catch(() => ({ success: false, data: [] })),
+          fetchAreaManagers().catch(() => ({ success: false, data: {} })),
+          fetchVietnamProvincesService().catch(() => []),
         ]);
         if (!isMounted) return;
         if (areasRes && areasRes.success && Array.isArray(areasRes.data)) {
@@ -87,7 +101,7 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
     return () => {
       isMounted = false;
     };
-  }, [propAreas, refreshIndex]);
+  }, [refreshIndex]);
 
     const getSubUnitManager = (u: ProvinceSubUnitItem): AreaManagerInfo | null => {
       if (!areaManagers || Object.keys(areaManagers).length === 0) return null;
@@ -186,7 +200,7 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
       const wardCount = subUnits.filter((u) => u.type === 'WARD' || u.type === 'COMMUNE' || u.type === 'TOWN').length;
 
       return (
-        <div className="sos-views-container sos-light-view">
+        <div className="sos-views-container sos-light-view administrative-areas-container">
           {/* THANH BREADCRUMB ĐIỀU HƯỚNG */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13.5px' }}>
@@ -214,54 +228,10 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
             </span>
           </div>
 
-          {/* STATS CỦA TỈNH ĐƯỢC CHỌN - LOẠI BỎ DÂN SỐ/DIỆN TÍCH, THAY BẰNG THỐNG KÊ QUẢN LÝ ĐỊA BÀN */}
-          <div className="sos-stats-grid">
-            <div className="sos-stat-box">
-              <div className="sos-stat-icon blue">
-                <Building2 size={20} />
-              </div>
-              <div className="sos-stat-meta">
-                <span className="sos-stat-value">{subUnits.length}</span>
-                <span className="sos-stat-label">Tổng Đơn Vị Con</span>
-              </div>
-            </div>
-            <div className="sos-stat-box">
-              <div className="sos-stat-icon green">
-                <UserCheck size={20} />
-              </div>
-              <div className="sos-stat-meta">
-                <span className="sos-stat-value" style={{ color: '#16a34a' }}>{managedCount}</span>
-                <span className="sos-stat-label">Đã Có Địa Phương Quản Lý</span>
-              </div>
-            </div>
-            <div className="sos-stat-box">
-              <div className="sos-stat-icon red">
-                <UserX size={20} />
-              </div>
-              <div className="sos-stat-meta">
-                <span className="sos-stat-value" style={{ color: '#dc2626' }}>{unmanagedCount}</span>
-                <span className="sos-stat-label">Chưa Phân Công Quản Lý</span>
-              </div>
-            </div>
-            <div className="sos-stat-box">
-              <div className="sos-stat-icon yellow">
-                <Home size={20} />
-              </div>
-              <div className="sos-stat-meta">
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px', lineHeight: 1.2 }}>
-                  <span style={{ fontSize: '22px', fontWeight: 800, color: '#0f172a' }}>{districtCount}</span>
-                  <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#64748b' }}>Quận/Huyện</span>
-                  <span style={{ color: '#cbd5e1', fontSize: '13px', margin: '0 2px' }}>•</span>
-                  <span style={{ fontSize: '22px', fontWeight: 800, color: '#0f172a' }}>{wardCount}</span>
-                  <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#64748b' }}>Phường/Xã</span>
-                </div>
-                <span className="sos-stat-label">Cơ Cấu Đơn Vị Hành Chính</span>
-              </div>
-            </div>
-          </div>
+
 
           {/* BẢNG DANH MỤC XÃ PHƯỜNG / QUẬN HUYỆN CỦA TỈNH */}
-          <div className="sos-view-card">
+          <div className="sos-view-card administrative-areas-card">
             <div className="sos-view-card-header">
               <div className="sos-view-card-title">
                 <Building2 size={18} color="#0284c7" />
@@ -338,7 +308,7 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
               </div>
             </div>
 
-            <div className="sos-table-wrapper">
+            <div className="sos-table-wrapper administrative-areas-table-wrapper">
               <table className="sos-table">
                 <thead>
                   <tr>
@@ -559,48 +529,10 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
 
 
     return (
-      <div className="sos-views-container sos-light-view">
-        {/* STATS TỔNG QUAN CÁC TỈNH THÀNH VIỆT NAM */}
-        <div className="sos-stats-grid">
-          <div className="sos-stat-box">
-            <div className="sos-stat-icon blue">
-              <Globe2 size={22} />
-            </div>
-            <div className="sos-stat-meta">
-              <span className="sos-stat-value">{vietnamProvinces.length || 34}</span>
-              <span className="sos-stat-label">34 Tỉnh / Thành Phố Cả Nước</span>
-            </div>
-          </div>
-          <div className="sos-stat-box">
-            <div className="sos-stat-icon yellow">
-              <Building2 size={22} />
-            </div>
-            <div className="sos-stat-meta">
-              <span className="sos-stat-value">Toàn Quốc</span>
-              <span className="sos-stat-label">Phạm Vi Quản Trị Hệ Thống</span>
-            </div>
-          </div>
-          <div className="sos-stat-box">
-            <div className="sos-stat-icon green">
-              <Layers size={22} />
-            </div>
-            <div className="sos-stat-meta">
-              <span className="sos-stat-value">Mô Hình 2025</span>
-              <span className="sos-stat-label">34 Đơn Vị Cấp Tỉnh Mới</span>
-            </div>
-          </div>
-          <div className="sos-stat-box">
-            <div className="sos-stat-icon purple">
-              <Shield size={22} />
-            </div>
-            <div className="sos-stat-meta">
-              <span className="sos-stat-value">2 Tầng</span>
-              <span className="sos-stat-label">Tỉnh Thành ➔ Xã Phường Con</span>
-            </div>
-          </div>
-        </div>
+      <div className="sos-views-container sos-light-view administrative-areas-container">
 
-        <div className="sos-view-card">
+
+        <div className="sos-view-card administrative-areas-card">
           <div className="sos-view-card-header">
             <div>
               <div className="sos-view-card-title">
@@ -678,7 +610,7 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
             </div>
           </div>
 
-          <div className="sos-table-wrapper">
+          <div className="sos-table-wrapper administrative-areas-table-wrapper">
             <table className="sos-table">
               <thead>
                 <tr>
@@ -689,7 +621,7 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
                 </tr>
               </thead>
               <tbody>
-                {provincesLoading ? (
+                {provincesLoading && filteredProvinces.length === 0 ? (
                   <tr>
                     <td colSpan={4} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
                       <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 8px auto', display: 'block', color: '#0284c7' }} />

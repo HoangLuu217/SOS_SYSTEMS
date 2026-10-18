@@ -71,67 +71,88 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
     const resolveAreaAndAuthority = async () => {
       setLoadingInfo(true);
       let detectedArea = '';
-      let detectedProvince = 'Thành phố Đà Nẵng';
-      let detectedWard = 'Thanh Khê';
+      let detectedProvince = '';
+      let detectedWard = '';
       let lat: number | undefined = undefined;
       let lng: number | undefined = undefined;
 
-      // 1. Lấy toạ độ GPS thực tế của thiết bị
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
-          lat = loc.coords.latitude;
-          lng = loc.coords.longitude;
-          if (isMounted) setCurrentCoords({ lat, lng });
-
-          // Dịch ngược toạ độ (reverse geocode)
-          const geoList = await Location.reverseGeocodeAsync({
-            latitude: loc.coords.latitude,
-            longitude: loc.coords.longitude,
-          });
-
-          if (geoList && geoList.length > 0) {
-            const geo = geoList[0];
-            detectedWard = geo.subregion || geo.district || geo.name || 'Thanh Khê';
-            detectedProvince = geo.region || geo.city || 'Thành phố Đà Nẵng';
-            detectedArea = [detectedWard, detectedProvince].filter(Boolean).join(', ');
-          }
-        }
-      } catch (err) {
-        console.log('[GPS Detect Note]:', err);
-      }
-
-      // 2. Dự phòng nếu người dùng chưa bật GPS: Lấy từ hồ sơ tài khoản
-      if (!detectedArea && user?.address) {
-        detectedArea = user.address;
-        const parts = user.address.split(',').map((s) => s.trim());
-        if (parts.length >= 2) {
-          detectedProvince = parts[parts.length - 1];
-          detectedWard = parts[parts.length - 2];
+      // 1. Ưu tiên: Địa chỉ thực tế mà tài khoản thuộc về (đã lưu trong hồ sơ cá nhân)
+      if (user?.address && user.address.trim()) {
+        const fullAddress = user.address.trim();
+        const parts = fullAddress.split(',').map((s) => s.trim()).filter(Boolean);
+        if (parts.length >= 3) {
+          detectedProvince = parts[parts.length - 1]; // Tỉnh / Thành phố
+          detectedWard = parts[parts.length - 2];     // Phường / Xã / Thị trấn
+          detectedArea = `${detectedWard}, ${detectedProvince}`;
+        } else if (parts.length === 2) {
+          detectedProvince = parts[1];
+          detectedWard = parts[0];
+          detectedArea = fullAddress;
         } else {
-          detectedProvince = user.address;
+          detectedProvince = fullAddress;
+          detectedArea = fullAddress;
         }
       }
+
+      // 2. Nếu tài khoản chưa cập nhật địa chỉ trong hồ sơ: Tự động lấy GPS thực tế
+      if (!detectedArea) {
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            });
+            lat = loc.coords.latitude;
+            lng = loc.coords.longitude;
+            if (isMounted) setCurrentCoords({ lat, lng });
+
+            // Dịch ngược toạ độ (reverse geocode)
+            const geoList = await Location.reverseGeocodeAsync({
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+            });
+
+            if (geoList && geoList.length > 0) {
+              const geo = geoList[0];
+              detectedProvince = geo.region || geo.city || '';
+              detectedWard = geo.district || geo.subregion || geo.street || geo.name || '';
+              detectedArea = [detectedWard, detectedProvince].filter(Boolean).join(', ');
+            }
+          }
+        } catch (err) {
+          console.log('[GPS Detect Note]:', err);
+        }
+      }
+
+      // Cập nhật ngầm tọa độ GPS thiết bị (nếu đã cấp quyền) để sẵn sàng khi gửi vị trí khẩn cấp
+      Location.getForegroundPermissionsAsync()
+        .then(({ status }) => {
+          if (status === 'granted') {
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+              .then((loc) => {
+                if (isMounted) setCurrentCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+              })
+              .catch(() => {});
+          }
+        })
+        .catch(() => {});
 
       if (!detectedArea) {
-        detectedArea = 'P. Thanh Khê, Thành phố Đà Nẵng';
+        detectedArea = 'Khu vực của bạn';
       }
 
       if (isMounted) {
         setUserLocationName(detectedArea);
-        setProvinceName(detectedProvince);
-        setWardName(detectedWard);
+        if (detectedProvince) setProvinceName(detectedProvince);
+        if (detectedWard) setWardName(detectedWard);
       }
 
       // 3. Gọi Backend lấy thông tin Ban chỉ huy / Cán bộ địa phương quản lý theo từng tài khoản
       try {
         const res = await backendApi.getLocalAuthority({
-          areaName: detectedArea,
-          province: detectedProvince,
-          ward: detectedWard,
+          areaName: detectedArea !== 'Khu vực của bạn' ? detectedArea : undefined,
+          province: detectedProvince || undefined,
+          ward: detectedWard || undefined,
           lat,
           lng,
           userId: user?._id,
@@ -139,6 +160,9 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
 
         if (isMounted && res.success && res.data) {
           setLocalInfo(res.data);
+          if (res.data.areaName) {
+            setUserLocationName(res.data.areaName);
+          }
           loadChatHistory(res.data.channel);
           initRealtimeSocket(res.data.channel);
         }
@@ -509,17 +533,22 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
     );
   };
 
-  // Tên hiển thị chuẩn xác: Phường / Xã thực tế
-  const cleanWard = (wardName || 'Thanh Khê')
-    .replace(/^(phường|xã|thị trấn|p\.|x\.|tt\.)\s+/i, '')
-    .trim();
+  // Tên hiển thị chuẩn xác theo địa bàn thực tế (GPS hoặc địa chỉ hồ sơ)
+  const displayArea = localInfo?.areaName || userLocationName || 'Địa phương';
+  const cleanDisplayArea = displayArea.replace(/^(phường|xã|thị trấn|p\.|x\.|tt\.)\s+/i, '').trim();
 
-  const cleanProvince = (provinceName || 'Đà Nẵng')
-    .replace(/^(thành phố|tỉnh|tp\.)\s+/i, '')
-    .trim();
+  const isCommuneOrWard =
+    displayArea.toLowerCase().includes('phường') ||
+    displayArea.toLowerCase().includes('xã') ||
+    displayArea.toLowerCase().includes('thị trấn');
 
-  const headerDepartmentTitle = `UBND Phường ${cleanWard}`;
-  const headerSubtitleText = `${cleanProvince} · Trực tuyến 24/7`;
+  const headerDepartmentTitle =
+    localInfo?.authority?.department ||
+    (isCommuneOrWard ? `UBND ${displayArea}` : `Ban Chỉ Huy PCTT ${cleanDisplayArea}`);
+
+  const headerSubtitleText = localInfo?.authority?.name
+    ? `${localInfo.authority.name} · Trực ban 24/7`
+    : `${displayArea} · Trực tuyến 24/7`;
 
   // Tính toán Top Inset an toàn cho tai thỏ iPhone / Dynamic Island
   const topSafeInset = Math.max(
@@ -636,8 +665,8 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
                     </View>
 
                     <Text style={styles.introCardTitle}>
-                      Kênh kết nối P. {cleanWard},{'\n'}
-                      {provinceName || 'Thành Phố Đà Nẵng'}
+                      Kênh kết nối cứu hộ{'\n'}
+                      {displayArea}
                     </Text>
 
                     <Text style={styles.introCardDesc}>

@@ -33,6 +33,7 @@ export type RescuerAvailability =
 export interface RescuerProfileOverviewScreenProps {
   onNavigateToEditProfile: () => void;
   onNavigateToProfessional: () => void;
+  onNavigateToSosHistory: () => void;
   onNavigateToSecurity: () => void;
   onNavigateToNotificationSettings: () => void;
   onNavigateToNotifications: () => void;
@@ -43,6 +44,7 @@ export interface RescuerProfileOverviewScreenProps {
 export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreenProps> = ({
   onNavigateToEditProfile,
   onNavigateToProfessional,
+  onNavigateToSosHistory,
   onNavigateToSecurity,
   onNavigateToNotificationSettings,
   onNavigateToNotifications,
@@ -313,14 +315,13 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
       {/* 1. Header: RescueSOS Branding + Notification Bell */}
       <View style={styles.header}>
         <View style={styles.brandRow}>
-          <LogoSOS
-            style={styles.brandLogo}
-            resizeMode="contain"
-          />
-          <View>
-            <Text style={styles.brandTitle}>RescueSOS</Text>
-            <Text style={styles.brandSubtitle}>Hệ thống Điều phối Cứu hộ</Text>
+          <View style={styles.logoBadge}>
+            <LogoSOS
+              style={styles.brandLogo}
+              resizeMode="contain"
+            />
           </View>
+          <Text style={styles.brandTitle}>HỖ TRỢ CỨU NẠN</Text>
         </View>
 
         <View style={styles.headerRightRow}>
@@ -570,6 +571,24 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
 
         {/* 4. Menu Items */}
         <View style={styles.menuCard}>
+          {/* Item 0: Lịch sử báo nạn (SOS History) */}
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={onNavigateToSosHistory}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconBox, { backgroundColor: '#FEF2F2' }]}>
+              <Feather name="clock" size={18} color="#DC2626" />
+            </View>
+            <View style={styles.menuTextBox}>
+              <Text style={styles.menuTitle}>Lịch sử báo nạn</Text>
+              <Text style={styles.menuDesc}>Xem các yêu cầu SOS cá nhân bạn đã gửi</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+
+          <View style={styles.menuDivider} />
+
           {/* Item 1: Thông tin cá nhân */}
           <TouchableOpacity
             style={styles.menuItem}
@@ -893,15 +912,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
+  logoBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#0066FF',
+    overflow: 'hidden',
+  },
   brandLogo: {
-    width: 38,
-    height: 38,
+    width: 32,
+    height: 32,
   },
   brandTitle: {
     fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.3,
+    letterSpacing: 0.2,
   },
   brandSubtitle: {
     fontSize: 11,

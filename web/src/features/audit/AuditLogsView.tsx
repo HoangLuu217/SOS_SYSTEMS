@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { History, RefreshCw, Search, X } from 'lucide-react';
 import type { AuditLogItem } from '@/types/dashboard';
 import { fetchAuditLogs } from '@/api';
-import { FALLBACK_AUDIT_LOGS } from '@/constants/dashboardFallbackData';
 import './AuditLogsView.css';
 
 // Từ điển chuyển đổi các mã hành động thành nhãn tiếng Việt dễ hiểu
@@ -329,7 +328,7 @@ export const AuditLogsView: React.FC = () => {
     loadLogs();
   }, []);
 
-  const displayAuditLogs = auditLogs.length > 0 ? auditLogs : FALLBACK_AUDIT_LOGS;
+  const displayAuditLogs = auditLogs;
   const totalCount = displayAuditLogs.length;
 
   const citizenCount = displayAuditLogs.filter((l) => isRoleMatch(l.actorRole || '', 'CITIZEN')).length;
