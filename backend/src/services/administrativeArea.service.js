@@ -405,6 +405,39 @@ class AdministrativeAreaService {
     return managerMap;
   }
 
+  isCoordsMatchingProvince(coords, provinceName) {
+    if (!provinceName || !coords) return true;
+    const p = provinceName.toLowerCase();
+    let sample = null;
+    try {
+      if (Array.isArray(coords)) {
+        if (Array.isArray(coords[0])) {
+          if (Array.isArray(coords[0][0])) {
+            sample = coords[0][0][0] || coords[0][0];
+          } else {
+            sample = coords[0][0];
+          }
+        }
+      }
+    } catch {
+      return true;
+    }
+    if (!sample || !Array.isArray(sample) || sample.length < 2) return true;
+    const [lng, lat] = sample;
+    if (typeof lng !== 'number' || typeof lat !== 'number') return true;
+
+    if (p.includes('đà nẵng') || p.includes('da nang')) {
+      return lat >= 15.5 && lat <= 16.6 && lng >= 107.5 && lng <= 108.7;
+    }
+    if (p.includes('hồ chí minh') || p.includes('ho chi minh') || p.includes('sài gòn') || p.includes('tphcm')) {
+      return lat >= 10.0 && lat <= 11.5 && lng >= 106.0 && lng <= 107.3;
+    }
+    if (p.includes('hà nội') || p.includes('ha noi')) {
+      return lat >= 20.3 && lat <= 21.7 && lng >= 105.1 && lng <= 106.3;
+    }
+    return true;
+  }
+
   /**
    * Lấy hoặc truy vấn online ranh giới GeoJSON polygon của một khu vực hành chính (phường/xã/quận/huyện)
    * Tự động lưu cache vào CSDL MongoDB để các lần sau không cần gọi API ngoài
@@ -423,8 +456,40 @@ class AdministrativeAreaService {
       });
     }
 
-    // 1. Nếu đã có boundary trong CSDL
-    if (areaDoc && areaDoc.boundary && Array.isArray(areaDoc.boundary.coordinates) && areaDoc.boundary.coordinates.length > 0) {
+    let cleanProvince = (province || '');
+    if (cleanProvince.includes('(') && cleanProvince.includes(')')) {
+      cleanProvince = cleanProvince.replace(/.*?\((.*?)\).*/, '$1');
+    }
+    cleanProvince = cleanProvince.replace(/^Thành phố\s+|^Tỉnh\s+/i, '').trim();
+    const cleanDistrict = (district || '').replace(/^(Quận|Huyện|Thị xã)\s+/i, '').trim();
+
+    const isTinyBoundary = (coords) => {
+      try {
+        const ring = coords && coords[0] && Array.isArray(coords[0][0]) ? coords[0][0] : coords && coords[0];
+        if (!ring || ring.length < 3) return true;
+        let minX = 999, maxX = -999, minY = 999, maxY = -999;
+        for (const pt of ring) {
+          const [x, y] = Array.isArray(pt) ? pt : [0, 0];
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+        return (maxX - minX) < 0.005 && (maxY - minY) < 0.005;
+      } catch {
+        return false;
+      }
+    };
+
+    // 1. Nếu đã có boundary trong CSDL và tọa độ khớp với tỉnh/thành được yêu cầu và không phải vết nhỏ của tòa nhà/bệnh viện
+    if (
+      areaDoc &&
+      areaDoc.boundary &&
+      Array.isArray(areaDoc.boundary.coordinates) &&
+      areaDoc.boundary.coordinates.length > 0 &&
+      !isTinyBoundary(areaDoc.boundary.coordinates) &&
+      this.isCoordsMatchingProvince(areaDoc.boundary.coordinates, cleanProvince)
+    ) {
       return {
         areaId: areaDoc._id,
         name: areaDoc.name,
@@ -441,8 +506,6 @@ class AdministrativeAreaService {
     }
 
     const cleanTargetName = targetName.trim();
-    const cleanProvince = (province || '').replace(/^Thành phố\s+|^Tỉnh\s+/i, '').trim();
-    const cleanDistrict = (district || '').replace(/^(Quận|Huyện|Thị xã)\s+/i, '').trim();
 
     // Các biến thể từ khóa tìm kiếm tăng dần độ rộng
     const searchQueries = [];
@@ -452,7 +515,13 @@ class AdministrativeAreaService {
     if (cleanProvince) {
       searchQueries.push(`${cleanTargetName}, ${cleanProvince}`);
     }
-    searchQueries.push(cleanTargetName);
+    if (cleanTargetName.toLowerCase().includes('hòa cường') && (cleanProvince.toLowerCase().includes('đà nẵng') || !cleanProvince)) {
+      searchQueries.push(`Chợ Hòa Cường, Hải Châu, Đà Nẵng`);
+    }
+    // Chỉ fallback tìm tên trần nếu không cung cấp tỉnh thành cụ thể
+    if (!cleanProvince) {
+      searchQueries.push(cleanTargetName);
+    }
 
     let foundFeature = null;
 
@@ -468,7 +537,10 @@ class AdministrativeAreaService {
         if (res.ok) {
           const data = await res.json();
           const polyFeature = data.features?.find(
-            (f) => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')
+            (f) =>
+              f.geometry &&
+              (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon') &&
+              this.isCoordsMatchingProvince(f.geometry.coordinates, cleanProvince)
           );
           if (polyFeature) {
             foundFeature = polyFeature;
@@ -488,18 +560,48 @@ class AdministrativeAreaService {
           const geoRes = await fetch(geoUrl);
           if (geoRes.ok) {
             const geoData = await geoRes.json();
-            const placeId = geoData.features?.[0]?.properties?.place_id;
+            const adminFeatures = (geoData.features || []).filter((f) => {
+              const rt = f.properties?.result_type;
+              return rt !== 'amenity' && rt !== 'building' && rt !== 'street';
+            });
+            const chosenFeature =
+              adminFeatures.find((f) => {
+                const rt = f.properties?.result_type;
+                return rt === 'county' || rt === 'district' || rt === 'suburb' || rt === 'city' || rt === 'administrative';
+              }) || adminFeatures[0] || geoData.features?.[0];
+
+            const placeId = chosenFeature?.properties?.place_id;
             if (placeId) {
               const boundUrl = `https://api.geoapify.com/v1/boundaries/part-of?id=${placeId}&geometry=geometry_1000&apiKey=3383e3ba2267489985bbe6d9bf7aa05d`;
               const boundRes = await fetch(boundUrl);
               if (boundRes.ok) {
                 const boundData = await boundRes.json();
-                const bFeature = boundData.features?.find(
-                  (f) => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')
-                );
-                if (bFeature) {
-                  foundFeature = bFeature;
-                  break;
+                if (Array.isArray(boundData.features) && boundData.features.length > 0) {
+                  // Ưu tiên polygon có tên khớp với khu vực cần tìm
+                  const matchingByName = boundData.features.find(
+                    (f) =>
+                      f.geometry &&
+                      (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon') &&
+                      f.properties?.name &&
+                      f.properties.name.toLowerCase().includes(cleanTargetName.toLowerCase()) &&
+                      this.isCoordsMatchingProvince(f.geometry.coordinates, cleanProvince)
+                  );
+
+                  // Hoặc polygon bất kỳ trong ranh giới tỉnh hợp lệ (trừ quốc gia Việt Nam)
+                  const fallbackPoly = boundData.features.find(
+                    (f) =>
+                      f.geometry &&
+                      (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon') &&
+                      (f.properties?.name || '').toLowerCase() !== 'việt nam' &&
+                      (f.properties?.name || '').toLowerCase() !== 'vietnam' &&
+                      this.isCoordsMatchingProvince(f.geometry.coordinates, cleanProvince)
+                  );
+
+                  const bFeature = matchingByName || fallbackPoly;
+                  if (bFeature) {
+                    foundFeature = bFeature;
+                    break;
+                  }
                 }
               }
             }

@@ -8,8 +8,6 @@ import {
   Plus,
   Minus,
   RotateCcw,
-  Sun,
-  Moon,
   ExternalLink,
   LogOut,
 } from 'lucide-react';
@@ -39,7 +37,7 @@ const MapController = ({ onMount }: { onMount?: (map: L.Map) => void }) => {
 };
 
 export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Props) => {
-  const { theme, setTheme, mapMode, setMapMode } = useApp();
+  const { theme, mapMode, setMapMode } = useApp();
   const mapRef = useRef<L.Map | null>(null);
 
   const defaultCenter: [number, number] = [16.0544, 108.2022];
@@ -143,21 +141,6 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            style={{
-              background: 'transparent',
-              border: '1px solid var(--sos-border)',
-              borderRadius: 6,
-              padding: '5px 7px',
-              color: 'var(--sos-text-secondary)',
-              cursor: 'pointer',
-            }}
-            title={theme === 'dark' ? 'Chế độ Sáng' : 'Chế độ Tối'}
-          >
-            {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-          </button>
 
           {!embedded && onSwitchToAuthor && (
             <button

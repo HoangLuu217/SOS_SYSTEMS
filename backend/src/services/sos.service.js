@@ -33,24 +33,7 @@ const resolveAdministrativeArea = async (address, location, inputAreaId) => {
     }
   }
 
-  // 2. Nhận diện các tuyến đường đặc trưng của Đà Nẵng
-  if (addressStr.includes('hòa cường') || addressStr.includes('núi thành') || addressStr.includes('tiểu la') || addressStr.includes('2 tháng 9')) {
-    const hoaCuong = await AdministrativeArea.findOne({ code: 'DAD_HOA_CUONG' });
-    if (hoaCuong) return hoaCuong._id;
-  }
-  if (addressStr.includes('hải châu') || addressStr.includes('bạch đằng')) {
-    const haiChau = await AdministrativeArea.findOne({ code: 'DAD_HAI_CHAU' });
-    if (haiChau) return haiChau._id;
-  }
-  if (addressStr.includes('điện bàn') || addressStr.includes('lê đỉnh')) {
-    const dienBan = await AdministrativeArea.findOne({ code: 'DBD' });
-    if (dienBan) return dienBan._id;
-  }
-
-  // 3. Fallback: Khu vực Đà Nẵng cấp Tỉnh hoặc khu vực hoạt động đầu tiên
-  const danang = await AdministrativeArea.findOne({ code: { $in: ['DANANG', 'DAD'] } });
-  if (danang) return danang._id;
-
+  // 2. Fallback: Khu vực hoạt động đầu tiên trong CSDL
   const defaultAny = await AdministrativeArea.findOne({ status: 'ACTIVE' });
   return defaultAny ? defaultAny._id : null;
 };

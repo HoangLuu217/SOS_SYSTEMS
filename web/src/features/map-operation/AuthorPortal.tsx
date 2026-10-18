@@ -15,8 +15,6 @@ import { TacticalMap } from './dispatch/TacticalMap';
 import {
   ShieldAlert,
   LogOut,
-  Sun,
-  Moon,
   Map as MapIcon,
   Layers,
   AlertTriangle,
@@ -43,7 +41,7 @@ interface Props {
 }
 
 export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
-  const { theme, setTheme, mapMode, setMapMode } = useApp();
+  const { mapMode, setMapMode } = useApp();
 
   // Domain D data
   const [areas, setAreas] = useState<AdministrativeArea[]>([]);
@@ -67,13 +65,13 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
         id: 'officer-default',
         fullName: 'Cán Bộ Trực Ban Địa Bàn',
         role: 'AUTHOR',
-        email: 'canbo@danang.gov.vn',
-        phone: '0905000000',
+        email: 'canbo@sos.gov.vn',
+        phone: '112',
         position: 'Chỉ Huy Trực Ban Tác Chiến',
         department: 'Ban Chỉ Huy PCTT Địa Phương',
-        jurisdictionAreaId: 'area-htd',
+        jurisdictionAreaId: 'area-national',
         jurisdictionAreaName: 'Địa Bàn Phụ Trách',
-        districtName: 'Thành phố Đà Nẵng',
+        districtName: 'Toàn Quốc',
       }
     );
   }, [user, authorOfficers]);
@@ -534,6 +532,12 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
                 : 'Trực ban 24/7'}
             </span>
           </div>
+
+          {/* Live Connection Status Indicator */}
+          <div className={`author-live-connection-chip ${isOnline ? '' : 'offline'}`} title={isOnline ? 'Đang kết nối máy chủ theo thời gian thực' : 'Mất kết nối - đang thử lại'}>
+            <span className="author-live-connection-dot" />
+            <span>{isOnline ? 'LIVE' : 'OFFLINE'}</span>
+          </div>
         </div>
 
         {/* Right: Map Mode, Theme, Officer Profile, Logout */}
@@ -577,15 +581,6 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
             <span>Điểm Nguy Hiểm</span>
           </button>
 
-          {/* Theme Switcher */}
-          <button
-            type="button"
-            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            className="author-icon-action-btn"
-            title={theme === 'dark' ? 'Chuyển sang Chế độ Sáng' : 'Chuyển sang Chế độ Tối'}
-          >
-            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-          </button>
 
           {/* Officer Profile Badge & Logout (Only if not embedded in main dashboard sidebar) */}
           {!embedded && (

@@ -9,9 +9,6 @@ export {
   HazardTypeIcon,
 } from '@/features/hazards';
 export {
-  DANANG_ADMIN_AREAS,
-} from '@/constants';
-export {
   ShelterTypeIcon,
   SHELTER_TYPE_CARDS,
   getShelterMarkerHtml,

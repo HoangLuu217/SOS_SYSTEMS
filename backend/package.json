@@ -10,7 +10,9 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "seed": "node src/seed.js",
-    "seed:rescuer": "node src/seed-rescuer.js",
+    "seed:areas": "node src/seedAreas.js",
+    "seed:teams": "node src/seedTeamsAndVehicles.js",
+    "seed:authority": "node src/seedAuthority.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
