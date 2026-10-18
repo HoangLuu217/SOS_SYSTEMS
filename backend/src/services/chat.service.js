@@ -64,12 +64,33 @@ class ChatService {
       const cleanSlug = cleanParts.join('_');
       const authorities = await User.find({ roles: 'LOCAL_AUTHORITY', status: { $ne: 'SUSPENDED' } })
         .select('_id authority');
+
+      // 1. Tìm cán bộ có areaSlug khớp chính xác hoặc nằm trong cleanSlug (vd: thanh_pho_da_nang nằm trong phuong_lien_chieu_thanh_pho_da_nang)
       for (const auth of authorities) {
-        if (auth.authority?.areaName && this.toAreaSlug(auth.authority.areaName) === cleanSlug) {
-          recipientObjectId = auth._id;
-          break;
+        if (auth.authority?.areaName) {
+          const authSlug = this.toAreaSlug(auth.authority.areaName);
+          if (authSlug === cleanSlug || cleanSlug.includes(authSlug)) {
+            recipientObjectId = auth._id;
+            break;
+          }
         }
       }
+
+      // 2. Nếu chưa có, tìm theo từ khóa của department
+      if (!recipientObjectId) {
+        for (const auth of authorities) {
+          const dept = auth.authority?.department || auth.authority?.organizationName;
+          if (dept) {
+            const deptSlug = this.toAreaSlug(dept);
+            const deptKeywords = deptSlug.split('_').filter((k) => k.length > 3);
+            if (deptKeywords.some((k) => cleanSlug.includes(k))) {
+              recipientObjectId = auth._id;
+              break;
+            }
+          }
+        }
+      }
+
       if (!recipientObjectId && authorities.length > 0) {
         recipientObjectId = authorities[0]._id;
       }
@@ -429,55 +450,15 @@ class ChatService {
   async getLocalAuthorityForArea({ areaName, province, ward, lat, lng, userId, currentUser }) {
     const { User } = require('../models');
 
-    // Chuẩn hoá tên địa bàn
+    // 1. Chuẩn hoá tên địa bàn của người dân / cứu hộ viên
     let resolvedAreaName = areaName || (ward && province ? `${ward}, ${province}` : (province || 'Địa phương'));
-
-    // Tìm kiếm cán bộ LOCAL_AUTHORITY phù hợp nhất
-    let manager = null;
-    let queryConditions = [];
-
-    if (ward) {
-      const cleanWard = ward.replace(/^(phường|xã|thị trấn|p\.|x\.|tt\.)\s+/i, '').trim();
-      if (cleanWard) {
-        queryConditions.push({ 'authority.areaName': new RegExp(cleanWard, 'i') });
-      }
-    }
-    if (province) {
-      const cleanProvince = province.replace(/^(tỉnh|thành phố|tp\.)\s+/i, '').trim();
-      if (cleanProvince) {
-        queryConditions.push({ 'authority.areaName': new RegExp(cleanProvince, 'i') });
-      }
-    }
-    if (areaName) {
-      const cleanArea = areaName.replace(/^(phường|xã|thị trấn|p\.|x\.|tt\.)\s+/i, '').trim();
-      if (cleanArea) {
-        queryConditions.push({ 'authority.areaName': new RegExp(cleanArea, 'i') });
-      }
+    if (ward && province && !resolvedAreaName.includes(ward)) {
+      resolvedAreaName = `${ward}, ${province}`;
     }
 
-    if (queryConditions.length > 0) {
-      manager = await User.findOne({
-        roles: 'LOCAL_AUTHORITY',
-        status: { $ne: 'SUSPENDED' },
-        $or: queryConditions,
-      }).select('fullName phone email roles authority avatarUrl');
-    }
-
-    // Đánh dấu xem có cán bộ đúng địa bàn hay không
-    const hasMatchedOfficer = !!manager;
-
-    // Nếu chưa có cán bộ cụ thể theo tên, lấy cán bộ LOCAL_AUTHORITY bất kỳ đầu tiên làm trực ban fallback
-    if (!manager) {
-      manager = await User.findOne({
-        roles: 'LOCAL_AUTHORITY',
-        status: { $ne: 'SUSPENDED' },
-      }).select('fullName phone email roles authority avatarUrl');
-    }
-
-    // Tên địa bàn chính thức:
-    // - Nếu tìm thấy cán bộ đúng khu vực: dùng tên chính thức của cán bộ đó.
-    // - Nếu là cán bộ fallback hỗ trợ tạm thời: GIỮ NGUYÊN địa bàn thực tế của người dùng (vd: "Quảng Nam")
-    const officialAreaName = (hasMatchedOfficer && manager?.authority?.areaName) || resolvedAreaName;
+    // Địa bàn chính thức: BẮT BUỘC LUÔN LÀ ĐỊA BÀN THỰC TẾ CỦA NGƯỜI DÂN
+    // Tuyệt đối không được thay thế bằng địa bàn của cán bộ quản lý
+    const officialAreaName = resolvedAreaName;
     const safeSlug = this.toAreaSlug(officialAreaName);
 
     // Mỗi tài khoản người dùng có một kênh trao đổi riêng biệt với chính quyền địa phương
@@ -485,9 +466,93 @@ class ChatService {
     const userSuffix = targetUserId ? `_${targetUserId}` : '';
     const channel = `area_${safeSlug || 'local'}${userSuffix}`;
 
+    let cleanWard = '';
+    let cleanProvince = '';
+    if (ward) {
+      cleanWard = ward.replace(/^(phường|xã|thị trấn|p\.|x\.|tt\.)\s+/i, '').trim();
+    }
+    if (province) {
+      cleanProvince = province.replace(/^(tỉnh|thành phố|tp\.)\s+/i, '').trim();
+    }
+
+    let manager = null;
+    let hasMatchedWardOfficer = false;
+
+    // 2. Tìm kiếm Cán bộ địa phương:
+    // Ưu tiên 1: Cán bộ được phân công ĐÚNG PHƯỜNG / XÃ của người dân
+    if (cleanWard) {
+      const wardRegex = new RegExp(cleanWard, 'i');
+      manager = await User.findOne({
+        roles: 'LOCAL_AUTHORITY',
+        status: { $ne: 'SUSPENDED' },
+        $or: [
+          { 'authority.areaName': wardRegex },
+          { 'authority.department': wardRegex },
+          { 'authority.organizationName': wardRegex },
+        ],
+      }).select('fullName phone email roles authority avatarUrl');
+
+      if (manager) {
+        hasMatchedWardOfficer = true;
+      }
+    }
+
+    // Ưu tiên 2: Nếu chưa có cán bộ riêng của phường, tìm Ban Chỉ Huy / Cán bộ cấp Tỉnh / Thành phố
+    if (!manager && cleanProvince) {
+      const provinceRegex = new RegExp(cleanProvince, 'i');
+
+      // Tìm cán bộ cấp Tỉnh/Thành phố (không bị giới hạn vào một phường/xã khác)
+      manager = await User.findOne({
+        roles: 'LOCAL_AUTHORITY',
+        status: { $ne: 'SUSPENDED' },
+        $or: [
+          {
+            $and: [
+              { 'authority.areaName': provinceRegex },
+              { 'authority.areaName': { $not: /phường|xã|thị trấn/i } },
+            ],
+          },
+          { 'authority.department': provinceRegex },
+          { 'authority.organizationName': provinceRegex },
+        ],
+      }).select('fullName phone email roles authority avatarUrl');
+
+      // Nếu vẫn chưa có, lấy cán bộ bất kỳ thuộc tỉnh/thành phố đó
+      if (!manager) {
+        manager = await User.findOne({
+          roles: 'LOCAL_AUTHORITY',
+          status: { $ne: 'SUSPENDED' },
+          $or: [
+            { 'authority.areaName': provinceRegex },
+            { 'authority.department': provinceRegex },
+          ],
+        }).select('fullName phone email roles authority avatarUrl');
+      }
+    }
+
+    // Đánh dấu có cán bộ phù hợp hay không
+    const hasMatchedOfficer = !!manager;
+
+    // Xác định tên cơ quan / đơn vị tiếp nhận phản ánh
+    const cleanDisplayArea = officialAreaName.replace(/^(phường|xã|thị trấn|p\.|x\.|tt\.)\s+/i, '').trim();
+    const isCommune = /phường|xã|thị trấn/i.test(officialAreaName);
+
+    let departmentTitle = '';
+    if (hasMatchedWardOfficer && manager?.authority?.department) {
+      departmentTitle = manager.authority.department;
+    } else if (hasMatchedWardOfficer) {
+      departmentTitle = `UBND ${ward || officialAreaName}`;
+    } else if (hasMatchedOfficer && manager?.authority?.department) {
+      departmentTitle = manager.authority.department;
+    } else if (isCommune && ward) {
+      departmentTitle = `UBND ${ward}`;
+    } else {
+      departmentTitle = `Ban Chỉ Huy PCTT & TKCN ${cleanProvince || cleanDisplayArea}`;
+    }
+
     return {
       channel,
-      areaName: officialAreaName,
+      areaName: officialAreaName, // LUÔN LUÔN là địa bàn thực tế của người dân (vd: Phường Liên Chiểu, Thành phố Đà Nẵng)
       authority: hasMatchedOfficer && manager
         ? {
             id: manager._id,
@@ -495,18 +560,18 @@ class ChatService {
             phone: manager.phone || '112',
             email: manager.email,
             position: manager.authority?.position || 'Trực ban tác chiến',
-            department: manager.authority?.department || manager.authority?.organizationName || `Ban Chỉ Huy PCTT & TKCN ${officialAreaName}`,
-            areaName: manager.authority?.areaName || officialAreaName,
+            department: departmentTitle,
+            areaName: officialAreaName,
             avatarUrl: manager.avatarUrl,
             status: 'ONLINE',
           }
         : {
-            id: manager ? manager._id : null,
-            name: `Trực ban PCTT ${officialAreaName}`,
+            id: null,
+            name: `Trực ban PCTT ${cleanDisplayArea}`,
             phone: '112 / 114 / 115',
             email: 'hotro@sos.vn',
             position: 'Trực ban điều phối tác chiến',
-            department: `Ban Chỉ Huy PCTT & TKCN ${officialAreaName}`,
+            department: departmentTitle,
             areaName: officialAreaName,
             status: 'ONLINE',
           },
