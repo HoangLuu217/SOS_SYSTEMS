@@ -24,8 +24,8 @@ class SafeLocationService {
     }
     if (!area) {
       area = await AdministrativeArea.create({
-        name: 'Thành phố Đà Nẵng',
-        code: 'DANANG_DEFAULT',
+        name: 'Khu vực quản lý chung',
+        code: 'DEFAULT_AREA',
         type: 'PROVINCE',
       });
     }

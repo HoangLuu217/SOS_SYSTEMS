@@ -29,7 +29,7 @@ import {
   fetchAdministrativeAreas,
 } from '@/api';
 import { resolveGoogleMapsInput } from '@/utils/mapLinkParser';
-import { domainDService, JURISDICTION_CONFIGS } from '@/services/domainDService';
+import { domainDService, JURISDICTION_CONFIGS, type JurisdictionConfig } from '@/services/domainDService';
 import { useGlobalModals } from '@/hooks/useGlobalModals';
 import {
   HAZARD_TYPE_OPTIONS,
@@ -50,7 +50,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
   areas: propAreas = [],
 }) => {
   const { showToast, setConfirmModal, setConfirmPromptValue, renderGlobalModals } = useGlobalModals();
-  const [areas, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
+  const [_areas, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
   const [loading, setLoading] = useState(false);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const refreshData = () => setRefreshIndex((prev) => prev + 1);
@@ -194,52 +194,19 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
     // 1. XÁC ĐỊNH ĐỊA BÀN PHÂN CÔNG QUẢN LÝ CỐ ĐỊNH TỪ TÀI KHOẢN (KHÔNG CHO PHÉP THAY ĐỔI)
     const determineOfficerJurKey = (): string => {
-      const directAreaId = (user?.authority?.areaId || authUser?.authority?.areaId || '').toLowerCase();
-      if (directAreaId) {
-        if (directAreaId.includes('nhs') || directAreaId.includes('ngu_hanh_son')) return 'ngu_hanh_son';
-        if (directAreaId.includes('hc') || directAreaId.includes('hai_chau')) return 'hai_chau';
-        if (directAreaId.includes('st') || directAreaId.includes('son_tra')) return 'son_tra';
-        if (directAreaId.includes('tk') || directAreaId.includes('thanh_khe')) return 'thanh_khe';
-        if (directAreaId.includes('cl') || directAreaId.includes('cam_le')) return 'cam_le';
-        if (directAreaId.includes('lc') || directAreaId.includes('lien_chieu')) return 'lien_chieu';
-        if (directAreaId.includes('hv') || directAreaId.includes('hoa_vang')) return 'hoa_vang';
-        if (directAreaId.includes('hs') || directAreaId.includes('hoang_sa')) return 'hoang_sa';
-      }
-
-      const userAreaObj = areas.find((a) => a._id === (user?.authority?.areaId || authUser?.authority?.areaId));
-      const userAreaText = userAreaObj ? `${userAreaObj.name} ${userAreaObj.code || ''}` : '';
-
-      const dept = (
-        (user?.authority?.areaName || '') + ' ' +
-        (user?.authority?.department || '') + ' ' +
-        (user?.authority?.position || '') + ' ' +
-        (user?.authority?.organizationName || '') + ' ' +
-        (authUser?.authority?.areaName || '') + ' ' +
-        (authUser?.authority?.department || '') + ' ' +
-        (authUser?.authority?.position || '') + ' ' +
-        (authUser?.authority?.organizationName || '') + ' ' +
-        userAreaText + ' ' +
-        (activeOfficer?.jurisdictionAreaName || '') + ' ' +
-        (activeOfficer?.districtName || '') + ' ' +
-        (activeOfficer?.department || '')
-      ).toLowerCase();
-
-      if (dept.includes('ngũ hành sơn') || dept.includes('ngu hanh son')) return 'ngu_hanh_son';
-      if (dept.includes('hải châu') || dept.includes('hai chau')) return 'hai_chau';
-      if (dept.includes('sơn trà') || dept.includes('son tra')) return 'son_tra';
-      if (dept.includes('thanh khê') || dept.includes('thanh khe')) return 'thanh_khe';
-      if (dept.includes('cẩm lệ') || dept.includes('cam le')) return 'cam_le';
-      if (dept.includes('liên chiểu') || dept.includes('lien chieu')) return 'lien_chieu';
-      if (dept.includes('hòa vang') || dept.includes('hoa vang')) return 'hoa_vang';
-      if (dept.includes('hoàng sa') || dept.includes('hoang sa')) return 'hoang_sa';
-
-      const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('sos_authority_jurisdiction_key') : null;
-      if (stored && JURISDICTION_CONFIGS[stored] && stored !== 'toan_thanh_pho') return stored;
-      return 'ngu_hanh_son';
+      if (user?.roles?.includes('ADMIN') || authUser?.roles?.includes('ADMIN')) return 'national';
+      const userAreaName = (user?.authority?.areaName || authUser?.authority?.areaName || activeOfficer?.jurisdictionAreaName || '').toLowerCase();
+      if (userAreaName) return userAreaName;
+      return 'national';
     };
 
     const fixedJurKey = determineOfficerJurKey();
-    const fixedJurisdictionConfig = JURISDICTION_CONFIGS[fixedJurKey] || JURISDICTION_CONFIGS.ngu_hanh_son;
+    const fixedJurisdictionConfig: JurisdictionConfig = JURISDICTION_CONFIGS[fixedJurKey] || {
+      name: user?.authority?.areaName || authUser?.authority?.areaName || activeOfficer?.jurisdictionAreaName || 'Toàn Quốc (63 Tỉnh Thành)',
+      district: '',
+      areaId: user?.authority?.areaId || authUser?.authority?.areaId || 'area-all',
+      keywords: [],
+    };
 
     try {
       localStorage.setItem('sos_authority_jurisdiction_key', fixedJurKey);
@@ -390,7 +357,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
     };
 
     const sortedReports = [...filteredReports].sort((a, b) => {
-      let cmp = 0;
+      let cmp: number;
       switch (hazardSortField) {
         case 'severity': {
           const wA = severityWeight[a.severity] || 0;

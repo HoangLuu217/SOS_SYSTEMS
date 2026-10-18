@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 
@@ -108,7 +109,9 @@ export const ShelterMiniMap: React.FC<{
   const markerRef = useRef<L.Marker | null>(null);
   const isDraggingRef = useRef<boolean>(false);
   const onLocationChangeRef = useRef(onLocationChange);
-  onLocationChangeRef.current = onLocationChange;
+  useEffect(() => {
+    onLocationChangeRef.current = onLocationChange;
+  }, [onLocationChange]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -201,6 +204,7 @@ export const ShelterMiniMap: React.FC<{
         mapRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

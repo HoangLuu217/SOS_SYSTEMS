@@ -1,0 +1,179 @@
+/* ============================================================
+   DISPATCH MODALS & DIALOGS MODULE
+   Clean, accessible modal overlays, forms, and alerts
+   ============================================================ */
+
+.sos-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000 !important;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.sos-modal-window {
+  width: 520px;
+  max-width: 90vw;
+  background: var(--sos-surface);
+  border: 1px solid var(--sos-border);
+  border-radius: var(--sos-radius-lg);
+  box-shadow: var(--sos-shadow-xl);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.sos-modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--sos-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sos-modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--sos-text-primary);
+}
+
+.sos-modal-close-icon {
+  background: transparent;
+  border: none;
+  color: var(--sos-text-muted);
+  cursor: pointer;
+  display: flex;
+  padding: 4px;
+  border-radius: var(--sos-radius-sm);
+}
+
+.sos-modal-close-icon:hover {
+  background: var(--sos-surface-subtle);
+  color: var(--sos-text-primary);
+}
+
+.sos-modal-content {
+  padding: 20px;
+  max-height: 70vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sos-modal-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--sos-border);
+  background: var(--sos-surface-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sos-text-primary);
+}
+
+.form-input, .form-select, .form-textarea {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--sos-border);
+  border-radius: var(--sos-radius-sm);
+  font-size: 13px;
+  color: var(--sos-text-primary);
+  background: var(--sos-surface);
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s ease;
+}
+
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  border-color: #0f172a;
+}
+
+.form-textarea {
+  height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* Toast Notifications */
+.sos-toast {
+  position: fixed;
+  top: 72px;
+  right: 24px;
+  background: #0f172a;
+  color: #ffffff;
+  padding: 10px 16px;
+  border-radius: var(--sos-radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--sos-shadow-lg);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 150;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.sos-toast.success {
+  border-left: 4px solid var(--sos-emerald);
+}
+
+.sos-toast.error {
+  border-left: 4px solid var(--sos-red);
+}
+
+/* Geoapify Live Boundaries & Badges */
+.badge-geojson {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #2563eb;
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.badge-geojson:hover {
+  background: rgba(37, 99, 235, 0.16);
+  border-color: #2563eb;
+  transform: translateY(-1px);
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

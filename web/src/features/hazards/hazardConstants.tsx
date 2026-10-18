@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 
@@ -229,7 +230,9 @@ export const HazardMiniMap: React.FC<{
   const markerRef = useRef<L.Marker | null>(null);
   const isDraggingRef = useRef<boolean>(false);
   const onLocationChangeRef = useRef(onLocationChange);
-  onLocationChangeRef.current = onLocationChange;
+  useEffect(() => {
+    onLocationChangeRef.current = onLocationChange;
+  }, [onLocationChange]);
 
   // Khởi tạo Leaflet Map 1 lần duy nhất trên container để tránh giật lag khi kéo ghim / bản đồ
   useEffect(() => {
@@ -323,6 +326,7 @@ export const HazardMiniMap: React.FC<{
         mapRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Cập nhật vị trí ghim và tâm bản đồ mượt mà khi props lat/lng thay đổi từ bên ngoài (nhập tay tọa độ)

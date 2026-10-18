@@ -32,30 +32,40 @@ export function getGoogleTileUrl(
   return clean ? GOOGLE_MAP_TILES.STREETS_CLEAN : GOOGLE_MAP_TILES.STREETS_FULL;
 }
 
-// Quick View Presets cho bản đồ Đà Nẵng và Biển Đảo Việt Nam
+// Quick View Presets cho bản đồ tác chiến Toàn quốc Việt Nam và Biển Đảo Tổ Quốc
 export const MAP_PRESETS = {
-  DANANG: {
-    label: 'Toàn cảnh 8 Quận / Huyện Đà Nẵng',
-    center: [16.0600, 108.1600] as [number, number],
-    zoom: 11,
+  VIETNAM_ALL: {
+    label: 'Toàn cảnh Việt Nam (63 Tỉnh Thành)',
+    center: [16.0, 107.5] as [number, number],
+    zoom: 6,
   },
-  URBAN: {
-    label: 'Khu vực Đô thị Trung tâm',
-    center: [16.0680, 108.2238] as [number, number],
-    zoom: 13,
+  NORTH: {
+    label: 'Khu vực Miền Bắc',
+    center: [21.0, 105.8] as [number, number],
+    zoom: 8,
+  },
+  CENTRAL: {
+    label: 'Khu vực Miền Trung & Tây Nguyên',
+    center: [15.5, 108.0] as [number, number],
+    zoom: 8,
+  },
+  SOUTH: {
+    label: 'Khu vực Miền Nam',
+    center: [10.8, 106.6] as [number, number],
+    zoom: 8,
   },
   HOANG_SA: {
-    label: 'Quần đảo Hoàng Sa (Đà Nẵng)',
+    label: 'Quần đảo Hoàng Sa (Việt Nam)',
     center: [16.5, 112.0] as [number, number],
     zoom: 8.5,
   },
   TRUONG_SA: {
-    label: 'Quần đảo Trường Sa (Khánh Hòa)',
+    label: 'Quần đảo Trường Sa (Việt Nam)',
     center: [10.0, 113.8] as [number, number],
     zoom: 7.2,
   },
   BIEN_DONG: {
-    label: 'Toàn cảnh Biển Đông (VN)',
+    label: 'Toàn cảnh Biển Đông (Việt Nam)',
     center: [13.2, 111.5] as [number, number],
     zoom: 6,
   },
@@ -171,182 +181,16 @@ export const SOVEREIGN_ISLANDS: SovereignIsland[] = [
   },
 ];
 
-// District & Major Ward Metadata & Cartographic Color Palette
-export const DISTRICT_METADATA: Record<string, {
-  name: string;
-  shortName: string;
-  fillColor: string;
-  borderColor: string;
-  icon: string;
-  center?: [number, number];
-  zoom?: number;
-}> = {
-  'area-dn': {
-    name: 'Thành phố Đà Nẵng',
-    shortName: 'Đà Nẵng',
-    fillColor: '#3b82f6',
-    borderColor: '#1d4ed8',
-    icon: '🌆',
-    center: [108.16, 16.06],
-    zoom: 10.4,
-  },
-  'area-hc': {
-    name: 'Phường Hải Châu',
-    shortName: 'Hải Châu',
-    fillColor: '#3b82f6',
-    borderColor: '#1d4ed8',
-    icon: '🏛️',
-    center: [108.2124, 16.0806],
-    zoom: 14.5,
-  },
-  'area-htd': {
-    name: 'Phường Hòa Cường',
-    shortName: 'Hòa Cường',
-    fillColor: '#2563eb',
-    borderColor: '#1e40af',
-    icon: '🏢',
-    center: [108.2103, 16.0411],
-    zoom: 14.8,
-  },
-  'area-tk': {
-    name: 'Phường Thanh Khê',
-    shortName: 'Thanh Khê',
-    fillColor: '#14b8a6',
-    borderColor: '#0f766e',
-    icon: '🏬',
-    center: [108.1896, 16.0682],
-    zoom: 14.5,
-  },
-  'area-ak': {
-    name: 'Phường An Khê',
-    shortName: 'An Khê',
-    fillColor: '#06b6d4',
-    borderColor: '#0e7490',
-    icon: '🏭',
-    center: [108.1792, 16.0308],
-    zoom: 14.5,
-  },
-  'area-st': {
-    name: 'Phường Sơn Trà',
-    shortName: 'Sơn Trà',
-    fillColor: '#8b5cf6',
-    borderColor: '#6d28d9',
-    icon: '🌊',
-    center: [108.2373, 16.1046],
-    zoom: 13.8,
-  },
-  'area-ah': {
-    name: 'Phường An Hải',
-    shortName: 'An Hải',
-    fillColor: '#a855f7',
-    borderColor: '#7e22ce',
-    icon: '🏖️',
-    center: [108.2373, 16.0747],
-    zoom: 14.5,
-  },
-  'area-nhs': {
-    name: 'Phường Ngũ Hành Sơn',
-    shortName: 'Ngũ Hành Sơn',
-    fillColor: '#0284c7',
-    borderColor: '#0369a1',
-    icon: '⛰️',
-    center: [108.2428, 15.9875],
-    zoom: 13.8,
-  },
-  'area-cl': {
-    name: 'Phường Cẩm Lệ',
-    shortName: 'Cẩm Lệ',
-    fillColor: '#f97316',
-    borderColor: '#c2410c',
-    icon: '🌉',
-    center: [108.1904, 16.0155],
-    zoom: 14.2,
-  },
-  'area-hx': {
-    name: 'Phường Hòa Xuân',
-    shortName: 'Hòa Xuân',
-    fillColor: '#ea580c',
-    borderColor: '#9a3412',
-    icon: '🏘️',
-    center: [108.2052, 15.9732],
-    zoom: 14.0,
-  },
-  'area-lc': {
-    name: 'Phường Liên Chiểu',
-    shortName: 'Liên Chiểu',
-    fillColor: '#f59e0b',
-    borderColor: '#b45309',
-    icon: '🏔️',
-    center: [108.0850, 16.0826],
-    zoom: 13.6,
-  },
-  'area-hk': {
-    name: 'Phường Hòa Khánh',
-    shortName: 'Hòa Khánh',
-    fillColor: '#d97706',
-    borderColor: '#92400e',
-    icon: '🏗️',
-    center: [108.1300, 16.0532],
-    zoom: 14.0,
-  },
-  'area-hvan': {
-    name: 'Phường Hải Vân',
-    shortName: 'Hải Vân',
-    fillColor: '#ca8a04',
-    borderColor: '#854d0e',
-    icon: '⛰️',
-    center: [108.0145, 16.1380],
-    zoom: 12.0,
-  },
-  'area-hv': {
-    name: 'Xã Hòa Vang',
-    shortName: 'Hòa Vang',
-    fillColor: '#10b981',
-    borderColor: '#047857',
-    icon: '🌲',
-    center: [108.0672, 15.9810],
-    zoom: 12.5,
-  },
-  'area-bana': {
-    name: 'Xã Bà Nà',
-    shortName: 'Bà Nà',
-    fillColor: '#059669',
-    borderColor: '#065f46',
-    icon: '🚠',
-    center: [108.0596, 16.0411],
-    zoom: 13.0,
-  },
-  'area-htien': {
-    name: 'Xã Hòa Tiến',
-    shortName: 'Hòa Tiến',
-    fillColor: '#15803d',
-    borderColor: '#166534',
-    icon: '🌾',
-    center: [108.1500, 15.9550],
-    zoom: 13.0,
-  },
-  'area-hs': {
-    name: 'Huyện Hoàng Sa',
-    shortName: 'Hoàng Sa (Đà Nẵng)',
-    fillColor: '#ef4444',
-    borderColor: '#b91c1c',
-    icon: '🇻🇳',
-    center: [112.0, 16.5],
-    zoom: 8.5,
-  },
-};
-
-// GeoJSON conversion for administrative areas
+// GeoJSON conversion for administrative areas (Hỗ trợ động toàn bộ các tỉnh thành trên cả nước)
 export function buildWardsGeoJSON(areas: AdministrativeArea[]): FeatureCollection {
   const validAreas = areas.filter(
     (a) => a.boundary?.coordinates && a.boundary.coordinates.length > 0 && a.type !== 'PROVINCE'
   );
 
   const features: Feature[] = validAreas.map((w, index) => {
-    const meta = DISTRICT_METADATA[w.id] || DISTRICT_METADATA[w.parentId || ''];
     const palette = getRegionColor(w.id || index);
-    const fillColor = meta?.fillColor || palette.fill;
-    const borderColor = meta?.borderColor || palette.border;
+    const fillColor = palette.fill;
+    const borderColor = palette.border;
 
     return {
       type: 'Feature',
@@ -515,28 +359,8 @@ export function isSosInOfficerJurisdiction(
   return !!matchesWard;
 }
 
-// Centroid coordinates for flying to districts and wards (Geoapify live boundaries)
-export const WARD_CENTROIDS: Record<string, [number, number]> = {
-  ...GEOAPIFY_CENTROIDS,
-  'area-dn': [108.1600, 16.0600],
-  'area-hs': [112.0, 16.5],
-  'area-hs-arch': [112.0, 16.5],
-  'area-htd': [108.2175, 16.0416], // Phường Hòa Cường
-  'area-hc': [108.2195, 16.0590],  // Phường Hải Châu
-  'area-tk': [108.1966, 16.0684],  // Phường Thanh Khê
-  'area-ak': [108.1855, 16.0500],  // Phường An Khê
-  'area-st': [108.2486, 16.1022],  // Phường Sơn Trà
-  'area-ah': [108.2364, 16.0701],  // Phường An Hải
-  'area-nhs': [108.2532, 16.0108], // Phường Ngũ Hành Sơn
-  'area-cl': [108.2013, 16.0153],  // Phường Cẩm Lệ
-  'area-hx': [108.2204, 16.0049],  // Phường Hòa Xuân
-  'area-lc': [108.1392, 16.0767],  // Phường Liên Chiểu
-  'area-hk': [108.1546, 16.0503],  // Phường Hòa Khánh
-  'area-hvan': [108.1149, 16.1348], // Phường Hải Vân
-  'area-hv': [108.0283, 15.9704],  // Xã Hòa Vang
-  'area-bana': [108.0240, 16.0502], // Xã Bà Nà
-  'area-htien': [108.1326, 15.9603], // Xã Hòa Tiến
-};
+// Dynamic Centroid coordinates populated via live boundaries API (Hỗ trợ toàn bộ các tỉnh thành trên cả nước)
+export const WARD_CENTROIDS: Record<string, [number, number]> = GEOAPIFY_CENTROIDS;
 
 export function getAreaCentroid(
   areaOrId?: AdministrativeArea | string | null,
@@ -544,7 +368,7 @@ export function getAreaCentroid(
 ): [number, number] | null {
   if (!areaOrId) return null;
   const id = typeof areaOrId === 'string' ? areaOrId : areaOrId.id;
-  if (WARD_CENTROIDS[id]) return WARD_CENTROIDS[id];
+  if (GEOAPIFY_CENTROIDS[id]) return GEOAPIFY_CENTROIDS[id];
 
   const area = typeof areaOrId === 'object' ? areaOrId : allAreas?.find((a) => a.id === id);
   if (area?.boundary?.coordinates) {
@@ -559,14 +383,16 @@ export function getAreaCentroid(
         sumLng += lng;
         sumLat += lat;
       }
-      return [sumLng / coords.length, sumLat / coords.length];
+      const centroid: [number, number] = [sumLng / coords.length, sumLat / coords.length];
+      GEOAPIFY_CENTROIDS[id] = centroid;
+      return centroid;
     }
   }
 
-  if (area?.parentId && WARD_CENTROIDS[area.parentId]) {
-    return WARD_CENTROIDS[area.parentId];
+  if (area?.parentId && GEOAPIFY_CENTROIDS[area.parentId]) {
+    return GEOAPIFY_CENTROIDS[area.parentId];
   }
 
-  return [108.2020, 16.0540];
+  return null;
 }
 

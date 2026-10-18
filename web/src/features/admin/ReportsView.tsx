@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { BarChart3, Siren, Users, Clock, RefreshCw } from 'lucide-react';
 import { fetchSosRequests } from '@/api';
 import type { SosRequestItem } from '@/types';
-import { FALLBACK_SOS_LIST } from '@/constants/dashboardFallbackData';
 
 export interface ReportsViewProps {
   initialSosList?: SosRequestItem[];
@@ -16,11 +15,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ initialSosList }) => {
     try {
       setLoading(true);
       const res = await fetchSosRequests({ limit: '100' });
-      if (res.success && res.data && res.data.length > 0) {
+      if (res.success && res.data) {
         setSosList(res.data);
       }
     } catch (e) {
-      console.warn('[ReportsView] fetchSosRequests fallback:', e);
+      console.warn('[ReportsView] fetchSosRequests error:', e);
     } finally {
       setLoading(false);
     }
@@ -32,7 +31,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ initialSosList }) => {
     }
   }, [initialSosList]);
 
-  const displaySosList = sosList.length > 0 ? sosList : FALLBACK_SOS_LIST;
+  const displaySosList = sosList;
   const totalSos = displaySosList.length;
   const completed = displaySosList.filter((s) => s.status === 'COMPLETED').length;
   const rate = totalSos > 0 ? ((completed / totalSos) * 100).toFixed(1) : '100';

@@ -164,14 +164,22 @@ export const AreaPreviewMap: React.FC<{
 
     // Tự động tìm và render boundary
     const loadBoundary = async () => {
-      // 1. Tìm trong domainDService
-      const allAreas = domainDService.getAreas();
+      // 1. Tìm trong domainDService (hoặc đồng bộ từ Geoapify nếu chưa có)
+      let allAreas = domainDService.getAreas();
+      if (!allAreas || allAreas.length === 0) {
+        try {
+          allAreas = await domainDService.syncFromGeoapify();
+        } catch {
+          allAreas = [];
+        }
+      }
+
       const cleanQuery = (areaName || '')
         .toLowerCase()
         .replace(/^(phường|xã|quận|huyện|thị xã|thị trấn|tp\.|thành phố)\s+/i, '')
         .trim();
 
-      const matchedArea = allAreas.find((a: any) => {
+      const matchedArea = (allAreas || []).find((a: any) => {
         if (areaId && a.id === areaId) return true;
         const cleanAreaName = (a.name || '')
           .toLowerCase()
@@ -193,12 +201,18 @@ export const AreaPreviewMap: React.FC<{
         return;
       }
 
-      // 2. Nếu chưa có trong local, gọi API backend
+      // 2. Nếu chưa có trong local, trích xuất tỉnh thành chuẩn và gọi API backend
+      let cleanProv = department || '';
+      if (cleanProv.includes('(') && cleanProv.includes(')')) {
+        cleanProv = cleanProv.replace(/.*?\((.*?)\).*/, '$1');
+      }
+      cleanProv = cleanProv.replace(/^Thành phố\s+|^Tỉnh\s+/i, '').trim();
+
       try {
         const res = await fetchAreaBoundary({
           name: areaName,
           areaId,
-          province: department,
+          province: cleanProv,
         });
 
         if (isSubscribed && res.success && res.data?.boundary?.coordinates) {
@@ -208,29 +222,14 @@ export const AreaPreviewMap: React.FC<{
       } catch (e) {
         console.warn('Lỗi fetchAreaBoundary:', e);
       }
-
-      // 3. Fallback đa giác tự nhiên (KHÔNG BAO GIỜ DÙNG HÌNH TRÒN L.circle)
-      if (isSubscribed && mapRef.current) {
-        const angles = [0, 36, 72, 108, 144, 180, 216, 252, 288, 324];
-        const baseR = 0.016; // ~1.8km
-        const ring: [number, number][] = angles.map((deg, i) => {
-          const rad = (deg * Math.PI) / 180;
-          const variation = 0.8 + ((i * 47) % 40) / 100;
-          const r = baseR * variation;
-          return [lng + r * Math.cos(rad) * 1.05, lat + r * Math.sin(rad)];
-        });
-        ring.push(ring[0]);
-        renderBoundary({
-          type: 'Polygon',
-          coordinates: [ring],
-        });
-      }
     };
 
     loadBoundary();
 
     const timer = setTimeout(() => {
-      map.invalidateSize();
+      if (mapRef.current) {
+        mapRef.current.invalidateSize();
+      }
     }, 150);
 
     return () => {
@@ -243,6 +242,6 @@ export const AreaPreviewMap: React.FC<{
     };
   }, [lat, lng, areaName, areaId, department]);
 
-  return <div ref={containerRef} style={{ width: '100%', height: '100%', minHeight: '380px', background: '#f1f5f9' }} />;
+  return <div ref={containerRef} style={{ width: '100%', height: '100%', minHeight: '400px', background: '#f1f5f9' }} />;
 };
 

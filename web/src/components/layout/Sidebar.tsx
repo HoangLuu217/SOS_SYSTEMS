@@ -37,6 +37,7 @@ import {
   Globe2,
   Check,
   MessageSquare,
+  Shield,
 } from 'lucide-react';
 
 import './Sidebar.css';
@@ -354,12 +355,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     managedArea: string;
   }>(() => {
     return {
-      fullName: user?.fullName || 'Đại úy Lê Hoàng Nam',
+      fullName: user?.fullName || 'Cán Bộ Phụ Trách',
       position: user?.authority?.position || (isAdmin ? 'Quản trị viên hệ thống' : 'Chỉ huy trực ban cứu hộ'),
-      organizationName: user?.authority?.organizationName || 'Ban Chỉ Huy PCTT & TKCN Quận Hải Châu',
-      phone: (user as any)?.phoneNumber || (user as any)?.phone || '0905 114 115',
-      email: user?.email || 'chihuy.pctt@danang.gov.vn',
-      managedArea: user?.authority?.areaName || 'TP Đà Nẵng / Quận Hải Châu',
+      organizationName: user?.authority?.organizationName || 'Ban Chỉ Huy PCTT & TKCN',
+      phone: (user as any)?.phoneNumber || (user as any)?.phone || '112',
+      email: user?.email || 'canbo@sos.gov.vn',
+      managedArea: user?.authority?.areaName || 'Khu vực quản lý',
     };
   });
 
@@ -519,12 +520,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setVerifiedPhone(isVer ? cleanP : '');
 
       setLocalProfile({
-        fullName: user.fullName || 'Đại úy Lê Hoàng Nam',
+        fullName: user.fullName || 'Cán Bộ Phụ Trách',
         position: user.authority?.position || (isAdmin ? 'Quản trị viên hệ thống' : 'Chỉ huy trực ban cứu hộ'),
-        organizationName: user.authority?.organizationName || 'Ban Chỉ Huy PCTT & TKCN Quận Hải Châu',
+        organizationName: user.authority?.organizationName || 'Ban Chỉ Huy PCTT & TKCN',
         phone: p,
-        email: user.email || 'chihuy.pctt@danang.gov.vn',
-        managedArea: user.authority?.areaName || 'TP Đà Nẵng / Quận Hải Châu',
+        email: user.email || 'canbo@sos.gov.vn',
+        managedArea: user.authority?.areaName || 'Khu vực quản lý',
       });
     }
   }, [user, isAdmin]);
@@ -794,8 +795,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="sos-user-name" title={displayUserName}>
                   {displayUserName}
                 </span>
-                <span className="sos-user-role" title={displayUserRole}>
-                  {displayUserRole}
+                <span
+                  className={`sos-user-role-badge ${isAdmin ? 'admin' : 'authority'}`}
+                  title={displayUserRole}
+                >
+                  <Shield size={10} style={{ flexShrink: 0 }} />
+                  <span>{displayUserRole}</span>
                 </span>
               </div>
             )}
@@ -810,7 +815,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               title="Đăng xuất khỏi hệ thống"
               aria-label="Đăng xuất"
             >
-              <LogOut size={16} />
+              <LogOut size={15} />
             </button>
           )}
         </div>

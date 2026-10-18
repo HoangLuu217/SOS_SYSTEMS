@@ -40,7 +40,7 @@ export function parseCoordinatesFromText(input: string): ParsedMapLocation | nul
       if (placeMatch) {
         try {
           placeName = decodeURIComponent(placeMatch[1].replace(/\+/g, ' '));
-        } catch (_) {}
+        } catch {}
       }
       return { lat: Number(lat.toFixed(5)), lng: Number(lng.toFixed(5)), placeName, source: '@' };
     }
@@ -175,7 +175,8 @@ export async function resolveGoogleMapsInput(input: string): Promise<ParsedMapLo
     // Nếu backend lỗi mạng nhưng parseCoordinatesFromText trước đó đã có kết quả
     if (immediate) return immediate;
     throw new Error(
-      err.message || 'Không tìm thấy tọa độ từ liên kết Google Maps. Vui lòng kiểm tra lại liên kết hoặc dán tọa độ trực tiếp.'
+      err?.message || 'Không tìm thấy tọa độ từ liên kết Google Maps. Vui lòng kiểm tra lại liên kết hoặc dán tọa độ trực tiếp.',
+      { cause: err }
     );
   }
 }
