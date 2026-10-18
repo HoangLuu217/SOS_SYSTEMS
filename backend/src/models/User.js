@@ -127,6 +127,16 @@ const rescuerSchema = new mongoose.Schema(
       },
       default: 'OFFLINE',
     },
+    areaId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AdministrativeArea',
+      default: null,
+    },
+    areaName: {
+      type: String,
+      trim: true,
+      default: null,
+    },
   },
   { _id: false }
 );
@@ -372,6 +382,7 @@ userSchema.index({
 });
 userSchema.index({ 'authority.organizationId': 1 });
 userSchema.index({ 'authority.areaId': 1 });
+userSchema.index({ 'rescuer.areaId': 1, 'rescuer.verificationStatus': 1 });
 
 /**
  * Business Validation:

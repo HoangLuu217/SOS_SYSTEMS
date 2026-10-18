@@ -90,8 +90,10 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 <tr>
                   <th>Họ và tên</th>
                   <th>Số điện thoại</th>
+                  <th>Địa bàn đăng ký</th>
+                  <th>CCCD / Phương tiện</th>
                   <th>Kỹ năng</th>
-                  <th>Trạng thái xác minh</th>
+                  <th>Trạng thái</th>
                   <th>Phê duyệt</th>
                 </tr>
               </thead>
@@ -100,6 +102,15 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   <tr key={r._id}>
                     <td><strong>{r.fullName}</strong></td>
                     <td>{r.phone || 'Chưa có'}</td>
+                    <td>
+                      <span className="sos-badge info" style={{ fontWeight: 600 }}>
+                        {r.rescuer?.areaName || r.rescuer?.areaId?.name || r.citizen?.areaName || r.address || 'Chưa phân bổ'}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{r.rescuer?.idNumber || 'Chưa có CCCD'}</div>
+                      <small style={{ color: '#64748B' }}>{r.rescuer?.vehicleType || 'Không phương tiện'}</small>
+                    </td>
                     <td>{r.rescuer?.skills?.join(', ') || 'Cứu nạn lũ lụt'}</td>
                     <td>
                       <span className={`sos-badge ${r.rescuer?.verificationStatus === 'VERIFIED' ? 'verified' : 'pending'}`}>

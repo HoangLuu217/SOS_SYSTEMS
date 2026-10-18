@@ -51,6 +51,7 @@ export const ProfileOverviewScreen: React.FC<ProfileOverviewScreenProps> = ({
     <CitizenProfileOverviewScreen
       onNavigateToEditProfile={onNavigateToEditProfile}
       onNavigateToEmergencyContact={onNavigateToEmergencyContact}
+      onNavigateToProfessional={onNavigateToProfessional}
       onNavigateToSosHistory={onNavigateToSosHistory}
       onNavigateToSecurity={onNavigateToSecurity}
       onNavigateToNotificationSettings={onNavigateToNotificationSettings}

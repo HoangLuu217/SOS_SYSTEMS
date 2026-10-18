@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { PROFILE_THEME } from './theme';
 import { useAuth } from '@/context/AuthContext';
 import { LogoSOS } from '@/components';
+import { backendApi } from '@/api';
+import type { RescueTeamData, VehicleData, RescuerVerificationStatus } from '@/types';
 
 export type RescuerAvailability =
   | 'OFFLINE'      // Ngoại tuyến
@@ -45,6 +47,7 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
   onNavigateToNotificationSettings,
   onNavigateToNotifications,
   unreadNotificationsCount = 3,
+  refreshTrigger,
 }) => {
   const { user, logout, updateUserAvatar } = useAuth();
 
@@ -57,9 +60,71 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
   // Logout modal state
   const [logoutDialogVisible, setLogoutDialogVisible] = useState(false);
 
-  // Rescuer Availability State (Mặc định 'READY' - Sẵn sàng tác chiến)
-  const [availability, setAvailability] = useState<RescuerAvailability>('READY');
+  // Rescuer Availability & Team states (Đồng bộ Backend Domain B)
+  const [availability, setAvailability] = useState<RescuerAvailability>('OFFLINE');
+  const [verificationStatus, setVerificationStatus] =
+    useState<RescuerVerificationStatus>('PENDING');
+  const [myTeam, setMyTeam] = useState<RescueTeamData | null>(null);
+  const [teamVehicles, setTeamVehicles] = useState<VehicleData[]>([]);
+  const [isUpdatingAvailability, setIsUpdatingAvailability] = useState(false);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
+
+  // Đồng bộ hồ sơ cứu hộ và Đội trực thuộc từ Backend
+  useEffect(() => {
+    let isMounted = true;
+    const fetchRescuerData = async () => {
+      try {
+        const res = await backendApi.getRescuerProfile();
+        if (res.success && res.data && isMounted) {
+          const rescuer: any = res.data.rescuer || {};
+          if (rescuer.availabilityStatus) {
+            setAvailability(
+              rescuer.availabilityStatus === 'AVAILABLE' ? 'READY' : rescuer.availabilityStatus
+            );
+          }
+          if (rescuer.verificationStatus) {
+            setVerificationStatus(rescuer.verificationStatus);
+          }
+        }
+
+        // Tải Đội cứu hộ mà user thuộc về
+        const teamsRes = await backendApi.getRescueTeams();
+        if (teamsRes.success && isMounted) {
+          const rawTeams = Array.isArray(teamsRes.data)
+            ? teamsRes.data
+            : (teamsRes.data as any)?.teams || [];
+
+          const currentUserId = user?._id?.toString();
+          const foundTeam = rawTeams.find((t: any) => {
+            const isLead = (t.leaderId?._id || t.leaderId)?.toString() === currentUserId;
+            const isMem =
+              Array.isArray(t.members) &&
+              t.members.some((m: any) => {
+                const rId = (m.rescuerId?._id || m.rescuerId)?.toString();
+                return rId === currentUserId;
+              });
+            return isLead || isMem;
+          });
+
+          if (foundTeam) {
+            setMyTeam(foundTeam);
+            // Tải phương tiện của đội
+            const vehRes = await backendApi.getVehicles({ teamId: foundTeam._id });
+            if (vehRes.success && vehRes.data?.vehicles && isMounted) {
+              setTeamVehicles(vehRes.data.vehicles);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Lỗi tải dữ liệu cứu hộ viên:', err);
+      }
+    };
+
+    fetchRescuerData();
+    return () => {
+      isMounted = false;
+    };
+  }, [refreshTrigger, user?._id]);
 
   // Dữ liệu thực tế từ User Profile
   const isLeader = user?.roles?.includes('LEADER');
@@ -145,7 +210,7 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
   };
 
   // Xử lý chuyển đổi nhanh trạng thái: Ngoại tuyến <-> Sẵn sàng
-  const handleToggleAvailability = (newVal: boolean) => {
+  const handleToggleAvailability = async (newVal: boolean) => {
     if (availability === 'BUSY' || availability === 'ON_MISSION') {
       Alert.alert(
         'Không thể đổi trạng thái',
@@ -160,7 +225,30 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
       );
       return;
     }
-    setAvailability(newVal ? 'READY' : 'OFFLINE');
+
+    // Nghiệp vụ Backend Domain B: Chỉ tài khoản đã được duyệt (VERIFIED) mới được bật AVAILABLE
+    if (newVal && verificationStatus !== 'VERIFIED') {
+      Alert.alert(
+        'Chưa được phê duyệt',
+        'Hồ sơ cứu hộ viên của bạn đang trong quá trình thẩm duyệt (PENDING) bởi cơ quan chức năng. Chỉ hồ sơ đã được duyệt (VERIFIED) mới có thể chuyển sang trạng thái sẵn sàng nhận lệnh.'
+      );
+      return;
+    }
+
+    const targetStatus = newVal ? 'AVAILABLE' : 'OFFLINE';
+    try {
+      setIsUpdatingAvailability(true);
+      const res = await backendApi.updateRescuerAvailability(targetStatus);
+      if (res.success) {
+        setAvailability(newVal ? 'READY' : 'OFFLINE');
+      } else {
+        Alert.alert('Không thể đổi trạng thái', res.message || 'Lỗi cập nhật trạng thái.');
+      }
+    } catch (e: any) {
+      Alert.alert('Lỗi', e?.message || 'Không thể kết nối đến máy chủ.');
+    } finally {
+      setIsUpdatingAvailability(false);
+    }
   };
 
   // Lấy thông tin hiển thị trạng thái tác chiến
@@ -291,9 +379,52 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
             </View>
 
             {/* Professional Verification Badge */}
-            <View style={styles.verifiedBadge}>
-              <Feather name="check-circle" size={13} color="#059669" />
-              <Text style={styles.verifiedBadgeText}>Hồ sơ cứu hộ đã xác minh</Text>
+            <View
+              style={[
+                styles.verifiedBadge,
+                verificationStatus === 'VERIFIED'
+                  ? { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }
+                  : verificationStatus === 'PENDING'
+                  ? { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }
+                  : { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
+              ]}
+            >
+              <Feather
+                name={
+                  verificationStatus === 'VERIFIED'
+                    ? 'check-circle'
+                    : verificationStatus === 'PENDING'
+                    ? 'clock'
+                    : 'alert-circle'
+                }
+                size={13}
+                color={
+                  verificationStatus === 'VERIFIED'
+                    ? '#059669'
+                    : verificationStatus === 'PENDING'
+                    ? '#D97706'
+                    : '#DC2626'
+                }
+              />
+              <Text
+                style={[
+                  styles.verifiedBadgeText,
+                  {
+                    color:
+                      verificationStatus === 'VERIFIED'
+                        ? '#059669'
+                        : verificationStatus === 'PENDING'
+                        ? '#D97706'
+                        : '#DC2626',
+                  },
+                ]}
+              >
+                {verificationStatus === 'VERIFIED'
+                  ? 'Hồ sơ cứu hộ đã xác minh'
+                  : verificationStatus === 'PENDING'
+                  ? 'Hồ sơ đang chờ duyệt'
+                  : 'Hồ sơ chưa được duyệt'}
+              </Text>
             </View>
           </View>
 
@@ -345,7 +476,7 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
               <Switch
                 value={availability === 'READY'}
                 onValueChange={handleToggleAvailability}
-                disabled={isToggleDisabled}
+                disabled={isToggleDisabled || isUpdatingAvailability}
                 trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
                 thumbColor={availability === 'READY' ? '#10B981' : '#F1F5F9'}
                 ios_backgroundColor="#CBD5E1"
@@ -370,17 +501,71 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
             </View>
             <Text style={styles.statusDescText}>{statusConfig.desc}</Text>
           </View>
+        </View>
 
-          {/* Test Status Variant Picker Trigger */}
-          <TouchableOpacity
-            style={styles.statusSelectorBtn}
-            onPress={() => setShowStatusPicker(true)}
-            activeOpacity={0.7}
-          >
-            <Feather name="sliders" size={13} color="#64748B" />
-            <Text style={styles.statusSelectorText}>Thử nghiệm 5 trạng thái tác chiến</Text>
-            <Feather name="chevron-down" size={14} color="#94A3B8" />
-          </TouchableOpacity>
+        {/* 3.5. Rescue Team & Vehicles Card (Domain B: Rescuer -> Rescue Team -> Vehicle) */}
+        <View style={styles.teamCard}>
+          <View style={styles.teamHeaderRow}>
+            <View style={styles.teamIconBox}>
+              <MaterialCommunityIcons name="account-group" size={20} color="#0284C7" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.teamCardTitle}>Đội cứu hộ tác chiến</Text>
+              <Text style={styles.teamCardSubtitle}>
+                {myTeam ? `Đơn vị: ${myTeam.name}` : 'Chưa được phân bổ vào đội'}
+              </Text>
+            </View>
+            {myTeam && (
+              <View style={styles.teamTypeBadge}>
+                <Text style={styles.teamTypeBadgeText}>{myTeam.type || 'GENERAL'}</Text>
+              </View>
+            )}
+          </View>
+
+          {myTeam ? (
+            <View style={styles.teamContentBox}>
+              <View style={styles.teamInfoRow}>
+                <Feather name="map-pin" size={13} color="#64748B" />
+                <Text style={styles.teamInfoText}>
+                  Địa bàn hoạt động: {myTeam.areaId?.name || 'Miền Trung'}
+                </Text>
+              </View>
+              <View style={styles.teamInfoRow}>
+                <Feather name="users" size={13} color="#64748B" />
+                <Text style={styles.teamInfoText}>
+                  Quân số: {myTeam.members?.length || 1} chiến sĩ cứu hộ
+                </Text>
+              </View>
+
+              {/* Danh sách phương tiện của đội */}
+              {teamVehicles.length > 0 && (
+                <View style={styles.teamVehiclesSection}>
+                  <Text style={styles.teamVehiclesTitle}>Phương tiện đội sở hữu:</Text>
+                  <View style={styles.vehiclePillsRow}>
+                    {teamVehicles.map((v) => (
+                      <View key={v._id} style={styles.vehiclePill}>
+                        <MaterialCommunityIcons
+                          name={v.type === 'BOAT' ? 'ferry' : 'car'}
+                          size={13}
+                          color="#EF4444"
+                        />
+                        <Text style={styles.vehiclePlateText}>{v.plateNumber}</Text>
+                        <Text style={styles.vehicleStatusDot}>
+                          {v.status === 'AVAILABLE' ? '🟢' : '🟡'}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={styles.noTeamNotice}>
+              <Text style={styles.noTeamText}>
+                Bạn chưa được biên chế vào Đội cứu hộ thực địa. Vui lòng liên hệ Đội trưởng hoặc Ban điều phối để được phân công tác chiến.
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* 4. Menu Items */}
@@ -1312,5 +1497,115 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#B45309',
     lineHeight: 16,
+  },
+  teamCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: PROFILE_THEME.radius.card,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 14,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  teamHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  teamIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F0F9FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  teamCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  teamCardSubtitle: {
+    fontSize: 12.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  teamTypeBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  teamTypeBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1D4ED8',
+  },
+  teamContentBox: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  teamInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  teamInfoText: {
+    fontSize: 13,
+    color: '#475569',
+  },
+  teamVehiclesSection: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F8FAFC',
+  },
+  teamVehiclesTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    marginBottom: 8,
+  },
+  vehiclePillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  vehiclePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    gap: 6,
+  },
+  vehiclePlateText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  vehicleStatusDot: {
+    fontSize: 8,
+  },
+  noTeamNotice: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  noTeamText: {
+    fontSize: 12.5,
+    color: '#94A3B8',
+    lineHeight: 18,
   },
 });
