@@ -10,10 +10,11 @@ const authorize = (...allowedRoles) => {
       return next(new ApiError(401, 'Yêu cầu xác thực tài khoản trước khi truy cập.'));
     }
 
-    const userRoles = req.user.roles || [];
-    // ADMIN luôn có toàn quyền truy cập
-    if (userRoles.includes('ADMIN')) {
-      return next();
+    const userRoles = Array.isArray(req.user.roles)
+      ? [...req.user.roles]
+      : (req.user.roles ? [req.user.roles] : []);
+    if (req.user.role && !userRoles.includes(req.user.role)) {
+      userRoles.push(req.user.role);
     }
 
     const hasPermission = allowedRoles.some(role => userRoles.includes(role));

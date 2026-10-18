@@ -13,6 +13,7 @@ const File = require('./File');
 const AuditLog = require('./AuditLog');
 const HazardReport = require('./HazardReport');
 const ChatMessage = require('./ChatMessage');
+const WeatherNotification = require('./WeatherNotification');
 
 module.exports = {
   User,
@@ -30,5 +31,6 @@ module.exports = {
   AuditLog,
   HazardReport,
   ChatMessage,
+  WeatherNotification,
 };
 

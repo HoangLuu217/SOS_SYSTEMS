@@ -47,6 +47,23 @@ const citizenSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    currentLocation: {
+      type: {
+        type: String,
+        enum: ['Point'],
+      },
+      coordinates: {
+        type: [Number],
+        validate: {
+          validator: (value) => !value || value.length === 2,
+          message: 'Tọa độ GPS phải có dạng [longitude, latitude].',
+        },
+      },
+    },
+    currentLocationUpdatedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { _id: false }
 );
@@ -372,6 +389,7 @@ userSchema.index({
 });
 userSchema.index({ 'authority.organizationId': 1 });
 userSchema.index({ 'authority.areaId': 1 });
+userSchema.index({ currentLocation: '2dsphere' }, { sparse: true });
 
 /**
  * Business Validation:

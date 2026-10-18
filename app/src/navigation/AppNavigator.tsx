@@ -85,6 +85,7 @@ export function AuthenticatedApp() {
         <View style={[styles.tabScreenWrap, activeTab !== 'news' && styles.hiddenTabScreen]}>
           <NewsScreen
             onNavigateToTab={(tab) => handleNavigateToTab(tab as TabName)}
+            onOpenSettings={() => setActiveTab('profile')}
           />
         </View>
 

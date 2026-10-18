@@ -70,6 +70,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
       return <ResourcesView />;
 
     // 5. Phát thông báo & Cảnh báo thiên tai
+    case 'notifications':
     case 'alerts':
       return <AlertsView user={user} />;
 

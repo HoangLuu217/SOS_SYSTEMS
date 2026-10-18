@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const bcrypt = require('bcryptjs');
-const { User } = require('../models');
+const { User, AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
 const { isValidPassword, isValidPhone, validatePasswordStrength } = require('../utils/validation.util');
 
@@ -113,6 +113,31 @@ class UserService {
       }
       if (authority.areaName !== undefined) {
         user.authority.areaName = authority.areaName ? String(authority.areaName).trim() : null;
+        if (user.authority.areaName) {
+          const cleanName = user.authority.areaName.split(',')[0].trim();
+          const strippedName = cleanName.replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '').trim();
+          try {
+            const matchedArea =
+              (await AdministrativeArea.findOne({ name: new RegExp(`^${cleanName}$`, 'i') })) ||
+              (await AdministrativeArea.findOne({ name: new RegExp(strippedName, 'i') }));
+            if (matchedArea) {
+              user.authority.areaId = matchedArea._id;
+              if (!authority.department && (!user.authority.department || user.authority.department.includes('Ban Chỉ Huy PCTT'))) {
+                user.authority.department = `Ban Chỉ Huy PCTT ${matchedArea.name}`;
+              }
+            } else {
+              user.authority.areaId = null;
+              if (!authority.department && (!user.authority.department || user.authority.department.includes('Ban Chỉ Huy PCTT'))) {
+                user.authority.department = `Ban Chỉ Huy PCTT ${cleanName}`;
+              }
+            }
+          } catch (e) {
+            user.authority.areaId = null;
+          }
+        }
+      }
+      if (authority.areaId !== undefined && authority.areaId) {
+        user.authority.areaId = authority.areaId;
       }
       if (authority.department !== undefined) {
         user.authority.department = authority.department ? String(authority.department).trim() : null;

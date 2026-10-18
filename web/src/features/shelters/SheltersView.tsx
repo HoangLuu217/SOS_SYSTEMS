@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Shield,
   MapPin,
@@ -27,6 +27,8 @@ import {
   updateSafeLocation,
   deleteSafeLocation,
   fetchAdministrativeAreas,
+  fetchProvincesV2,
+  type ProvinceV2,
 } from '@/api';
 import { resolveGoogleMapsInput } from '@/utils/mapLinkParser';
 import { domainDService, JURISDICTION_CONFIGS } from '@/services/domainDService';
@@ -60,6 +62,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
   const [shelterFilter, setShelterFilter] = useState<'ALL' | 'ACTIVE' | 'FULL' | 'MAINTENANCE' | 'INACTIVE'>('ALL');
   const [shelterTypeFilter, setShelterTypeFilter] = useState<'ALL' | 'EVACUATION_CENTER' | 'HOSPITAL' | 'SHELTER' | 'RESCUE_STATION' | 'MEETING_POINT'>('ALL');
   const [shelterManagementScope, setShelterManagementScope] = useState<'LOCAL' | 'CITY'>('LOCAL');
+  const [selectedAdminProvince, setSelectedAdminProvince] = useState<string>('ALL');
+  const [allProvinces, setAllProvinces] = useState<ProvinceV2[]>([]);
   const [shelterSearchText, setShelterSearchText] = useState('');
   const [shelterPage, setShelterPage] = useState<number>(1);
   const [shelterSortField, setShelterSortField] = useState<'createdAt' | 'name' | 'capacity' | 'occupancyRate' | 'district' | 'address' | 'status'>('createdAt');
@@ -156,10 +160,24 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
     }
   }, [propAreas]);
 
-    domainDService.syncFromStoredAuthUser();
-    const authUserStr = typeof localStorage !== 'undefined' ? localStorage.getItem('sos_auth_user') : null;
-    const authUser = user || (authUserStr ? JSON.parse(authUserStr) : null);
-    const activeOfficer = domainDService.getActiveOfficer();
+  useEffect(() => {
+    fetchProvincesV2().then((list) => {
+      if (Array.isArray(list) && list.length > 0) {
+        setAllProvinces(list);
+      }
+    });
+  }, []);
+
+  domainDService.syncFromStoredAuthUser();
+  const authUserStr = typeof localStorage !== 'undefined' ? localStorage.getItem('sos_auth_user') : null;
+  const authUser = user || (authUserStr ? JSON.parse(authUserStr) : null);
+  const activeOfficer = domainDService.getActiveOfficer();
+  const isAdmin = Boolean(
+    user?.roles?.includes('ADMIN') ||
+    authUser?.roles?.includes('ADMIN') ||
+    (user as any)?.role === 'ADMIN' ||
+    (authUser as any)?.role === 'ADMIN'
+  );
 
     // 1. XÁC ĐỊNH ĐỊA BÀN PHÂN CÔNG QUẢN LÝ CỐ ĐỊNH TỪ TÀI KHOẢN (KHÔNG CHO PHÉP THAY ĐỔI)
     const determineOfficerJurKey = (): string => {
@@ -204,27 +222,26 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       if (dept.includes('hòa vang') || dept.includes('hoa vang')) return 'hoa_vang';
       if (dept.includes('hoàng sa') || dept.includes('hoang sa')) return 'hoang_sa';
 
-      const stored = typeof localStorage !== 'undefined' ? localStorage.getItem('sos_authority_jurisdiction_key') : null;
-      if (stored && JURISDICTION_CONFIGS[stored] && stored !== 'toan_thanh_pho') return stored;
       return 'ngu_hanh_son';
     };
 
     const fixedJurKey = determineOfficerJurKey();
     const fixedJurisdictionConfig = JURISDICTION_CONFIGS[fixedJurKey] || JURISDICTION_CONFIGS.ngu_hanh_son;
 
-    try {
-      localStorage.setItem('sos_authority_jurisdiction_key', fixedJurKey);
-    } catch {}
-
     // Tìm đơn vị hành chính quản lý tương ứng từ tài khoản người dùng
     const userAreaIdFromAuth = user?.authority?.areaId || authUser?.authority?.areaId;
     const userAreaNameFromAuth = user?.authority?.areaName || authUser?.authority?.areaName;
 
+    const isAreaMatchingUserAuth = (areaName?: string) => {
+      if (!areaName || !userAreaNameFromAuth) return true;
+      const cleanA = areaName.toLowerCase().replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '').trim();
+      const cleanU = userAreaNameFromAuth.toLowerCase().replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '').trim();
+      const uFirstPart = cleanU.split(',')[0].trim();
+      return cleanA.length > 1 && (uFirstPart.includes(cleanA) || cleanA.includes(uFirstPart));
+    };
+
     const resolvedAccountArea = (() => {
-      if (userAreaIdFromAuth) {
-        const found = areas.find((a) => a._id === userAreaIdFromAuth || a.code === userAreaIdFromAuth);
-        if (found) return found;
-      }
+      // 1. Khớp theo tên từ hồ sơ trước
       if (userAreaNameFromAuth) {
         const lowerName = userAreaNameFromAuth.toLowerCase();
         const found = areas.find((a) => {
@@ -232,6 +249,15 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
           return aName.includes(lowerName) || lowerName.includes(aName);
         });
         if (found) return found;
+      }
+      // 2. Chỉ dùng ID nếu tên phù hợp với hồ sơ
+      if (userAreaIdFromAuth) {
+        const found = areas.find((a) => a._id === userAreaIdFromAuth || a.code === userAreaIdFromAuth);
+        if (found && isAreaMatchingUserAuth(found.name)) return found;
+      }
+      // 3. Nếu cán bộ thuộc tỉnh khác (không có trong areas), trả về null thay vì ép về quận Đà Nẵng
+      if (userAreaNameFromAuth) {
+        return null;
       }
       const cfg = fixedJurisdictionConfig;
       const foundByCfg = areas.find((a) => {
@@ -253,51 +279,144 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       activeOfficer?.jurisdictionAreaName ||
       fixedJurisdictionConfig.name;
 
+    // Xác định tên cấp trên (Quận/Huyện, Tỉnh/TP) từ cơ cấu cây hành chính thực tế (không mock cứng)
+    const resolveAreaParents = (area: typeof resolvedAccountArea) => {
+      if (!area || !area.name) return { parentName: '', provinceName: '', fullName: '' };
+      const chain: string[] = [area.name];
+      const visited = new Set<string>();
+      if (area._id) visited.add(String(area._id));
+      let curr = area;
+      let province = '';
+      let depth = 0;
+
+      while (curr && curr.parentId && depth < 10) {
+        depth++;
+        const pId = String((curr.parentId as any)?._id || curr.parentId);
+        if (!pId || visited.has(pId)) break;
+        visited.add(pId);
+
+        const parent = areas.find(
+          (a) => String(a._id) === pId || (a.code && a.code === pId)
+        );
+        if (!parent || parent === curr || visited.has(String(parent._id))) break;
+        visited.add(String(parent._id));
+        chain.push(parent.name);
+        if (parent.type === 'PROVINCE') {
+          province = parent.name;
+        }
+        curr = parent;
+      }
+
+      if (!province && chain.length > 1) {
+        province = chain[chain.length - 1];
+      }
+
+      return {
+        parentName: chain[1] || '',
+        provinceName: province,
+        fullName: chain.join(', '),
+      };
+    };
+
+    const areaHierarchy = resolveAreaParents(resolvedAccountArea);
+
+    // Tên đầy đủ kèm tỉnh/thành phố cho Địa bàn phụ trách (lấy theo dữ liệu thực tế)
+    const accountAreaWithCity = (() => {
+      if (isAdmin) return 'Toàn quốc';
+      if (userAreaNameFromAuth) {
+        return userAreaNameFromAuth;
+      }
+      if (areaHierarchy.fullName && areaHierarchy.fullName.includes(',')) {
+        return areaHierarchy.fullName;
+      }
+      return accountAreaDisplayName;
+    })();
+
+    // Tên rút gọn hiển thị trên tab (ví dụ: "Xã Hợp Kim" hoặc "Phường Ngũ Hành Sơn")
+    const localTabLabel = (
+      userAreaNameFromAuth
+        ? userAreaNameFromAuth.split(',')[0]
+        : resolvedAccountArea?.name || accountAreaDisplayName.split(',')[0]
+    ).trim();
+
+    // Tên tỉnh/thành phố hiển thị trên tab cấp thành phố (lấy động theo cây đơn vị hành chính)
+    const cityTabLabel = (() => {
+      if (userAreaNameFromAuth && userAreaNameFromAuth.includes(',')) {
+        return userAreaNameFromAuth.split(',').slice(-1)[0].trim();
+      }
+      if (areaHierarchy.provinceName) return areaHierarchy.provinceName;
+      const prov = areas.find((a) => a.type === 'PROVINCE');
+      if (prov) return prov.name;
+      return 'Thành phố Đà Nẵng';
+    })();
+
     const accountAreaId =
       resolvedAccountArea?._id ||
-      userAreaIdFromAuth ||
+      (resolvedAccountArea ? userAreaIdFromAuth : null) ||
       fixedJurisdictionConfig.areaId;
 
     // 2. HÀM KIỂM TRA ĐIỂM TRÚ ẨN CÓ THUỘC ĐỊA BÀN PHÂN CÔNG HAY KHÔNG
     const isShelterInOfficerJurisdiction = (sh: SafeLocationItem): boolean => {
-      const cfg = fixedJurisdictionConfig;
+      if (isAdmin) return true;
       const addrLower = (sh.address || '').toLowerCase();
       const nameLower = (sh.name || '').toLowerCase();
       const fullText = `${addrLower} ${nameLower}`;
+      const cleanAccAreaName = localTabLabel.replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '').trim().toLowerCase();
 
-      // 1. So khớp từ khóa đặc trưng của địa bàn phụ trách
-      const matchesKeyword = cfg.keywords.some((kw) => fullText.includes(kw));
-      if (matchesKeyword) return true;
+      // 1. So khớp ID khu vực nếu có và hợp lệ
+      const shAreaId = String((sh.areaId as any)?._id || (sh.areaId as any)?.id || (sh.areaId as any)?.code || sh.areaId || '');
+      if (resolvedAccountArea?._id && shAreaId && String(resolvedAccountArea._id) === shAreaId) {
+        return true;
+      }
 
-      // 2. So khớp tọa độ GPS nằm trong bounding box địa lý của quận/huyện
-      const coords = sh.location?.coordinates;
-      if (Array.isArray(coords) && coords.length === 2) {
-        const lng = Number(coords[0]);
-        const lat = Number(coords[1]);
-        if (!isNaN(lat) && !isNaN(lng) && cfg.bounds) {
-          if (
-            lat >= cfg.bounds.minLat &&
-            lat <= cfg.bounds.maxLat &&
-            lng >= cfg.bounds.minLng &&
-            lng <= cfg.bounds.maxLng
-          ) {
-            const otherConfigs = Object.entries(JURISDICTION_CONFIGS).filter(
-              ([k]) => k !== fixedJurKey && k !== 'toan_thanh_pho'
-            );
-            const inOtherDistrict = otherConfigs.some(([, other]) =>
-              other.keywords.some((k) => addrLower.includes(k))
-            );
-            if (!inOtherDistrict) {
-              return true;
-            }
-          }
+      // 2. So khớp theo tên đơn vị hành chính
+      const shAreaName = String((sh.areaId as any)?.name || '').toLowerCase();
+      if (shAreaName && cleanAccAreaName.length > 2) {
+        const cleanSh = shAreaName.replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '').trim().toLowerCase();
+        if (cleanSh === cleanAccAreaName || cleanSh.includes(cleanAccAreaName) || cleanAccAreaName.includes(cleanSh)) {
+          return true;
         }
       }
 
-      // 3. So khớp ID khu vực nếu có
-      const shAreaId = (sh.areaId as any)?._id || (sh.areaId as any)?.id || (sh.areaId as any)?.code || sh.areaId;
-      if (shAreaId && (shAreaId === cfg.areaId || (sh.areaId as any)?.name === cfg.name)) {
+      // 3. So khớp từ khóa tên xã/phường trong địa chỉ
+      if (cleanAccAreaName.length > 2 && fullText.includes(cleanAccAreaName)) {
         return true;
+      }
+
+      // 4. Chỉ kiểm tra bounds quận Đà Nẵng nếu địa bàn cán bộ thực sự thuộc Đà Nẵng
+      const isDaNangOfficer =
+        userAreaNameFromAuth.toLowerCase().includes('đà nẵng') ||
+        userAreaNameFromAuth.toLowerCase().includes('da nang') ||
+        Boolean(resolvedAccountArea && !userAreaNameFromAuth);
+
+      if (isDaNangOfficer && fixedJurisdictionConfig) {
+        const cfg = fixedJurisdictionConfig;
+        if (cfg.keywords && cfg.keywords.some((kw) => fullText.includes(kw))) {
+          return true;
+        }
+        const coords = sh.location?.coordinates;
+        if (Array.isArray(coords) && coords.length === 2) {
+          const lng = Number(coords[0]);
+          const lat = Number(coords[1]);
+          if (!isNaN(lat) && !isNaN(lng) && cfg.bounds) {
+            if (
+              lat >= cfg.bounds.minLat &&
+              lat <= cfg.bounds.maxLat &&
+              lng >= cfg.bounds.minLng &&
+              lng <= cfg.bounds.maxLng
+            ) {
+              const otherConfigs = Object.entries(JURISDICTION_CONFIGS).filter(
+                ([k]) => k !== fixedJurKey && k !== 'toan_thanh_pho'
+              );
+              const inOtherDistrict = otherConfigs.some(([, other]) =>
+                other.keywords.some((k) => addrLower.includes(k))
+              );
+              if (!inOtherDistrict) {
+                return true;
+              }
+            }
+          }
+        }
       }
 
       return false;
@@ -305,12 +424,12 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
     // 3. HÀM XÁC ĐỊNH TÊN ĐỊA PHƯƠNG QUẢN LÝ CHO TỪNG ĐIỂM TRÚ ẨN
     const getShelterDistrictName = (sh: SafeLocationItem): string => {
-      if (isShelterInOfficerJurisdiction(sh)) {
-        return fixedJurisdictionConfig.name;
-      }
       const shAreaName = (sh.areaId as any)?.name;
       if (shAreaName && typeof shAreaName === 'string') {
         return shAreaName;
+      }
+      if (isShelterInOfficerJurisdiction(sh)) {
+        return localTabLabel;
       }
       const fullText = `${sh.address || ''} ${sh.name || ''}`.toLowerCase();
       for (const [key, cfg] of Object.entries(JURISDICTION_CONFIGS)) {
@@ -388,8 +507,81 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
     // 4. TẬP DỮ LIỆU ĐỊA PHƯƠNG & THÀNH PHỐ QUẢN LÝ
     const displayShelters = shelters.length > 0 ? shelters : FALLBACK_SHELTERS;
+
+    // Hàm xác định điểm trú ẩn có thuộc Tỉnh / Thành phố được chọn (cho Admin)
+    const isShelterInProvince = (s: SafeLocationItem, provinceName: string): boolean => {
+      if (!provinceName || provinceName === 'ALL') return true;
+      const targetClean = provinceName
+        .toLowerCase()
+        .replace(/^(tỉnh|thành phố|tp\.?)\s+/i, '')
+        .trim();
+
+      const addr = (s.address || '').toLowerCase();
+      const name = (s.name || '').toLowerCase();
+      const fullText = `${addr} ${name}`;
+
+      if (fullText.includes(targetClean)) return true;
+
+      const removeAccents = (str: string) =>
+        str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      if (removeAccents(fullText).includes(removeAccents(targetClean))) return true;
+
+      const areaName = (s.areaId as any)?.name || (s.areaId as any)?.districtName;
+      if (areaName && typeof areaName === 'string') {
+        const cleanArea = areaName.toLowerCase();
+        if (cleanArea.includes(targetClean) || removeAccents(cleanArea).includes(removeAccents(targetClean))) {
+          return true;
+        }
+      }
+
+      if (targetClean.includes('đà nẵng') || targetClean.includes('da nang')) {
+        const daNangDistricts = ['ngũ hành sơn', 'hải châu', 'sơn trà', 'thanh khê', 'cẩm lệ', 'liên chiểu', 'hòa vang', 'hoàng sa'];
+        if (daNangDistricts.some((d) => fullText.includes(d) || removeAccents(fullText).includes(removeAccents(d)))) {
+          return true;
+        }
+        const coords = s.location?.coordinates;
+        if (Array.isArray(coords) && coords.length === 2) {
+          const lng = Number(coords[0]);
+          const lat = Number(coords[1]);
+          if (lat >= 15.9 && lat <= 16.3 && lng >= 107.9 && lng <= 108.4) return true;
+        }
+      }
+
+      return false;
+    };
+
+    // Danh sách Tỉnh/Thành cho Admin kèm số lượng điểm trú ẩn thực tế (không mock)
+    const adminProvinceOptions = useMemo(() => {
+      if (!isAdmin) return [];
+      const countsMap = new Map<string, number>();
+
+      allProvinces.forEach((p) => {
+        const c = displayShelters.filter((s) => isShelterInProvince(s, p.name)).length;
+        countsMap.set(p.name, c);
+      });
+
+      return [...allProvinces]
+        .map((p) => ({
+          code: p.code,
+          name: p.name,
+          count: countsMap.get(p.name) || 0,
+        }))
+        .sort((a, b) => {
+          if (a.count > 0 && b.count === 0) return -1;
+          if (a.count === 0 && b.count > 0) return 1;
+          if (b.count !== a.count) return b.count - a.count;
+          return a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' });
+        });
+    }, [isAdmin, allProvinces, displayShelters]);
+
     const localShelters = displayShelters.filter((s) => isShelterInOfficerJurisdiction(s));
-    const baseScopedShelters = shelterManagementScope === 'LOCAL' ? localShelters : displayShelters;
+
+    // Lọc theo Cấp quản lý: Admin lọc theo 1 tab và chọn Tỉnh/Thành phố (Toàn quốc hoặc Tỉnh cụ thể), Cán bộ lọc theo Địa phương vs Tổng Tỉnh/Thành
+    const baseScopedShelters = isAdmin
+      ? (selectedAdminProvince === 'ALL'
+          ? displayShelters
+          : displayShelters.filter((s) => isShelterInProvince(s, selectedAdminProvince)))
+      : (shelterManagementScope === 'LOCAL' ? localShelters : displayShelters);
 
     // Thống kê nhanh theo phạm vi đang chọn
     const scopeTotalCapacity = baseScopedShelters.reduce((acc, curr) => acc + (curr.capacity || 0), 0);
@@ -493,8 +685,13 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       );
     };
 
-    // Mở Form Thêm Điểm Trú Ẩn Mới
+    // Mở Form Thêm Điểm Trú Ẩn Mới (Chỉ dành cho Cán bộ chính quyền địa phương)
     const handleOpenCreateShelterModal = () => {
+      if (isAdmin) {
+        showToast('Quản trị viên (ADMIN) không có thẩm quyền tạo điểm an toàn. Chức năng này chỉ dành riêng cho Cán bộ chính quyền địa phương.', 'error');
+        return;
+      }
+
       let defaultLat = 16.0570;
       let defaultLng = 108.2170;
       if (fixedJurisdictionConfig.bounds) {
@@ -504,14 +701,29 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
       setCreateShelterName('');
       setCreateShelterType('EVACUATION_CENTER');
-      setCreateShelterAreaId((resolvedAccountArea?._id as string) || accountAreaId || '');
-      setCreateShelterAddress(`${accountAreaDisplayName}, TP Đà Nẵng`);
+      let initAreaId = '';
+      if (isAdmin) {
+        if (selectedAdminProvince !== 'ALL') {
+          const matched = areas.find(
+            (a) =>
+              a.name.toLowerCase().includes(selectedAdminProvince.toLowerCase()) ||
+              selectedAdminProvince.toLowerCase().includes(a.name.toLowerCase())
+          );
+          initAreaId = matched ? String(matched._id) : `PROV_${selectedAdminProvince}`;
+        } else if (areas.length > 0) {
+          initAreaId = String(areas[0]._id);
+        }
+      } else {
+        initAreaId = (resolvedAccountArea?._id as string) || accountAreaId || '';
+      }
+      setCreateShelterAreaId(initAreaId);
+      setCreateShelterAddress(isAdmin ? (selectedAdminProvince !== 'ALL' ? selectedAdminProvince : '') : (accountAreaWithCity || accountAreaDisplayName));
       setCreateShelterCapacity(300);
       setCreateShelterOccupancy(0);
       setCreateShelterStatus('ACTIVE');
       setCreateShelterLat(defaultLat);
       setCreateShelterLng(defaultLng);
-      setCreateShelterNotes(`Điểm trú ẩn an toàn thuộc quản lý Ban Chỉ Huy PCTT ${accountAreaDisplayName}`);
+      setCreateShelterNotes(isAdmin ? 'Điểm trú ẩn an toàn thuộc Quản trị viên hệ thống SOS quản lý' : `Điểm trú ẩn an toàn thuộc quản lý Ban Chỉ Huy PCTT ${localTabLabel}`);
       setCreateShelterMapLinkInput('');
       setCreateShelterMapLinkStatus(null);
       setCreateShelterErrors({});
@@ -525,7 +737,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       setEditShelterName(sh.name || '');
       setEditShelterType(sh.type || 'EVACUATION_CENTER');
       const curAreaId = typeof sh.areaId === 'object' && sh.areaId !== null ? (sh.areaId._id || (sh.areaId as any).id) : (sh.areaId || '');
-      setEditShelterAreaId((resolvedAccountArea?._id as string) || accountAreaId || curAreaId || (areas[0]?._id as string) || fixedJurisdictionConfig.areaId || '');
+      setEditShelterAreaId(curAreaId || (resolvedAccountArea?._id as string) || accountAreaId || (areas[0]?._id as string) || '');
       setEditShelterAddress(sh.address || '');
       setEditShelterCapacity(sh.capacity ?? 200);
       setEditShelterOccupancy(sh.currentOccupancy ?? 0);
@@ -557,7 +769,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
         setCreateShelterLat(res.lat);
         setCreateShelterLng(res.lng);
         setCreateShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-        if (res.placeName && (!createShelterAddress || createShelterAddress.includes('TP Đà Nẵng'))) {
+        if (res.placeName && (!createShelterAddress || createShelterAddress === (accountAreaWithCity || accountAreaDisplayName) || createShelterAddress === localTabLabel)) {
           setCreateShelterAddress(res.placeName);
           setCreateShelterErrors((prev) => ({ ...prev, address: undefined }));
         }
@@ -608,6 +820,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
     // Gửi yêu cầu Tạo Điểm Trú Ẩn Mới lên server
     const handleSubmitCreateShelter = () => {
+      if (isAdmin) {
+        showToast('Quản trị viên (ADMIN) không có thẩm quyền tạo điểm an toàn. Chức năng này chỉ dành riêng cho Cán bộ chính quyền địa phương.', 'error');
+        return;
+      }
       const errors: typeof createShelterErrors = {};
 
       if (!createShelterName.trim()) {
@@ -661,9 +877,19 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
     // Thực hiện gọi API tạo điểm trú ẩn
     const executeSubmitCreateShelter = async () => {
+      if (isAdmin) {
+        showToast('Quản trị viên (ADMIN) không có thẩm quyền tạo điểm an toàn.', 'error');
+        return;
+      }
       try {
         setSubmittingCreateShelter(true);
-        const resolvedAreaId = (resolvedAccountArea?._id as string) || accountAreaId || createShelterAreaId || fixedJurisdictionConfig.areaId || (areas[0]?._id as string);
+        const resolvedAreaId =
+          createShelterAreaId ||
+          (isAdmin && selectedAdminProvince !== 'ALL' ? `PROV_${selectedAdminProvince}` : '') ||
+          (resolvedAccountArea?._id as string) ||
+          accountAreaId ||
+          (areas[0]?._id as string) ||
+          fixedJurisdictionConfig.areaId;
         const payload = {
           name: createShelterName.trim(),
           type: createShelterType,
@@ -760,7 +986,12 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       if (!editingShelter) return;
       try {
         setSubmittingEditShelter(true);
-        const resolvedAreaId = (resolvedAccountArea?._id as string) || accountAreaId || editShelterAreaId || fixedJurisdictionConfig.areaId || (areas[0]?._id as string);
+        const resolvedAreaId =
+          editShelterAreaId ||
+          (editingShelter.areaId ? ((editingShelter.areaId as any)._id || editingShelter.areaId) : '') ||
+          (resolvedAccountArea?._id as string) ||
+          accountAreaId ||
+          (areas[0]?._id as string);
         const payload = {
           name: editShelterName.trim(),
           type: editShelterType,
@@ -931,50 +1162,39 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
             gap: '12px',
           }}
         >
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Shield size={20} color="#0284c7" />
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: '18px',
-                  fontWeight: 800,
-                  color: '#0f172a',
-                  letterSpacing: '0.2px',
-                  textTransform: 'uppercase',
-                }}
-              >
-                Quản Lý &amp; Thiết Lập Điểm Trú Ẩn / Trạm An Toàn
-              </h2>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '5px', fontSize: '13.5px' }}>
-              <MapPin size={15} color="#64748b" />
-              <span style={{ color: '#64748b', fontWeight: 500 }}>Địa bàn phụ trách:</span>
-              <strong style={{ color: '#0f172a', fontWeight: 700 }}>{accountAreaDisplayName}</strong>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MapPin size={16} color="#0284c7" />
+            <span style={{ color: '#64748b', fontWeight: 500, fontSize: '13.5px' }}>
+              {isAdmin ? 'Phạm vi quản trị:' : 'Địa bàn phụ trách:'}
+            </span>
+            <strong style={{ color: '#0f172a', fontWeight: 700, fontSize: '14px' }}>
+              {isAdmin ? 'Toàn quốc' : accountAreaWithCity}
+            </strong>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              type="button"
-              className="sos-btn-flat primary"
-              onClick={handleOpenCreateShelterModal}
-              style={{
-                padding: '8px 16px',
-                fontSize: '13px',
-                backgroundColor: '#0284c7',
-                color: '#ffffff',
-                borderColor: '#0284c7',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <PlusCircle size={15} />
-              <span>Thêm Điểm Trú Ẩn Mới</span>
-            </button>
+            {!isAdmin && (
+              <button
+                type="button"
+                className="sos-btn-flat primary"
+                onClick={handleOpenCreateShelterModal}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  backgroundColor: '#0284c7',
+                  color: '#ffffff',
+                  borderColor: '#0284c7',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <PlusCircle size={15} />
+                <span>Thêm Điểm Trú Ẩn Mới</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -988,32 +1208,107 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
           </div>
         </div>
 
-        {/* 2. CHỌN PHẠM VI XEM: TÊN ĐỊA PHƯƠNG & TỔNG THÀNH PHỐ + KPI NĂNG LỰC */}
+        {/* 2. CHỌN PHẠM VI XEM: ADMIN (1 TAB TOÀN QUỐC + DROPDOWN CHỌN TỈNH/THÀNH) VS CÁN BỘ ĐỊA PHƯƠNG (2 TAB) + KPI NĂNG LỰC */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', flexShrink: 0 }}>
-          <div className="sos-scope-tabs">
-            <button
-              type="button"
-              className={`sos-scope-tab ${shelterManagementScope === 'LOCAL' ? 'active' : ''}`}
-              onClick={() => {
-                setShelterManagementScope('LOCAL');
-                setShelterPage(1);
-              }}
-            >
-              <span>{accountAreaDisplayName}</span>
-              <span className="sos-scope-badge">{localShelters.length}</span>
-            </button>
+          <div className="sos-scope-tabs" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+            {isAdmin ? (
+              <>
+                <button
+                  type="button"
+                  className="sos-scope-tab active"
+                  onClick={() => {
+                    setSelectedAdminProvince('ALL');
+                    setShelterPage(1);
+                  }}
+                  title="Hiển thị tất cả điểm trú ẩn trên toàn quốc"
+                >
+                  <span>{selectedAdminProvince === 'ALL' ? 'Toàn quốc' : selectedAdminProvince}</span>
+                  <span className="sos-scope-badge">{baseScopedShelters.length}</span>
+                </button>
 
-            <button
-              type="button"
-              className={`sos-scope-tab ${shelterManagementScope === 'CITY' ? 'active' : ''}`}
-              onClick={() => {
-                setShelterManagementScope('CITY');
-                setShelterPage(1);
-              }}
-            >
-              <span>Thành phố Đà Nẵng</span>
-              <span className="sos-scope-badge">{displayShelters.length}</span>
-            </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '4px' }}>
+                  <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500 }}>
+                    Lọc theo Tỉnh / Thành phố:
+                  </span>
+                  <select
+                    value={selectedAdminProvince}
+                    onChange={(e) => {
+                      setSelectedAdminProvince(e.target.value);
+                      setShelterPage(1);
+                    }}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '13px',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: '#ffffff',
+                      color: '#0f172a',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      outline: 'none',
+                      minWidth: '220px',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                    }}
+                  >
+                    <option value="ALL">-- Tất cả Tỉnh / Thành phố (Toàn quốc) --</option>
+                    {adminProvinceOptions.map((p: { code?: number; name: string; count: number }) => (
+                      <option key={p.code || p.name} value={p.name}>
+                        {p.name} {p.count > 0 ? `(${p.count})` : ''}
+                      </option>
+                    ))}
+                  </select>
+
+                  {selectedAdminProvince !== 'ALL' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedAdminProvince('ALL');
+                        setShelterPage(1);
+                      }}
+                      title="Quay lại xem Toàn quốc"
+                      style={{
+                        padding: '5px 10px',
+                        fontSize: '12px',
+                        color: '#0284c7',
+                        backgroundColor: '#f0f9ff',
+                        border: '1px solid #bae6fd',
+                        borderRadius: '5px',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                      }}
+                    >
+                      ✕ Xem Toàn quốc
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className={`sos-scope-tab ${shelterManagementScope === 'LOCAL' ? 'active' : ''}`}
+                  onClick={() => {
+                    setShelterManagementScope('LOCAL');
+                    setShelterPage(1);
+                  }}
+                >
+                  <span>{localTabLabel}</span>
+                  <span className="sos-scope-badge">{localShelters.length}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`sos-scope-tab ${shelterManagementScope === 'CITY' ? 'active' : ''}`}
+                  onClick={() => {
+                    setShelterManagementScope('CITY');
+                    setShelterPage(1);
+                  }}
+                >
+                  <span>{cityTabLabel}</span>
+                  <span className="sos-scope-badge">{displayShelters.length}</span>
+                </button>
+              </>
+            )}
           </div>
 
           {/* Quick Stats Strip */}
@@ -1243,27 +1538,29 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     <td colSpan={7} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b', fontSize: '13px' }}>
                       <Shield size={32} color="#94a3b8" style={{ marginBottom: '8px' }} />
                       <div>Không có điểm trú ẩn an toàn nào trong danh mục này.</div>
-                      <button
-                        type="button"
-                        onClick={handleOpenCreateShelterModal}
-                        style={{
-                          marginTop: '12px',
-                          padding: '6px 14px',
-                          fontSize: '12px',
-                          color: '#0284c7',
-                          background: '#f0f9ff',
-                          border: '1px solid #bae6fd',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontWeight: 600,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '5px',
-                        }}
-                      >
-                        <PlusCircle size={13} />
-                        <span>Thêm điểm trú ẩn mới ngay</span>
-                      </button>
+                      {!isAdmin && (
+                        <button
+                          type="button"
+                          onClick={handleOpenCreateShelterModal}
+                          style={{
+                            marginTop: '12px',
+                            padding: '6px 14px',
+                            fontSize: '12px',
+                            color: '#0284c7',
+                            background: '#f0f9ff',
+                            border: '1px solid #bae6fd',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                          }}
+                        >
+                          <PlusCircle size={13} />
+                          <span>Thêm điểm trú ẩn mới ngay</span>
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ) : (
@@ -1996,9 +2293,9 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
         )}
 
         {/* ============================================================ */}
-        {/* MODAL TẠO ĐIỂM TRÚ ẨN MỚI (2 CỘT TƯƠNG ĐỒNG VỚI HAZARD) */}
+        {/* MODAL TẠO ĐIỂM TRÚ ẨN MỚI (CHỈ DÀNH CHO CÁN BỘ CHÍNH QUYỀN ĐỊA PHƯƠNG) */}
         {/* ============================================================ */}
-        {isCreateShelterOpen && (
+        {isCreateShelterOpen && !isAdmin && (
           <div
             style={{
               position: 'fixed',
@@ -2189,25 +2486,73 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
                           Khu vực quản lý
                         </label>
-                        <div
-                          style={{
-                            width: '100%',
-                            padding: '8px 12px',
-                            borderRadius: '6px',
-                            border: '1px solid #cbd5e1',
-                            background: '#f8fafc',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            boxSizing: 'border-box',
-                            minHeight: '36px',
-                          }}
-                        >
-                          <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
-                          <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
-                            {accountAreaDisplayName}
-                          </span>
-                        </div>
+                        {isAdmin ? (
+                          <select
+                            value={createShelterAreaId}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setCreateShelterAreaId(val);
+                              const found = areas.find((a) => a._id === val);
+                              if (found && !createShelterAddress) {
+                                setCreateShelterAddress(found.name);
+                              }
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '8px 10px',
+                              borderRadius: '6px',
+                              border: '1px solid #cbd5e1',
+                              fontSize: '12.5px',
+                              color: '#0f172a',
+                              background: '#ffffff',
+                              boxSizing: 'border-box',
+                            }}
+                          >
+                            <option value="">-- Chọn khu vực hành chính ({accountAreaDisplayName || 'Toàn quốc'}) --</option>
+                            {areas.length > 0 && (
+                              <optgroup label="Khu vực hành chính hệ thống">
+                                {areas.map((a) => (
+                                  <option key={a._id} value={a._id}>
+                                    {a.name} {a.code ? `[${a.code}]` : ''}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {allProvinces.length > 0 && (
+                              <optgroup label="Tất cả 63 Tỉnh / Thành phố">
+                                {allProvinces.map((p) => {
+                                  const matchedArea = areas.find((a) => a.name.toLowerCase() === p.name.toLowerCase());
+                                  const val = matchedArea ? matchedArea._id : `PROV_${p.name}`;
+                                  return (
+                                    <option key={`c-prov-${p.code || p.name}`} value={val}>
+                                      {p.name}
+                                    </option>
+                                  );
+                                })}
+                              </optgroup>
+                            )}
+                          </select>
+                        ) : (
+                          <div
+                            style={{
+                              width: '100%',
+                              padding: '8px 12px',
+                              borderRadius: '6px',
+                              border: '1px solid #cbd5e1',
+                              background: '#f8fafc',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              boxSizing: 'border-box',
+                              minHeight: '36px',
+                            }}
+                          >
+                            <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
+                              {accountAreaDisplayName}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       <div>
@@ -2829,25 +3174,73 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
                           Khu vực quản lý
                         </label>
-                        <div
-                          style={{
-                            width: '100%',
-                            padding: '8px 12px',
-                            borderRadius: '6px',
-                            border: '1px solid #cbd5e1',
-                            background: '#f8fafc',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            boxSizing: 'border-box',
-                            minHeight: '36px',
-                          }}
-                        >
-                          <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
-                          <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
-                            {accountAreaDisplayName}
-                          </span>
-                        </div>
+                        {isAdmin ? (
+                          <select
+                            value={editShelterAreaId}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setEditShelterAreaId(val);
+                              const found = areas.find((a) => a._id === val);
+                              if (found && !editShelterAddress) {
+                                setEditShelterAddress(found.name);
+                              }
+                            }}
+                            style={{
+                              width: '100%',
+                              padding: '8px 10px',
+                              borderRadius: '6px',
+                              border: '1px solid #cbd5e1',
+                              fontSize: '12.5px',
+                              color: '#0f172a',
+                              background: '#ffffff',
+                              boxSizing: 'border-box',
+                            }}
+                          >
+                            <option value="">-- Chọn khu vực hành chính ({accountAreaDisplayName || 'Toàn quốc'}) --</option>
+                            {areas.length > 0 && (
+                              <optgroup label="Khu vực hành chính hệ thống">
+                                {areas.map((a) => (
+                                  <option key={`edit-area-${a._id}`} value={a._id}>
+                                    {a.name} {a.code ? `[${a.code}]` : ''}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {allProvinces.length > 0 && (
+                              <optgroup label="Tất cả 63 Tỉnh / Thành phố">
+                                {allProvinces.map((p) => {
+                                  const matchedArea = areas.find((a) => a.name.toLowerCase() === p.name.toLowerCase());
+                                  const val = matchedArea ? matchedArea._id : `PROV_${p.name}`;
+                                  return (
+                                    <option key={`edit-prov-${p.code || p.name}`} value={val}>
+                                      {p.name}
+                                    </option>
+                                  );
+                                })}
+                              </optgroup>
+                            )}
+                          </select>
+                        ) : (
+                          <div
+                            style={{
+                              width: '100%',
+                              padding: '8px 12px',
+                              borderRadius: '6px',
+                              border: '1px solid #cbd5e1',
+                              background: '#f8fafc',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              boxSizing: 'border-box',
+                              minHeight: '36px',
+                            }}
+                          >
+                            <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
+                              {accountAreaDisplayName}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       <div>

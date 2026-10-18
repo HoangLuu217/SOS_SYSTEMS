@@ -15,9 +15,34 @@ class SafeLocationService {
       area = await AdministrativeArea.findById(areaId);
     }
     if (!area && areaId) {
+      const cleanAreaId = String(areaId).replace(/^PROV_/i, '').trim();
+      const codeCandidate = cleanAreaId.replace(/^area-/i, '').toUpperCase();
       area = await AdministrativeArea.findOne({
-        $or: [{ code: areaId }, { name: new RegExp(areaId, 'i') }],
+        $or: [
+          { code: cleanAreaId },
+          { code: codeCandidate },
+          { name: new RegExp(cleanAreaId, 'i') },
+        ],
       });
+      if (!area && !cleanAreaId.startsWith('area-')) {
+        try {
+          area = await AdministrativeArea.create({
+            name: cleanAreaId,
+            code: cleanAreaId.toUpperCase().replace(/^(TỈNH|THÀNH PHỐ|TP\.?)\s+/i, '').replace(/\s+/g, '_'),
+            type: 'PROVINCE',
+          });
+        } catch (_) {}
+      }
+    }
+    if (!area && address) {
+      const addressStr = String(address || '').toLowerCase();
+      const allAreas = await AdministrativeArea.find();
+      const matched = allAreas.find((a) => {
+        if (!a.name) return false;
+        const cleanName = a.name.toLowerCase().replace(/^(phường|quận|huyện|xã|thành phố|tỉnh)\s+/i, '').trim();
+        return cleanName.length > 2 && addressStr.includes(cleanName);
+      });
+      if (matched) area = matched;
     }
     if (!area) {
       area = await AdministrativeArea.findOne();

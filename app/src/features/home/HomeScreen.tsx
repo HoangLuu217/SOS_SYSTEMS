@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  AppState,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
@@ -256,6 +257,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           });
           lat = loc.coords.latitude;
           lon = loc.coords.longitude;
+          // Lưu GPS foreground mới nhất để backend chỉ gửi tin điểm an toàn/nguy hiểm
+          // tới tài khoản thực sự đang ở trong ranh giới địa phương.
+          void backendApi.updateCurrentLocation(lat, lon);
 
           // Dịch ngược tọa độ GPS thành tên Tỉnh / Thành phố
           const geoList = await Location.reverseGeocodeAsync({
@@ -323,6 +327,30 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     };
   }, []);
 
+  // Cập nhật GPS khi người dùng quay lại app; không bật theo dõi vị trí nền.
+  useEffect(() => {
+    const syncCurrentLocation = async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        await backendApi.updateCurrentLocation(
+          position.coords.latitude,
+          position.coords.longitude
+        );
+      } catch {
+        // Vị trí không bắt buộc để dùng ứng dụng; lần mở app tiếp theo sẽ thử lại.
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void syncCurrentLocation();
+    });
+    return () => subscription.remove();
+  }, []);
+
   // Xử lý các nút bấm trong phần Tiện ích nhanh
   const handleUtilityPress = (id: string) => {
     switch (id) {
@@ -362,8 +390,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 Alert.alert(
                   'Thành công',
                   'Đã cập nhật trạng thái AN TOÀN cho tài khoản ' +
-                    (user?.fullName || 'Người dùng') +
-                    '. Đội cứu trợ đã ghi nhận vị trí an toàn của bạn!'
+                  (user?.fullName || 'Người dùng') +
+                  '. Đội cứu trợ đã ghi nhận vị trí an toàn của bạn!'
                 );
               },
             },
@@ -384,8 +412,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 Alert.alert(
                   'Đã ghi nhận',
                   'Cảm ơn tấm lòng của bạn! Đội ngũ y tế SOS sẽ liên hệ qua số điện thoại ' +
-                    (user?.phone || 'của bạn') +
-                    ' khi có đợt tiếp nhận máu phù hợp.'
+                  (user?.phone || 'của bạn') +
+                  ' khi có đợt tiếp nhận máu phù hợp.'
                 );
               },
             },
@@ -414,8 +442,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           Alert.alert(
             'Đăng tin cảnh báo (Ban chỉ huy)',
             'Bạn đang đăng nhập với quyền hạn ' +
-              (user?.roles?.[0] || 'AUTHORITY') +
-              '. Bạn có thể soạn thông báo khẩn hoặc duyệt tin từ Web Dashboard.',
+            (user?.roles?.[0] || 'AUTHORITY') +
+            '. Bạn có thể soạn thông báo khẩn hoặc duyệt tin từ Web Dashboard.',
             [
               { text: 'Đóng', style: 'cancel' },
               {

@@ -49,7 +49,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           overflow:
             (activeNavKey === 'map' && isAuthority) ||
             activeNavKey === 'hazard_reports' ||
-            activeNavKey === 'shelters'
+            activeNavKey === 'shelters' ||
+            activeNavKey === 'notifications' ||
+            activeNavKey === 'alerts'
               ? 'hidden'
               : 'auto',
           height: '100vh',
@@ -91,11 +93,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 flexDirection: 'column',
                 minHeight: 0,
                 overflow:
-                  activeNavKey === 'hazard_reports' || activeNavKey === 'shelters'
+                  activeNavKey === 'hazard_reports' ||
+                  activeNavKey === 'shelters' ||
+                  activeNavKey === 'notifications' ||
+                  activeNavKey === 'alerts'
                     ? 'hidden'
                     : undefined,
                 padding:
-                  activeNavKey === 'hazard_reports' || activeNavKey === 'shelters'
+                  activeNavKey === 'hazard_reports' ||
+                  activeNavKey === 'shelters' ||
+                  activeNavKey === 'notifications' ||
+                  activeNavKey === 'alerts'
                     ? '14px 20px 16px'
                     : undefined,
               }}

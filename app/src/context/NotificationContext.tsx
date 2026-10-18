@@ -1,11 +1,10 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { Platform, Vibration } from 'react-native';
+import { Vibration } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { backendApi, NotificationItem } from '@/api';
 import {
   registerForPushNotificationsAsync,
-  triggerLocalNotification,
   sseNotificationService,
 } from '@/services';
 import { useAuth } from './AuthContext';
@@ -41,45 +40,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const isInstantType = (type?: string) => {
     const t = String(type || '').toUpperCase();
-    return t === 'INSTANT' || t === 'TIN_TUC_THOI' || t === 'ALERT' || t === 'WEATHER' || t === 'RESCUE';
+    return t === 'INSTANT' || t === 'TIN_TUC_THOI' || t === 'ALERT' || t === 'RESCUE';
   };
 
   const isSystemType = (type?: string) => {
     const t = String(type || '').toUpperCase();
     return t === 'SYSTEM' || t === 'THONG_BAO_HE_THONG';
   };
-
-  // Khởi tạo đăng ký kênh Push Notifications và nạp danh sách IDs đã xem
-  useEffect(() => {
-    registerForPushNotificationsAsync().then((token) => {
-      if (token && user?._id) {
-        backendApi.registerPushToken(token).catch(() => {});
-      }
-    }).catch(() => {});
-
-    // Lắng nghe người dùng bấm vào thông báo ngoài thanh Notification bar của điện thoại
-    const responseSub = Notifications.addNotificationResponseReceivedListener(() => {
-      if (navigateHandlerRef.current) {
-        navigateHandlerRef.current('news');
-      }
-    });
-
-    // Nạp các ID thông báo đã ghi nhận từ bộ nhớ để tránh spam chuông lại khi vừa mở app
-    AsyncStorage.getItem(SEEN_NOTIFICATIONS_STORAGE_KEY).then((raw) => {
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            parsed.forEach((id) => seenIdsRef.current.add(id));
-          }
-        } catch (_) {}
-      }
-    });
-
-    return () => {
-      responseSub.remove();
-    };
-  }, [user?._id]);
 
   // Xử lý thông báo đến tức thời (kích hoạt banner, chuông, rung)
   const processIncomingAlert = useCallback(async (incoming: NotificationItem) => {
@@ -117,19 +84,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return [incoming, ...prev];
     });
 
-    // 2. Kích hoạt thông báo trên thanh trạng thái điện thoại (Heads-up Notification Banner + Chuông)
-    await triggerLocalNotification({
-      title: incoming.title,
-      body: incoming.content,
-      priority: incoming.priority as any,
-      data: {
-        notificationId: incoming._id,
-        type: incoming.type,
-        areaName: incoming.areaName,
-      },
-    });
-
-    // 3. Rung điện thoại báo động
+    // Push của Expo hiển thị ở thanh hệ thống; SSE cập nhật giao diện trong app.
+    // Không phát thêm local notification ở đây để tránh hiển thị hai banner.
+    // Rung điện thoại báo động
     try {
       if (incoming.priority === 'CRITICAL' || incoming.type === 'INSTANT') {
         Vibration.vibrate([0, 500, 200, 500]);
@@ -194,12 +151,53 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, [processIncomingAlert]);
 
+  // Khởi tạo đăng ký push token và đồng bộ thông báo từ push khi app đang mở.
+  useEffect(() => {
+    registerForPushNotificationsAsync().catch(() => {});
+
+    const receivedSub = Notifications.addNotificationReceivedListener((notification) => {
+      const content = notification.request.content;
+      const data = content.data as Record<string, any>;
+      const item: NotificationItem = {
+        _id: String(data.notificationId || data.broadcastId || notification.request.identifier),
+        title: content.title || 'Thông báo mới',
+        content: String(data.content || content.body || ''),
+        type: String(data.type || 'SYSTEM'),
+        priority: String(data.priority || 'NORMAL'),
+        areaId: data.areaId,
+        areaName: data.areaName,
+        data,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      };
+      processIncomingAlert(item);
+    });
+
+    const responseSub = Notifications.addNotificationResponseReceivedListener(() => {
+      syncNotifications();
+      navigateHandlerRef.current?.('news');
+    });
+
+    AsyncStorage.getItem(SEEN_NOTIFICATIONS_STORAGE_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) parsed.forEach((id) => seenIdsRef.current.add(id));
+      } catch (_) {}
+    });
+
+    return () => {
+      receivedSub.remove();
+      responseSub.remove();
+    };
+  }, [user?._id, processIncomingAlert, syncNotifications]);
+
   // Nạp dữ liệu ban đầu khi mount
   useEffect(() => {
     syncNotifications();
   }, [syncNotifications]);
 
-  // Vòng lặp đồng bộ ngầm 3 giây (giống hệt MapScreen) để đảm bảo 100% không bao giờ trễ
+  // Đồng bộ dự phòng khi SSE tạm mất kết nối.
   useEffect(() => {
     let isMounted = true;
     const interval = setInterval(async () => {
@@ -207,7 +205,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       try {
         await syncNotifications();
       } catch (_) {}
-    }, 3000);
+    }, 30000);
 
     return () => {
       isMounted = false;

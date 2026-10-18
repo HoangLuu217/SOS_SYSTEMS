@@ -23,12 +23,14 @@ const adminRoutes = require('./admin.routes');
 const configRoutes = require('./config.routes');
 const hazardReportRoutes = require('./hazardReport.routes');
 const chatRoutes = require('./chat.routes');
+const weatherNotificationRoutes = require('./weatherNotification.routes');
 
 // Mount routes theo đúng đặc tả API Nhóm A và các nhóm khác
 router.use('/auth', authRoutes);
 router.use('/config', configRoutes);
 router.use('/users', userRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/weather-notifications', weatherNotificationRoutes);
 router.use('/rescuer', rescuerRoutes);
 router.use('/rescue-teams', rescueTeamRoutes);
 router.use('/vehicles', vehicleRoutes);

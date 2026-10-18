@@ -52,6 +52,7 @@ export type NavItemKey =
   | 'coordination'
   | 'rescuers'
   | 'resources'
+  | 'notifications'
   | 'alerts'
   | 'shelters'
   | 'hazard_reports'
@@ -239,13 +240,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ],
     },
 
-    // NHÓM 3: CẢNH BÁO & CỘNG ĐỒNG
+    // NHÓM 3: THÔNG BÁO & CỘNG ĐỒNG
     {
-      title: 'CẢNH BÁO & CỘNG ĐỒNG',
+      title: 'THÔNG BÁO & CỘNG ĐỒNG',
       items: [
         {
-          key: 'alerts',
-          label: 'Phát cảnh báo khẩn cấp',
+          key: 'notifications',
+          label: 'Gửi thông báo',
           icon: <Bell size={18} className="sos-nav-icon" />,
         },
         {
@@ -336,7 +337,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Xác định trạng thái active của mục hiện tại
   const isItemActive = (key: NavItemKey) => {
-    if (activeKey) return activeKey === key;
+    if (activeKey) {
+      if (key === 'notifications' && (activeKey === 'notifications' || activeKey === 'alerts')) {
+        return true;
+      }
+      return activeKey === key;
+    }
     return key === 'rescuers'; // Fallback active cho Đội cứu hộ địa phương
   };
 
@@ -355,7 +361,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       organizationName: user?.authority?.organizationName || 'Ban Chỉ Huy PCTT & TKCN Quận Hải Châu',
       phone: (user as any)?.phoneNumber || (user as any)?.phone || '0905 114 115',
       email: user?.email || 'chihuy.pctt@danang.gov.vn',
-      managedArea: user?.authority?.areaName || 'TP Đà Nẵng / Quận Hải Châu',
+      managedArea:
+        isAdmin
+          ? 'Toàn quốc'
+          : (user?.authority?.areaName ||
+            (user?.authority?.department
+              ? user.authority.department.replace(/^Ban Chỉ Huy PCTT\s*/i, '').replace(/\(.*?\)/g, '').trim()
+              : 'Phường Ngũ Hành Sơn, Thành phố Đà Nẵng')),
     };
   });
 
@@ -520,7 +532,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         organizationName: user.authority?.organizationName || 'Ban Chỉ Huy PCTT & TKCN Quận Hải Châu',
         phone: p,
         email: user.email || 'chihuy.pctt@danang.gov.vn',
-        managedArea: user.authority?.areaName || 'TP Đà Nẵng / Quận Hải Châu',
+        managedArea:
+          isAdmin
+            ? 'Toàn quốc'
+            : (user.authority?.areaName ||
+              (user.authority?.department
+                ? user.authority.department.replace(/^Ban Chỉ Huy PCTT\s*/i, '').replace(/\(.*?\)/g, '').trim()
+                : 'Phường Ngũ Hành Sơn, Thành phố Đà Nẵng')),
       });
     }
   }, [user, isAdmin]);
@@ -616,13 +634,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
         phone: localProfile.phone,
         email: localProfile.email,
         isPhoneVerified: isPhoneVerified,
-        authority: {
-          position: localProfile.position,
-          organizationName: localProfile.organizationName,
-          areaName: localProfile.managedArea,
-          provinceCode: selectedProvinceCode ? Number(selectedProvinceCode) : undefined,
-          wardCode: selectedWardCode !== 'ALL' ? Number(selectedWardCode) : undefined,
-        },
+        authority: isAdmin
+          ? {
+              position: localProfile.position,
+              organizationName: localProfile.organizationName,
+              areaName: 'Toàn quốc',
+            }
+          : {
+              position: localProfile.position,
+              organizationName: localProfile.organizationName,
+              areaName: localProfile.managedArea,
+              provinceCode: selectedProvinceCode ? Number(selectedProvinceCode) : undefined,
+              wardCode: selectedWardCode !== 'ALL' ? Number(selectedWardCode) : undefined,
+            },
       });
 
       const serverUser = res.success && res.data ? res.data : null;
@@ -636,11 +660,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         authority: {
           ...(currentUserObj.authority || {}),
           ...(serverUser?.authority || {}),
+          areaId: isAdmin
+            ? null
+            : (serverUser?.authority?.areaId || (currentUserObj.authority?.areaName === localProfile.managedArea ? currentUserObj.authority?.areaId : null)),
+          department: isAdmin
+            ? (serverUser?.authority?.department || 'Ban Quản Trị Hệ Thống SOS')
+            : (serverUser?.authority?.department || (currentUserObj.authority?.areaName === localProfile.managedArea ? currentUserObj.authority?.department : `Ban Chỉ Huy PCTT ${localProfile.managedArea.split(',')[0].trim()}`)),
           position: localProfile.position,
           organizationName: localProfile.organizationName,
-          areaName: localProfile.managedArea,
-          provinceCode: selectedProvinceCode || undefined,
-          wardCode: selectedWardCode !== 'ALL' ? selectedWardCode : undefined,
+          areaName: isAdmin ? 'Toàn quốc' : localProfile.managedArea,
+          provinceCode: isAdmin ? undefined : (selectedProvinceCode || undefined),
+          wardCode: isAdmin ? undefined : (selectedWardCode !== 'ALL' ? selectedWardCode : undefined),
         } as any,
       };
 
@@ -1030,63 +1060,94 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                 </div>
 
-                {/* Phần địa bàn phụ trách quản lý nằm dưới hai cột và chiếm toàn bộ chiều rộng */}
-                <div className="sos-profile-area-section">
-                  <label className="sos-profile-section-label">
-                    <i className="bi bi-geo-alt" style={{ color: '#2563eb' }}></i>
-                    <span>Địa bàn phụ trách quản lý:</span>
-                  </label>
-
-                  <div className="sos-profile-area-dropdowns">
-                    <div className="sos-profile-area-col">
-                      <span className="sos-profile-sublabel">Tỉnh / Thành phố:</span>
-                      <select
-                        value={selectedProvinceCode}
-                        onChange={handleProvinceChange}
-                        disabled={loadingProvinces}
-                      >
-                        <option value="">
-                          {loadingProvinces ? '-- Đang tải danh sách Tỉnh/TP... --' : '-- Chọn Tỉnh / Thành phố --'}
-                        </option>
-                        {provinces.map((p) => (
-                          <option key={p.code} value={p.code}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="sos-profile-area-col">
-                      <span className="sos-profile-sublabel">
-                        Phường / Xã:
-                        {loadingWards && <span style={{ marginLeft: 6, fontSize: 11, color: '#2563eb' }}>(Đang nạp...)</span>}
-                      </span>
-                      <select
-                        value={selectedWardCode}
-                        onChange={handleWardChange}
-                        disabled={!selectedProvinceCode || loadingWards}
-                      >
-                        <option value="ALL">-- Toàn bộ Tỉnh / Thành phố (Cấp Tỉnh) --</option>
-                        {wards.map((w) => (
-                          <option key={w.code} value={w.code}>
-                            {w.name}
-                          </option>
-                        ))}
-                      </select>
+                {/* Phần địa bàn phụ trách: Admin là Toàn quốc, Cán bộ địa phương chọn Tỉnh/Xã */}
+                {isAdmin ? (
+                  <div className="sos-profile-area-section">
+                    <label className="sos-profile-section-label">
+                      <i className="bi bi-shield-check" style={{ color: '#2563eb' }}></i>
+                      <span>Phạm vi quản trị hệ thống:</span>
+                    </label>
+                    <div
+                      style={{
+                        padding: '14px 16px',
+                        background: '#f0f9ff',
+                        borderRadius: '8px',
+                        border: '1px solid #bae6fd',
+                        color: '#0369a1',
+                        fontSize: '13.5px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        marginTop: '6px',
+                      }}
+                    >
+                      <i className="bi bi-globe2" style={{ fontSize: '22px', color: '#0284c7' }}></i>
+                      <div>
+                        <strong style={{ fontSize: '14px', color: '#0c4a6e', display: 'block', marginBottom: '2px' }}>
+                          Toàn quốc (Quản trị viên toàn hệ thống)
+                        </strong>
+                        Tài khoản Quản trị viên (Admin) có phạm vi điều hành, giám sát toàn diện trên tất cả các Tỉnh / Thành phố trên cả nước, không giới hạn theo địa bàn phụ trách cụ thể.
+                      </div>
                     </div>
                   </div>
+                ) : (
+                  <div className="sos-profile-area-section">
+                    <label className="sos-profile-section-label">
+                      <i className="bi bi-geo-alt" style={{ color: '#2563eb' }}></i>
+                      <span>Địa bàn phụ trách quản lý:</span>
+                    </label>
 
-                  <div className="sos-profile-managed-area">
-                    <span className="sos-profile-sublabel">Địa bàn hiển thị trong hồ sơ &amp; phân quyền:</span>
-                    <input
-                      type="text"
-                      required
-                      value={localProfile.managedArea}
-                      onChange={(e) => setLocalProfile({ ...localProfile, managedArea: e.target.value })}
-                      placeholder="VD: Phường Hải Châu, Thành phố Đà Nẵng"
-                    />
+                    <div className="sos-profile-area-dropdowns">
+                      <div className="sos-profile-area-col">
+                        <span className="sos-profile-sublabel">Tỉnh / Thành phố:</span>
+                        <select
+                          value={selectedProvinceCode}
+                          onChange={handleProvinceChange}
+                          disabled={loadingProvinces}
+                        >
+                          <option value="">
+                            {loadingProvinces ? '-- Đang tải danh sách Tỉnh/TP... --' : '-- Chọn Tỉnh / Thành phố --'}
+                          </option>
+                          {provinces.map((p) => (
+                            <option key={p.code} value={p.code}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="sos-profile-area-col">
+                        <span className="sos-profile-sublabel">
+                          Phường / Xã:
+                          {loadingWards && <span style={{ marginLeft: 6, fontSize: 11, color: '#2563eb' }}>(Đang nạp...)</span>}
+                        </span>
+                        <select
+                          value={selectedWardCode}
+                          onChange={handleWardChange}
+                          disabled={!selectedProvinceCode || loadingWards}
+                        >
+                          <option value="ALL">-- Toàn bộ Tỉnh / Thành phố (Cấp Tỉnh) --</option>
+                          {wards.map((w) => (
+                            <option key={w.code} value={w.code}>
+                              {w.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="sos-profile-managed-area">
+                      <span className="sos-profile-sublabel">Địa bàn hiển thị trong hồ sơ &amp; phân quyền:</span>
+                      <input
+                        type="text"
+                        required
+                        value={localProfile.managedArea}
+                        onChange={(e) => setLocalProfile({ ...localProfile, managedArea: e.target.value })}
+                        placeholder="VD: Phường Hải Châu, Thành phố Đà Nẵng"
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {profileErrorMsg && (
                   <div className="sos-profile-form-error">

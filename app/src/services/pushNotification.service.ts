@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { backendApi } from '@/api';
 
 // Cấu hình cách hiển thị thông báo khi ứng dụng đang chạy ở foreground
@@ -62,14 +63,29 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 
     // Lấy token từ Expo push service nếu có cấu hình
     try {
-      const pushTokenData = await Notifications.getExpoPushTokenAsync().catch(() => null);
+      const projectId =
+        Constants.expoConfig?.extra?.eas?.projectId ||
+        (Constants as any).easConfig?.projectId;
+      const pushTokenData = await Notifications.getExpoPushTokenAsync(
+        projectId ? { projectId } : undefined
+      ).catch(() => null);
       if (pushTokenData?.data) {
         token = pushTokenData.data;
-        await backendApi.registerPushToken(token);
-        console.log('✅ Đã đăng ký Expo Push Token với máy chủ thành công:', token);
+        const registration = await backendApi.registerPushToken(token);
+        if (!registration.success) {
+          console.warn(
+            '⚠️ Đã lấy được Expo Push Token nhưng máy chủ không lưu được token:',
+            registration.message || 'Không rõ lỗi'
+          );
+          return null;
+        }
+        console.log('✅ Đã đăng ký Expo Push Token với máy chủ thành công.');
       }
     } catch (pushErr: any) {
-      console.log('ℹ️ Môi trường hiện tại sử dụng Local Realtime Push Channel:', pushErr?.message || pushErr);
+      console.warn(
+        '⚠️ Không lấy được Expo Push Token. Push khi app chạy nền cần development/production build và cấu hình credential Android/iOS.',
+        pushErr?.message || pushErr
+      );
     }
   } catch (err: any) {
     console.log('Lỗi khi khởi tạo Push Notifications:', err?.message || err);

@@ -70,13 +70,13 @@ router.get('/:id', optionalAuthenticate, hazardReportController.getHazardReportB
 
 /**
  * @route   POST /hazard-reports
- * @desc    Citizen / Rescuer gửi đóng góp điểm nguy hiểm (Mặc định PENDING)
- * @access  CITIZEN, RESCUER, LOCAL_AUTHORITY, ADMIN
+ * @desc    Citizen / Rescuer gửi đóng góp điểm nguy hiểm hoặc Cán bộ chính quyền tạo
+ * @access  CITIZEN, RESCUER, LOCAL_AUTHORITY, AUTHORITY
  */
 router.post(
   '/',
   authenticate,
-  authorize('CITIZEN', 'RESCUER', 'LOCAL_AUTHORITY', 'ADMIN'),
+  authorize('CITIZEN', 'RESCUER', 'LOCAL_AUTHORITY', 'AUTHORITY'),
   hazardReportController.createHazardReport
 );
 

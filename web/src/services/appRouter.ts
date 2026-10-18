@@ -27,6 +27,7 @@ const VALID_KEYS: Set<string> = new Set([
   'coordination',
   'rescuers',
   'resources',
+  'notifications',
   'alerts',
   'shelters',
   'hazard_reports',
@@ -57,6 +58,14 @@ const KEY_ALIASES: Record<string, NavItemKey> = {
   history: 'operation_logs',
   messages: 'chat',
   conversation: 'chat',
+  alerts: 'notifications',
+  alert: 'notifications',
+  notification: 'notifications',
+  broadcast: 'notifications',
+  'thong-bao': 'notifications',
+  'thong_bao': 'notifications',
+  'thongbao': 'notifications',
+  'gui-thong-bao': 'notifications',
 };
 
 

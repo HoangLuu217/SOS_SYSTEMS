@@ -45,15 +45,28 @@ class HazardReportService {
     // Xác định khu vực hành chính (areaId)
     let targetAreaId = areaId;
     if (targetAreaId && !mongoose.Types.ObjectId.isValid(targetAreaId)) {
-      const codeCandidate = String(targetAreaId).replace(/^area-/i, '').toUpperCase();
+      const cleanAreaId = String(targetAreaId).replace(/^PROV_/i, '').trim();
+      const codeCandidate = cleanAreaId.replace(/^area-/i, '').toUpperCase();
       const matchedArea = await AdministrativeArea.findOne({
         $or: [
-          { code: targetAreaId },
+          { code: cleanAreaId },
           { code: codeCandidate },
+          { name: new RegExp(cleanAreaId, 'i') },
         ],
       });
       if (matchedArea) {
         targetAreaId = matchedArea._id;
+      } else if (!cleanAreaId.startsWith('area-')) {
+        try {
+          const newArea = await AdministrativeArea.create({
+            name: cleanAreaId,
+            code: cleanAreaId.toUpperCase().replace(/^(TỈNH|THÀNH PHỐ|TP\.?)\s+/i, '').replace(/\s+/g, '_'),
+            type: 'PROVINCE',
+          });
+          targetAreaId = newArea._id;
+        } catch (_) {
+          targetAreaId = null;
+        }
       } else {
         targetAreaId = null;
       }
@@ -70,7 +83,7 @@ class HazardReportService {
       if (matched) {
         targetAreaId = matched._id;
       } else {
-        const defaultArea = await AdministrativeArea.findOne({ code: 'DANANG' });
+        const defaultArea = (await AdministrativeArea.findOne({ code: 'DANANG' })) || (await AdministrativeArea.findOne());
         targetAreaId = defaultArea ? defaultArea._id : null;
       }
     }

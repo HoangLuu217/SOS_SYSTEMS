@@ -23,9 +23,12 @@ export async function createAlert(payload: {
 export interface BroadcastNotificationPayload {
   title: string;
   content: string;
-  type: 'INSTANT' | 'SYSTEM' | string;
+  type: 'INSTANT' | 'SYSTEM' | 'WEATHER' | 'SAFE_LOCATION' | 'HAZARD' | string;
   areaId?: string;
   priority?: 'NORMAL' | 'HIGH' | 'CRITICAL' | string;
+  imageUrl?: string;
+  articleUrl?: string;
+  sourceName?: string;
   data?: any;
 }
 
@@ -35,6 +38,9 @@ export interface BroadcastItem {
   content: string;
   type: 'INSTANT' | 'SYSTEM' | string;
   priority?: string;
+  imageUrl?: string;
+  articleUrl?: string;
+  sourceName?: string;
   areaName?: string;
   areaId?: string;
   createdBy?: {

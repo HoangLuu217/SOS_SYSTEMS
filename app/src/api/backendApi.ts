@@ -37,6 +37,7 @@ export type {
 class BackendApiService {
   // HTTP Client core
   getBaseUrl = () => apiClient.getBaseUrl();
+  getAccessToken = () => apiClient.getAccessToken();
   setBaseUrl = (url: string) => apiClient.setBaseUrl(url);
   clearCustomBaseUrl = () => apiClient.clearCustomBaseUrl();
   request = <T = any>(endpoint: string, options: RequestInit = {}) =>
@@ -127,6 +128,9 @@ class BackendApiService {
 
   registerPushToken = (pushToken: string) =>
     notificationApi.registerPushToken(pushToken);
+
+  updateCurrentLocation = (latitude: number, longitude: number) =>
+    notificationApi.updateCurrentLocation(latitude, longitude);
 
   markAllNotificationsAsRead = () => notificationApi.markAllNotificationsAsRead();
 
