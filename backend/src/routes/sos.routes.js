@@ -8,7 +8,7 @@ const { authorize } = require('../middlewares/roleMiddleware');
 router.use(authenticate);
 
 // POST /api/sos - Tạo yêu cầu cứu nạn mới
-router.post('/', authorize('CITIZEN', 'LOCAL_AUTHORITY', 'ADMIN'), sosController.createSos);
+router.post('/', authorize('CITIZEN', 'LOCAL_AUTHORITY', 'ADMIN', 'RESCUER'), sosController.createSos);
 
 // GET /api/sos - Lấy danh sách yêu cầu cứu nạn
 router.get('/', sosController.getSosRequests);
@@ -17,10 +17,10 @@ router.get('/', sosController.getSosRequests);
 router.get('/:id', sosController.getSosById);
 
 // PATCH /api/sos/:id - Cập nhật thông tin yêu cầu (chỉ khi đang ở trạng thái phù hợp, ví dụ PENDING)
-router.patch('/:id', authorize('CITIZEN', 'LOCAL_AUTHORITY', 'ADMIN'), sosController.updateSos);
+router.patch('/:id', authorize('CITIZEN', 'LOCAL_AUTHORITY', 'ADMIN', 'RESCUER'), sosController.updateSos);
 
 // POST /api/sos/:id/cancel - Hủy yêu cầu cứu nạn
-router.post('/:id/cancel', authorize('CITIZEN', 'LOCAL_AUTHORITY', 'ADMIN'), sosController.cancelSos);
+router.post('/:id/cancel', authorize('CITIZEN', 'LOCAL_AUTHORITY', 'ADMIN', 'RESCUER'), sosController.cancelSos);
 
 // POST /api/sos/:id/complete - Đánh dấu yêu cầu đã hoàn thành
 router.post('/:id/complete', authorize('LOCAL_AUTHORITY', 'RESCUER', 'ADMIN', 'CITIZEN'), sosController.completeSos);
@@ -32,6 +32,6 @@ router.get('/:id/history', sosController.getSosHistory);
 router.patch('/:id/verify', authorize('LOCAL_AUTHORITY', 'ADMIN'), sosController.verifySos);
 
 // GET /api/sos/:id/files - Lấy toàn bộ file đính kèm của SOS để xác minh
-router.get('/:id/files', authorize('LOCAL_AUTHORITY', 'ADMIN', 'CITIZEN'), sosController.getSosFiles);
+router.get('/:id/files', authorize('LOCAL_AUTHORITY', 'ADMIN', 'CITIZEN', 'RESCUER'), sosController.getSosFiles);
 
 module.exports = router;

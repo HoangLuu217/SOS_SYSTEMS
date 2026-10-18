@@ -38,6 +38,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
   const [sosList, setSosList] = useState<SosRequestItem[]>(() => memoryCachedSosList || []);
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>(() => memoryCachedAreas || []);
   const [, setVehicles] = useState<VehicleItem[]>(() => memoryCachedVehicles || []);
+  const [hasLoadedFromApi, setHasLoadedFromApi] = useState<boolean>(Boolean(memoryCachedSosList));
 
   // State lọc Triage và tìm kiếm
   const [triageFilter, setTriageFilter] = useState<'ALL' | 'CRITICAL' | 'HIGH' | 'PENDING' | 'ACTIVE'>('ALL');
@@ -69,9 +70,10 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
         fetchVehicles(),
       ]);
 
-      if (sosRes.status === 'fulfilled' && sosRes.value.success && sosRes.value.data) {
+      if (sosRes.status === 'fulfilled' && sosRes.value.success && Array.isArray(sosRes.value.data)) {
         memoryCachedSosList = sosRes.value.data;
         setSosList(sosRes.value.data);
+        setHasLoadedFromApi(true);
       }
       if (areaRes.status === 'fulfilled' && areaRes.value.success && areaRes.value.data) {
         memoryCachedAreas = areaRes.value.data;
@@ -156,7 +158,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     }
   };
 
-  const displaySosList = sosList.length > 0 ? sosList : (loading ? [] : FALLBACK_SOS_LIST);
+  const displaySosList = hasLoadedFromApi ? sosList : (sosList.length > 0 ? sosList : (loading ? [] : FALLBACK_SOS_LIST));
   const totalCount = displaySosList.length;
   const criticalCount = displaySosList.filter((s) => s.priority === 'CRITICAL').length;
   const highCount = displaySosList.filter((s) => s.priority === 'HIGH').length;
@@ -317,9 +319,9 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
           <table className="executive-table">
             <thead>
               <tr>
-                <th style={{ width: '14%' }}>Mã sự cố</th>
-                <th style={{ width: '20%' }}>Người dân &amp; Liên hệ</th>
-                <th style={{ width: '30%' }}>Địa điểm &amp; Tình trạng</th>
+                <th style={{ width: '16%' }}>Mã sự cố</th>
+                <th style={{ width: '22%' }}>Người dân &amp; Liên hệ</th>
+                <th style={{ width: '26%' }}>Địa điểm &amp; Tình trạng</th>
                 <th style={{ width: '12%' }}>Nạn nhân</th>
                 <th style={{ width: '11%' }}>Mức độ</th>
                 <th style={{ width: '13%' }}>Trạng thái</th>
@@ -357,6 +359,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                   const photoUrl = sos.imageUrl || (sos.images && sos.images[0]);
                   const timeAgoText = formatTimeAgo(sos.createdAt);
                   const isRescuer = Array.isArray(citizenInfo?.roles) && citizenInfo.roles.includes('RESCUER');
+                  const areaName = typeof sos.areaId === 'object' && sos.areaId !== null ? (sos.areaId as any)?.name : null;
 
                   return (
                     <tr
@@ -385,6 +388,34 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                             >
                               {isRescuer ? 'RESCUER' : 'CITIZEN'}
                             </span>
+                            {sos.repeatCount && sos.repeatCount > 1 ? (
+                              <span
+                                className="source-pill"
+                                style={{
+                                  backgroundColor: '#fef2f2',
+                                  borderColor: '#fca5a5',
+                                  color: '#dc2626',
+                                  fontWeight: 800,
+                                }}
+                                title={`Người dân đã gửi lại ${sos.repeatCount} lần tại cùng vị trí này`}
+                              >
+                                BÁO LẠI {sos.repeatCount} LẦN
+                              </span>
+                            ) : null}
+                            {sos.isSecondaryRequest ? (
+                              <span
+                                className="source-pill"
+                                style={{
+                                  backgroundColor: '#faf5ff',
+                                  borderColor: '#e9d5ff',
+                                  color: '#7e22ce',
+                                  fontWeight: 700,
+                                }}
+                                title="Ca cứu hộ bổ sung / Báo nạn hộ người thân tại vị trí khác"
+                              >
+                                BÁO HỘ
+                              </span>
+                            ) : null}
                           </div>
                         </div>
                       </td>
@@ -404,30 +435,49 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                             )}
                           </div>
                           <div className="citizen-meta">
-                            <span className="citizen-name">{citizenName}</span>
+                            <span className="citizen-name" title={citizenName}>{citizenName}</span>
+
+                            {/* Số điện thoại chính (Ưu tiên SĐT hiện trường nếu có, hoặc SĐT hồ sơ) */}
                             {sos.contactPhone ? (
                               <a
                                 href={`tel:${sos.contactPhone}`}
                                 className="citizen-phone-link"
-                                title="SĐT liên hệ trực tiếp tại điểm ngập"
+                                title="Số chính liên hệ trực tiếp tại điểm ngập"
                                 style={{ color: '#0284c7', fontWeight: 700 }}
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <Phone size={10} />
-                                <span>{sos.contactPhone} (Hiện trường)</span>
+                                <span>{sos.contactPhone}</span>
+                                <span className="phone-tag-badge primary">Chính</span>
                               </a>
                             ) : citizenPhone ? (
                               <a
                                 href={`tel:${citizenPhone}`}
                                 className="citizen-phone-link"
+                                title="Số điện thoại tài khoản người dân"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <Phone size={10} />
                                 <span>{citizenPhone}</span>
+                                <span className="phone-tag-badge primary">Hồ sơ</span>
                               </a>
                             ) : (
                               <span className="no-phone-text">Chưa có SĐT</span>
                             )}
+
+                            {/* Số điện thoại dự phòng hoặc người thân */}
+                            {sos.secondaryPhone && sos.secondaryPhone !== sos.contactPhone && sos.secondaryPhone !== citizenPhone ? (
+                              <a
+                                href={`tel:${sos.secondaryPhone}`}
+                                className="citizen-phone-link secondary-phone"
+                                title="SĐT dự phòng hoặc người thân"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <PhoneCall size={10} />
+                                <span>{sos.secondaryPhone}</span>
+                                <span className="phone-tag-badge secondary">Dự phòng</span>
+                              </a>
+                            ) : null}
                           </div>
                         </div>
                       </td>
@@ -439,6 +489,12 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                             <MapPin size={13} className="pin-icon" />
                             <span className="address-text">{sos.address}</span>
                           </div>
+                          {areaName && (
+                            <div className="area-sub-badge" title="Đơn vị hành chính trực thuộc">
+                              <Compass size={10} />
+                              <span>{areaName}</span>
+                            </div>
+                          )}
                           {sos.location?.coordinates && (
                             <small style={{ color: '#94a3b8', fontSize: '11px', display: 'block', marginTop: '2px' }}>
                               [{sos.location.coordinates[0].toFixed(4)}, {sos.location.coordinates[1].toFixed(4)}]
@@ -642,7 +698,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
               {/* Section 1: Thông tin người báo nạn & SĐT */}
               <div className="sos-detail-section">
                 <h4 className="sos-section-title">
-                  <Users size={16} />
                   <span>Thông tin Người báo & Nạn nhân</span>
                 </h4>
 
@@ -671,12 +726,12 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                     <div className="profile-sub-badges">
                       {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.email && (
                         <span className="profile-sub-item">
-                          ✉️ {selectedSosDetail.citizenId.email}
+                          {selectedSosDetail.citizenId.email}
                         </span>
                       )}
                       {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.address && (
                         <span className="profile-sub-item">
-                          🏠 Thường trú: {selectedSosDetail.citizenId.address}
+                          Thường trú: {selectedSosDetail.citizenId.address}
                         </span>
                       )}
                     </div>
@@ -711,6 +766,18 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                       )}
                     </span>
                   </div>
+                  {selectedSosDetail.secondaryPhone && (
+                    <div className="sos-info-box" style={{ borderColor: '#86efac', backgroundColor: '#f0fdf4' }}>
+                      <span className="info-label" style={{ color: '#166534', fontWeight: 700 }}>SĐT dự phòng hoặc người thân</span>
+                      <span className="info-value">
+                        <a href={`tel:${selectedSosDetail.secondaryPhone}`} className="phone-clickable" style={{ color: '#15803d' }}>
+                          <PhoneCall size={14} />
+                          <strong>{selectedSosDetail.secondaryPhone}</strong>
+                          <span className="badge-call" style={{ backgroundColor: '#16a34a' }}>Gọi số phụ</span>
+                        </a>
+                      </span>
+                    </div>
+                  )}
                   <div className="sos-info-box">
                     <span className="info-label">Số lượng nạn nhân mắc kẹt</span>
                     <span className="info-value victims-count">
