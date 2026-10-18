@@ -463,6 +463,9 @@ class ChatService {
       }).select('fullName phone email roles authority avatarUrl');
     }
 
+    // Đánh dấu xem có cán bộ đúng địa bàn hay không
+    const hasMatchedOfficer = !!manager;
+
     // Nếu chưa có cán bộ cụ thể theo tên, lấy cán bộ LOCAL_AUTHORITY bất kỳ đầu tiên làm trực ban fallback
     if (!manager) {
       manager = await User.findOne({
@@ -471,8 +474,10 @@ class ChatService {
       }).select('fullName phone email roles authority avatarUrl');
     }
 
-    // Sử dụng tên địa bàn chính thức của manager nếu tìm thấy để đảm bảo channel đồng nhất 100%
-    const officialAreaName = manager?.authority?.areaName || resolvedAreaName;
+    // Tên địa bàn chính thức:
+    // - Nếu tìm thấy cán bộ đúng khu vực: dùng tên chính thức của cán bộ đó.
+    // - Nếu là cán bộ fallback hỗ trợ tạm thời: GIỮ NGUYÊN địa bàn thực tế của người dùng (vd: "Quảng Nam")
+    const officialAreaName = (hasMatchedOfficer && manager?.authority?.areaName) || resolvedAreaName;
     const safeSlug = this.toAreaSlug(officialAreaName);
 
     // Mỗi tài khoản người dùng có một kênh trao đổi riêng biệt với chính quyền địa phương
@@ -483,7 +488,7 @@ class ChatService {
     return {
       channel,
       areaName: officialAreaName,
-      authority: manager
+      authority: hasMatchedOfficer && manager
         ? {
             id: manager._id,
             name: manager.fullName || 'Cán bộ trực ban',
@@ -496,13 +501,13 @@ class ChatService {
             status: 'ONLINE',
           }
         : {
-            id: null,
-            name: `Ban Chỉ Huy PCTT ${resolvedAreaName}`,
+            id: manager ? manager._id : null,
+            name: `Trực ban PCTT ${officialAreaName}`,
             phone: '112 / 114 / 115',
             email: 'hotro@sos.vn',
-            position: 'Trực ban 24/7',
-            department: `Ban Chỉ Huy Phòng Chống Thiên Tai & Cứu Nạn ${resolvedAreaName}`,
-            areaName: resolvedAreaName,
+            position: 'Trực ban điều phối tác chiến',
+            department: `Ban Chỉ Huy PCTT & TKCN ${officialAreaName}`,
+            areaName: officialAreaName,
             status: 'ONLINE',
           },
     };
