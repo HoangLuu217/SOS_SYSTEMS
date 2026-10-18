@@ -78,16 +78,19 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
 
       // 1. Ưu tiên: Địa chỉ thực tế mà tài khoản thuộc về (đã lưu trong hồ sơ cá nhân)
       if (user?.address && user.address.trim()) {
-        detectedArea = user.address.trim();
-        const parts = detectedArea.split(',').map((s) => s.trim()).filter(Boolean);
+        const fullAddress = user.address.trim();
+        const parts = fullAddress.split(',').map((s) => s.trim()).filter(Boolean);
         if (parts.length >= 3) {
           detectedProvince = parts[parts.length - 1]; // Tỉnh / Thành phố
           detectedWard = parts[parts.length - 2];     // Phường / Xã / Thị trấn
+          detectedArea = `${detectedWard}, ${detectedProvince}`;
         } else if (parts.length === 2) {
           detectedProvince = parts[1];
           detectedWard = parts[0];
+          detectedArea = fullAddress;
         } else {
-          detectedProvince = detectedArea;
+          detectedProvince = fullAddress;
+          detectedArea = fullAddress;
         }
       }
 
