@@ -90,6 +90,7 @@ export class ApiClient {
         return {
           success: false,
           message: errorMsg,
+          code: json?.code,
           data: json?.data,
           error: json?.error,
         };

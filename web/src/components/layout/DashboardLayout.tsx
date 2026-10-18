@@ -98,14 +98,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   activeNavKey === 'notifications' ||
                   activeNavKey === 'alerts'
                     ? 'hidden'
-                    : undefined,
+                    : 'auto',
                 padding:
                   activeNavKey === 'hazard_reports' ||
                   activeNavKey === 'shelters' ||
                   activeNavKey === 'notifications' ||
                   activeNavKey === 'alerts'
                     ? '14px 20px 16px'
-                    : undefined,
+                    : '12px 18px 14px',
               }}
             >
               <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>

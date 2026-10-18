@@ -724,6 +724,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({
           box-shadow: 0 2px 6px rgba(0, 102, 255, 0.45), 0 1px 3px rgba(0, 0, 0, 0.25);
           z-index: 2;
         }
+        .leaflet-control-attribution {
+          display: none !important;
+        }
       </style>
     </head>
     <body>
@@ -731,7 +734,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({
       <script>
         var map = L.map('map', {
           zoomControl: false,
-          preferCanvas: true
+          preferCanvas: true,
+          attributionControl: false
         }).setView([${location.coords.latitude}, ${location.coords.longitude}], 15);
 
         L.control.zoom({ position: 'bottomleft' }).addTo(map);

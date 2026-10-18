@@ -18,15 +18,15 @@ import {
   INITIAL_ASSIGNMENTS,
   SAMPLE_OFFICERS,
 } from '@/constants/mockData';
-import { fetchGeoapifyBoundaries, GEOAPIFY_CENTROIDS } from './geoapifyBoundariesService';
+import { fetchGeoapifyBoundaries, GEOAPIFY_CENTROIDS, slugifyVietnamese } from './geoapifyBoundariesService';
 import { fetchAreaBoundary } from '@/api';
 
-// Storage keys (v25 with all 15 official merged Da Nang wards & communes from user's API)
-const STORAGE_AREAS = 'rescuesos_areas_v25_all_15_official_merged_danang_wards';
-const STORAGE_AUTHORITIES = 'rescuesos_authorities_v25_all_15_official_merged_danang_wards';
-const STORAGE_SOS = 'rescuesos_sos_v25_all_15_official_merged_danang_wards';
-const STORAGE_ASSIGNMENTS = 'rescuesos_assignments_v25_all_15_official_merged_danang_wards';
-const STORAGE_ACTIVE_OFFICER = 'rescuesos_active_officer_v25_all_15_official_merged_danang_wards';
+// Storage keys (v30 - Dynamic Nationwide Multi-Province Architecture)
+const STORAGE_AREAS = 'rescuesos_areas_v30';
+const STORAGE_AUTHORITIES = 'rescuesos_authorities_v30';
+const STORAGE_SOS = 'rescuesos_sos_v30';
+const STORAGE_ASSIGNMENTS = 'rescuesos_assignments_v30';
+const STORAGE_ACTIVE_OFFICER = 'rescuesos_active_officer_v30';
 export const STORAGE_JURISDICTION_KEY = 'sos_selected_jurisdiction_key';
 
 export interface JurisdictionConfig {
@@ -37,97 +37,19 @@ export interface JurisdictionConfig {
   bounds?: { minLat: number; maxLat: number; minLng: number; maxLng: number };
 }
 
+// Cấu hình địa bàn quản lý động - Hỗ trợ toàn quốc 34 tỉnh thành
 export const JURISDICTION_CONFIGS: Record<string, JurisdictionConfig> = {
-  ngu_hanh_son: {
-    name: 'Quận Ngũ Hành Sơn',
-    district: 'Quận Ngũ Hành Sơn',
-    areaId: 'area-nhs',
-    keywords: [
-      'ngũ hành sơn', 'ngu hanh son', 'khuê mỹ', 'khue my', 'mỹ an', 'my an',
-      'hòa hải', 'hoa hai', 'hòa quý', 'hoa quy', 'nguyễn thức tự', 'nguyen thuc tu',
-      'non nước', 'non nuoc', 'cầu nguyễn văn trỗi', 'nguyễn văn trỗi', 'chân cầu nguyễn văn trỗi'
-    ],
-    bounds: { minLat: 15.93, maxLat: 16.065, minLng: 108.23, maxLng: 108.31 },
-  },
-  hai_chau: {
-    name: 'Quận Hải Châu',
-    district: 'Quận Hải Châu',
-    areaId: 'area-hc',
-    keywords: [
-      'hải châu', 'hai chau', 'hòa cường', 'hoa cuong', 'thuận phước', 'thuan phuoc',
-      'thạch thang', 'thach thang', 'nam dương', 'nam duong', 'bình hiên', 'binh hien',
-      'bình thuận', 'binh thuan', 'hòa thuận', 'hoa thuan', 'thanh bình', 'thanh binh',
-      'nguyễn văn linh', 'bạch đằng', 'trần phú', 'tiểu la', '2 tháng 9', 'lê đình lý'
-    ],
-    bounds: { minLat: 16.02, maxLat: 16.095, minLng: 108.20, maxLng: 108.235 },
-  },
-  son_tra: {
-    name: 'Quận Sơn Trà',
-    district: 'Quận Sơn Trà',
-    areaId: 'area-st',
-    keywords: [
-      'sơn trà', 'son tra', 'phước mỹ', 'phuoc my', 'an hải', 'an hai',
-      'mân thái', 'man thai', 'nại hiên đông', 'nai hien dong', 'thọ quang', 'tho quang',
-      'linh ứng', 'linh ung', 'bán đảo sơn trà', 'hoàng sa'
-    ],
-    bounds: { minLat: 16.05, maxLat: 16.16, minLng: 108.23, maxLng: 108.33 },
-  },
-  thanh_khe: {
-    name: 'Quận Thanh Khê',
-    district: 'Quận Thanh Khê',
-    areaId: 'area-tk',
-    keywords: [
-      'thanh khê', 'thanh khe', 'an khê', 'an khe', 'tam thuận', 'tam thuan',
-      'xuân hà', 'xuan ha', 'chính gián', 'chinh gian', 'vĩnh trung', 'vinh trung',
-      'tân chính', 'tan chinh', 'thạc gián', 'thac gian', 'điện biên phủ', 'hà huy tập'
-    ],
-    bounds: { minLat: 16.045, maxLat: 16.085, minLng: 108.17, maxLng: 108.21 },
-  },
-  cam_le: {
-    name: 'Quận Cẩm Lệ',
-    district: 'Quận Cẩm Lệ',
-    areaId: 'area-cl',
-    keywords: [
-      'cẩm lệ', 'cam le', 'hòa xuân', 'hoa xuan', 'khuê trung', 'khue trung',
-      'hòa phát', 'hoa phat', 'hòa thọ đông', 'hòa thọ tây', 'hòa an', 'hoa an',
-      'cách mạng tháng 8', 'văn tiến dũng'
-    ],
-    bounds: { minLat: 15.985, maxLat: 16.045, minLng: 108.18, maxLng: 108.245 },
-  },
-  lien_chieu: {
-    name: 'Quận Liên Chiểu',
-    district: 'Quận Liên Chiểu',
-    areaId: 'area-lc',
-    keywords: [
-      'liên chiểu', 'lien chieu', 'hòa khánh', 'hoa khanh', 'hải vân', 'hai van',
-      'hòa minh', 'hoa minh', 'hòa hiệp', 'hoa hiep', 'ngã ba huế', 'nga ba hue',
-      'tôn đức thắng', 'nguyễn lương bằng'
-    ],
-    bounds: { minLat: 16.045, maxLat: 16.17, minLng: 108.09, maxLng: 108.195 },
-  },
-  hoa_vang: {
-    name: 'Huyện Hòa Vang',
-    district: 'Huyện Hòa Vang',
-    areaId: 'area-hv',
-    keywords: [
-      'hòa vang', 'hoa vang', 'bà nà', 'ba na', 'hòa tiến', 'hoa tien',
-      'hòa phong', 'hoa phong', 'hòa khương', 'hoa khuong', 'hòa nhơn', 'hoa nhon',
-      'hòa ninh', 'hòa bắc', 'hòa sơn', 'hòa liên', 'hòa châu', 'hòa phước'
-    ],
-    bounds: { minLat: 15.88, maxLat: 16.20, minLng: 107.88, maxLng: 108.18 },
-  },
-  hoang_sa: {
-    name: 'Huyện Hoàng Sa',
-    district: 'Huyện Hoàng Sa',
-    areaId: 'area-hs',
-    keywords: ['hoàng sa', 'hoang sa'],
-    bounds: { minLat: 15.0, maxLat: 17.5, minLng: 111.0, maxLng: 113.0 },
+  national: {
+    name: 'Toàn Quốc (34 Tỉnh Thành)',
+    district: 'Việt Nam',
+    areaId: 'area-all',
+    keywords: ['toàn quốc', 'vietnam', 'việt nam'],
   },
   toan_thanh_pho: {
-    name: 'Toàn TP Đà Nẵng',
-    district: 'Thành phố Đà Nẵng',
-    areaId: 'area-dn',
-    keywords: ['đà nẵng', 'da nang'],
+    name: 'Toàn Quốc (34 Tỉnh Thành)',
+    district: 'Việt Nam',
+    areaId: 'area-all',
+    keywords: ['toàn quốc', 'vietnam', 'việt nam'],
   },
 };
 
@@ -145,9 +67,15 @@ class DomainDService {
     this.areas = this.load(STORAGE_AREAS, INITIAL_AREAS);
     this.authorities = this.load(STORAGE_AUTHORITIES, INITIAL_AUTHORITIES);
     const loadedSos = this.load(STORAGE_SOS, INITIAL_SOS_REQUESTS);
-    // Sanitize any invalid/stray SOS requests (such as test SOS #8938 at Nam Kỳ Khởi Nghĩa)
+    // Sanitize any invalid/mock SOS requests (such as 8924, 8927, 8938)
     this.sosRequests = loadedSos.filter(
-      (s) => !s.sosCode.includes('8938') && !s.locationName.includes('Nam Kỳ Khởi Nghĩa')
+      (s) =>
+        !s.id?.includes('8924') &&
+        !s.id?.includes('8927') &&
+        !s.sosCode?.includes('8924') &&
+        !s.sosCode?.includes('8927') &&
+        !s.sosCode?.includes('8938') &&
+        !s.locationName?.includes('Nam Kỳ Khởi Nghĩa')
     );
     // Đảm bảo các ca SOS khởi tạo mới (như Phường Hòa Xuân) được merge vào nếu localStorage chưa có
     const existingIds = new Set(this.sosRequests.map((s) => s.id));
@@ -283,8 +211,17 @@ class DomainDService {
 
   syncRealSosRequests(realRequests: SosRequest[]): SosRequest[] {
     const realIds = new Set(realRequests.map((r) => r.id));
-    const nonColliding = this.sosRequests.filter((s) => !realIds.has(s.id));
+    // Khi có dữ liệu thật từ MongoDB, loại bỏ hoàn toàn các ca mock cũ (sos-89..., 8924, 8927)
+    const nonColliding = this.sosRequests.filter(
+      (s) =>
+        !realIds.has(s.id) &&
+        !s.id.startsWith('sos-89') &&
+        !s.id.startsWith('sos-dn-') &&
+        !s.sosCode.includes('8924') &&
+        !s.sosCode.includes('8927')
+    );
     this.sosRequests = [...realRequests, ...nonColliding];
+    this.save(STORAGE_SOS, this.sosRequests);
     return [...this.sosRequests];
   }
 
@@ -532,14 +469,10 @@ class DomainDService {
       if (stored && JURISDICTION_CONFIGS[stored]) return stored;
     } catch { }
     const officer = this.getActiveOfficer();
-    if (officer?.role === 'ADMIN' || officer?.jurisdictionAreaId === 'area-dn') return 'toan_thanh_pho';
-    const nameLower = (officer?.jurisdictionAreaName || '').toLowerCase();
-    for (const [key, cfg] of Object.entries(JURISDICTION_CONFIGS)) {
-      if (key !== 'toan_thanh_pho' && nameLower.includes(cfg.name.toLowerCase().replace(/^(quận|huyện)\s+/i, ''))) {
-        return key;
-      }
+    if (!officer || officer.role === 'ADMIN' || officer.jurisdictionAreaId === 'area-all') {
+      return 'national';
     }
-    return 'ngu_hanh_son';
+    return officer.jurisdictionAreaId || 'national';
   }
 
   syncFromStoredAuthUser() {
@@ -557,72 +490,52 @@ class DomainDService {
   syncLoggedInUser(user: any): AuthorityOfficer {
     if (!user) return this.getActiveOfficer();
 
-    const storedJurKey = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_JURISDICTION_KEY) : null;
+    const areaName = String(user.authority?.jurisdictionAreaName || user.authority?.areaName || '').toLowerCase();
 
-    // Detect province/city from authority.department (ví dụ: "Ban Chỉ Huy PCTT Phường Cầu Giấy (Thành phố Hà Nội)")
-    const deptStr = String(user.authority?.department || '');
-    const deptCityMatch = deptStr.match(/\((.*?)\)/);
-    const detectedCity = deptCityMatch ? deptCityMatch[1].trim() : (user.authority?.cityName || user.authority?.districtName || '');
+    // Determine managed area from user authority dynamically
+    const userAreaId = user.authority?.areaId || user.authority?.administrativeAreaId;
+    const userAreaName = user.authority?.jurisdictionAreaName || user.authority?.areaName;
+    const userDistrict = user.authority?.districtName || user.authority?.provinceName;
+
+    let jurKey = '';
+    if (user.roles?.includes('ADMIN')) {
+      jurKey = 'toan_thanh_pho';
+    } else if (areaName) {
+      for (const [k, c] of Object.entries(JURISDICTION_CONFIGS)) {
+        if (areaName.includes(c.name.toLowerCase().replace(/^(phường|quận|huyện|xã)\s+/i, ''))) {
+          jurKey = k;
+          break;
+        }
+      }
+    }
+
+    if (typeof localStorage !== 'undefined' && jurKey) {
+      localStorage.setItem(STORAGE_JURISDICTION_KEY, jurKey);
+    }
+
+    const cfg = jurKey ? JURISDICTION_CONFIGS[jurKey] : null;
+    const finalAreaId = userAreaId || cfg?.areaId || (userAreaName ? `area-${slugifyVietnamese(userAreaName)}` : 'area-default');
+    const finalAreaName = userAreaName || cfg?.name || user.authority?.department || 'Địa Bàn Phụ Trách';
+    const finalDistrictName = userDistrict || cfg?.district || '';
 
     // Check if matching officer already exists
     const matched = this.officers.find(
       (o) =>
         (user.phone && o.phone === user.phone) ||
         (user.email && o.email?.toLowerCase() === user.email?.toLowerCase()) ||
-        (user.authority?.department && o.department?.toLowerCase().includes(user.authority.department.toLowerCase())) ||
         (user.fullName && o.fullName?.toLowerCase() === user.fullName?.toLowerCase())
     );
 
     if (matched) {
-      if (storedJurKey && JURISDICTION_CONFIGS[storedJurKey]) {
-        const cfg = JURISDICTION_CONFIGS[storedJurKey];
-        matched.jurisdictionAreaId = cfg.areaId;
-        matched.jurisdictionAreaName = cfg.name;
-        matched.districtName = cfg.district;
-      } else if (user.authority?.areaId || user.authority?.areaName) {
-        matched.jurisdictionAreaId = String(user.authority.areaId || matched.jurisdictionAreaId);
-        matched.jurisdictionAreaName = user.authority.areaName || matched.jurisdictionAreaName;
-        if (detectedCity) matched.districtName = detectedCity;
-      }
+      matched.jurisdictionAreaId = finalAreaId;
+      matched.jurisdictionAreaName = finalAreaName;
+      matched.districtName = finalDistrictName;
+      matched.department = user.authority?.department || matched.department;
+      matched.position = user.authority?.position || matched.position;
       this.activeOfficerId = matched.id;
       this.save(STORAGE_ACTIVE_OFFICER, matched.id);
       return matched;
     }
-
-    // Determine managed area from stored key or user authority department/position
-    const dept = deptStr.toLowerCase();
-    const pos = (user.authority?.position || '').toLowerCase();
-
-    let jurKey = storedJurKey && JURISDICTION_CONFIGS[storedJurKey] ? storedJurKey : '';
-
-    if (!jurKey) {
-      if (user.roles?.includes('ADMIN')) {
-        jurKey = 'toan_thanh_pho';
-      } else if (dept.includes('ngũ hành sơn') || pos.includes('ngũ hành sơn')) {
-        jurKey = 'ngu_hanh_son';
-      } else if (dept.includes('hải châu') || pos.includes('hải châu')) {
-        jurKey = 'hai_chau';
-      } else if (dept.includes('sơn trà') || pos.includes('sơn trà')) {
-        jurKey = 'son_tra';
-      } else if (dept.includes('thanh khê') || pos.includes('thanh khê')) {
-        jurKey = 'thanh_khe';
-      } else if (dept.includes('cẩm lệ') || pos.includes('cẩm lệ')) {
-        jurKey = 'cam_le';
-      } else if (dept.includes('liên chiểu') || pos.includes('liên chiểu')) {
-        jurKey = 'lien_chieu';
-      } else if (dept.includes('hòa vang') || pos.includes('hòa vang')) {
-        jurKey = 'hoa_vang';
-      } else if (dept.includes('hoàng sa') || pos.includes('hoàng sa')) {
-        jurKey = 'hoang_sa';
-      } else {
-        jurKey = 'ngu_hanh_son';
-      }
-    }
-
-    const cfg = JURISDICTION_CONFIGS[jurKey] || JURISDICTION_CONFIGS.ngu_hanh_son;
-    const finalAreaId = user.authority?.areaId ? String(user.authority.areaId) : cfg.areaId;
-    const finalAreaName = user.authority?.areaName || cfg.name;
-    const finalDistrictName = detectedCity || cfg.district;
 
     const newOfficer: AuthorityOfficer = {
       id: `off-${Date.now()}`,
@@ -676,7 +589,31 @@ class DomainDService {
       this.areas.push(area);
     }
 
+    const isDanang =
+      officer.districtName?.toLowerCase().includes('đà nẵng') ||
+      officer.jurisdictionAreaName?.toLowerCase().includes('hòa cường');
+
+    // Kiểm tra xem boundary hiện tại có bị sai lệch địa lý không (ví dụ: tọa độ TP.HCM lat ~ 10.78 cho phường ở Đà Nẵng)
+    let isCorruptedBoundary = false;
     if (area.boundary && Array.isArray(area.boundary.coordinates) && area.boundary.coordinates.length > 0) {
+      try {
+        const ring =
+          area.boundary.type === 'MultiPolygon'
+            ? (area.boundary.coordinates as any)[0][0]
+            : (area.boundary.coordinates as any)[0];
+        const sample = ring && ring[0];
+        if (sample && Array.isArray(sample) && sample.length >= 2) {
+          const [lng, lat] = sample;
+          if (isDanang && (lat < 15.5 || lat > 16.6 || lng < 107.5 || lng > 108.7)) {
+            isCorruptedBoundary = true;
+          }
+        }
+      } catch {
+        isCorruptedBoundary = true;
+      }
+    }
+
+    if (area.boundary && Array.isArray(area.boundary.coordinates) && area.boundary.coordinates.length > 0 && !isCorruptedBoundary) {
       this.cacheAreaCentroid(officer.jurisdictionAreaId, area);
       return area;
     }
@@ -698,6 +635,11 @@ class DomainDService {
       }
     } catch (err) {
       console.warn('Lỗi load boundary cho cán bộ:', err);
+    }
+
+    // Fallback centroid cho Hòa Cường nếu chưa có boundary
+    if (isDanang && (officer.jurisdictionAreaName?.toLowerCase().includes('hòa cường') || officer.jurisdictionAreaId === 'area-htd')) {
+      GEOAPIFY_CENTROIDS[officer.jurisdictionAreaId] = [108.2175, 16.0416];
     }
 
     return area;

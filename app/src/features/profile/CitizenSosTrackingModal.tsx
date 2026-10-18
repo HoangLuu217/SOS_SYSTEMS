@@ -12,6 +12,8 @@ import {
   Modal,
   Image,
   Dimensions,
+  TextInput,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
@@ -123,6 +125,14 @@ const TYPE_CONFIG: Record<string, { label: string; icon: string }> = {
   OTHER: { label: 'Cứu nạn khẩn cấp khác', icon: 'alert-circle' },
 };
 
+let _SOSMapScreen: any = null;
+const getSOSMapScreen = () => {
+  if (!_SOSMapScreen) {
+    _SOSMapScreen = require('../sos/SOSMapScreen').SOSMapScreen;
+  }
+  return _SOSMapScreen;
+};
+
 export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = ({
   visible,
   sosId,
@@ -197,6 +207,7 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
               if (res.success) {
                 const updated = { ...sos, status: 'COMPLETED' };
                 setSos(updated);
+                DeviceEventEmitter.emit('sos:sync', updated);
                 onSosCompleted?.(updated);
                 Alert.alert(
                   'Cứu hộ thành công! 🎉',
@@ -236,6 +247,7 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
               if (res.success) {
                 const updated = { ...sos, status: 'CANCELLED' };
                 setSos(updated);
+                DeviceEventEmitter.emit('sos:sync', updated);
                 onSosCompleted?.(updated);
                 Alert.alert('Đã hủy', 'Yêu cầu cứu nạn đã được hủy thành công.');
               } else {
@@ -250,6 +262,13 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
         },
       ]
     );
+  };
+
+  // State và hàm xử lý form chỉnh sửa ca cứu nạn toàn diện (đồng bộ 100% với SOSMapScreen)
+  const [showEditSOSMap, setShowEditSOSMap] = useState<boolean>(false);
+
+  const handleOpenEdit = () => {
+    setShowEditSOSMap(true);
   };
 
   if (!visible) return null;
@@ -268,11 +287,13 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
 
   const rescuerPhone =
     assignment?.rescuerId?.phone ||
+    assignment?.rescueTeamId?.leaderId?.phone ||
     assignment?.authorityOrganizationId?.phone ||
     '112';
 
   const rescuerName =
     assignment?.rescuerId?.fullName ||
+    assignment?.rescueTeamId?.leaderId?.fullName ||
     assignment?.rescueTeamId?.name ||
     'Đội Phản ứng nhanh địa phương';
 
@@ -288,6 +309,12 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
   // Vật phẩm tiếp tế chuẩn bị mang theo
   const peopleCount = sos?.people || 1;
   const priorityGroups: string[] = sos?.priorityGroups || [];
+
+  // Phân tích và định dạng nội dung mô tả tình hình tránh bị chẹt chữ (tính trực tiếp, không dùng hook tránh lỗi React)
+  const rawDesc = (sos?.description || '').replace(/⚡\s*/g, '').trim();
+  const tagMatches: string[] = rawDesc.match(/\[[^\]]+\]/g) || [];
+  const parsedTags: string[] = tagMatches.map((t: string) => t.replace(/^\[|\]$/g, '').trim());
+  const parsedUserNote: string = rawDesc.replace(/\[[^\]]+\]/g, '').trim();
 
   // Tạo mã HTML nhúng Leaflet Map đồng bộ 100% với MapScreen trong app
   const mapHtml = `
@@ -368,6 +395,9 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
           border-top: 6px solid #2563eb;
           margin-top: -1px;
         }
+        .leaflet-control-attribution {
+          display: none !important;
+        }
       </style>
     </head>
     <body>
@@ -375,7 +405,8 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
       <script>
         var map = L.map('map', {
           zoomControl: false,
-          preferCanvas: true
+          preferCanvas: true,
+          attributionControl: false
         });
 
         // 1. Chế độ thu nhỏ (Zoom <= 15) - Chuẩn Google Maps không quán xá như MapScreen
@@ -677,8 +708,8 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
             {/* 5. KHỐI HỒ SƠ YÊU CẦU BẠN ĐÃ GỬI (Đối soát tránh hoang mang nhầm ca) */}
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <View style={[styles.cardHeaderIconWrap, { backgroundColor: '#FEF2F2' }]}>
-                  <Feather name="file-text" size={18} color="#DC2626" />
+                <View style={[styles.cardHeaderIconWrap, { backgroundColor: '#EFF6FF' }]}>
+                  <Feather name="file-text" size={18} color="#0066FF" />
                 </View>
                 <Text style={styles.cardSectionTitle}>Hồ sơ cứu nạn bạn đã gửi</Text>
               </View>
@@ -715,12 +746,29 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
               </View>
 
               {/* Lời nhắn / Mô tả */}
-              {sos?.description && (
+              {sos?.description && (parsedTags.length > 0 || parsedUserNote) ? (
                 <View style={styles.descBox}>
                   <Text style={styles.descBoxLabel}>Nội dung mô tả tình hình:</Text>
-                  <Text style={styles.descBoxText}>{sos.description.replace(/⚡\s*/g, '').trim()}</Text>
+
+                  {parsedTags.length > 0 && (
+                    <View style={styles.descTagsCol}>
+                      {parsedTags.map((tag: string, idx: number) => (
+                        <View key={idx} style={styles.descTagRow}>
+                          <View style={styles.descTagBullet} />
+                          <Text style={styles.descTagText}>{tag}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  {parsedUserNote ? (
+                    <View style={[styles.descUserNoteBox, parsedTags.length > 0 && { marginTop: 8 }]}>
+                      <Text style={styles.descUserNoteLabel}>Ghi chú khẩn cấp của bạn:</Text>
+                      <Text style={styles.descUserNoteText}>{parsedUserNote}</Text>
+                    </View>
+                  ) : null}
                 </View>
-              )}
+              ) : null}
 
               {/* Số điện thoại liên hệ của người dân */}
               <View style={styles.infoRow}>
@@ -732,9 +780,17 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
               </View>
             </View>
 
-            {/* 6. NÚT HÀNH ĐỘNG DUY NHẤT: XÁC NHẬN ĐÃ ĐƯỢC CỨU AN TOÀN */}
+            {/* 6. NÚT HÀNH ĐỘNG: CẬP NHẬT THÔNG TIN / XÁC NHẬN AN TOÀN */}
             {currentStatus !== 'COMPLETED' && currentStatus !== 'CANCELLED' && currentStatus !== 'REJECTED' ? (
               <View style={styles.actionContainer}>
+                <TouchableOpacity
+                  style={styles.editBtn}
+                  onPress={handleOpenEdit}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.editBtnText}>CẬP NHẬT / SỬA THÔNG TIN YÊU CẦU</Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity
                   style={styles.completedBtn}
                   onPress={handleConfirmSafety}
@@ -744,10 +800,7 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                   {isCompleting ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
-                    <>
-                      <Feather name="check-circle" size={19} color="#FFFFFF" />
-                      <Text style={styles.completedBtnText}>XÁC NHẬN ĐÃ ĐƯỢC CỨU AN TOÀN</Text>
-                    </>
+                    <Text style={styles.completedBtnText}>XÁC NHẬN ĐÃ ĐƯỢC CỨU AN TOÀN</Text>
                   )}
                 </TouchableOpacity>
 
@@ -775,6 +828,27 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
             <View style={{ height: 30 }} />
           </ScrollView>
         )}
+
+        {/* MODAL CẬP NHẬT TOÀN DIỆN Y HỆT FORM ĐĂNG TIN CỨU TRỢ (FULL SCREEN) */}
+        {showEditSOSMap ? (
+          <Modal
+            visible={showEditSOSMap}
+            animationType="slide"
+            onRequestClose={() => setShowEditSOSMap(false)}
+          >
+            {React.createElement(getSOSMapScreen(), {
+              editingSosId: sos?._id || sosId,
+              editingSosData: sos,
+              onClose: () => setShowEditSOSMap(false),
+              onSosUpdated: (updated: any) => {
+                setSos(updated);
+                onSosCompleted?.(updated);
+                loadData(false);
+                setShowEditSOSMap(false);
+              },
+            })}
+          </Modal>
+        ) : null}
       </SafeAreaView>
     </Modal>
   );
@@ -1198,22 +1272,59 @@ const styles = StyleSheet.create({
   descBox: {
     backgroundColor: '#F8FAFC',
     borderRadius: 10,
-    padding: 10,
+    padding: 12,
     borderLeftWidth: 3,
     borderLeftColor: '#0066FF',
     marginBottom: 12,
   },
   descBoxLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 6,
+  },
+  descTagsCol: {
+    gap: 5,
+  },
+  descTagRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 7,
+  },
+  descTagBullet: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#0066FF',
+    marginTop: 6,
+  },
+  descTagText: {
+    flex: 1,
+    fontSize: 12.5,
+    color: '#334155',
+    lineHeight: 18,
+    fontWeight: '500',
+  },
+  descUserNoteBox: {
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  descUserNoteLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#64748B',
-    marginBottom: 2,
+    color: '#0284C7',
+    marginBottom: 3,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
-  descBoxText: {
-    fontSize: 13,
-    color: '#1E293B',
-    lineHeight: 19,
-    fontStyle: 'italic',
+  descUserNoteText: {
+    fontSize: 13.5,
+    color: '#0F172A',
+    fontWeight: '600',
+    lineHeight: 20,
   },
   actionContainer: {
     gap: 10,
@@ -1274,4 +1385,24 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     paddingHorizontal: 16,
   },
+  editBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1.5,
+    borderColor: '#3B82F6',
+    paddingVertical: 13,
+    borderRadius: PROFILE_THEME.radius.button,
+    marginBottom: 10,
+  },
+  editBtnText: {
+    color: '#0066FF',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+
 });
+

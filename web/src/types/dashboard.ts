@@ -32,6 +32,7 @@ export interface SosRequestItem {
   people: number;
   description?: string;
   contactPhone?: string;
+  secondaryPhone?: string;
   priorityGroups?: string[];
   images?: string[];
   imageUrl?: string;
@@ -47,6 +48,10 @@ export interface SosRequestItem {
     | 'CANCELLED'
     | 'REJECTED';
   resolvedAt?: string;
+  repeatCount?: number;
+  lastRepeatedAt?: string;
+  isSecondaryRequest?: boolean;
+  primarySosId?: string;
   createdAt: string;
   updatedAt: string;
 }

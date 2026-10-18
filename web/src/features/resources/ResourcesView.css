@@ -1,0 +1,279 @@
+/* ==========================================================================
+   RESOURCES & SUPPLIES EXECUTIVE THEME
+   Đồng bộ phong cách Oceanic Executive chuẩn của RescueSOS
+   ========================================================================== */
+
+.resources-executive-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.resources-executive-container .executive-overview-container {
+  margin-bottom: 0 !important;
+  padding: 12px 18px 10px !important;
+  flex-shrink: 0;
+  border-radius: 12px;
+}
+
+.resources-executive-container .executive-table-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  margin-bottom: 0 !important;
+  padding: 10px 14px 12px !important;
+  border-radius: 12px;
+}
+
+.resources-executive-container .executive-table-scroll {
+  flex: 1;
+  max-height: none !important;
+  min-height: 0 !important;
+  height: auto;
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+}
+
+/* Typography & highlight details */
+.code-mono-bold {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.team-title-bold {
+  font-weight: 800;
+  font-size: 14px;
+  color: #0f172a;
+  letter-spacing: -0.15px;
+}
+
+.leader-title-bold {
+  font-weight: 700;
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.leader-phone-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  color: #0284c7;
+  font-weight: 700;
+  font-size: 12px;
+  font-family: monospace;
+  text-decoration: none;
+  width: fit-content;
+  transition: all 0.15s ease;
+}
+
+.leader-phone-pill:hover {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+/* Badges for vehicle types */
+.resource-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.resource-type-badge.boat {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #bae6fd;
+}
+
+.resource-type-badge.ambulance {
+  background: #ffe4e6;
+  color: #be123c;
+  border-color: #fecdd3;
+}
+
+.resource-type-badge.truck {
+  background: #ede9fe;
+  color: #6d28d9;
+  border-color: #ddd6fe;
+}
+
+.resource-type-badge.generic {
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #e2e8f0;
+}
+
+.resource-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.resource-status-badge.available {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+
+.resource-status-badge.busy {
+  background: #fef3c7;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.resource-status-badge.maintenance {
+  background: #f1f5f9;
+  color: #64748b;
+  border-color: #cbd5e1;
+}
+
+.stock-progress-track {
+  width: 100%;
+  height: 7px;
+  background: #f1f5f9;
+  border-radius: 9999px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid #e2e8f0;
+}
+
+.stock-progress-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+.stock-progress-fill.high {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.stock-progress-fill.medium {
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+
+.stock-progress-fill.low {
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.supply-cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.supply-cat-chip.life-saving {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.supply-cat-chip.medical {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.supply-cat-chip.food {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.supply-cat-chip.equipment {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+
+/* Deployed team supplies list cards */
+.team-supply-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 12px;
+  padding: 4px 2px;
+}
+
+.team-supply-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.team-supply-card:hover {
+  border-color: #0284c7;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.08);
+}
+
+.team-supply-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.team-supply-items-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.team-supply-item-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: #0f172a;
+}
+
+.team-supply-item-tag.highlight {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+  font-weight: 700;
+}
+
+.team-supply-item-tag.medical {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+  font-weight: 700;
+}
+
+.team-supply-item-tag.equipment {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1e40af;
+  font-weight: 700;
+}

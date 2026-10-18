@@ -31,7 +31,7 @@ import {
   type ProvinceV2,
 } from '@/api';
 import { resolveGoogleMapsInput } from '@/utils/mapLinkParser';
-import { domainDService, JURISDICTION_CONFIGS } from '@/services/domainDService';
+import { domainDService, JURISDICTION_CONFIGS, type JurisdictionConfig } from '@/services/domainDService';
 import { FALLBACK_SHELTERS } from '@/constants';
 import { useGlobalModals } from '@/hooks/useGlobalModals';
 import {
@@ -141,7 +141,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
         if (areasRes && areasRes.success && Array.isArray(areasRes.data)) {
           setAreas(areasRes.data);
         }
-      } catch (e) {
+      } catch {
         if (isMounted) setShelters(FALLBACK_SHELTERS);
       } finally {
         if (isMounted) setLoading(false);
@@ -181,6 +181,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
     // 1. XÁC ĐỊNH ĐỊA BÀN PHÂN CÔNG QUẢN LÝ CỐ ĐỊNH TỪ TÀI KHOẢN (KHÔNG CHO PHÉP THAY ĐỔI)
     const determineOfficerJurKey = (): string => {
+      if (isAdmin) return 'national';
+
       // 1. Kiểm tra nếu có mã hoặc ID khu vực trực tiếp từ tài khoản
       const directAreaId = (user?.authority?.areaId || authUser?.authority?.areaId || '').toLowerCase();
       if (directAreaId) {
@@ -226,7 +228,12 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
     };
 
     const fixedJurKey = determineOfficerJurKey();
-    const fixedJurisdictionConfig = JURISDICTION_CONFIGS[fixedJurKey] || JURISDICTION_CONFIGS.ngu_hanh_son;
+    const fixedJurisdictionConfig: JurisdictionConfig = JURISDICTION_CONFIGS[fixedJurKey] || {
+      name: user?.authority?.areaName || authUser?.authority?.areaName || activeOfficer?.jurisdictionAreaName || 'Toàn Quốc (63 Tỉnh Thành)',
+      district: '',
+      areaId: user?.authority?.areaId || authUser?.authority?.areaId || 'area-all',
+      keywords: [],
+    };
 
     // Tìm đơn vị hành chính quản lý tương ứng từ tài khoản người dùng
     const userAreaIdFromAuth = user?.authority?.areaId || authUser?.authority?.areaId;
@@ -615,7 +622,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
     // Sắp xếp dữ liệu đa tiêu chí
     const sortedShelters = [...filteredShelters].sort((a, b) => {
-      let cmp = 0;
+      let cmp: number;
       switch (shelterSortField) {
         case 'name':
           cmp = (a.name || '').localeCompare(b.name || '', 'vi', { sensitivity: 'base' });

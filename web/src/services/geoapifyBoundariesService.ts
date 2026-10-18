@@ -1,5 +1,4 @@
 import type { AdministrativeArea, GeoJsonPolygon } from '@/types/domainD';
-import { GEOAPIFY_PRELOADED_FEATURES } from '@/constants/geoapifyBaseline';
 import { syncAdministrativeAreasToBackend } from '@/api';
 
 export const GEOAPIFY_BOUNDARIES_URL =
@@ -59,45 +58,12 @@ export function slugifyVietnamese(text: string): string {
     .replace(/^-|-$/g, '');
 }
 
-// Known district/ward key map for seamless compatibility with existing authorities & missions
-const KNOWN_AREA_MAP: Record<string, { id: string; code: string; parentId: string }> = {
-  'Phường Hải Châu': { id: 'area-hc', code: 'DAD-HC-01', parentId: 'area-dn' },
-  'Phường Hòa Cường': { id: 'area-htd', code: 'DAD-HC-02', parentId: 'area-dn' },
-  'Phường Thanh Khê': { id: 'area-tk', code: 'DAD-TK-01', parentId: 'area-dn' },
-  'Phường An Khê': { id: 'area-ak', code: 'DAD-TK-02', parentId: 'area-dn' },
-  'Phường Sơn Trà': { id: 'area-st', code: 'DAD-ST-01', parentId: 'area-dn' },
-  'Phường An Hải': { id: 'area-ah', code: 'DAD-ST-02', parentId: 'area-dn' },
-  'Phường Ngũ Hành Sơn': { id: 'area-nhs', code: 'DAD-NHS-01', parentId: 'area-dn' },
-  'Phường Cẩm Lệ': { id: 'area-cl', code: 'DAD-CL-01', parentId: 'area-dn' },
-  'Phường Hòa Xuân': { id: 'area-hx', code: 'DAD-CL-02', parentId: 'area-dn' },
-  'Phường Liên Chiểu': { id: 'area-lc', code: 'DAD-LC-01', parentId: 'area-dn' },
-  'Phường Hòa Khánh': { id: 'area-hk', code: 'DAD-LC-02', parentId: 'area-dn' },
-  'Phường Hải Vân': { id: 'area-hvan', code: 'DAD-LC-03', parentId: 'area-dn' },
-  'Xã Hòa Vang': { id: 'area-hv', code: 'DAD-HV-01', parentId: 'area-dn' },
-  'Xã Bà Nà': { id: 'area-bana', code: 'DAD-HV-02', parentId: 'area-dn' },
-  'Xã Hòa Tiến': { id: 'area-htien', code: 'DAD-HV-03', parentId: 'area-dn' },
-};
-
-// Master province and sovereign island areas always present
-export const MASTER_PROVINCE_AREA: AdministrativeArea = {
-  id: 'area-dn',
-  name: 'Thành phố Đà Nẵng',
-  code: 'DAD',
-  type: 'PROVINCE',
-  parentId: null,
-  status: 'ACTIVE',
-  boundaryRef: 'GEOAPIFY-DAD-ROOT',
-  areaKm2: 1285.4,
-  population: 1230000,
-  activeRescueTeams: 42,
-};
-
 export const HOANG_SA_ISLAND_AREA: AdministrativeArea = {
   id: 'area-hs',
   name: 'Huyện Hoàng Sa',
-  code: 'DAD-HS',
+  code: 'VN-HS',
   type: 'DISTRICT',
-  parentId: 'area-dn',
+  parentId: null,
   status: 'ACTIVE',
   boundaryRef: 'VN-HOANG-SA',
   areaKm2: 305.0,
@@ -116,8 +82,6 @@ export const HOANG_SA_ISLAND_AREA: AdministrativeArea = {
     ],
   },
 };
-
-export const DANANG_DISTRICTS: AdministrativeArea[] = [];
 
 export interface GeoapifyFeature {
   type: 'Feature';
@@ -178,29 +142,21 @@ export function calculatePolygonAreaKm2(geometry: { type: string; coordinates: a
   return Number((totalArea / 1000000).toFixed(1));
 }
 
-// Convert Geoapify FeatureCollection to standard AdministrativeArea list (filtered strictly to Da Nang's 15 modern merged administrative units)
+// Convert Geoapify FeatureCollection to standard AdministrativeArea list (Hỗ trợ động tất cả các tỉnh/thành)
 export function parseGeoapifyFeaturesToAreas(features: GeoapifyFeature[]): AdministrativeArea[] {
-  const areas: AdministrativeArea[] = [MASTER_PROVINCE_AREA, HOANG_SA_ISLAND_AREA];
+  const areas: AdministrativeArea[] = [HOANG_SA_ISLAND_AREA];
 
-  // Strictly filter to the 15 modern merged administrative units of Da Nang
-  const daNangFeatures = features.filter((feature) => {
-    const name = feature.properties.name || feature.properties.name_international?.vi;
-    return Boolean(name && KNOWN_AREA_MAP[name]);
-  });
-
-  daNangFeatures.forEach((feature, index) => {
+  features.forEach((feature, index) => {
     const p = feature.properties;
     const name = p.name || p.name_international?.vi;
     if (!name) return;
-    const known = KNOWN_AREA_MAP[name];
-    if (!known) return;
 
-    const id = known.id;
-    const code = known.code;
-    const parentId = known.parentId;
+    const id = `area-${slugifyVietnamese(name)}`;
+    const code = `VN-${slugifyVietnamese(name).toUpperCase()}`;
+    const parentId = p.district ? `area-${slugifyVietnamese(p.district)}` : null;
 
-    const isWard = name.startsWith('Phường');
-    const type = 'WARD';
+    const isWard = name.startsWith('Phường') || name.startsWith('Xã') || name.startsWith('Thị trấn');
+    const type = isWard ? 'WARD' : 'DISTRICT';
 
     // Real merged area calculated directly from spherical polygon geometry
     const realArea = calculatePolygonAreaKm2(feature.geometry);
@@ -236,27 +192,12 @@ export function parseGeoapifyFeaturesToAreas(features: GeoapifyFeature[]): Admin
   return areas;
 }
 
-// Global cached centroid map for fast map flyTo and markers
-export const GEOAPIFY_CENTROIDS: Record<string, [number, number]> = {
-  'area-dn': [108.16, 16.06],
-  'area-hs': [112.0, 16.5],
-  'area-hs-arch': [112.0, 16.5],
-};
+// Global cached centroid map for fast map flyTo and markers (Được tính toán và đồng bộ động từ API cho tất cả các tỉnh/thành)
+export const GEOAPIFY_CENTROIDS: Record<string, [number, number]> = {};
 
-// Initial synchronous administrative areas parsed directly from Geoapify features
-export const INITIAL_GEOAPIFY_AREAS: AdministrativeArea[] = parseGeoapifyFeaturesToAreas(
-  GEOAPIFY_PRELOADED_FEATURES as any
-);
+// Initial synchronous administrative areas (loaded live via API or cached in localStorage)
+export const INITIAL_GEOAPIFY_AREAS: AdministrativeArea[] = [];
 
-(GEOAPIFY_PRELOADED_FEATURES as any[]).forEach((f) => {
-  const name = f.properties?.name;
-  if (!name || !KNOWN_AREA_MAP[name]) return;
-  const known = KNOWN_AREA_MAP[name];
-  if (f.properties.lon && f.properties.lat) {
-    GEOAPIFY_CENTROIDS[known.id] = [f.properties.lon, f.properties.lat];
-  }
-});
-registerCentroidsFromAreas(INITIAL_GEOAPIFY_AREAS);
 
 // Fetch live from the Geoapify API URL
 export async function fetchGeoapifyBoundaries(forceRefresh: boolean = false): Promise<AdministrativeArea[]> {
@@ -286,8 +227,7 @@ export async function fetchGeoapifyBoundaries(forceRefresh: boolean = false): Pr
     // Populate centroid map directly from Geoapify lon/lat
     data.features.forEach((f) => {
       const name = f.properties.name;
-      const known = KNOWN_AREA_MAP[name];
-      const id = known?.id || `area-geo-${slugifyVietnamese(name)}`;
+      const id = `area-geo-${slugifyVietnamese(name)}`;
       if (f.properties.lon && f.properties.lat) {
         GEOAPIFY_CENTROIDS[id] = [f.properties.lon, f.properties.lat];
       }
@@ -454,8 +394,12 @@ export async function fetchVietnamProvincesService(): Promise<VietnamProvinceIte
       }
     }
 
-    // Gọi API v2 lấy danh mục 34 tỉnh thành
-    const res = await fetch('https://provinces.open-api.vn/api/v2/p/');
+    // Gọi API v2 lấy danh mục 34 tỉnh thành với timeout 3.5s an toàn
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const res = await fetch('https://provinces.open-api.vn/api/v2/p/', {
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeoutId));
     if (res.ok) {
       const apiData = await res.json();
       if (Array.isArray(apiData) && apiData.length > 0) {
@@ -536,16 +480,23 @@ export async function fetchProvinceSubUnitsService(
     );
     if (match) provCode = match.code;
   }
-  if (!provCode) provCode = 48;
-
-  const isDaNang = provCode === 48 || provinceName.toLowerCase().includes('đà nẵng');
-  const cacheKey = `rescuesos_subunits_v3_p${provCode}`;
+  if (!provCode) {
+    const firstMatch = VIETNAM_34_PROVINCES_STANDARD.find((p) =>
+      p.name.toLowerCase().includes(provinceName.toLowerCase())
+    );
+    if (firstMatch) provCode = firstMatch.code;
+  }
+  const cacheKey = `rescuesos_subunits_v6_p${provCode}`;
 
   try {
+    localStorage.removeItem(`rescuesos_subunits_v3_p${provCode}`);
+    localStorage.removeItem(`rescuesos_subunits_v2_p${provCode}`);
+
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
       const parsed: ProvinceSubUnitItem[] = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      const isOldDistrictsOnly = parsed.length <= 8 && parsed.every((u) => u.type === 'DISTRICT');
+      if (Array.isArray(parsed) && parsed.length > 0 && !isOldDistrictsOnly) {
         syncAdministrativeAreasToBackend({
           provinceName,
           provinceCode: provCode,
@@ -558,34 +509,12 @@ export async function fetchProvinceSubUnitsService(
 
   const units: ProvinceSubUnitItem[] = [];
 
-  // Đối với Đà Nẵng: Bổ sung 8 Quận/Huyện tác chiến chuẩn
-  if (isDaNang) {
-    const DANANG_OFFICIAL_DISTRICTS = [
-      { name: 'Quận Hải Châu', code: 'DAD-HC' },
-      { name: 'Quận Thanh Khê', code: 'DAD-TK' },
-      { name: 'Quận Sơn Trà', code: 'DAD-ST' },
-      { name: 'Quận Ngũ Hành Sơn', code: 'DAD-NHS' },
-      { name: 'Quận Cẩm Lệ', code: 'DAD-CL' },
-      { name: 'Quận Liên Chiểu', code: 'DAD-LC' },
-      { name: 'Huyện Hòa Vang', code: 'DAD-HV' },
-      { name: 'Huyện Hoàng Sa', code: 'DAD-HS' },
-    ];
-    DANANG_OFFICIAL_DISTRICTS.forEach((d, idx) => {
-      units.push({
-        id: `dn-d-${idx + 1}`,
-        name: d.name,
-        code: d.code,
-        type: 'DISTRICT',
-        parentName: 'Thành phố Đà Nẵng',
-        status: 'ACTIVE',
-      });
-    });
-  }
-
   // Gọi trực tiếp API Wards v2 của tỉnh thành tương ứng
   try {
     const url = `https://provinces.open-api.vn/api/v2/w/?province=${provCode}`;
-    const res = await fetch(url);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const res = await fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timeoutId));
     if (res.ok) {
       const apiWards = await res.json();
       if (Array.isArray(apiWards) && apiWards.length > 0) {

@@ -31,7 +31,7 @@ import {
   type ProvinceV2,
 } from '@/api';
 import { resolveGoogleMapsInput } from '@/utils/mapLinkParser';
-import { domainDService, JURISDICTION_CONFIGS } from '@/services/domainDService';
+import { domainDService, JURISDICTION_CONFIGS, type JurisdictionConfig } from '@/services/domainDService';
 import { useGlobalModals } from '@/hooks/useGlobalModals';
 import {
   HAZARD_TYPE_OPTIONS,
@@ -52,7 +52,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
   areas: propAreas = [],
 }) => {
   const { showToast, setConfirmModal, setConfirmPromptValue, renderGlobalModals } = useGlobalModals();
-  const [areas, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
+  const [_areas, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
   const [loading, setLoading] = useState(false);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const refreshData = () => setRefreshIndex((prev) => prev + 1);
@@ -625,7 +625,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
     };
 
     const sortedReports = [...filteredReports].sort((a, b) => {
-      let cmp = 0;
+      let cmp: number;
       switch (hazardSortField) {
         case 'severity': {
           const wA = severityWeight[a.severity] || 0;

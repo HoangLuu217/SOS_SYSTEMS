@@ -281,7 +281,7 @@ class NotificationService {
       }
     }
 
-    const targetAreaName = targetAreaDoc ? targetAreaDoc.name : 'Toàn thành phố Đà Nẵng';
+    const targetAreaName = targetAreaDoc ? targetAreaDoc.name : 'Toàn địa bàn quản lý';
     const effectivePriority = priority || (normalizedType === 'INSTANT' ? 'CRITICAL' : 'NORMAL');
     let pointDetails = {};
 

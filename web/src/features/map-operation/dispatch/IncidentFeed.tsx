@@ -25,7 +25,7 @@ export const IncidentFeed = ({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [adminDistrictFilter, setAdminDistrictFilter] = useState<string>('ALL');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'UNASSIGNED' | 'URGENT' | 'ACTIVE' | 'RESOLVED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'UNASSIGNED' | 'ACTIVE' | 'RESOLVED'>('ALL');
 
   // Baseline scoped incidents for this officer (before status/search filter)
   const scopedIncidents = useMemo(() => {
@@ -83,9 +83,6 @@ export const IncidentFeed = ({
       const isAssigned = Boolean(s.assignmentId && s.status !== 'CANCELLED');
       if (statusFilter === 'UNASSIGNED') {
         return !isAssigned && s.status !== 'COMPLETED';
-      }
-      if (statusFilter === 'URGENT') {
-        return s.priority === 'CRITICAL' || s.priority === 'HIGH';
       }
       if (statusFilter === 'ACTIVE') {
         return isAssigned && s.status !== 'COMPLETED';
@@ -212,14 +209,13 @@ export const IncidentFeed = ({
           {[
             { id: 'ALL', label: 'Tất cả', count: tabCounts.all },
             { id: 'UNASSIGNED', label: lang === 'vi' ? 'Chờ điều phối' : 'Pending', count: tabCounts.unassigned },
-            { id: 'URGENT', label: 'Khẩn cấp', count: tabCounts.urgent },
             { id: 'ACTIVE', label: 'Đang cứu', count: tabCounts.active },
             { id: 'RESOLVED', label: 'Hoàn thành', count: tabCounts.resolved },
           ].map((tab) => (
             <button
               key={tab.id}
               type="button"
-              className={`feed-filter-pill ${statusFilter === tab.id ? 'active' : ''} ${tab.id.toLowerCase()}`}
+              className={`feed-filter-pill ${statusFilter === tab.id ? 'is-active' : ''} tab-${tab.id.toLowerCase()}`}
               onClick={() => setStatusFilter(tab.id as any)}
             >
               <span>{tab.label}</span>

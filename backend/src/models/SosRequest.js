@@ -113,6 +113,27 @@ const sosRequestSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: null,
+      validate: {
+        validator: function (v) {
+          if (!v || !v.trim()) return true;
+          const clean = v.replace(/[\s\.\-]+/g, '');
+          return /^(?:\+84|0)(?:3|5|7|8|9)\d{8}$/.test(clean);
+        },
+        message: 'Số điện thoại liên hệ khẩn cấp không hợp lệ (cần 10 chữ số chuẩn VN)',
+      },
+    },
+    secondaryPhone: {
+      type: String,
+      trim: true,
+      default: null,
+      validate: {
+        validator: function (v) {
+          if (!v || !v.trim()) return true;
+          const clean = v.replace(/[\s\.\-]+/g, '');
+          return /^(?:\+84|0)(?:3|5|7|8|9)\d{8}$/.test(clean);
+        },
+        message: 'Số điện thoại dự phòng không hợp lệ (cần 10 chữ số chuẩn VN)',
+      },
     },
     priorityGroups: [{
       type: String,
@@ -141,6 +162,23 @@ const sosRequestSchema = new mongoose.Schema(
         message: 'Trạng thái cứu hộ {VALUE} không hợp lệ',
       },
       default: 'PENDING',
+    },
+    repeatCount: {
+      type: Number,
+      default: 1,
+    },
+    lastRepeatedAt: {
+      type: Date,
+      default: null,
+    },
+    isSecondaryRequest: {
+      type: Boolean,
+      default: false,
+    },
+    primarySosId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SosRequest',
+      default: null,
     },
     resolvedAt: {
       type: Date,

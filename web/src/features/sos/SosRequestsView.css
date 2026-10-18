@@ -459,16 +459,26 @@
   background: rgba(255, 255, 255, 0.65);
 }
 
-.triage-btn.active {
-  background: #0284C7;
+/* Chỉ nút Tất cả có nền màu xanh dương khi chọn */
+.triage-btn.btn-all.active {
+  background: #4B83C1;
   color: #FFFFFF;
   font-weight: 700;
-  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);
+  box-shadow: 0 2px 6px rgba(75, 131, 193, 0.35);
 }
 
-.triage-btn.active .dot-mini {
-  filter: brightness(2) contrast(1.2);
-  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.9);
+/* Các bộ lọc còn lại (Nguy cấp, Khẩn cấp, Chờ điều phối, Đang cứu): Nổi bong bóng trắng tinh tế, không đổi màu mè */
+.triage-btn:not(.btn-all).active {
+  background: #FFFFFF !important;
+  color: #0F172A !important;
+  font-weight: 700 !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12), 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+  border-radius: 6px;
+}
+
+.triage-btn:not(.btn-all).active .dot-mini {
+  filter: none !important;
+  box-shadow: none !important;
 }
 
 .dot-mini {
@@ -528,14 +538,38 @@
   align-items: center;
 }
 
-/* 5. BẢNG DỮ LIỆU CỨU NẠN (RỘNG RÃI, HỞ 1 XÍU, BO GÓC NHẸ 100%) */
+/* 5. BẢNG DỮ LIỆU CỨU NẠN (CUỘN NỘI BỘ BÊN TRONG BẢNG, TIÊU ĐỀ CỐ ĐỊNH) */
 .executive-table-scroll {
-  overflow-x: hidden;
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 280px);
+  min-height: 380px;
   border: 1px solid #CBD5E1;
   border-radius: 8px;
   background: #FFFFFF;
   box-shadow: none;
   width: 100%;
+  position: relative;
+}
+
+/* Tùy chỉnh thanh cuộn nội bộ nhỏ gọn, thanh thoát */
+.executive-table-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.executive-table-scroll::-webkit-scrollbar-track {
+  background: #F1F5F9;
+  border-radius: 4px;
+}
+
+.executive-table-scroll::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+
+.executive-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
 }
 
 .executive-table {
@@ -547,6 +581,9 @@
 }
 
 .executive-table thead tr th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   background: #F1F5F9;
   color: #334155;
   font-size: 11px;
@@ -558,6 +595,7 @@
   border-right: 1px solid #E2E8F0;
   text-align: left;
   white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .executive-table thead tr th:first-child {
@@ -613,11 +651,11 @@
 }
 
 .executive-table tbody tr.row-critical-tint td {
-  background: rgba(254, 242, 242, 0.6);
+  /* Bỏ màu nền hồng của dòng nguy cấp */
 }
 
 .executive-table tbody tr.row-critical-tint:hover td {
-  background: rgba(254, 226, 226, 0.85) !important;
+  background: #F0F9FF !important;
 }
 
 /* Chi tiết ô */
@@ -625,7 +663,8 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .code-line {
@@ -656,9 +695,9 @@
 .meta-line {
   display: flex;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 4px;
   font-size: 11px;
-  white-space: nowrap;
 }
 
 .time-text {
@@ -675,6 +714,8 @@
   font-weight: 600;
   color: #0284C7;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* Người dân cell */
@@ -682,7 +723,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .citizen-avatar {
@@ -703,7 +745,9 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
 }
 
 .citizen-name {
@@ -711,6 +755,10 @@
   color: #0F172A;
   font-size: 12.5px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  max-width: 100%;
 }
 
 .citizen-phone-link {
@@ -726,6 +774,51 @@
 .citizen-phone-link:hover {
   text-decoration: underline;
   color: #0369A1;
+}
+
+.citizen-phone-link.secondary-phone {
+  color: #059669;
+}
+
+.citizen-phone-link.secondary-phone:hover {
+  color: #047857;
+}
+
+.phone-tag-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 0 4px;
+  border-radius: 3px;
+  letter-spacing: 0.2px;
+  line-height: 14px;
+  display: inline-block;
+}
+
+.phone-tag-badge.primary {
+  background: #E0F2FE;
+  color: #0369A1;
+  border: 1px solid #BAE6FD;
+}
+
+.phone-tag-badge.secondary {
+  background: #DCFCE7;
+  color: #15803D;
+  border: 1px solid #BBF7D0;
+}
+
+.area-sub-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #EFF6FF;
+  border: 1px solid #DBEAFE;
+  color: #1D4ED8;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-top: 2px;
+  width: fit-content;
 }
 
 .no-phone-text {
@@ -809,9 +902,9 @@
 }
 
 .victims-pill.high-danger {
-  background: #FEF2F2;
-  border-color: #FECACA;
-  color: #DC2626;
+  background: #F0F9FF;
+  border-color: #BAE6FD;
+  color: #0369A1;
 }
 
 /* Mức độ ưu tiên tags */
@@ -828,8 +921,8 @@
 }
 
 .priority-tag.critical {
-  background: #FEF2F2;
-  border: 1px solid #FECACA;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
   color: #DC2626;
 }
 
@@ -1085,4 +1178,71 @@
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* Scope switch tabs (Nút bản đồ chi tiết theo mẫu ảnh) */
+.sos-scope-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sos-scope-tab {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+
+.sos-scope-tab:hover {
+  background: #f0f9ff;
+  color: #0284c7;
+  border-color: #7dd3fc;
+}
+
+.sos-scope-tab.active {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #7dd3fc;
+  font-weight: 700;
+}
+
+.sos-scope-tab.active .sos-scope-badge {
+  background: #0284c7;
+  color: #ffffff;
+}
+
+.sos-scope-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sos-scope-tab.btn-dark-blue {
+  background: #4B83C1;
+  border: 1px solid #3d71ac;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(75, 131, 193, 0.3);
+}
+
+.sos-scope-tab.btn-dark-blue:hover {
+  background: #3d71ac !important;
+  border-color: #356296 !important;
+  color: #ffffff !important;
+}
+
+.sos-scope-tab.btn-dark-blue .sos-scope-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
 }

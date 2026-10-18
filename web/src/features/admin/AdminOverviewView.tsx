@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Siren, Users, LifeBuoy, Building2, BarChart3, RefreshCw } from 'lucide-react';
+import { BarChart3, RefreshCw } from 'lucide-react';
 import { fetchAdminStatistics } from '@/api';
 import type { AdminOverviewStats } from '@/types';
 
@@ -25,8 +25,6 @@ export const AdminOverviewView: React.FC = () => {
     loadData();
   }, []);
 
-  const stats = adminStats?.overview;
-
   return (
     <div className="sos-views-container">
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
@@ -42,36 +40,6 @@ export const AdminOverviewView: React.FC = () => {
         </button>
       </div>
 
-      <div className="sos-stats-grid">
-        <div className="sos-stat-box">
-          <div className="sos-stat-icon red"><Siren size={22} /></div>
-          <div className="sos-stat-meta">
-            <span className="sos-stat-value">{stats?.totalSos ?? 6}</span>
-            <span className="sos-stat-label">Tổng Tiếp Nhận Cứu Nạn</span>
-          </div>
-        </div>
-        <div className="sos-stat-box">
-          <div className="sos-stat-icon blue"><Users size={22} /></div>
-          <div className="sos-stat-meta">
-            <span className="sos-stat-value">{stats?.totalCitizens ?? 1240}</span>
-            <span className="sos-stat-label">Người Dân Kết Nối</span>
-          </div>
-        </div>
-        <div className="sos-stat-box">
-          <div className="sos-stat-icon green"><LifeBuoy size={22} /></div>
-          <div className="sos-stat-meta">
-            <span className="sos-stat-value">{stats?.totalRescuers ?? 18}</span>
-            <span className="sos-stat-label">Lực Lượng Cứu Hộ Sẵn Sàng</span>
-          </div>
-        </div>
-        <div className="sos-stat-box">
-          <div className="sos-stat-icon purple"><Building2 size={22} /></div>
-          <div className="sos-stat-meta">
-            <span className="sos-stat-value">{stats?.totalVehicles ?? 12}</span>
-            <span className="sos-stat-label">Phương Tiện Cơ Động</span>
-          </div>
-        </div>
-      </div>
 
       {/* Phân bố SOS theo trạng thái */}
       <div className="sos-view-card">

@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const { User, AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
 const { isValidPassword, isValidPhone, validatePasswordStrength } = require('../utils/validation.util');
+const cloudinary = require('../config/cloudinary');
 
 const auditService = require('./audit.service');
 
@@ -188,23 +189,28 @@ class UserService {
 
     let finalUrl = avatarUrl.trim();
 
-    // Nếu là base64 data URI, lưu thành file ảnh thực tế trên máy chủ vào thư mục assets/avatars
-    if (finalUrl.startsWith('data:image/')) {
+    // Nếu là base64 data URI hoặc chuỗi base64 thô, tải trực tiếp lên Cloudinary
+    if (finalUrl.startsWith('data:image/') || finalUrl.startsWith('/9j/') || finalUrl.length > 500) {
       try {
-        const matches = finalUrl.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
-        if (matches) {
-          const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
-          const buffer = Buffer.from(matches[2], 'base64');
-          const avatarsDir = path.join(__dirname, '../../assets/avatars');
-          if (!fs.existsSync(avatarsDir)) {
-            fs.mkdirSync(avatarsDir, { recursive: true });
-          }
-          const fileName = `avatar-${userId}.${ext}`;
-          const filePath = path.join(avatarsDir, fileName);
-          fs.writeFileSync(filePath, buffer);
+        const uploadPayload = finalUrl.startsWith('data:image/')
+          ? finalUrl
+          : `data:image/jpeg;base64,${finalUrl}`;
+
+        const uploadResult = await cloudinary.uploader.upload(uploadPayload, {
+          folder: 'sos_systems/avatars',
+          resource_type: 'image',
+          public_id: `avatar_${userId}_${Date.now()}`,
+          overwrite: true,
+          transformation: [
+            { width: 400, height: 400, crop: 'fill', gravity: 'face' }
+          ],
+        });
+
+        if (uploadResult && uploadResult.secure_url) {
+          finalUrl = uploadResult.secure_url;
         }
       } catch (err) {
-        console.warn('Lỗi ghi file avatar:', err.message);
+        console.warn('Lỗi upload avatar lên Cloudinary:', err.message);
       }
     }
 
