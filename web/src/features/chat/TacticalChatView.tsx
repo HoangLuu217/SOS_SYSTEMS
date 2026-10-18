@@ -31,7 +31,7 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
   const [loadingMsg, setLoadingMsg] = useState(false);
   const [sending, setSending] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterRole, setFilterRole] = useState<'ALL' | 'LOCAL_AUTHORITY' | 'ADMIN'>('ALL');
+  const [filterRole, setFilterRole] = useState<'ALL' | 'CITIZEN' | 'LOCAL_AUTHORITY' | 'ADMIN'>('ALL');
   const [realtimeConnected, setRealtimeConnected] = useState(true);
   const [mobileShowChat, setMobileShowChat] = useState(false);
 
@@ -123,12 +123,30 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
     loadConversations(true);
   }, [loadConversations]);
 
-  // Đăng ký người dùng Socket.IO
+  // Đăng ký người dùng Socket.IO & Tham gia phòng địa bàn phụ trách
   useEffect(() => {
     if (currentUser?._id) {
       registerUserSocket(currentUser._id);
     }
-  }, [currentUser?._id]);
+    if (currentUser?.authority?.areaName) {
+      const cleanSlug = currentUser.authority.areaName
+        .toLowerCase()
+        .replace(/\bp\.\s*/gi, 'phuong ')
+        .replace(/\bx\.\s*/gi, 'xa ')
+        .replace(/\btt\.\s*/gi, 'thi_tran ')
+        .replace(/\bq\.\s*/gi, 'quan ')
+        .replace(/\bh\.\s*/gi, 'huyen ')
+        .replace(/\btp\.\s*/gi, 'thanh_pho ')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'd')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+      const areaChannel = `area_${cleanSlug}`;
+      joinChannelRoom(areaChannel);
+    }
+  }, [currentUser?._id, currentUser?.authority?.areaName]);
 
   // Khi chuyển đổi cuộc trò chuyện: tải tin nhắn và tham gia phòng socket tương ứng
   useEffect(() => {
@@ -174,12 +192,17 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
             }
           } else {
             playChime();
-            setConversations((prev) =>
-              prev.map((c) => {
+            setConversations((prev) => {
+              const channelExists = prev.some((c) => c.channel === newMsg.channel);
+              if (!channelExists) {
+                loadConversations();
+                return prev;
+              }
+              return prev.map((c) => {
                 if (c.channel === newMsg.channel) {
                   return {
                     ...c,
-                    unreadCount: c.unreadCount + 1,
+                    unreadCount: (c.unreadCount || 0) + 1,
                     latestMessage: {
                       content: newMsg.content,
                       senderName: newMsg.senderName,
@@ -188,8 +211,8 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                   };
                 }
                 return c;
-              })
-            );
+              });
+            });
           }
         }
       },
@@ -201,7 +224,7 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
     return () => {
       unsubscribe();
     };
-  }, [currentUser?._id, playChime, scrollToBottom]);
+  }, [currentUser?._id, loadConversations, playChime, scrollToBottom]);
 
   // Gửi tin nhắn
   const handleSend = async (contentToSend?: string) => {
@@ -275,6 +298,7 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
 
   // Lọc cuộc hội thoại
   const filteredConversations = conversations.filter((c) => {
+    if (filterRole === 'CITIZEN' && c.role !== 'CITIZEN') return false;
     if (filterRole === 'ADMIN' && c.role !== 'ADMIN' && c.type !== 'CHANNEL') return false;
     if (filterRole === 'LOCAL_AUTHORITY' && c.role !== 'LOCAL_AUTHORITY' && c.type !== 'CHANNEL') return false;
     if (!searchQuery.trim()) return true;
@@ -319,6 +343,13 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
             </button>
             <button
               type="button"
+              className={`sos-chat-filter-pill ${filterRole === 'CITIZEN' ? 'active' : ''}`}
+              onClick={() => setFilterRole('CITIZEN')}
+            >
+              Người dân ({conversations.filter((c) => c.role === 'CITIZEN').length})
+            </button>
+            <button
+              type="button"
               className={`sos-chat-filter-pill ${filterRole === 'LOCAL_AUTHORITY' ? 'active' : ''}`}
               onClick={() => setFilterRole('LOCAL_AUTHORITY')}
             >
@@ -347,7 +378,10 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
               filteredConversations.map((conv) => {
                 const isActive = activeConv?.channel === conv.channel;
                 const isChannel = conv.type === 'CHANNEL';
-                const avatarClass = isChannel
+                const isCitizen = conv.role === 'CITIZEN';
+                const avatarClass = isCitizen
+                  ? 'sos-chat-avatar citizen'
+                  : isChannel
                   ? 'sos-chat-avatar channel'
                   : conv.role === 'ADMIN'
                   ? 'sos-chat-avatar admin'
@@ -364,7 +398,9 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                   >
                     <div className="sos-chat-avatar-wrap">
                       <div className={avatarClass}>
-                        {isChannel ? (
+                        {isCitizen ? (
+                          <i className="bi bi-people-fill" aria-hidden="true" />
+                        ) : isChannel ? (
                           <i className="bi bi-megaphone" aria-hidden="true" />
                         ) : conv.role === 'ADMIN' ? (
                           <i className="bi bi-shield-check" aria-hidden="true" />
@@ -429,14 +465,18 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
 
                   <div
                     className={
-                      activeConv.type === 'CHANNEL'
+                      activeConv.role === 'CITIZEN'
+                        ? 'sos-chat-avatar citizen'
+                        : activeConv.type === 'CHANNEL'
                         ? 'sos-chat-avatar channel'
                         : activeConv.role === 'ADMIN'
                         ? 'sos-chat-avatar admin'
                         : 'sos-chat-avatar authority'
                     }
                   >
-                    {activeConv.type === 'CHANNEL' ? (
+                    {activeConv.role === 'CITIZEN' ? (
+                      <i className="bi bi-people-fill" aria-hidden="true" />
+                    ) : activeConv.type === 'CHANNEL' ? (
                       <i className="bi bi-megaphone" aria-hidden="true" />
                     ) : activeConv.role === 'ADMIN' ? (
                       <i className="bi bi-shield-check" aria-hidden="true" />
@@ -448,7 +488,9 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                   <div className="sos-chat-partner-text">
                     <div className="sos-chat-main-title">
                       <span>{cleanChatName(activeConv.name)}</span>
-                      {activeConv.type === 'CHANNEL' ? (
+                      {activeConv.role === 'CITIZEN' ? (
+                        <span className="sos-role-pill citizen">NGƯỜI DÂN &bull; ĐỊA BÀN</span>
+                      ) : activeConv.type === 'CHANNEL' ? (
                         <span className="sos-role-pill channel">KÊNH CHUNG</span>
                       ) : activeConv.role === 'ADMIN' ? (
                         <span className="sos-role-pill admin">BAN CHỈ HUY</span>
@@ -457,7 +499,12 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                       )}
                     </div>
                     <div className="sos-chat-main-subtitle">
-                      {activeConv.type === 'CHANNEL' ? (
+                      {activeConv.role === 'CITIZEN' ? (
+                        <span>
+                          <i className="bi bi-geo-alt" style={{ marginRight: '4px' }} />
+                          {activeConv.areaName || 'Cứu trợ người dân địa bàn'}
+                        </span>
+                      ) : activeConv.type === 'CHANNEL' ? (
                         <span>Tất cả ban chỉ huy và cán bộ địa phương</span>
                       ) : (
                         <>
@@ -513,12 +560,19 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
 
                     const senderRoleUpper = (msg.senderRole || '').toUpperCase();
                     const isSenderAdmin = senderRoleUpper.includes('ADMIN');
+                    const isCitizen = senderRoleUpper.includes('CITIZEN');
 
                     return (
                       <div key={msg._id || idx} className={`sos-chat-msg-row ${isOwn ? 'own' : ''}`}>
                         {!isOwn && (
-                          <div className={`sos-chat-msg-avatar ${isSenderAdmin ? 'admin' : 'authority'}`}>
-                            {msg.senderName ? msg.senderName.charAt(0).toUpperCase() : 'C'}
+                          <div className={`sos-chat-msg-avatar ${isSenderAdmin ? 'admin' : isCitizen ? 'citizen' : 'authority'}`}>
+                            {isCitizen ? (
+                              <i className="bi bi-person-fill" />
+                            ) : msg.senderName ? (
+                              msg.senderName.charAt(0).toUpperCase()
+                            ) : (
+                              'C'
+                            )}
                           </div>
                         )}
 
@@ -526,8 +580,8 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                           {!isOwn && (
                             <div className="sos-chat-msg-meta">
                               <span className="sos-chat-msg-sender">{msg.senderName}</span>
-                              <span className={`sos-role-pill-sm ${isSenderAdmin ? 'admin' : 'authority'}`}>
-                                {isSenderAdmin ? 'Ban chỉ huy' : 'Chính quyền'}
+                              <span className={`sos-role-pill-sm ${isSenderAdmin ? 'admin' : isCitizen ? 'citizen' : 'authority'}`}>
+                                {isSenderAdmin ? 'Ban chỉ huy' : isCitizen ? 'Người dân' : 'Chính quyền'}
                               </span>
                             </div>
                           )}

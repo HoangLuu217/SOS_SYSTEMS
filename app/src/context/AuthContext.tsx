@@ -23,7 +23,7 @@ export interface AuthContextType {
   login: (identifier: string, password: string) => Promise<{ success: boolean; message: string }>;
   signup: (data: {
     fullName: string;
-    email: string;
+    email?: string;
     phone: string;
     password: string;
     otp?: string;
@@ -181,7 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
    */
   const signup = async (data: {
     fullName: string;
-    email: string;
+    email?: string;
     phone: string;
     password: string;
     otp?: string;
@@ -199,8 +199,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(backendRes.data.user);
       }
 
-      // 2. Đồng bộ tạo tài khoản trên Supabase nếu đã cấu hình
-      if (isSupabaseConfigured()) {
+      // 2. Đồng bộ tạo tài khoản trên Supabase nếu đã cấu hình và có email
+      if (isSupabaseConfigured() && data.email) {
         try {
           const { data: supaData } = await supabase.auth.signUp({
             email: data.email.trim(),
@@ -530,7 +530,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await backendApi.updateProfile(data);
       if (res.success && res.data) {
         setUser(res.data);
-        return { success: true, message: 'Cập nhật hồ sơ thành công' };
+        await AsyncStorage.setItem(ENV.STORAGE_KEYS.USER_DATA, JSON.stringify(res.data));
+        return { success: true, message: 'Cập nhật hồ sơ thành công', data: res.data };
       }
       return { success: false, message: res.message || 'Cập nhật thất bại.' };
     } catch (err: any) {

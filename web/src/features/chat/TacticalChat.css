@@ -191,6 +191,10 @@
   background: #0d9488;
 }
 
+.sos-chat-avatar.citizen {
+  background: #ea580c;
+}
+
 .sos-chat-item-info {
   flex: 1;
   min-width: 0;
@@ -351,6 +355,12 @@
   border: 1px solid #bbf7d0;
 }
 
+.sos-role-pill.citizen {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+}
+
 .sos-chat-header-actions {
   display: flex;
   align-items: center;
@@ -502,6 +512,10 @@
   background: #0d9488;
 }
 
+.sos-chat-msg-avatar.citizen {
+  background: #ea580c;
+}
+
 .sos-chat-msg-bubble {
   display: flex;
   flex-direction: column;
@@ -541,6 +555,12 @@
 .sos-role-pill-sm.authority {
   background: #f0fdf4;
   color: #15803d;
+}
+
+.sos-role-pill-sm.citizen {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
 }
 
 .sos-chat-msg-card {

@@ -2,6 +2,7 @@
  * Kiểu dữ liệu Người liên hệ khẩn cấp
  */
 export interface EmergencyContact {
+  id?: string;
   name: string;
   phone: string;
   relation: string;
@@ -25,6 +26,7 @@ export interface UserProfile {
   address?: string;
   citizen?: {
     emergencyContact?: EmergencyContact;
+    emergencyContacts?: EmergencyContact[];
   };
   createdAt?: string;
   updatedAt?: string;

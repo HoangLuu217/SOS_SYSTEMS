@@ -70,9 +70,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     return () => backHandler.remove();
   }, [currentScreen]);
 
+  const [overviewRefreshKey, setOverviewRefreshKey] = useState<number>(0);
+
   // Điều hướng màn hình
   const handleBackToOverview = () => {
     setCurrentScreen('overview');
+    setOverviewRefreshKey((prev) => prev + 1);
   };
 
   return (
@@ -93,6 +96,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           onNavigateToNotificationSettings={() => setCurrentScreen('notification_settings')}
           onNavigateToNotifications={() => setCurrentScreen('notifications')}
           unreadNotificationsCount={unreadCount}
+          refreshTrigger={overviewRefreshKey}
         />
       </View>
 

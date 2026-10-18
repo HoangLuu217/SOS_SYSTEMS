@@ -27,84 +27,109 @@ interface EditProfileScreenProps {
   onBack: () => void;
 }
 
+// Hàm format ngày sinh đẹp mắt dạng DD/MM/YYYY
+const formatDateDisplay = (val?: any): string => {
+  if (!val) return '';
+  const str = String(val).trim();
+  if (str.includes('/')) return str;
+  try {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
+    }
+  } catch {}
+  return str.split('T')[0] || str;
+};
+
+// Hàm phân tách chuỗi địa chỉ
+const parseAddressComponents = (addrStr?: string | any) => {
+  if (!addrStr || typeof addrStr !== 'string') {
+    return { street: '', ward: '', province: '' };
+  }
+  const parts = addrStr.split(',').map((s) => s.trim());
+  if (parts.length >= 3) {
+    return {
+      street: parts.slice(0, parts.length - 2).join(', '),
+      ward: parts[parts.length - 2],
+      province: parts[parts.length - 1],
+    };
+  }
+  if (parts.length === 2) {
+    return { street: parts[0], ward: '', province: parts[1] };
+  }
+  return { street: parts[0] || '', ward: '', province: '' };
+};
+
 export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) => {
   const { user, updateUserProfile, updateUserAvatar } = useAuth();
 
-  // Dữ liệu người dùng thực tế và vai trò hệ thống
+  // Chế độ màn hình: false = Xem thông tin (Mặc định khi vào), true = Chỉnh sửa
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Vai trò hệ thống
   const isRescuer =
     Boolean(user?.roles?.includes('RESCUER')) ||
     Boolean(user?.roles?.includes('LEADER'));
   const roleName = isRescuer
     ? (user?.roles?.includes('LEADER') ? 'Đội trưởng cứu hộ' : 'Nhân viên cứu hộ')
     : 'Người dân';
-  const roleColor = isRescuer ? '#2563EB' : '#0066FF';
-  const roleIcon = isRescuer ? ('shield-account' as const) : ('account' as const);
 
-  const initialName = user?.fullName || '';
-  const initialDob = user?.dateOfBirth ? String(user.dateOfBirth).split('T')[0] : '';
-  const initialGender = (user?.gender as 'MALE' | 'FEMALE' | 'OTHER') || 'MALE';
-
-  // Parse address fields
-  const userAddress: any = (user as any)?.address;
-  const initialProvince =
-    typeof userAddress === 'object' && userAddress?.province
-      ? userAddress.province
-      : typeof userAddress === 'string' && userAddress.includes(',')
-      ? userAddress.split(',').pop()?.trim() || ''
-      : '';
-  const initialWard =
-    typeof userAddress === 'object' && userAddress?.ward
-      ? userAddress.ward
-      : '';
-  const initialStreet =
-    typeof userAddress === 'object' && userAddress?.street
-      ? userAddress.street
-      : typeof userAddress === 'string' && userAddress
-      ? userAddress.split(',')[0].trim()
-      : '';
+  // Lấy dữ liệu địa chỉ ban đầu
+  const initialAddr = useMemo(() => parseAddressComponents(user?.address), [user?.address]);
 
   // Form states
-  const [fullName, setFullName] = useState(initialName);
-  const [dateOfBirth, setDateOfBirth] = useState(initialDob);
-  const [gender, setGender] = useState<'MALE' | 'FEMALE' | 'OTHER'>(initialGender);
-  const [street, setStreet] = useState(initialStreet);
-
-  // Province & Ward states from Vietnam Provinces online API (2025)
-  const [province, setProvince] = useState(initialProvince);
+  const [fullName, setFullName] = useState(user?.fullName || '');
+  const [dateOfBirth, setDateOfBirth] = useState(formatDateDisplay(user?.dateOfBirth));
+  const [gender, setGender] = useState<'MALE' | 'FEMALE' | 'OTHER'>((user?.gender as any) || 'MALE');
+  const [street, setStreet] = useState(initialAddr.street);
+  const [province, setProvince] = useState(initialAddr.province);
+  const [ward, setWard] = useState(initialAddr.ward);
   const [selectedProvinceCode, setSelectedProvinceCode] = useState<number | null>(null);
-  const [ward, setWard] = useState(initialWard);
 
-  // API Lists & Loading
+  // Đồng bộ lại khi user thay đổi
+  useEffect(() => {
+    if (user) {
+      setFullName(user.fullName || '');
+      setDateOfBirth(formatDateDisplay(user.dateOfBirth));
+      setGender((user.gender as any) || 'MALE');
+      const addr = parseAddressComponents(user.address);
+      setStreet(addr.street);
+      setProvince(addr.province);
+      setWard(addr.ward);
+    }
+  }, [user]);
+
+  // Danh sách API Tỉnh / Phường
   const [provinceList, setProvinceList] = useState<Province[]>(FALLBACK_PROVINCES);
   const [wardList, setWardList] = useState<Ward[]>([]);
   const [loadingProvinces, setLoadingProvinces] = useState(false);
   const [loadingWards, setLoadingWards] = useState(false);
 
-  // Modals & Search
+  // Modal chọn địa chỉ
   const [showProvincePicker, setShowProvincePicker] = useState(false);
   const [showWardPicker, setShowWardPicker] = useState(false);
   const [provinceSearch, setProvinceSearch] = useState('');
   const [wardSearch, setWardSearch] = useState('');
 
-  // Validation errors
+  // Lỗi xác thực
   const [nameError, setNameError] = useState<string | null>(null);
   const [provinceError, setProvinceError] = useState<string | null>(null);
   const [wardError, setWardError] = useState<string | null>(null);
   const [streetError, setStreetError] = useState<string | null>(null);
 
-  // Saving & Feedback
+  // Lưu & Phản hồi
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
-  // Unsaved changes confirmation dialog
-  const [showExitConfirm, setShowExitConfirm] = useState(false);
-
-  // Avatar picking states
+  // Avatar states
   const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string | null>(user?.avatarUrl || null);
   const [avatarSheetVisible, setAvatarSheetVisible] = useState(false);
   const [isSavingAvatar, setIsSavingAvatar] = useState(false);
 
-  // Tải danh sách Tỉnh/Thành phố từ API online khi mở màn hình
+  // Tải danh sách tỉnh thành
   useEffect(() => {
     let isMounted = true;
     const fetchProvinces = async () => {
@@ -113,103 +138,124 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
         const list = await provinceApi.getProvinces();
         if (isMounted && Array.isArray(list) && list.length > 0) {
           setProvinceList(list);
-
-          // Khớp mã tỉnh với tên tỉnh ban đầu nếu có
           const matched = list.find((p) =>
-            p.name.toLowerCase().includes(initialProvince.toLowerCase())
+            p.name.toLowerCase().includes(initialAddr.province.toLowerCase()) ||
+            initialAddr.province.toLowerCase().includes(p.name.toLowerCase())
           );
           if (matched) {
             setSelectedProvinceCode(matched.code);
           }
         }
       } catch {
-        // Sử dụng danh sách dự phòng đã nạp
       } finally {
         if (isMounted) setLoadingProvinces(false);
       }
     };
-
     fetchProvinces();
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [initialAddr.province]);
 
-  // Tải danh sách Phường/Xã khi đã có selectedProvinceCode
+  // Tải danh sách phường xã khi đã có mã tỉnh
   useEffect(() => {
     let isMounted = true;
     if (!selectedProvinceCode) {
       setWardList([]);
       return;
     }
-
     const fetchWards = async () => {
       setLoadingWards(true);
       try {
         const wards = await provinceApi.getWards(selectedProvinceCode);
-        if (isMounted) {
-          setWardList(wards);
-        }
+        if (isMounted) setWardList(wards);
       } catch {
-        // Fallback
       } finally {
         if (isMounted) setLoadingWards(false);
       }
     };
-
     fetchWards();
     return () => {
       isMounted = false;
     };
   }, [selectedProvinceCode]);
 
-  // Lọc danh sách Tỉnh/Thành theo từ khóa tìm kiếm
+  // Lọc tìm kiếm
   const filteredProvinces = useMemo(() => {
     if (!provinceSearch.trim()) return provinceList;
-    const query = provinceSearch.trim().toLowerCase();
-    return provinceList.filter((p) => p.name.toLowerCase().includes(query));
+    const q = provinceSearch.trim().toLowerCase();
+    return provinceList.filter((p) => p.name.toLowerCase().includes(q));
   }, [provinceList, provinceSearch]);
 
-  // Lọc danh sách Phường/Xã theo từ khóa tìm kiếm
   const filteredWards = useMemo(() => {
     if (!wardSearch.trim()) return wardList;
-    const query = wardSearch.trim().toLowerCase();
-    return wardList.filter((w) => w.name.toLowerCase().includes(query));
+    const q = wardSearch.trim().toLowerCase();
+    return wardList.filter((w) => w.name.toLowerCase().includes(q));
   }, [wardList, wardSearch]);
 
-  // Detect if any field has changed
+  // Kiểm tra có thay đổi chưa lưu
   const hasUnsavedChanges =
-    fullName !== initialName ||
-    dateOfBirth !== initialDob ||
-    gender !== initialGender ||
-    province !== initialProvince ||
-    ward !== initialWard ||
-    street !== initialStreet;
+    fullName !== (user?.fullName || '') ||
+    dateOfBirth !== formatDateDisplay(user?.dateOfBirth) ||
+    gender !== (user?.gender || 'MALE') ||
+    province !== initialAddr.province ||
+    ward !== initialAddr.ward ||
+    street !== initialAddr.street;
 
-  // Handle Back press
+  // Xử lý nút Back
   const handlePressBack = () => {
-    if (hasUnsavedChanges) {
-      setShowExitConfirm(true);
+    if (isEditing) {
+      handleCancelEdit();
     } else {
       onBack();
     }
   };
 
-  // Chọn Tỉnh / Thành phố
+  // Huỷ chỉnh sửa
+  const handleCancelEdit = () => {
+    if (hasUnsavedChanges) {
+      Alert.alert(
+        'Huỷ thay đổi?',
+        'Các thông tin bạn vừa chỉnh sửa chưa được lưu sẽ bị huỷ bỏ.',
+        [
+          { text: 'Tiếp tục sửa', style: 'cancel' },
+          {
+            text: 'Huỷ bỏ',
+            style: 'destructive',
+            onPress: () => {
+              setFullName(user?.fullName || '');
+              setDateOfBirth(formatDateDisplay(user?.dateOfBirth));
+              setGender((user?.gender as any) || 'MALE');
+              setStreet(initialAddr.street);
+              setProvince(initialAddr.province);
+              setWard(initialAddr.ward);
+              setNameError(null);
+              setProvinceError(null);
+              setWardError(null);
+              setStreetError(null);
+              setIsEditing(false);
+            },
+          },
+        ]
+      );
+    } else {
+      setIsEditing(false);
+    }
+  };
+
+  // Chọn Tỉnh
   const handleSelectProvince = (item: Province) => {
     setProvince(item.name);
     setSelectedProvinceCode(item.code);
     setProvinceError(null);
     setShowProvincePicker(false);
     setProvinceSearch('');
-
-    // Reset phường/xã để người dùng chọn lại đúng với tỉnh mới
     if (item.code !== selectedProvinceCode) {
       setWard('');
     }
   };
 
-  // Chọn Phường / Xã
+  // Chọn Phường
   const handleSelectWard = (item: Ward) => {
     setWard(item.name);
     setWardError(null);
@@ -217,7 +263,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
     setWardSearch('');
   };
 
-  // Avatar from library
+  // Avatar từ thư viện ảnh
   const handlePickAvatar = async () => {
     setAvatarSheetVisible(false);
     try {
@@ -253,7 +299,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
     }
   };
 
-  // Avatar from camera
+  // Avatar từ máy ảnh
   const handleTakeAvatar = async () => {
     setAvatarSheetVisible(false);
     try {
@@ -288,54 +334,66 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
     }
   };
 
-  // Save changes
+  // Lưu thông tin người dùng
   const handleSave = async () => {
     let isValid = true;
 
-    if (!fullName.trim()) {
-      setNameError('Vui lòng nhập họ và tên');
+    if (!fullName.trim() || fullName.trim().length < 2) {
+      setNameError('Họ và tên phải có ít nhất 2 ký tự');
       isValid = false;
     } else {
       setNameError(null);
     }
 
-    if (!province.trim()) {
-      setProvinceError('Vui lòng chọn Tỉnh / Thành phố');
-      isValid = false;
-    } else {
-      setProvinceError(null);
-    }
-
-    if (!ward.trim()) {
-      setWardError('Vui lòng chọn Phường / Xã');
-      isValid = false;
-    } else {
-      setWardError(null);
-    }
-
-    if (!street.trim()) {
-      setStreetError('Vui lòng nhập số nhà, tên đường');
-      isValid = false;
-    } else {
-      setStreetError(null);
-    }
+    // Địa chỉ là tuỳ chọn - không bắt buộc phải nhập đủ 3 cấp để tránh chặn lưu hồ sơ
+    setProvinceError(null);
+    setWardError(null);
+    setStreetError(null);
 
     if (!isValid) return;
 
     setIsSaving(true);
     try {
-      await updateUserProfile({
+      // Định dạng địa chỉ linh hoạt từ các phần đã chọn/nhập
+      const addressParts = [street.trim(), ward.trim(), province.trim()].filter(Boolean);
+      const formattedAddress = addressParts.length > 0 
+        ? addressParts.join(', ') 
+        : (user?.address || undefined);
+
+      // Định dạng ngày sinh gửi lên backend
+      let dobToSend: string | undefined = undefined;
+      const cleanDob = dateOfBirth.trim();
+      if (cleanDob) {
+        if (cleanDob.includes('/')) {
+          const parts = cleanDob.split('/');
+          if (parts.length === 3) {
+            dobToSend = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+          } else {
+            dobToSend = cleanDob;
+          }
+        } else {
+          dobToSend = cleanDob;
+        }
+      }
+
+      const res = await updateUserProfile({
         fullName: fullName.trim(),
         gender,
-        dateOfBirth: dateOfBirth.trim(),
-        address: `${street.trim()}, ${ward.trim()}, ${province.trim()}`,
+        dateOfBirth: dobToSend,
+        address: formattedAddress,
       });
 
       setIsSaving(false);
-      setShowSuccessModal(true);
-    } catch {
+
+      if (res && res.success) {
+        setShowSuccessModal(true);
+        setIsEditing(false); // Trở về chế độ xem thông tin
+      } else {
+        Alert.alert('Thất bại', res?.message || 'Không thể lưu thay đổi vào lúc này.');
+      }
+    } catch (err: any) {
       setIsSaving(false);
-      Alert.alert('Thất bại', 'Không thể lưu thay đổi vào lúc này.');
+      Alert.alert('Lỗi', err.message || 'Không thể lưu thay đổi vào lúc này.');
     }
   };
 
@@ -350,12 +408,32 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
           onPress={handlePressBack}
           activeOpacity={0.7}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          testID="btn-back-edit-profile"
         >
-          <Feather name="arrow-left" size={22} color="#0F172A" />
+          <Feather name={isEditing ? 'x' : 'arrow-left'} size={22} color="#0F172A" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Thông tin cá nhân</Text>
-        <View style={{ width: 40 }} />
+
+        <Text style={styles.headerTitle}>
+          {isEditing ? 'Chỉnh sửa thông tin' : 'Thông tin cá nhân'}
+        </Text>
+
+        {isEditing ? (
+          <TouchableOpacity
+            style={styles.headerTextBtn}
+            onPress={handleCancelEdit}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.headerCancelText}>Huỷ</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.headerEditBtn}
+            onPress={() => setIsEditing(true)}
+            activeOpacity={0.7}
+          >
+            <Feather name="edit-2" size={16} color="#0066FF" />
+            <Text style={styles.headerEditText}>Sửa</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <KeyboardAvoidingView
@@ -368,279 +446,361 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Card: Avatar Editing */}
-          <View style={styles.avatarCard}>
-            <View style={styles.avatarWrap}>
-              {selectedAvatarUrl ? (
-                <Image source={{ uri: selectedAvatarUrl }} style={styles.avatarImage} />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Text style={styles.avatarInitial}>
-                    {fullName.trim().charAt(fullName.trim().lastIndexOf(' ') + 1) || 'A'}
-                  </Text>
-                </View>
-              )}
-
-              {isSavingAvatar && (
-                <View style={styles.avatarSavingOverlay}>
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={styles.cameraBadge}
-                onPress={() => setAvatarSheetVisible(true)}
-                activeOpacity={0.8}
-                testID="btn-edit-avatar"
-              >
-                <Feather name="camera" size={15} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.avatarNameText}>{fullName || 'Nguyễn Minh An'}</Text>
-            <Text style={styles.avatarSubText}>Chạm vào máy ảnh để đổi ảnh đại diện</Text>
-          </View>
-
-          {/* Card: Editable Personal Information */}
-          <View style={styles.card}>
-            <View style={styles.cardTitleRow}>
-              <Feather name="user" size={17} color="#0066FF" />
-              <Text style={styles.cardTitle}>Thông tin cơ bản</Text>
-            </View>
-
-            {/* Họ và tên */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>
-                Họ và tên <Text style={styles.requiredMark}>*</Text>
-              </Text>
-              <View style={[styles.inputBox, nameError ? styles.inputBoxError : null]}>
-                <Feather name="user-check" size={17} color="#64748B" style={styles.fieldIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  value={fullName}
-                  onChangeText={(t) => {
-                    setFullName(t);
-                    if (nameError) setNameError(null);
-                  }}
-                  placeholder="Nhập họ và tên..."
-                  placeholderTextColor="#94A3B8"
-                />
-              </View>
-              {nameError && <Text style={styles.errorText}>{nameError}</Text>}
-            </View>
-
-            {/* Ngày sinh */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Ngày sinh (DD/MM/YYYY)</Text>
-              <View style={styles.inputBox}>
-                <Feather name="calendar" size={17} color="#64748B" style={styles.fieldIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  value={dateOfBirth}
-                  onChangeText={setDateOfBirth}
-                  placeholder="DD/MM/YYYY"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="numbers-and-punctuation"
-                />
-              </View>
-            </View>
-
-            {/* Giới tính */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>Giới tính</Text>
-              <View style={styles.genderRow}>
-                {(['MALE', 'FEMALE', 'OTHER'] as const).map((g) => {
-                  const isSelected = gender === g;
-                  const label = g === 'MALE' ? 'Nam' : g === 'FEMALE' ? 'Nữ' : 'Khác';
-                  return (
-                    <TouchableOpacity
-                      key={g}
-                      style={[styles.genderOption, isSelected && styles.genderOptionActive]}
-                      onPress={() => setGender(g)}
-                      activeOpacity={0.8}
-                    >
-                      <View style={[styles.radioCircle, isSelected && styles.radioCircleActive]}>
-                        {isSelected && <View style={styles.radioDot} />}
-                      </View>
-                      <Text style={[styles.genderText, isSelected && styles.genderTextActive]}>
-                        {label}
+          {/* ========================================================
+              CHẾ ĐỘ 1: XEM THÔNG TIN CÁ NHÂN (VIEW MODE - MẶC ĐỊNH)
+             ======================================================== */}
+          {!isEditing ? (
+            <View style={{ gap: 14 }}>
+              {/* Card Avatar & Header xem */}
+              <View style={styles.viewAvatarCard}>
+                <View style={styles.avatarWrap}>
+                  {selectedAvatarUrl ? (
+                    <Image source={{ uri: selectedAvatarUrl }} style={styles.avatarImage} />
+                  ) : (
+                    <View style={styles.avatarPlaceholder}>
+                      <Text style={styles.avatarInitial}>
+                        {fullName.trim().charAt(fullName.trim().lastIndexOf(' ') + 1) || 'A'}
                       </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.viewFullName}>{fullName || user?.fullName || 'Người dùng'}</Text>
+                <View style={styles.badgeRow}>
+                  <View style={styles.activePill}>
+                    <View style={styles.activeDot} />
+                    <Text style={styles.activePillText}>Đang hoạt động</Text>
+                  </View>
+                  <View style={styles.rolePill}>
+                    <Text style={styles.rolePillText}>{roleName}</Text>
+                  </View>
+                </View>
               </View>
-            </View>
 
-            <View style={styles.formDivider} />
+              {/* Card: Thông tin cơ bản */}
+              <View style={styles.card}>
+                <View style={styles.cardTitleRow}>
+                  <Feather name="user" size={17} color="#0066FF" />
+                  <Text style={styles.cardTitle}>Thông tin cơ bản</Text>
+                </View>
 
-            {/* ========================================================
-                ĐỊA CHỈ THƯỜNG TRÚ - CHỌN TỪ VIETNAM PROVINCES API (2025)
-               ======================================================== */}
-            <Text style={styles.sectionHeading}>Địa chỉ thường trú</Text>
-            <View style={styles.noteBox}>
-              <Feather name="info" size={14} color="#0284C7" />
-              <Text style={styles.noteText}>
-                {isRescuer
-                  ? 'Địa chỉ thường trú được giữ tách biệt hoàn toàn với địa bàn tác chiến cứu hộ.'
-                  : 'Địa chỉ thường trú hỗ trợ định vị khu vực dân cư của bạn trong hệ thống cứu hộ SOS.'}
-              </Text>
-            </View>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Họ và tên</Text>
+                  <Text style={styles.infoValue}>{user?.fullName || 'Chưa cập nhật'}</Text>
+                </View>
 
-            {/* 1. Tỉnh / Thành phố (CHỌN TỪ DANH SÁCH API ONLINE) */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>
-                Tỉnh / Thành phố <Text style={styles.requiredMark}>*</Text>
-              </Text>
-              <TouchableOpacity
-                style={[styles.selectBox, provinceError ? styles.inputBoxError : null]}
-                onPress={() => setShowProvincePicker(true)}
-                activeOpacity={0.7}
-                testID="btn-select-province"
-              >
-                <View style={styles.selectContentLeft}>
-                  <Feather name="map-pin" size={17} color="#0066FF" style={styles.fieldIcon} />
-                  <Text style={[styles.selectText, !province && styles.selectTextPlaceholder]}>
-                    {province || 'Chọn Tỉnh / Thành phố...'}
+                <View style={styles.infoDivider} />
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Ngày sinh</Text>
+                  <Text style={styles.infoValue}>
+                    {formatDateDisplay(user?.dateOfBirth) || 'Chưa cập nhật'}
                   </Text>
                 </View>
-                <Feather name="chevron-down" size={18} color="#64748B" />
-              </TouchableOpacity>
-              {provinceError && <Text style={styles.errorText}>{provinceError}</Text>}
-            </View>
 
-            {/* 2. Phường / Xã (CHỌN TỪ DANH SÁCH API THEO TỈNH ĐÃ CHỌN) */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>
-                Phường / Xã <Text style={styles.requiredMark}>*</Text>
-              </Text>
-              <TouchableOpacity
-                style={[styles.selectBox, wardError ? styles.inputBoxError : null]}
-                onPress={() => {
-                  if (!selectedProvinceCode) {
-                    setProvinceError('Vui lòng chọn Tỉnh / Thành phố trước');
-                    return;
-                  }
-                  setShowWardPicker(true);
-                }}
-                activeOpacity={0.7}
-                testID="btn-select-ward"
-              >
-                <View style={styles.selectContentLeft}>
-                  <Feather name="navigation" size={17} color="#2563EB" style={styles.fieldIcon} />
-                  <Text style={[styles.selectText, !ward && styles.selectTextPlaceholder]}>
-                    {ward || (selectedProvinceCode ? 'Chọn Phường / Xã...' : 'Vui lòng chọn Tỉnh / TP trước')}
+                <View style={styles.infoDivider} />
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Giới tính</Text>
+                  <Text style={styles.infoValue}>
+                    {user?.gender === 'MALE'
+                      ? 'Nam'
+                      : user?.gender === 'FEMALE'
+                      ? 'Nữ'
+                      : user?.gender === 'OTHER'
+                      ? 'Khác'
+                      : 'Chưa cập nhật'}
                   </Text>
                 </View>
-                <Feather name="chevron-down" size={18} color="#64748B" />
+
+                <View style={styles.infoDivider} />
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Số điện thoại</Text>
+                  <Text style={styles.infoValue}>{user?.phone || 'Chưa cập nhật SĐT'}</Text>
+                </View>
+
+                <View style={styles.infoDivider} />
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Email</Text>
+                  <Text style={styles.infoValue}>{user?.email || 'Chưa có email'}</Text>
+                </View>
+              </View>
+
+              {/* Card: Địa chỉ thường trú */}
+              <View style={styles.card}>
+                <View style={styles.cardTitleRow}>
+                  <Feather name="map-pin" size={17} color="#0066FF" />
+                  <Text style={styles.cardTitle}>Địa chỉ thường trú</Text>
+                </View>
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Tỉnh / Thành phố</Text>
+                  <Text style={styles.infoValue}>{initialAddr.province || 'Chưa chọn'}</Text>
+                </View>
+
+                <View style={styles.infoDivider} />
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Phường / Xã</Text>
+                  <Text style={styles.infoValue}>{initialAddr.ward || 'Chưa chọn'}</Text>
+                </View>
+
+                <View style={styles.infoDivider} />
+
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Địa chỉ chi tiết</Text>
+                  <Text style={styles.infoValue}>{initialAddr.street || 'Chưa nhập'}</Text>
+                </View>
+
+                {user?.address ? (
+                  <>
+                    <View style={styles.infoDivider} />
+                    <View style={styles.addressSummaryCard}>
+                      <Feather name="check-circle" size={14} color="#059669" />
+                      <Text style={styles.addressSummaryText}>
+                        Địa chỉ đầy đủ: <Text style={styles.addressSummaryBold}>{user.address}</Text>
+                      </Text>
+                    </View>
+                  </>
+                ) : null}
+              </View>
+
+              {/* Nút lớn: Chỉnh sửa thông tin */}
+              <TouchableOpacity
+                style={styles.editButtonBig}
+                onPress={() => setIsEditing(true)}
+                activeOpacity={0.85}
+              >
+                <Feather name="edit-3" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.editButtonBigText}>Chỉnh sửa thông tin</Text>
               </TouchableOpacity>
-              {wardError && <Text style={styles.errorText}>{wardError}</Text>}
             </View>
+          ) : (
+            /* ========================================================
+               CHẾ ĐỘ 2: BIỂU MẪU CHỈNH SỬA THÔNG TIN (EDIT MODE)
+               ======================================================== */
+            <View style={{ gap: 14 }}>
+              {/* Card Avatar Editing */}
+              <View style={styles.avatarCard}>
+                <View style={styles.avatarWrap}>
+                  {selectedAvatarUrl ? (
+                    <Image source={{ uri: selectedAvatarUrl }} style={styles.avatarImage} />
+                  ) : (
+                    <View style={styles.avatarPlaceholder}>
+                      <Text style={styles.avatarInitial}>
+                        {fullName.trim().charAt(fullName.trim().lastIndexOf(' ') + 1) || 'A'}
+                      </Text>
+                    </View>
+                  )}
 
-            {/* 3. Địa chỉ cụ thể: Số nhà, tên đường (NHẬP CHI TIẾT) */}
-            <View style={styles.fieldGroup}>
-              <Text style={styles.fieldLabel}>
-                Địa chỉ chi tiết (Số nhà, tên đường) <Text style={styles.requiredMark}>*</Text>
-              </Text>
-              <View style={[styles.inputBox, streetError ? styles.inputBoxError : null]}>
-                <Feather name="home" size={17} color="#64748B" style={styles.fieldIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  value={street}
-                  onChangeText={(t) => {
-                    setStreet(t);
-                    if (streetError) setStreetError(null);
-                  }}
-                  placeholder="VD: 128 Nguyễn Du"
-                  placeholderTextColor="#94A3B8"
-                />
+                  {isSavingAvatar && (
+                    <View style={styles.avatarSavingOverlay}>
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    </View>
+                  )}
+
+                  <TouchableOpacity
+                    style={styles.cameraBadge}
+                    onPress={() => setAvatarSheetVisible(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Feather name="camera" size={15} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.avatarNameText}>{fullName || 'Nguyễn Minh An'}</Text>
+                <Text style={styles.avatarSubText}>Chạm vào máy ảnh để đổi ảnh đại diện</Text>
               </View>
-              {streetError && <Text style={styles.errorText}>{streetError}</Text>}
+
+              {/* Card: Thông tin cơ bản */}
+              <View style={styles.card}>
+                <View style={styles.cardTitleRow}>
+                  <Feather name="user" size={17} color="#0066FF" />
+                  <Text style={styles.cardTitle}>Thông tin cơ bản</Text>
+                </View>
+
+                {/* Họ và tên */}
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>
+                    Họ và tên <Text style={styles.requiredMark}>*</Text>
+                  </Text>
+                  <View style={[styles.inputBox, nameError ? styles.inputBoxError : null]}>
+                    <Feather name="user-check" size={17} color="#64748B" style={styles.fieldIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      value={fullName}
+                      onChangeText={(t) => {
+                        setFullName(t);
+                        if (nameError) setNameError(null);
+                      }}
+                      placeholder="Nhập họ và tên..."
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                  {nameError && <Text style={styles.errorText}>{nameError}</Text>}
+                </View>
+
+                {/* Ngày sinh */}
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Ngày sinh (DD/MM/YYYY)</Text>
+                  <View style={styles.inputBox}>
+                    <Feather name="calendar" size={17} color="#64748B" style={styles.fieldIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      value={dateOfBirth}
+                      onChangeText={setDateOfBirth}
+                      placeholder="DD/MM/YYYY"
+                      placeholderTextColor="#94A3B8"
+                      keyboardType="numbers-and-punctuation"
+                    />
+                  </View>
+                </View>
+
+                {/* Giới tính */}
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Giới tính</Text>
+                  <View style={styles.genderRow}>
+                    {(['MALE', 'FEMALE', 'OTHER'] as const).map((g) => {
+                      const isSelected = gender === g;
+                      const label = g === 'MALE' ? 'Nam' : g === 'FEMALE' ? 'Nữ' : 'Khác';
+                      return (
+                        <TouchableOpacity
+                          key={g}
+                          style={[styles.genderOption, isSelected && styles.genderOptionActive]}
+                          onPress={() => setGender(g)}
+                          activeOpacity={0.8}
+                        >
+                          <View style={[styles.radioCircle, isSelected && styles.radioCircleActive]}>
+                            {isSelected && <View style={styles.radioDot} />}
+                          </View>
+                          <Text style={[styles.genderText, isSelected && styles.genderTextActive]}>
+                            {label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              </View>
+
+              {/* Card: Địa chỉ thường trú */}
+              <View style={styles.card}>
+                <View style={styles.cardTitleRow}>
+                  <Feather name="map-pin" size={17} color="#0066FF" />
+                  <Text style={styles.cardTitle}>Địa chỉ thường trú</Text>
+                </View>
+
+                {/* 1. Tỉnh / Thành phố */}
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>
+                    Tỉnh / Thành phố <Text style={styles.requiredMark}>*</Text>
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.selectBox, provinceError ? styles.inputBoxError : null]}
+                    onPress={() => setShowProvincePicker(true)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.selectContentLeft}>
+                      <Feather name="map-pin" size={17} color="#0066FF" style={styles.fieldIcon} />
+                      <Text style={[styles.selectText, !province && styles.selectTextPlaceholder]}>
+                        {province || 'Chọn Tỉnh / Thành phố...'}
+                      </Text>
+                    </View>
+                    <Feather name="chevron-down" size={18} color="#64748B" />
+                  </TouchableOpacity>
+                  {provinceError && <Text style={styles.errorText}>{provinceError}</Text>}
+                </View>
+
+                {/* 2. Phường / Xã */}
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Phường / Xã</Text>
+                  <TouchableOpacity
+                    style={[styles.selectBox, wardError ? styles.inputBoxError : null]}
+                    onPress={() => {
+                      if (!selectedProvinceCode) {
+                        setProvinceError('Vui lòng chọn Tỉnh / Thành phố trước');
+                        return;
+                      }
+                      setShowWardPicker(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.selectContentLeft}>
+                      <Feather name="navigation" size={17} color="#2563EB" style={styles.fieldIcon} />
+                      <Text style={[styles.selectText, !ward && styles.selectTextPlaceholder]}>
+                        {ward || (selectedProvinceCode ? 'Chọn Phường / Xã...' : 'Vui lòng chọn Tỉnh / TP trước')}
+                      </Text>
+                    </View>
+                    <Feather name="chevron-down" size={18} color="#64748B" />
+                  </TouchableOpacity>
+                  {wardError && <Text style={styles.errorText}>{wardError}</Text>}
+                </View>
+
+                {/* 3. Địa chỉ cụ thể */}
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Địa chỉ chi tiết (Số nhà, tên đường)</Text>
+                  <View style={[styles.inputBox, streetError ? styles.inputBoxError : null]}>
+                    <Feather name="home" size={17} color="#64748B" style={styles.fieldIcon} />
+                    <TextInput
+                      style={styles.textInput}
+                      value={street}
+                      onChangeText={(t) => {
+                        setStreet(t);
+                        if (streetError) setStreetError(null);
+                      }}
+                      placeholder="VD: 128 Nguyễn Du"
+                      placeholderTextColor="#94A3B8"
+                    />
+                  </View>
+                  {streetError && <Text style={styles.errorText}>{streetError}</Text>}
+                </View>
+
+                {province && ward && street ? (
+                  <View style={styles.addressSummaryCard}>
+                    <Feather name="check-circle" size={14} color="#059669" />
+                    <Text style={styles.addressSummaryText}>
+                      Địa chỉ lưu: <Text style={styles.addressSummaryBold}>{`${street}, ${ward}, ${province}`}</Text>
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {/* Nhóm nút hành động: Huỷ & Lưu */}
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={styles.cancelBtn}
+                  onPress={handleCancelEdit}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.cancelBtnText}>Huỷ bỏ</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.saveBtn, isSaving && { opacity: 0.7 }]}
+                  onPress={handleSave}
+                  disabled={isSaving}
+                  activeOpacity={0.8}
+                >
+                  {isSaving ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <View style={styles.btnRow}>
+                      <Feather name="check" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                      <Text style={styles.saveBtnText}>Lưu thay đổi</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
+          )}
 
-            {/* Hiển thị tóm tắt địa chỉ hoàn chỉnh */}
-            {province && ward && street ? (
-              <View style={styles.addressSummaryCard}>
-                <Feather name="check-circle" size={14} color="#059669" />
-                <Text style={styles.addressSummaryText}>
-                  Địa chỉ lưu: <Text style={styles.addressSummaryBold}>{`${street}, ${ward}, ${province}`}</Text>
-                </Text>
-              </View>
-            ) : null}
-          </View>
-
-          {/* Card: Read-only Account Information */}
-          <View style={styles.card}>
-            <View style={styles.readOnlyHeader}>
-              <Feather name="shield" size={16} color="#0F172A" />
-              <Text style={styles.readOnlyTitle}>Thông tin tài khoản hệ thống (Chỉ đọc)</Text>
-            </View>
-
-            <View style={styles.readOnlyRow}>
-              <Text style={styles.readOnlyLabel}>Số điện thoại</Text>
-              <View style={styles.readOnlyValueWrap}>
-                <Text style={styles.readOnlyValue}>{user?.phone || 'Chưa cập nhật SĐT'}</Text>
-                <Feather name="lock" size={12} color="#94A3B8" />
-              </View>
-            </View>
-
-            <View style={styles.readOnlyDivider} />
-
-            <View style={styles.readOnlyRow}>
-              <Text style={styles.readOnlyLabel}>Email xác thực</Text>
-              <View style={styles.readOnlyValueWrap}>
-                <Text style={styles.readOnlyValue}>
-                  {user?.email || 'Chưa có email'}
-                </Text>
-                <Feather name="lock" size={12} color="#94A3B8" />
-              </View>
-            </View>
-
-            <View style={styles.readOnlyDivider} />
-
-            <View style={styles.readOnlyRow}>
-              <Text style={styles.readOnlyLabel}>Vai trò tài khoản</Text>
-              <View style={[styles.roleBadge, { backgroundColor: roleColor }]}>
-                <MaterialCommunityIcons name={roleIcon} size={13} color="#FFFFFF" />
-                <Text style={[styles.roleBadgeText, { color: '#FFFFFF' }]}>{roleName}</Text>
-              </View>
-            </View>
-
-            <View style={styles.readOnlyDivider} />
-
-            <View style={styles.readOnlyRow}>
-              <Text style={styles.readOnlyLabel}>Trạng thái tài khoản</Text>
-              <View style={styles.activeBadge}>
-                <View style={styles.activeDot} />
-                <Text style={styles.activeBadgeText}>Đang hoạt động</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Primary Button: Lưu thay đổi (Màu đỏ san hô coral-red) */}
-          <TouchableOpacity
-            style={[styles.saveButton, isSaving && { opacity: 0.7 }]}
-            onPress={handleSave}
-            disabled={isSaving}
-            activeOpacity={0.8}
-            testID="btn-save-edit-profile"
-          >
-            {isSaving ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <View style={styles.btnRow}>
-                <Feather name="save" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                <Text style={styles.saveButtonText}>Lưu thay đổi</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          {/* Khoảng cách đáy an toàn tránh che BottomNav */}
           <View style={{ height: 48 }} />
         </ScrollView>
       </KeyboardAvoidingView>
 
       {/* ========================================================
-          MODAL 1: CHỌN TỈNH / THÀNH PHỐ (VIETNAM PROVINCES API)
+          MODAL 1: CHỌN TỈNH / THÀNH PHỐ
          ======================================================== */}
       <Modal
         visible={showProvincePicker}
@@ -657,7 +817,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
                 <View style={styles.pickerHeaderRow}>
                   <View>
                     <Text style={styles.pickerTitle}>Chọn Tỉnh / Thành phố</Text>
-                    <Text style={styles.pickerSubtitle}>Dữ liệu chuẩn hành chính Việt Nam (2025)</Text>
+                    <Text style={styles.pickerSubtitle}>Dữ liệu chuẩn hành chính Việt Nam</Text>
                   </View>
                   <TouchableOpacity
                     onPress={() => setShowProvincePicker(false)}
@@ -727,7 +887,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
       </Modal>
 
       {/* ========================================================
-          MODAL 2: CHỌN PHƯỜNG / XÃ (VIETNAM PROVINCES API)
+          MODAL 2: CHỌN PHƯỜNG / XÃ
          ======================================================== */}
       <Modal
         visible={showWardPicker}
@@ -820,23 +980,22 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* MODAL: Success Feedback */}
+      {/* ========================================================
+          MODAL 3: THÔNG BÁO LƯU THÀNH CÔNG
+         ======================================================== */}
       <Modal visible={showSuccessModal} transparent animationType="fade">
         <View style={styles.dialogOverlay}>
           <View style={styles.dialogBox}>
             <View style={styles.successIconCircle}>
-              <Feather name="check" size={28} color="#059669" />
+              <Feather name="check" size={28} color="#10B981" />
             </View>
-            <Text style={styles.dialogTitle}>Cập nhật thành công</Text>
+            <Text style={styles.dialogTitle}>Cập nhật thành công!</Text>
             <Text style={styles.dialogMessage}>
-              Hồ sơ cứu hộ cá nhân của bạn đã được cập nhật an toàn trên hệ thống RescueSOS.
+              Hồ sơ thông tin cá nhân của bạn đã được cập nhật thành công lên hệ thống RescueSOS.
             </Text>
             <TouchableOpacity
               style={styles.dialogButton}
-              onPress={() => {
-                setShowSuccessModal(false);
-                onBack();
-              }}
+              onPress={() => setShowSuccessModal(false)}
               activeOpacity={0.8}
             >
               <Text style={styles.dialogButtonText}>Xác nhận</Text>
@@ -845,48 +1004,14 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
         </View>
       </Modal>
 
-      {/* MODAL: Unsaved Changes Exit Confirmation */}
-      <Modal visible={showExitConfirm} transparent animationType="fade">
-        <View style={styles.dialogOverlay}>
-          <View style={styles.dialogBox}>
-            <View style={styles.warningIconCircle}>
-              <Feather name="alert-triangle" size={26} color="#D97706" />
-            </View>
-            <Text style={styles.dialogTitle}>Hủy thay đổi?</Text>
-            <Text style={styles.dialogMessage}>
-              Bạn có các thay đổi chưa được lưu. Nếu thoát ngay bây giờ, các thay đổi sẽ bị mất.
-            </Text>
-            <View style={styles.dialogActionsRow}>
-              <TouchableOpacity
-                style={styles.cancelLeaveBtn}
-                onPress={() => setShowExitConfirm(false)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.cancelLeaveText}>Tiếp tục sửa</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.confirmLeaveBtn}
-                onPress={() => {
-                  setShowExitConfirm(false);
-                  onBack();
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.confirmLeaveText}>Rời đi</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* MODAL: Avatar Options */}
+      {/* MODAL 4: Chọn ảnh Avatar */}
       <Modal visible={avatarSheetVisible} transparent animationType="slide">
         <TouchableWithoutFeedback onPress={() => setAvatarSheetVisible(false)}>
           <View style={styles.modalOverlay}>
             <TouchableWithoutFeedback>
               <View style={styles.sheetCard}>
                 <View style={styles.sheetHandle} />
-                <Text style={styles.sheetTitle}>Ảnh đại diện cứu hộ</Text>
+                <Text style={styles.sheetTitle}>Ảnh đại diện</Text>
 
                 <TouchableOpacity style={styles.sheetItem} onPress={handleTakeAvatar}>
                   <View style={[styles.sheetIconCircle, { backgroundColor: '#EFF6FF' }]}>
@@ -947,15 +1072,137 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
   },
+  headerEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#EFF6FF',
+  },
+  headerEditText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0066FF',
+  },
+  headerTextBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  headerCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748B',
+  },
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 36,
     backgroundColor: '#F8FAFC',
-    gap: 14,
   },
 
-  // Avatar Card
+  // View Mode Avatar Card
+  viewAvatarCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingVertical: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  viewFullName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 8,
+    marginBottom: 6,
+    textAlign: 'center',
+    paddingHorizontal: 16,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  activePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  activeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  activePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  rolePill: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  rolePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+
+  // Info Row for View Mode
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  infoLabel: {
+    fontSize: 13.5,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  infoValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+    maxWidth: '68%',
+    textAlign: 'right',
+  },
+  infoDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+  },
+
+  // Big Edit Button
+  editButtonBig: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0066FF',
+    borderRadius: 16,
+    height: 52,
+    shadowColor: '#0066FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+    marginTop: 6,
+  },
+  editButtonBigText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  // Edit Mode Avatar Card
   avatarCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
@@ -1015,24 +1262,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarNameText: {
-    fontSize: 17,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#0F172A',
     marginBottom: 2,
+    textAlign: 'center',
   },
   avatarSubText: {
     fontSize: 12,
     color: '#64748B',
   },
 
-  // Card
+  // Card chung
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 14,
+    gap: 12,
   },
   cardTitleRow: {
     flexDirection: 'row',
@@ -1045,35 +1293,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F172A',
   },
-  sectionHeading: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 4,
-  },
-  formDivider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 4,
-  },
-  noteBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#F0F9FF',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    borderRadius: 10,
-    padding: 10,
-    gap: 8,
-  },
-  noteText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#0369A1',
-    lineHeight: 16,
-  },
 
-  // Field Inputs & Selects
+  // Form Fields
   fieldGroup: {
     gap: 6,
   },
@@ -1114,7 +1335,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Select Box for Province & Ward
   selectBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1163,7 +1383,7 @@ const styles = StyleSheet.create({
     color: '#047857',
   },
 
-  // Gender Radio Row
+  // Gender
   genderRow: {
     flexDirection: 'row',
     gap: 8,
@@ -1211,82 +1431,30 @@ const styles = StyleSheet.create({
     color: '#0066FF',
   },
 
-  // Read-only Account Card
-  readOnlyHeader: {
+  // Action Row
+  actionRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
+    gap: 12,
+    marginTop: 6,
   },
-  readOnlyTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  readOnlyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  readOnlyLabel: {
-    fontSize: 13,
-    color: '#64748B',
-  },
-  readOnlyValueWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  readOnlyValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  readOnlyDivider: {
-    height: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  roleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  roleBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-  activeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  activeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-  },
-  activeBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#059669',
-  },
-
-  // Save Button
-  saveButton: {
-    backgroundColor: '#0066FF',
+  cancelBtn: {
+    flex: 1,
+    height: 50,
     borderRadius: 16,
-    height: 52,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  saveBtn: {
+    flex: 1.6,
+    height: 50,
+    borderRadius: 16,
+    backgroundColor: '#0066FF',
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#0066FF',
@@ -1294,19 +1462,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 3,
-    marginTop: 4,
   },
   btnRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  saveButtonText: {
-    fontSize: 16,
+  saveBtnText: {
+    fontSize: 15.5,
     fontWeight: '700',
     color: '#FFFFFF',
   },
 
-  // Modal Picker Styles
+  // Pickers
   pickerModalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.55)',
@@ -1417,7 +1584,7 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
   },
 
-  // Dialog Overlay & Box
+  // Dialog Overlay
   dialogOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.6)',
@@ -1447,15 +1614,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  warningIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#FEF3C7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
   dialogTitle: {
     fontSize: 17,
     fontWeight: '800',
@@ -1480,37 +1638,6 @@ const styles = StyleSheet.create({
   },
   dialogButtonText: {
     fontSize: 14.5,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  dialogActionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    width: '100%',
-  },
-  cancelLeaveBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#F1F5F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cancelLeaveText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  confirmLeaveBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#0066FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  confirmLeaveText: {
-    fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
   },

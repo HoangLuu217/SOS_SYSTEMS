@@ -17,5 +17,7 @@ router.post('/me/verify-phone-otp', userController.verifyPhoneOtp);
 // 3. Citizen Profile
 router.get('/me/citizen', userController.getCitizen);
 router.patch('/me/citizen/emergency-contact', userController.updateEmergencyContact);
+router.delete('/me/citizen/emergency-contact', userController.deleteEmergencyContact);
+router.delete('/me/citizen/emergency-contact/:id', userController.deleteEmergencyContact);
 
 module.exports = router;

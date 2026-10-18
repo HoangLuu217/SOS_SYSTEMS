@@ -12,6 +12,7 @@ export interface ProfileOverviewScreenProps {
   onNavigateToNotificationSettings: () => void;
   onNavigateToNotifications: () => void;
   unreadNotificationsCount?: number;
+  refreshTrigger?: number;
 }
 
 export const ProfileOverviewScreen: React.FC<ProfileOverviewScreenProps> = ({
@@ -23,6 +24,7 @@ export const ProfileOverviewScreen: React.FC<ProfileOverviewScreenProps> = ({
   onNavigateToNotificationSettings,
   onNavigateToNotifications,
   unreadNotificationsCount = 3,
+  refreshTrigger,
 }) => {
   const { user } = useAuth();
 
@@ -41,6 +43,7 @@ export const ProfileOverviewScreen: React.FC<ProfileOverviewScreenProps> = ({
         onNavigateToNotificationSettings={onNavigateToNotificationSettings}
         onNavigateToNotifications={onNavigateToNotifications}
         unreadNotificationsCount={unreadNotificationsCount}
+        refreshTrigger={refreshTrigger}
       />
     );
   }
@@ -54,6 +57,7 @@ export const ProfileOverviewScreen: React.FC<ProfileOverviewScreenProps> = ({
       onNavigateToNotificationSettings={onNavigateToNotificationSettings}
       onNavigateToNotifications={onNavigateToNotifications}
       unreadNotificationsCount={unreadNotificationsCount}
+      refreshTrigger={refreshTrigger}
     />
   );
 };
