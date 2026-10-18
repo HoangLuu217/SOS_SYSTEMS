@@ -49,6 +49,8 @@ class BackendApiService {
     apiClient.postFormData<T>(endpoint, formData, options);
   put = <T = any>(endpoint: string, body: any, options: RequestInit = {}) =>
     apiClient.put<T>(endpoint, body, options);
+  patch = <T = any>(endpoint: string, body: any, options: RequestInit = {}) =>
+    apiClient.patch<T>(endpoint, body, options);
   delete = <T = any>(endpoint: string, options: RequestInit = {}) =>
     apiClient.delete<T>(endpoint, options);
 

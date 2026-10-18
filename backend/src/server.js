@@ -12,6 +12,8 @@ const startServer = async () => {
     await mongoose.connect(MONGODB_URI);
     console.log(' Kết nối MongoDB thành công');
 
+
+
     const server = http.createServer(app);
     initSocket(server);
 

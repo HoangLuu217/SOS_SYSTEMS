@@ -8,10 +8,12 @@ import {
   ActivityIndicator,
   RefreshControl,
   StatusBar,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { backendApi } from '@/api';
+import { useAuth } from '@/context/AuthContext';
 import { PROFILE_THEME } from './theme';
 import { CitizenSosTrackingModal } from './CitizenSosTrackingModal';
 
@@ -45,6 +47,9 @@ const TYPE_CONFIG: Record<string, string> = {
 };
 
 export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack, onNavigateToSos }) => {
+  const { user } = useAuth();
+  const isRescuer = Array.isArray(user?.roles) && (user.roles.includes('RESCUER') || user.roles.includes('LEADER'));
+
   const [sosList, setSosList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -52,12 +57,13 @@ export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack, onNa
   const [selectedSosForTracking, setSelectedSosForTracking] = useState<any | null>(null);
   const [trackingModalVisible, setTrackingModalVisible] = useState<boolean>(false);
 
-  const fetchSosHistory = async () => {
+  const fetchSosHistory = async (showLoadingIndicator = true) => {
     try {
       setErrorMessage(null);
+      if (showLoadingIndicator) setLoading(true);
       const res = await backendApi.get('/sos');
       if (res.success && Array.isArray(res.data)) {
-        // Sort descending by createdAt
+        // Sắp xếp ca mới nhất lên đầu
         const sorted = res.data.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setSosList(sorted);
       } else {
@@ -75,12 +81,28 @@ export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack, onNa
   };
 
   useEffect(() => {
-    fetchSosHistory();
+    // 1. Tải dữ liệu ban đầu
+    fetchSosHistory(true);
+
+    // 2. Lắng nghe sự kiện SOS được tạo mới hoặc cập nhật từ bất kỳ đâu trong app / SSE
+    const sub = DeviceEventEmitter.addListener('sos:sync', () => {
+      fetchSosHistory(false);
+    });
+
+    // 3. Tự động đồng bộ ngầm định kỳ mỗi 5 giây khi màn hình này đang mở
+    const timer = setInterval(() => {
+      fetchSosHistory(false);
+    }, 5000);
+
+    return () => {
+      sub.remove();
+      clearInterval(timer);
+    };
   }, []);
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchSosHistory();
+    fetchSosHistory(false);
   };
 
   const renderSosItem = ({ item }: { item: any }) => {
@@ -186,7 +208,7 @@ export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack, onNa
                 <Text style={styles.emptyDesc}>{errorMessage}</Text>
                 <TouchableOpacity
                   style={[styles.emptyActionBtn, { backgroundColor: '#0066FF' }]}
-                  onPress={fetchSosHistory}
+                  onPress={() => fetchSosHistory(true)}
                   activeOpacity={0.8}
                 >
                   <Feather name="refresh-cw" size={15} color="#FFFFFF" />
@@ -198,9 +220,9 @@ export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack, onNa
                 <View style={styles.emptyIconWrap}>
                   <Feather name="shield" size={44} color="#94A3B8" />
                 </View>
-                <Text style={styles.emptyTitle}>Chưa có yêu cầu cứu nạn nào</Text>
+                <Text style={styles.emptyTitle}>Chưa có yêu cầu báo nạn nào</Text>
                 <Text style={styles.emptyDesc}>
-                  Tài khoản của bạn chưa gửi ca báo nạn nào. Khi bạn gửi cứu trợ từ Tab SOS, toàn bộ tiến trình sẽ hiển thị tại đây.
+                  Bạn chưa gửi yêu cầu báo nạn khẩn cấp nào. Khi bạn gửi cứu trợ từ Tab SOS, toàn bộ tiến trình cứu hộ sẽ hiển thị tại đây.
                 </Text>
                 {onNavigateToSos && (
                   <TouchableOpacity

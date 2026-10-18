@@ -25,13 +25,13 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
         setLoading(true);
         const res = await fetchSosRequests();
         if (!isMounted) return;
-        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        if (res.success && Array.isArray(res.data)) {
           setSosList(res.data);
         } else {
-          setSosList(FALLBACK_SOS_LIST);
+          setSosList([]);
         }
       } catch {
-        if (isMounted) setSosList(FALLBACK_SOS_LIST);
+        if (isMounted) setSosList([]);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -67,7 +67,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
     }
   };
 
-  const baseSos = sosList.length > 0 ? sosList : FALLBACK_SOS_LIST;
+  const baseSos = sosList;
   const activeMissions = baseSos.filter((s) =>
     ['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status)
   );

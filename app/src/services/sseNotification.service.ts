@@ -1,3 +1,4 @@
+import { DeviceEventEmitter } from 'react-native';
 import { backendApi } from '@/api';
 import { NotificationItem } from '@/types';
 
@@ -71,16 +72,23 @@ class SSENotificationService {
               const jsonStr = trimmed.replace(/^data:\s*/, '');
               const payload = JSON.parse(jsonStr);
 
+              if (payload?.data?.type === 'SOS_SYNC') {
+                console.log('⚡ [SSE_NOTIFICATION] Đồng bộ SOS realtime:', payload.data);
+                DeviceEventEmitter.emit('sos:sync', payload.data);
+              }
+
               if (payload && (payload.action === 'BROADCAST' || payload.action === 'USER')) {
                 const item = this.normalizeNotification(payload.data);
-                console.log(`📢 [SSE_NOTIFICATION] Nhận thông báo mới: "${item.title}"`);
-                this.notificationListeners.forEach((fn) => {
-                  try {
-                    fn(item);
-                  } catch (e) {
-                    console.error('Lỗi listener SSE notification:', e);
-                  }
-                });
+                if (item.title || item.content) {
+                  console.log(`📢 [SSE_NOTIFICATION] Nhận thông báo mới: "${item.title}"`);
+                  this.notificationListeners.forEach((fn) => {
+                    try {
+                      fn(item);
+                    } catch (e) {
+                      console.error('Lỗi listener SSE notification:', e);
+                    }
+                  });
+                }
               }
             } catch {
               // Dữ liệu heartbeat hoặc kết nối ban đầu

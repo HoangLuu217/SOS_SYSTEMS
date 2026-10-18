@@ -273,18 +273,25 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
         return;
       }
       const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.7,
+        quality: 0.6,
+        base64: true,
       });
 
       if (!res.canceled && res.assets && res.assets.length > 0) {
-        const pickedUri = res.assets[0].uri;
-        setSelectedAvatarUrl(pickedUri);
+        const asset = res.assets[0];
+        const avatarData = asset.base64
+          ? `data:image/jpeg;base64,${asset.base64}`
+          : asset.uri;
+        setSelectedAvatarUrl(asset.uri);
         setIsSavingAvatar(true);
-        await updateUserAvatar(pickedUri);
+        const result = await updateUserAvatar(avatarData);
         setIsSavingAvatar(false);
+        if (result && !result.success) {
+          Alert.alert('Thông báo', result.message || 'Chưa thể tải ảnh lên máy chủ.');
+        }
       }
     } catch {
       setIsSavingAvatar(false);
@@ -304,15 +311,22 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
       const res = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.7,
+        quality: 0.6,
+        base64: true,
       });
 
       if (!res.canceled && res.assets && res.assets.length > 0) {
-        const takenUri = res.assets[0].uri;
-        setSelectedAvatarUrl(takenUri);
+        const asset = res.assets[0];
+        const avatarData = asset.base64
+          ? `data:image/jpeg;base64,${asset.base64}`
+          : asset.uri;
+        setSelectedAvatarUrl(asset.uri);
         setIsSavingAvatar(true);
-        await updateUserAvatar(takenUri);
+        const result = await updateUserAvatar(avatarData);
         setIsSavingAvatar(false);
+        if (result && !result.success) {
+          Alert.alert('Thông báo', result.message || 'Chưa thể tải ảnh lên máy chủ.');
+        }
       }
     } catch {
       setIsSavingAvatar(false);

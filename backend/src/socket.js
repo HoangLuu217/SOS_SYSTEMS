@@ -90,6 +90,24 @@ const emitSosCreated = (sosData) => {
     io.to(`area:${areaKey}`).emit('sos:area:created', sosData);
   }
   console.log(`📢 [Socket.IO] Đã phát sự kiện SOS mới: ${sosData.sosCode || sosData._id}`);
+
+  try {
+    const eventBus = require('./services/eventBus');
+    const citizenId = sosData.citizenId?._id || sosData.citizenId;
+    if (citizenId) {
+      eventBus.emit('notification_event', {
+        action: 'USER',
+        userId: citizenId.toString(),
+        data: {
+          type: 'SOS_SYNC',
+          action: 'CREATED',
+          sosId: sosData._id,
+          sosCode: sosData.sosCode,
+          status: sosData.status,
+        },
+      });
+    }
+  } catch (err) {}
 };
 
 /**
@@ -101,6 +119,24 @@ const emitSosUpdated = (sosData) => {
   io.emit('sos:updated', sosData);
   io.emit('sos:status_changed', sosData);
   console.log(`📢 [Socket.IO] Đã phát sự kiện cập nhật SOS: ${sosData.sosCode || sosData._id} -> Trạng thái: ${sosData.status}`);
+
+  try {
+    const eventBus = require('./services/eventBus');
+    const citizenId = sosData.citizenId?._id || sosData.citizenId;
+    if (citizenId) {
+      eventBus.emit('notification_event', {
+        action: 'USER',
+        userId: citizenId.toString(),
+        data: {
+          type: 'SOS_SYNC',
+          action: 'UPDATED',
+          sosId: sosData._id,
+          sosCode: sosData.sosCode,
+          status: sosData.status,
+        },
+      });
+    }
+  } catch (err) {}
 };
 
 module.exports = {

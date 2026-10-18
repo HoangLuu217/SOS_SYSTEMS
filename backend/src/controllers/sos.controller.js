@@ -1,6 +1,7 @@
 const sosService = require('../services/sos.service');
 const fileService = require('../services/file.service');
 const auditService = require('../services/audit.service');
+const { SosAssignment, RescueTeam } = require('../models');
 const { emitSosCreated, emitSosUpdated } = require('../socket');
 
 const createSos = async (req, res, next) => {
@@ -21,13 +22,18 @@ const createSos = async (req, res, next) => {
         severityLevel: newSos.severityLevel,
         description: newSos.description,
         contactPhone: newSos.contactPhone || req.user.phone,
+        secondaryPhone: newSos.secondaryPhone || null,
         victimCount: newSos.victimCount,
         address: newSos.location?.address,
       },
     });
 
     // Phát sự kiện Realtime Socket.IO cho toàn bộ Web Dashboard & Cán bộ
-    emitSosCreated(newSos);
+    if (newSos.repeatCount && newSos.repeatCount > 1) {
+      emitSosUpdated(newSos);
+    } else {
+      emitSosCreated(newSos);
+    }
 
     res.status(201).json({ success: true, data: newSos });
   } catch (error) {
@@ -39,17 +45,23 @@ const getSosRequests = async (req, res, next) => {
   try {
     const query = { ...req.query };
     const userRoles = req.user?.roles || [];
+    const userId = req.user?._id;
     
-    // Nếu user chỉ là CITIZEN (không phải Admin hay Authority), họ chỉ xem được SOS của họ
-    const isCitizenOnly = userRoles.includes('CITIZEN') && !userRoles.some(r => ['ADMIN', 'LOCAL_AUTHORITY'].includes(r));
-    if (isCitizenOnly) {
-      query.citizenId = req.user._id;
+    // Nếu user không phải ADMIN và không phải LOCAL_AUTHORITY (như CITIZEN, RESCUER...)
+    // Họ chỉ xem được danh sách các ca báo nạn do chính tài khoản của họ gửi
+    const isDispatchAuthority = userRoles.some(r => ['ADMIN', 'LOCAL_AUTHORITY'].includes(r));
+    if (!isDispatchAuthority) {
+      query.citizenId = userId;
     }
 
-    // Cán bộ địa phương (LOCAL_AUTHORITY) chỉ get các ca SOS thuộc khu vực phân công
+    // Cán bộ địa phương (LOCAL_AUTHORITY) xem các ca thuộc địa bàn của mình và các ca chưa phân bổ khu vực
     const isLocalAuthorityOnly = userRoles.includes('LOCAL_AUTHORITY') && !userRoles.includes('ADMIN');
     if (isLocalAuthorityOnly && req.user?.authority?.areaId) {
-      query.areaId = req.user.authority.areaId;
+      query.$or = [
+        { areaId: req.user.authority.areaId },
+        { areaId: null },
+      ];
+      delete query.areaId;
     }
     
     const list = await sosService.getSosRequests(query);

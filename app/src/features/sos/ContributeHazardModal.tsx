@@ -491,6 +491,9 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
           box-shadow: 0 4px 14px rgba(0,0,0,0.25);
           white-space: nowrap;
         }
+        .leaflet-control-attribution {
+          display: none !important;
+        }
       </style>
     </head>
     <body>
@@ -502,7 +505,8 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
 
         var map = L.map('map', {
           zoomControl: false,
-          preferCanvas: true
+          preferCanvas: true,
+          attributionControl: false
         }).setView([lat, lng], 16);
 
         L.control.zoom({ position: 'topright' }).addTo(map);

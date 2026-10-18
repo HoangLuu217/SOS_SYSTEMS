@@ -121,6 +121,10 @@ export interface SosRequest {
   imageUrl?: string;
   priorityGroups?: string[];
   senderRole?: 'CITIZEN' | 'RESCUER' | string;
+  repeatCount?: number;
+  lastRepeatedAt?: string;
+  isSecondaryRequest?: boolean;
+  primarySosId?: string;
 }
 
 export interface RescueTeam {

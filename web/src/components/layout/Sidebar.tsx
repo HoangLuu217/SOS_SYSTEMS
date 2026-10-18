@@ -108,7 +108,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Trạng thái đếm số liệu thời gian thực từ database
   const [sosCounts, setSosCounts] = useState<{ pending: number; active: number }>({
     pending: 0,
-    active: 6, // Mặc định 6 vụ như yêu cầu hiển thị badge
+    active: 0,
   });
   const [hazardCount, setHazardCount] = useState<number>(0);
   const [shelterCount, setShelterCount] = useState<number>(0);
@@ -117,24 +117,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Đồng bộ số liệu thời gian thực
   const fetchRealCounts = useCallback(async () => {
     try {
-      const res = await fetchSosRequests();
+      const fetchParams: Record<string, string> = {};
+      if (!isAdmin && user?.authority?.areaId) {
+        fetchParams.areaId = user.authority.areaId;
+      }
+      const res = await fetchSosRequests(fetchParams);
       if (res.success && Array.isArray(res.data)) {
         const pending = res.data.filter((s) => s.status === 'PENDING').length;
         const active = res.data.filter((s) =>
           ['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status)
         ).length;
-        setSosCounts({ pending, active: active > 0 ? active : 6 });
+        setSosCounts({ pending, active });
       } else {
-        const fallback = domainDService.getSosRequests();
+        const fallback = domainDService
+          .getSosRequests()
+          .filter((s) => !s.id?.startsWith('sos-89') && !s.id?.startsWith('sos-dn-'));
         const pending = fallback.filter((s) => s.status === 'PENDING').length;
         const active = fallback.filter((s) =>
           s.status === 'VERIFIED' || !!s.assignmentId || ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status as any)
         ).length;
-        setSosCounts({ pending, active: active > 0 ? active : 6 });
+        setSosCounts({ pending, active });
       }
     } catch {
-      // Giữ mặc định 6 vụ cho badge
-      setSosCounts((prev) => ({ ...prev, active: prev.active || 6 }));
+      // Không ép fallback 6 vụ
     }
 
     try {
@@ -206,7 +211,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           key: 'sos_requests',
-          label: 'Theo dõi yêu cầu SOS',
+          label: 'Theo dõi SOS',
           icon: <Siren size={18} className="sos-nav-icon" />,
           badge: sosCounts.pending > 0 ? `${sosCounts.pending} Mới` : undefined,
           badgeType: 'danger',
@@ -215,8 +220,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           key: 'coordination',
           label: 'Điều phối & Phân công',
           icon: <GitMerge size={18} className="sos-nav-icon" />,
-          // Badge hình viên thuốc hiển thị "6 Vụ" nổi bật khẩn cấp
-          badge: `${sosCounts.active || 6} Vụ`,
+          badge: sosCounts.active > 0 ? `${sosCounts.active} Vụ` : undefined,
           badgeType: 'danger',
         },
       ],

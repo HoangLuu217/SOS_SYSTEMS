@@ -1501,50 +1501,74 @@
 
 .feed-filter-pill {
   white-space: nowrap;
-  padding: 3px 8px;
-  border-radius: 5px;
-  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  border: 1px solid var(--sos-border);
-  background: var(--sos-surface-subtle);
-  color: var(--sos-text-secondary);
+  gap: 5px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: all 0.15s ease;
   flex-shrink: 0;
 }
 
 .feed-filter-pill:hover {
-  background: var(--sos-surface);
-  color: var(--sos-text-primary);
+  background: #f8fafc;
+  color: #0f172a;
   border-color: #94a3b8;
 }
 
-.feed-filter-pill.active {
-  background: #1e293b;
-  color: #ffffff;
-  border-color: #1e293b;
-}
-
-[data-theme="dark"] .feed-filter-pill.active {
-  background: #334155;
-  color: #ffffff;
-  border-color: #475569;
-}
-
 .feed-filter-pill .pill-count {
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 700;
-  padding: 0 4px;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #475569;
 }
 
+/* Các màu sắc trạng thái rõ ràng, dễ hiểu khi active (thay thế màu đen cũ) */
+.feed-filter-pill.is-active,
+.feed-filter-pill.active {
+  color: #ffffff !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+}
+
+.feed-filter-pill.is-active .pill-count,
 .feed-filter-pill.active .pill-count {
-  background: rgba(255, 255, 255, 0.2);
-  color: #ffffff;
+  background: rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+}
+
+/* 1. Tất cả: Xanh dương chuẩn thương hiệu */
+.feed-filter-pill.tab-all.is-active,
+.feed-filter-pill.tab-all.active {
+  background: #4B83C1 !important;
+  border-color: #3d71ac !important;
+}
+
+/* 2. Chờ điều phối: Màu cam hổ phách (cảnh báo chờ gán) */
+.feed-filter-pill.tab-unassigned.is-active,
+.feed-filter-pill.tab-unassigned.active {
+  background: #D97706 !important;
+  border-color: #B45309 !important;
+}
+
+/* 3. Đang cứu: Màu xanh dương điều hành tác chiến */
+.feed-filter-pill.tab-active.is-active {
+  background: #0284C7 !important;
+  border-color: #0369A1 !important;
+}
+
+/* 4. Hoàn thành: Màu xanh lá cây an toàn */
+.feed-filter-pill.tab-resolved.is-active,
+.feed-filter-pill.tab-resolved.active {
+  background: #16A34A !important;
+  border-color: #15803D !important;
 }
 
 /* Incident Cards List */
