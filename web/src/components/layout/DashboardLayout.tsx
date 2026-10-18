@@ -49,7 +49,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           overflow:
             (activeNavKey === 'map' && isAuthority) ||
             activeNavKey === 'hazard_reports' ||
-            activeNavKey === 'shelters'
+            activeNavKey === 'shelters' ||
+            activeNavKey === 'sos_requests'
               ? 'hidden'
               : 'auto',
           height: '100vh',

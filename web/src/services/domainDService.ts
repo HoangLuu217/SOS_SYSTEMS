@@ -123,6 +123,24 @@ export const JURISDICTION_CONFIGS: Record<string, JurisdictionConfig> = {
     keywords: ['hoàng sa', 'hoang sa'],
     bounds: { minLat: 15.0, maxLat: 17.5, minLng: 111.0, maxLng: 113.0 },
   },
+  hoa_cuong: {
+    name: 'Phường Hòa Cường',
+    district: 'Quận Hải Châu',
+    areaId: 'area-htd',
+    keywords: [
+      'hòa cường', 'hoa cuong', 'núi thành', 'nui thanh', 'tiểu la', 'tieu la',
+      '2 tháng 9', '2 thang 9', 'lê thanh nghị', '30 tháng 4', 'xô viết nghệ tĩnh',
+      'hòa cường bắc', 'hòa cường nam'
+    ],
+    bounds: { minLat: 16.02, maxLat: 16.055, minLng: 108.205, maxLng: 108.235 },
+  },
+  dien_ban: {
+    name: 'Điện Bàn Đông',
+    district: 'Thị Xã Điện Bàn',
+    areaId: 'area-dbd',
+    keywords: ['điện bàn', 'dien ban', 'lê đỉnh', 'le dinh'],
+    bounds: { minLat: 15.93, maxLat: 15.98, minLng: 108.24, maxLng: 108.28 },
+  },
   toan_thanh_pho: {
     name: 'Toàn TP Đà Nẵng',
     district: 'Thành phố Đà Nẵng',
@@ -145,9 +163,15 @@ class DomainDService {
     this.areas = this.load(STORAGE_AREAS, INITIAL_AREAS);
     this.authorities = this.load(STORAGE_AUTHORITIES, INITIAL_AUTHORITIES);
     const loadedSos = this.load(STORAGE_SOS, INITIAL_SOS_REQUESTS);
-    // Sanitize any invalid/stray SOS requests (such as test SOS #8938 at Nam Kỳ Khởi Nghĩa)
+    // Sanitize any invalid/mock SOS requests (such as 8924, 8927, 8938)
     this.sosRequests = loadedSos.filter(
-      (s) => !s.sosCode.includes('8938') && !s.locationName.includes('Nam Kỳ Khởi Nghĩa')
+      (s) =>
+        !s.id?.includes('8924') &&
+        !s.id?.includes('8927') &&
+        !s.sosCode?.includes('8924') &&
+        !s.sosCode?.includes('8927') &&
+        !s.sosCode?.includes('8938') &&
+        !s.locationName?.includes('Nam Kỳ Khởi Nghĩa')
     );
     // Đảm bảo các ca SOS khởi tạo mới (như Phường Hòa Xuân) được merge vào nếu localStorage chưa có
     const existingIds = new Set(this.sosRequests.map((s) => s.id));
@@ -283,8 +307,17 @@ class DomainDService {
 
   syncRealSosRequests(realRequests: SosRequest[]): SosRequest[] {
     const realIds = new Set(realRequests.map((r) => r.id));
-    const nonColliding = this.sosRequests.filter((s) => !realIds.has(s.id));
+    // Khi có dữ liệu thật từ MongoDB, loại bỏ hoàn toàn các ca mock cũ (sos-89..., 8924, 8927)
+    const nonColliding = this.sosRequests.filter(
+      (s) =>
+        !realIds.has(s.id) &&
+        !s.id.startsWith('sos-89') &&
+        !s.id.startsWith('sos-dn-') &&
+        !s.sosCode.includes('8924') &&
+        !s.sosCode.includes('8927')
+    );
     this.sosRequests = [...realRequests, ...nonColliding];
+    this.save(STORAGE_SOS, this.sosRequests);
     return [...this.sosRequests];
   }
 
@@ -557,72 +590,68 @@ class DomainDService {
   syncLoggedInUser(user: any): AuthorityOfficer {
     if (!user) return this.getActiveOfficer();
 
-    const storedJurKey = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_JURISDICTION_KEY) : null;
-
-    // Detect province/city from authority.department (ví dụ: "Ban Chỉ Huy PCTT Phường Cầu Giấy (Thành phố Hà Nội)")
     const deptStr = String(user.authority?.department || '');
-    const deptCityMatch = deptStr.match(/\((.*?)\)/);
-    const detectedCity = deptCityMatch ? deptCityMatch[1].trim() : (user.authority?.cityName || user.authority?.districtName || '');
+    const posStr = String(user.authority?.position || '');
+    const dept = deptStr.toLowerCase();
+    const pos = posStr.toLowerCase();
+    const areaName = String(user.authority?.jurisdictionAreaName || user.authority?.areaName || '').toLowerCase();
+
+    // Determine managed area key from user authority
+    let jurKey = '';
+    if (user.roles?.includes('ADMIN')) {
+      jurKey = 'toan_thanh_pho';
+    } else if (dept.includes('hòa cường') || pos.includes('hòa cường') || areaName.includes('hòa cường')) {
+      jurKey = 'hoa_cuong';
+    } else if (dept.includes('điện bàn') || pos.includes('điện bàn') || areaName.includes('điện bàn')) {
+      jurKey = 'dien_ban';
+    } else if (dept.includes('hải châu') || pos.includes('hải châu') || areaName.includes('hải châu')) {
+      jurKey = 'hai_chau';
+    } else if (dept.includes('ngũ hành sơn') || pos.includes('ngũ hành sơn') || areaName.includes('ngũ hành sơn')) {
+      jurKey = 'ngu_hanh_son';
+    } else if (dept.includes('sơn trà') || pos.includes('sơn trà') || areaName.includes('sơn trà')) {
+      jurKey = 'son_tra';
+    } else if (dept.includes('thanh khê') || pos.includes('thanh khê') || areaName.includes('thanh khê')) {
+      jurKey = 'thanh_khe';
+    } else if (dept.includes('cẩm lệ') || pos.includes('cẩm lệ') || areaName.includes('cẩm lệ')) {
+      jurKey = 'cam_le';
+    } else if (dept.includes('liên chiểu') || pos.includes('liên chiểu') || areaName.includes('liên chiểu')) {
+      jurKey = 'lien_chieu';
+    } else if (dept.includes('hòa vang') || pos.includes('hòa vang') || areaName.includes('hòa vang')) {
+      jurKey = 'hoa_vang';
+    } else if (dept.includes('hoàng sa') || pos.includes('hoàng sa') || areaName.includes('hoàng sa')) {
+      jurKey = 'hoang_sa';
+    } else {
+      jurKey = 'hoa_cuong';
+    }
+
+    // Always update STORAGE_JURISDICTION_KEY to the active user's jurisdiction
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(STORAGE_JURISDICTION_KEY, jurKey);
+    }
+
+    const cfg = JURISDICTION_CONFIGS[jurKey] || JURISDICTION_CONFIGS.hoa_cuong;
+    const finalAreaId = cfg.areaId;
+    const finalAreaName = cfg.name;
+    const finalDistrictName = cfg.district;
 
     // Check if matching officer already exists
     const matched = this.officers.find(
       (o) =>
         (user.phone && o.phone === user.phone) ||
         (user.email && o.email?.toLowerCase() === user.email?.toLowerCase()) ||
-        (user.authority?.department && o.department?.toLowerCase().includes(user.authority.department.toLowerCase())) ||
         (user.fullName && o.fullName?.toLowerCase() === user.fullName?.toLowerCase())
     );
 
     if (matched) {
-      if (storedJurKey && JURISDICTION_CONFIGS[storedJurKey]) {
-        const cfg = JURISDICTION_CONFIGS[storedJurKey];
-        matched.jurisdictionAreaId = cfg.areaId;
-        matched.jurisdictionAreaName = cfg.name;
-        matched.districtName = cfg.district;
-      } else if (user.authority?.areaId || user.authority?.areaName) {
-        matched.jurisdictionAreaId = String(user.authority.areaId || matched.jurisdictionAreaId);
-        matched.jurisdictionAreaName = user.authority.areaName || matched.jurisdictionAreaName;
-        if (detectedCity) matched.districtName = detectedCity;
-      }
+      matched.jurisdictionAreaId = finalAreaId;
+      matched.jurisdictionAreaName = finalAreaName;
+      matched.districtName = finalDistrictName;
+      matched.department = user.authority?.department || matched.department;
+      matched.position = user.authority?.position || matched.position;
       this.activeOfficerId = matched.id;
       this.save(STORAGE_ACTIVE_OFFICER, matched.id);
       return matched;
     }
-
-    // Determine managed area from stored key or user authority department/position
-    const dept = deptStr.toLowerCase();
-    const pos = (user.authority?.position || '').toLowerCase();
-
-    let jurKey = storedJurKey && JURISDICTION_CONFIGS[storedJurKey] ? storedJurKey : '';
-
-    if (!jurKey) {
-      if (user.roles?.includes('ADMIN')) {
-        jurKey = 'toan_thanh_pho';
-      } else if (dept.includes('ngũ hành sơn') || pos.includes('ngũ hành sơn')) {
-        jurKey = 'ngu_hanh_son';
-      } else if (dept.includes('hải châu') || pos.includes('hải châu')) {
-        jurKey = 'hai_chau';
-      } else if (dept.includes('sơn trà') || pos.includes('sơn trà')) {
-        jurKey = 'son_tra';
-      } else if (dept.includes('thanh khê') || pos.includes('thanh khê')) {
-        jurKey = 'thanh_khe';
-      } else if (dept.includes('cẩm lệ') || pos.includes('cẩm lệ')) {
-        jurKey = 'cam_le';
-      } else if (dept.includes('liên chiểu') || pos.includes('liên chiểu')) {
-        jurKey = 'lien_chieu';
-      } else if (dept.includes('hòa vang') || pos.includes('hòa vang')) {
-        jurKey = 'hoa_vang';
-      } else if (dept.includes('hoàng sa') || pos.includes('hoàng sa')) {
-        jurKey = 'hoang_sa';
-      } else {
-        jurKey = 'ngu_hanh_son';
-      }
-    }
-
-    const cfg = JURISDICTION_CONFIGS[jurKey] || JURISDICTION_CONFIGS.ngu_hanh_son;
-    const finalAreaId = user.authority?.areaId ? String(user.authority.areaId) : cfg.areaId;
-    const finalAreaName = user.authority?.areaName || cfg.name;
-    const finalDistrictName = detectedCity || cfg.district;
 
     const newOfficer: AuthorityOfficer = {
       id: `off-${Date.now()}`,

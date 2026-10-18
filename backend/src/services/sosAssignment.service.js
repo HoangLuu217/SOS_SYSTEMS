@@ -134,7 +134,14 @@ class SosAssignmentService {
       $or: [{ sosRequestId: sosId }, { sosId: sosId }],
     })
       .populate('authorityOrganizationId', 'name code type phone')
-      .populate('rescueTeamId', 'name type leaderId')
+      .populate({
+        path: 'rescueTeamId',
+        select: 'name type leaderId',
+        populate: {
+          path: 'leaderId',
+          select: '_id fullName phone email avatarUrl rescuer',
+        },
+      })
       .populate('rescuerId', '_id fullName phone email avatarUrl rescuer')
       .populate('vehicleId', 'plateNumber type capacity status')
       .populate('assignedBy', '_id fullName phone email roles')

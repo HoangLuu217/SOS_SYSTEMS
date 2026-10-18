@@ -31,6 +31,7 @@ export type RescuerAvailability =
 export interface RescuerProfileOverviewScreenProps {
   onNavigateToEditProfile: () => void;
   onNavigateToProfessional: () => void;
+  onNavigateToSosHistory: () => void;
   onNavigateToSecurity: () => void;
   onNavigateToNotificationSettings: () => void;
   onNavigateToNotifications: () => void;
@@ -41,6 +42,7 @@ export interface RescuerProfileOverviewScreenProps {
 export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreenProps> = ({
   onNavigateToEditProfile,
   onNavigateToProfessional,
+  onNavigateToSosHistory,
   onNavigateToSecurity,
   onNavigateToNotificationSettings,
   onNavigateToNotifications,
@@ -385,6 +387,24 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
 
         {/* 4. Menu Items */}
         <View style={styles.menuCard}>
+          {/* Item 0: Lịch sử báo nạn (SOS History) */}
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={onNavigateToSosHistory}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconBox, { backgroundColor: '#FEF2F2' }]}>
+              <Feather name="clock" size={18} color="#DC2626" />
+            </View>
+            <View style={styles.menuTextBox}>
+              <Text style={styles.menuTitle}>Lịch sử báo nạn</Text>
+              <Text style={styles.menuDesc}>Xem các yêu cầu SOS cá nhân bạn đã gửi</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+
+          <View style={styles.menuDivider} />
+
           {/* Item 1: Thông tin cá nhân */}
           <TouchableOpacity
             style={styles.menuItem}

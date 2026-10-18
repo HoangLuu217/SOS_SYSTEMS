@@ -145,7 +145,7 @@ const seed = async () => {
     });
     if (!rescuer) {
       rescuer = await User.create({
-        fullName: 'Lê Cứu Nạn (Đội Cứu Hộ Sông Hàn)',
+        fullName: 'Lê Cứu Nạn',
         email: 'rescuer@sos.vn',
         phone: '0903000003',
         passwordHash: defaultPasswordHash,

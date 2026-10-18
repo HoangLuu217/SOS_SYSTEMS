@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { Platform, Vibration } from 'react-native';
+import { Platform, Vibration, DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { backendApi, NotificationItem } from '@/api';
@@ -105,6 +105,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     // Lưu lại bộ nhớ đã thấy
     const idsArray = Array.from(seenIdsRef.current).slice(-100);
     AsyncStorage.setItem(SEEN_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(idsArray)).catch(() => {});
+
+    if (incoming.data?.type === 'SOS_SYNC' || incoming.data?.type === 'RESCUE' || incoming.data?.sosId) {
+      DeviceEventEmitter.emit('sos:sync');
+    }
 
     // 1. Chèn thông báo mới vào đầu danh sách ngay lập tức
     setNotifications((prev) => {

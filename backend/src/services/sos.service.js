@@ -1,9 +1,79 @@
+const mongoose = require('mongoose');
 const { SosRequest, SosStatusHistory, AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
 
+/**
+ * Tự động phân giải khu vực hành chính (AdministrativeArea) dựa vào địa chỉ & tọa độ
+ */
+const resolveAdministrativeArea = async (address, location, inputAreaId) => {
+  if (inputAreaId && mongoose.Types.ObjectId.isValid(inputAreaId) && String(inputAreaId) !== '650c1f1e1c9d440000a1b1c1') {
+    const existing = await AdministrativeArea.findById(inputAreaId);
+    if (existing) return existing._id;
+  }
+
+  const addressStr = String(address || '').toLowerCase();
+  const allAreas = await AdministrativeArea.find({ status: 'ACTIVE' });
+
+  // 1. Khớp theo cấp hành chính chi tiết nhất trước (WARD -> DISTRICT -> PROVINCE), tên dài trước
+  const typeWeight = { WARD: 3, DISTRICT: 2, PROVINCE: 1 };
+  const sortedAreas = [...allAreas].sort((a, b) => {
+    const weightDiff = (typeWeight[b.type] || 0) - (typeWeight[a.type] || 0);
+    if (weightDiff !== 0) return weightDiff;
+    return (b.name?.length || 0) - (a.name?.length || 0);
+  });
+
+  for (const a of sortedAreas) {
+    if (!a.name || a.type === 'PROVINCE') continue; // Bỏ qua Province ở bước so khớp chi tiết
+    const cleanName = a.name
+      .toLowerCase()
+      .replace(/^(phường|xã|quận|huyện|thị trấn|thị xã|tp\.|thành phố)\s+/i, '')
+      .trim();
+    if (cleanName.length >= 3 && addressStr.includes(cleanName)) {
+      return a._id;
+    }
+  }
+
+  // 2. Nhận diện các tuyến đường đặc trưng của Đà Nẵng
+  if (addressStr.includes('hòa cường') || addressStr.includes('núi thành') || addressStr.includes('tiểu la') || addressStr.includes('2 tháng 9')) {
+    const hoaCuong = await AdministrativeArea.findOne({ code: 'DAD_HOA_CUONG' });
+    if (hoaCuong) return hoaCuong._id;
+  }
+  if (addressStr.includes('hải châu') || addressStr.includes('bạch đằng')) {
+    const haiChau = await AdministrativeArea.findOne({ code: 'DAD_HAI_CHAU' });
+    if (haiChau) return haiChau._id;
+  }
+  if (addressStr.includes('điện bàn') || addressStr.includes('lê đỉnh')) {
+    const dienBan = await AdministrativeArea.findOne({ code: 'DBD' });
+    if (dienBan) return dienBan._id;
+  }
+
+  // 3. Fallback: Khu vực Đà Nẵng cấp Tỉnh hoặc khu vực hoạt động đầu tiên
+  const danang = await AdministrativeArea.findOne({ code: { $in: ['DANANG', 'DAD'] } });
+  if (danang) return danang._id;
+
+  const defaultAny = await AdministrativeArea.findOne({ status: 'ACTIVE' });
+  return defaultAny ? defaultAny._id : null;
+};
+
+const calculateDistanceMeters = (coord1, coord2) => {
+  if (!coord1 || !coord2 || !Array.isArray(coord1) || !Array.isArray(coord2)) return 999999;
+  const [lon1, lat1] = coord1;
+  const [lon2, lat2] = coord2;
+  const R = 6371e3; // bán kính Trái Đất (mét)
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
 const createSosRequest = async (citizenId, sosData) => {
   // Extract fields matching citizen mobile app form
-  const { location, areaId, address, emergencyType, priority, people, description, images, imageUrl, contactPhone, priorityGroups } = sosData;
+  const { location, areaId, address, emergencyType, priority, people, description, images, imageUrl, contactPhone, secondaryPhone, priorityGroups } = sosData;
 
   const normalizedImages = Array.isArray(images)
     ? images
@@ -11,25 +81,71 @@ const createSosRequest = async (citizenId, sosData) => {
     ? [imageUrl]
     : [];
 
-  // Tự động gán areaId mặc định nếu app gửi placeholder hoặc thiếu areaId
-  let assignedAreaId = areaId;
-  const isPlaceholder = !assignedAreaId || assignedAreaId === '650c1f1e1c9d440000a1b1c1';
-  if (isPlaceholder && AdministrativeArea) {
-    let defaultArea = await AdministrativeArea.findOne({ status: 'ACTIVE' });
-    if (!defaultArea) {
-      defaultArea = await AdministrativeArea.findOne();
+  // 1. Kiểm tra toàn bộ các ca SOS đang hoạt động (ACTIVE) của tài khoản này
+  const activeStatuses = ['PENDING', 'VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'];
+  const activeSosList = await SosRequest.find({
+    citizenId,
+    status: { $in: activeStatuses }
+  }).sort({ createdAt: -1 });
+
+  // Kiểm tra xem vị trí mới có nằm trong bán kính < 50m của BẤT KỲ ca active nào không
+  let matchingMergeSos = null;
+  if (location?.coordinates && activeSosList.length > 0) {
+    for (const sos of activeSosList) {
+      if (sos.location?.coordinates) {
+        const dist = calculateDistanceMeters(sos.location.coordinates, location.coordinates);
+        if (dist < 50) {
+          matchingMergeSos = sos;
+          break;
+        }
+      }
     }
-    if (!defaultArea) {
-      defaultArea = await AdministrativeArea.create({
-        name: 'Khu vực cứu hộ trung tâm',
-        code: 'AREA_DANANG_DEFAULT',
-        type: 'DISTRICT',
-        status: 'ACTIVE',
-      });
-    }
-    assignedAreaId = defaultArea._id;
   }
 
+  // TRƯỜNG HỢP A: Vị trí mới nằm trong bán kính < 50m của 1 ca đang xử lý của tài khoản này
+  // -> CHẶN gửi mới, yêu cầu người dùng vào Cập nhật ca đã có để tránh spam và chồng chéo
+  if (matchingMergeSos) {
+    throw new ApiError(
+      400,
+      `Bạn đã gửi 1 yêu cầu cứu nạn (${matchingMergeSos.sosCode || 'đang mở'}) ở gần vị trí này trước đó. Làm ơn hãy đến mục Cập nhật để bổ sung thông tin tín hiệu của bạn thay vì gửi mới!`,
+      'NEARBY_ACTIVE_SOS_EXISTS',
+      {
+        existingSosId: matchingMergeSos._id,
+        existingSosCode: matchingMergeSos.sosCode,
+        address: matchingMergeSos.address,
+      }
+    );
+  }
+
+  // TRƯỜNG HỢP B: Ngoài phạm vi 50m (ví dụ di chuyển hoặc báo hộ người thân ở địa điểm khác)
+  // Giới hạn an toàn: Mỗi tài khoản chỉ được phép có tối đa 3 ca cứu nạn đang hoạt động cùng lúc (đến lần thứ 4 thì chặn)
+  const MAX_ACTIVE_SOS_PER_USER = 3;
+  if (activeSosList.length >= MAX_ACTIVE_SOS_PER_USER) {
+    throw new ApiError(
+      400,
+      `Mỗi tài khoản chỉ được phép gửi tối đa ${MAX_ACTIVE_SOS_PER_USER} yêu cầu cứu nạn đang hoạt động cùng lúc để đảm bảo nguồn lực điều phối. Vui lòng theo dõi hoặc hủy các ca trước đó nếu đã an toàn!`,
+      'MAX_ACTIVE_SOS_LIMIT_REACHED',
+      {
+        activeCount: activeSosList.length,
+        maxLimit: MAX_ACTIVE_SOS_PER_USER,
+        activeSosList: activeSosList.map((s) => ({
+          _id: s._id,
+          sosCode: s.sosCode,
+          address: s.address,
+          status: s.status,
+          createdAt: s.createdAt,
+        })),
+        existingSosId: activeSosList[0]?._id,
+        existingSosCode: activeSosList[0]?.sosCode,
+      }
+    );
+  }
+
+  // Tự động gán đúng khu vực hành chính dựa trên địa chỉ GPS thực tế
+  const assignedAreaId = await resolveAdministrativeArea(address, location, areaId);
+
+  // TRƯỜNG HỢP B: Tạo ca mới bình thường (hoặc ca Báo hộ bạn bè ở địa điểm khác >= 50m)
+  const isSecondary = activeSosList.length > 0;
   const newSos = await SosRequest.create({
     citizenId,
     location,
@@ -40,9 +156,13 @@ const createSosRequest = async (citizenId, sosData) => {
     people: people ? Number(people) : 1,
     description: description ? description.replace(/⚡\s*/g, '').trim() : null,
     contactPhone: contactPhone || null,
+    secondaryPhone: secondaryPhone ? secondaryPhone.trim() : null,
     priorityGroups: Array.isArray(priorityGroups) ? priorityGroups : [],
     images: normalizedImages,
-    status: 'PENDING'
+    status: 'PENDING',
+    repeatCount: 1,
+    isSecondaryRequest: isSecondary,
+    primarySosId: isSecondary ? activeSosList[0]._id : null,
   });
 
   // Tạo history cho trạng thái khởi tạo
@@ -51,12 +171,14 @@ const createSosRequest = async (citizenId, sosData) => {
     oldStatus: null,
     newStatus: 'PENDING',
     changedBy: citizenId,
-    note: 'Tạo yêu cầu cứu nạn mới'
+    note: isSecondary
+      ? `Tạo ca cứu nạn phụ / báo hộ bạn bè (Tài khoản đang có ca khác)`
+      : 'Tạo yêu cầu cứu nạn mới',
   });
 
   const populatedSos = await SosRequest.findById(newSos._id)
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
-    .populate('areaId', 'name');
+    .populate('areaId', 'name code');
 
   return populatedSos || newSos;
 };
@@ -68,6 +190,8 @@ const getSosRequests = async (query = {}) => {
   if (query.areaId) filter.areaId = query.areaId;
   if (query.priority) filter.priority = query.priority;
   if (query.emergencyType) filter.emergencyType = query.emergencyType;
+  if (query._id) filter._id = query._id;
+  if (query.$or) filter.$or = query.$or;
 
   // Hỗ trợ Geospatial Query (Tìm theo tọa độ và bán kính - Tính bằng mét)
   if (query.lng && query.lat && query.radius) {
@@ -86,13 +210,14 @@ const getSosRequests = async (query = {}) => {
   return await SosRequest.find(filter)
     // Nếu dùng $near, MongoDB sẽ tự sort theo khoảng cách. Nếu không thì sort theo thời gian tạo mới nhất.
     .sort(query.lng ? {} : { createdAt: -1 })
-    .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles');
+    .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
+    .populate('areaId', 'name code');
 };
 
 const getSosRequestById = async (id) => {
   const sos = await SosRequest.findById(id)
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
-    .populate('areaId', 'name');
+    .populate('areaId', 'name code');
     
   if (!sos) {
     throw new ApiError(404, 'Không tìm thấy yêu cầu SOS');
@@ -100,26 +225,6 @@ const getSosRequestById = async (id) => {
   return sos;
 };
 
-const updateSosRequest = async (id, updateData, userId) => {
-  const sos = await getSosRequestById(id);
-  
-  // Bỏ qua update trạng thái ở đây để dùng hàm changeStatus riêng,
-  // chỉ cập nhật các thông tin cơ bản
-  const allowedUpdates = ['location', 'address', 'emergencyType', 'priority', 'people', 'description', 'images'];
-  
-  let isModified = false;
-  allowedUpdates.forEach(field => {
-    if (updateData[field] !== undefined) {
-      sos[field] = updateData[field];
-      isModified = true;
-    }
-  });
-
-  if (isModified) {
-    await sos.save();
-  }
-  return sos;
-};
 
 const changeStatus = async (id, newStatus, changedBy, note = '') => {
   const sos = await SosRequest.findById(id);
@@ -175,6 +280,46 @@ const verifyAndClassifySos = async (id, verifyData, authorityId) => {
   });
 
   return sos;
+};
+
+const updateSosRequest = async (id, updateData, userId) => {
+  const sos = await SosRequest.findById(id);
+  if (!sos) throw new ApiError(404, 'Không tìm thấy yêu cầu SOS');
+
+  if (sos.status === 'COMPLETED' || sos.status === 'CANCELLED') {
+    throw new ApiError(400, 'Không thể cập nhật yêu cầu cứu nạn đã kết thúc');
+  }
+
+  const allowedFields = [
+    'location',
+    'address',
+    'priority',
+    'description',
+    'people',
+    'priorityGroups',
+    'emergencyType',
+    'contactPhone',
+    'secondaryPhone',
+    'images',
+  ];
+  for (const field of allowedFields) {
+    if (updateData[field] !== undefined) {
+      sos[field] = updateData[field];
+    }
+  }
+
+  // Tự động làm sạch SĐT phụ nếu không hợp lệ
+  if (sos.secondaryPhone && !/^(?:\+84|0)(?:3|5|7|8|9)\d{8}$/.test(sos.secondaryPhone.replace(/[\s\.\-]+/g, ''))) {
+    sos.secondaryPhone = null;
+  }
+
+  await sos.save();
+
+  const populated = await SosRequest.findById(sos._id)
+    .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
+    .populate('areaId', 'name code');
+
+  return populated || sos;
 };
 
 module.exports = {

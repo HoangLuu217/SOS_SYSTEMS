@@ -79,7 +79,7 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
   }, [user, authorOfficers]);
 
   // Selection states
-  const [selectedSosId, setSelectedSosId] = useState<string>('sos-8924'); // Default to Hoa Cuong SOS
+  const [selectedSosId, setSelectedSosId] = useState<string>('');
   const [toasts, setToasts] = useState<ToastState[]>([]);
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
 
@@ -229,10 +229,10 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
         domainDService.syncRealSosRequests(realMapped);
         setSosRequests(domainDService.getSosRequests());
 
-        // Nếu URL chưa chỉ định SOS cụ thể, ưu tiên chọn ca SOS mới nhất từ app
+        // Nếu URL chưa chỉ định SOS cụ thể hoặc URL trỏ vào ca mock cũ, ưu tiên chọn ca SOS thật từ app
         const currentUrlId = getCurrentSosIdFromUrl();
-        if (!currentUrlId && realMapped.length > 0) {
-          setSelectedSosId((prev) => (prev.startsWith('sos-') && !prev.includes('real') ? realMapped[0].id : prev));
+        if ((!currentUrlId || currentUrlId.startsWith('sos-89') || currentUrlId.startsWith('sos-dn-')) && realMapped.length > 0) {
+          setSelectedSosId(realMapped[0].id);
         }
       }
     } catch (err) {
