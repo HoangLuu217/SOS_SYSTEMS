@@ -136,7 +136,77 @@ const seed = async () => {
           department: 'Ban Chỉ Huy PCTT & TKCN TP. Đà Nẵng',
         },
       });
-      console.log('✅ Đã tạo thêm tài khoản cá nhân: hoangluu2172k4+authority@gmail.com');
+    }
+
+    // 3.1. Khởi tạo / cập nhật Địa bàn & Cán bộ PCTT Liên Chiểu
+    let lienChieuArea = await AdministrativeArea.findOne({
+      $or: [{ code: 'VN-DAD-LIENCHIEU' }, { name: /Liên Chiểu/i }],
+    });
+    if (!lienChieuArea) {
+      lienChieuArea = await AdministrativeArea.create({
+        name: 'Quận Liên Chiểu',
+        code: 'VN-DAD-LIENCHIEU',
+        type: 'DISTRICT',
+        parentId: area._id,
+        status: 'ACTIVE',
+        boundary: {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [108.11, 16.04],
+              [108.19, 16.04],
+              [108.19, 16.14],
+              [108.11, 16.14],
+              [108.11, 16.04],
+            ],
+          ],
+        },
+      });
+      console.log('✅ Đã tạo khu vực hành chính:', lienChieuArea.name);
+    }
+
+    let lienChieuOrg = await AuthorityOrganization.findOne({
+      $or: [{ code: 'BCH_PCTT_LIENCHIEU' }, { name: /Liên Chiểu/i }],
+    });
+    if (!lienChieuOrg) {
+      lienChieuOrg = await AuthorityOrganization.create({
+        name: 'Ban Chỉ Huy Phòng Chống Thiên Tai & TKCN Quận Liên Chiểu',
+        type: 'LOCAL_AUTHORITY',
+        code: 'BCH_PCTT_LIENCHIEU',
+        areaId: lienChieuArea._id,
+        administrativeAreaId: lienChieuArea._id,
+        address: 'Số 168 Hồ Tùng Mậu, Phường Hòa Minh, Quận Liên Chiểu, TP. Đà Nẵng',
+        phone: '02363738363',
+        email: 'bchpctt.lienchieu@danang.gov.vn',
+        status: 'ACTIVE',
+      });
+      console.log('✅ Đã tạo cơ quan chính quyền:', lienChieuOrg.name);
+    }
+
+    let lienChieuOfficer = await User.findOne({
+      $or: [{ email: 'authority_lienchieu@sos.vn' }, { phone: '0902000005' }],
+    });
+    if (!lienChieuOfficer) {
+      lienChieuOfficer = await User.create({
+        fullName: 'Cán bộ Trần Văn Thắng (PCTT Liên Chiểu)',
+        email: 'authority_lienchieu@sos.vn',
+        phone: '0902000005',
+        passwordHash: defaultPasswordHash,
+        roles: ['LOCAL_AUTHORITY'],
+        status: 'ACTIVE',
+        isVerified: true,
+        authority: {
+          organizationId: lienChieuOrg._id,
+          areaId: lienChieuArea._id,
+          position: 'Cán bộ điều phối tác chiến cứu nạn',
+          department: 'UBND Phường Liên Chiểu',
+          organizationName: 'Ban Chỉ Huy PCTT & TKCN Quận Liên Chiểu',
+          areaName: 'Phường Liên Chiểu, Thành phố Đà Nẵng',
+          provinceCode: 48,
+          wardCode: 20205,
+        },
+      });
+      console.log('✅ Đã tạo tài khoản LOCAL_AUTHORITY Liên Chiểu: authority_lienchieu@sos.vn');
     }
 
     // 4. Tạo tài khoản Cứu Hộ Viên (RESCUER) để phân công nhiệm vụ

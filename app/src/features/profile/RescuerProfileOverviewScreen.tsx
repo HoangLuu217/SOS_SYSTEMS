@@ -227,14 +227,13 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
       {/* 1. Header: RescueSOS Branding + Notification Bell */}
       <View style={styles.header}>
         <View style={styles.brandRow}>
-          <LogoSOS
-            style={styles.brandLogo}
-            resizeMode="contain"
-          />
-          <View>
-            <Text style={styles.brandTitle}>RescueSOS</Text>
-            <Text style={styles.brandSubtitle}>Hệ thống Điều phối Cứu hộ</Text>
+          <View style={styles.logoBadge}>
+            <LogoSOS
+              style={styles.brandLogo}
+              resizeMode="contain"
+            />
           </View>
+          <Text style={styles.brandTitle}>HỖ TRỢ CỨU NẠN</Text>
         </View>
 
         <View style={styles.headerRightRow}>
@@ -728,15 +727,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
+  logoBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#0066FF',
+    overflow: 'hidden',
+  },
   brandLogo: {
-    width: 38,
-    height: 38,
+    width: 32,
+    height: 32,
   },
   brandTitle: {
     fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.3,
+    letterSpacing: 0.2,
   },
   brandSubtitle: {
     fontSize: 11,
