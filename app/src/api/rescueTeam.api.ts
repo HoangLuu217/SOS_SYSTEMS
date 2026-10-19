@@ -56,6 +56,27 @@ export class RescueTeamApi {
   ): Promise<ApiResponse<RescueTeamData>> {
     return await this.client.delete(`/rescue-teams/${teamId}/members/${rescuerId}`);
   }
+
+  /**
+   * Chuyển giao vai trò Đội trưởng (PATCH /rescue-teams/:id/leader)
+   */
+  async changeLeader(
+    teamId: string,
+    newLeaderId: string
+  ): Promise<ApiResponse<RescueTeamData>> {
+    return await this.client.patch(`/rescue-teams/${teamId}/leader`, { leaderId: newLeaderId });
+  }
+
+  /**
+   * Phê duyệt hoặc từ chối thành viên ứng tuyển (PATCH /rescue-teams/:id/members/:rescuerId/status)
+   */
+  async updateMemberStatus(
+    teamId: string,
+    rescuerId: string,
+    status: 'APPROVED' | 'REJECTED'
+  ): Promise<ApiResponse<RescueTeamData>> {
+    return await this.client.patch(`/rescue-teams/${teamId}/members/${rescuerId}/status`, { status });
+  }
 }
 
 export const rescueTeamApi = new RescueTeamApi();
