@@ -16,6 +16,8 @@ import { MapScreen } from '@/features/map';
 import { SosScreen } from '@/features/sos';
 import { NewsScreen } from '@/features/news';
 import { ProfileScreen } from '@/features/profile';
+import { RescuerMissionScreen } from '@/features/mission';
+import { backendApi } from '@/api';
 import { AlertModal, BottomNav, LogoSOS, InAppNotificationBanner } from '@/components';
 import { MapFilterType, TabName } from '@/types';
 import { BACKGROUND_APP_SOURCE } from '@/constants/backgroundBase64';
@@ -30,12 +32,39 @@ LogBox.ignoreLogs([
  * Lớp giao diện chính khi người dùng đã đăng nhập (Tab Navigation Layer)
  */
 export function AuthenticatedApp() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabName>('home');
   const [configVisible, setConfigVisible] = useState(false);
   const [mapFilter, setMapFilter] = useState<MapFilterType>('ALL');
   const [mapNavKey, setMapNavKey] = useState(0);
+  const [activeMissionsCount, setActiveMissionsCount] = useState<number>(0);
+
+  // Xác định người dùng có phải là Cứu hộ viên chính thức
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+  const isRescuer =
+    roles.includes('LEADER') ||
+    (roles.includes('RESCUER') && user?.rescuer?.verificationStatus !== 'PENDING');
 
   const { unreadCount, setNavigateHandler } = useNotifications();
+
+  // Tải số lượng nhiệm vụ đang xử lý cho Cứu hộ viên
+  React.useEffect(() => {
+    if (!isRescuer) return;
+    const loadMissionsCount = async () => {
+      try {
+        const res = await backendApi.getMyAssignments();
+        if (res.success && Array.isArray(res.data)) {
+          const active = res.data.filter(
+            (m) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(m.status)
+          ).length;
+          setActiveMissionsCount(active);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    loadMissionsCount();
+  }, [isRescuer]);
 
   const handleNavigateToTab = React.useCallback((tab: TabName, options?: { filter?: MapFilterType; areaId?: string }) => {
     setActiveTab(tab);
@@ -76,9 +105,17 @@ export function AuthenticatedApp() {
           />
         </View>
 
-        {/* Tab Cứu hộ SOS */}
+        {/* Tab Cứu hộ SOS (cho Người dân) hoặc Nhiệm vụ Tác chiến (cho Cứu hộ viên) */}
         <View style={[styles.tabScreenWrap, activeTab !== 'sos' && styles.hiddenTabScreen]}>
-          <SosScreen onNavigateToHome={() => setActiveTab('home')} />
+          {isRescuer ? (
+            <RescuerMissionScreen
+              onNavigateToTab={handleNavigateToTab}
+              onNavigateToHome={() => setActiveTab('home')}
+              onMissionsCountChange={setActiveMissionsCount}
+            />
+          ) : (
+            <SosScreen onNavigateToHome={() => setActiveTab('home')} />
+          )}
         </View>
 
         {/* Tab Tin tức & Thông báo */}
@@ -101,6 +138,8 @@ export function AuthenticatedApp() {
           activeTab={activeTab}
           onTabPress={setActiveTab}
           unreadNewsCount={unreadCount}
+          isRescuer={isRescuer}
+          activeMissionsCount={activeMissionsCount}
         />
       </View>
 
