@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import type { User } from '@/types/auth';
 import {
   fetchSosRequests,
@@ -665,8 +666,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const displayUserName = localProfile.fullName;
-  const displayUserRole = localProfile.position;
+  const rawUserName = localProfile.fullName || user?.fullName || 'Cán bộ trực ban';
+  // Loại bỏ các phần chú thích trong ngoặc đơn như (PCTT Liên Chiểu) để họ tên hiển thị gọn gàng, trọn vẹn
+  const displayUserName = rawUserName.replace(/\s*\([^\)]*\)/g, '').trim() || rawUserName;
+  const displayUserRole = localProfile.position || user?.authority?.position || (isAdmin ? 'Quản trị viên' : 'Cán bộ điều phối');
   const userInitial = displayUserName.trim().charAt(0).toUpperCase() || 'U';
 
   return (
@@ -821,18 +824,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Toast thông báo cập nhật hồ sơ thành công */}
-      {profileSuccessMsg && (
-        <div className="sos-profile-toast-success">
-          <Check size={16} />
-          <span>Đã cập nhật hồ sơ địa phương thành công!</span>
-        </div>
-      )}
+      {/* Toast thông báo cập nhật hồ sơ thành công - Render trực tiếp vào document.body */}
+      {profileSuccessMsg &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div className="sos-profile-toast-success">
+            <Check size={16} />
+            <span>Đã cập nhật hồ sơ địa phương thành công!</span>
+          </div>,
+          document.body
+        )}
 
-      {/* Modal Chỉnh Sửa Hồ Sơ Cán Bộ & Địa Phương */}
-      {isProfileModalOpen && (
-        <div className="sos-modal-overlay" onClick={() => setIsProfileModalOpen(false)}>
-          <div
+      {/* Modal Chỉnh Sửa Hồ Sơ Cán Bộ & Địa Phương - Render trực tiếp vào document.body để luôn nổi lên trên Map */}
+      {isProfileModalOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div className="sos-modal-overlay" onClick={() => setIsProfileModalOpen(false)}>
+            <div
             className="sos-profile-modal-card"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
@@ -1121,7 +1129,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </aside>
   );

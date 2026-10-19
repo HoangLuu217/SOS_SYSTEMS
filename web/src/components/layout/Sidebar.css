@@ -4,7 +4,7 @@
 
 :root {
   /* --- Kích thước Sidebar --- */
-  --sos-sidebar-width: 272px;
+  --sos-sidebar-width: 284px;
   --sos-sidebar-collapsed-width: 76px;
 
   /* --- Màu sắc giao diện SaaS (Light Theme Chuẩn) --- */
@@ -541,6 +541,7 @@
   gap: 10px;
   min-width: 0;
   flex: 1;
+  overflow: hidden;
   cursor: pointer;
   border-radius: 8px;
   padding: 2px 0;
@@ -608,16 +609,16 @@
   flex: 1;
   gap: 3px;
   line-height: 1.25;
+  overflow: hidden;
 }
 
 .sos-user-name {
   font-size: 13.5px;
-  font-weight: 800;
+  font-weight: 700;
   color: #0f172a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-transform: capitalize;
   letter-spacing: -0.15px;
 }
 
@@ -633,12 +634,19 @@
   border: 1px solid #bae6fd;
   padding: 2px 7px;
   border-radius: 6px;
-  width: fit-content;
-  max-width: none;
-  white-space: nowrap;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
   letter-spacing: 0;
   text-transform: none;
   margin-bottom: 0;
+}
+
+.sos-user-role-badge span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .sos-user-profile-card .sos-user-role-badge.admin,
@@ -662,6 +670,7 @@
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   flex-shrink: 0;
+  margin-left: auto;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
@@ -811,7 +820,7 @@
   position: fixed;
   bottom: 24px;
   left: 280px;
-  z-index: 99999;
+  z-index: 1000000 !important;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -836,15 +845,39 @@
   }
 }
 
-/* Modal Card - Compact no-scroll view */
+/* Modal Overlay Toàn Cục - Luôn nổi lên trên bản đồ, thanh điều phối và mọi layer khác */
+.sos-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999999 !important;
+  animation: modalFadeIn 0.15s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Modal Card - Compact no-scroll view, nổi trên overlay */
 .sos-profile-modal-card {
+  position: relative;
+  z-index: 1000000;
   width: min(720px, calc(100vw - 32px));
   max-width: 720px;
   max-height: 92dvh;
   background: #ffffff;
   border-radius: 12px;
   border: 1px solid #e2e8f0;
-  box-shadow: 0 20px 40px -8px rgba(15, 23, 42, 0.18), 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.35), 0 2px 8px rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
   overflow: hidden;
