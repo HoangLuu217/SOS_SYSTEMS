@@ -362,29 +362,17 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
         {/* Card Đăng ký Rescuer */}
         {onNavigateToProfessional && (
           <LinearGradient
-            colors={
-              rescuerStatus === 'PENDING'
-                ? ['#FFFBEB', '#FEF3C7', '#FFFFFF']
-                : ['#F0F7FF', '#F8FAFF', '#FFFFFF']
-            }
+            colors={['#F0F7FF', '#F8FAFF', '#FFFFFF']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[
-              styles.rescuerCard,
-              rescuerStatus === 'PENDING' && { borderColor: '#FDE68A' },
-            ]}
+            style={styles.rescuerCard}
           >
             {/* Header: Icon & Titles */}
             <View style={styles.rescuerCardHeader}>
               <View style={styles.rescuerHeaderLeft}>
-                <View
-                  style={[
-                    styles.rescuerIconBox,
-                    rescuerStatus === 'PENDING' && { backgroundColor: '#D97706' },
-                  ]}
-                >
+                <View style={styles.rescuerIconBox}>
                   <MaterialCommunityIcons
-                    name={rescuerStatus === 'PENDING' ? 'timer-sand' : 'hand-heart'}
+                    name="hand-heart"
                     size={26}
                     color="#FFFFFF"
                   />
@@ -393,24 +381,13 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
                   <View style={styles.rescuerTitleRow}>
                     <Text style={styles.rescuerTitle}>Đăng ký Cứu hộ viên</Text>
                     <MaterialCommunityIcons
-                      name={
-                        rescuerStatus === 'PENDING'
-                          ? 'shield-sync-outline'
-                          : 'shield-check-outline'
-                      }
+                      name="shield-check-outline"
                       size={18}
-                      color={rescuerStatus === 'PENDING' ? '#D97706' : '#0066FF'}
+                      color="#0066FF"
                       style={styles.rescuerVerifiedIcon}
                     />
                   </View>
-                  <Text
-                    style={[
-                      styles.rescuerSubtitle,
-                      rescuerStatus === 'PENDING' && { color: '#D97706' },
-                    ]}
-                  >
-                    {rescuerStatus === 'PENDING' ? 'HỒ SƠ ĐANG CHỜ XÉT DUYỆT' : 'LỰC LƯỢNG TÌNH NGUYỆN'}
-                  </Text>
+                  <Text style={styles.rescuerSubtitle}>LỰC LƯỢNG TÌNH NGUYỆN</Text>
                 </View>
               </View>
             </View>
