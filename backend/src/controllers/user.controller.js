@@ -31,7 +31,19 @@ class UserController {
    */
   async updateAvatar(req, res, next) {
     try {
-      const { avatarUrl } = req.body;
+      const avatarUrl =
+        req.file?.path ||
+        req.files?.avatar?.[0]?.path ||
+        req.files?.file?.[0]?.path ||
+        req.body?.avatarUrl;
+
+      if (!avatarUrl) {
+        return res.status(400).json({
+          success: false,
+          message: 'Vui lòng đính kèm file ảnh đại diện hoặc chuỗi avatarUrl hợp lệ.',
+        });
+      }
+
       const result = await userService.updateAvatar(req.user._id, avatarUrl);
       return sendSuccess(res, 200, 'Cập nhật ảnh đại diện thành công', result);
     } catch (error) {

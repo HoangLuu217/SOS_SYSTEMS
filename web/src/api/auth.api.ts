@@ -94,6 +94,7 @@ export async function updateUserProfile(payload: {
   fullName?: string;
   phone?: string;
   email?: string;
+  avatarUrl?: string;
   isPhoneVerified?: boolean;
   authority?: {
     position?: string;
@@ -107,6 +108,34 @@ export async function updateUserProfile(payload: {
     method: 'PATCH',
     body: JSON.stringify(payload),
   });
+}
+
+/**
+ * Tải ảnh đại diện lên Cloudinary và cập nhật cho tài khoản người dùng
+ */
+export async function updateUserAvatar(
+  fileOrData: File | string
+): Promise<{ success: boolean; data?: { userId: string; avatarUrl: string; user?: User }; message?: string }> {
+  if (typeof fileOrData === 'string') {
+    return fetchWithAuth<{ success: boolean; data?: { userId: string; avatarUrl: string; user?: User }; message?: string }>(
+      '/users/me/avatar',
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ avatarUrl: fileOrData }),
+      }
+    );
+  }
+
+  const formData = new FormData();
+  formData.append('avatar', fileOrData);
+
+  return fetchWithAuth<{ success: boolean; data?: { userId: string; avatarUrl: string; user?: User }; message?: string }>(
+    '/users/me/avatar',
+    {
+      method: 'PATCH',
+      body: formData,
+    }
+  );
 }
 
 /**

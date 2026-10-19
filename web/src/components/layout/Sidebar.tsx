@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import type { User } from '@/types/auth';
 import {
   fetchSosRequests,
@@ -6,6 +7,7 @@ import {
   fetchHazardReports,
   fetchSafeLocations,
   updateUserProfile,
+  updateUserAvatar,
   sendPhoneOtp,
   verifyPhoneOtp,
 } from '@/api';
@@ -38,6 +40,7 @@ import {
   Check,
   MessageSquare,
   Shield,
+  Camera,
 } from 'lucide-react';
 
 import './Sidebar.css';
@@ -353,6 +356,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     phone: string;
     email: string;
     managedArea: string;
+    avatarUrl: string;
   }>(() => {
     return {
       fullName: user?.fullName || 'Cán Bộ Phụ Trách',
@@ -361,6 +365,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       phone: (user as any)?.phoneNumber || (user as any)?.phone || '112',
       email: user?.email || 'canbo@sos.gov.vn',
       managedArea: user?.authority?.areaName || 'Khu vực quản lý',
+      avatarUrl: user?.avatarUrl || '',
     };
   });
 
@@ -368,6 +373,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [profileSuccessMsg, setProfileSuccessMsg] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileErrorMsg, setProfileErrorMsg] = useState<string | null>(null);
+
+  // Trạng thái đổi ảnh đại diện (Cloudinary)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const avatarFileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Trạng thái xác thực số điện thoại qua OTP
   const [isPhoneVerified, setIsPhoneVerified] = useState<boolean>(() => {
@@ -526,9 +536,64 @@ export const Sidebar: React.FC<SidebarProps> = ({
         phone: p,
         email: user.email || 'canbo@sos.gov.vn',
         managedArea: user.authority?.areaName || 'Khu vực quản lý',
+        avatarUrl: user.avatarUrl || '',
       });
     }
   }, [user, isAdmin]);
+
+  // Tải ảnh đại diện lên Cloudinary và cập nhật tức thì
+  const handleAvatarFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setAvatarError('Vui lòng chọn file hình ảnh (JPG, PNG, WebP, GIF,...).');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setAvatarError('Kích thước ảnh tối đa cho phép là 10MB.');
+      return;
+    }
+
+    setUploadingAvatar(true);
+    setAvatarError(null);
+
+    // Tạo preview cục bộ ngay lập tức để trải nghiệm mượt mà
+    const previewUrl = URL.createObjectURL(file);
+    setLocalProfile((prev) => ({ ...prev, avatarUrl: previewUrl }));
+
+    try {
+      const res = await updateUserAvatar(file);
+      if (res.success && res.data?.avatarUrl) {
+        const cloudUrl = res.data.avatarUrl;
+        setLocalProfile((prev) => ({ ...prev, avatarUrl: cloudUrl }));
+
+        // Cập nhật auth user trong localStorage & phát event đồng bộ toàn bộ app
+        const rawUser = localStorage.getItem('sos_auth_user');
+        if (rawUser) {
+          try {
+            const currentObj = JSON.parse(rawUser);
+            const updated = { ...currentObj, avatarUrl: cloudUrl };
+            localStorage.setItem('sos_auth_user', JSON.stringify(updated));
+            window.dispatchEvent(new Event('storage'));
+            window.dispatchEvent(new CustomEvent('sos_user_profile_updated', { detail: updated }));
+          } catch { }
+        }
+
+        setProfileSuccessMsg(true);
+        setTimeout(() => setProfileSuccessMsg(false), 3500);
+      } else {
+        throw new Error(res.message || 'Không thể lưu ảnh đại diện lên Cloudinary');
+      }
+    } catch (err: any) {
+      console.error('Lỗi khi tải avatar lên Cloudinary:', err);
+      setAvatarError(err?.message || 'Lỗi khi tải ảnh đại diện lên Cloudinary');
+    } finally {
+      setUploadingAvatar(false);
+      if (e.target) e.target.value = '';
+    }
+  };
 
   // Khi cán bộ thay đổi số điện thoại trong ô input
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -620,6 +685,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         fullName: localProfile.fullName,
         phone: localProfile.phone,
         email: localProfile.email,
+        avatarUrl: localProfile.avatarUrl,
         isPhoneVerified: isPhoneVerified,
         authority: {
           position: localProfile.position,
@@ -636,6 +702,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ...currentUserObj,
         ...(serverUser || {}),
         fullName: serverUser?.fullName || localProfile.fullName,
+        avatarUrl: serverUser?.avatarUrl || localProfile.avatarUrl,
         phoneNumber: serverUser?.phone || (serverUser as any)?.phoneNumber || localProfile.phone,
         email: serverUser?.email || localProfile.email,
         authority: {
@@ -665,8 +732,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const displayUserName = localProfile.fullName;
-  const displayUserRole = localProfile.position;
+  const rawUserName = localProfile.fullName || user?.fullName || 'Cán bộ trực ban';
+  // Loại bỏ các phần chú thích trong ngoặc đơn như (PCTT Liên Chiểu) để họ tên hiển thị gọn gàng, trọn vẹn
+  const displayUserName = rawUserName.replace(/\s*\([^\)]*\)/g, '').trim() || rawUserName;
+  const displayUserRole = localProfile.position || user?.authority?.position || (isAdmin ? 'Quản trị viên' : 'Cán bộ điều phối');
+  const displayAvatar = localProfile.avatarUrl || user?.avatarUrl || '';
   const userInitial = displayUserName.trim().charAt(0).toUpperCase() || 'U';
 
   return (
@@ -783,9 +853,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="sos-user-avatar-wrap">
               <div
                 className={`sos-user-avatar ${isAdmin ? 'admin' : 'authority'}`}
-                title="Nhấp để chỉnh sửa hồ sơ"
+                title="Nhấp để xem hồ sơ & đổi ảnh đại diện"
               >
-                {userInitial}
+                {displayAvatar ? (
+                  <img
+                    src={displayAvatar}
+                    alt={displayUserName}
+                    className="sos-user-avatar-img"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  userInitial
+                )}
               </div>
               <span className="sos-user-online-dot" title="Đang trực tuyến" />
             </div>
@@ -821,18 +902,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Toast thông báo cập nhật hồ sơ thành công */}
-      {profileSuccessMsg && (
-        <div className="sos-profile-toast-success">
-          <Check size={16} />
-          <span>Đã cập nhật hồ sơ địa phương thành công!</span>
-        </div>
-      )}
+      {/* Toast thông báo cập nhật hồ sơ thành công - Render trực tiếp vào document.body */}
+      {profileSuccessMsg &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div className="sos-profile-toast-success">
+            <Check size={16} />
+            <span>Đã cập nhật hồ sơ địa phương thành công!</span>
+          </div>,
+          document.body
+        )}
 
-      {/* Modal Chỉnh Sửa Hồ Sơ Cán Bộ & Địa Phương */}
-      {isProfileModalOpen && (
-        <div className="sos-modal-overlay" onClick={() => setIsProfileModalOpen(false)}>
-          <div
+      {/* Modal Chỉnh Sửa Hồ Sơ Cán Bộ & Địa Phương - Render trực tiếp vào document.body để luôn nổi lên trên Map */}
+      {isProfileModalOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div className="sos-modal-overlay" onClick={() => setIsProfileModalOpen(false)}>
+            <div
             className="sos-profile-modal-card"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
@@ -860,15 +946,51 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
             <form onSubmit={handleSaveProfile} className="sos-profile-form">
               <div className="sos-profile-modal-body">
-                {/* Khối tóm tắt hồ sơ */}
+                {/* Khối tóm tắt hồ sơ & Đổi Avatar Cloudinary */}
                 <div className="sos-profile-avatar-preview">
-                  <div className="sos-profile-big-avatar">
-                    {localProfile.fullName.trim().charAt(0).toUpperCase() || 'U'}
+                  <div className="sos-profile-avatar-action-wrap">
+                    <div
+                      className="sos-profile-big-avatar"
+                      onClick={() => avatarFileInputRef.current?.click()}
+                      title="Nhấp để tải lên ảnh đại diện mới từ máy tính"
+                    >
+                      {displayAvatar ? (
+                        <img
+                          src={displayAvatar}
+                          alt="Avatar"
+                          className="sos-profile-avatar-img"
+                        />
+                      ) : (
+                        userInitial
+                      )}
+
+                      {/* Lớp phủ camera khi hover hoặc đang upload */}
+                      <div className="sos-avatar-camera-overlay">
+                        {uploadingAvatar ? (
+                          <div className="sos-avatar-spinner" />
+                        ) : (
+                          <Camera size={15} />
+                        )}
+                      </div>
+                    </div>
+
+                    <input
+                      type="file"
+                      ref={avatarFileInputRef}
+                      onChange={handleAvatarFileSelected}
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      style={{ display: 'none' }}
+                    />
                   </div>
+
                   <div className="sos-profile-preview-text">
                     <strong>{localProfile.fullName || 'Cán bộ trực ban'}</strong>
                     <span>{localProfile.position || 'Chỉ huy cứu hộ'}</span>
                     <small>{localProfile.organizationName || 'Ban Chỉ Huy PCTT & TKCN'}</small>
+                    {uploadingAvatar && (
+                      <span className="sos-avatar-uploading-inline">Đang lưu ảnh lên Cloudinary...</span>
+                    )}
+                    {avatarError && <span className="sos-avatar-error-inline">{avatarError}</span>}
                   </div>
                 </div>
 
@@ -1121,7 +1243,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </aside>
   );

@@ -59,8 +59,9 @@ export async function fetchWithAuth<T>(endpoint: string, options: RequestInit = 
       userId = u._id || u.id || '';
     } catch { }
   }
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(userId ? { 'x-user-id': userId } : {}),
     ...((options.headers as Record<string, string>) || {}),
   };
