@@ -141,6 +141,12 @@ class BackendApiService {
   leaveRescueTeam = (teamId: string, rescuerId: string) =>
     rescueTeamApi.removeMember(teamId, rescuerId);
 
+  changeRescueTeamLeader = (teamId: string, newLeaderId: string) =>
+    rescueTeamApi.changeLeader(teamId, newLeaderId);
+
+  updateRescueTeamMemberStatus = (teamId: string, rescuerId: string, status: 'APPROVED' | 'REJECTED') =>
+    rescueTeamApi.updateMemberStatus(teamId, rescuerId, status);
+
   getVehicles = (params?: any) => vehicleApi.getVehicles(params);
 
   getVehicleById = (id: string) => vehicleApi.getVehicleById(id);
@@ -221,6 +227,27 @@ class BackendApiService {
 
   markChatAsRead = (params: Parameters<typeof chatApi.markAsRead>[0]) =>
     chatApi.markAsRead(params);
+
+  // Sos Assignment / Mission API for Rescuers
+  getMyAssignments = () =>
+    apiClient.get<import('../types').SosAssignmentData[]>('/assignments/my');
+
+  getAssignmentById = (id: string) =>
+    apiClient.get<import('../types').SosAssignmentData>(`/assignments/${id}`);
+
+  acceptAssignment = (id: string) =>
+    apiClient.patch<import('../types').SosAssignmentData>(`/assignments/${id}/accept`, {});
+
+  updateAssignmentStatus = (id: string, status: string, note?: string) =>
+    apiClient.patch<import('../types').SosAssignmentData>(`/assignments/${id}/status`, {
+      status,
+      note,
+    });
+
+  cancelAssignment = (id: string, cancelReason?: string) =>
+    apiClient.patch<import('../types').SosAssignmentData>(`/assignments/${id}/cancel`, {
+      cancelReason,
+    });
 
   // Storage helpers
   saveTokens = (accessToken: string, refreshToken?: string) =>
