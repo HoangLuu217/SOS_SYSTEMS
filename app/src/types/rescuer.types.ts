@@ -70,7 +70,10 @@ export interface RescueTeamMember {
       }
     | string;
   role: 'LEADER' | 'MEMBER';
+  status?: 'PENDING' | 'APPROVED' | 'REJECTED';
   joinedAt: string;
+  approvedAt?: string;
+  approvedBy?: string;
 }
 
 /**
@@ -105,3 +108,87 @@ export interface RescueTeamData {
   createdAt?: string;
   updatedAt?: string;
 }
+
+/**
+ * Trạng thái phân công nhiệm vụ cứu hộ
+ */
+export type SosAssignmentStatus =
+  | 'PENDING'
+  | 'ACCEPTED'
+  | 'DISPATCHED'
+  | 'EN_ROUTE'
+  | 'ARRIVED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'REJECTED'
+  | 'CANCELLED';
+
+/**
+ * Thông tin một nhiệm vụ phân công cứu hộ (SosAssignment)
+ */
+export interface SosAssignmentData {
+  _id: string;
+  sosRequestId: {
+    _id: string;
+    sosCode?: string;
+    address: string;
+    location: {
+      type: 'Point';
+      coordinates: [number, number]; // [lng, lat]
+    };
+    emergencyType: string;
+    priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    people: number;
+    description?: string;
+    contactPhone?: string;
+    secondaryPhone?: string;
+    priorityGroups?: string[];
+    status: string;
+    createdAt?: string;
+    citizenId?: {
+      _id: string;
+      fullName: string;
+      phone?: string;
+      avatarUrl?: string;
+    };
+  };
+  authorityOrganizationId?: {
+    _id: string;
+    name: string;
+    code?: string;
+    type?: string;
+    phone?: string;
+  };
+  rescueTeamId?: {
+    _id: string;
+    name: string;
+    type?: string;
+    leaderId?: any;
+  };
+  rescuerId?: {
+    _id: string;
+    fullName: string;
+    phone?: string;
+    email?: string;
+    avatarUrl?: string;
+  };
+  vehicleId?: VehicleData;
+  assignedBy?: {
+    _id: string;
+    fullName: string;
+    phone?: string;
+    roles?: string[];
+  };
+  status: SosAssignmentStatus;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  assignedAt?: string;
+  acceptedAt?: string;
+  startedAt?: string;
+  completedAt?: string;
+  cancelledAt?: string;
+  cancelReason?: string;
+  note?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
