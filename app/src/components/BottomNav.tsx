@@ -56,12 +56,16 @@ export interface BottomNavProps {
   activeTab: TabName;
   onTabPress: (tab: TabName) => void;
   unreadNewsCount?: number;
+  isRescuer?: boolean;
+  activeMissionsCount?: number;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
   activeTab,
   onTabPress,
   unreadNewsCount = 0,
+  isRescuer = false,
+  activeMissionsCount = 0,
 }) => {
   const insets = useSafeAreaInsets();
 
@@ -79,16 +83,34 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             return (
               <View key={tab.name} style={styles.sosWrapper}>
                 <TouchableOpacity
-                  style={styles.sosButton}
+                  style={[
+                    styles.sosButton,
+                    isRescuer && styles.missionButton,
+                  ]}
                   onPress={() => onTabPress(tab.name)}
                   activeOpacity={0.8}
                 >
                   <Ionicons
-                    name={isActive ? tab.iconActive : tab.icon}
-                    size={30}
+                    name={
+                      isRescuer
+                        ? (isActive ? 'shield-checkmark' : 'shield-outline')
+                        : (isActive ? tab.iconActive : tab.icon)
+                    }
+                    size={isRescuer ? 26 : 30}
                     color="#FFFFFF"
                   />
-                  <Text style={styles.sosLabel}>SOS</Text>
+                  <Text style={[styles.sosLabel, isRescuer && styles.missionLabel]}>
+                    {isRescuer ? 'Nhiệm vụ' : 'SOS'}
+                  </Text>
+
+                  {/* Badge số nhiệm vụ đang xử lý */}
+                  {isRescuer && activeMissionsCount > 0 && (
+                    <View style={styles.centerBadge}>
+                      <Text style={styles.centerBadgeText}>
+                        {activeMissionsCount > 9 ? '9+' : activeMissionsCount}
+                      </Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
               </View>
             );
@@ -237,5 +259,43 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.5,
     marginTop: 1,
+  },
+  missionButton: {
+    backgroundColor: '#0066FF',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0066FF',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.45,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 10,
+      },
+    }),
+  },
+  missionLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  centerBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  centerBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
   },
 });
