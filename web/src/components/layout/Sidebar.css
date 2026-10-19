@@ -575,6 +575,16 @@
   border: 1.5px solid #ffffff;
   letter-spacing: 0.2px;
   transition: transform 0.2s ease;
+  overflow: hidden;
+  position: relative;
+}
+
+.sos-user-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8.5px;
+  display: block;
 }
 
 .sos-user-profile-card:hover .sos-user-avatar {
@@ -976,42 +986,146 @@
   gap: 10px;
 }
 
-/* Khối tóm tắt hồ sơ gọn nhẹ */
+/* Khối tóm tắt hồ sơ gọn nhẹ & Đổi avatar Cloudinary */
 .sos-profile-avatar-preview {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  background: #f4f7fb;
-  border-radius: 10px;
+  gap: 14px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border-radius: 12px;
   border: 1px solid #e2e8f0;
 }
 
+.sos-profile-avatar-action-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
 .sos-profile-big-avatar {
-  width: 36px;
-  height: 36px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
-  background: #2563eb;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: 20px;
   font-weight: 700;
   flex-shrink: 0;
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 3px 10px rgba(2, 132, 199, 0.25);
+  border: 2px solid #ffffff;
+  transition: all 0.2s ease;
+}
+
+.sos-profile-big-avatar:hover {
+  transform: scale(1.04);
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+}
+
+.sos-profile-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
+.sos-avatar-camera-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  border-radius: 50%;
+}
+
+.sos-profile-big-avatar:hover .sos-avatar-camera-overlay {
+  opacity: 1;
+}
+
+.sos-avatar-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spinAvatar 0.8s linear infinite;
+}
+
+@keyframes spinAvatar {
+  to { transform: rotate(360deg); }
 }
 
 .sos-profile-preview-text {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
 }
 
-.sos-profile-preview-text strong {
-  font-size: 14px;
+.sos-profile-preview-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sos-profile-preview-header-row strong {
+  font-size: 14.5px;
   font-weight: 700;
   color: #142235;
   line-height: 1.25;
+}
+
+.sos-btn-upload-avatar-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #0284c7;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  border-radius: 6px;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.sos-btn-upload-avatar-link:hover:not(:disabled) {
+  background: #0284c7;
+  color: #ffffff;
+  border-color: #0284c7;
+}
+
+.sos-btn-upload-avatar-link:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sos-avatar-error-inline {
+  font-size: 11px;
+  color: #dc2626;
+  margin-top: 2px;
+  font-weight: 500;
+}
+
+.sos-avatar-uploading-inline {
+  font-size: 11px;
+  color: #0284c7;
+  font-weight: 600;
+  margin-top: 2px;
 }
 
 .sos-profile-preview-text span {
