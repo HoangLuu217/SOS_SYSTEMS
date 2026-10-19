@@ -118,6 +118,98 @@ class SosAssignmentService {
   }
 
   /**
+   * GET /assignments/my
+   * Lấy danh sách nhiệm vụ phân công của Cứu hộ viên hiện tại hoặc Đội của họ
+   */
+  async getMyAssignments(user) {
+    if (!user || !user._id) {
+      throw new ApiError(401, 'Vui lòng đăng nhập để xem nhiệm vụ');
+    }
+
+    const userId = user._id;
+
+    // Tìm các đội mà user là leader hoặc thành viên đã được duyệt
+    const teams = await RescueTeam.find({
+      $or: [
+        { leaderId: userId },
+        { 'members.rescuerId': userId, 'members.status': 'APPROVED' },
+        { 'members.rescuerId': userId },
+      ],
+    }).select('_id');
+    const teamIds = teams.map((t) => t._id);
+
+    const filter = {
+      $or: [
+        { rescuerId: userId },
+        { rescueTeamId: { $in: teamIds } },
+        { teamId: { $in: teamIds } },
+      ],
+    };
+
+    const assignments = await SosAssignment.find(filter)
+      .populate({
+        path: 'sosRequestId',
+        populate: { path: 'citizenId', select: '_id fullName phone avatarUrl' },
+      })
+      .populate({
+        path: 'sosId',
+        populate: { path: 'citizenId', select: '_id fullName phone avatarUrl' },
+      })
+      .populate('authorityOrganizationId', 'name code type phone')
+      .populate({
+        path: 'rescueTeamId',
+        select: 'name type leaderId',
+        populate: {
+          path: 'leaderId',
+          select: '_id fullName phone email avatarUrl rescuer',
+        },
+      })
+      .populate('rescuerId', '_id fullName phone email avatarUrl rescuer')
+      .populate('vehicleId', 'plateNumber type capacity status')
+      .populate('assignedBy', '_id fullName phone email roles')
+      .sort({ createdAt: -1 });
+
+    return assignments;
+  }
+
+  /**
+   * GET /assignments/:id
+   */
+  async getAssignmentById(id) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new ApiError(400, 'ID phân công không hợp lệ');
+    }
+
+    const assignment = await SosAssignment.findById(id)
+      .populate({
+        path: 'sosRequestId',
+        populate: { path: 'citizenId', select: '_id fullName phone avatarUrl' },
+      })
+      .populate({
+        path: 'sosId',
+        populate: { path: 'citizenId', select: '_id fullName phone avatarUrl' },
+      })
+      .populate('authorityOrganizationId', 'name code type phone')
+      .populate({
+        path: 'rescueTeamId',
+        select: 'name type leaderId',
+        populate: {
+          path: 'leaderId',
+          select: '_id fullName phone email avatarUrl rescuer',
+        },
+      })
+      .populate('rescuerId', '_id fullName phone email avatarUrl rescuer')
+      .populate('vehicleId', 'plateNumber type capacity status')
+      .populate('assignedBy', '_id fullName phone email roles');
+
+    if (!assignment) {
+      throw new ApiError(404, 'Không tìm thấy phân công cứu hộ');
+    }
+
+    return assignment;
+  }
+
+  /**
    * GET /sos/:id/assignments
    */
   async getAssignmentsBySosId(sosId) {
@@ -264,6 +356,16 @@ class SosAssignmentService {
     }
 
     await assignment.save();
+
+    // Đồng bộ trạng thái SOS Request tương ứng
+    const sosId = assignment.sosRequestId || assignment.sosId;
+    if (sosId) {
+      if (targetStatus === 'COMPLETED') {
+        await SosRequest.findByIdAndUpdate(sosId, { status: 'RESOLVED', resolvedAt: now });
+      } else if (['EN_ROUTE', 'ARRIVED', 'IN_PROGRESS'].includes(targetStatus)) {
+        await SosRequest.findByIdAndUpdate(sosId, { status: 'IN_PROGRESS' });
+      }
+    }
 
     return assignment;
   }
