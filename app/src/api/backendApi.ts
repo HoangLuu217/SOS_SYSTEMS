@@ -135,6 +135,12 @@ class BackendApiService {
 
   getRescueTeamById = (id: string) => rescueTeamApi.getTeamById(id);
 
+  joinRescueTeam = (teamId: string, rescuerId: string, role: string = 'MEMBER') =>
+    rescueTeamApi.addMember(teamId, rescuerId, role);
+
+  leaveRescueTeam = (teamId: string, rescuerId: string) =>
+    rescueTeamApi.removeMember(teamId, rescuerId);
+
   getVehicles = (params?: any) => vehicleApi.getVehicles(params);
 
   getVehicleById = (id: string) => vehicleApi.getVehicleById(id);

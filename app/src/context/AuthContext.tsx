@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { backendApi, UserProfile } from '@/api';
 import {
@@ -110,6 +111,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     checkSession();
+  }, []);
+
+  // Lắng nghe cập nhật hồ sơ cứu hộ / user profile theo thời gian thực (Realtime)
+  useEffect(() => {
+    const handleProfileUpdate = async (payload: any) => {
+      console.log('🔄 [AuthContext] Nhận sự kiện cập nhật user profile realtime:', payload);
+      try {
+        if (payload?.user) {
+          setUser((prev) => {
+            if (!prev) return prev;
+            const updated: UserProfile = { ...prev, ...payload.user };
+            AsyncStorage.setItem(ENV.STORAGE_KEYS.USER_DATA, JSON.stringify(updated)).catch(() => {});
+            return updated;
+          });
+        }
+
+        // Tải lại thông tin hồ sơ cứu hộ từ backend để đồng bộ roles và trạng thái
+        const res = await backendApi.getRescuerProfile();
+        if (res.success && res.data) {
+          const freshData = res.data;
+          setUser((prev) => {
+            if (!prev) return prev;
+            const updated: UserProfile = {
+              ...prev,
+              ...(freshData as any),
+              rescuer: freshData.rescuer || prev.rescuer,
+              roles: (freshData as any).roles || prev.roles,
+            };
+            AsyncStorage.setItem(ENV.STORAGE_KEYS.USER_DATA, JSON.stringify(updated)).catch(() => {});
+            return updated;
+          });
+        }
+      } catch (err) {
+        console.warn('⚠️ [AuthContext] Lỗi đồng bộ user profile:', err);
+      }
+    };
+
+    const sub1 = DeviceEventEmitter.addListener('rescuer:verification_status_changed', handleProfileUpdate);
+    const sub2 = DeviceEventEmitter.addListener('user:profile_updated', handleProfileUpdate);
+
+    return () => {
+      sub1.remove();
+      sub2.remove();
+    };
   }, []);
 
   /**

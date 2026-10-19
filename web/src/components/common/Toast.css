@@ -1,0 +1,168 @@
+.sos-toast-container {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 999999;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+  max-width: 420px;
+  width: calc(100vw - 48px);
+}
+
+.sos-toast-card {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+  animation: sosToastSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transition: all 0.25s ease;
+  user-select: none;
+}
+
+.sos-toast-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px -5px rgba(15, 23, 42, 0.18), 0 10px 14px -6px rgba(15, 23, 42, 0.1);
+}
+
+.sos-toast-card.success {
+  border-left: 4px solid #10b981;
+}
+
+.sos-toast-card.error {
+  border-left: 4px solid #ef4444;
+}
+
+.sos-toast-card.warning {
+  border-left: 4px solid #f59e0b;
+}
+
+.sos-toast-card.info {
+  border-left: 4px solid #0284c7;
+}
+
+.sos-toast-icon-wrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sos-toast-card.success .sos-toast-icon-wrap {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.sos-toast-card.error .sos-toast-icon-wrap {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.sos-toast-card.warning .sos-toast-icon-wrap {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.sos-toast-card.info .sos-toast-icon-wrap {
+  background: #f0f9ff;
+  color: #0284c7;
+}
+
+.sos-toast-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.sos-toast-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 2px 0;
+  line-height: 1.3;
+}
+
+.sos-toast-message {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #475569;
+  margin: 0;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.sos-toast-close {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  margin-top: -2px;
+  margin-right: -4px;
+}
+
+.sos-toast-close:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.sos-toast-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  transform-origin: left;
+  animation: sosToastProgress linear forwards;
+}
+
+.sos-toast-card.success .sos-toast-progress-bar {
+  background: #10b981;
+}
+
+.sos-toast-card.error .sos-toast-progress-bar {
+  background: #ef4444;
+}
+
+.sos-toast-card.warning .sos-toast-progress-bar {
+  background: #f59e0b;
+}
+
+.sos-toast-card.info .sos-toast-progress-bar {
+  background: #0284c7;
+}
+
+@keyframes sosToastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes sosToastProgress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}

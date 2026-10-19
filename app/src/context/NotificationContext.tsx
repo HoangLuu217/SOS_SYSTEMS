@@ -83,15 +83,23 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Xử lý thông báo đến tức thời (kích hoạt banner, chuông, rung)
   const processIncomingAlert = useCallback(async (incoming: NotificationItem) => {
+    const isRescuerVerification =
+      incoming.type === 'RESCUER_VERIFICATION' ||
+      incoming.data?.type === 'RESCUER_VERIFICATION';
+
+    const verificationStatus =
+      incoming.data?.verificationStatus || (incoming as any).verificationStatus || 'VERIFIED';
+
     const broadcastKey =
       incoming.data?.broadcastId ||
       `${incoming.title?.trim()}_${incoming.content?.trim()}_${incoming.createdAt?.slice(0, 16)}`;
 
-    // Bỏ qua nếu đã từng hiển thị thông báo này
+    // Bỏ qua nếu đã từng hiển thị thông báo này (Deduplicate)
     if (
       seenIdsRef.current.has(incoming._id) ||
       (incoming.data?.broadcastId && seenIdsRef.current.has(incoming.data.broadcastId)) ||
-      seenIdsRef.current.has(broadcastKey)
+      seenIdsRef.current.has(broadcastKey) ||
+      (isRescuerVerification && seenIdsRef.current.has(`rescuer_ver_${verificationStatus}`))
     ) {
       return;
     }
@@ -101,6 +109,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       seenIdsRef.current.add(incoming.data.broadcastId);
     }
     seenIdsRef.current.add(broadcastKey);
+    if (isRescuerVerification) {
+      seenIdsRef.current.add(`rescuer_ver_${verificationStatus}`);
+    }
 
     // Lưu lại bộ nhớ đã thấy
     const idsArray = Array.from(seenIdsRef.current).slice(-100);
@@ -108,6 +119,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     if (incoming.data?.type === 'SOS_SYNC' || incoming.data?.type === 'RESCUE' || incoming.data?.sosId) {
       DeviceEventEmitter.emit('sos:sync');
+    }
+
+    if (incoming.data?.type === 'RESCUER_VERIFICATION' || incoming.data?.type === 'USER_SYNC') {
+      DeviceEventEmitter.emit('rescuer:verification_status_changed', incoming.data);
+      DeviceEventEmitter.emit('user:profile_updated', incoming.data);
     }
 
     // 1. Chèn thông báo mới vào đầu danh sách ngay lập tức

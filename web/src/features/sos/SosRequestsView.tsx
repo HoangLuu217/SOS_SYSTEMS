@@ -21,6 +21,7 @@ import { fetchSosRequests, createSosRequest, fetchAdministrativeAreas, fetchVehi
 import { onSosCreated, onSosUpdated } from '@/services/socketService';
 import { FALLBACK_SOS_LIST, FALLBACK_VEHICLES } from '@/constants/dashboardFallbackData';
 import { EMERGENCY_TYPE_LABELS } from '@/features/hazards';
+import { toast } from '@/components/common/toast';
 import './SosRequestsView.css';
 
 export interface SosRequestsViewProps {
@@ -138,7 +139,10 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
         people: parseInt(hotlineForm.people, 10) || 1,
         description: `[Tiếp nhận Hotline] Người gọi: ${hotlineForm.name} (${hotlineForm.phone}). ${hotlineForm.description}`,
       });
-      alert(`✅ Đã tạo thành công yêu cầu SOS từ cuộc gọi của: ${hotlineForm.name}!`);
+      toast.success(
+        `Đã tạo thành công yêu cầu SOS từ cuộc gọi của: ${hotlineForm.name}!`,
+        'Tiếp nhận Hotline thành công'
+      );
       setShowHotlineModal(false);
       setHotlineForm({
         name: '',
@@ -152,7 +156,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
       });
       loadData();
     } catch (err: any) {
-      alert('❌ Lỗi tạo SOS qua hotline: ' + (err?.message || 'Lỗi server'));
+      toast.error(err?.message || 'Không thể tạo yêu cầu SOS qua hotline', 'Lỗi tiếp nhận');
     } finally {
       setLoading(false);
     }

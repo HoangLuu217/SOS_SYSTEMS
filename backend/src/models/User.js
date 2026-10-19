@@ -114,10 +114,10 @@ const rescuerSchema = new mongoose.Schema(
     verificationStatus: {
       type: String,
       enum: {
-        values: ['PENDING', 'VERIFIED', 'REJECTED'],
+        values: ['NOT_REGISTERED', 'PENDING', 'VERIFIED', 'REJECTED'],
         message: 'Trạng thái xác minh {VALUE} không hợp lệ',
       },
-      default: 'PENDING',
+      default: 'NOT_REGISTERED',
     },
     availabilityStatus: {
       type: String,

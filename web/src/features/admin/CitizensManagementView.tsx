@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Users, RefreshCw, Lock as LockIcon, Unlock } from 'lucide-react';
 import { fetchAdminUsers, updateUserStatus } from '@/api';
+import { toast } from '@/components/common/toast';
 
 interface CitizenUser {
   _id: string;
@@ -48,10 +49,13 @@ export const CitizensManagementView: React.FC = () => {
     try {
       setLoading(true);
       await updateUserStatus(userId, nextStatus);
-      alert(`✅ Đã cập nhật trạng thái tài khoản thành: ${nextStatus}!`);
+      toast.success(
+        `Đã cập nhật trạng thái tài khoản thành: ${nextStatus === 'ACTIVE' ? 'Hoạt động' : 'Tạm khóa'}!`,
+        'Cập nhật tài khoản'
+      );
       loadData();
     } catch (err: any) {
-      alert('❌ Lỗi cập nhật trạng thái: ' + (err?.message || 'Lỗi server'));
+      toast.error(err?.message || 'Lỗi server', 'Lỗi cập nhật trạng thái');
     } finally {
       setLoading(false);
     }

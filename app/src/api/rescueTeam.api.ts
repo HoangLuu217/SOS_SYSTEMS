@@ -35,6 +35,27 @@ export class RescueTeamApi {
   async getTeamById(id: string): Promise<ApiResponse<RescueTeamData>> {
     return await this.client.get(`/rescue-teams/${id}`);
   }
+
+  /**
+   * Gia nhập Đội cứu hộ (POST /rescue-teams/:id/members)
+   */
+  async addMember(
+    teamId: string,
+    rescuerId: string,
+    role: string = 'MEMBER'
+  ): Promise<ApiResponse<RescueTeamData>> {
+    return await this.client.post(`/rescue-teams/${teamId}/members`, { rescuerId, role });
+  }
+
+  /**
+   * Rời khỏi Đội cứu hộ (DELETE /rescue-teams/:id/members/:rescuerId)
+   */
+  async removeMember(
+    teamId: string,
+    rescuerId: string
+  ): Promise<ApiResponse<RescueTeamData>> {
+    return await this.client.delete(`/rescue-teams/${teamId}/members/${rescuerId}`);
+  }
 }
 
 export const rescueTeamApi = new RescueTeamApi();

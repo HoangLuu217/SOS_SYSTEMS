@@ -36,6 +36,7 @@ import {
   fetchProvinceSubUnitsService,
 } from '@/services/geoapifyBoundariesService';
 import { AreaPreviewMap, getAreaCoordinates } from './AreaPreviewMap';
+import { toast } from '@/components/common/toast';
 import '@/features/sos/SosRequestsView.css';
 import './AuthoritiesView.css';
 
@@ -337,8 +338,12 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
       setLoading(true);
       await updateUserStatus(a._id, nextStatus);
       refreshData();
+      toast.success(
+        `Đã chuyển trạng thái tài khoản sang: ${nextStatus === 'ACTIVE' ? 'Đang hoạt động' : 'Tạm khóa'}!`,
+        'Cập nhật thành công'
+      );
     } catch (err: any) {
-      alert('❌ Lỗi cập nhật trạng thái: ' + (err.message || 'Lỗi server'));
+      toast.error(err?.message || 'Lỗi server', 'Lỗi cập nhật trạng thái');
     } finally {
       setLoading(false);
     }

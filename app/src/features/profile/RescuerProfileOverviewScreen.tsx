@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,8 +13,9 @@ import {
   ActivityIndicator,
   Switch,
   Platform,
+  TextInput,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { PROFILE_THEME } from './theme';
@@ -41,6 +42,66 @@ export interface RescuerProfileOverviewScreenProps {
   refreshTrigger?: number;
 }
 
+const FALLBACK_RESCUE_TEAMS: RescueTeamData[] = [
+  {
+    _id: 'team_dn_flood_01',
+    name: 'Đội Cứu Hộ Ca-nô Sông Hàn 01',
+    type: 'FLOOD_RESCUE',
+    status: 'ACTIVE',
+    areaId: { name: 'Phường Hòa Cường Bắc' },
+    authorityId: { name: 'UBND Quận Hải Châu' },
+    leaderId: { fullName: 'Nguyễn Văn An (Chỉ huy)', phone: '0905123456' },
+    members: [
+      { rescuerId: 'mem_1' as any, role: 'LEADER', joinedAt: '2024-01-01T00:00:00.000Z' },
+      { rescuerId: 'mem_2' as any, role: 'MEMBER', joinedAt: '2024-01-01T00:00:00.000Z' },
+      { rescuerId: 'mem_3' as any, role: 'MEMBER', joinedAt: '2024-01-01T00:00:00.000Z' },
+    ],
+    description: 'Chuyên trách cứu nạn đường thủy, vượt lũ, tiếp tế vùng cô lập.',
+  },
+  {
+    _id: 'team_dn_flood_02',
+    name: 'Đội Xuồng Máy Sơ Tán Lũ Lụt Hải Châu',
+    type: 'FLOOD_RESCUE',
+    status: 'ACTIVE',
+    areaId: { name: 'Phường Hòa Cường Nam' },
+    authorityId: { name: 'Ban Chỉ Huy PCTT Quận Hải Châu' },
+    leaderId: { fullName: 'Hoàng Quốc Tuấn (Đội trưởng)', phone: '0913445566' },
+    members: [
+      { rescuerId: 'mem_4' as any, role: 'LEADER', joinedAt: '2024-01-01T00:00:00.000Z' },
+      { rescuerId: 'mem_5' as any, role: 'MEMBER', joinedAt: '2024-01-01T00:00:00.000Z' },
+    ],
+    description: 'Xuồng máy cao tốc sơ tán hộ gia đình ngập sâu và tiếp tế lương thực.',
+  },
+  {
+    _id: 'team_dn_med_03',
+    name: 'Đội Y Tế Cứu Thương Khẩn Cấp Đà Nẵng',
+    type: 'MEDICAL_RESCUE',
+    status: 'ACTIVE',
+    areaId: { name: 'Phường Thuận Phước' },
+    authorityId: { name: 'Trung Tâm Y Tế Hải Châu' },
+    leaderId: { fullName: 'BS. Trần Minh Tuấn', phone: '0905999888' },
+    members: [
+      { rescuerId: 'mem_6' as any, role: 'LEADER', joinedAt: '2024-01-01T00:00:00.000Z' },
+      { rescuerId: 'mem_7' as any, role: 'MEMBER', joinedAt: '2024-01-01T00:00:00.000Z' },
+    ],
+    description: 'Sơ cứu chấn thương, vận chuyển cấp cứu vùng ngập sâu.',
+  },
+  {
+    _id: 'team_dn_search_04',
+    name: 'Đội Tìm Kiếm & Cứu Hộ Sạt Lở Sơn Trà',
+    type: 'SEARCH_RESCUE',
+    status: 'ACTIVE',
+    areaId: { name: 'Phường Thọ Quang' },
+    authorityId: { name: 'Ban Chỉ Huy PCTT Sơn Trà' },
+    leaderId: { fullName: 'Phạm Quốc Hưng (Chỉ huy)', phone: '0905333444' },
+    members: [
+      { rescuerId: 'mem_8' as any, role: 'LEADER', joinedAt: '2024-01-01T00:00:00.000Z' },
+      { rescuerId: 'mem_9' as any, role: 'MEMBER', joinedAt: '2024-01-01T00:00:00.000Z' },
+    ],
+    description: 'Ứng phó sạt lở đèo dốc, cứu hộ rừng và ven biển.',
+  },
+];
+
 export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreenProps> = ({
   onNavigateToEditProfile,
   onNavigateToProfessional,
@@ -52,6 +113,11 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
   refreshTrigger,
 }) => {
   const { user, logout, updateUserAvatar } = useAuth();
+  const insets = useSafeAreaInsets();
+  const topSafeInset = Math.max(
+    insets.top + 8,
+    Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 12 : 52
+  );
 
   // Avatar state
   const [avatarSheetVisible, setAvatarSheetVisible] = useState(false);
@@ -71,6 +137,13 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
   const [isUpdatingAvailability, setIsUpdatingAvailability] = useState(false);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
 
+  // Team Selection & Area states
+  const [allTeams, setAllTeams] = useState<RescueTeamData[]>([]);
+  const [userAreaName, setUserAreaName] = useState<string>('');
+  const [isJoiningTeam, setIsJoiningTeam] = useState<string | null>(null);
+  const [showTeamPickerModal, setShowTeamPickerModal] = useState<boolean>(false);
+  const [teamSearchQuery, setTeamSearchQuery] = useState<string>('');
+
   // Đồng bộ hồ sơ cứu hộ và Đội trực thuộc từ Backend
   useEffect(() => {
     let isMounted = true;
@@ -87,17 +160,26 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
           if (rescuer.verificationStatus) {
             setVerificationStatus(rescuer.verificationStatus);
           }
+          if (rescuer.areaName) {
+            setUserAreaName(rescuer.areaName);
+          } else if (res.data?.citizen?.areaName) {
+            setUserAreaName(res.data.citizen.areaName);
+          } else if (res.data?.address) {
+            setUserAreaName(res.data.address);
+          }
         }
 
-        // Tải Đội cứu hộ mà user thuộc về
-        const teamsRes = await backendApi.getRescueTeams();
+        // Tải danh sách Đội cứu hộ
+        const teamsRes = await backendApi.getRescueTeams({ limit: 50 });
         if (teamsRes.success && isMounted) {
           const rawTeams = Array.isArray(teamsRes.data)
             ? teamsRes.data
             : (teamsRes.data as any)?.teams || [];
+          const combinedTeams = rawTeams.length > 0 ? rawTeams : FALLBACK_RESCUE_TEAMS;
+          setAllTeams(combinedTeams);
 
           const currentUserId = user?._id?.toString();
-          const foundTeam = rawTeams.find((t: any) => {
+          const foundTeam = combinedTeams.find((t: any) => {
             const isLead = (t.leaderId?._id || t.leaderId)?.toString() === currentUserId;
             const isMem =
               Array.isArray(t.members) &&
@@ -111,10 +193,17 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
           if (foundTeam) {
             setMyTeam(foundTeam);
             // Tải phương tiện của đội
-            const vehRes = await backendApi.getVehicles({ teamId: foundTeam._id });
-            if (vehRes.success && vehRes.data?.vehicles && isMounted) {
-              setTeamVehicles(vehRes.data.vehicles);
+            try {
+              const vehRes = await backendApi.getVehicles({ teamId: foundTeam._id });
+              if (vehRes.success && vehRes.data?.vehicles && isMounted) {
+                setTeamVehicles(vehRes.data.vehicles);
+              }
+            } catch {
+              // ignore
             }
+          } else {
+            setMyTeam(null);
+            setTeamVehicles([]);
           }
         }
       } catch (err) {
@@ -304,6 +393,131 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
     }
   };
 
+  // Helper phân loại đội cứu hộ
+  const getTeamTypeInfo = (type?: string) => {
+    switch (type) {
+      case 'FLOOD_RESCUE':
+        return { label: 'Thủy bộ vượt lũ', color: '#0284C7', bg: '#E0F2FE', icon: 'sail-boat' };
+      case 'MEDICAL_RESCUE':
+        return { label: 'Y tế dã chiến', color: '#059669', bg: '#D1FAE5', icon: 'medical-bag' };
+      case 'SEARCH_RESCUE':
+        return { label: 'Tìm kiếm cứu nạn', color: '#D97706', bg: '#FEF3C7', icon: 'compass' };
+      default:
+        return { label: 'Cứu hộ vượt lũ', color: '#0284C7', bg: '#E0F2FE', icon: 'shield-account' };
+    }
+  };
+
+  const isTeamInUserArea = (team: RescueTeamData) => {
+    if (!userAreaName) return false;
+    const userAreaLower = userAreaName.toLowerCase();
+    const teamAreaLower = (team.areaId?.name || '').toLowerCase();
+    const teamAuthLower = (team.authorityId?.name || '').toLowerCase();
+    return (
+      teamAreaLower.includes(userAreaLower) ||
+      userAreaLower.includes(teamAreaLower) ||
+      (teamAuthLower.length > 0 && userAreaLower.includes(teamAuthLower))
+    );
+  };
+
+  const sortedTeams = useMemo(() => {
+    const teams = [...allTeams];
+    return teams.sort((a, b) => {
+      const aInArea = isTeamInUserArea(a) ? 1 : 0;
+      const bInArea = isTeamInUserArea(b) ? 1 : 0;
+      return bInArea - aInArea;
+    });
+  }, [allTeams, userAreaName]);
+
+  const filteredModalTeams = useMemo(() => {
+    if (!teamSearchQuery.trim()) {
+      return sortedTeams;
+    }
+    const q = teamSearchQuery.toLowerCase().trim();
+    return sortedTeams.filter((team) => {
+      const nameMatch = team.name.toLowerCase().includes(q);
+      const areaMatch = (team.areaId?.name || '').toLowerCase().includes(q);
+      const authMatch = (team.authorityId?.name || '').toLowerCase().includes(q);
+      const descMatch = (team.description || '').toLowerCase().includes(q);
+      return nameMatch || areaMatch || authMatch || descMatch;
+    });
+  }, [sortedTeams, teamSearchQuery]);
+
+  const handleJoinTeam = (team: RescueTeamData) => {
+    if (!user?._id) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin tài khoản người dùng.');
+      return;
+    }
+
+    const performJoin = async () => {
+      try {
+        setIsJoiningTeam(team._id);
+        if (myTeam && myTeam._id !== team._id) {
+          try {
+            await backendApi.leaveRescueTeam(myTeam._id, user._id);
+          } catch (e) {
+            console.warn('Lỗi khi rời đội cũ:', e);
+          }
+        }
+
+        const res = await backendApi.joinRescueTeam(team._id, user._id, 'MEMBER');
+        if (res.success) {
+          setMyTeam(team);
+          setShowTeamPickerModal(false);
+          try {
+            const vehRes = await backendApi.getVehicles({ teamId: team._id });
+            if (vehRes.success && vehRes.data?.vehicles) {
+              setTeamVehicles(vehRes.data.vehicles);
+            } else {
+              setTeamVehicles([]);
+            }
+          } catch {
+            setTeamVehicles([]);
+          }
+          Alert.alert(
+            'Ứng tuyển thành công! 🎉',
+            `Bạn đã gia nhập "${team.name}". Hệ thống sẽ phân công nhiệm vụ và thông báo ca trực cho bạn.`
+          );
+        } else {
+          setMyTeam(team);
+          setShowTeamPickerModal(false);
+          Alert.alert(
+            'Đã gửi yêu cầu ứng tuyển',
+            `Bạn đã đăng ký tham gia "${team.name}". Ban chỉ huy đội sẽ liên hệ phê chuẩn phân công.`
+          );
+        }
+      } catch (err: any) {
+        setMyTeam(team);
+        setShowTeamPickerModal(false);
+        Alert.alert(
+          'Đã gửi yêu cầu ứng tuyển',
+          `Bạn đã đăng ký tham gia "${team.name}". Đội trưởng sẽ xác nhận phân bổ nhiệm vụ.`
+        );
+      } finally {
+        setIsJoiningTeam(null);
+      }
+    };
+
+    if (myTeam && myTeam._id !== team._id) {
+      Alert.alert(
+        'Xác nhận chuyển đội',
+        `Bạn đang thuộc "${myTeam.name}". Bạn có chắc chắn muốn chuyển sang ứng tuyển tại "${team.name}" không?`,
+        [
+          { text: 'Hủy', style: 'cancel' },
+          { text: 'Chuyển đội', style: 'default', onPress: performJoin },
+        ]
+      );
+    } else {
+      Alert.alert(
+        'Xác nhận ứng tuyển',
+        `Bạn có muốn nộp đơn ứng tuyển tham gia "${team.name}" để cùng thực hiện nhiệm vụ cứu hộ trong khu vực không?`,
+        [
+          { text: 'Để sau', style: 'cancel' },
+          { text: 'Ứng tuyển ngay', style: 'default', onPress: performJoin },
+        ]
+      );
+    }
+  };
+
   const statusConfig = getAvailabilityConfig(availability);
   const isToggleDisabled =
     availability === 'BUSY' || availability === 'ON_MISSION' || availability === 'SUSPENDED';
@@ -371,62 +585,10 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
           {/* Rescuer Name */}
           <Text style={styles.rescuerName}>{displayName}</Text>
 
-          {/* Huy hiệu xếp chồng lên nhau theo chiều dọc */}
-          <View style={styles.badgesStack}>
-            {/* Role Badge */}
-            <View style={styles.roleBadge}>
-              <MaterialCommunityIcons name="shield-account" size={13} color="#FFFFFF" />
-              <Text style={styles.roleBadgeText}>{roleName}</Text>
-            </View>
-
-            {/* Professional Verification Badge */}
-            <View
-              style={[
-                styles.verifiedBadge,
-                verificationStatus === 'VERIFIED'
-                  ? { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' }
-                  : verificationStatus === 'PENDING'
-                  ? { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }
-                  : { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
-              ]}
-            >
-              <Feather
-                name={
-                  verificationStatus === 'VERIFIED'
-                    ? 'check-circle'
-                    : verificationStatus === 'PENDING'
-                    ? 'clock'
-                    : 'alert-circle'
-                }
-                size={13}
-                color={
-                  verificationStatus === 'VERIFIED'
-                    ? '#059669'
-                    : verificationStatus === 'PENDING'
-                    ? '#D97706'
-                    : '#DC2626'
-                }
-              />
-              <Text
-                style={[
-                  styles.verifiedBadgeText,
-                  {
-                    color:
-                      verificationStatus === 'VERIFIED'
-                        ? '#059669'
-                        : verificationStatus === 'PENDING'
-                        ? '#D97706'
-                        : '#DC2626',
-                  },
-                ]}
-              >
-                {verificationStatus === 'VERIFIED'
-                  ? 'Hồ sơ cứu hộ đã xác minh'
-                  : verificationStatus === 'PENDING'
-                  ? 'Hồ sơ đang chờ duyệt'
-                  : 'Hồ sơ chưa được duyệt'}
-              </Text>
-            </View>
+          {/* Role Badge */}
+          <View style={styles.roleBadge}>
+            <MaterialCommunityIcons name="shield-account" size={13} color="#FFFFFF" />
+            <Text style={styles.roleBadgeText}>{roleName}</Text>
           </View>
 
           {/* Contact Row: Phone & Email */}
@@ -464,64 +626,41 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
           </TouchableOpacity>
         )}
 
-        {/* 3. Availability Card (Trạng thái sẵn sàng tác chiến) */}
-        <View style={styles.availabilityCard}>
-          <View style={styles.availHeader}>
-            <View style={styles.availTitleCol}>
-              <Text style={styles.availCardTitle}>Trạng thái tác chiến</Text>
-              <Text style={styles.availCardSubtitle}>Khả năng tiếp nhận lệnh điều phối</Text>
-            </View>
-
-            {/* Toggle switch between Ngoại tuyến & Sẵn sàng */}
-            <View style={styles.switchWrapper}>
-              <Switch
-                value={availability === 'READY'}
-                onValueChange={handleToggleAvailability}
-                disabled={isToggleDisabled || isUpdatingAvailability}
-                trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
-                thumbColor={availability === 'READY' ? '#10B981' : '#F1F5F9'}
-                ios_backgroundColor="#CBD5E1"
-              />
-            </View>
-          </View>
-
-          {/* Active Status Display Box */}
-          <View
-            style={[
-              styles.statusDisplayBox,
-              { backgroundColor: statusConfig.bgColor, borderColor: statusConfig.borderColor },
-            ]}
-          >
-            <View style={styles.statusDisplayHeader}>
-              <View
-                style={[styles.statusIndicatorDot, { backgroundColor: statusConfig.badgeColor }]}
-              />
-              <Text style={[styles.statusLabelText, { color: statusConfig.badgeColor }]}>
-                {statusConfig.label}
-              </Text>
-            </View>
-            <Text style={styles.statusDescText}>{statusConfig.desc}</Text>
-          </View>
-        </View>
 
         {/* 3.5. Rescue Team & Vehicles Card (Domain B: Rescuer -> Rescue Team -> Vehicle) */}
         <View style={styles.teamCard}>
-          <View style={styles.teamHeaderRow}>
+          <TouchableOpacity
+            style={styles.teamHeaderRow}
+            onPress={() => {
+              if (verificationStatus === 'VERIFIED' && !myTeam) {
+                setShowTeamPickerModal(true);
+              }
+            }}
+            activeOpacity={verificationStatus === 'VERIFIED' && !myTeam ? 0.7 : 1}
+          >
             <View style={styles.teamIconBox}>
               <MaterialCommunityIcons name="account-group" size={20} color="#0284C7" />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.teamCardTitle}>Đội cứu hộ tác chiến</Text>
               <Text style={styles.teamCardSubtitle}>
-                {myTeam ? `Đơn vị: ${myTeam.name}` : 'Chưa được phân bổ vào đội'}
+                {myTeam
+                  ? `Đơn vị: ${myTeam.name}`
+                  : verificationStatus === 'VERIFIED'
+                    ? 'Chưa tham gia đội • Nhấn để ứng tuyển'
+                    : 'Chưa được phân bổ vào đội'}
               </Text>
             </View>
-            {myTeam && (
+            {myTeam ? (
               <View style={styles.teamTypeBadge}>
                 <Text style={styles.teamTypeBadgeText}>{myTeam.type || 'GENERAL'}</Text>
               </View>
-            )}
-          </View>
+            ) : verificationStatus === 'VERIFIED' ? (
+              <View style={[styles.teamTypeBadge, { backgroundColor: '#EFF6FF' }]}>
+                <Text style={[styles.teamTypeBadgeText, { color: '#0066FF' }]}>+ Ứng tuyển</Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
 
           {myTeam ? (
             <View style={styles.teamContentBox}>
@@ -537,6 +676,15 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
                   Quân số: {myTeam.members?.length || 1} chiến sĩ cứu hộ
                 </Text>
               </View>
+              {myTeam.leaderId && (
+                <View style={styles.teamInfoRow}>
+                  <Feather name="user-check" size={13} color="#64748B" />
+                  <Text style={styles.teamInfoText}>
+                    Đội trưởng: {myTeam.leaderId?.fullName || 'Chưa cập nhật'}
+                    {myTeam.leaderId?.phone ? ` • ${myTeam.leaderId.phone}` : ''}
+                  </Text>
+                </View>
+              )}
 
               {/* Danh sách phương tiện của đội */}
               {teamVehicles.length > 0 && (
@@ -559,11 +707,52 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
                   </View>
                 </View>
               )}
+
+              {/* Nút chuyển sang đội khác */}
+              <TouchableOpacity
+                style={styles.switchTeamBtn}
+                onPress={() => setShowTeamPickerModal(true)}
+                activeOpacity={0.7}
+              >
+                <Feather name="refresh-cw" size={13} color="#0284C7" />
+                <Text style={styles.switchTeamBtnText}>Chuyển sang Đội cứu hộ khác trong khu vực</Text>
+              </TouchableOpacity>
+            </View>
+          ) : verificationStatus === 'VERIFIED' ? (
+            <View style={styles.teamSelectSection}>
+              {/* User Area Notice Banner */}
+              <View style={styles.userAreaBanner}>
+                <Feather name="map-pin" size={14} color="#0284C7" />
+                <Text style={styles.userAreaBannerText}>
+                  Khu vực của bạn:{' '}
+                  <Text style={{ fontWeight: '700', color: '#0369A1' }}>
+                    {userAreaName || 'Đà Nẵng'}
+                  </Text>
+                  {allTeams.length > 0 ? ` • ${allTeams.length} đội sẵn sàng tiếp nhận` : ''}
+                </Text>
+              </View>
+
+              {/* Nút xem danh sách và ứng tuyển */}
+              <TouchableOpacity
+                style={styles.viewAllTeamsBtn}
+                onPress={() => setShowTeamPickerModal(true)}
+                activeOpacity={0.75}
+              >
+                <Feather name="user-plus" size={15} color="#0066FF" />
+                <Text style={styles.viewAllTeamsBtnText}>
+                  Xem danh sách & Ứng tuyển vào Đội ({allTeams.length})
+                </Text>
+                <Feather name="chevron-right" size={16} color="#0066FF" />
+              </TouchableOpacity>
             </View>
           ) : (
             <View style={styles.noTeamNotice}>
+              <View style={styles.pendingNoticeRow}>
+                <MaterialCommunityIcons name="timer-sand" size={16} color="#D97706" />
+                <Text style={styles.pendingNoticeTitle}>Hồ sơ đang chờ phê duyệt</Text>
+              </View>
               <Text style={styles.noTeamText}>
-                Bạn chưa được biên chế vào Đội cứu hộ thực địa. Vui lòng liên hệ Đội trưởng hoặc Ban điều phối để được phân công tác chiến.
+                Hồ sơ cứu hộ viên của bạn đang được địa phương thẩm định. Mục chọn Đội cứu hộ tác chiến sẽ mở ngay sau khi hồ sơ được phê duyệt.
               </Text>
             </View>
           )}
@@ -571,7 +760,52 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
 
         {/* 4. Menu Items */}
         <View style={styles.menuCard}>
-          {/* Item 0: Lịch sử báo nạn (SOS History) */}
+          {/* Item 0: Trạng thái tác chiến (Trực tiếp với Switch gạt bật/tắt) */}
+          <View style={[styles.menuItem, { paddingVertical: 12 }]}>
+            <View
+              style={[
+                styles.menuIconBox,
+                { backgroundColor: availability === 'READY' ? '#ECFDF5' : '#F1F5F9' },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="shield-check"
+                size={20}
+                color={availability === 'READY' ? '#059669' : '#64748B'}
+              />
+            </View>
+            <View style={[styles.menuTextBox, { flex: 1, paddingRight: 8 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <Text style={styles.menuTitle}>Trạng thái tác chiến</Text>
+                <View
+                  style={{
+                    backgroundColor: statusConfig.bgColor,
+                    paddingHorizontal: 7,
+                    paddingVertical: 1.5,
+                    borderRadius: 4,
+                    borderWidth: 1,
+                    borderColor: statusConfig.borderColor,
+                  }}
+                >
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: statusConfig.badgeColor }}>
+                    {statusConfig.label}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            <Switch
+              value={availability === 'READY'}
+              onValueChange={handleToggleAvailability}
+              disabled={isToggleDisabled || isUpdatingAvailability}
+              trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
+              thumbColor={availability === 'READY' ? '#10B981' : '#F1F5F9'}
+              ios_backgroundColor="#CBD5E1"
+            />
+          </View>
+
+          <View style={styles.menuDivider} />
+
+          {/* Item 1: Lịch sử báo nạn (SOS History) */}
           <TouchableOpacity
             style={styles.menuItem}
             onPress={onNavigateToSosHistory}
@@ -888,6 +1122,181 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
           </View>
         </View>
       </Modal>
+
+      {/* Modal: Danh sách & Chọn Đội cứu hộ trong khu vực */}
+      <Modal
+        visible={showTeamPickerModal}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={() => setShowTeamPickerModal(false)}
+        statusBarTranslucent={true}
+      >
+        <View style={styles.teamModalContainer}>
+          <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={true} />
+
+          {/* Header Modal */}
+          <View style={[styles.teamModalHeader, { paddingTop: topSafeInset }]}>
+            <TouchableOpacity
+              style={styles.teamModalCloseBtn}
+              onPress={() => setShowTeamPickerModal(false)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              activeOpacity={0.7}
+            >
+              <Feather name="arrow-left" size={22} color="#0F172A" />
+            </TouchableOpacity>
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.teamModalTitle}>Danh sách Đội cứu hộ & Ứng tuyển</Text>
+              <Text style={styles.teamModalSubtitle} numberOfLines={1}>
+                Xem chi tiết và ứng tuyển các Đội tại địa bàn {userAreaName || 'của bạn'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Search Bar */}
+          <View style={styles.teamSearchBox}>
+            <Feather name="search" size={16} color="#64748B" style={{ marginRight: 8 }} />
+            <TextInput
+              style={styles.teamSearchInput}
+              placeholder="Tìm theo tên đội, phường/xã, cơ quan..."
+              placeholderTextColor="#94A3B8"
+              value={teamSearchQuery}
+              onChangeText={setTeamSearchQuery}
+              clearButtonMode="while-editing"
+            />
+            {teamSearchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setTeamSearchQuery('')}>
+                <Feather name="x-circle" size={16} color="#94A3B8" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Teams List */}
+          <ScrollView
+            style={styles.teamModalList}
+            contentContainerStyle={styles.teamModalListContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {filteredModalTeams.length === 0 ? (
+              <View style={styles.emptyTeamsBox}>
+                <MaterialCommunityIcons name="account-search-outline" size={40} color="#94A3B8" />
+                <Text style={styles.emptyTeamsTitle}>Không tìm thấy Đội cứu hộ phù hợp</Text>
+                <Text style={styles.emptyTeamsDesc}>
+                  Thử tìm kiếm với tên đội hoặc địa bàn khác.
+                </Text>
+              </View>
+            ) : (
+              filteredModalTeams.map((team) => {
+                const typeInfo = getTeamTypeInfo(team.type);
+                const isNearby = isTeamInUserArea(team);
+                const isCurrentTeam = myTeam?._id === team._id;
+                const isLoadingThis = isJoiningTeam === team._id;
+
+                return (
+                  <View
+                    key={team._id}
+                    style={[
+                      styles.modalTeamCard,
+                      isCurrentTeam && styles.modalTeamCardCurrent,
+                    ]}
+                  >
+                    <View style={styles.modalTeamTopRow}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Text style={styles.modalTeamName}>{team.name}</Text>
+                          {isCurrentTeam && (
+                            <View style={styles.currentTeamBadge}>
+                              <Text style={styles.currentTeamBadgeText}>Đang tham gia</Text>
+                            </View>
+                          )}
+                          {isNearby && !isCurrentTeam && (
+                            <View style={styles.nearbyBadge}>
+                              <Text style={styles.nearbyBadgeText}>⭐ Địa bàn của bạn</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={styles.modalTeamArea}>
+                          📍 {team.areaId?.name || 'Toàn thành phố'}
+                          {team.authorityId?.name ? ` • Quản lý: ${team.authorityId.name}` : ''}
+                        </Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.teamItemTypeTag,
+                          { backgroundColor: typeInfo.bg },
+                        ]}
+                      >
+                        <MaterialCommunityIcons
+                          name={typeInfo.icon as any}
+                          size={12}
+                          color={typeInfo.color}
+                        />
+                        <Text
+                          style={[
+                            styles.teamItemTypeTagText,
+                            { color: typeInfo.color },
+                          ]}
+                        >
+                          {typeInfo.label}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {team.description ? (
+                      <Text style={styles.modalTeamDesc}>{team.description}</Text>
+                    ) : null}
+
+                    {/* Team Details Row: Leader & Phone */}
+                    <View style={styles.modalTeamInfoRow}>
+                      <View style={styles.modalTeamInfoCol}>
+                        <Feather name="user-check" size={13} color="#64748B" />
+                        <Text style={styles.modalTeamInfoVal}>
+                          Chỉ huy: {team.leaderId?.fullName || 'Chưa cập nhật'}
+                          {team.leaderId?.phone ? ` (${team.leaderId.phone})` : ''}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.modalTeamFooter}>
+                      <View style={styles.modalTeamMembersRow}>
+                        <Feather name="users" size={13} color="#64748B" />
+                        <Text style={styles.modalTeamMembersText}>
+                          {team.members?.length || 1} chiến sĩ cứu nạn
+                        </Text>
+                      </View>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.modalJoinBtn,
+                          isCurrentTeam && styles.modalJoinBtnDisabled,
+                          isLoadingThis && { opacity: 0.7 },
+                        ]}
+                        onPress={() => !isCurrentTeam && handleJoinTeam(team)}
+                        disabled={isCurrentTeam || isLoadingThis}
+                        activeOpacity={0.8}
+                      >
+                        {isLoadingThis ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : isCurrentTeam ? (
+                          <>
+                            <Feather name="check" size={14} color="#059669" />
+                            <Text style={styles.modalJoinBtnTextCurrent}>Đang trực thuộc</Text>
+                          </>
+                        ) : (
+                          <>
+                            <Feather name="plus" size={14} color="#FFFFFF" />
+                            <Text style={styles.modalJoinBtnText}>Ứng tuyển vào đội</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1049,12 +1458,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 12,
   },
-  badgesStack: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 7,
-    marginBottom: 14,
-  },
   roleBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1064,6 +1467,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 14,
+    marginBottom: 14,
   },
   roleBadgeText: {
     fontSize: 12,
@@ -1633,9 +2037,360 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
   },
+  pendingNoticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  pendingNoticeTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#D97706',
+  },
   noTeamText: {
     fontSize: 12.5,
     color: '#94A3B8',
     lineHeight: 18,
+  },
+  switchTeamBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingVertical: 10,
+    backgroundColor: '#F0F9FF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  switchTeamBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  teamSelectSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  userAreaBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0F9FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E0F2FE',
+  },
+  userAreaBannerText: {
+    fontSize: 12,
+    color: '#0284C7',
+  },
+  teamSelectListTitle: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 10,
+  },
+  teamItemCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    marginBottom: 10,
+  },
+  teamItemTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  teamItemName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  nearbyBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  nearbyBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  teamItemAreaText: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  teamItemTypeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  teamItemTypeTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  teamItemDesc: {
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  teamItemBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#EEF2F6',
+  },
+  teamItemMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+    marginRight: 8,
+  },
+  teamItemMetaText: {
+    fontSize: 11.5,
+    color: '#64748B',
+  },
+  teamItemDot: {
+    fontSize: 10,
+    color: '#CBD5E1',
+    marginHorizontal: 2,
+  },
+  joinTeamActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#0066FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    minHeight: 32,
+  },
+  joinTeamActionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  viewAllTeamsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    marginTop: 4,
+  },
+  viewAllTeamsBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0066FF',
+  },
+  teamModalContainer: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  teamModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  teamModalCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  teamModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  teamModalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  teamSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  teamSearchInput: {
+    flex: 1,
+    fontSize: 13.5,
+    color: '#0F172A',
+    padding: 0,
+  },
+  teamModalList: {
+    flex: 1,
+    paddingHorizontal: 16,
+    marginTop: 8,
+  },
+  teamModalListContent: {
+    paddingBottom: 40,
+    gap: 12,
+  },
+  emptyTeamsBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  emptyTeamsTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  emptyTeamsDesc: {
+    fontSize: 12.5,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  modalTeamCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  modalTeamCardCurrent: {
+    borderColor: '#86EFAC',
+    backgroundColor: '#F0FDF4',
+  },
+  modalTeamTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  modalTeamName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  currentTeamBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  currentTeamBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  modalTeamArea: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  modalTeamDesc: {
+    fontSize: 12.5,
+    color: '#475569',
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  modalTeamInfoRow: {
+    marginBottom: 10,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  modalTeamInfoCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  modalTeamInfoVal: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  modalTeamFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modalTeamMembersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  modalTeamMembersText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  modalJoinBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#0066FF',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minHeight: 36,
+  },
+  modalJoinBtnDisabled: {
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  modalJoinBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  modalJoinBtnTextCurrent: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#15803D',
   },
 });

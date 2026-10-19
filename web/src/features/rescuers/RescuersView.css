@@ -139,3 +139,462 @@
   font-size: 10px;
   font-weight: 700;
 }
+
+/* ==========================================================================
+   RESCUER APPROVAL & APPLICANT DOSSIER REDESIGN
+   ========================================================================== */
+
+/* 1. Executive Metric Strip in Admin Mode */
+.rescuer-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 2px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+  .rescuer-kpi-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.rescuer-kpi-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  user-select: none;
+}
+
+.rescuer-kpi-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  border-color: #cbd5e1;
+}
+
+.rescuer-kpi-card.active {
+  border-color: #0284c7;
+  background: #f0f9ff;
+  box-shadow: 0 0 0 1.5px #0284c7, 0 4px 12px rgba(2, 132, 199, 0.12);
+}
+
+.rescuer-kpi-icon-wrap {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rescuer-kpi-icon-wrap.blue {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.rescuer-kpi-icon-wrap.amber {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.rescuer-kpi-icon-wrap.emerald {
+  background: #dcfce7;
+  color: #059669;
+}
+
+.rescuer-kpi-icon-wrap.cyan {
+  background: #cffafe;
+  color: #0891b2;
+}
+
+.rescuer-kpi-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.rescuer-kpi-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 2px;
+}
+
+.rescuer-kpi-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.rescuer-kpi-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.rescuer-kpi-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rescuer-kpi-badge.pending {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.rescuer-kpi-badge.verified {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.rescuer-kpi-badge.neutral {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* 2. Applicant Identity Cell (Column 1) */
+.applicant-cell-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.applicant-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13.5px;
+  font-weight: 800;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
+  flex-shrink: 0;
+  border: 2px solid #ffffff;
+}
+
+.applicant-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.applicant-name {
+  font-weight: 750;
+  font-size: 13.5px;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.15px;
+}
+
+.applicant-contact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.applicant-phone-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #0284c7;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.15s ease;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.applicant-phone-link:hover {
+  color: #0369a1;
+  text-decoration: underline;
+}
+
+.applicant-phone-missing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #94a3b8;
+  font-style: italic;
+  font-size: 11.5px;
+}
+
+/* 3. Identification CCCD Badge (Column 2) */
+.id-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
+  letter-spacing: 0.5px;
+  width: fit-content;
+}
+
+.id-card-icon {
+  color: #0284c7;
+  flex-shrink: 0;
+}
+
+.id-card-badge-empty {
+  font-size: 11.5px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* 4. Registered Area Pill (Column 3) */
+.area-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.area-badge-pill.assigned {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  color: #0369a1;
+}
+
+.area-badge-pill.unassigned {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  font-style: italic;
+}
+
+/* 5. Vehicle Badges (Column 4) */
+.vehicle-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  width: fit-content;
+  white-space: nowrap;
+}
+
+.vehicle-badge-pill.vehicle-boat {
+  background: #ecfeff;
+  border: 1px solid #a5f3fc;
+  color: #0e7490;
+}
+
+.vehicle-badge-pill.vehicle-ambulance {
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #be123c;
+}
+
+.vehicle-badge-pill.vehicle-truck {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+}
+
+.vehicle-badge-pill.vehicle-bike {
+  background: #faf5ff;
+  border: 1px solid #e9d5ff;
+  color: #7e22ce;
+}
+
+.vehicle-badge-pill.vehicle-general {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+}
+
+.vehicle-badge-pill.vehicle-none {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  color: #94a3b8;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-style: italic;
+}
+
+/* 6. Skill Tag Pills & Overflow (Column 5) */
+.skill-tags-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.skill-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2.5px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skill-tag-pill.skill-medical {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+}
+
+.skill-tag-pill.skill-water {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  color: #0284c7;
+}
+
+.skill-tag-pill.skill-fire {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #c2410c;
+}
+
+.skill-tag-pill.skill-general {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+}
+
+.skill-more-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.skill-more-pill:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+/* 7. Action Button Enhancements */
+.coordination-action-btn.compact {
+  padding: 4px 10px !important;
+  font-size: 12px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.coordination-action-btn.danger-outline {
+  background: #fff;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+}
+
+.coordination-action-btn.danger-outline:hover {
+  background: #fef2f2;
+  border-color: #f87171;
+}
+
+/* 8. Dossier Inspection Modal */
+.dossier-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .dossier-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dossier-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.dossier-card.full-width {
+  grid-column: 1 / -1;
+}
+
+.dossier-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dossier-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+}
+
+.dossier-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.dossier-item-label {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.dossier-item-value {
+  color: #0f172a;
+  font-weight: 700;
+  text-align: right;
+}
+

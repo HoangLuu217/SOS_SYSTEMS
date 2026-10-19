@@ -95,6 +95,48 @@ export const onSosUpdated = (callback: (updatedSos: any) => void): (() => void) 
   };
 };
 
+/**
+ * Đăng ký lắng nghe sự kiện có hồ sơ đăng ký Cứu hộ viên mới gửi lên
+ * @param callback Callback nhận dữ liệu người đăng ký mới từ Backend
+ * @returns Hàm hủy lắng nghe (cleanup)
+ */
+export const onRescuerApplicationSubmitted = (callback: (newApplicant: any) => void): (() => void) => {
+  const s = getSocket();
+  const handler = (data: any) => {
+    console.log('📝 [Socket.IO Web] Nhận hồ sơ cứu hộ mới Realtime:', data);
+    callback(data);
+  };
+
+  s.on('rescuer:application_submitted', handler);
+  s.on('rescuer:pending_updated', handler);
+
+  return () => {
+    s.off('rescuer:application_submitted', handler);
+    s.off('rescuer:pending_updated', handler);
+  };
+};
+
+/**
+ * Đăng ký lắng nghe sự kiện trạng thái cứu hộ viên thay đổi (phê duyệt / từ chối)
+ * @param callback Callback nhận dữ liệu cập nhật
+ * @returns Hàm hủy lắng nghe (cleanup)
+ */
+export const onRescuerVerificationChanged = (callback: (data: any) => void): (() => void) => {
+  const s = getSocket();
+  const handler = (data: any) => {
+    console.log('✅ [Socket.IO Web] Trạng thái cứu hộ viên thay đổi Realtime:', data);
+    callback(data);
+  };
+
+  s.on('rescuer:verification_status_changed', handler);
+  s.on('rescuer:verified', handler);
+
+  return () => {
+    s.off('rescuer:verification_status_changed', handler);
+    s.off('rescuer:verified', handler);
+  };
+};
+
 // ==========================================
 // 2. CÁC HÀM XỬ LÝ CHAT TÁC CHIẾN NỘI BỘ
 // ==========================================

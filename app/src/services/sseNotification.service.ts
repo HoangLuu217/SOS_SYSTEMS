@@ -77,6 +77,16 @@ class SSENotificationService {
                 DeviceEventEmitter.emit('sos:sync', payload.data);
               }
 
+              if (
+                payload?.data?.type === 'RESCUER_VERIFICATION' ||
+                payload?.data?.action === 'VERIFIED_STATUS_CHANGED' ||
+                payload?.type === 'RESCUER_VERIFICATION'
+              ) {
+                console.log('⚡ [SSE_NOTIFICATION] Đồng bộ Cứu hộ viên realtime:', payload.data);
+                DeviceEventEmitter.emit('rescuer:verification_status_changed', payload.data);
+                DeviceEventEmitter.emit('user:profile_updated', payload.data);
+              }
+
               if (payload && (payload.action === 'BROADCAST' || payload.action === 'USER')) {
                 const item = this.normalizeNotification(payload.data);
                 if (item.title || item.content) {

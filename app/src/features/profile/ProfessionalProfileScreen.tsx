@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
 import { backendApi } from '@/api';
 import type { RescuerVerificationStatus, RescuerVehicleType } from '@/types';
@@ -260,6 +261,11 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
 
       if (res.success) {
         setVerificationStatus('PENDING');
+        try {
+          await AsyncStorage.setItem('@sos_just_applied_rescuer', 'true');
+        } catch {
+          // ignore storage error
+        }
         setShowSuccessModal(true);
       } else {
         Alert.alert('Không thể lưu', res.message || 'Lỗi khi cập nhật hồ sơ.');
