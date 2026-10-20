@@ -38,7 +38,7 @@ class VehicleService {
    */
   async getVehicles(query = {}) {
     const page = Math.max(1, parseInt(query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 10));
+    const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 100));
     const skip = (page - 1) * limit;
 
     const filter = {};
@@ -47,6 +47,45 @@ class VehicleService {
     if (query.status) filter.status = query.status;
     if (query.plateNumber) {
       filter.plateNumber = { $regex: query.plateNumber.trim(), $options: 'i' };
+    }
+
+    if (query.areaId && query.areaId !== 'ALL') {
+      const mongoose = require('mongoose');
+      const { AdministrativeArea } = require('../models');
+      let targetArea = null;
+      if (mongoose.Types.ObjectId.isValid(query.areaId)) {
+        targetArea = await AdministrativeArea.findById(query.areaId);
+      }
+      if (!targetArea) {
+        targetArea = await AdministrativeArea.findOne({
+          $or: [{ code: query.areaId }, { name: new RegExp(query.areaId, 'i') }],
+        });
+      }
+
+      let areaConditions = [];
+      if (targetArea) {
+        const relevantAreaIds = [targetArea._id];
+        const childWards = await AdministrativeArea.find({ parentId: targetArea._id }).select('_id');
+        childWards.forEach((w) => relevantAreaIds.push(w._id));
+        if (targetArea.parentId) {
+          relevantAreaIds.push(targetArea.parentId);
+        }
+
+        const cleanName = (targetArea.name || '')
+          .replace(/^(phường|xã|quận|huyện|thành phố|thị xã)\s+/i, '')
+          .trim();
+
+        areaConditions = [{ areaId: { $in: relevantAreaIds } }];
+        if (cleanName.length >= 3) {
+          areaConditions.push({ name: new RegExp(cleanName, 'i') });
+        }
+      } else {
+        areaConditions = [{ areaId: query.areaId }];
+      }
+
+      const teamsInArea = await RescueTeam.find({ $or: areaConditions }).select('_id');
+      const teamIds = teamsInArea.map((t) => t._id);
+      filter.teamId = { $in: teamIds };
     }
 
     const [vehicles, total] = await Promise.all([

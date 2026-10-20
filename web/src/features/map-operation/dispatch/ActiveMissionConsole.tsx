@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Phone, RefreshCw, XCircle } from 'lucide-react';
 import type { SosRequest, SosAssignment, RescueTeam, Vehicle } from '@/types/domainD';
 
@@ -27,210 +27,356 @@ export const ActiveMissionConsole: React.FC<Props> = ({
   const assignedVehicle = vehicles.find((v) => v.id === assignment?.vehicleId);
   const vehiclePlate = assignedVehicle?.plate || '43C-554.12';
 
+  // Xác định trạng thái tác chiến chính xác, tránh trường hợp PENDING bị rơi vào else (Đã hoàn thành)
+  const statusInfo = useMemo(() => {
+    const aStatus = String(assignment?.status || '').toUpperCase();
+    const sStatus = String(selectedSos?.status || '').toUpperCase();
+
+    // 1. Hoàn thành
+    if (aStatus === 'COMPLETED' || sStatus === 'COMPLETED') {
+      return {
+        text: 'Đã hoàn thành cứu nạn',
+        subText: 'Nhiệm vụ cứu hộ kết thúc thành công',
+        bg: '#f0fdf4',
+        border: '#86efac',
+        textColor: '#15803d',
+        dotColor: '#16a34a',
+        isCompleted: true,
+      };
+    }
+
+    // 2. Đang tiến hành cứu hộ tại chỗ
+    if (['RESCUING', 'IN_PROGRESS', 'ON_SCENE_RESCUING'].includes(aStatus) || sStatus === 'RESCUING') {
+      return {
+        text: 'Đang tiến hành ứng cứu tại chỗ',
+        subText: 'Đội đang hỗ trợ đưa người dân lên ca-nô an toàn',
+        bg: '#f0fdf4',
+        border: '#86efac',
+        textColor: '#15803d',
+        dotColor: '#16a34a',
+        isCompleted: false,
+      };
+    }
+
+    // 3. Đã tiếp cận hiện trường
+    if (['ARRIVED', 'ON_SCENE'].includes(aStatus) || sStatus === 'ARRIVED') {
+      return {
+        text: 'Đã tiếp cận vị trí ngập',
+        subText: 'Đội đã có mặt tại hiện trường cứu nạn',
+        bg: '#eff6ff',
+        border: '#93c5fd',
+        textColor: '#1d4ed8',
+        dotColor: '#2563eb',
+        isCompleted: false,
+      };
+    }
+
+    // 4. Đang di chuyển đến điểm cứu nạn
+    if (['ON_THE_WAY', 'EN_ROUTE', 'ON_WAY'].includes(aStatus) || sStatus === 'ON_THE_WAY') {
+      return {
+        text: 'Đang di chuyển đến điểm cứu nạn',
+        subText: 'Định vị GPS trực tiếp từ đội cứu hộ',
+        bg: '#f0fdf4',
+        border: '#86efac',
+        textColor: '#15803d',
+        dotColor: '#16a34a',
+        isCompleted: false,
+      };
+    }
+
+    // 5. Đã chấp nhận lệnh
+    if (aStatus === 'ACCEPTED') {
+      return {
+        text: 'Đội đã nhận lệnh • Đang xuất phát',
+        subText: 'Ca-nô & lực lượng đang xuất kích tiếp cận',
+        bg: '#f0fdf4',
+        border: '#86efac',
+        textColor: '#15803d',
+        dotColor: '#16a34a',
+        isCompleted: false,
+      };
+    }
+
+    // 6. Mặc định khi vừa điều động / Chờ nhận lệnh (PENDING, ASSIGNED, v.v.)
+    return {
+      text: 'Đã điều động • Đang xuất phát',
+      subText: 'Định vị GPS trực tiếp từ đội cứu hộ',
+      bg: '#f0fdf4',
+      border: '#86efac',
+      textColor: '#15803d',
+      dotColor: '#16a34a',
+      isCompleted: false,
+    };
+  }, [assignment?.status, selectedSos?.status]);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {/* Top Status Card */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* 1. TOP MISSION STATUS & ETA BANNER */}
       <div
         style={{
-          padding: '10px 12px',
-          borderRadius: 6,
-          background: 'var(--sos-surface-subtle)',
-          border: '1px solid var(--sos-border)',
+          padding: '14px 16px',
+          borderRadius: 12,
+          background: statusInfo.bg,
+          border: `1.5px solid ${statusInfo.border}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          boxShadow: '0 2px 6px -1px rgba(16, 185, 129, 0.08)',
         }}
       >
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.3px', color: '#15803d' }}>
-            {assignment?.status === 'ASSIGNED' || assignment?.status === 'ACCEPTED'
-              ? 'Đã điều động • Đang xuất phát'
-              : assignment?.status === 'ON_THE_WAY'
-              ? 'Đang di chuyển đến điểm cứu nạn'
-              : assignment?.status === 'ARRIVED'
-              ? 'Đã tiếp cận vị trí ngập'
-              : assignment?.status === 'RESCUING'
-              ? 'Đang tiến hành ứng cứu'
-              : 'Đã hoàn thành cứu nạn'}
+          <div
+            style={{
+              fontSize: 13.5,
+              fontWeight: 900,
+              textTransform: 'uppercase',
+              letterSpacing: '0.4px',
+              color: statusInfo.textColor,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                width: 9,
+                height: 9,
+                borderRadius: '50%',
+                background: statusInfo.dotColor,
+              }}
+            />
+            <span>{statusInfo.text}</span>
           </div>
-          <div style={{ fontSize: 10.5, color: 'var(--sos-text-muted)', marginTop: 2 }}>
-            Định vị GPS trực tiếp từ đội cứu hộ
+          <div style={{ fontSize: 12, color: statusInfo.textColor, marginTop: 3, fontWeight: 600 }}>
+            {statusInfo.subText}
           </div>
         </div>
 
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--sos-text-primary)' }}>
-            ~{assignment?.etaMinutes ?? 7}p
-          </div>
-          <div style={{ fontSize: 9.5, color: 'var(--sos-text-muted)', fontWeight: 600 }}>
-            DỰ KIẾN ĐẾN
-          </div>
+          {statusInfo.isCompleted ? (
+            <>
+              <div style={{ fontSize: 16, fontWeight: 900, color: '#15803d' }}>
+                HOÀN TẤT
+              </div>
+              <div style={{ fontSize: 10.5, color: '#16a34a', fontWeight: 800, letterSpacing: '0.5px' }}>
+                AN TOÀN
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 20, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.3px' }}>
+                ~{assignment?.etaMinutes ?? 3}p
+              </div>
+              <div style={{ fontSize: 10.5, color: '#64748b', fontWeight: 800, letterSpacing: '0.5px' }}>
+                DỰ KIẾN ĐẾN
+              </div>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Rescuer & Vehicle Card */}
+      {/* 2. MAIN ASSIGNED FORCE & TRIP ROUTE CARD */}
       <div
         style={{
-          padding: '12px 13px',
-          borderRadius: 8,
-          background: 'var(--sos-surface)',
-          border: '1px solid var(--sos-border)',
+          borderRadius: 12,
+          background: '#ffffff',
+          border: '1.5px solid #cbd5e1',
+          overflow: 'hidden',
+          boxShadow: '0 2px 6px -1px rgba(0, 0, 0, 0.05)',
           display: 'flex',
           flexDirection: 'column',
-          gap: 10,
         }}
       >
-        {/* Rescuer Officer Profile */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        {/* Section Header */}
+        <div
+          style={{
+            padding: '10px 16px',
+            background: '#f8fafc',
+            borderBottom: '1px solid #e2e8f0',
+            fontSize: 11.5,
+            fontWeight: 800,
+            color: '#64748b',
+            textTransform: 'uppercase',
+            letterSpacing: '0.4px',
+          }}
+        >
+          Lực Lượng Tác Chiến Tiếp Cận
+        </div>
+
+        {/* 2A: Rescuer Leader Profile */}
+        <div
+          style={{
+            padding: '14px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
             <div
               style={{
-                width: 38,
-                height: 38,
+                width: 44,
+                height: 44,
                 borderRadius: '50%',
-                background: '#1e293b',
+                background: '#0f172a',
                 color: '#ffffff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: 14,
-                fontWeight: 700,
+                fontSize: 16,
+                fontWeight: 800,
                 flexShrink: 0,
+                boxShadow: '0 2px 6px rgba(15, 23, 42, 0.25)',
               }}
             >
-              {assignment?.rescuerName ? assignment.rescuerName.charAt(0) : 'C'}
+              {assignment?.rescuerName ? assignment.rescuerName.charAt(0) : 'L'}
             </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--sos-text-primary)' }}>
-                  {assignment?.rescuerName || 'Cứu Hộ Viên'}
-                </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 16, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.2px' }}>
+                {assignment?.rescuerName || 'Lê Cứu Nạn'}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--sos-text-secondary)', marginTop: 1 }}>
-                {assignment?.rescuerRole || 'Chỉ Huy'} • <strong>{assignment?.rescueTeamName}</strong>
+              <div style={{ fontSize: 13, color: '#334155', marginTop: 2, fontWeight: 700, lineHeight: 1.35 }}>
+                <span style={{ color: '#0284c7' }}>{assignment?.rescuerRole || 'LEADER'}</span>
+                <span> • </span>
+                <span>{assignment?.rescueTeamName || 'Đội Phản Ứng Nhanh Cứu Hộ Phường Liên Chiểu (43-LC-01)'}</span>
               </div>
             </div>
           </div>
 
-          {/* Call Rescuer Button */}
+          {/* Hotline Call Button */}
           <a
             href={`tel:${rescuerPhone}`}
             style={{
-              width: 32,
-              height: 32,
-              borderRadius: 6,
-              background: 'var(--sos-surface-subtle)',
-              border: '1px solid var(--sos-border)',
-              color: 'var(--sos-text-primary)',
+              width: 38,
+              height: 38,
+              borderRadius: 8,
+              background: '#f0f9ff',
+              border: '1.5px solid #bae6fd',
+              color: '#0284c7',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               textDecoration: 'none',
               flexShrink: 0,
+              transition: 'all 0.15s ease',
             }}
             title={`Gọi cho đội cứu hộ: ${rescuerPhone}`}
           >
-            <Phone size={14} />
+            <Phone size={17} />
           </a>
         </div>
 
-        {/* Vehicle Plate & Specs */}
+        {/* Divider */}
+        <div style={{ height: 1, background: '#e2e8f0' }} />
+
+        {/* 2B: Assigned Vehicle Specs */}
         <div
           style={{
-            padding: '8px 10px',
-            borderRadius: 6,
-            background: 'var(--sos-surface-subtle)',
-            border: '1px solid var(--sos-border)',
+            padding: '12px 16px',
+            background: '#f8fafc',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            fontSize: 11,
+            gap: 12,
           }}
         >
           <div>
-            <strong style={{ color: 'var(--sos-text-primary)' }}>{assignment?.vehicleName}</strong>
-            <div style={{ fontSize: 10, color: 'var(--sos-text-muted)' }}>
-              Sức chứa: {assignment?.vehicleCapacity || '6 người'}
+            <div style={{ fontSize: 14, fontWeight: 900, color: '#0f172a' }}>
+              {assignment?.vehicleName || 'Ca-nô cứu hộ'}
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginTop: 2 }}>
+              Sức chứa: <strong style={{ color: '#334155' }}>{assignment?.vehicleCapacity || '6'} người</strong>
             </div>
           </div>
 
           <div
             style={{
-              padding: '2px 8px',
-              borderRadius: 4,
-              background: 'var(--sos-surface)',
-              border: '1px solid var(--sos-border)',
-              color: 'var(--sos-text-primary)',
-              fontWeight: 700,
+              padding: '4px 10px',
+              borderRadius: 6,
+              background: '#ffffff',
+              border: '1.5px solid #cbd5e1',
+              color: '#0f172a',
+              fontWeight: 900,
               fontFamily: 'monospace',
-              fontSize: 11,
+              fontSize: 13.5,
+              letterSpacing: '0.5px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
             }}
           >
             {vehiclePlate}
           </div>
         </div>
 
-        {/* Trip Route Tracker (A -> B) */}
+        {/* Divider */}
+        <div style={{ height: 1, background: '#e2e8f0' }} />
+
+        {/* 2C: Tactical Route Stepper (Point A -> Point B) */}
         <div
           style={{
+            padding: '14px 16px',
             display: 'flex',
             flexDirection: 'column',
-            gap: 8,
-            paddingTop: 4,
+            gap: 10,
           }}
         >
-          {/* Point A: Base */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 14 }}>
+          {/* Point A: Base Station */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 16 }}>
               <div
                 style={{
-                  width: 10,
-                  height: 10,
+                  width: 12,
+                  height: 12,
                   borderRadius: '50%',
                   background: '#10b981',
-                  border: '2px solid #ffffff',
-                  boxShadow: '0 0 0 1px #10b981',
+                  border: '2.5px solid #ffffff',
+                  boxShadow: '0 0 0 2px #10b981',
                 }}
               />
-              <div style={{ width: 1.5, height: 26, background: '#cbd5e1', margin: '2px 0' }} />
+              <div style={{ width: 2, height: 32, background: '#cbd5e1', margin: '3px 0' }} />
             </div>
-            <div style={{ flex: 1, fontSize: 11 }}>
-              <div style={{ color: 'var(--sos-text-muted)', fontSize: 10 }}>Điểm xuất phát (Trạm cứu hộ):</div>
-              <div style={{ fontWeight: 700, color: 'var(--sos-text-primary)' }}>
-                {assignment?.authorityOrganizationName || 'Trạm Chỉ Huy PCCC & TKCN'}
+            <div style={{ flex: 1 }}>
+              <div style={{ color: '#64748b', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                Điểm Xuất Phát (Trạm Cứu Hộ):
+              </div>
+              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: 14, marginTop: 2 }}>
+                {assignment?.authorityOrganizationName || 'Ban Chỉ Huy PCTT & TKCN Quận Liên Chiểu'}
               </div>
             </div>
           </div>
 
-          {/* Point B: Destination (Citizen distress) */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <div style={{ width: 14, display: 'flex', justifyContent: 'center' }}>
+          {/* Point B: Destination (Victim Distress Location) */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <div style={{ width: 16, display: 'flex', justifyContent: 'center' }}>
               <div
                 style={{
-                  width: 10,
-                  height: 10,
+                  width: 12,
+                  height: 12,
                   borderRadius: '50%',
                   background: '#ef4444',
-                  border: '2px solid #ffffff',
-                  boxShadow: '0 0 0 1px #ef4444',
+                  border: '2.5px solid #ffffff',
+                  boxShadow: '0 0 0 2px #ef4444',
                 }}
               />
             </div>
-            <div style={{ flex: 1, fontSize: 11 }}>
-              <div style={{ color: 'var(--sos-text-muted)', fontSize: 10 }}>Điểm cứu nạn (Vị trí gặp nạn):</div>
-              <div style={{ fontWeight: 800, color: '#dc2626' }}>
-                {selectedSos.locationName}, {selectedSos.wardName}
+            <div style={{ flex: 1 }}>
+              <div style={{ color: '#dc2626', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                Điểm Cứu Nạn (Vị Trí Gặp Nạn):
               </div>
-              <div style={{ fontSize: 10.5, color: 'var(--sos-text-secondary)', marginTop: 1 }}>
-                Nạn nhân: <strong>{selectedSos.citizenName}</strong> • {selectedSos.citizenPhone} ({selectedSos.affectedPeople} người)
+              <div style={{ fontWeight: 900, color: '#dc2626', fontSize: 14.5, marginTop: 2, lineHeight: 1.4 }}>
+                {selectedSos.locationName}
+              </div>
+              <div style={{ fontSize: 13, color: '#334155', marginTop: 3, fontWeight: 700 }}>
+                Nạn nhân: <strong style={{ color: '#0f172a' }}>{selectedSos.citizenName}</strong> • {selectedSos.citizenPhone} (<span style={{ color: '#dc2626' }}>{selectedSos.affectedPeople} người</span>)
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Actions: Reassign & Cancel */}
-      <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+      {/* 3. TACTICAL ACTION BUTTONS */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
         <button
           type="button"
           onClick={(e) => {
@@ -239,21 +385,24 @@ export const ActiveMissionConsole: React.FC<Props> = ({
           }}
           style={{
             flex: 1,
-            padding: '8px 10px',
-            background: 'var(--sos-surface)',
-            border: '1px solid var(--sos-border)',
-            borderRadius: 6,
-            color: 'var(--sos-text-primary)',
-            fontSize: 11,
-            fontWeight: 700,
+            height: 44,
+            padding: '0 14px',
+            background: '#ffffff',
+            border: '1.5px solid #cbd5e1',
+            borderRadius: 9,
+            color: '#0f172a',
+            fontSize: 13.5,
+            fontWeight: 800,
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 5,
+            gap: 7,
+            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+            transition: 'all 0.15s ease',
           }}
         >
-          <RefreshCw size={13} />
+          <RefreshCw size={15} style={{ color: '#0284c7' }} />
           <span>Đổi đội cứu hộ</span>
         </button>
 
@@ -265,21 +414,24 @@ export const ActiveMissionConsole: React.FC<Props> = ({
           }}
           style={{
             flex: 1,
-            padding: '8px 10px',
-            background: 'rgba(239, 68, 68, 0.08)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            borderRadius: 6,
+            height: 44,
+            padding: '0 14px',
+            background: '#fef2f2',
+            border: '1.5px solid #fecaca',
+            borderRadius: 9,
             color: '#dc2626',
-            fontSize: 11,
-            fontWeight: 700,
+            fontSize: 13.5,
+            fontWeight: 800,
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 5,
+            gap: 7,
+            boxShadow: '0 1px 2px rgba(220,38,38,0.05)',
+            transition: 'all 0.15s ease',
           }}
         >
-          <XCircle size={13} />
+          <XCircle size={16} />
           <span>Hủy điều động</span>
         </button>
       </div>

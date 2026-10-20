@@ -75,7 +75,23 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
     const unsubCreated = onSosCreated(() => {
       loadData();
     });
-    const unsubUpdated = () => {
+    const unsubUpdated = (updatedSos: any) => {
+      if (updatedSos && (updatedSos._id || updatedSos.id)) {
+        const targetId = updatedSos._id || updatedSos.id;
+        setSosList((prev) =>
+          prev.map((s) =>
+            s._id === targetId || (s as any).id === targetId
+              ? { ...s, ...updatedSos, status: updatedSos.status }
+              : s
+          )
+        );
+        setSelectedSosDetail((prev) => {
+          if (prev && (prev._id === targetId || (prev as any).id === targetId)) {
+            return { ...prev, ...updatedSos, status: updatedSos.status };
+          }
+          return prev;
+        });
+      }
       loadData();
     };
     const unsubUpdatedSocket = onSosUpdated(unsubUpdated);

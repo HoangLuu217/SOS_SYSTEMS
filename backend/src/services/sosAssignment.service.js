@@ -2,11 +2,13 @@ const mongoose = require('mongoose');
 const {
   SosAssignment,
   SosRequest,
+  SosStatusHistory,
   AuthorityOrganization,
   RescueTeam,
   User,
   Vehicle,
 } = require('../models');
+const { emitSosUpdated } = require('../socket');
 const ApiError = require('../utils/apiError');
 
 class SosAssignmentService {
@@ -27,19 +29,7 @@ class SosAssignmentService {
       throw new ApiError(404, 'Không tìm thấy yêu cầu cứu nạn SOS');
     }
 
-    // 2. Kiểm tra Authority tồn tại
-    if (!authorityOrganizationId) {
-      throw new ApiError(400, 'authorityOrganizationId là bắt buộc');
-    }
-    if (!mongoose.Types.ObjectId.isValid(authorityOrganizationId)) {
-      throw new ApiError(400, 'authorityOrganizationId không phải là ObjectId hợp lệ');
-    }
-    const authority = await AuthorityOrganization.findById(authorityOrganizationId);
-    if (!authority) {
-      throw new ApiError(404, 'Không tìm thấy cơ quan chỉ đạo (Authority Organization)');
-    }
-
-    // 3. Kiểm tra Rescue Team tồn tại
+    // 2. Kiểm tra Rescue Team tồn tại
     if (!rescueTeamId) {
       throw new ApiError(400, 'rescueTeamId là bắt buộc');
     }
@@ -51,29 +41,41 @@ class SosAssignmentService {
       throw new ApiError(404, 'Không tìm thấy đội cứu hộ (Rescue Team)');
     }
 
-    // 4. Kiểm tra Rescuer tồn tại
-    if (!rescuerId) {
-      throw new ApiError(400, 'rescuerId là bắt buộc');
+    // 3. Kiểm tra Authority tồn tại (tự động kế thừa từ Team nếu thiếu)
+    let authOrgId = authorityOrganizationId;
+    if (!authOrgId || !mongoose.Types.ObjectId.isValid(authOrgId)) {
+      authOrgId = team.authorityId;
     }
-    if (!mongoose.Types.ObjectId.isValid(rescuerId)) {
-      throw new ApiError(400, 'rescuerId không phải là ObjectId hợp lệ');
+    let authority = null;
+    if (authOrgId && mongoose.Types.ObjectId.isValid(authOrgId)) {
+      authority = await AuthorityOrganization.findById(authOrgId);
     }
-    const rescuer = await User.findById(rescuerId);
+    if (!authority) {
+      authority = await AuthorityOrganization.findOne({});
+    }
+    if (!authority) {
+      throw new ApiError(404, 'Không tìm thấy cơ quan chỉ đạo (Authority Organization)');
+    }
+
+    // 4. Kiểm tra Rescuer tồn tại (mặc định Đội trưởng nếu thiếu)
+    let validRescuerId = rescuerId;
+    if (!validRescuerId || !mongoose.Types.ObjectId.isValid(validRescuerId)) {
+      validRescuerId = team.leaderId;
+    }
+    const rescuer = await User.findById(validRescuerId);
     if (!rescuer) {
       throw new ApiError(404, 'Không tìm thấy cứu hộ viên (Rescuer)');
     }
 
-    // 5. Kiểm tra Vehicle tồn tại (nếu có truyền)
+    // 5. Kiểm tra Vehicle tồn tại (nếu có truyền hoặc lấy theo Đội)
     let validVehicleId = null;
-    if (vehicleId) {
-      if (!mongoose.Types.ObjectId.isValid(vehicleId)) {
-        throw new ApiError(400, 'vehicleId không phải là ObjectId hợp lệ');
-      }
+    if (vehicleId && mongoose.Types.ObjectId.isValid(vehicleId)) {
       const vehicle = await Vehicle.findById(vehicleId);
-      if (!vehicle) {
-        throw new ApiError(404, 'Không tìm thấy phương tiện cứu hộ (Vehicle)');
-      }
-      validVehicleId = vehicle._id;
+      if (vehicle) validVehicleId = vehicle._id;
+    }
+    if (!validVehicleId) {
+      const teamVehicle = await Vehicle.findOne({ teamId: team._id });
+      if (teamVehicle) validVehicleId = teamVehicle._id;
     }
 
     // Validate priority nếu có truyền
@@ -112,6 +114,59 @@ class SosAssignmentService {
     if (['PENDING', 'VERIFIED'].includes(sos.status)) {
       sos.status = 'ASSIGNED';
       await sos.save();
+
+      try {
+        await SosStatusHistory.create({
+          sosId: sos._id,
+          oldStatus: 'VERIFIED',
+          newStatus: 'ASSIGNED',
+          changedBy: assignerId || rescuer._id,
+          note: note || 'Điều phối phân công lực lượng cứu hộ',
+        });
+      } catch (err) {}
+
+      emitSosUpdated(sos);
+    }
+
+    // Phát sự kiện Realtime Socket.IO & SSE thông báo cho Cứu Hộ Viên (Nổ nhiệm vụ GrabDriver)
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (io) {
+        io.emit('assignment:created', assignment);
+        io.emit('assignment:new', assignment);
+        io.to(`user_${rescuer._id}`).emit('assignment:assigned', assignment);
+      }
+
+      const eventBus = require('./eventBus');
+      eventBus.emit('notification_event', {
+        action: 'BROADCAST',
+        data: {
+          type: 'SOS_SYNC',
+          action: 'ASSIGNED',
+          sosId: sos._id,
+          sosCode: sos.sosCode,
+          status: 'ASSIGNED',
+          assignmentId: assignment._id,
+          rescuerId: rescuer._id,
+        },
+      });
+      eventBus.emit('notification_event', {
+        action: 'USER',
+        userId: rescuer._id.toString(),
+        title: '🚨 LỆNH ĐIỀU ĐỘNG CỨU HỘ MỚI',
+        content: `Bạn vừa được Ban chỉ huy điều động ứng cứu khẩn cấp ca ${sos.sosCode || sos._id}!`,
+        data: {
+          type: 'SOS_SYNC',
+          action: 'ASSIGNED',
+          sosId: sos._id,
+          sosCode: sos.sosCode,
+          status: 'ASSIGNED',
+          assignmentId: assignment._id,
+        },
+      });
+    } catch (err) {
+      console.warn('Lỗi phát socket/SSE cho nhiệm vụ mới:', err);
     }
 
     return assignment;
@@ -152,9 +207,9 @@ class SosAssignmentService {
 
   /**
    * PATCH /assignments/:id/accept
-   * Chỉ cho phép PENDING -> ACCEPTED
+   * Cứu hộ viên chấp nhận phân công (chỉ cho phép PENDING -> ACCEPTED)
    */
-  async acceptAssignment(id) {
+  async acceptAssignment(id, currentUser = null) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new ApiError(400, 'ID phân công không phải là ObjectId hợp lệ');
     }
@@ -175,13 +230,39 @@ class SosAssignmentService {
     assignment.acceptedAt = new Date();
     await assignment.save();
 
+    // Đồng bộ trạng thái sang SosRequest và phát realtime Socket.IO
+    const sosId = assignment.sosRequestId || assignment.sosId;
+    if (sosId) {
+      const sos = await SosRequest.findById(sosId)
+        .populate('citizenId', 'fullName phone avatarUrl email address')
+        .populate('areaId', 'name code');
+      if (sos) {
+        const oldStatus = sos.status;
+        sos.status = 'ACCEPTED';
+        await sos.save();
+
+        try {
+          await SosStatusHistory.create({
+            sosId: sos._id,
+            oldStatus,
+            newStatus: 'ACCEPTED',
+            changedBy: currentUser?._id || assignment.rescuerId,
+            note: 'Cứu hộ viên đã tiếp nhận nhiệm vụ',
+          });
+        } catch (err) {}
+
+        emitSosUpdated(sos);
+      }
+    }
+
     return assignment;
   }
 
   /**
    * PATCH /assignments/:id/status
+   * Cập nhật trạng thái tiến trình cứu hộ của Rescuer
    */
-  async updateStatus(id, newStatus) {
+  async updateStatus(id, newStatus, currentUser = null, note = '') {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new ApiError(400, 'ID phân công không phải là ObjectId hợp lệ');
     }
@@ -195,8 +276,10 @@ class SosAssignmentService {
       'ACCEPTED',
       'DISPATCHED',
       'EN_ROUTE',
+      'ON_THE_WAY',
       'ARRIVED',
       'IN_PROGRESS',
+      'RESCUING',
       'COMPLETED',
       'REJECTED',
       'CANCELLED',
@@ -220,18 +303,17 @@ class SosAssignmentService {
     // Định nghĩa các luồng chuyển trạng thái hợp lệ
     const VALID_TRANSITIONS = {
       PENDING: ['ACCEPTED', 'REJECTED', 'CANCELLED'],
-      ACCEPTED: ['DISPATCHED', 'EN_ROUTE', 'CANCELLED'],
-      DISPATCHED: ['EN_ROUTE', 'ARRIVED', 'CANCELLED'],
+      ACCEPTED: ['DISPATCHED', 'EN_ROUTE', 'ON_THE_WAY', 'CANCELLED'],
+      DISPATCHED: ['EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'CANCELLED'],
       EN_ROUTE: ['ARRIVED', 'CANCELLED'],
-      ARRIVED: ['IN_PROGRESS', 'CANCELLED'],
+      ON_THE_WAY: ['ARRIVED', 'CANCELLED'],
+      ARRIVED: ['IN_PROGRESS', 'RESCUING', 'CANCELLED'],
       IN_PROGRESS: ['COMPLETED', 'CANCELLED'],
+      RESCUING: ['COMPLETED', 'CANCELLED'],
       COMPLETED: [],
       REJECTED: [],
       CANCELLED: [],
-      // Hỗ trợ status legacy nếu có
-      ASSIGNED: ['ACCEPTED', 'DISPATCHED', 'EN_ROUTE', 'CANCELLED'],
-      ON_THE_WAY: ['ARRIVED', 'CANCELLED'],
-      RESCUING: ['COMPLETED', 'CANCELLED'],
+      ASSIGNED: ['ACCEPTED', 'DISPATCHED', 'EN_ROUTE', 'ON_THE_WAY', 'CANCELLED'],
     };
 
     if (currentStatus === targetStatus) {
@@ -253,7 +335,7 @@ class SosAssignmentService {
     if (targetStatus === 'ACCEPTED' && !assignment.acceptedAt) {
       assignment.acceptedAt = now;
     }
-    if (targetStatus === 'IN_PROGRESS' && !assignment.startedAt) {
+    if (['IN_PROGRESS', 'RESCUING'].includes(targetStatus) && !assignment.startedAt) {
       assignment.startedAt = now;
     }
     if (targetStatus === 'COMPLETED' && !assignment.completedAt) {
@@ -264,6 +346,49 @@ class SosAssignmentService {
     }
 
     await assignment.save();
+
+    // Map trạng thái phân công sang trạng thái SosRequest
+    const ASSIGNMENT_TO_SOS_STATUS = {
+      PENDING: 'ASSIGNED',
+      ACCEPTED: 'ACCEPTED',
+      DISPATCHED: 'ON_THE_WAY',
+      EN_ROUTE: 'ON_THE_WAY',
+      ON_THE_WAY: 'ON_THE_WAY',
+      ARRIVED: 'ARRIVED',
+      IN_PROGRESS: 'RESCUING',
+      RESCUING: 'RESCUING',
+      COMPLETED: 'COMPLETED',
+      CANCELLED: 'CANCELLED',
+      REJECTED: 'REJECTED',
+    };
+
+    const targetSosStatus = ASSIGNMENT_TO_SOS_STATUS[targetStatus];
+    const sosId = assignment.sosRequestId || assignment.sosId;
+    if (sosId && targetSosStatus) {
+      const sos = await SosRequest.findById(sosId)
+        .populate('citizenId', 'fullName phone avatarUrl email address')
+        .populate('areaId', 'name code');
+      if (sos) {
+        const oldStatus = sos.status;
+        sos.status = targetSosStatus;
+        if (targetSosStatus === 'COMPLETED') {
+          sos.resolvedAt = now;
+        }
+        await sos.save();
+
+        try {
+          await SosStatusHistory.create({
+            sosId: sos._id,
+            oldStatus,
+            newStatus: targetSosStatus,
+            changedBy: currentUser?._id || assignment.rescuerId,
+            note: note || `Cứu hộ viên cập nhật tiến trình: ${targetStatus}`,
+          });
+        } catch (err) {}
+
+        emitSosUpdated(sos);
+      }
+    }
 
     return assignment;
   }
@@ -281,7 +406,6 @@ class SosAssignmentService {
       throw new ApiError(404, 'Không tìm thấy phân công cứu hộ (Assignment)');
     }
 
-    // Không cho reassign assignment đã COMPLETED hoặc CANCELLED
     if (['COMPLETED', 'CANCELLED'].includes(assignment.status)) {
       throw new ApiError(
         400,
@@ -291,7 +415,6 @@ class SosAssignmentService {
 
     const { rescueTeamId, rescuerId, vehicleId, note } = data;
 
-    // 1. Kiểm tra Team tồn tại nếu truyền
     if (rescueTeamId) {
       if (!mongoose.Types.ObjectId.isValid(rescueTeamId)) {
         throw new ApiError(400, 'rescueTeamId không phải là ObjectId hợp lệ');
@@ -304,7 +427,6 @@ class SosAssignmentService {
       assignment.teamId = team._id;
     }
 
-    // 2. Kiểm tra Rescuer tồn tại nếu truyền
     if (rescuerId) {
       if (!mongoose.Types.ObjectId.isValid(rescuerId)) {
         throw new ApiError(400, 'rescuerId không phải là ObjectId hợp lệ');
@@ -316,7 +438,6 @@ class SosAssignmentService {
       assignment.rescuerId = rescuer._id;
     }
 
-    // 3. Kiểm tra Vehicle tồn tại nếu truyền
     if (vehicleId !== undefined) {
       if (vehicleId === null || vehicleId === '') {
         assignment.vehicleId = null;
@@ -338,6 +459,16 @@ class SosAssignmentService {
 
     await assignment.save();
 
+    const sosId = assignment.sosRequestId || assignment.sosId;
+    if (sosId) {
+      const sos = await SosRequest.findById(sosId)
+        .populate('citizenId', 'fullName phone avatarUrl email address')
+        .populate('areaId', 'name code');
+      if (sos) {
+        emitSosUpdated(sos);
+      }
+    }
+
     return assignment;
   }
 
@@ -354,7 +485,6 @@ class SosAssignmentService {
       throw new ApiError(404, 'Không tìm thấy phân công cứu hộ (Assignment)');
     }
 
-    // Không cho cancel assignment đã COMPLETED hoặc CANCELLED
     if (['COMPLETED', 'CANCELLED'].includes(assignment.status)) {
       throw new ApiError(
         400,
@@ -368,7 +498,145 @@ class SosAssignmentService {
 
     await assignment.save();
 
+    const sosId = assignment.sosRequestId || assignment.sosId;
+    if (sosId) {
+      const sos = await SosRequest.findById(sosId)
+        .populate('citizenId', 'fullName phone avatarUrl email address')
+        .populate('areaId', 'name code');
+      if (sos) {
+        const oldStatus = sos.status;
+        sos.status = 'VERIFIED';
+        await sos.save();
+
+        try {
+          await SosStatusHistory.create({
+            sosId: sos._id,
+            oldStatus,
+            newStatus: 'VERIFIED',
+            note: cancelReason ? `Hủy điều động: ${cancelReason}` : 'Hủy phân công điều động, chuyển ca về trạng thái Đã Xác Minh để điều phối lại',
+          });
+        } catch (err) {}
+
+        emitSosUpdated(sos);
+      }
+    }
+
     return assignment;
+  }
+
+  /**
+   * GET /assignments/my
+   * Lấy danh sách nhiệm vụ được phân công cho cứu hộ viên
+   */
+  async getMyAssignments(userId) {
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      throw new ApiError(400, 'User ID không hợp lệ');
+    }
+
+    // 1. Tìm các đội cứu hộ mà user là đội trưởng hoặc thành viên
+    const teams = await RescueTeam.find({
+      $or: [{ leaderId: userId }, { 'members.rescuerId': userId }],
+    }).select('_id');
+    const teamIds = teams.map((t) => t._id);
+
+    // 2. Tìm các assignment gán trực tiếp cho user hoặc cho đội
+    const assignments = await SosAssignment.find({
+      $or: [
+        { rescuerId: userId },
+        { rescueTeamId: { $in: teamIds } },
+        { teamId: { $in: teamIds } },
+      ],
+      status: { $ne: 'CANCELLED' },
+    })
+      .populate({
+        path: 'sosRequestId',
+        populate: [
+          { path: 'citizenId', select: '_id fullName phone email avatarUrl address' },
+          { path: 'areaId', select: '_id name code' },
+        ],
+      })
+      .populate({
+        path: 'sosId',
+        populate: [
+          { path: 'citizenId', select: '_id fullName phone email avatarUrl address' },
+          { path: 'areaId', select: '_id name code' },
+        ],
+      })
+      .populate('authorityOrganizationId', 'name code type phone')
+      .populate('rescueTeamId', 'name type phone')
+      .populate('rescuerId', 'fullName phone email avatarUrl')
+      .populate('vehicleId', 'plateNumber type capacity')
+      .sort({ createdAt: -1 });
+
+    return assignments;
+  }
+
+  /**
+   * Cập nhật tiến trình tác chiến trực tiếp thông qua mã SOS
+   */
+  async updateStatusBySosId(sosId, newStatus, currentUser = null, note = '') {
+    if (!mongoose.Types.ObjectId.isValid(sosId)) {
+      throw new ApiError(400, 'ID SOS không hợp lệ');
+    }
+
+    // Tìm assignment đang hoạt động của SOS này
+    let assignment = await SosAssignment.findOne({
+      $or: [{ sosRequestId: sosId }, { sosId: sosId }],
+      status: { $nin: ['CANCELLED', 'REJECTED'] },
+    }).sort({ createdAt: -1 });
+
+    if (assignment) {
+      assignment = await this.updateStatus(assignment._id, newStatus, currentUser, note);
+    } else {
+      const sos = await SosRequest.findById(sosId)
+        .populate('citizenId', 'fullName phone avatarUrl email address')
+        .populate('areaId', 'name code');
+      if (!sos) {
+        throw new ApiError(404, 'Không tìm thấy yêu cầu cứu nạn SOS');
+      }
+
+      const ASSIGNMENT_TO_SOS_STATUS = {
+        PENDING: 'ASSIGNED',
+        ACCEPTED: 'ACCEPTED',
+        DISPATCHED: 'ON_THE_WAY',
+        EN_ROUTE: 'ON_THE_WAY',
+        ON_THE_WAY: 'ON_THE_WAY',
+        ARRIVED: 'ARRIVED',
+        IN_PROGRESS: 'RESCUING',
+        RESCUING: 'RESCUING',
+        COMPLETED: 'COMPLETED',
+        CANCELLED: 'CANCELLED',
+      };
+
+      const targetSosStatus = ASSIGNMENT_TO_SOS_STATUS[newStatus] || newStatus;
+      const oldStatus = sos.status;
+      sos.status = targetSosStatus;
+      if (targetSosStatus === 'COMPLETED') {
+        sos.resolvedAt = new Date();
+      }
+      await sos.save();
+
+      try {
+        if (currentUser?._id) {
+          await SosStatusHistory.create({
+            sosId: sos._id,
+            oldStatus,
+            newStatus: targetSosStatus,
+            changedBy: currentUser._id,
+            note: note || `Cập nhật tiến trình: ${newStatus}`,
+          });
+        }
+      } catch (err) {}
+
+      emitSosUpdated(sos);
+      return { sos };
+    }
+
+    const updatedSos = await SosRequest.findById(sosId)
+      .populate('citizenId', 'fullName phone avatarUrl email address')
+      .populate('areaId', 'name code');
+
+    return { assignment, sos: updatedSos };
   }
 }
 

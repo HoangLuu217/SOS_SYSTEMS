@@ -19,7 +19,7 @@ import { CitizenSosModal } from './CitizenSosModal';
 
 interface Props {
   sosRequests: SosRequest[];
-  selectedSos: SosRequest;
+  selectedSos?: SosRequest | null;
   onSelectSos: (sos: SosRequest) => void;
   assignment: SosAssignment | null;
   authorities: AuthorityOrganization[];
@@ -82,32 +82,22 @@ export const MissionDispatch = ({
   // Left Feed Collapse state
   const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
 
-  // Multi-selected rescue teams for live GPS preview and dispatching
+  // Multi-selected rescue teams for live GPS preview and dispatching (Mặc định RỖNG - chỉ hiện GPS khi bấm chọn đội)
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (assignment?.rescueTeamId) {
       setSelectedTeamIds(assignment.rescueTeamId.split(',').filter(Boolean));
     } else {
-      const officerAreaId = !activeOfficer?.role?.includes('ADMIN') ? activeOfficer?.jurisdictionAreaId : undefined;
-      const targetDistrictId =
-        selectedSos?.districtId || (officerAreaId && !officerAreaId.startsWith('area-h') ? officerAreaId : 'area-hc');
-      const filtered = rescueTeams.filter((t) => {
-        if (officerAreaId && (t as any).wardId === officerAreaId) return true;
-        if (selectedSos?.wardId && (t as any).wardId === selectedSos.wardId) return true;
-        if (targetDistrictId && t.districtId === targetDistrictId) return true;
-        return false;
-      });
-      const defaultTeam = filtered[0] || rescueTeams[0];
-      if (defaultTeam) {
-        setSelectedTeamIds([defaultTeam.id]);
-      }
+      // Khi chưa gán đội hoặc chọn ca SOS mới: Không tự động chọn ngầm định đội nào.
+      // GPS thành viên & phương tiện chỉ xuất hiện khi cán bộ bấm chọn vào đội đó.
+      setSelectedTeamIds([]);
     }
-  }, [selectedSos?.id, assignment?.rescueTeamId, rescueTeams]);
+  }, [selectedSos?.id, assignment?.rescueTeamId]);
 
-  // Right Panel Slide & Collapsible state (Cố định 400px chuẩn UX, không cho kéo dãn tự do)
+  // Right Panel Slide & Collapsible state (Cố định 420px chuẩn UX, không cho kéo dãn tự do)
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
-  const RIGHT_PANEL_WIDTH = 400;
+  const RIGHT_PANEL_WIDTH = 420;
 
   const toggleRightPanel = () => {
     setIsRightPanelOpen((prev) => !prev);
@@ -143,7 +133,7 @@ export const MissionDispatch = ({
     if (!assignment) return;
     onCancelAssignment(assignment.id, reason);
     setIsCancelOpen(false);
-    showToast(`Đã hủy điều động cứu hộ cho ${selectedSos.sosCode}.`, 'error');
+    showToast(`Đã hủy điều động cứu hộ cho ${selectedSos?.sosCode || 'nhiệm vụ này'}.`, 'error');
   };
 
   const handleCitizenSosSubmit = (newSos: Omit<SosRequest, 'id' | 'sosCode' | 'timeAgo' | 'createdAt' | 'status' | 'assignmentId'>) => {
@@ -157,7 +147,7 @@ export const MissionDispatch = ({
       {/* 1. Tactical Map (Takes FULL width from sidebar to right dispatch panel) */}
       <div style={{ flex: 1, position: 'relative', display: 'flex', overflow: 'hidden', height: '100%' }}>
         <TacticalMap
-          selectedSos={selectedSos}
+          selectedSos={selectedSos ?? null}
           assignment={assignment}
           activeOfficer={activeOfficer}
           areas={areas}
@@ -167,6 +157,7 @@ export const MissionDispatch = ({
           rescueTeams={rescueTeams}
           vehicles={vehicles}
         />
+
 
         {/* Floating Incident Queue Overlaid on Map */}
         {isLeftPanelOpen ? (
@@ -246,7 +237,7 @@ export const MissionDispatch = ({
           >
             <ChevronLeft size={16} color="#dc2626" />
             <span>Bảng Phân Công & Tác Chiến</span>
-            {selectedSos && (
+            {selectedSos && selectedSos.sosCode && (
               <span className="floating-sos-code-badge">{selectedSos.sosCode}</span>
             )}
           </button>
@@ -274,6 +265,7 @@ export const MissionDispatch = ({
           rescueTeams={rescueTeams}
           vehicles={vehicles}
           activeOfficer={activeOfficer}
+          areas={areas}
           onConfirmAssign={onConfirmAssign}
           onUpdateStatus={onUpdateStatus}
           onOpenReassign={() => setIsReassignOpen(true)}
@@ -299,7 +291,7 @@ export const MissionDispatch = ({
       )}
 
       {/* Cancel Assignment Modal */}
-      {assignment && (
+      {assignment && selectedSos && selectedSos.sosCode && (
         <CancelAssignmentModal
           isOpen={isCancelOpen}
           onClose={() => setIsCancelOpen(false)}

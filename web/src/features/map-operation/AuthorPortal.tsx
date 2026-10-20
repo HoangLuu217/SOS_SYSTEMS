@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type {
   AdministrativeArea,
   AuthorityOrganization,
@@ -9,27 +9,50 @@ import type {
   AssignmentStatus,
 } from '@/types/domainD';
 import { domainDService } from '@/services/domainDService';
-import { fetchSosRequests } from '@/api';
+import {
+  fetchSosRequests,
+  assignSosApi,
+  cancelAssignmentApi,
+  reassignMissionApi,
+  updateAssignmentStatusApi,
+  fetchRescueTeams,
+  fetchVehicles,
+} from '@/api';
 import { MissionDispatch } from './dispatch/MissionDispatch';
-import { TacticalMap } from './dispatch/TacticalMap';
 import {
   ShieldAlert,
   LogOut,
   Map as MapIcon,
   Layers,
   AlertTriangle,
+  X,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { isSosInOfficerJurisdiction } from '@/services/mapGeoService';
 import { navigateTo, getCurrentSosIdFromUrl } from '@/services/appRouter';
-import { onSosCreated, onSosUpdated } from '@/services/socketService';
+import { onSosCreated, onSosUpdated, getSocket } from '@/services/socketService';
 import './RescueSos.css';
 
 interface ToastState {
-  id: number;
+  id: string;
   message: string;
   type: 'success' | 'error';
 }
+
+const SOS_STATUS_VIETNAMESE: Record<string, string> = {
+  PENDING: 'Chờ xử lý',
+  VERIFIED: 'Đã xác minh (Sẵn sàng điều phối)',
+  DISPATCHED: 'Đang điều động cứu nạn',
+  ON_THE_WAY: 'Đội cứu hộ đang di chuyển',
+  EN_ROUTE: 'Đội cứu hộ đang trên đường tới',
+  ARRIVED: 'Đã tiếp cận hiện trường',
+  IN_PROGRESS: 'Đang triển khai cứu nạn',
+  RESCUING: 'Đang giải cứu nạn nhân',
+  COMPLETED: 'Đã hoàn thành cứu hộ',
+  RESOLVED: 'Đã xử lý xong',
+  CANCELLED: 'Đã hủy điều động',
+  REJECTED: 'Đội từ chối nhận lệnh',
+};
 
 import type { User } from '@/types/auth';
 
@@ -93,6 +116,76 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+// Hàm ánh xạ Đội Cứu Hộ từ MongoDB sang định dạng chuẩn Web tác chiến
+function mapBackendTeamToDomain(t: any): RescueTeam {
+  const leaderObj = typeof t.leaderId === 'object' && t.leaderId ? t.leaderId : null;
+  const leaderId = leaderObj?._id || (typeof t.leaderId === 'string' ? t.leaderId : 'rescuer-lead');
+  const leaderName = leaderObj?.fullName || 'Đội Trưởng';
+  const leaderPhone = leaderObj?.phone || '';
+
+  const rescuers = (t.members || []).map((m: any, idx: number) => {
+    const rescuerObj = typeof m.rescuerId === 'object' && m.rescuerId ? m.rescuerId : null;
+    const rId = rescuerObj?._id || (typeof m.rescuerId === 'string' ? m.rescuerId : `rescuer-${t._id}-${idx}`);
+    const rName = rescuerObj?.fullName || (m.role === 'LEADER' ? leaderName : `Cứu hộ viên ${idx + 1}`);
+    const rPhone = rescuerObj?.phone || leaderPhone;
+    return {
+      id: rId,
+      name: rName,
+      role: m.role === 'LEADER' ? 'Chỉ Huy Đội' : 'Chiến Sĩ Cứu Hộ',
+      status: 'Online' as const,
+      teamId: t._id,
+      phone: rPhone,
+    };
+  });
+
+  if (rescuers.length === 0 && leaderName) {
+    rescuers.push({
+      id: leaderId,
+      name: leaderName,
+      role: 'Chỉ Huy Đội',
+      status: 'Online' as const,
+      teamId: t._id,
+      phone: leaderPhone,
+    });
+  }
+
+  const areaObj = typeof t.areaId === 'object' && t.areaId ? t.areaId : null;
+  const areaName = areaObj?.name || '';
+  const isLienChieu = t.name.toLowerCase().includes('liên chiểu') || areaName.toLowerCase().includes('liên chiểu');
+
+  return {
+    id: t._id,
+    name: t.name,
+    authorityOrganizationId: typeof t.authorityId === 'object' && t.authorityId ? t.authorityId._id : t.authorityId || 'auth-hccd',
+    status: t.status === 'ACTIVE' || t.status === 'AVAILABLE' ? 'Available' : 'Busy',
+    availableRescuersCount: rescuers.length || 4,
+    rescuers,
+    districtId: isLienChieu ? 'area-lc' : (t.areaId?._id || t.areaId || 'area-lc'),
+    wardId: isLienChieu ? 'area-lc' : (t.areaId?._id || t.areaId || 'area-lc'),
+  };
+}
+
+// Hàm ánh xạ Phương tiện từ MongoDB sang định dạng chuẩn Web
+function mapBackendVehicleToDomain(v: any): Vehicle {
+  const teamId = typeof v.teamId === 'object' && v.teamId ? v.teamId._id : v.teamId || '';
+  let vType: 'Inflatable Boat' | 'Tactical Truck' | 'Ambulance' | 'Amphibious Vehicle' = 'Inflatable Boat';
+  if (v.type === 'BOAT') vType = 'Inflatable Boat';
+  else if (v.type === 'AMBULANCE') vType = 'Ambulance';
+  else if (v.type === 'TRUCK') vType = 'Tactical Truck';
+
+  const typeLabel = v.type === 'BOAT' ? 'Ca-nô' : v.type === 'AMBULANCE' ? 'Xe Cứu Thương' : 'Xe Tác Chiến';
+
+  return {
+    id: v._id,
+    name: `${typeLabel} ${v.plateNumber}`,
+    plate: v.plateNumber,
+    type: vType,
+    status: v.status === 'AVAILABLE' ? 'Available' : 'In Mission',
+    capacity: `${v.capacity || 6} người`,
+    teamId,
+  };
+}
 
   // Đồng bộ SOS thực tế từ cơ sở dữ liệu MongoDB (từ ứng dụng mobile app người dân)
   const syncRealSosFromApi = useCallback(async (officer: AuthorityOfficer) => {
@@ -199,7 +292,7 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
               svgX: 370,
               svgY: 280,
             },
-            assignmentId: null,
+            assignmentId: item.assignmentId || item.assignment?._id || null,
             imageUrl: item.imageUrl || (item.images && item.images.length > 0 ? item.images[0] : undefined),
             images: item.images || (item.imageUrl ? [item.imageUrl] : undefined),
             priorityGroups: (() => {
@@ -224,6 +317,40 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
           };
         });
 
+        // Đồng bộ các phân công tác chiến thực tế vào domainDService
+        res.data.forEach((item: any) => {
+          if (item.assignment) {
+            const assign = item.assignment;
+            const assignId = assign._id || item.assignmentId;
+            domainDService.syncRealAssignment({
+              id: assignId,
+              sosRequestId: item._id,
+              authorityOrganizationId: assign.authorityOrganizationId?._id || assign.authorityOrganizationId || 'auth-org-lc',
+              authorityOrganizationName: assign.authorityOrganizationId?.name || 'Ban Chỉ Huy PCTT & TKCN Quận Liên Chiểu',
+              rescueTeamId: assign.rescueTeamId?._id || assign.rescueTeamId || '6acf2d296102c44874cc2b43',
+              rescueTeamName: assign.rescueTeamId?.name || 'Đội Phản Ứng Nhanh Cứu Hộ Phường Liên Chiểu (43-LC-01)',
+              rescuerId: assign.rescuerId?._id || assign.rescuerId || '6ad4c91546705c7dadf70b3d',
+              rescuerName: assign.rescuerId?.fullName || 'Lê Cứu Nạn',
+              rescuerRole: 'LEADER',
+              vehicleId: assign.vehicleId?._id || assign.vehicleId || '6ad4ece4f6dd5a81b15a31b9',
+              vehicleName: assign.vehicleId?.plateNumber || '43-CN-09',
+              vehicleCapacity: String(assign.vehicleId?.capacity || '8'),
+              status: assign.status || 'PENDING',
+              priority: (item.priority || 'CRITICAL') as any,
+              assignedAt: assign.assignedAt || assign.createdAt || new Date().toISOString(),
+              rescuerLocation: { lat: 16.0795, lng: 108.1485, svgX: 520, svgY: 260 },
+              distanceRemainingKm: 1.1,
+              etaMinutes: 3,
+            });
+          } else {
+            // Khi ca SOS trên server không còn assignment (đã hủy), đồng bộ hủy trong domainDService
+            const existingAssign = domainDService.getAssignmentBySosId(item._id);
+            if (existingAssign && existingAssign.status !== 'CANCELLED') {
+              domainDService.cancelAssignment(existingAssign.id, 'Đã hủy trên máy chủ');
+            }
+          }
+        });
+
         domainDService.syncRealSosRequests(realMapped);
         setSosRequests(domainDService.getSosRequests());
 
@@ -232,6 +359,30 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
         if ((!currentUrlId || currentUrlId.startsWith('sos-89') || currentUrlId.startsWith('sos-dn-')) && realMapped.length > 0) {
           setSelectedSosId(realMapped[0].id);
         }
+      }
+
+      // Đồng bộ danh sách Đội cứu hộ thật từ MongoDB
+      try {
+        const teamsRes = await fetchRescueTeams();
+        if (teamsRes?.success && Array.isArray(teamsRes.data) && teamsRes.data.length > 0) {
+          const mappedTeams = teamsRes.data.map(mapBackendTeamToDomain);
+          domainDService.syncRealRescueTeams(mappedTeams);
+          setRescueTeams(domainDService.getRescueTeams());
+        }
+      } catch (err) {
+        console.warn('Lỗi đồng bộ đội cứu hộ từ API:', err);
+      }
+
+      // Đồng bộ danh sách Phương tiện cứu hộ thật từ MongoDB
+      try {
+        const vehRes = await fetchVehicles();
+        if (vehRes?.success && Array.isArray(vehRes.data) && vehRes.data.length > 0) {
+          const mappedVehs = vehRes.data.map(mapBackendVehicleToDomain);
+          domainDService.syncRealVehicles(mappedVehs);
+          setVehicles(domainDService.getVehicles());
+        }
+      } catch (err) {
+        console.warn('Lỗi đồng bộ phương tiện từ API:', err);
       }
     } catch (err) {
       console.warn('Lỗi đồng bộ dữ liệu SOS từ server:', err);
@@ -260,14 +411,25 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
     const unsubUpdated = onSosUpdated((updatedSos) => {
       syncRealSosFromApi(activeOfficer);
       if (updatedSos?._id) {
-        showToast(`ℹ️ Cập nhật trạng thái SOS: ${updatedSos.status}`, 'success');
+        const rawStatus = String(updatedSos.status || '').toUpperCase();
+        const statusText = SOS_STATUS_VIETNAMESE[rawStatus] || updatedSos.status;
+        showToast(`ℹ️ Cập nhật trạng thái SOS: ${statusText}`, 'success');
       }
     });
 
-    // Định kỳ 15 giây dự phòng kiểm tra lại tín hiệu SOS từ server
+    // Lắng nghe các sự kiện phân công & cứu hộ viên đổi trạng thái Realtime
+    const socket = getSocket();
+    const handleRealtimeSync = () => syncRealSosFromApi(activeOfficer);
+    socket.on('connect', handleRealtimeSync);
+    socket.on('assignment:created', handleRealtimeSync);
+    socket.on('assignment:updated', handleRealtimeSync);
+    socket.on('assignment:status_changed', handleRealtimeSync);
+    socket.on('sos:assignment:status_changed', handleRealtimeSync);
+
+    // Định kỳ 3 giây dự phòng kiểm tra lại tín hiệu SOS từ server đảm bảo Realtime liên tục không cần reset thủ công
     const interval = setInterval(() => {
       syncRealSosFromApi(activeOfficer);
-    }, 15000);
+    }, 3000);
 
     const handleUpdateEvent = () => syncRealSosFromApi(activeOfficer);
     window.addEventListener('sos_data_updated', handleUpdateEvent);
@@ -275,6 +437,11 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
     return () => {
       unsubCreated();
       unsubUpdated();
+      socket.off('connect', handleRealtimeSync);
+      socket.off('assignment:created', handleRealtimeSync);
+      socket.off('assignment:updated', handleRealtimeSync);
+      socket.off('assignment:status_changed', handleRealtimeSync);
+      socket.off('sos:assignment:status_changed', handleRealtimeSync);
       clearInterval(interval);
       window.removeEventListener('sos_data_updated', handleUpdateEvent);
     };
@@ -343,13 +510,28 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
     }
   }, [activeOfficer.jurisdictionAreaId, activeOfficer.jurisdictionAreaName, activeOfficer.districtName]);
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    const id = Date.now();
+  const lastToastRef = useRef<{ message: string; timestamp: number }>({ message: '', timestamp: 0 });
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    const now = Date.now();
+    // Chống lặp tin nhắn giống nhau trong vòng 2.5 giây
+    if (lastToastRef.current.message === message && now - lastToastRef.current.timestamp < 2500) {
+      return;
+    }
+    lastToastRef.current = { message, timestamp: now };
+
+    const id = `${now}-${Math.random().toString(36).slice(2, 7)}`;
     setToasts((prev) => [...prev, { id, message, type }]);
+
+    // Tự động ẩn dứt khoát sau 3 giây (3000ms)
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3800);
-  };
+    }, 3000);
+  }, []);
 
   // Strictly scope areas: For Admin, highlight the ward of selected SOS; for Author scope to managed ward
   const authorScopedAreas = useMemo(() => {
@@ -409,7 +591,7 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
   const currentAssignment = useMemo(() => {
     if (!selectedSos || !selectedSos.id) return null;
     return domainDService.getAssignmentBySosId(selectedSos.id);
-  }, [selectedSos]);
+  }, [selectedSos, sosRequests]);
 
   // Urgent local count
   const localUrgentCount = useMemo(() => {
@@ -427,7 +609,7 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }, [officerFullName]);
 
-  const handleConfirmAssign = (params: {
+  const handleConfirmAssign = async (params: {
     authorityOrganizationId: string;
     authorityOrganizationName: string;
     rescueTeamId: string;
@@ -443,14 +625,59 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
     domainDService.assignSos(selectedSos.id, params);
     setSosRequests(domainDService.getSosRequests());
     showToast(`Đã xuất kích ${params.rescueTeamName} ứng cứu ca ${selectedSos.sosCode}!`, 'success');
+
+    // Đồng bộ lên backend nếu là ca SOS thật
+    try {
+      if (selectedSos.id && !selectedSos.id.startsWith('sos-')) {
+        const primaryTeamId = params.rescueTeamId.split(',')[0].trim();
+        const foundTeam = rescueTeams.find((t) => t.id === primaryTeamId);
+        const realTeamId =
+          foundTeam?.id && !foundTeam.id.startsWith('team-')
+            ? foundTeam.id
+            : '6acf2d296102c44874cc2b43';
+
+        const realRescuerId =
+          params.rescuerId && !params.rescuerId.startsWith('rescuer-')
+            ? params.rescuerId
+            : (foundTeam?.rescuers?.[0]?.id || '6ad4c91546705c7dadf70b3d');
+
+        const realVehicleId =
+          params.vehicleId && !params.vehicleId.startsWith('veh-')
+            ? params.vehicleId
+            : undefined;
+
+        await assignSosApi(selectedSos.id, {
+          authorityOrganizationId:
+            params.authorityOrganizationId && !params.authorityOrganizationId.startsWith('auth-')
+              ? params.authorityOrganizationId
+              : undefined,
+          rescueTeamId: realTeamId,
+          rescuerId: realRescuerId,
+          vehicleId: realVehicleId,
+          note: `Lệnh điều động khẩn cấp từ Ban Chỉ Huy PCTT ${activeOfficer.jurisdictionAreaName || ''}`,
+        });
+        await syncRealSosFromApi(activeOfficer);
+      }
+    } catch (err) {
+      console.warn('Lỗi gọi API điều động lên server:', err);
+    }
   };
 
-  const handleUpdateAssignmentStatus = (assignmentId: string, nextStatus: AssignmentStatus) => {
+  const handleUpdateAssignmentStatus = async (assignmentId: string, nextStatus: AssignmentStatus) => {
     domainDService.updateAssignmentStatus(assignmentId, nextStatus);
     setSosRequests(domainDService.getSosRequests());
+
+    try {
+      if (assignmentId && !assignmentId.startsWith('assign-')) {
+        await updateAssignmentStatusApi(assignmentId, nextStatus);
+        await syncRealSosFromApi(activeOfficer);
+      }
+    } catch (err) {
+      console.warn('Lỗi cập nhật trạng thái phân công:', err);
+    }
   };
 
-  const handleReassignMission = (
+  const handleReassignMission = async (
     assignmentId: string,
     params: {
       rescueTeamId: string;
@@ -465,11 +692,37 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
   ) => {
     domainDService.reassignMission(assignmentId, params);
     setSosRequests(domainDService.getSosRequests());
+
+    try {
+      if (assignmentId && !assignmentId.startsWith('assign-')) {
+        await reassignMissionApi(assignmentId, {
+          rescueTeamId: params.rescueTeamId,
+          rescuerId: params.rescuerId,
+          vehicleId: params.vehicleId,
+        });
+        await syncRealSosFromApi(activeOfficer);
+      }
+    } catch (err) {
+      console.warn('Lỗi gọi API đổi đội cứu hộ:', err);
+    }
   };
 
-  const handleCancelAssignment = (assignmentId: string, reason: string) => {
+  const handleCancelAssignment = async (assignmentId: string, reason: string) => {
+    // 1. Cập nhật lạc quan (optimistic) trên UI ngay lập tức
     domainDService.cancelAssignment(assignmentId, reason);
     setSosRequests(domainDService.getSosRequests());
+
+    // 2. Gửi lệnh PATCH hủy phân công tới backend để cập nhật MongoDB
+    try {
+      if (assignmentId && !assignmentId.startsWith('assign-')) {
+        await cancelAssignmentApi(assignmentId, reason);
+        await syncRealSosFromApi(activeOfficer);
+      }
+      showToast('Đã hủy điều động thành công! Sự cố chuyển về trạng thái sẵn sàng điều phối.', 'success');
+    } catch (err) {
+      console.warn('Lỗi đồng bộ hủy điều động tới backend:', err);
+      await syncRealSosFromApi(activeOfficer);
+    }
   };
 
   const handleCreateCitizenSos = (
@@ -615,87 +868,47 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
 
       {/* Mission Dispatch for AUTHOR (Scoped to Local Sector) */}
       <main style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {authorScopedSosRequests.length > 0 && selectedSos ? (
-          <MissionDispatch
-            sosRequests={authorScopedSosRequests}
-            selectedSos={selectedSos}
-            onSelectSos={(sos) => {
-              setSelectedSosId(sos.id);
-              navigateTo('map', user ?? null, sos.id);
-            }}
-            assignment={currentAssignment}
-            authorities={authorities}
-            rescueTeams={rescueTeams}
-            vehicles={vehicles}
-            onConfirmAssign={handleConfirmAssign}
-            onUpdateStatus={handleUpdateAssignmentStatus}
-            onReassign={handleReassignMission}
-            onCancelAssignment={handleCancelAssignment}
-            onCreateCitizenSos={handleCreateCitizenSos}
-            showToast={showToast}
-            activeOfficer={activeOfficer}
-            areas={authorScopedAreas}
-          />
-        ) : (
-          <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
-            <TacticalMap
-              selectedSos={null}
-              assignment={null}
-              activeOfficer={activeOfficer}
-              areas={authorScopedAreas}
-              sosRequests={[]}
-            />
-            {/* Floating indicator: Khu vực an toàn */}
-            <div
-              style={{
-                position: 'absolute',
-                top: 14,
-                left: 14,
-                zIndex: 450,
-                background: 'var(--sos-surface)',
-                border: '1px solid var(--sos-border)',
-                boxShadow: '0 8px 24px rgba(15, 23, 42, 0.15)',
-                borderRadius: 12,
-                padding: '12px 18px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                animation: 'fadeIn 0.2s ease-out',
-              }}
-            >
-              <div
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: '50%',
-                  background: 'rgba(16, 185, 129, 0.12)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 18,
-                }}
-              >
-                🛡️
-              </div>
-              <div>
-                <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--sos-text-primary)' }}>
-                  Địa Bàn An Toàn • {activeOfficer.jurisdictionAreaName}
-                </div>
-                <div style={{ fontSize: 11.5, color: 'var(--sos-text-secondary)', marginTop: 2 }}>
-                  Hiện không có tín hiệu SOS khẩn cấp trong khu vực quản lý. Trực chiến 24/7.
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        <MissionDispatch
+          sosRequests={authorScopedSosRequests}
+          selectedSos={selectedSos}
+          onSelectSos={(sos) => {
+            setSelectedSosId(sos.id);
+            navigateTo('map', user ?? null, sos.id);
+          }}
+          assignment={currentAssignment}
+          authorities={authorities}
+          rescueTeams={rescueTeams}
+          vehicles={vehicles}
+          onConfirmAssign={handleConfirmAssign}
+          onUpdateStatus={handleUpdateAssignmentStatus}
+          onReassign={handleReassignMission}
+          onCancelAssignment={handleCancelAssignment}
+          onCreateCitizenSos={handleCreateCitizenSos}
+          showToast={showToast}
+          activeOfficer={activeOfficer}
+          areas={authorScopedAreas}
+        />
       </main>
 
-      {/* Toast Notifications */}
-      {toasts.map((toast) => (
-        <div key={toast.id} className={`sos-toast ${toast.type}`}>
-          <span>{toast.message}</span>
+      {/* Toast Notifications Container - Top Center, không đè lên thẻ sự cố */}
+      {toasts.length > 0 && (
+        <div className="sos-toast-container" role="status" aria-live="polite">
+          {toasts.map((toast) => (
+            <div key={toast.id} className={`sos-toast ${toast.type}`}>
+              <span className="sos-toast-message">{toast.message}</span>
+              <button
+                type="button"
+                className="sos-toast-close"
+                onClick={() => dismissToast(toast.id)}
+                title="Đóng thông báo"
+                aria-label="Đóng"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 };

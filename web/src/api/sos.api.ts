@@ -41,6 +41,7 @@ export async function completeSosRequest(sosId: string): Promise<{ success: bool
 }
 
 export async function assignSosApi(sosId: string, payload: {
+  authorityOrganizationId?: string;
   rescueTeamId: string;
   rescuerId: string;
   vehicleId?: string;

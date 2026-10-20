@@ -72,75 +72,76 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
         overflow: 'hidden',
       }}
     >
-      {/* Thanh header điều hướng tối giản */}
-      <header
-        style={{
-          height: 50,
-          background: 'var(--sos-bg-primary)',
-          borderBottom: '1px solid var(--sos-border)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'flex-end',
-          padding: '0 16px',
-          zIndex: 500,
-          flexShrink: 0,
-        }}
-      >
-        {/* Chuyển đổi chế độ Đường phố / Vệ tinh */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div
+      {/* Vùng bản đồ chính: Tràn viền 100% không còn thanh header trắng dư thừa */}
+      <main style={{ flex: 1, position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
+        <style>{`
+          .leaflet-container {
+            width: 100% !important;
+            height: 100% !important;
+            font-family: inherit;
+          }
+        `}</style>
+
+        {/* Chuyển đổi chế độ Đường phố / Vệ tinh - Nổi trực tiếp trên bản đồ */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 16,
+            right: 16,
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            background: theme === 'dark' ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(8px)',
+            border: '1px solid var(--sos-border)',
+            borderRadius: 8,
+            padding: 3,
+            gap: 3,
+            boxShadow: '0 4px 16px rgba(15, 23, 42, 0.15), 0 1px 3px rgba(0, 0, 0, 0.05)',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setMapMode('street')}
             style={{
               display: 'flex',
               alignItems: 'center',
-              background: theme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f1f5f9',
-              border: '1px solid var(--sos-border)',
+              gap: 5,
+              padding: '5px 12px',
               borderRadius: 6,
-              padding: 2,
-              gap: 2,
+              border: 'none',
+              background: mapMode === 'street' ? (theme === 'dark' ? '#334155' : '#0f172a') : 'transparent',
+              color: mapMode === 'street' ? '#ffffff' : 'var(--sos-text-secondary)',
+              fontWeight: 600,
+              fontSize: 12,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
             }}
           >
-            <button
-              type="button"
-              onClick={() => setMapMode('street')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '4px 10px',
-                borderRadius: 5,
-                border: 'none',
-                background: mapMode === 'street' ? (theme === 'dark' ? '#334155' : '#0f172a') : 'transparent',
-                color: mapMode === 'street' ? '#ffffff' : 'var(--sos-text-secondary)',
-                fontWeight: 600,
-                fontSize: 11.5,
-                cursor: 'pointer',
-              }}
-            >
-              <MapIcon size={13} />
-              <span>Đường phố</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMapMode('satellite')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '4px 10px',
-                borderRadius: 5,
-                border: 'none',
-                background: mapMode === 'satellite' ? (theme === 'dark' ? '#334155' : '#0f172a') : 'transparent',
-                color: mapMode === 'satellite' ? '#ffffff' : 'var(--sos-text-secondary)',
-                fontWeight: 600,
-                fontSize: 11.5,
-                cursor: 'pointer',
-              }}
-            >
-              <Layers size={13} />
-              <span>Vệ tinh</span>
-            </button>
-          </div>
-
+            <MapIcon size={13} />
+            <span>Đường phố</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMapMode('satellite')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: '5px 12px',
+              borderRadius: 6,
+              border: 'none',
+              background: mapMode === 'satellite' ? (theme === 'dark' ? '#334155' : '#0f172a') : 'transparent',
+              color: mapMode === 'satellite' ? '#ffffff' : 'var(--sos-text-secondary)',
+              fontWeight: 600,
+              fontSize: 12,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Layers size={13} />
+            <span>Vệ tinh</span>
+          </button>
 
           {!embedded && onSwitchToAuthor && (
             <button
@@ -182,10 +183,6 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
             </button>
           )}
         </div>
-      </header>
-
-      {/* Vùng bản đồ chính: Giữ nguyên vẹn bản đồ bình thường, không chứa bất kỳ sidebar hay overlay rườm rà nào */}
-      <main style={{ flex: 1, position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
         <style>{`
           .leaflet-container {
             width: 100% !important;

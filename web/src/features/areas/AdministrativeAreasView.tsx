@@ -9,7 +9,6 @@ import {
   ArrowLeft,
   UserCheck,
   UserX,
-  Home,
   Loader2,
 } from 'lucide-react';
 import type { AdministrativeAreaItem } from '@/types/dashboard';
@@ -62,7 +61,7 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
   const [subUnits, setSubUnits] = useState<ProvinceSubUnitItem[]>([]);
   const [subUnitsLoading, setSubUnitsLoading] = useState(false);
   const [provinceSearchQuery, setProvinceSearchQuery] = useState('');
-  const [provinceManagerFilter, setProvinceManagerFilter] = useState<'ALL' | 'MANAGED' | 'UNMANAGED'>('ALL');
+  const [provinceTypeFilter, setProvinceTypeFilter] = useState<'ALL' | 'CITY' | 'PROVINCE'>('ALL');
   const [subUnitTypeFilter, setSubUnitTypeFilter] = useState<'ALL' | 'DISTRICT' | 'WARD'>('ALL');
   const [subUnitManagerFilter, setSubUnitManagerFilter] = useState<'ALL' | 'MANAGED' | 'UNMANAGED'>('ALL');
   const [subUnitSearchQuery, setSubUnitSearchQuery] = useState('');
@@ -121,20 +120,6 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
         }
       }
 
-      return null;
-    };
-
-    const getProvinceManager = (p: VietnamProvinceItem): AreaManagerInfo | null => {
-      if (!areaManagers || Object.keys(areaManagers).length === 0) return null;
-      const fullName = (p.name || '').toLowerCase().trim();
-      if (areaManagers[fullName]) return areaManagers[fullName];
-      const shortName = fullName.replace(/^(thành phố|tỉnh|tp\.)\s+/i, '').trim();
-      if (shortName && areaManagers[shortName]) return areaManagers[shortName];
-      for (const key of Object.keys(areaManagers)) {
-        if (key && shortName && (key.includes(shortName) || shortName.includes(key))) {
-          return areaManagers[key];
-        }
-      }
       return null;
     };
 
@@ -221,11 +206,6 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
                 {selectedProvince.name}
               </strong>
             </div>
-
-            <span className="sos-badge active" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a' }} />
-              KHẢ DỤNG HỆ THỐNG
-            </span>
           </div>
 
 
@@ -258,7 +238,7 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
                     style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
                   >
                     <UserCheck size={13} />
-                    <span>Đã có quản lý ({managedCount})</span>
+                    <span>Đã có cán bộ ({managedCount})</span>
                   </button>
                   <button
                     type="button"
@@ -267,7 +247,7 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
                     style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
                   >
                     <UserX size={13} />
-                    <span>Chưa có quản lý ({unmanagedCount})</span>
+                    <span>Chưa phân công ({unmanagedCount})</span>
                   </button>
                   <button
                     type="button"
@@ -361,42 +341,15 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
                       return (
                         <tr key={u.id} style={{ height: '56px' }}>
                           <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                              <div
-                                style={{
-                                  width: 28,
-                                  height: 28,
-                                  borderRadius: '6px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  flexShrink: 0,
-                                  background: isDistrict
-                                    ? 'rgba(217, 119, 6, 0.1)'
-                                    : isCommune
-                                    ? 'rgba(2, 132, 199, 0.1)'
-                                    : 'rgba(22, 163, 74, 0.1)',
-                                  color: isDistrict ? '#d97706' : isCommune ? '#0284c7' : '#16a34a',
-                                }}
-                              >
-                                {isDistrict ? (
-                                  <Building2 size={15} />
-                                ) : isCommune ? (
-                                  <Globe2 size={15} />
-                                ) : (
-                                  <Home size={15} />
-                                )}
-                              </div>
-                              <span
-                                style={{
-                                  color: '#0f172a',
-                                  fontSize: '13.5px',
-                                  fontWeight: 600,
-                                }}
-                              >
-                                {u.name}
-                              </span>
-                            </div>
+                            <span
+                              style={{
+                                color: '#0f172a',
+                                fontSize: '13.5px',
+                                fontWeight: 600,
+                              }}
+                            >
+                              {u.name}
+                            </span>
                           </td>
                           <td>
                             <code
@@ -518,20 +471,29 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
     }
 
     // TẦNG 1: DANH MỤC CÁC TỈNH / THÀNH PHỐ VIỆT NAM (CHUẨN 34 TỈNH THÀNH MỚI)
+    const checkIsCity = (p: VietnamProvinceItem) => {
+      const name = (p.name || '').toLowerCase();
+      return name.includes('thành phố') || name.includes('tp');
+    };
+
+    const cityCount = vietnamProvinces.filter(checkIsCity).length;
+    const provinceCount = vietnamProvinces.length - cityCount;
+
     const filteredProvinces = vietnamProvinces.filter((p) => {
-      const mgr = getProvinceManager(p);
-      if (provinceManagerFilter === 'MANAGED' && !mgr) return false;
-      if (provinceManagerFilter === 'UNMANAGED' && mgr) return false;
+      const isCity = checkIsCity(p);
+      if (provinceTypeFilter === 'CITY' && !isCity) return false;
+      if (provinceTypeFilter === 'PROVINCE' && isCity) return false;
       if (!provinceSearchQuery.trim()) return true;
       const q = provinceSearchQuery.toLowerCase();
-      return (p.name || '').toLowerCase().includes(q) || (p.ref || '').toLowerCase().includes(q) || (p.isoCode || '').toLowerCase().includes(q);
+      return (
+        (p.name || '').toLowerCase().includes(q) ||
+        (p.ref || '').toLowerCase().includes(q) ||
+        (p.isoCode || '').toLowerCase().includes(q)
+      );
     });
-
 
     return (
       <div className="sos-views-container sos-light-view administrative-areas-container">
-
-
         <div className="sos-view-card administrative-areas-card">
           <div className="sos-view-card-header">
             <div>
@@ -545,28 +507,28 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
             </div>
 
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-              {/* Bộ lọc cán bộ quản lý cấp tỉnh */}
+              {/* Bộ lọc phân loại Tỉnh / Thành phố */}
               <div className="sos-filter-tabs" style={{ marginBottom: 0 }}>
                 <button
                   type="button"
-                  className={`sos-btn-filter-pill ${provinceManagerFilter === 'ALL' ? 'active' : ''}`}
-                  onClick={() => setProvinceManagerFilter('ALL')}
+                  className={`sos-btn-filter-pill ${provinceTypeFilter === 'ALL' ? 'active' : ''}`}
+                  onClick={() => setProvinceTypeFilter('ALL')}
                 >
-                  Tất cả
+                  Tất cả ({vietnamProvinces.length})
                 </button>
                 <button
                   type="button"
-                  className={`sos-btn-filter-pill ${provinceManagerFilter === 'MANAGED' ? 'active-green' : ''}`}
-                  onClick={() => setProvinceManagerFilter('MANAGED')}
+                  className={`sos-btn-filter-pill ${provinceTypeFilter === 'CITY' ? 'active-blue' : ''}`}
+                  onClick={() => setProvinceTypeFilter('CITY')}
                 >
-                  Đã có cán bộ
+                  Thành phố TW ({cityCount})
                 </button>
                 <button
                   type="button"
-                  className={`sos-btn-filter-pill ${provinceManagerFilter === 'UNMANAGED' ? 'active-yellow' : ''}`}
-                  onClick={() => setProvinceManagerFilter('UNMANAGED')}
+                  className={`sos-btn-filter-pill ${provinceTypeFilter === 'PROVINCE' ? 'active-green' : ''}`}
+                  onClick={() => setProvinceTypeFilter('PROVINCE')}
                 >
-                  Chưa phân công
+                  Tỉnh ({provinceCount})
                 </button>
               </div>
 
@@ -636,9 +598,7 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
                   </tr>
                 ) : (
                   filteredProvinces.map((prov) => {
-                    const isTWCity =
-                      prov.name.toLowerCase().includes('thành phố') ||
-                      prov.name.toLowerCase().includes('tp');
+                    const isTWCity = checkIsCity(prov);
 
                     return (
                       <tr
@@ -647,26 +607,9 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
                         style={{ cursor: 'pointer', height: '54px' }}
                       >
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <div
-                              style={{
-                                width: 28,
-                                height: 28,
-                                borderRadius: '6px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexShrink: 0,
-                                background: isTWCity ? 'rgba(2, 132, 199, 0.1)' : 'rgba(124, 58, 237, 0.1)',
-                                color: isTWCity ? '#0284c7' : '#7c3aed',
-                              }}
-                            >
-                              <Globe2 size={15} />
-                            </div>
-                            <span style={{ color: '#0f172a', fontSize: '13.5px', fontWeight: 600 }}>
-                              {prov.name}
-                            </span>
-                          </div>
+                          <span style={{ color: '#0f172a', fontSize: '13.5px', fontWeight: 600 }}>
+                            {prov.name}
+                          </span>
                         </td>
                         <td>
                           <code

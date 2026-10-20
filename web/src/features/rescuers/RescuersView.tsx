@@ -15,8 +15,9 @@ import {
   FileCheck,
   Check,
 } from 'lucide-react';
-import type { RescueTeamItem } from '@/types/dashboard';
-import { fetchRescueTeams, fetchAdminUsers, verifyRescuer } from '@/api';
+import type { RescueTeamItem, AdministrativeAreaItem } from '@/types/dashboard';
+import type { User } from '@/types/auth';
+import { fetchRescueTeams, fetchAdminUsers, verifyRescuer, fetchAdministrativeAreas } from '@/api';
 import { domainDService } from '@/services/domainDService';
 import '@/features/sos/SosRequestsView.css';
 import './RescuersView.css';
@@ -24,20 +25,69 @@ import './RescuersView.css';
 export interface RescuersViewProps {
   mode?: 'operations' | 'admin';
   onOpenMap?: (sosId?: any) => void;
+  user?: User;
 }
 
 export const RescuersView: React.FC<RescuersViewProps> = ({
   mode: initialMode = 'operations',
   onOpenMap: _onOpenMap,
+  user,
 }) => {
   const [currentMode, setCurrentMode] = useState<'operations' | 'admin'>(initialMode);
   const [rescueTeams, setRescueTeams] = useState<RescueTeamItem[]>([]);
   const [rescuers, setRescuers] = useState<any[]>([]);
+  const [areas, setAreas] = useState<AdministrativeAreaItem[]>([]);
+  const [selectedAreaId, setSelectedAreaId] = useState<string>('ALL');
   const [loading, setLoading] = useState(false);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+
+  // Phân quyền: Cán bộ địa phương (Local) chỉ xem đội của địa bàn mình quản lý, Admin xem tất cả
+  const activeOfficer = domainDService.getActiveOfficer();
+  const isAdmin = user?.roles?.includes('ADMIN') || (user as any)?.role === 'ADMIN' || activeOfficer?.role === 'ADMIN';
+
+  const userAreaId =
+    user?.authority?.areaId ||
+    (user?.authority as any)?.administrativeAreaId ||
+    (user?.authority as any)?.jurisdictionAreaId ||
+    activeOfficer?.jurisdictionAreaId;
+
+  const userAreaName =
+    user?.authority?.areaName ||
+    (user?.authority as any)?.jurisdictionAreaName ||
+    activeOfficer?.jurisdictionAreaName ||
+    '';
+
+  const managedArea = useMemo(() => {
+    if (isAdmin) return null;
+    if (userAreaId) {
+      const byId = areas.find((a) => a._id === userAreaId || a.code === userAreaId);
+      if (byId) return byId;
+    }
+    if (userAreaName) {
+      const cleanUser = userAreaName.toLowerCase().replace(/^(phường|xã|quận|huyện)\s+/i, '').trim();
+      const byName = areas.find((a) => {
+        const cleanArea = a.name.toLowerCase().replace(/^(phường|xã|quận|huyện)\s+/i, '').trim();
+        return cleanUser && (cleanArea.includes(cleanUser) || cleanUser.includes(cleanArea));
+      });
+      if (byName) return byName;
+    }
+    return null;
+  }, [areas, isAdmin, userAreaId, userAreaName]);
+
+  const effectiveAreaId = !isAdmin
+    ? (managedArea?._id || userAreaId || (userAreaName ? userAreaName : 'ALL'))
+    : selectedAreaId;
+
+  useEffect(() => {
+    if (!isAdmin && managedArea?._id) {
+      setSelectedAreaId(managedArea._id);
+    } else if (user?.authority?.areaId) {
+      setSelectedAreaId(user.authority.areaId);
+    }
+  }, [isAdmin, managedArea, user?.authority?.areaId]);
 
   // Modal State
   const [selectedTeamDetail, setSelectedTeamDetail] = useState<RescueTeamItem | null>(null);
@@ -54,14 +104,20 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [teamsRes, rescuersRes] = await Promise.allSettled([
-        fetchRescueTeams(),
+      const areaParam = effectiveAreaId !== 'ALL' ? effectiveAreaId : undefined;
+      const [teamsRes, rescuersRes, areasRes] = await Promise.allSettled([
+        fetchRescueTeams({ areaId: areaParam, limit: 100 }),
         fetchAdminUsers({ role: 'RESCUER' }),
+        fetchAdministrativeAreas(),
       ]);
 
-      if (teamsRes.status === 'fulfilled' && teamsRes.value.success && Array.isArray(teamsRes.value.data) && teamsRes.value.data.length > 0) {
+      if (areasRes.status === 'fulfilled' && areasRes.value.success && Array.isArray(areasRes.value.data)) {
+        setAreas(areasRes.value.data);
+      }
+
+      if (teamsRes.status === 'fulfilled' && teamsRes.value.success && Array.isArray(teamsRes.value.data)) {
         setRescueTeams(teamsRes.value.data);
-      } else {
+      } else if (selectedAreaId === 'ALL') {
         // Fallback domain D mock teams
         const fallbackTeams = domainDService.getRescueTeams().map((t) => ({
           _id: t.id,
@@ -104,6 +160,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
             })),
         })) as RescueTeamItem[];
         setRescueTeams(fallbackTeams);
+      } else {
+        setRescueTeams([]);
       }
 
       if (rescuersRes.status === 'fulfilled' && rescuersRes.value.success && rescuersRes.value.data?.users) {
@@ -114,7 +172,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [effectiveAreaId]);
 
   useEffect(() => {
     loadData();
@@ -190,9 +248,37 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
   // KPI Metrics
   const totalTeams = rescueTeams.length;
 
-  // Filtered teams list
+  // Filtered teams list: Phân quyền rõ ràng (Local chỉ xem đội thuộc địa bàn quản lý, Admin xem tất cả)
   const filteredTeams = useMemo(() => {
     return rescueTeams.filter((team) => {
+      // 1. Phân quyền địa phương: Nếu không phải Admin, chỉ hiển thị đội thuộc địa bàn quản lý
+      if (!isAdmin && (managedArea || userAreaName || userAreaId)) {
+        const targetAreaId = managedArea?._id || userAreaId;
+        const targetAreaName = (userAreaName || managedArea?.name || '')
+          .toLowerCase()
+          .replace(/^(phường|xã|quận|huyện)\s+/i, '')
+          .trim();
+
+        const teamAreaObj = typeof team.areaId === 'object' && team.areaId !== null ? team.areaId : null;
+        const teamAreaId = teamAreaObj?._id || team.areaId;
+        const teamAreaName = (teamAreaObj?.name || (team as any).areaName || '').toLowerCase();
+        const teamNameLower = (team.name || '').toLowerCase();
+
+        const matchId = targetAreaId && (teamAreaId === targetAreaId || teamAreaId === managedArea?.code);
+        const matchParentChild = Boolean(
+          ((teamAreaObj as any)?.parentId && ((teamAreaObj as any).parentId === targetAreaId || (teamAreaObj as any).parentId === managedArea?._id)) ||
+          (managedArea?.parentId && (managedArea.parentId === teamAreaId || managedArea.parentId === (teamAreaObj as any)?._id))
+        );
+        const matchName = Boolean(
+          targetAreaName &&
+          (teamAreaName.includes(targetAreaName) ||
+            targetAreaName.includes(teamAreaName) ||
+            teamNameLower.includes(targetAreaName))
+        );
+
+        if (!matchId && !matchParentChild && !matchName) return false;
+      }
+
       if (typeFilter !== 'ALL' && team.type !== typeFilter) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -204,7 +290,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
       }
       return true;
     });
-  }, [rescueTeams, typeFilter, searchQuery]);
+  }, [rescueTeams, typeFilter, searchQuery, isAdmin, managedArea, userAreaId, userAreaName]);
 
   // Rescuers pending verification
   const pendingRescuers = useMemo(() => {
@@ -343,7 +429,59 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
               </button>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              {/* Lọc Theo Địa Phương: Admin xem tất cả, Local chỉ xem khu vực mình quản lý */}
+              {!isAdmin ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: '#eff6ff',
+                    border: '1px solid #bfdbfe',
+                    borderRadius: 8,
+                    padding: '6px 12px',
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    color: '#1d4ed8',
+                    height: 34,
+                    boxSizing: 'border-box',
+                  }}
+                  title="Địa bàn bạn đang phụ trách quản lý cứu hộ"
+                >
+                  <MapPin size={14} style={{ color: '#2563eb', flexShrink: 0 }} />
+                  <span>Khu vực: {managedArea?.name || userAreaName || 'Địa phương phụ trách'}</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <MapPin size={14} style={{ color: '#0284c7' }} />
+                  <select
+                    value={selectedAreaId}
+                    onChange={(e) => setSelectedAreaId(e.target.value)}
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: 8,
+                      padding: '6px 12px',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      color: '#0f172a',
+                      outline: 'none',
+                      height: 34,
+                      cursor: 'pointer',
+                    }}
+                    title="Lọc lực lượng theo từng địa phương / địa bàn (Quyền Admin)"
+                  >
+                    <option value="ALL">📍 Toàn thành phố / Tất cả địa bàn</option>
+                    {areas.map((area) => (
+                      <option key={area._id} value={area._id}>
+                        {area.name} ({area.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="executive-search-input-wrap">
                 <Search size={14} className="search-icon" />
                 <input

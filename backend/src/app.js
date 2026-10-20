@@ -37,6 +37,14 @@ app.use(cookieParser());
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
+// Chuẩn hóa URL loại bỏ các dấu gạch chéo kép //
+app.use((req, res, next) => {
+  if (req.url && req.url.includes('//')) {
+    req.url = req.url.replace(/\/{2,}/g, '/');
+  }
+  next();
+});
+
 // Health check endpoint
 const healthHandler = (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
