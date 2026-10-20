@@ -1,6 +1,8 @@
 import { apiClient, ApiClient } from './client';
 import { ApiResponse, UserProfile, EmergencyContact } from '../types';
 
+import { Platform } from 'react-native';
+
 /**
  * Các API liên quan đến Hồ sơ người dùng và Cứu trợ (User / Profile / Rescuer)
  */
@@ -27,10 +29,51 @@ export class UserApi {
   /**
    * Cập nhật ảnh đại diện (Avatar)
    */
-  async updateAvatar(avatarUrl: string): Promise<ApiResponse<{ userId: string; avatarUrl: string }>> {
-    const res = await this.client.patch<{ userId: string; avatarUrl: string }>('/users/me/avatar', {
-      avatarUrl,
-    });
+  async updateAvatar(avatarInput: string): Promise<ApiResponse<{ userId: string; avatarUrl: string }>> {
+    const isBase64 =
+      typeof avatarInput === 'string' &&
+      (avatarInput.startsWith('data:image/') || avatarInput.startsWith('/9j/') || avatarInput.length > 500);
+
+    let res: ApiResponse<{ userId: string; avatarUrl: string }>;
+
+    if (isBase64) {
+      // 1. Gửi qua JSON PATCH/POST (Tương thích 100% với Devtunnel và mọi proxy)
+      res = await this.client.patch<{ userId: string; avatarUrl: string }>('/users/me/avatar', {
+        avatarUrl: avatarInput,
+      });
+      if (!res.success) {
+        res = await this.client.post<{ userId: string; avatarUrl: string }>('/users/me/avatar', {
+          avatarUrl: avatarInput,
+        });
+      }
+    } else {
+      // 2. Dự phòng: Gửi Multipart FormData cho file local URI
+      const formData = new FormData();
+      const filename = avatarInput.split('/').pop() || `avatar_${Date.now()}.jpg`;
+      const ext = filename.split('.').pop()?.toLowerCase() || 'jpg';
+      const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+
+      formData.append('avatar', {
+        uri: avatarInput,
+        name: filename,
+        type: mimeType,
+      } as any);
+
+      res = await this.client.uploadFormData<{ userId: string; avatarUrl: string }>(
+        '/users/me/avatar',
+        formData,
+        'POST'
+      );
+
+      if (!res.success) {
+        res = await this.client.uploadFormData<{ userId: string; avatarUrl: string }>(
+          '/users/me/avatar',
+          formData,
+          'PATCH'
+        );
+      }
+    }
+
     if (res.success && res.data?.avatarUrl) {
       const stored = await this.client.getStoredUser();
       if (stored) {

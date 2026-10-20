@@ -327,72 +327,80 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
   // Avatar từ thư viện ảnh
   const handlePickAvatar = async () => {
     setAvatarSheetVisible(false);
-    try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh.');
-        return;
-      }
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.6,
-        base64: true,
-      });
-
-      if (!res.canceled && res.assets && res.assets.length > 0) {
-        const asset = res.assets[0];
-        const avatarData = asset.base64
-          ? `data:image/jpeg;base64,${asset.base64}`
-          : asset.uri;
-        setSelectedAvatarUrl(asset.uri);
-        setIsSavingAvatar(true);
-        const result = await updateUserAvatar(avatarData);
-        setIsSavingAvatar(false);
-        if (result && !result.success) {
-          Alert.alert('Thông báo', result.message || 'Chưa thể tải ảnh lên máy chủ.');
+    setTimeout(async () => {
+      try {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh.');
+          return;
         }
+        const res = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.5,
+          base64: true,
+        });
+
+        if (!res.canceled && res.assets && res.assets[0]?.uri) {
+          const asset = res.assets[0];
+          setSelectedAvatarUrl(asset.uri);
+          setIsSavingAvatar(true);
+          const avatarPayload = asset.base64
+            ? `data:image/jpeg;base64,${asset.base64}`
+            : asset.uri;
+          const result = await updateUserAvatar(avatarPayload);
+          setIsSavingAvatar(false);
+          if (result && !result.success) {
+            Alert.alert('Thông báo', result.message || 'Chưa thể tải ảnh lên máy chủ.');
+          } else if (result && result.success) {
+            Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện mới!');
+          }
+        }
+      } catch {
+        setIsSavingAvatar(false);
+        Alert.alert('Lỗi', 'Không thể chọn ảnh từ thiết bị.');
       }
-    } catch {
-      setIsSavingAvatar(false);
-      Alert.alert('Lỗi', 'Không thể chọn ảnh từ thiết bị.');
-    }
+    }, 350);
   };
 
   // Avatar từ máy ảnh
   const handleTakeAvatar = async () => {
     setAvatarSheetVisible(false);
-    try {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền máy ảnh.');
-        return;
-      }
-      const res = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.6,
-        base64: true,
-      });
-
-      if (!res.canceled && res.assets && res.assets.length > 0) {
-        const asset = res.assets[0];
-        const avatarData = asset.base64
-          ? `data:image/jpeg;base64,${asset.base64}`
-          : asset.uri;
-        setSelectedAvatarUrl(asset.uri);
-        setIsSavingAvatar(true);
-        const result = await updateUserAvatar(avatarData);
-        setIsSavingAvatar(false);
-        if (result && !result.success) {
-          Alert.alert('Thông báo', result.message || 'Chưa thể tải ảnh lên máy chủ.');
+    setTimeout(async () => {
+      try {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền máy ảnh.');
+          return;
         }
+        const res = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.5,
+          base64: true,
+        });
+
+        if (!res.canceled && res.assets && res.assets[0]?.uri) {
+          const asset = res.assets[0];
+          setSelectedAvatarUrl(asset.uri);
+          setIsSavingAvatar(true);
+          const avatarPayload = asset.base64
+            ? `data:image/jpeg;base64,${asset.base64}`
+            : asset.uri;
+          const result = await updateUserAvatar(avatarPayload);
+          setIsSavingAvatar(false);
+          if (result && !result.success) {
+            Alert.alert('Thông báo', result.message || 'Chưa thể tải ảnh lên máy chủ.');
+          } else if (result && result.success) {
+            Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện mới!');
+          }
+        }
+      } catch {
+        setIsSavingAvatar(false);
+        Alert.alert('Lỗi', 'Không thể chụp ảnh mới.');
       }
-    } catch {
-      setIsSavingAvatar(false);
-      Alert.alert('Lỗi', 'Không thể chụp ảnh mới.');
-    }
+    }, 350);
   };
 
   // Lưu thông tin người dùng

@@ -53,6 +53,7 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
   const [avatarSheetVisible, setAvatarSheetVisible] = useState(false);
   const [avatarPreviewVisible, setAvatarPreviewVisible] = useState(false);
   const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string | null>(null);
+  const [pendingAvatarBase64, setPendingAvatarBase64] = useState<string | null>(null);
   const [isSavingAvatar, setIsSavingAvatar] = useState(false);
 
   // Logout modal state
@@ -183,59 +184,67 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
 
   // Chụp ảnh bằng camera
   const handleTakePhoto = async () => {
-    try {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền máy ảnh để chụp ảnh đại diện.');
-        return;
+    // Đóng sheet ngay lập tức để tránh deadlock modal trên React Native
+    setAvatarSheetVisible(false);
+
+    setTimeout(async () => {
+      try {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền máy ảnh để chụp ảnh đại diện.');
+          return;
+        }
+        const res = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.5,
+          base64: true,
+        });
+        if (!res.canceled && res.assets && res.assets[0]?.uri) {
+          const asset = res.assets[0];
+          setSelectedAvatarUrl(asset.uri); // Chỉ dùng uri cục bộ cho Preview UI
+          setPendingAvatarBase64(asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : null);
+          setTimeout(() => {
+            setAvatarPreviewVisible(true);
+          }, 200);
+        }
+      } catch {
+        Alert.alert('Lỗi', 'Không thể khởi động máy ảnh.');
       }
-      const res = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.6,
-        base64: true,
-      });
-      if (!res.canceled && res.assets && res.assets[0]) {
-        const asset = res.assets[0];
-        const avatarUri = asset.base64
-          ? `data:image/jpeg;base64,${asset.base64}`
-          : asset.uri;
-        setSelectedAvatarUrl(avatarUri);
-        setAvatarSheetVisible(false);
-        setAvatarPreviewVisible(true);
-      }
-    } catch {
-      Alert.alert('Lỗi', 'Không thể khởi động máy ảnh.');
-    }
+    }, 350);
   };
 
   // Chọn ảnh từ thư viện
   const handleSelectFromLibrary = async () => {
-    try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh để đổi ảnh đại diện.');
-        return;
+    // Đóng sheet ngay lập tức để tránh deadlock modal trên React Native
+    setAvatarSheetVisible(false);
+
+    setTimeout(async () => {
+      try {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh để đổi ảnh đại diện.');
+          return;
+        }
+        const res = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.5,
+          base64: true,
+        });
+        if (!res.canceled && res.assets && res.assets[0]?.uri) {
+          const asset = res.assets[0];
+          setSelectedAvatarUrl(asset.uri); // Chỉ dùng uri cục bộ cho Preview UI
+          setPendingAvatarBase64(asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : null);
+          setTimeout(() => {
+            setAvatarPreviewVisible(true);
+          }, 200);
+        }
+      } catch {
+        Alert.alert('Lỗi', 'Không thể mở thư viện ảnh.');
       }
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.6,
-        base64: true,
-      });
-      if (!res.canceled && res.assets && res.assets[0]) {
-        const asset = res.assets[0];
-        const avatarUri = asset.base64
-          ? `data:image/jpeg;base64,${asset.base64}`
-          : asset.uri;
-        setSelectedAvatarUrl(avatarUri);
-        setAvatarSheetVisible(false);
-        setAvatarPreviewVisible(true);
-      }
-    } catch {
-      Alert.alert('Lỗi', 'Không thể mở thư viện ảnh.');
-    }
+    }, 350);
   };
 
   // Lưu avatar
@@ -243,12 +252,15 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
     if (!selectedAvatarUrl) return;
     setIsSavingAvatar(true);
     try {
-      const res = await updateUserAvatar(selectedAvatarUrl);
+      // Ưu tiên gửi base64 qua JSON (tương thích 100% với Devtunnel, không bị lỗi drop stream)
+      const avatarPayload = pendingAvatarBase64 || selectedAvatarUrl;
+      const res = await updateUserAvatar(avatarPayload);
       if (res.success) {
         setAvatarPreviewVisible(false);
+        setPendingAvatarBase64(null);
         Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện mới!');
       } else {
-        Alert.alert('Không thể lưu', res.message || 'Lỗi lưu ảnh.');
+        Alert.alert('Không thể lưu', res.message || 'Lỗi lưu ảnh đại diện.');
       }
     } catch (e: any) {
       Alert.alert('Lỗi', e.message || 'Đã có lỗi xảy ra.');

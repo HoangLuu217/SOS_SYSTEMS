@@ -589,29 +589,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateUserAvatar = async (avatarUrl: string) => {
     try {
       const res = await backendApi.updateAvatar(avatarUrl);
-      const finalAvatar = res.data?.avatarUrl || avatarUrl;
-
-      if (user) {
-        const updatedUser = { ...user, avatarUrl: finalAvatar };
-        setUser(updatedUser);
-        await AsyncStorage.setItem(ENV.STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
-      }
-
-      if (res.success) {
+      if (res.success && res.data?.avatarUrl) {
+        const finalAvatar = res.data.avatarUrl;
+        if (user) {
+          const updatedUser = { ...user, avatarUrl: finalAvatar };
+          setUser(updatedUser);
+          await AsyncStorage.setItem(ENV.STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
+        }
         return { success: true, message: 'Cập nhật ảnh đại diện thành công' };
-      } else {
-        return {
-          success: true,
-          message: 'Đã lưu ảnh đại diện trên thiết bị của bạn.',
-        };
       }
+
+      return {
+        success: false,
+        message: res.message || 'Không thể lưu ảnh đại diện lên máy chủ.',
+      };
     } catch (err: any) {
-      if (user) {
-        const updatedUser = { ...user, avatarUrl };
-        setUser(updatedUser);
-        await AsyncStorage.setItem(ENV.STORAGE_KEYS.USER_DATA, JSON.stringify(updatedUser));
-        return { success: true, message: 'Đã lưu ảnh đại diện trên thiết bị.' };
-      }
       return { success: false, message: err.message || 'Lỗi khi cập nhật ảnh đại diện.' };
     }
   };
