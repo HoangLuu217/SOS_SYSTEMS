@@ -4,9 +4,6 @@ const vehicleController = require('../controllers/vehicle.controller');
 const { authenticate } = require('../middlewares/authMiddleware');
 const { authorize } = require('../middlewares/roleMiddleware');
 
-// Tất cả endpoints quản lý phương tiện yêu cầu đăng nhập
-router.use(authenticate);
-
 /**
  * @route   GET /vehicles
  * @desc    Lấy danh sách phương tiện cứu hộ (hỗ trợ phân trang, lọc theo teamId, type, status)
@@ -18,6 +15,9 @@ router.get('/', vehicleController.getVehicles);
  * @desc    Lấy chi tiết một phương tiện
  */
 router.get('/:id', vehicleController.getVehicleById);
+
+// Các routes tạo mới, cập nhật, xóa phương tiện yêu cầu đăng nhập & phân quyền
+router.use(authenticate);
 
 /**
  * @route   POST /vehicles

@@ -5,6 +5,9 @@ import { alertApi } from './alert.api';
 import { mapApi } from './map.api';
 import { notificationApi } from './notification.api';
 import { chatApi } from './chat.api';
+import { rescuerApi } from './rescuer.api';
+import { rescueTeamApi } from './rescueTeam.api';
+import { vehicleApi } from './vehicle.api';
 import { assignmentApi, RescuerAssignmentItem } from './assignment.api';
 import type {
   EmergencyContact,
@@ -115,10 +118,55 @@ class BackendApiService {
 
   deleteEmergencyContact = (contactId?: string) => userApi.deleteEmergencyContact(contactId);
 
-  getRescuerProfile = () => userApi.getRescuerProfile();
+  getRescuerProfile = () => rescuerApi.getProfile();
+
+  updateRescuerProfile = (data: any) => rescuerApi.updateProfile(data);
+
+  applyRescuer = (data: any) => rescuerApi.apply(data);
+
+  updateRescuerSkills = (skills: string[]) => rescuerApi.updateSkills(skills);
+
+  updateRescuerExperience = (experience: string) => rescuerApi.updateExperience(experience);
 
   updateRescuerAvailability = (availabilityStatus: string) =>
-    userApi.updateRescuerAvailability(availabilityStatus);
+    rescuerApi.updateAvailability(availabilityStatus);
+
+  // Rescue Team & Vehicle API
+  getRescueTeams = (params?: any) => rescueTeamApi.getTeams(params);
+
+  getRescueTeamById = (id: string) => rescueTeamApi.getTeamById(id);
+
+  joinRescueTeam = (teamId: string, rescuerId: string, role: string = 'MEMBER') =>
+    rescueTeamApi.addMember(teamId, rescuerId, role);
+
+  leaveRescueTeam = (teamId: string, rescuerId: string) =>
+    rescueTeamApi.removeMember(teamId, rescuerId);
+
+  changeRescueTeamLeader = (teamId: string, newLeaderId: string) =>
+    rescueTeamApi.changeLeader(teamId, newLeaderId);
+
+  updateRescueTeamMemberStatus = (teamId: string, rescuerId: string, status: 'APPROVED' | 'REJECTED') =>
+    rescueTeamApi.updateMemberStatus(teamId, rescuerId, status);
+
+  getVehicles = (params?: any) => vehicleApi.getVehicles(params);
+
+  getVehicleById = (id: string) => vehicleApi.getVehicleById(id);
+
+  updateVehicleStatus = (id: string, status: any) => vehicleApi.updateStatus(id, status);
+
+  // Administrative Area API
+  getAdministrativeAreas = (query?: { type?: string; parentId?: string; search?: string }) => {
+    let endpoint = '/administrative-areas';
+    if (query) {
+      const q = new URLSearchParams();
+      if (query.type) q.append('type', query.type);
+      if (query.parentId) q.append('parentId', query.parentId);
+      if (query.search) q.append('search', query.search);
+      const str = q.toString();
+      if (str) endpoint += `?${str}`;
+    }
+    return apiClient.get<any[]>(endpoint);
+  };
 
   // Notifications API
   getNotifications = (query?: {
@@ -181,13 +229,26 @@ class BackendApiService {
   markChatAsRead = (params: Parameters<typeof chatApi.markAsRead>[0]) =>
     chatApi.markAsRead(params);
 
-  // Assignment & Tactical Mission API
-  getMyAssignments = () => assignmentApi.getMyAssignments();
+  // Sos Assignment / Mission API for Rescuers
+  getMyAssignments = () =>
+    assignmentApi.getMyAssignments() as Promise<ApiResponse<import('../types').SosAssignmentData[]>>;
+
+  getAssignmentById = (id: string) =>
+    apiClient.get<import('../types').SosAssignmentData>(`/assignments/${id}`);
+
   acceptAssignment = (id: string) => assignmentApi.acceptAssignment(id);
+
   updateAssignmentStatus = (id: string, status: string, note?: string) =>
     assignmentApi.updateAssignmentStatus(id, status, note);
+
   updateSosMissionStatus = (sosId: string, status: string, note?: string) =>
     assignmentApi.updateSosMissionStatus(sosId, status, note);
+
+  cancelAssignment = (id: string, cancelReason?: string) =>
+    apiClient.patch<import('../types').SosAssignmentData>(`/assignments/${id}/cancel`, {
+      cancelReason,
+    });
+
   getAvailableSosRequests = () => assignmentApi.getAvailableSosRequests();
 
   // Storage helpers

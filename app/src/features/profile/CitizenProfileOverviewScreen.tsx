@@ -11,19 +11,23 @@ import {
   TouchableWithoutFeedback,
   Alert,
   ActivityIndicator,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PROFILE_THEME } from './theme';
 import { useAuth } from '@/context/AuthContext';
 import { backendApi, EmergencyContact } from '@/api';
 import { LogoSOS } from '@/components';
+import { RescuerVerificationStatusModal } from './RescuerVerificationStatusModal';
 
 export interface CitizenProfileOverviewScreenProps {
   onNavigateToEditProfile: () => void;
   onNavigateToEmergencyContact: () => void;
+  onNavigateToProfessional?: () => void;
   onNavigateToSosHistory: () => void;
   onNavigateToSecurity: () => void;
   onNavigateToNotificationSettings: () => void;
@@ -35,6 +39,7 @@ export interface CitizenProfileOverviewScreenProps {
 export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreenProps> = ({
   onNavigateToEditProfile,
   onNavigateToEmergencyContact,
+  onNavigateToProfessional,
   onNavigateToSosHistory,
   onNavigateToSecurity,
   onNavigateToNotificationSettings,
@@ -55,6 +60,11 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
 
   // Emergency contact preview state
   const [emergencyContact, setEmergencyContact] = useState<EmergencyContact | null>(null);
+
+  // Trạng thái đăng ký Cứu hộ viên (Rescuer)
+  const [rescuerStatus, setRescuerStatus] = useState<string>('NOT_REGISTERED');
+  const [rescuerData, setRescuerData] = useState<any>(null);
+  const [statusModalVisible, setStatusModalVisible] = useState<boolean>(false);
 
   // Dữ liệu người dùng thực tế từ User Profile (không dùng mock)
   const displayName = user?.fullName || 'Người dân';
@@ -107,11 +117,69 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
       }
     };
 
+    const loadRescuerStatus = async () => {
+      try {
+        const res = await backendApi.getRescuerProfile();
+        if (res.success && res.data && isMounted) {
+          setRescuerData(res.data);
+          const status = res.data.rescuer?.verificationStatus || 'NOT_REGISTERED';
+          setRescuerStatus(status);
+
+          // Tự động mở Modal chi tiết hồ sơ thẩm định nếu người dùng vừa mới nộp đơn
+          try {
+            const justApplied = await AsyncStorage.getItem('@sos_just_applied_rescuer');
+            if (justApplied === 'true' && isMounted) {
+              await AsyncStorage.removeItem('@sos_just_applied_rescuer');
+              setStatusModalVisible(true);
+            }
+          } catch {
+            // ignore
+          }
+        }
+      } catch {
+        // Mặc định Chưa đăng ký
+      }
+    };
+
     loadEmergencyContact();
+    loadRescuerStatus();
     return () => {
       isMounted = false;
     };
   }, [refreshTrigger]);
+
+  // Lắng nghe sự kiện duyệt hồ sơ Cứu hộ viên theo thời gian thực (Realtime)
+  useEffect(() => {
+    const handleVerificationRealtime = async (payload: any) => {
+      console.log('⚡ [CitizenProfile] Nhận tín hiệu duyệt cứu hộ viên realtime:', payload);
+      if (payload?.verificationStatus) {
+        setRescuerStatus(payload.verificationStatus);
+      }
+      try {
+        const res = await backendApi.getRescuerProfile();
+        if (res.success && res.data) {
+          setRescuerData(res.data);
+          const st = res.data.rescuer?.verificationStatus || payload?.verificationStatus || 'NOT_REGISTERED';
+          setRescuerStatus(st);
+        }
+      } catch (e) {
+        if (payload?.rescuer) {
+          setRescuerData((prev: any) => ({
+            ...prev,
+            rescuer: { ...(prev?.rescuer || {}), ...payload.rescuer },
+          }));
+        }
+      }
+    };
+
+    const sub1 = DeviceEventEmitter.addListener('rescuer:verification_status_changed', handleVerificationRealtime);
+    const sub2 = DeviceEventEmitter.addListener('user:profile_updated', handleVerificationRealtime);
+
+    return () => {
+      sub1.remove();
+      sub2.remove();
+    };
+  }, []);
 
   // Chụp ảnh bằng camera
   const handleTakePhoto = async () => {
@@ -291,8 +359,120 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
           </TouchableOpacity>
         )}
 
+        {/* Card Đăng ký Rescuer */}
+        {onNavigateToProfessional && (
+          <LinearGradient
+            colors={['#F0F7FF', '#F8FAFF', '#FFFFFF']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.rescuerCard}
+          >
+            {/* Header: Icon & Titles */}
+            <View style={styles.rescuerCardHeader}>
+              <View style={styles.rescuerHeaderLeft}>
+                <View style={styles.rescuerIconBox}>
+                  <MaterialCommunityIcons
+                    name="hand-heart"
+                    size={26}
+                    color="#FFFFFF"
+                  />
+                </View>
+                <View style={styles.rescuerTitleCol}>
+                  <View style={styles.rescuerTitleRow}>
+                    <Text style={styles.rescuerTitle}>Đăng ký Cứu hộ viên</Text>
+                    <MaterialCommunityIcons
+                      name="shield-check-outline"
+                      size={18}
+                      color="#0066FF"
+                      style={styles.rescuerVerifiedIcon}
+                    />
+                  </View>
+                  <Text style={styles.rescuerSubtitle}>LỰC LƯỢNG TÌNH NGUYỆN</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Description Text */}
+            <Text style={styles.rescuerDesc}>
+              {rescuerStatus === 'PENDING'
+                ? 'Hồ sơ chuyên môn của bạn đang được Ban Chỉ huy PCTT & TKCN địa phương thẩm định năng lực và đối soát thực địa.'
+                : 'Tham gia đội ngũ hỗ trợ cứu hộ và ứng phó thiên tai, lũ lụt tại địa phương. Giúp đỡ đồng bào trong những thời điểm khẩn cấp nhất.'}
+            </Text>
+
+            {/* Action Button */}
+            <TouchableOpacity
+              style={[
+                styles.rescuerActionBtn,
+                rescuerStatus === 'PENDING' && styles.rescuerActionBtnPending,
+              ]}
+              onPress={() => {
+                if (rescuerStatus === 'PENDING') {
+                  setStatusModalVisible(true);
+                } else {
+                  onNavigateToProfessional();
+                }
+              }}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons
+                name={rescuerStatus === 'PENDING' ? 'timer-sand' : 'account-plus'}
+                size={19}
+                color={rescuerStatus === 'PENDING' ? '#B45309' : '#FFFFFF'}
+              />
+              <Text
+                style={[
+                  styles.rescuerActionBtnText,
+                  rescuerStatus === 'PENDING' && styles.rescuerActionBtnTextPending,
+                ]}
+              >
+                {rescuerStatus === 'PENDING' ? 'Chờ duyệt - Xem chi tiết hồ sơ' : 'Đăng ký Cứu hộ viên ngay'}
+              </Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        )}
+
         {/* 3. Menu Items for Citizen */}
         <View style={styles.menuCard}>
+          {/* Item: Hồ sơ Cứu hộ viên chuyên môn */}
+          {onNavigateToProfessional && (
+            <>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  if (rescuerStatus === 'PENDING') {
+                    setStatusModalVisible(true);
+                  } else {
+                    onNavigateToProfessional();
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    styles.menuIconBox,
+                    { backgroundColor: rescuerStatus === 'PENDING' ? '#FEF3C7' : '#EFF6FF' },
+                  ]}
+                >
+                  <Feather
+                    name={rescuerStatus === 'PENDING' ? 'clock' : 'award'}
+                    size={18}
+                    color={rescuerStatus === 'PENDING' ? '#D97706' : '#0066FF'}
+                  />
+                </View>
+                <View style={styles.menuTextBox}>
+                  <Text style={styles.menuTitle}>Hồ sơ chuyên môn Cứu hộ</Text>
+                  <Text style={styles.menuDesc}>
+                    {rescuerStatus === 'PENDING'
+                      ? 'Đang chờ thẩm định hồ sơ - Bấm để xem hoặc cập nhật'
+                      : 'Kỹ năng tác chiến, CCCD, phương tiện'}
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+              <View style={styles.menuDivider} />
+            </>
+          )}
+
           {/* Item 1.5: Lịch sử báo nạn (SOS History) */}
           <TouchableOpacity
             style={styles.menuItem}
@@ -542,6 +722,17 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
           </View>
         </View>
       </Modal>
+
+      {/* Modal: Tiến trình & Trạng thái xác minh Cứu hộ viên */}
+      <RescuerVerificationStatusModal
+        visible={statusModalVisible}
+        onClose={() => setStatusModalVisible(false)}
+        onUpdateProfile={() => {
+          setStatusModalVisible(false);
+          onNavigateToProfessional?.();
+        }}
+        rescuerData={rescuerData}
+      />
     </SafeAreaView>
   );
 };
@@ -1057,4 +1248,89 @@ const styles = StyleSheet.create({
     color: '#B45309',
     lineHeight: 16,
   },
+  rescuerCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    padding: 16,
+    marginBottom: 14,
+    shadowColor: '#0066FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  rescuerCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  rescuerHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  rescuerIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#0066FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rescuerTitleCol: {
+    flex: 1,
+  },
+  rescuerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rescuerTitle: {
+    fontSize: 16.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  rescuerVerifiedIcon: {
+    marginLeft: 2,
+  },
+  rescuerSubtitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0066FF',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  rescuerDesc: {
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: '#334155',
+    marginTop: 14,
+    marginBottom: 16,
+  },
+  rescuerActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0066FF',
+    borderRadius: 12,
+    paddingVertical: 13,
+    gap: 8,
+    minHeight: 48,
+  },
+  rescuerActionBtnPending: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+  },
+  rescuerActionBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  rescuerActionBtnTextPending: {
+    color: '#B45309',
+  },
 });
+

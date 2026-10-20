@@ -4,9 +4,8 @@ const adminController = require('../controllers/admin.controller');
 const { authenticate } = require('../middlewares/authMiddleware');
 const { authorize } = require('../middlewares/roleMiddleware');
 
-// Tất cả admin routes yêu cầu xác thực + quyền ADMIN
+// Tất cả admin routes yêu cầu xác thực người dùng
 router.use(authenticate);
-router.use(authorize('ADMIN'));
 
 // ─── STATISTICS ───────────────────────────────────────────────────────────────
 
@@ -15,74 +14,78 @@ router.use(authorize('ADMIN'));
  * @desc    Tổng hợp thống kê toàn hệ thống
  * @access  ADMIN
  */
-router.get('/statistics', adminController.getStatistics);
+router.get('/statistics', authorize('ADMIN'), adminController.getStatistics);
 
 // ─── USER MANAGEMENT ─────────────────────────────────────────────────────────
 
 /**
  * @route   GET /admin/users
- * @desc    Lấy danh sách tất cả người dùng
+ * @desc    Lấy danh sách người dùng (hỗ trợ Admin và Local Authority tra cứu cứu hộ viên)
  *          Query: role, status, isVerified, search, page, limit
- * @access  ADMIN
+ * @access  LOCAL_AUTHORITY, ADMIN
  */
-router.get('/users', adminController.getUsers);
+router.get('/users', authorize('LOCAL_AUTHORITY', 'ADMIN'), adminController.getUsers);
 
 /**
  * @route   POST /admin/users
  * @desc    Tạo tài khoản người dùng mới (đặc biệt LOCAL_AUTHORITY phân bổ địa bàn)
  * @access  ADMIN
  */
-router.post('/users', adminController.createUser);
+router.post('/users', authorize('ADMIN'), adminController.createUser);
 
 /**
  * @route   GET /admin/users/:id
  * @desc    Lấy chi tiết 1 người dùng
- * @access  ADMIN
+ * @access  LOCAL_AUTHORITY, ADMIN
  */
-router.get('/users/:id', adminController.getUserById);
+router.get('/users/:id', authorize('LOCAL_AUTHORITY', 'ADMIN'), adminController.getUserById);
 
 /**
  * @route   PATCH /admin/users/:id
  * @desc    Cập nhật thông tin chi tiết người dùng (họ tên, SĐT, email, status, địa bàn quản lý)
  * @access  ADMIN
  */
-router.patch('/users/:id', adminController.updateUser);
+router.patch('/users/:id', authorize('ADMIN'), adminController.updateUser);
 
 /**
  * @route   PATCH /admin/users/:id/status
  * @desc    Cập nhật trạng thái tài khoản (ACTIVE / INACTIVE / SUSPENDED / PENDING)
  * @access  ADMIN
  */
-router.patch('/users/:id/status', adminController.updateUserStatus);
+router.patch('/users/:id/status', authorize('ADMIN'), adminController.updateUserStatus);
 
 /**
  * @route   PATCH /admin/users/:id/verify
  * @desc    Xác minh tài khoản người dùng (isVerified = true)
  * @access  ADMIN
  */
-router.patch('/users/:id/verify', adminController.verifyUser);
+router.patch('/users/:id/verify', authorize('ADMIN'), adminController.verifyUser);
 
 /**
  * @route   PATCH /admin/users/:id/roles
  * @desc    Cập nhật danh sách vai trò của người dùng
  * @access  ADMIN
  */
-router.patch('/users/:id/roles', adminController.updateUserRoles);
+router.patch('/users/:id/roles', authorize('ADMIN'), adminController.updateUserRoles);
 
 /**
  * @route   DELETE /admin/users/:id
  * @desc    Xóa tài khoản người dùng (hard delete)
  * @access  ADMIN
  */
-router.delete('/users/:id', adminController.deleteUser);
+router.delete('/users/:id', authorize('ADMIN'), adminController.deleteUser);
 
 // ─── RESCUER VERIFICATION ────────────────────────────────────────────────────
 
 /**
  * @route   PATCH /admin/rescuers/:id/verify
  * @desc    Xác minh hoặc từ chối cứu hộ viên (verificationStatus: VERIFIED | REJECTED)
- * @access  ADMIN
+ * @access  LOCAL_AUTHORITY, ADMIN
  */
-router.patch('/rescuers/:id/verify', adminController.verifyRescuer);
+router.patch(
+  '/rescuers/:id/verify',
+  authorize('LOCAL_AUTHORITY', 'ADMIN'),
+  adminController.verifyRescuer
+);
 
 module.exports = router;

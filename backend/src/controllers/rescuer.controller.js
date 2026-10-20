@@ -20,21 +20,33 @@ class RescuerController {
    */
   async updateMyProfile(req, res, next) {
     try {
+      const isNewApplicant = !req.user.roles?.includes('RESCUER');
       const updated = await rescuerService.updateProfile(req.user._id, req.body);
 
       await auditService.log({
         actorId: req.user._id,
-        actorRole: 'RESCUER',
-        action: 'RESCUER_UPDATE_PROFILE',
+        actorRole: isNewApplicant ? 'CITIZEN' : 'RESCUER',
+        action: isNewApplicant ? 'CITIZEN_APPLY_RESCUER' : 'RESCUER_UPDATE_PROFILE',
         entityType: 'User',
         entityId: req.user._id,
         metadata: { updatedFields: Object.keys(req.body) },
       });
 
-      return sendSuccess(res, 200, 'Cập nhật thông tin hồ sơ cứu hộ viên thành công', updated);
+      const message = isNewApplicant
+        ? 'Nộp đơn đăng ký Cứu hộ viên thành công! Hồ sơ đang chờ cơ quan chức năng phê duyệt.'
+        : 'Cập nhật thông tin hồ sơ cứu hộ viên thành công';
+
+      return sendSuccess(res, 200, message, updated);
     } catch (error) {
       next(error);
     }
+  }
+
+  /**
+   * POST /rescuer/apply
+   */
+  async applyRescuer(req, res, next) {
+    return this.updateMyProfile(req, res, next);
   }
 
   /**
@@ -47,7 +59,7 @@ class RescuerController {
 
       await auditService.log({
         actorId: req.user._id,
-        actorRole: 'RESCUER',
+        actorRole: req.user.roles?.includes('RESCUER') ? 'RESCUER' : 'CITIZEN',
         action: 'RESCUER_UPDATE_SKILLS',
         entityType: 'User',
         entityId: req.user._id,
@@ -91,6 +103,48 @@ class RescuerController {
       });
 
       return sendSuccess(res, 200, 'Cập nhật trạng thái sẵn sàng thành công', result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /rescuer/pending
+   * Dành cho Cán bộ địa phương (LOCAL_AUTHORITY) và ADMIN tra cứu hồ sơ chờ duyệt
+   */
+  async getPendingRescuers(req, res, next) {
+    try {
+      const rescuers = await rescuerService.getPendingRescuers(req.query, req.user);
+      return sendSuccess(
+        res,
+        200,
+        `Lấy danh sách hồ sơ cứu hộ viên chờ duyệt thành công (${rescuers.length} hồ sơ)`,
+        rescuers
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /rescuer/:id/verify
+   * Cán bộ địa phương (LOCAL_AUTHORITY) hoặc ADMIN phê duyệt / từ chối hồ sơ cứu hộ viên
+   */
+  async verifyRescuer(req, res, next) {
+    try {
+      const { verificationStatus } = req.body;
+      const user = await rescuerService.verifyRescuer(req.params.id, verificationStatus);
+
+      await auditService.log({
+        actorId: req.user._id,
+        actorRole: req.user.roles?.includes('ADMIN') ? 'ADMIN' : 'LOCAL_AUTHORITY',
+        action: 'VERIFY_RESCUER',
+        entityType: 'User',
+        entityId: req.params.id,
+        metadata: { verificationStatus },
+      });
+
+      return sendSuccess(res, 200, 'Cập nhật trạng thái xác minh cứu hộ viên thành công', user);
     } catch (error) {
       next(error);
     }

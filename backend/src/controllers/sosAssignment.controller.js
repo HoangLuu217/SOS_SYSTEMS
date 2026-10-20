@@ -41,6 +41,30 @@ class SosAssignmentController {
   }
 
   /**
+   * GET /assignments/my
+   */
+  async getMyAssignments(req, res, next) {
+    try {
+      const assignments = await sosAssignmentService.getMyAssignments(req.user);
+      return sendSuccess(res, 200, 'Lấy danh sách nhiệm vụ thành công', assignments);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /assignments/:id
+   */
+  async getAssignmentById(req, res, next) {
+    try {
+      const assignment = await sosAssignmentService.getAssignmentById(req.params.id);
+      return sendSuccess(res, 200, 'Lấy chi tiết nhiệm vụ thành công', assignment);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * GET /sos/:id/assignments
    */
   async getAssignmentsBySosId(req, res, next) {

@@ -20,6 +20,7 @@ import type { User } from '@/types/auth';
 import { fetchVehicles, fetchRescueTeams, fetchAdministrativeAreas } from '@/api';
 import { domainDService } from '@/services/domainDService';
 import { FALLBACK_SUPPLIES, type SupplyItem } from '@/constants';
+import { toast } from '@/components/common/toast';
 import '@/features/sos/SosRequestsView.css';
 import './ResourcesView.css';
 
@@ -363,7 +364,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     setIsCreateVehicleOpen(false);
     setNewPlate('');
     setNewDescription('');
-    alert('✅ Đã thêm phương tiện cơ động vào biên chế đội cứu hộ thành công!');
+    toast.success('Đã thêm phương tiện cơ động vào biên chế đội cứu hộ thành công!', 'Biên chế thành công');
   };
 
   // Handle Dispatch Supply
@@ -373,7 +374,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
     const amount = Number(dispatchAmount);
     if (isNaN(amount) || amount <= 0 || amount > selectedSupplyToDispatch.available) {
-      alert('Số lượng cấp phát không hợp lệ hoặc vượt quá cơ số trong kho!');
+      toast.warning('Số lượng cấp phát không hợp lệ hoặc vượt quá cơ số trong kho!', 'Cảnh báo cấp phát');
       return;
     }
 

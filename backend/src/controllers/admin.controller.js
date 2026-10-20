@@ -180,8 +180,8 @@ class AdminController {
 
       await auditService.log({
         actorId: req.user._id,
-        actorRole: 'ADMIN',
-        action: 'ADMIN_VERIFY_RESCUER',
+        actorRole: req.user.roles?.includes('ADMIN') ? 'ADMIN' : 'LOCAL_AUTHORITY',
+        action: 'VERIFY_RESCUER',
         entityType: 'User',
         entityId: req.params.id,
         metadata: { verificationStatus },

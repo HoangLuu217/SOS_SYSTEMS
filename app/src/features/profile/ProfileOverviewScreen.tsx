@@ -30,7 +30,11 @@ export const ProfileOverviewScreen: React.FC<ProfileOverviewScreenProps> = ({
 
   // Xác định chính xác vai trò tài khoản dựa trên roles trong database
   const roles = Array.isArray(user?.roles) ? user.roles : [];
-  const isRescuer = roles.includes('RESCUER') || roles.includes('LEADER');
+  // Người dùng chỉ vào giao diện Đội Cứu Hộ chuyên trách khi đã được duyệt hoặc là LEADER.
+  // Khi hồ sơ vẫn đang PENDING, người dùng vẫn ở giao diện Công dân để theo dõi tiến trình duyệt hồ sơ.
+  const isRescuer =
+    roles.includes('LEADER') ||
+    (roles.includes('RESCUER') && user?.rescuer?.verificationStatus !== 'PENDING');
 
   // Đăng nhập tài khoản nào sẽ vào đúng 100% trang hồ sơ của vai trò đó
   if (isRescuer) {
@@ -52,6 +56,7 @@ export const ProfileOverviewScreen: React.FC<ProfileOverviewScreenProps> = ({
     <CitizenProfileOverviewScreen
       onNavigateToEditProfile={onNavigateToEditProfile}
       onNavigateToEmergencyContact={onNavigateToEmergencyContact}
+      onNavigateToProfessional={onNavigateToProfessional}
       onNavigateToSosHistory={onNavigateToSosHistory}
       onNavigateToSecurity={onNavigateToSecurity}
       onNavigateToNotificationSettings={onNavigateToNotificationSettings}

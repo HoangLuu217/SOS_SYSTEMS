@@ -12,6 +12,7 @@ import {
   verifyPhoneOtp,
 } from '@/api';
 import { domainDService } from '@/services/domainDService';
+import { onRescuerApplicationSubmitted, onRescuerVerificationChanged } from '@/services/socketService';
 import {
   fetchProvincesV2,
   fetchProvinceWithWardsV2,
@@ -55,6 +56,7 @@ export type NavItemKey =
   | 'sos_requests'
   | 'coordination'
   | 'rescuers'
+  | 'rescuers_approval'
   | 'resources'
   | 'alerts'
   | 'shelters'
@@ -164,20 +166,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
       // ignore
     }
 
-    if (isAdmin) {
-      try {
-        const rescuerRes = await fetchAdminUsers({ role: 'RESCUER' });
-        if (rescuerRes.success && Array.isArray(rescuerRes.data?.users)) {
-          const pendingCount = rescuerRes.data.users.filter(
-            (u: any) => u.rescuer?.verificationStatus === 'PENDING'
-          ).length;
-          setPendingRescuersCount(pendingCount);
-        }
-      } catch {
-        // ignore
+    try {
+      const rescuerRes = await fetchAdminUsers({ role: 'RESCUER', limit: '100' });
+      if (rescuerRes.success && Array.isArray(rescuerRes.data?.users)) {
+        const pendingCount = rescuerRes.data.users.filter(
+          (u: any) => u.rescuer?.verificationStatus === 'PENDING'
+        ).length;
+        setPendingRescuersCount(pendingCount);
       }
+    } catch {
+      // ignore
     }
-  }, [isAdmin]);
+  }, []);
 
   useEffect(() => {
     fetchRealCounts();
@@ -187,10 +187,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
     window.addEventListener('sos_data_updated', onDataUpdated);
     window.addEventListener('storage', onDataUpdated);
 
+    // Lắng nghe sự kiện hồ sơ cứu hộ mới / duyệt hồ sơ thời gian thực qua Socket.IO
+    const unsubApp = onRescuerApplicationSubmitted(() => {
+      fetchRealCounts();
+    });
+    const unsubVer = onRescuerVerificationChanged(() => {
+      fetchRealCounts();
+    });
+
     return () => {
       clearInterval(timer);
       window.removeEventListener('sos_data_updated', onDataUpdated);
       window.removeEventListener('storage', onDataUpdated);
+      unsubApp();
+      unsubVer();
     };
   }, [fetchRealCounts]);
 
@@ -238,6 +248,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           key: 'rescuers',
           label: 'Đội cứu hộ địa phương',
           icon: <LifeBuoy size={18} className="sos-nav-icon" />,
+        },
+        {
+          key: 'rescuers_approval',
+          label: 'Duyệt hồ sơ cứu hộ',
+          icon: <UserCheck size={18} className="sos-nav-icon" />,
+          badge: pendingRescuersCount > 0 ? `${pendingRescuersCount} duyệt` : undefined,
+          badgeType: 'warning',
         },
         {
           key: 'resources',

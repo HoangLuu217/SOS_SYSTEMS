@@ -1,15 +1,21 @@
 const express = require('express');
 const router = express.Router();
 const sosAssignmentController = require('../controllers/sosAssignment.controller');
-const { optionalAuthenticate } = require('../middlewares/authMiddleware');
+const { authenticate, optionalAuthenticate } = require('../middlewares/authMiddleware');
 
 router.use(optionalAuthenticate);
 
 /**
  * @route   GET /assignments/my
- * @desc    Lấy danh sách các phân công của cứu hộ viên đang đăng nhập
+ * @desc    Lấy danh sách các phân công của cứu hộ viên hiện tại / đội cứu hộ
  */
-router.get('/assignments/my', sosAssignmentController.getMyAssignments);
+router.get('/assignments/my', authenticate, sosAssignmentController.getMyAssignments);
+
+/**
+ * @route   GET /assignments/:id
+ * @desc    Lấy chi tiết một phân công
+ */
+router.get('/assignments/:id', sosAssignmentController.getAssignmentById);
 
 /**
  * @route   PATCH /assignments/sos/:sosId/status

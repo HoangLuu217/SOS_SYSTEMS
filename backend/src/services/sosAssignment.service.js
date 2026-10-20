@@ -173,6 +173,103 @@ class SosAssignmentService {
   }
 
   /**
+   * GET /assignments/my
+   * Lấy danh sách nhiệm vụ phân công của Cứu hộ viên hiện tại hoặc Đội của họ
+   */
+  async getMyAssignments(userOrId) {
+    const userId = userOrId?._id || userOrId;
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      throw new ApiError(401, 'Vui lòng đăng nhập để xem nhiệm vụ');
+    }
+
+    // Tìm các đội mà user là leader hoặc thành viên đã được duyệt
+    const teams = await RescueTeam.find({
+      $or: [
+        { leaderId: userId },
+        { 'members.rescuerId': userId, 'members.status': 'APPROVED' },
+        { 'members.rescuerId': userId },
+      ],
+    }).select('_id');
+    const teamIds = teams.map((t) => t._id);
+
+    const filter = {
+      $or: [
+        { rescuerId: userId },
+        { rescueTeamId: { $in: teamIds } },
+        { teamId: { $in: teamIds } },
+      ],
+    };
+
+    const assignments = await SosAssignment.find(filter)
+      .populate({
+        path: 'sosRequestId',
+        populate: [
+          { path: 'citizenId', select: '_id fullName phone email avatarUrl address' },
+          { path: 'areaId', select: '_id name code' },
+        ],
+      })
+      .populate({
+        path: 'sosId',
+        populate: [
+          { path: 'citizenId', select: '_id fullName phone email avatarUrl address' },
+          { path: 'areaId', select: '_id name code' },
+        ],
+      })
+      .populate('authorityOrganizationId', 'name code type phone')
+      .populate({
+        path: 'rescueTeamId',
+        select: 'name type leaderId phone',
+        populate: {
+          path: 'leaderId',
+          select: '_id fullName phone email avatarUrl rescuer',
+        },
+      })
+      .populate('rescuerId', '_id fullName phone email avatarUrl rescuer')
+      .populate('vehicleId', 'plateNumber type capacity status')
+      .populate('assignedBy', '_id fullName phone email roles')
+      .sort({ createdAt: -1 });
+
+    return assignments;
+  }
+
+  /**
+   * GET /assignments/:id
+   */
+  async getAssignmentById(id) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new ApiError(400, 'ID phân công không hợp lệ');
+    }
+
+    const assignment = await SosAssignment.findById(id)
+      .populate({
+        path: 'sosRequestId',
+        populate: { path: 'citizenId', select: '_id fullName phone avatarUrl' },
+      })
+      .populate({
+        path: 'sosId',
+        populate: { path: 'citizenId', select: '_id fullName phone avatarUrl' },
+      })
+      .populate('authorityOrganizationId', 'name code type phone')
+      .populate({
+        path: 'rescueTeamId',
+        select: 'name type leaderId',
+        populate: {
+          path: 'leaderId',
+          select: '_id fullName phone email avatarUrl rescuer',
+        },
+      })
+      .populate('rescuerId', '_id fullName phone email avatarUrl rescuer')
+      .populate('vehicleId', 'plateNumber type capacity status')
+      .populate('assignedBy', '_id fullName phone email roles');
+
+    if (!assignment) {
+      throw new ApiError(404, 'Không tìm thấy phân công cứu hộ');
+    }
+
+    return assignment;
+  }
+
+  /**
    * GET /sos/:id/assignments
    */
   async getAssignmentsBySosId(sosId) {
@@ -371,7 +468,7 @@ class SosAssignmentService {
       if (sos) {
         const oldStatus = sos.status;
         sos.status = targetSosStatus;
-        if (targetSosStatus === 'COMPLETED') {
+        if (targetSosStatus === 'COMPLETED' || targetSosStatus === 'RESOLVED') {
           sos.resolvedAt = now;
         }
         await sos.save();
@@ -524,52 +621,6 @@ class SosAssignmentService {
     return assignment;
   }
 
-  /**
-   * GET /assignments/my
-   * Lấy danh sách nhiệm vụ được phân công cho cứu hộ viên
-   */
-  async getMyAssignments(userId) {
-    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-      throw new ApiError(400, 'User ID không hợp lệ');
-    }
-
-    // 1. Tìm các đội cứu hộ mà user là đội trưởng hoặc thành viên
-    const teams = await RescueTeam.find({
-      $or: [{ leaderId: userId }, { 'members.rescuerId': userId }],
-    }).select('_id');
-    const teamIds = teams.map((t) => t._id);
-
-    // 2. Tìm các assignment gán trực tiếp cho user hoặc cho đội
-    const assignments = await SosAssignment.find({
-      $or: [
-        { rescuerId: userId },
-        { rescueTeamId: { $in: teamIds } },
-        { teamId: { $in: teamIds } },
-      ],
-      status: { $ne: 'CANCELLED' },
-    })
-      .populate({
-        path: 'sosRequestId',
-        populate: [
-          { path: 'citizenId', select: '_id fullName phone email avatarUrl address' },
-          { path: 'areaId', select: '_id name code' },
-        ],
-      })
-      .populate({
-        path: 'sosId',
-        populate: [
-          { path: 'citizenId', select: '_id fullName phone email avatarUrl address' },
-          { path: 'areaId', select: '_id name code' },
-        ],
-      })
-      .populate('authorityOrganizationId', 'name code type phone')
-      .populate('rescueTeamId', 'name type phone')
-      .populate('rescuerId', 'fullName phone email avatarUrl')
-      .populate('vehicleId', 'plateNumber type capacity')
-      .sort({ createdAt: -1 });
-
-    return assignments;
-  }
 
   /**
    * Cập nhật tiến trình tác chiến trực tiếp thông qua mã SOS
