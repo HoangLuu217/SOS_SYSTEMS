@@ -433,46 +433,6 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
 
         {/* 3. Menu Items for Citizen */}
         <View style={styles.menuCard}>
-          {/* Item: Hồ sơ Cứu hộ viên chuyên môn */}
-          {onNavigateToProfessional && (
-            <>
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => {
-                  if (rescuerStatus === 'PENDING') {
-                    setStatusModalVisible(true);
-                  } else {
-                    onNavigateToProfessional();
-                  }
-                }}
-                activeOpacity={0.7}
-              >
-                <View
-                  style={[
-                    styles.menuIconBox,
-                    { backgroundColor: rescuerStatus === 'PENDING' ? '#FEF3C7' : '#EFF6FF' },
-                  ]}
-                >
-                  <Feather
-                    name={rescuerStatus === 'PENDING' ? 'clock' : 'award'}
-                    size={18}
-                    color={rescuerStatus === 'PENDING' ? '#D97706' : '#0066FF'}
-                  />
-                </View>
-                <View style={styles.menuTextBox}>
-                  <Text style={styles.menuTitle}>Hồ sơ chuyên môn Cứu hộ</Text>
-                  <Text style={styles.menuDesc}>
-                    {rescuerStatus === 'PENDING'
-                      ? 'Đang chờ thẩm định hồ sơ - Bấm để xem hoặc cập nhật'
-                      : 'Kỹ năng tác chiến, CCCD, phương tiện'}
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={18} color="#94A3B8" />
-              </TouchableOpacity>
-              <View style={styles.menuDivider} />
-            </>
-          )}
-
           {/* Item 1.5: Lịch sử báo nạn (SOS History) */}
           <TouchableOpacity
             style={styles.menuItem}
