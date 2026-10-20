@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type {
   SosRequest,
@@ -8,7 +8,9 @@ import type {
   AuthorityOrganization,
   AssignmentStatus,
   AuthorityOfficer,
+  AdministrativeArea,
 } from '@/types/domainD';
+import { isTeamInOfficerJurisdiction } from '@/services/mapGeoService';
 import { useApp } from '@/context/AppContext';
 import { CitizenDistressProfile } from './CitizenDistressProfile';
 import { TeamSelectorCard } from './TeamSelectorCard';
@@ -17,12 +19,13 @@ import { ConfirmDispatchModal } from './ConfirmDispatchModal';
 import { ActiveMissionConsole } from './ActiveMissionConsole';
 
 interface Props {
-  selectedSos: SosRequest;
+  selectedSos?: SosRequest | null;
   assignment: SosAssignment | null;
   authorities: AuthorityOrganization[];
   rescueTeams: RescueTeam[];
   vehicles: Vehicle[];
   activeOfficer?: AuthorityOfficer;
+  areas?: AdministrativeArea[];
   onConfirmAssign: (params: {
     authorityOrganizationId: string;
     authorityOrganizationName: string;
@@ -50,6 +53,7 @@ export const DispatchWorkflow = ({
   rescueTeams,
   vehicles,
   activeOfficer,
+  areas,
   onConfirmAssign,
   onUpdateStatus: _onUpdateStatus,
   onOpenReassign,
@@ -67,26 +71,21 @@ export const DispatchWorkflow = ({
   // Viewing Team Detail Modal state
   const [viewingTeamDetail, setViewingTeamDetail] = useState<RescueTeam | null>(null);
 
-  // District scoping: determine which district this SOS belongs to
-  const officerAreaId = !isAdmin ? activeOfficer?.jurisdictionAreaId : undefined;
-  const targetDistrictId =
-    selectedSos?.districtId || (officerAreaId && !officerAreaId.startsWith('area-h') ? officerAreaId : 'area-hc');
+  // Managed ward of the active officer
+  const managedWard = areas?.[0];
 
-  // Available rescue teams filtered by ward or district
-  const districtFilteredTeams = rescueTeams.filter((t) => {
-    if (officerAreaId && (t as any).wardId === officerAreaId) return true;
-    if (selectedSos?.wardId && (t as any).wardId === selectedSos.wardId) return true;
-    if (targetDistrictId && t.districtId === targetDistrictId) return true;
-    return false;
-  });
-  const availableTeams = districtFilteredTeams.length > 0 ? districtFilteredTeams : rescueTeams;
+  // Available rescue teams filtered strictly by officer jurisdiction (or citywide if Admin)
+  const availableTeams = useMemo(() => {
+    if (isAdmin) return rescueTeams;
+    return rescueTeams.filter((t) => isTeamInOfficerJurisdiction(t, activeOfficer, managedWard));
+  }, [rescueTeams, isAdmin, activeOfficer, managedWard]);
 
-  // Selected team IDs state (supports selecting multiple teams)
+  // Selected team IDs state (supports selecting multiple teams) - Không tự động chọn ngầm định
   const [localSelectedTeamIds, setLocalSelectedTeamIds] = useState<string[]>(() => {
     if (assignment?.rescueTeamId) {
       return assignment.rescueTeamId.split(',').filter(Boolean);
     }
-    return availableTeams[0]?.id ? [availableTeams[0].id] : [];
+    return [];
   });
 
   const activeSelectedTeamIds = propSelectedTeamIds ?? localSelectedTeamIds;
@@ -112,11 +111,12 @@ export const DispatchWorkflow = ({
   const matchedAuthority =
     authorities.find((a) => a.id === currentTeam?.authorityOrganizationId) ||
     authorities.find(
-      (a) => a.areaId === selectedSos?.wardId || a.areaIds?.includes(selectedSos?.wardId)
+      (a) =>
+        (selectedSos?.wardId && (a.areaId === selectedSos.wardId || a.areaIds?.includes(selectedSos.wardId)))
     ) ||
     authorities[0];
 
-  // Reset when selectedSos changes or assignment changes
+  // Reset when selectedSos changes or assignment changes (Tuyệt đối không auto-select team)
   useEffect(() => {
     if (assignment) {
       const ids = assignment.rescueTeamId ? assignment.rescueTeamId.split(',').filter(Boolean) : [];
@@ -125,15 +125,10 @@ export const DispatchWorkflow = ({
       setSelectedRescuerId(assignment.rescuerId);
       setSelectedVehicleId(assignment.vehicleId);
     } else {
-      const initialTeam = availableTeams[0];
-      const initialIds = initialTeam ? [initialTeam.id] : [];
-      setLocalSelectedTeamIds(initialIds);
-      onSelectedTeamsChange?.(initialIds);
-      if (initialTeam?.rescuers.length > 0) {
-        setSelectedRescuerId(initialTeam.rescuers[0].id);
-      }
-      const initialVehs = vehicles.filter((v) => v.teamId === initialTeam?.id);
-      setSelectedVehicleId(initialVehs[0]?.id || availableVehicles[0]?.id || '');
+      setLocalSelectedTeamIds([]);
+      onSelectedTeamsChange?.([]);
+      setSelectedRescuerId('');
+      setSelectedVehicleId('');
     }
   }, [selectedSos?.id, assignment?.id]);
 
@@ -267,16 +262,19 @@ export const DispatchWorkflow = ({
 
   const isAssigned = Boolean(assignment && assignment.status !== 'CANCELLED');
 
-  // Friendly district name
-  const districtNameLabel =
-    selectedSos.districtId === 'area-hc' ? 'Hải Châu' :
-    selectedSos.districtId === 'area-cl' ? 'Cẩm Lệ' :
-    selectedSos.districtId === 'area-st' ? 'Sơn Trà' :
-    selectedSos.districtId === 'area-tk' ? 'Thanh Khê' :
-    selectedSos.districtId === 'area-nhs' ? 'Ngũ Hành Sơn' :
-    selectedSos.districtId === 'area-lc' ? 'Liên Chiểu' :
-    selectedSos.districtId === 'area-hv' ? 'Hòa Vang' :
-    'Hải Châu';
+  // Friendly district / ward name for display
+  const districtNameLabel = (() => {
+    const rawName = selectedSos.wardName || selectedSos.districtName || activeOfficer?.jurisdictionAreaName || '';
+    const clean = rawName.replace(/^(phường|xã|quận|huyện|thị xã|thành phố)\s+/i, '').trim();
+    if (clean) return clean;
+    if (selectedSos.districtId === 'area-lc' || selectedSos.wardId?.includes('lc')) return 'Liên Chiểu';
+    if (selectedSos.districtId === 'area-cl') return 'Cẩm Lệ';
+    if (selectedSos.districtId === 'area-st') return 'Sơn Trà';
+    if (selectedSos.districtId === 'area-tk') return 'Thanh Khê';
+    if (selectedSos.districtId === 'area-nhs') return 'Ngũ Hành Sơn';
+    if (selectedSos.districtId === 'area-hv') return 'Hòa Vang';
+    return 'Liên Chiểu';
+  })();
 
   return (
     <aside
@@ -300,20 +298,21 @@ export const DispatchWorkflow = ({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span
               style={{
                 display: 'inline-block',
-                width: 9,
-                height: 9,
+                width: 10,
+                height: 10,
                 borderRadius: '50%',
                 background: isAssigned ? '#1e293b' : '#dc2626',
+                boxShadow: isAssigned ? '0 0 0 2px rgba(30, 41, 59, 0.2)' : '0 0 0 2px rgba(220, 38, 38, 0.2)',
               }}
             />
             <span
               style={{
-                fontSize: 12,
-                fontWeight: 800,
+                fontSize: 13,
+                fontWeight: 900,
                 textTransform: 'uppercase',
                 letterSpacing: '0.4px',
                 color: isAssigned ? '#1e293b' : '#dc2626',
@@ -328,7 +327,7 @@ export const DispatchWorkflow = ({
               className={`badge-priority ${
                 selectedSos.priority === 'CRITICAL' ? 'critical' : selectedSos.priority === 'HIGH' ? 'high' : 'medium'
               }`}
-              style={{ fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 4 }}
+              style={{ fontSize: 12, fontWeight: 900, padding: '3px 8px', borderRadius: 5 }}
             >
               {selectedSos.priority}
             </span>
@@ -338,87 +337,102 @@ export const DispatchWorkflow = ({
                 onClick={onToggleCollapse}
                 style={{
                   background: '#f8fafc',
-                  border: '1px solid #cbd5e1',
+                  border: '1.5px solid #cbd5e1',
                   borderRadius: 6,
-                  padding: '3px 8px',
+                  padding: '4px 9px',
                   cursor: 'pointer',
-                  color: '#475569',
+                  color: '#334155',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 3,
-                  fontSize: 11.5,
-                  fontWeight: 700,
+                  gap: 4,
+                  fontSize: 12,
+                  fontWeight: 800,
                   transition: 'all 0.15s ease',
                   boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                 }}
                 title="Thu gọn bảng tác chiến để mở rộng toàn màn hình bản đồ"
               >
                 <span>Thu gọn</span>
-                <ChevronRight size={13} />
+                <ChevronRight size={14} />
               </button>
             )}
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7 }}>
-          <h2 style={{ fontSize: 17, fontWeight: 900, color: '#0f172a', margin: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+          <h2 style={{ fontSize: 20, fontWeight: 900, color: '#0f172a', margin: 0, letterSpacing: '-0.3px' }}>
             {selectedSos.sosCode}
           </h2>
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--sos-text-secondary)', background: 'var(--sos-surface-subtle)', border: '1px solid var(--sos-border)', padding: '2px 7px', borderRadius: 4 }}>
+          <span style={{ fontSize: 13, fontWeight: 800, color: '#0369a1', background: '#f0f9ff', border: '1.5px solid #bae6fd', padding: '2px 8px', borderRadius: 6 }}>
             {selectedSos.emergencyType}
           </span>
-          <span style={{ fontSize: 12, color: 'var(--sos-text-muted)' }}>
+          <span style={{ fontSize: 13, color: '#64748b', fontWeight: 600 }}>
             • {selectedSos.timeAgo || 'Vừa xong'}
           </span>
         </div>
       </div>
 
-      {/* 2. SCROLLABLE WORKSPACE CONTENT */}
-      <div
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: '12px 14px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 12,
-        }}
-      >
-        {/* Sub-component: Citizen Distress Profile */}
+      {/* 2. FIXED CITIZEN DISTRESS PROFILE */}
+      <div style={{ flexShrink: 0, padding: '12px 14px 4px 14px' }}>
         <CitizenDistressProfile selectedSos={selectedSos} />
+      </div>
 
-        {/* Rescue Team Allocation Section vs Active Mission Console */}
-        {!isAssigned ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span>🛟</span>
-                  <span>PHÂN CÔNG ĐỘI CỨU HỘ {districtNameLabel.toUpperCase()}</span>
-                </div>
-                <div style={{ fontSize: 11.5, color: 'var(--sos-text-muted)', marginTop: 2 }}>
-                  {availableTeams.length} đội trực chiến sẵn sàng xuất kích
-                </div>
+      {/* 3. RESCUE TEAMS ALLOCATION SECTION (CHỈ CUỘN Ở CÁC ĐỘI) */}
+      {!isAssigned ? (
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {/* Cố định tiêu đề phân công */}
+          <div
+            style={{
+              flexShrink: 0,
+              padding: '10px 14px 8px 14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>🛟</span>
+                <span>PHÂN CÔNG ĐỘI CỨU HỘ {districtNameLabel.toUpperCase()}</span>
               </div>
-
-              <span
-                style={{
-                  fontSize: 10.5,
-                  fontWeight: 700,
-                  background: 'rgba(37, 99, 235, 0.08)',
-                  color: '#2563eb',
-                  padding: '2px 8px',
-                  borderRadius: 12,
-                  border: '1px solid rgba(37, 99, 235, 0.2)',
-                }}
-              >
-                {districtNameLabel}
-              </span>
+              <div style={{ fontSize: 11.5, color: 'var(--sos-text-muted)', marginTop: 2 }}>
+                {availableTeams.length} đội trực chiến sẵn sàng xuất kích
+              </div>
             </div>
 
-            {/* Sub-components: Rescue Team Cards List */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-              {availableTeams.map((team, index) => {
+            <span
+              style={{
+                fontSize: 10.5,
+                fontWeight: 700,
+                background: 'rgba(37, 99, 235, 0.08)',
+                color: '#2563eb',
+                padding: '2px 8px',
+                borderRadius: 12,
+                border: '1px solid rgba(37, 99, 235, 0.2)',
+              }}
+            >
+              {districtNameLabel}
+            </span>
+          </div>
+
+          {/* CHỈ CUỘN DANH SÁCH CÁC ĐỘI CỨU HỘ */}
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
+              padding: '2px 14px 12px 14px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 9,
+            }}
+          >
+            {availableTeams.length === 0 ? (
+              <div style={{ padding: '22px 14px', textAlign: 'center', background: '#f8fafc', borderRadius: 8, border: '1px dashed #cbd5e1', color: '#64748b', fontSize: 12.5, lineHeight: 1.5 }}>
+                Chưa có đội cứu hộ nào thuộc địa bàn {activeOfficer?.jurisdictionAreaName || 'quản lý'}.
+              </div>
+            ) : (
+              availableTeams.map((team, index) => {
                 const isSelected = activeSelectedTeamIds.includes(team.id);
                 const teamVeh = vehicles.find((v) => v.teamId === team.id) || vehicles[0];
                 const isRecommended = index === 0;
@@ -432,7 +446,8 @@ export const DispatchWorkflow = ({
                     ? 'Ca-nô cứu sinh 43-HC (6 người)'
                     : `${teamVeh?.name || 'Ca-nô'} (${teamVeh?.capacity || '6 người'})`;
 
-                const etaText = index === 1 ? '~6-7 phút' : '~5-7 phút';
+                // Khoảng cách & thời gian tính bằng xe ô tô (chuẩn Google Maps)
+                const etaText = index === 0 ? '5 phút (1.8 km)' : index === 1 ? '7 phút (2.6 km)' : `${5 + index * 3} phút (${(1.8 + index * 1.1).toFixed(1)} km)`;
 
                 const teamDisplayName =
                   team.id === 'team-hc-htd'
@@ -452,11 +467,13 @@ export const DispatchWorkflow = ({
                     onViewMembers={() => setViewingTeamDetail(team)}
                   />
                 );
-              })}
-            </div>
+              })
+            )}
           </div>
-        ) : (
-          /* Sub-component: Active Mission Console when Assigned */
+        </div>
+      ) : (
+        /* Khi đã phân công: Console nhiệm vụ cuộn linh hoạt */
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 14px' }}>
           <ActiveMissionConsole
             assignment={assignment}
             selectedSos={selectedSos}
@@ -465,8 +482,8 @@ export const DispatchWorkflow = ({
             onOpenReassign={onOpenReassign}
             onOpenCancel={onOpenCancel}
           />
-        )}
-      </div>
+        </div>
+      )}
 
       {/* 3. STICKY ACTION FOOTER (ALWAYS VISIBLE AT BOTTOM) */}
       {!isAssigned && (

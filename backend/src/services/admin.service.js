@@ -7,6 +7,7 @@ const {
   HazardReport,
   AuthorityOrganization,
   AdministrativeArea,
+  Notification,
 } = require('../models');
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
@@ -55,18 +56,33 @@ class AdminService {
     const skip = (page - 1) * limit;
 
     const filter = {};
-    if (query.role) filter.roles = query.role;
+    if (query.role) {
+      if (query.role === 'RESCUER') {
+        filter.$or = [
+          { roles: 'RESCUER' },
+          { 'rescuer.verificationStatus': { $in: ['PENDING', 'VERIFIED', 'REJECTED'] } },
+        ];
+      } else {
+        filter.roles = query.role;
+      }
+    }
     if (query.status) filter.status = query.status;
     if (query.isVerified !== undefined) {
       filter.isVerified = query.isVerified === 'true' || query.isVerified === true;
     }
     if (query.search) {
       const term = query.search.trim();
-      filter.$or = [
+      const searchCond = [
         { fullName: { $regex: term, $options: 'i' } },
         { email: { $regex: term, $options: 'i' } },
         { phone: { $regex: term, $options: 'i' } },
       ];
+      if (filter.$or) {
+        filter.$and = [{ $or: filter.$or }, { $or: searchCond }];
+        delete filter.$or;
+      } else {
+        filter.$or = searchCond;
+      }
     }
 
     const [users, total] = await Promise.all([
@@ -517,15 +533,120 @@ class AdminService {
     const user = await User.findById(id);
     if (!user) throw new ApiError(404, 'Không tìm thấy cứu hộ viên này');
     if (!user.roles.includes('RESCUER')) {
-      throw new ApiError(400, 'Tài khoản này không có vai trò RESCUER');
+      if (verificationStatus === 'VERIFIED') {
+        user.roles.push('RESCUER');
+      } else {
+        throw new ApiError(400, 'Tài khoản này không có vai trò RESCUER');
+      }
     }
 
     user.rescuer.verificationStatus = verificationStatus;
     if (verificationStatus === 'VERIFIED') {
       user.rescuer.availabilityStatus = 'AVAILABLE';
       if (user.status === 'PENDING') user.status = 'ACTIVE';
+      if (!user.roles.includes('RESCUER')) {
+        user.roles.push('RESCUER');
+      }
     }
     await user.save();
+
+    // Phát tín hiệu Realtime cho người dùng lập tức (SSE + Socket.IO + DB Notification)
+    try {
+      const isApproved = verificationStatus === 'VERIFIED';
+      const userIdStr = user._id.toString();
+
+      // 1. Tạo bản ghi Notification lưu trữ trong DB
+      const notifTitle = isApproved ? '🎉 Hồ sơ cứu hộ đã được phê duyệt!' : 'Thông báo kết quả duyệt hồ sơ cứu hộ';
+      const notifContent = isApproved
+        ? 'Chúc mừng bạn! Hồ sơ đăng ký Cứu hộ viên đã được chính quyền phê duyệt. Bạn đã có thể nhận lệnh điều phối và gia nhập đội cứu hộ.'
+        : 'Hồ sơ đăng ký Cứu hộ viên của bạn chưa đáp ứng đủ điều kiện hoặc đã bị từ chối.';
+      const broadcastId = `rescuer_verification_${userIdStr}_${verificationStatus}`;
+
+      const notifDoc = await Notification.create({
+        userId: user._id,
+        type: 'SYSTEM',
+        title: notifTitle,
+        content: notifContent,
+        priority: 'HIGH',
+        isRead: false,
+        data: {
+          type: 'RESCUER_VERIFICATION',
+          verificationStatus,
+          userId: userIdStr,
+          broadcastId,
+          timestamp: Date.now(),
+        },
+      });
+
+      const safeUser = user.toSafeObject ? user.toSafeObject() : user.toObject({ transform: (doc, ret) => { delete ret.passwordHash; return ret; } });
+
+      const realtimePayload = {
+        _id: notifDoc._id.toString(),
+        type: 'RESCUER_VERIFICATION',
+        action: 'VERIFIED_STATUS_CHANGED',
+        verificationStatus,
+        title: notifTitle,
+        content: notifContent,
+        priority: 'HIGH',
+        userId: userIdStr,
+        roles: user.roles,
+        rescuer: user.rescuer,
+        user: safeUser,
+        data: {
+          type: 'RESCUER_VERIFICATION',
+          verificationStatus,
+          userId: userIdStr,
+          broadcastId,
+          timestamp: Date.now(),
+        },
+      };
+
+      // 2. Phát SSE Stream qua EventBus
+      try {
+        const eventBus = require('./eventBus');
+        eventBus.emit('notification_event', {
+          action: 'USER',
+          userId: userIdStr,
+          data: realtimePayload,
+        });
+      } catch (e) {
+        console.warn('⚠️ Lỗi emit eventBus SSE:', e.message);
+      }
+
+      // 3. Phát Socket.IO trực tiếp
+      try {
+        const { getIO } = require('../socket');
+        const io = getIO();
+        if (io) {
+          io.to(`user_${userIdStr}`).emit('rescuer:verification_status_changed', realtimePayload);
+          io.to(`user_${userIdStr}`).emit('user:profile_updated', realtimePayload);
+          io.emit('rescuer:verification_status_changed', realtimePayload);
+          io.emit('rescuer:verified', realtimePayload);
+        }
+      } catch (e) {
+        console.warn('⚠️ Lỗi emit Socket.IO:', e.message);
+      }
+
+      // 4. Push Notification tới điện thoại
+      try {
+        if (user.pushToken) {
+          const { sendExpoPushNotification } = require('../utils/expoPush');
+          await sendExpoPushNotification({
+            to: user.pushToken,
+            title: isApproved ? '🎉 Hồ sơ cứu hộ đã được phê duyệt!' : 'Hồ sơ cứu hộ',
+            body: isApproved
+              ? 'Hồ sơ Cứu hộ viên của bạn đã được phê duyệt thành công.'
+              : 'Hồ sơ đăng ký Cứu hộ viên đã bị từ chối.',
+            data: {
+              type: 'RESCUER_VERIFICATION',
+              verificationStatus,
+            },
+          });
+        }
+      } catch (_) {}
+    } catch (realtimeErr) {
+      console.warn('⚠️ [verifyRescuer Realtime Error]:', realtimeErr.message);
+    }
 
     return user.toObject({ transform: (doc, ret) => { delete ret.passwordHash; return ret; } });
   }

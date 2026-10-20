@@ -101,6 +101,34 @@ class UserService {
       }
     }
 
+    if (data.avatarUrl !== undefined) {
+      let finalAvatar = typeof data.avatarUrl === 'string' ? data.avatarUrl.trim() : null;
+      if (finalAvatar && (finalAvatar.startsWith('data:image/') || finalAvatar.startsWith('/9j/') || finalAvatar.length > 500)) {
+        try {
+          const uploadPayload = finalAvatar.startsWith('data:image/')
+            ? finalAvatar
+            : `data:image/jpeg;base64,${finalAvatar}`;
+
+          const uploadResult = await cloudinary.uploader.upload(uploadPayload, {
+            folder: 'sos_systems/avatars',
+            resource_type: 'image',
+            public_id: `avatar_${userId}_${Date.now()}`,
+            overwrite: true,
+            transformation: [
+              { width: 400, height: 400, crop: 'fill', gravity: 'face' }
+            ],
+          });
+
+          if (uploadResult && uploadResult.secure_url) {
+            finalAvatar = uploadResult.secure_url;
+          }
+        } catch (err) {
+          console.warn('Lỗi upload avatar lên Cloudinary trong updateMe:', err.message);
+        }
+      }
+      user.avatarUrl = finalAvatar;
+    }
+
     // Cập nhật thông tin cán bộ địa phương (Authority Profile)
     if (authority && typeof authority === 'object') {
       if (!user.authority) {
@@ -220,6 +248,7 @@ class UserService {
     return {
       userId: user._id,
       avatarUrl: user.avatarUrl,
+      user: user.toSafeObject(),
     };
   }
 

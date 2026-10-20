@@ -5,6 +5,7 @@ import { AppProvider } from '@/context/AppContext';
 import { domainDService } from '@/services/domainDService';
 import { logoutApi } from '@/api';
 import { parseRoute, buildRouteUrl, navigateTo } from '@/services/appRouter';
+import { ToastContainer } from '@/components/common/ToastContainer';
 import type { User } from '@/types/auth';
 import './App.css';
 
@@ -203,6 +204,7 @@ function App() {
   return (
     <AppProvider>
       <MainRouter />
+      <ToastContainer />
     </AppProvider>
   );
 }

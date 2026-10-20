@@ -75,16 +75,58 @@ class RescueTeamService {
    */
   async getTeams(query = {}) {
     const page = Math.max(1, parseInt(query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 10));
+    const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 100));
     const skip = (page - 1) * limit;
 
     const filter = {};
     if (query.status) filter.status = query.status;
     if (query.type) filter.type = query.type;
-    if (query.areaId) filter.areaId = query.areaId;
     if (query.authorityId) filter.authorityId = query.authorityId;
     if (query.search) {
       filter.name = { $regex: query.search.trim(), $options: 'i' };
+    }
+
+    if (query.areaId && query.areaId !== 'ALL') {
+      const mongoose = require('mongoose');
+      let targetArea = null;
+      if (mongoose.Types.ObjectId.isValid(query.areaId)) {
+        targetArea = await AdministrativeArea.findById(query.areaId);
+      }
+      if (!targetArea) {
+        targetArea = await AdministrativeArea.findOne({
+          $or: [{ code: query.areaId }, { name: new RegExp(query.areaId, 'i') }],
+        });
+      }
+
+      if (targetArea) {
+        const relevantAreaIds = [targetArea._id];
+        // Nếu là Quận/Huyện: bao gồm tất cả các Phường/Xã trực thuộc
+        const childWards = await AdministrativeArea.find({ parentId: targetArea._id }).select('_id');
+        childWards.forEach((w) => relevantAreaIds.push(w._id));
+
+        // Nếu là Phường/Xã: bao gồm Quận/Huyện cấp trên
+        if (targetArea.parentId) {
+          relevantAreaIds.push(targetArea.parentId);
+        }
+
+        const cleanName = (targetArea.name || '')
+          .replace(/^(phường|xã|quận|huyện|thành phố|thị xã)\s+/i, '')
+          .trim();
+
+        const areaConditions = [{ areaId: { $in: relevantAreaIds } }];
+        if (cleanName.length >= 3) {
+          areaConditions.push({ name: new RegExp(cleanName, 'i') });
+        }
+
+        if (filter.$or) {
+          filter.$and = [{ $or: filter.$or }, { $or: areaConditions }];
+          delete filter.$or;
+        } else {
+          filter.$or = areaConditions;
+        }
+      } else {
+        filter.areaId = query.areaId;
+      }
     }
 
     const [teams, total] = await Promise.all([
@@ -214,9 +256,11 @@ class RescueTeamService {
   }
 
   /**
-   * Thêm thành viên cứu hộ vào Đội
+   * Thêm / Ứng tuyển thành viên cứu hộ vào Đội
+   * - Nếu do Leader của đội hoặc Authority/Admin thêm: status = 'APPROVED'
+   * - Nếu cứu hộ viên tự ứng tuyển: status = 'PENDING' (cần xác nhận của leader hoặc authority)
    */
-  async addMember(teamId, rescuerId, role = 'MEMBER') {
+  async addMember(teamId, rescuerId, role = 'MEMBER', actor = null) {
     const [team, rescuer] = await Promise.all([
       RescueTeam.findById(teamId),
       User.findById(rescuerId),
@@ -232,25 +276,102 @@ class RescueTeamService {
       throw new ApiError(400, 'Tài khoản này không có vai trò RESCUER');
     }
 
-    // Kiểm tra xem đã là thành viên trong đội chưa
-    const isAlreadyMember = team.members.some(
+    // Kiểm tra xem đã có trong danh sách thành viên hay chưa
+    const existingMember = team.members.find(
       m => m.rescuerId.toString() === rescuerId.toString()
     );
-    if (isAlreadyMember) {
-      throw new ApiError(409, 'Cứu hộ viên này đã có trong danh sách thành viên của đội');
+
+    if (existingMember) {
+      if (existingMember.status === 'PENDING') {
+        throw new ApiError(400, 'Bạn đã nộp đơn ứng tuyển vào đội này và đang chờ xét duyệt');
+      }
+      if (existingMember.status === 'APPROVED' || !existingMember.status) {
+        throw new ApiError(409, 'Cứu hộ viên này đã có trong danh sách thành viên chính thức của đội');
+      }
+      // Nếu trạng thái trước đó bị REJECTED, cho phép nộp đơn lại
+      existingMember.status = 'PENDING';
+      existingMember.role = 'MEMBER';
+      existingMember.joinedAt = new Date();
+      existingMember.approvedAt = null;
+      existingMember.approvedBy = null;
+      await team.save();
+
+      return team.populate({
+        path: 'members.rescuerId',
+        select: 'fullName phone email avatarUrl rescuer status isVerified',
+      });
     }
+
+    // Xác định quyền hạn của người gọi API:
+    // Nếu là ADMIN, LOCAL_AUTHORITY hoặc chính Leader của đội đó thêm thì trực tiếp APPROVED
+    const actorRoles = actor?.roles || [];
+    const isAuthorityOrAdmin = actorRoles.includes('ADMIN') || actorRoles.includes('LOCAL_AUTHORITY');
+    const isTeamLeader = team.leaderId && actor && team.leaderId.toString() === actor._id.toString();
+
+    const isDirectApproval = isAuthorityOrAdmin || isTeamLeader;
+    const finalStatus = isDirectApproval ? 'APPROVED' : 'PENDING';
 
     team.members.push({
       rescuerId,
       role: role === 'LEADER' ? 'LEADER' : 'MEMBER',
+      status: finalStatus,
       joinedAt: new Date(),
+      approvedAt: finalStatus === 'APPROVED' ? new Date() : null,
+      approvedBy: finalStatus === 'APPROVED' && actor ? actor._id : null,
     });
 
     await team.save();
 
     return team.populate({
       path: 'members.rescuerId',
-      select: 'fullName phone email avatarUrl rescuer',
+      select: 'fullName phone email avatarUrl rescuer status isVerified',
+    });
+  }
+
+  /**
+   * Phê duyệt hoặc Từ chối đơn ứng tuyển của cứu hộ viên
+   */
+  async updateMemberStatus(teamId, rescuerId, status, actor) {
+    const team = await RescueTeam.findById(teamId);
+    if (!team) {
+      throw new ApiError(404, 'Không tìm thấy Đội cứu hộ');
+    }
+
+    // Phải là Leader của đội, hoặc LOCAL_AUTHORITY, hoặc ADMIN
+    const actorRoles = actor?.roles || [];
+    const isAuthorityOrAdmin = actorRoles.includes('ADMIN') || actorRoles.includes('LOCAL_AUTHORITY');
+    const isTeamLeader = team.leaderId && actor && team.leaderId.toString() === actor._id.toString();
+
+    if (!isAuthorityOrAdmin && !isTeamLeader) {
+      throw new ApiError(403, 'Chỉ Đội trưởng hoặc Cơ quan quản lý mới có quyền phê duyệt thành viên');
+    }
+
+    const member = team.members.find(
+      m => (m.rescuerId?._id || m.rescuerId).toString() === rescuerId.toString()
+    );
+
+    if (!member) {
+      throw new ApiError(404, 'Không tìm thấy thông tin đơn ứng tuyển của cứu hộ viên này trong đội');
+    }
+
+    if (status === 'APPROVED') {
+      member.status = 'APPROVED';
+      member.approvedAt = new Date();
+      member.approvedBy = actor?._id || null;
+    } else if (status === 'REJECTED') {
+      // Xóa khỏi danh sách thành viên
+      team.members = team.members.filter(
+        m => (m.rescuerId?._id || m.rescuerId).toString() !== rescuerId.toString()
+      );
+    } else {
+      throw new ApiError(400, 'Trạng thái xét duyệt không hợp lệ');
+    }
+
+    await team.save();
+
+    return team.populate({
+      path: 'members.rescuerId',
+      select: 'fullName phone email avatarUrl rescuer status isVerified',
     });
   }
 
@@ -263,12 +384,31 @@ class RescueTeamService {
       throw new ApiError(404, 'Không tìm thấy Đội cứu hộ');
     }
 
-    // Không cho phép xóa Leader hiện tại nếu chưa chuyển giao
-    if (team.leaderId.toString() === rescuerId.toString()) {
-      throw new ApiError(
-        400,
-        'Không thể xóa Đội trưởng hiện tại ra khỏi đội. Vui lòng chuyển giao chức vụ Đội trưởng trước!'
+    const isCurrentLeader =
+      team.leaderId && team.leaderId.toString() === rescuerId.toString();
+
+    if (isCurrentLeader) {
+      // Lấy danh sách các thành viên khác ngoài Đội trưởng
+      const otherMembers = team.members.filter(
+        m => m.rescuerId.toString() !== rescuerId.toString()
       );
+
+      // Trường hợp đội còn thành viên khác thì bắt buộc chuyển giao
+      if (otherMembers.length > 0) {
+        throw new ApiError(
+          400,
+          'Bạn hiện đang là Đội trưởng của đội. Để rời đội, bạn cần chuyển giao chức vụ Đội trưởng cho một thành viên khác.'
+        );
+      }
+
+      // Trường hợp đội chỉ có DUY NHẤT Đội trưởng:
+      // Chuyển trạng thái đội sang INACTIVE (Tạm dừng hoạt động) và cho phép rời
+      team.status = 'INACTIVE';
+      team.leaderId = null;
+      team.members = [];
+      await team.save();
+
+      return team;
     }
 
     const initialLength = team.members.length;

@@ -85,4 +85,15 @@ router.patch(
   rescueTeamController.changeLeader
 );
 
+/**
+ * @route   PATCH /rescue-teams/:id/members/:rescuerId/status
+ * @desc    Phê duyệt hoặc từ chối đơn ứng tuyển của thành viên
+ * @access  LOCAL_AUTHORITY, ADMIN, RESCUER
+ */
+router.patch(
+  '/:id/members/:rescuerId/status',
+  authorize('LOCAL_AUTHORITY', 'ADMIN', 'RESCUER'),
+  rescueTeamController.updateMemberStatus
+);
+
 module.exports = router;

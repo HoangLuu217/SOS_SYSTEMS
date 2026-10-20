@@ -81,7 +81,22 @@ export const onSosCreated = (callback: (newSos: any) => void): (() => void) => {
  */
 export const onSosUpdated = (callback: (updatedSos: any) => void): (() => void) => {
   const s = getSocket();
+  let lastEventTime = 0;
+  let lastEventSignature = '';
+
   const handler = (data: any) => {
+    const id = data?._id || data?.sosCode || '';
+    const status = data?.status || '';
+    const signature = `${id}-${status}`;
+    const now = Date.now();
+
+    // Chống trùng lặp do backend phát đồng thời cả 'sos:updated' và 'sos:status_changed'
+    if (signature && signature === lastEventSignature && now - lastEventTime < 1000) {
+      return;
+    }
+    lastEventSignature = signature;
+    lastEventTime = now;
+
     console.log('🔄 [Socket.IO Web] Nhận tín hiệu cập nhật SOS Realtime:', data);
     callback(data);
   };
@@ -92,6 +107,48 @@ export const onSosUpdated = (callback: (updatedSos: any) => void): (() => void) 
   return () => {
     s.off('sos:updated', handler);
     s.off('sos:status_changed', handler);
+  };
+};
+
+/**
+ * Đăng ký lắng nghe sự kiện có hồ sơ đăng ký Cứu hộ viên mới gửi lên
+ * @param callback Callback nhận dữ liệu người đăng ký mới từ Backend
+ * @returns Hàm hủy lắng nghe (cleanup)
+ */
+export const onRescuerApplicationSubmitted = (callback: (newApplicant: any) => void): (() => void) => {
+  const s = getSocket();
+  const handler = (data: any) => {
+    console.log('📝 [Socket.IO Web] Nhận hồ sơ cứu hộ mới Realtime:', data);
+    callback(data);
+  };
+
+  s.on('rescuer:application_submitted', handler);
+  s.on('rescuer:pending_updated', handler);
+
+  return () => {
+    s.off('rescuer:application_submitted', handler);
+    s.off('rescuer:pending_updated', handler);
+  };
+};
+
+/**
+ * Đăng ký lắng nghe sự kiện trạng thái cứu hộ viên thay đổi (phê duyệt / từ chối)
+ * @param callback Callback nhận dữ liệu cập nhật
+ * @returns Hàm hủy lắng nghe (cleanup)
+ */
+export const onRescuerVerificationChanged = (callback: (data: any) => void): (() => void) => {
+  const s = getSocket();
+  const handler = (data: any) => {
+    console.log('✅ [Socket.IO Web] Trạng thái cứu hộ viên thay đổi Realtime:', data);
+    callback(data);
+  };
+
+  s.on('rescuer:verification_status_changed', handler);
+  s.on('rescuer:verified', handler);
+
+  return () => {
+    s.off('rescuer:verification_status_changed', handler);
+    s.off('rescuer:verified', handler);
   };
 };
 

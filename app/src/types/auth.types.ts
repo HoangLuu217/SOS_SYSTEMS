@@ -28,6 +28,14 @@ export interface UserProfile {
     emergencyContact?: EmergencyContact;
     emergencyContacts?: EmergencyContact[];
   };
+  rescuer?: {
+    idNumber?: string | null;
+    skills: string[];
+    experience?: string | null;
+    vehicleType?: string | null;
+    verificationStatus: 'NOT_REGISTERED' | 'PENDING' | 'VERIFIED' | 'REJECTED';
+    availabilityStatus: 'OFFLINE' | 'AVAILABLE' | 'BUSY' | 'ON_MISSION' | 'SUSPENDED';
+  };
   createdAt?: string;
   updatedAt?: string;
 }

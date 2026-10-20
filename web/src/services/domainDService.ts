@@ -247,16 +247,34 @@ class DomainDService {
     return filtered.length > 0 ? filtered : this.rescueTeams;
   }
 
+  syncRealRescueTeams(teams: RescueTeam[]): RescueTeam[] {
+    if (!teams || teams.length === 0) return [...this.rescueTeams];
+    const realIds = new Set(teams.map((t) => t.id));
+    const kept = this.rescueTeams.filter((t) => !realIds.has(t.id));
+    this.rescueTeams = [...teams, ...kept];
+    return [...this.rescueTeams];
+  }
+
   getVehicles(teamId?: string): Vehicle[] {
     if (!teamId) return [...this.vehicles];
     const filtered = this.vehicles.filter((v) => v.teamId === teamId);
     return filtered.length > 0 ? filtered : this.vehicles;
   }
 
+  syncRealVehicles(vehicles: Vehicle[]): Vehicle[] {
+    if (!vehicles || vehicles.length === 0) return [...this.vehicles];
+    const realIds = new Set(vehicles.map((v) => v.id));
+    const kept = this.vehicles.filter((v) => !realIds.has(v.id));
+    this.vehicles = [...vehicles, ...kept];
+    return [...this.vehicles];
+  }
+
   getAssignmentBySosId(sosId: string): SosAssignment | null {
     const req = this.sosRequests.find((s) => s.id === sosId);
     if (!req || !req.assignmentId) return null;
-    return this.assignments[req.assignmentId] || null;
+    const assign = this.assignments[req.assignmentId];
+    if (!assign || assign.status === 'CANCELLED') return null;
+    return assign;
   }
 
   assignSos(
@@ -281,10 +299,10 @@ class DomainDService {
     const sos = this.sosRequests[sosIndex];
 
     const rescuerLoc = {
-      lat: sos.coordinates.lat - 0.007,
-      lng: sos.coordinates.lng + 0.009,
-      svgX: Math.max(100, Math.min(750, sos.coordinates.svgX + 90)),
-      svgY: Math.max(80, Math.min(500, sos.coordinates.svgY - 70)),
+      lat: sos.coordinates.lat + 0.0045,
+      lng: sos.coordinates.lng + 0.0035,
+      svgX: Math.max(100, Math.min(750, sos.coordinates.svgX + 40)),
+      svgY: Math.max(80, Math.min(500, sos.coordinates.svgY - 40)),
     };
 
     const assignment: SosAssignment = {
@@ -319,6 +337,12 @@ class DomainDService {
     this.save(STORAGE_SOS, this.sosRequests);
 
     return { sos: this.sosRequests[sosIndex], assignment };
+  }
+
+  syncRealAssignment(assignment: SosAssignment): void {
+    if (!assignment || !assignment.id) return;
+    this.assignments[assignment.id] = assignment;
+    this.save(STORAGE_ASSIGNMENTS, this.assignments);
   }
 
   updateAssignmentStatus(assignmentId: string, nextStatus: AssignmentStatus): SosAssignment {

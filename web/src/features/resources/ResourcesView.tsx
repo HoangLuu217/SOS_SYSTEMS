@@ -15,9 +15,12 @@ import {
   PlusCircle,
   Clock,
 } from 'lucide-react';
-import type { VehicleItem, RescueTeamItem } from '@/types/dashboard';
-import { fetchVehicles, fetchRescueTeams } from '@/api';
+import type { VehicleItem, RescueTeamItem, AdministrativeAreaItem } from '@/types/dashboard';
+import type { User } from '@/types/auth';
+import { fetchVehicles, fetchRescueTeams, fetchAdministrativeAreas } from '@/api';
+import { domainDService } from '@/services/domainDService';
 import { FALLBACK_SUPPLIES, type SupplyItem } from '@/constants';
+import { toast } from '@/components/common/toast';
 import '@/features/sos/SosRequestsView.css';
 import './ResourcesView.css';
 
@@ -25,19 +28,68 @@ export interface ResourcesViewProps {
   vehicles?: VehicleItem[];
   rescueTeams?: RescueTeamItem[];
   onOpenMap?: (sosId?: any) => void;
+  user?: User;
 }
 
 export const ResourcesView: React.FC<ResourcesViewProps> = ({
   vehicles: propVehicles = [],
   rescueTeams: propTeams = [],
+  user,
 }) => {
   const [vehicles, setVehicles] = useState<VehicleItem[]>(propVehicles);
   const [rescueTeams, setRescueTeams] = useState<RescueTeamItem[]>(propTeams);
   const [supplies, setSupplies] = useState<SupplyItem[]>(FALLBACK_SUPPLIES);
+  const [areas, setAreas] = useState<AdministrativeAreaItem[]>([]);
+  const [selectedAreaId, setSelectedAreaId] = useState<string>('ALL');
   const [resourceTab, setResourceTab] = useState<'VEHICLES' | 'SUPPLIES'>('VEHICLES');
   const [suppliesSubTab, setSuppliesSubTab] = useState<'BY_TEAM' | 'DEPOT'>('BY_TEAM');
   const [loading, setLoading] = useState<boolean>(false);
   const [refreshIndex, setRefreshIndex] = useState(0);
+
+  // Phân quyền: Cán bộ địa phương (Local) chỉ xem phương tiện/vật tư của địa bàn mình quản lý, Admin xem tất cả
+  const activeOfficer = domainDService.getActiveOfficer();
+  const isAdmin = user?.roles?.includes('ADMIN') || (user as any)?.role === 'ADMIN' || activeOfficer?.role === 'ADMIN';
+
+  const userAreaId =
+    user?.authority?.areaId ||
+    (user?.authority as any)?.administrativeAreaId ||
+    (user?.authority as any)?.jurisdictionAreaId ||
+    activeOfficer?.jurisdictionAreaId;
+
+  const userAreaName =
+    user?.authority?.areaName ||
+    (user?.authority as any)?.jurisdictionAreaName ||
+    activeOfficer?.jurisdictionAreaName ||
+    '';
+
+  const managedArea = useMemo(() => {
+    if (isAdmin) return null;
+    if (userAreaId) {
+      const byId = areas.find((a) => a._id === userAreaId || a.code === userAreaId);
+      if (byId) return byId;
+    }
+    if (userAreaName) {
+      const cleanUser = userAreaName.toLowerCase().replace(/^(phường|xã|quận|huyện)\s+/i, '').trim();
+      const byName = areas.find((a) => {
+        const cleanArea = a.name.toLowerCase().replace(/^(phường|xã|quận|huyện)\s+/i, '').trim();
+        return cleanUser && (cleanArea.includes(cleanUser) || cleanUser.includes(cleanArea));
+      });
+      if (byName) return byName;
+    }
+    return null;
+  }, [areas, isAdmin, userAreaId, userAreaName]);
+
+  const effectiveAreaId = !isAdmin
+    ? (managedArea?._id || userAreaId || (userAreaName ? userAreaName : 'ALL'))
+    : selectedAreaId;
+
+  useEffect(() => {
+    if (!isAdmin && managedArea?._id) {
+      setSelectedAreaId(managedArea._id);
+    } else if (user?.authority?.areaId) {
+      setSelectedAreaId(user.authority.areaId);
+    }
+  }, [isAdmin, managedArea, user?.authority?.areaId]);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -68,10 +120,16 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [vehRes, teamRes] = await Promise.allSettled([
-        fetchVehicles(),
-        fetchRescueTeams(),
+      const areaParam = effectiveAreaId !== 'ALL' ? effectiveAreaId : undefined;
+      const [vehRes, teamRes, areasRes] = await Promise.allSettled([
+        fetchVehicles({ areaId: areaParam, limit: 100 }),
+        fetchRescueTeams({ areaId: areaParam, limit: 100 }),
+        fetchAdministrativeAreas(),
       ]);
+
+      if (areasRes.status === 'fulfilled' && areasRes.value.success && Array.isArray(areasRes.value.data)) {
+        setAreas(areasRes.value.data);
+      }
 
       if (vehRes.status === 'fulfilled' && vehRes.value.success && Array.isArray(vehRes.value.data)) {
         setVehicles(vehRes.value.data);
@@ -81,6 +139,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
       if (teamRes.status === 'fulfilled' && teamRes.value.success && Array.isArray(teamRes.value.data)) {
         setRescueTeams(teamRes.value.data);
+      } else {
+        setRescueTeams([]);
       }
     } catch (e) {
       console.warn('Lỗi tải tài nguyên:', e);
@@ -88,7 +148,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [effectiveAreaId]);
 
   useEffect(() => {
     loadData();
@@ -146,6 +206,35 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
   // Filtered vehicles
   const filteredVehicles = useMemo(() => {
     return vehiclesWithTeam.filter((v) => {
+      // 1. Phân quyền địa phương: Nếu không phải Admin, chỉ hiển thị phương tiện thuộc đội của địa bàn quản lý
+      if (!isAdmin && (managedArea || userAreaName || userAreaId)) {
+        const targetAreaId = managedArea?._id || userAreaId;
+        const targetAreaName = (userAreaName || managedArea?.name || '')
+          .toLowerCase()
+          .replace(/^(phường|xã|quận|huyện)\s+/i, '')
+          .trim();
+
+        const team = v.assignedTeam;
+        const teamAreaObj = typeof team?.areaId === 'object' && team?.areaId !== null ? team.areaId : null;
+        const teamAreaId = teamAreaObj?._id || team?.areaId;
+        const teamAreaName = (teamAreaObj?.name || (team as any)?.areaName || '').toLowerCase();
+        const teamNameLower = (team?.name || '').toLowerCase();
+
+        const matchId = targetAreaId && (teamAreaId === targetAreaId || teamAreaId === managedArea?.code);
+        const matchParentChild = Boolean(
+          ((teamAreaObj as any)?.parentId && ((teamAreaObj as any).parentId === targetAreaId || (teamAreaObj as any).parentId === managedArea?._id)) ||
+          (managedArea?.parentId && (managedArea.parentId === teamAreaId || managedArea.parentId === (teamAreaObj as any)?._id))
+        );
+        const matchName = Boolean(
+          targetAreaName &&
+          (teamAreaName.includes(targetAreaName) ||
+            targetAreaName.includes(teamAreaName) ||
+            teamNameLower.includes(targetAreaName))
+        );
+
+        if (!matchId && !matchParentChild && !matchName) return false;
+      }
+
       if (vehicleTypeFilter !== 'ALL' && v.type !== vehicleTypeFilter) return false;
       if (vehicleTeamFilter !== 'ALL') {
         const teamId = v.assignedTeam?._id || (typeof v.teamId === 'object' && v.teamId ? (v.teamId as any)._id : v.teamId);
@@ -162,23 +251,63 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       }
       return true;
     });
-  }, [vehiclesWithTeam, vehicleTypeFilter, vehicleTeamFilter, searchQuery]);
+  }, [vehiclesWithTeam, vehicleTypeFilter, vehicleTeamFilter, searchQuery, isAdmin, managedArea, userAreaId, userAreaName]);
 
   // Filtered warehouse supplies
   const filteredSupplies = useMemo(() => {
+    const targetAreaName = (userAreaName || managedArea?.name || '')
+      .toLowerCase()
+      .replace(/^(phường|xã|quận|huyện)\s+/i, '')
+      .trim();
+
     return supplies.filter((s) => {
       if (supplyCategoryFilter !== 'ALL' && s.category !== supplyCategoryFilter) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         return s.name.toLowerCase().includes(q) || s.location.toLowerCase().includes(q);
       }
+      // Phân quyền kho địa phương: Nếu là cán bộ địa phương, ưu tiên hiển thị kho tại địa bàn hoặc kho trung tâm
+      if (!isAdmin && targetAreaName) {
+        const locLower = s.location.toLowerCase();
+        const isLocalWarehouse = locLower.includes(targetAreaName);
+        const isCentralWarehouse = locLower.includes('trung tâm') || locLower.includes('khẩn cấp') || locLower.includes('kỹ thuật');
+        return isLocalWarehouse || isCentralWarehouse;
+      }
       return true;
     });
-  }, [supplies, supplyCategoryFilter, searchQuery]);
+  }, [supplies, supplyCategoryFilter, searchQuery, isAdmin, userAreaName, managedArea]);
 
   // Team supplies manifest (khi thằng team nó đi cứu lấy gì thì cũng sẽ get ra tương tự)
   const teamSuppliesManifest = useMemo(() => {
-    return rescueTeams.map((team, index) => {
+    const targetAreaId = managedArea?._id || userAreaId;
+    const targetAreaName = (userAreaName || managedArea?.name || '')
+      .toLowerCase()
+      .replace(/^(phường|xã|quận|huyện)\s+/i, '')
+      .trim();
+
+    const scopedTeams = !isAdmin && (managedArea || userAreaName || userAreaId)
+      ? rescueTeams.filter((team) => {
+          const teamAreaObj = typeof team.areaId === 'object' && team.areaId !== null ? team.areaId : null;
+          const teamAreaId = teamAreaObj?._id || team.areaId;
+          const teamAreaName = (teamAreaObj?.name || (team as any).areaName || '').toLowerCase();
+          const teamNameLower = (team.name || '').toLowerCase();
+
+          const matchId = targetAreaId && (teamAreaId === targetAreaId || teamAreaId === managedArea?.code);
+          const matchParentChild = Boolean(
+            ((teamAreaObj as any)?.parentId && ((teamAreaObj as any).parentId === targetAreaId || (teamAreaObj as any).parentId === managedArea?._id)) ||
+            (managedArea?.parentId && (managedArea.parentId === teamAreaId || managedArea.parentId === (teamAreaObj as any)?._id))
+          );
+          const matchName = Boolean(
+            targetAreaName &&
+            (teamAreaName.includes(targetAreaName) ||
+              targetAreaName.includes(teamAreaName) ||
+              teamNameLower.includes(targetAreaName))
+          );
+          return matchId || matchParentChild || matchName;
+        })
+      : rescueTeams;
+
+    return scopedTeams.map((team, index) => {
       const leader = typeof team.leaderId === 'object' && team.leaderId !== null ? team.leaderId : null;
       const leaderName = leader?.fullName || 'Chỉ huy dã chiến';
       const leaderPhone = leader?.phone || '0905 112 233';
@@ -206,7 +335,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         dispatchedAt: `${25 + index * 15} phút trước`,
       };
     });
-  }, [rescueTeams]);
+  }, [rescueTeams, isAdmin, managedArea, userAreaId, userAreaName]);
 
   // Handle Add Vehicle
   const handleCreateVehicle = (e: React.FormEvent) => {
@@ -235,7 +364,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     setIsCreateVehicleOpen(false);
     setNewPlate('');
     setNewDescription('');
-    alert('✅ Đã thêm phương tiện cơ động vào biên chế đội cứu hộ thành công!');
+    toast.success('Đã thêm phương tiện cơ động vào biên chế đội cứu hộ thành công!', 'Biên chế thành công');
   };
 
   // Handle Dispatch Supply
@@ -245,7 +374,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
     const amount = Number(dispatchAmount);
     if (isNaN(amount) || amount <= 0 || amount > selectedSupplyToDispatch.available) {
-      alert('Số lượng cấp phát không hợp lệ hoặc vượt quá cơ số trong kho!');
+      toast.warning('Số lượng cấp phát không hợp lệ hoặc vượt quá cơ số trong kho!', 'Cảnh báo cấp phát');
       return;
     }
 
@@ -464,7 +593,62 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            {/* Lọc Theo Địa Phương: Admin xem tất cả, Local chỉ xem khu vực mình quản lý */}
+            {!isAdmin ? (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: 8,
+                  padding: '6px 12px',
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  color: '#1d4ed8',
+                  height: 34,
+                  boxSizing: 'border-box',
+                }}
+                title="Địa bàn bạn đang phụ trách quản lý phương tiện & vật tư"
+              >
+                <MapPin size={14} style={{ color: '#2563eb', flexShrink: 0 }} />
+                <span>Khu vực: {managedArea?.name || userAreaName || 'Địa phương phụ trách'}</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <MapPin size={14} style={{ color: '#0284c7' }} />
+                <select
+                  value={selectedAreaId}
+                  onChange={(e) => {
+                    setSelectedAreaId(e.target.value);
+                    setVehicleTeamFilter('ALL');
+                  }}
+                  style={{
+                    background: '#ffffff',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: 8,
+                    padding: '6px 12px',
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    color: '#0f172a',
+                    outline: 'none',
+                    height: 34,
+                    cursor: 'pointer',
+                  }}
+                  title="Lọc phương tiện & nguồn lực theo từng địa phương (Quyền Admin)"
+                >
+                  <option value="ALL">📍 Toàn thành phố / Tất cả địa bàn</option>
+                  {areas.map((area) => (
+                    <option key={area._id} value={area._id}>
+                      {area.name} ({area.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="executive-search-input-wrap">
               <Search size={14} className="search-icon" />
               <input

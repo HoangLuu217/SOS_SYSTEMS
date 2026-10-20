@@ -17,6 +17,7 @@ import type { SosRequestItem } from '@/types/dashboard';
 import { fetchSosRequests, completeSosRequest } from '@/api';
 import { FALLBACK_SOS_LIST } from '@/constants';
 import { onSosCreated, onSosUpdated } from '@/services/socketService';
+import { toast } from '@/components/common/toast';
 import '@/features/sos/SosRequestsView.css';
 import './CoordinationView.css';
 
@@ -75,7 +76,23 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
     const unsubCreated = onSosCreated(() => {
       loadData();
     });
-    const unsubUpdated = () => {
+    const unsubUpdated = (updatedSos: any) => {
+      if (updatedSos && (updatedSos._id || updatedSos.id)) {
+        const targetId = updatedSos._id || updatedSos.id;
+        setSosList((prev) =>
+          prev.map((s) =>
+            s._id === targetId || (s as any).id === targetId
+              ? { ...s, ...updatedSos, status: updatedSos.status }
+              : s
+          )
+        );
+        setSelectedSosDetail((prev) => {
+          if (prev && (prev._id === targetId || (prev as any).id === targetId)) {
+            return { ...prev, ...updatedSos, status: updatedSos.status };
+          }
+          return prev;
+        });
+      }
       loadData();
     };
     const unsubUpdatedSocket = onSosUpdated(unsubUpdated);
@@ -98,12 +115,13 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
         await completeSosRequest(sosId);
         refreshData();
       }
+      toast.success('Đã hoàn thành và đóng yêu cầu cứu hộ!', 'Nhiệm vụ hoàn tất');
       window.dispatchEvent(new CustomEvent('sos_data_updated'));
       if (selectedSosDetail?._id === sosId) {
         setSelectedSosDetail((prev) => (prev ? { ...prev, status: 'COMPLETED' } : null));
       }
     } catch (err: any) {
-      alert('❌ Lỗi: ' + (err?.message || 'Không thể cập nhật'));
+      toast.error(err?.message || 'Không thể cập nhật trạng thái nhiệm vụ', 'Lỗi điều phối');
     } finally {
       setCompletingId(null);
     }

@@ -15,12 +15,16 @@ export const NAV_TITLES: Record<NavItemKey, NavMeta> = {
     desc: 'Tiếp nhận dữ liệu từ App & cuộc gọi Hotline, xác minh và đánh giá mức độ khẩn cấp',
   },
   coordination: {
-    title: 'ĐIỀU PHỐI & PHÂN CÔNG CỨU HỘ',
+    title: 'ĐIỀU PHỐI NHIỆM VỤ CỨU HỘ',
     desc: 'Phân công đội cứu nạn, theo dõi tiến trình thực địa và đóng yêu cầu hoàn thành',
   },
   rescuers: {
     title: 'ĐỘI NGŨ CỨU NẠN ĐỊA PHƯƠNG',
     desc: 'Quản lý lực lượng cứu hộ, trạng thái sẵn sàng và khu vực hoạt động',
+  },
+  rescuers_approval: {
+    title: 'DUYỆT HỒ SƠ ĐĂNG KÝ CỨU HỘ',
+    desc: 'Thẩm định hồ sơ đăng ký Cứu hộ viên, đối soát CCCD, kỹ năng và phê duyệt vào hệ thống',
   },
   resources: {
     title: 'PHƯƠNG TIỆN & VẬT TƯ',

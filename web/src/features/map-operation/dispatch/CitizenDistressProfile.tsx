@@ -13,122 +13,174 @@ export const CitizenDistressProfile: React.FC<Props> = ({ selectedSos }) => {
     <>
       <div
         style={{
-          padding: '13px 15px',
-          background: 'var(--sos-surface)',
-          border: '1px solid var(--sos-border)',
-          borderRadius: 8,
-          fontSize: 13,
+          padding: '11px 13px',
+          background: '#ffffff',
+          border: '1.5px solid #cbd5e1',
+          borderRadius: 12,
           display: 'flex',
           flexDirection: 'column',
           gap: 9,
+          boxShadow: '0 2px 6px -1px rgba(0, 0, 0, 0.05)',
         }}
       >
-        {/* Row 1: Citizen Name + Direct hotline call */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 15 }}>
-            {selectedSos.citizenName}
-          </span>
+        {/* Section 1: Tên người dân & Số điện thoại đường dây nóng */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 2 }}>
+              Người Dân Gặp Nạn
+            </div>
+            <span style={{ fontWeight: 900, color: '#0f172a', fontSize: 17, letterSpacing: '-0.2px' }}>
+              {selectedSos.citizenName}
+            </span>
+          </div>
+
           <a
             href={`tel:${selectedSos.citizenPhone}`}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 5,
-              color: '#0f172a',
-              fontWeight: 700,
+              gap: 6,
+              color: '#0284c7',
+              fontWeight: 800,
               textDecoration: 'none',
-              background: 'var(--sos-surface-subtle)',
-              padding: '4px 9px',
-              borderRadius: 5,
-              border: '1px solid var(--sos-border)',
-              fontSize: 12,
+              background: '#f0f9ff',
+              padding: '6px 12px',
+              borderRadius: 8,
+              border: '1.5px solid #bae6fd',
+              fontSize: 13.5,
+              transition: 'all 0.15s ease',
             }}
+            title="Gọi trực tiếp cho người dân"
           >
-            <Phone size={13} style={{ color: '#0284c7' }} />
+            <Phone size={15} style={{ color: '#0284c7' }} />
             <span>{selectedSos.citizenPhone}</span>
           </a>
         </div>
 
-        {/* Row 2: Location snippet */}
-        <div style={{ color: '#1e293b', lineHeight: 1.4, fontSize: 13, display: 'flex', alignItems: 'flex-start', gap: 5 }}>
-          <MapPin size={15} style={{ color: '#dc2626', flexShrink: 0, marginTop: 1 }} />
-          <span><strong style={{ fontWeight: 700, color: '#0f172a' }}>{selectedSos.locationName}</strong></span>
+        {/* Divider 1 */}
+        <div style={{ height: 1, background: '#e2e8f0', margin: '2px 0' }} />
+
+        {/* Section 2: Vị trí hiện trường khẩn cấp */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <MapPin size={18} style={{ color: '#dc2626', flexShrink: 0, marginTop: 2 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 2 }}>
+              Vị Trí Cứu Trợ (Hiện Trường)
+            </div>
+            <div style={{ fontSize: 14.5, fontWeight: 800, color: '#0f172a', lineHeight: 1.45 }}>
+              {selectedSos.locationName}
+            </div>
+          </div>
         </div>
 
-        {/* Row 3: Casualties and Vulnerabilities summary */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--sos-text-secondary)' }}>
-          <span style={{ fontWeight: 800, color: '#dc2626', fontSize: 13.5 }}>
-            {selectedSos.affectedPeople} người gặp nạn
-          </span>
+        {/* Divider 2 */}
+        <div style={{ height: 1, background: '#e2e8f0', margin: '2px 0' }} />
+
+        {/* Section 3: Số lượng người & Đối tượng tổn thương */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span
+              style={{
+                background: '#fef2f2',
+                border: '1.5px solid #fecaca',
+                padding: '4px 10px',
+                borderRadius: 7,
+                fontWeight: 900,
+                color: '#dc2626',
+                fontSize: 14.5,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+              }}
+            >
+              <span>🚨</span>
+              <span>{selectedSos.affectedPeople} người gặp nạn</span>
+            </span>
+          </div>
+
           {selectedSos.affectedPeople > 1 && (
-            <span style={{ color: 'var(--sos-text-muted)', fontSize: 12, fontWeight: 500 }}>
+            <span style={{ color: '#475569', fontSize: 13, fontWeight: 700 }}>
               (Bao gồm người cao tuổi, trẻ nhỏ)
             </span>
           )}
         </div>
 
-        {/* Row 4: Narrative Description */}
+        {/* Section 4: Mô tả chi tiết tình huống hiện trường */}
         {selectedSos.description && (
           <div
             style={{
-              padding: '8px 11px',
-              background: 'var(--sos-surface-subtle)',
-              borderLeft: '3px solid #dc2626',
-              fontStyle: 'italic',
-              color: '#334155',
-              lineHeight: 1.45,
-              borderRadius: '0 6px 6px 0',
-              fontSize: 12.5,
-              fontWeight: 500,
+              padding: '11px 14px',
+              background: '#f8fafc',
+              borderLeft: '4px solid #ef4444',
+              borderRadius: '0 8px 8px 0',
+              borderTop: '1px solid #e2e8f0',
+              borderRight: '1px solid #e2e8f0',
+              borderBottom: '1px solid #e2e8f0',
             }}
           >
-            "{selectedSos.description}"
+            <div style={{ fontSize: 11.5, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 4 }}>
+              Lời Nhắn Hiện Trường
+            </div>
+            <div
+              style={{
+                fontStyle: 'italic',
+                color: '#1e293b',
+                lineHeight: 1.55,
+                fontSize: 13.5,
+                fontWeight: 600,
+              }}
+            >
+              "{selectedSos.description}"
+            </div>
           </div>
         )}
 
-        {/* Row 5: Photo Attachment */}
+        {/* Section 5: Ảnh hiện trường xác minh (nếu có) */}
         {selectedSos.imageUrl && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 2 }}>
-            <div
-              onClick={() => setIsLightboxOpen(true)}
-              style={{
-                width: 58,
-                height: 42,
-                borderRadius: 6,
-                overflow: 'hidden',
-                cursor: 'pointer',
-                border: '1px solid var(--sos-border)',
-                flexShrink: 0,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-              }}
-              title="Bấm để xem ảnh phóng to"
-            >
-              <img
-                src={selectedSos.imageUrl}
-                alt="Hiện trường"
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
+          <>
+            <div style={{ height: 1, background: '#e2e8f0', margin: '2px 0' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div
+                onClick={() => setIsLightboxOpen(true)}
+                style={{
+                  width: 68,
+                  height: 48,
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  cursor: 'pointer',
+                  border: '1.5px solid #cbd5e1',
+                  flexShrink: 0,
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.08)',
+                }}
+                title="Bấm để xem ảnh phóng to"
+              >
+                <img
+                  src={selectedSos.imageUrl}
+                  alt="Hiện trường"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsLightboxOpen(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  color: '#2563eb',
+                  fontSize: 13,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                }}
+              >
+                <Maximize2 size={15} />
+                <span>Xem ảnh hiện trường (Phóng to)</span>
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsLightboxOpen(true)}
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                color: '#2563eb',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
-            >
-              <Maximize2 size={13} />
-              <span>Xem ảnh hiện trường (Zoom phóng to)</span>
-            </button>
-          </div>
+          </>
         )}
       </div>
 

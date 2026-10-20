@@ -14,33 +14,217 @@ import {
   PlusCircle,
   FileCheck,
   Check,
+  CreditCard,
+  Sailboat,
+  Bike,
+  Clock,
+  ShieldCheck,
+  MapPinOff,
 } from 'lucide-react';
-import type { RescueTeamItem } from '@/types/dashboard';
-import { fetchRescueTeams, fetchAdminUsers, verifyRescuer } from '@/api';
+import type { RescueTeamItem, AdministrativeAreaItem } from '@/types/dashboard';
+import type { User } from '@/types/auth';
+import { fetchRescueTeams, fetchAdminUsers, verifyRescuer, fetchAdministrativeAreas } from '@/api';
 import { domainDService } from '@/services/domainDService';
+import { toast } from '@/components/common/toast';
+import { onRescuerApplicationSubmitted, onRescuerVerificationChanged } from '@/services/socketService';
 import '@/features/sos/SosRequestsView.css';
 import './RescuersView.css';
 
 export interface RescuersViewProps {
   mode?: 'operations' | 'admin';
   onOpenMap?: (sosId?: any) => void;
+  user?: User;
 }
+
+const SKILL_LABELS: Record<string, string> = {
+  first_aid: 'Sơ cứu y tế',
+  water_rescue: 'Cứu hộ vùng nước',
+  search_rescue: 'Tìm kiếm cứu nạn',
+  boat_driver: 'Lái xuồng vượt lũ',
+  rope_climb: 'Leo dây & Độ cao',
+  diving: 'Lặn cứu hộ',
+  logistics: 'Hậu cần & Tiếp tế',
+  evacuation: 'Sơ tán người dân',
+  firefighting: 'PCCC & CNCH',
+  relief_logistics: 'Tiếp tế lương thực',
+  communication: 'Thông tin liên lạc',
+  technical_rescue: 'Cứu hộ kỹ thuật cao',
+};
+
+const VEHICLE_LABELS: Record<string, string> = {
+  BOAT: 'Thuyền / Ca-nô',
+  MOTORBIKE: 'Xe máy cơ động',
+  TRUCK: 'Xe tải cứu trợ',
+  AMBULANCE: 'Xe cứu thương',
+  OTHER: 'Xe bán tải / Khác',
+};
+
+const formatCccd = (raw?: string) => {
+  if (!raw || raw === 'null') return null;
+  const cleaned = raw.replace(/\s+/g, '');
+  if (cleaned.length === 12) {
+    return `${cleaned.slice(0, 4)} ${cleaned.slice(4, 8)} ${cleaned.slice(8, 12)}`;
+  }
+  return raw;
+};
+
+const getSkillCategoryClass = (skillName: string): string => {
+  const s = skillName.toLowerCase();
+  if (
+    s.includes('y tế') ||
+    s.includes('sơ cứu') ||
+    s.includes('cấp cứu') ||
+    s.includes('dược') ||
+    s.includes('bác sĩ') ||
+    s.includes('điều dưỡng') ||
+    s.includes('tiêm') ||
+    s.includes('huyết thanh')
+  ) {
+    return 'skill-medical';
+  }
+  if (
+    s.includes('nước') ||
+    s.includes('xuồng') ||
+    s.includes('thuyền') ||
+    s.includes('lặn') ||
+    s.includes('luồng') ||
+    s.includes('ca-nô')
+  ) {
+    return 'skill-water';
+  }
+  if (
+    s.includes('cháy') ||
+    s.includes('pccc') ||
+    s.includes('dây') ||
+    s.includes('leo') ||
+    s.includes('độ cao') ||
+    s.includes('tời')
+  ) {
+    return 'skill-fire';
+  }
+  return 'skill-general';
+};
+
+const renderVehicleBadge = (vehicleType?: string) => {
+  if (!vehicleType || vehicleType === 'null' || vehicleType === 'NONE') {
+    return (
+      <span className="vehicle-badge-pill vehicle-none">
+        Không phương tiện
+      </span>
+    );
+  }
+  const label = VEHICLE_LABELS[vehicleType] || vehicleType;
+  const lower = label.toLowerCase();
+  if (vehicleType === 'BOAT' || lower.includes('thuyền') || lower.includes('ca-nô')) {
+    return (
+      <span className="vehicle-badge-pill vehicle-boat" title={label}>
+        <Sailboat size={13} />
+        <span>{label}</span>
+      </span>
+    );
+  }
+  if (vehicleType === 'AMBULANCE' || lower.includes('thương') || lower.includes('y tế')) {
+    return (
+      <span className="vehicle-badge-pill vehicle-ambulance" title={label}>
+        <Truck size={13} />
+        <span>{label}</span>
+      </span>
+    );
+  }
+  if (vehicleType === 'TRUCK' || lower.includes('tải')) {
+    return (
+      <span className="vehicle-badge-pill vehicle-truck" title={label}>
+        <Truck size={13} />
+        <span>{label}</span>
+      </span>
+    );
+  }
+  if (vehicleType === 'MOTORBIKE' || lower.includes('máy')) {
+    return (
+      <span className="vehicle-badge-pill vehicle-bike" title={label}>
+        <Bike size={13} />
+        <span>{label}</span>
+      </span>
+    );
+  }
+  return (
+    <span className="vehicle-badge-pill vehicle-general" title={label}>
+      <Truck size={13} />
+      <span>{label}</span>
+    </span>
+  );
+};
 
 export const RescuersView: React.FC<RescuersViewProps> = ({
   mode: initialMode = 'operations',
   onOpenMap: _onOpenMap,
+  user,
 }) => {
   const [currentMode, setCurrentMode] = useState<'operations' | 'admin'>(initialMode);
+
+  useEffect(() => {
+    setCurrentMode(initialMode);
+  }, [initialMode]);
+
   const [rescueTeams, setRescueTeams] = useState<RescueTeamItem[]>([]);
   const [rescuers, setRescuers] = useState<any[]>([]);
+  const [areas, setAreas] = useState<AdministrativeAreaItem[]>([]);
+  const [selectedAreaId, setSelectedAreaId] = useState<string>('ALL');
   const [loading, setLoading] = useState(false);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'VERIFIED' | 'REJECTED'>('ALL');
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+
+  // Phân quyền: Cán bộ địa phương (Local) chỉ xem đội của địa bàn mình quản lý, Admin xem tất cả
+  const activeOfficer = domainDService.getActiveOfficer();
+  const isAdmin = user?.roles?.includes('ADMIN') || (user as any)?.role === 'ADMIN' || activeOfficer?.role === 'ADMIN';
+
+  const userAreaId =
+    user?.authority?.areaId ||
+    (user?.authority as any)?.administrativeAreaId ||
+    (user?.authority as any)?.jurisdictionAreaId ||
+    activeOfficer?.jurisdictionAreaId;
+
+  const userAreaName =
+    user?.authority?.areaName ||
+    (user?.authority as any)?.jurisdictionAreaName ||
+    activeOfficer?.jurisdictionAreaName ||
+    '';
+
+  const managedArea = useMemo(() => {
+    if (isAdmin) return null;
+    if (userAreaId) {
+      const byId = areas.find((a) => a._id === userAreaId || a.code === userAreaId);
+      if (byId) return byId;
+    }
+    if (userAreaName) {
+      const cleanUser = userAreaName.toLowerCase().replace(/^(phường|xã|quận|huyện)\s+/i, '').trim();
+      const byName = areas.find((a) => {
+        const cleanArea = a.name.toLowerCase().replace(/^(phường|xã|quận|huyện)\s+/i, '').trim();
+        return cleanUser && (cleanArea.includes(cleanUser) || cleanUser.includes(cleanArea));
+      });
+      if (byName) return byName;
+    }
+    return null;
+  }, [areas, isAdmin, userAreaId, userAreaName]);
+
+  const effectiveAreaId = !isAdmin
+    ? (managedArea?._id || userAreaId || (userAreaName ? userAreaName : 'ALL'))
+    : selectedAreaId;
+
+  useEffect(() => {
+    if (!isAdmin && managedArea?._id) {
+      setSelectedAreaId(managedArea._id);
+    } else if (user?.authority?.areaId) {
+      setSelectedAreaId(user.authority.areaId);
+    }
+  }, [isAdmin, managedArea, user?.authority?.areaId]);
 
   // Modal State
   const [selectedTeamDetail, setSelectedTeamDetail] = useState<RescueTeamItem | null>(null);
+  const [selectedApplicantDetail, setSelectedApplicantDetail] = useState<any | null>(null);
   const [isCreateTeamOpen, setIsCreateTeamOpen] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamType, setNewTeamType] = useState('FLOOD_RESCUE');
@@ -54,14 +238,20 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [teamsRes, rescuersRes] = await Promise.allSettled([
-        fetchRescueTeams(),
-        fetchAdminUsers({ role: 'RESCUER' }),
+      const areaParam = effectiveAreaId !== 'ALL' ? effectiveAreaId : undefined;
+      const [teamsRes, rescuersRes, areasRes] = await Promise.allSettled([
+        fetchRescueTeams({ areaId: areaParam, limit: 100 }),
+        fetchAdminUsers({ role: 'RESCUER', limit: '100' }),
+        fetchAdministrativeAreas(),
       ]);
 
-      if (teamsRes.status === 'fulfilled' && teamsRes.value.success && Array.isArray(teamsRes.value.data) && teamsRes.value.data.length > 0) {
+      if (areasRes.status === 'fulfilled' && areasRes.value.success && Array.isArray(areasRes.value.data)) {
+        setAreas(areasRes.value.data);
+      }
+
+      if (teamsRes.status === 'fulfilled' && teamsRes.value.success && Array.isArray(teamsRes.value.data)) {
         setRescueTeams(teamsRes.value.data);
-      } else {
+      } else if (selectedAreaId === 'ALL') {
         // Fallback domain D mock teams
         const fallbackTeams = domainDService.getRescueTeams().map((t) => ({
           _id: t.id,
@@ -104,6 +294,8 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
             })),
         })) as RescueTeamItem[];
         setRescueTeams(fallbackTeams);
+      } else {
+        setRescueTeams([]);
       }
 
       if (rescuersRes.status === 'fulfilled' && rescuersRes.value.success && rescuersRes.value.data?.users) {
@@ -114,11 +306,62 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [effectiveAreaId]);
 
   useEffect(() => {
     loadData();
   }, [loadData, refreshIndex]);
+
+  // Lắng nghe sự kiện hồ sơ cứu hộ mới & trạng thái duyệt thời gian thực qua Socket.IO
+  useEffect(() => {
+    const unsubApp = onRescuerApplicationSubmitted((newApplicant) => {
+      console.log('⚡ [RescuersView Realtime] Nhận đăng ký cứu hộ mới:', newApplicant);
+      if (newApplicant?._id) {
+        setRescuers((prev) => {
+          const exists = prev.some((r) => r._id === newApplicant._id);
+          if (exists) {
+            return prev.map((r) => (r._id === newApplicant._id ? { ...r, ...newApplicant } : r));
+          }
+          return [newApplicant, ...prev];
+        });
+        toast.info(
+          `Có hồ sơ đăng ký Cứu hộ viên mới từ: ${newApplicant.fullName || 'Người dân'}!`,
+          'Hồ sơ đăng ký mới'
+        );
+        window.dispatchEvent(new CustomEvent('sos_data_updated'));
+      } else {
+        loadData();
+      }
+    });
+
+    const unsubVer = onRescuerVerificationChanged((data) => {
+      console.log('⚡ [RescuersView Realtime] Trạng thái duyệt thay đổi:', data);
+      if (data?.userId) {
+        setRescuers((prev) =>
+          prev.map((r) =>
+            r._id === data.userId
+              ? {
+                  ...r,
+                  rescuer: {
+                    ...(r.rescuer || {}),
+                    verificationStatus: data.verificationStatus,
+                    availabilityStatus: data.availabilityStatus,
+                  },
+                }
+              : r
+          )
+        );
+        window.dispatchEvent(new CustomEvent('sos_data_updated'));
+      } else {
+        loadData();
+      }
+    });
+
+    return () => {
+      unsubApp();
+      unsubVer();
+    };
+  }, [loadData]);
 
   const handleVerifyRescuer = async (userId: string, status: 'VERIFIED' | 'REJECTED') => {
     try {
@@ -134,9 +377,13 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
             : r
         )
       );
-      alert(`✅ Đã cập nhật trạng thái cứu hộ viên thành: ${status === 'VERIFIED' ? 'Đã Xác Minh' : 'Đã Từ Chối'}!`);
+      toast.success(
+        `Đã cập nhật trạng thái cứu hộ viên thành: ${status === 'VERIFIED' ? 'Đã Xác Minh' : 'Đã Từ Chối'}!`,
+        'Phê duyệt thành công'
+      );
+      window.dispatchEvent(new CustomEvent('sos_data_updated'));
     } catch (err: any) {
-      alert('❌ Lỗi: ' + (err?.message || 'Không thể xác minh'));
+      toast.error(err?.message || 'Không thể cập nhật trạng thái cứu hộ viên', 'Thao tác thất bại');
     } finally {
       setVerifyingId(null);
     }
@@ -145,7 +392,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
   const handleCreateTeamSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTeamName.trim()) {
-      alert('Vui lòng nhập tên đội cứu hộ!');
+      toast.warning('Vui lòng nhập tên đội cứu hộ!', 'Thiếu thông tin');
       return;
     }
     const newTeam: RescueTeamItem = {
@@ -184,15 +431,43 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
     setNewTeamName('');
     setNewTeamLeader('');
     setNewTeamPhone('');
-    alert('✅ Đã thêm đội cứu hộ mới vào hệ thống thành công!');
+    toast.success('Đã thêm đội cứu hộ mới vào hệ thống thành công!', 'Tạo đội thành công');
   };
 
   // KPI Metrics
   const totalTeams = rescueTeams.length;
 
-  // Filtered teams list
+  // Filtered teams list: Phân quyền rõ ràng (Local chỉ xem đội thuộc địa bàn quản lý, Admin xem tất cả)
   const filteredTeams = useMemo(() => {
     return rescueTeams.filter((team) => {
+      // 1. Phân quyền địa phương: Nếu không phải Admin, chỉ hiển thị đội thuộc địa bàn quản lý
+      if (!isAdmin && (managedArea || userAreaName || userAreaId)) {
+        const targetAreaId = managedArea?._id || userAreaId;
+        const targetAreaName = (userAreaName || managedArea?.name || '')
+          .toLowerCase()
+          .replace(/^(phường|xã|quận|huyện)\s+/i, '')
+          .trim();
+
+        const teamAreaObj = typeof team.areaId === 'object' && team.areaId !== null ? team.areaId : null;
+        const teamAreaId = teamAreaObj?._id || team.areaId;
+        const teamAreaName = (teamAreaObj?.name || (team as any).areaName || '').toLowerCase();
+        const teamNameLower = (team.name || '').toLowerCase();
+
+        const matchId = targetAreaId && (teamAreaId === targetAreaId || teamAreaId === managedArea?.code);
+        const matchParentChild = Boolean(
+          ((teamAreaObj as any)?.parentId && ((teamAreaObj as any).parentId === targetAreaId || (teamAreaObj as any).parentId === managedArea?._id)) ||
+          (managedArea?.parentId && (managedArea.parentId === teamAreaId || managedArea.parentId === (teamAreaObj as any)?._id))
+        );
+        const matchName = Boolean(
+          targetAreaName &&
+          (teamAreaName.includes(targetAreaName) ||
+            targetAreaName.includes(teamAreaName) ||
+            teamNameLower.includes(targetAreaName))
+        );
+
+        if (!matchId && !matchParentChild && !matchName) return false;
+      }
+
       if (typeFilter !== 'ALL' && team.type !== typeFilter) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -204,12 +479,42 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
       }
       return true;
     });
-  }, [rescueTeams, typeFilter, searchQuery]);
+  }, [rescueTeams, typeFilter, searchQuery, isAdmin, managedArea, userAreaId, userAreaName]);
 
   // Rescuers pending verification
   const pendingRescuers = useMemo(() => {
     return rescuers.filter((r) => r.rescuer?.verificationStatus === 'PENDING');
   }, [rescuers]);
+
+  const verifiedRescuers = useMemo(() => {
+    return rescuers.filter((r) => r.rescuer?.verificationStatus === 'VERIFIED');
+  }, [rescuers]);
+
+  const rejectedRescuers = useMemo(() => {
+    return rescuers.filter((r) => r.rescuer?.verificationStatus === 'REJECTED');
+  }, [rescuers]);
+
+  const filteredRescuers = useMemo(() => {
+    return rescuers.filter((r) => {
+      if (statusFilter !== 'ALL' && r.rescuer?.verificationStatus !== statusFilter) return false;
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      const area = (r.rescuer?.areaName || r.rescuer?.areaId?.name || r.citizen?.areaName || r.address || '').toLowerCase();
+      const cccd = (r.rescuer?.idNumber || '').toLowerCase();
+      const rawSkills = r.rescuer?.skills || [];
+      const localizedSkills = rawSkills.map((s: string) => SKILL_LABELS[s] || s).join(' ').toLowerCase();
+      const rawVehicle = r.rescuer?.vehicleType || '';
+      const localizedVehicle = (VEHICLE_LABELS[rawVehicle] || rawVehicle).toLowerCase();
+      return (
+        (r.fullName || '').toLowerCase().includes(q) ||
+        (r.phone || '').includes(q) ||
+        area.includes(q) ||
+        cccd.includes(q) ||
+        localizedSkills.includes(q) ||
+        localizedVehicle.includes(q)
+      );
+    });
+  }, [rescuers, statusFilter, searchQuery]);
 
   const getTeamTypeBadge = (type: string) => {
     switch (type) {
@@ -248,46 +553,38 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
   return (
     <div className="rescuers-executive-container oceanic-executive-theme">
-      {/* 1. HEADER CARD TỔNG QUAN LỰC LƯỢNG */}
-      <div className="executive-overview-container">
-        <div className="executive-overview-header" style={{ marginBottom: 0 }}>
-          <div className="executive-header-left">
-            {/* Toggle Mode: Operations vs Admin Verification */}
-            <div className="executive-segmented-pill">
-              <button
-                type="button"
-                className={`segment-btn ${currentMode === 'operations' ? 'active' : ''}`}
-                onClick={() => setCurrentMode('operations')}
-              >
-                Đội Tác Chiến ({totalTeams})
-              </button>
-              <button
-                type="button"
-                className={`segment-btn ${currentMode === 'admin' ? 'active' : ''}`}
-                onClick={() => setCurrentMode('admin')}
-              >
-                Duyệt Hồ Sơ ({pendingRescuers.length})
-              </button>
+      {/* 1. HEADER CARD TỔNG QUAN LỰC LƯỢNG - Chỉ hiển thị ở chế độ Đội tác chiến (operations) */}
+      {currentMode === 'operations' && (
+        <div className="executive-overview-container">
+          <div className="executive-overview-header" style={{ marginBottom: 0 }}>
+            <div className="executive-header-left">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Shield size={18} color="#0284C7" />
+                <span style={{ fontWeight: 800, fontSize: 14, color: '#0F172A' }}>
+                  LỰC LƯỢNG CỨU HỘ ĐỊA PHƯƠNG
+                </span>
+                <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>
+                  ({totalTeams} đội tác chiến)
+                </span>
+              </div>
+
+              <span className="executive-live-pill">
+                <span className="live-dot" />
+                Sẵn sàng 24/7
+              </span>
             </div>
 
-            <span className="executive-live-pill">
-              <span className="live-dot" />
-              Sẵn sàng 24/7
-            </span>
-          </div>
+            <div className="executive-header-right">
+              <button
+                type="button"
+                className="coordination-action-btn outline"
+                onClick={refreshData}
+                title="Cập nhật danh sách mới nhất"
+              >
+                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                <span>Làm mới</span>
+              </button>
 
-          <div className="executive-header-right">
-            <button
-              type="button"
-              className="coordination-action-btn outline"
-              onClick={refreshData}
-              title="Cập nhật danh sách mới nhất"
-            >
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              <span>Làm mới</span>
-            </button>
-
-            {currentMode === 'operations' && (
               <button
                 type="button"
                 className="coordination-action-btn primary"
@@ -296,10 +593,10 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 <PlusCircle size={15} />
                 <span>Thêm Đội Cứu Hộ Mới</span>
               </button>
-            )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* 3. BẢNG DỮ LIỆU ĐỘI CỨU HỘ HOẶC XÁC MINH HỒ SƠ */}
       {currentMode === 'operations' ? (
@@ -343,7 +640,59 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
               </button>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              {/* Lọc Theo Địa Phương: Admin xem tất cả, Local chỉ xem khu vực mình quản lý */}
+              {!isAdmin ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: '#eff6ff',
+                    border: '1px solid #bfdbfe',
+                    borderRadius: 8,
+                    padding: '6px 12px',
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    color: '#1d4ed8',
+                    height: 34,
+                    boxSizing: 'border-box',
+                  }}
+                  title="Địa bàn bạn đang phụ trách quản lý cứu hộ"
+                >
+                  <MapPin size={14} style={{ color: '#2563eb', flexShrink: 0 }} />
+                  <span>Khu vực: {managedArea?.name || userAreaName || 'Địa phương phụ trách'}</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <MapPin size={14} style={{ color: '#0284c7' }} />
+                  <select
+                    value={selectedAreaId}
+                    onChange={(e) => setSelectedAreaId(e.target.value)}
+                    style={{
+                      background: '#ffffff',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: 8,
+                      padding: '6px 12px',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      color: '#0f172a',
+                      outline: 'none',
+                      height: 34,
+                      cursor: 'pointer',
+                    }}
+                    title="Lọc lực lượng theo từng địa phương / địa bàn (Quyền Admin)"
+                  >
+                    <option value="ALL">📍 Toàn thành phố / Tất cả địa bàn</option>
+                    {areas.map((area) => (
+                      <option key={area._id} value={area._id}>
+                        {area.name} ({area.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="executive-search-input-wrap">
                 <Search size={14} className="search-icon" />
                 <input
@@ -494,123 +843,287 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
           </div>
         </div>
       ) : (
-        /* GIAO DIỆN XÁC MINH CỨU HỘ VIÊN (ADMIN MODE) */
+        /* GIAO DIỆN XÁC MINH CỨU HỘ VIÊN (ADMIN MODE) - VÀO THẲNG BẢNG DUYỆT HỒ SƠ */
         <div className="executive-table-card">
           <div className="executive-table-toolbar">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <FileCheck size={18} color="#0284C7" />
-              <span style={{ fontWeight: 800, fontSize: 14, color: '#0F172A' }}>
-                HỒ SƠ ĐĂNG KÝ CỨU HỘ VIÊN ({rescuers.length} hồ sơ)
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <FileCheck size={18} color="#0284C7" />
+                <span style={{ fontWeight: 800, fontSize: 14, color: '#0F172A' }}>
+                  HỒ SƠ ĐĂNG KÝ CỨU HỘ VIÊN
+                </span>
+                <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>
+                  ({filteredRescuers.length} hồ sơ)
+                </span>
+              </div>
+
+              {/* Status Triage Filter Pills */}
+              <div className="executive-triage-pills" style={{ margin: 0 }}>
+                <button
+                  type="button"
+                  className={`triage-btn btn-all ${statusFilter === 'ALL' ? 'active' : ''}`}
+                  onClick={() => setStatusFilter('ALL')}
+                >
+                  Tất cả ({rescuers.length})
+                </button>
+                <button
+                  type="button"
+                  className={`triage-btn ${statusFilter === 'PENDING' ? 'active' : ''}`}
+                  style={statusFilter === 'PENDING' ? { background: '#FEF3C7', color: '#B45309', borderColor: '#F59E0B' } : {}}
+                  onClick={() => setStatusFilter('PENDING')}
+                >
+                  <span className="dot-mini orange" />
+                  Chờ duyệt ({pendingRescuers.length})
+                </button>
+                <button
+                  type="button"
+                  className={`triage-btn ${statusFilter === 'VERIFIED' ? 'active' : ''}`}
+                  style={statusFilter === 'VERIFIED' ? { background: '#ECFDF5', color: '#047857', borderColor: '#10B981' } : {}}
+                  onClick={() => setStatusFilter('VERIFIED')}
+                >
+                  <span className="dot-mini green" />
+                  Đã duyệt ({verifiedRescuers.length})
+                </button>
+                <button
+                  type="button"
+                  className={`triage-btn ${statusFilter === 'REJECTED' ? 'active' : ''}`}
+                  onClick={() => setStatusFilter('REJECTED')}
+                >
+                  Từ chối ({rejectedRescuers.length})
+                </button>
+              </div>
             </div>
 
-            <div className="executive-search-input-wrap">
-              <Search size={14} className="search-icon" />
-              <input
-                type="text"
-                placeholder="Tìm hồ sơ cứu hộ viên..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div className="executive-search-input-wrap">
+                <Search size={14} className="search-icon" />
+                <input
+                  type="text"
+                  placeholder="Tìm hồ sơ cứu hộ, địa bàn, CCCD, SĐT..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    className="clear-search-btn"
+                    onClick={() => setSearchQuery('')}
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                className="coordination-action-btn outline"
+                onClick={refreshData}
+                title="Cập nhật danh sách mới nhất"
+              >
+                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                <span>Làm mới</span>
+              </button>
             </div>
           </div>
 
-          <div className="executive-table-scroll">
-            <table className="executive-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '22%' }}>Họ &amp; Tên</th>
-                  <th style={{ width: '18%' }}>Số Điện Thoại</th>
-                  <th style={{ width: '25%' }}>Kỹ Năng &amp; Kinh Nghiệm</th>
-                  <th style={{ width: '18%' }}>Trạng Thái Xác Minh</th>
-                  <th style={{ width: '17%', textAlign: 'center' }}>Hành Động</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rescuers.length === 0 ? (
+            <div className="executive-table-scroll">
+              <table className="executive-table">
+                <thead>
                   <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748B' }}>
-                      Chưa có hồ sơ cứu hộ viên nào đăng ký trong hệ thống
-                    </td>
+                    <th style={{ width: '22%' }}>Ứng Viên &amp; Liên Hệ</th>
+                    <th style={{ width: '13%' }}>Định Danh CCCD</th>
+                    <th style={{ width: '14%' }}>Địa Bàn Đăng Ký</th>
+                    <th style={{ width: '15%' }}>Phương Tiện Cơ Động</th>
+                    <th style={{ width: '16%' }}>Kỹ Năng Cứu Nạn</th>
+                    <th style={{ width: '10%' }}>Trạng Thái</th>
+                    <th style={{ width: '10%', textAlign: 'center' }}>Thao Tác</th>
                   </tr>
-                ) : (
-                  rescuers
-                    .filter((r) => {
-                      if (!searchQuery.trim()) return true;
-                      const q = searchQuery.toLowerCase();
-                      return (r.fullName || '').toLowerCase().includes(q) || (r.phone || '').includes(q);
-                    })
-                    .map((r) => {
+                </thead>
+                <tbody>
+                  {filteredRescuers.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748B' }}>
+                        {searchQuery || statusFilter !== 'ALL'
+                          ? 'Không tìm thấy hồ sơ cứu hộ nào phù hợp với bộ lọc'
+                          : 'Chưa có hồ sơ cứu hộ viên nào đăng ký trong hệ thống'}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRescuers.map((r) => {
                       const isVerified = r.rescuer?.verificationStatus === 'VERIFIED';
                       const isPending = r.rescuer?.verificationStatus === 'PENDING';
-                      const skills = r.rescuer?.skills || ['Cứu hộ cơ bản'];
+                      const rawSkills: string[] = Array.isArray(r.rescuer?.skills) && r.rescuer.skills.length > 0
+                        ? r.rescuer.skills
+                        : [];
+                      const areaName = r.rescuer?.areaName || r.rescuer?.areaId?.name || r.citizen?.areaName || r.address || 'Chưa phân bổ';
+                      const rawIdNumber = r.rescuer?.idNumber;
+                      const rawVehicle = r.rescuer?.vehicleType;
 
                       return (
-                        <tr key={r._id} className="executive-table-row">
+                        <tr
+                          key={r._id}
+                          className="executive-table-row"
+                          onClick={() => setSelectedApplicantDetail(r)}
+                        >
+                          {/* Cột 1: Ứng Viên & Liên Hệ (Họ tên + Avatar + SĐT liên lạc) */}
                           <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <div className="rescuer-member-avatar" style={{ width: 32, height: 32, fontSize: 13 }}>
+                            <div className="applicant-cell-wrap">
+                              <div className="applicant-avatar">
                                 {(r.fullName || 'CH')[0]?.toUpperCase()}
                               </div>
-                              <span style={{ fontWeight: 700, color: '#0F172A', fontSize: 13.5 }}>
-                                {r.fullName}
+                              <div className="applicant-info">
+                                <span className="applicant-name" title={r.fullName}>
+                                  {r.fullName || 'Chưa đặt tên'}
+                                </span>
+                                <div className="applicant-contact">
+                                  {r.phone ? (
+                                    <a
+                                      href={`tel:${r.phone}`}
+                                      className="applicant-phone-link"
+                                      onClick={(e) => e.stopPropagation()}
+                                      title="Nhấn để gọi điện trực tiếp"
+                                    >
+                                      <Phone size={11} />
+                                      <span>{r.phone}</span>
+                                    </a>
+                                  ) : (
+                                    <span className="applicant-phone-missing">
+                                      <Phone size={11} /> Chưa có SĐT
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Cột 2: Định Danh CCCD (Card badge đẹp chuẩn format) */}
+                          <td>
+                            {rawIdNumber && rawIdNumber !== 'null' ? (
+                              <div className="id-card-badge" title="Căn cước công dân">
+                                <CreditCard size={12} className="id-card-icon" />
+                                <span>{formatCccd(rawIdNumber)}</span>
+                              </div>
+                            ) : (
+                              <span className="id-card-badge-empty">Chưa có CCCD</span>
+                            )}
+                          </td>
+
+                          {/* Cột 3: Địa Bàn Đăng Ký */}
+                          <td>
+                            <div className={`area-badge-pill ${areaName !== 'Chưa phân bổ' ? 'assigned' : 'unassigned'}`}>
+                              {areaName !== 'Chưa phân bổ' ? (
+                                <MapPin size={12} color="#0284C7" style={{ flexShrink: 0 }} />
+                              ) : (
+                                <MapPinOff size={12} color="#94A3B8" style={{ flexShrink: 0 }} />
+                              )}
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {areaName}
                               </span>
                             </div>
                           </td>
+
+                          {/* Cột 4: Phương Tiện Cơ Động (Chip chuyên biệt có icon) */}
                           <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#0284C7', fontWeight: 600 }}>
-                              <Phone size={13} />
-                              <span>{r.phone}</span>
-                            </div>
+                            {renderVehicleBadge(rawVehicle)}
                           </td>
+
+                          {/* Cột 5: Kỹ Năng Cứu Nạn (Phân loại màu sắc + overflow chip) */}
                           <td>
-                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                              {skills.map((s: string, idx: number) => (
-                                <span key={idx} className="rescuer-member-chip" style={{ fontSize: 11, padding: '2px 8px' }}>
-                                  {s}
-                                </span>
-                              ))}
-                            </div>
+                            {rawSkills.length === 0 ? (
+                              <span style={{ fontSize: 11.5, color: '#94A3B8', fontStyle: 'italic' }}>
+                                Chưa khai báo
+                              </span>
+                            ) : (
+                              <div className="skill-tags-wrapper">
+                                {rawSkills.slice(0, 2).map((s: string, idx: number) => {
+                                  const label = SKILL_LABELS[s] || s;
+                                  const categoryClass = getSkillCategoryClass(label);
+                                  return (
+                                    <span
+                                      key={idx}
+                                      className={`skill-tag-pill ${categoryClass}`}
+                                      title={label}
+                                    >
+                                      {label}
+                                    </span>
+                                  );
+                                })}
+                                {rawSkills.length > 2 && (
+                                  <span
+                                    className="skill-more-pill"
+                                    title={rawSkills.slice(2).map((s: string) => SKILL_LABELS[s] || s).join(', ')}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedApplicantDetail(r);
+                                    }}
+                                  >
+                                    +{rawSkills.length - 2} khác
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </td>
+
+                          {/* Cột 6: Trạng Thái Phê Duyệt */}
                           <td>
                             <span className={`rescuer-status-badge ${isVerified ? 'available' : isPending ? 'busy' : 'offline'}`}>
-                              {isVerified ? 'Đã xác minh' : isPending ? 'Chờ xét duyệt' : 'Từ chối'}
+                              <span className="live-dot" style={{ width: 5, height: 5 }} />
+                              {isVerified ? 'Đã duyệt' : isPending ? 'Chờ duyệt' : 'Từ chối'}
                             </span>
                           </td>
-                          <td>
-                            <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                              {!isVerified && (
+
+                          {/* Cột 7: Thao Tác */}
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center' }}>
+                              {!isPending && (
                                 <button
                                   type="button"
-                                  className="coordination-action-btn success"
-                                  onClick={() => handleVerifyRescuer(r._id, 'VERIFIED')}
-                                  disabled={verifyingId === r._id}
+                                  className="coordination-action-btn compact outline"
+                                  onClick={() => setSelectedApplicantDetail(r)}
+                                  title="Xem hồ sơ chi tiết của ứng viên"
                                 >
-                                  {verifyingId === r._id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                                  <span>Duyệt</span>
+                                  <Eye size={12} />
+                                  <span>Hồ sơ</span>
                                 </button>
                               )}
+
                               {isPending && (
-                                <button
-                                  type="button"
-                                  className="coordination-action-btn outline"
-                                  onClick={() => handleVerifyRescuer(r._id, 'REJECTED')}
-                                  disabled={verifyingId === r._id}
-                                >
-                                  <X size={12} />
-                                  <span>Từ chối</span>
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    className="coordination-action-btn compact success"
+                                    onClick={() => handleVerifyRescuer(r._id, 'VERIFIED')}
+                                    disabled={verifyingId === r._id}
+                                    title="Phê duyệt hồ sơ này"
+                                  >
+                                    {verifyingId === r._id ? (
+                                      <Loader2 size={12} className="animate-spin" />
+                                    ) : (
+                                      <Check size={12} />
+                                    )}
+                                    <span>Duyệt</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="coordination-action-btn compact danger-outline"
+                                    onClick={() => handleVerifyRescuer(r._id, 'REJECTED')}
+                                    disabled={verifyingId === r._id}
+                                    title="Từ chối hồ sơ"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </>
                               )}
                             </div>
                           </td>
                         </tr>
                       );
                     })
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
       )}
 
       {/* 4. MODAL CHI TIẾT ĐỘI CỨU HỘ & DANH SÁCH THÀNH VIÊN */}
@@ -961,6 +1474,259 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 6. MODAL THẨM ĐỊNH CHI TIẾT HỒ SƠ CỨU HỘ VIÊN */}
+      {selectedApplicantDetail && (
+        <div className="executive-modal-backdrop" onClick={() => setSelectedApplicantDetail(null)}>
+          <div
+            className="executive-modal-card"
+            style={{ maxWidth: 640, width: '92%' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="executive-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div
+                  className="applicant-avatar"
+                  style={{ width: 44, height: 44, fontSize: 16 }}
+                >
+                  {(selectedApplicantDetail.fullName || 'CH')[0]?.toUpperCase()}
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
+                    {selectedApplicantDetail.fullName || 'Người dân đăng ký'}
+                  </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                    <span
+                      className={`rescuer-status-badge ${
+                        selectedApplicantDetail.rescuer?.verificationStatus === 'VERIFIED'
+                          ? 'available'
+                          : selectedApplicantDetail.rescuer?.verificationStatus === 'PENDING'
+                          ? 'busy'
+                          : 'offline'
+                      }`}
+                    >
+                      <span className="live-dot" style={{ width: 5, height: 5 }} />
+                      {selectedApplicantDetail.rescuer?.verificationStatus === 'VERIFIED'
+                        ? 'Đã duyệt chính thức'
+                        : selectedApplicantDetail.rescuer?.verificationStatus === 'PENDING'
+                        ? 'Đang chờ thẩm định'
+                        : 'Hồ sơ bị từ chối'}
+                    </span>
+                    <span style={{ fontSize: 12, color: '#64748B' }}>
+                      ID: {selectedApplicantDetail._id?.slice(-8)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="executive-toggle-btn"
+                onClick={() => setSelectedApplicantDetail(null)}
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div
+              style={{
+                padding: '20px 24px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 16,
+                maxHeight: '70vh',
+                overflowY: 'auto',
+              }}
+            >
+              <div className="dossier-grid">
+                {/* 1. Thông tin liên lạc & Công dân */}
+                <div className="dossier-card">
+                  <div className="dossier-card-title">
+                    <CreditCard size={14} color="#0284C7" />
+                    <span>Định Danh &amp; Liên Lạc</span>
+                  </div>
+                  <div className="dossier-item">
+                    <span className="dossier-item-label">Số CCCD / CMND</span>
+                    <span className="dossier-item-value" style={{ fontFamily: 'monospace' }}>
+                      {formatCccd(selectedApplicantDetail.rescuer?.idNumber) || 'Chưa cung cấp'}
+                    </span>
+                  </div>
+                  <div className="dossier-item">
+                    <span className="dossier-item-label">Số điện thoại</span>
+                    <span className="dossier-item-value">
+                      {selectedApplicantDetail.phone ? (
+                        <a
+                          href={`tel:${selectedApplicantDetail.phone}`}
+                          style={{ color: '#0284C7', textDecoration: 'none' }}
+                        >
+                          {selectedApplicantDetail.phone}
+                        </a>
+                      ) : (
+                        'Chưa cung cấp'
+                      )}
+                    </span>
+                  </div>
+                  <div className="dossier-item">
+                    <span className="dossier-item-label">Email</span>
+                    <span className="dossier-item-value" style={{ fontSize: 12 }}>
+                      {selectedApplicantDetail.email || 'Chưa cung cấp'}
+                    </span>
+                  </div>
+                  <div className="dossier-item">
+                    <span className="dossier-item-label">Địa bàn đăng ký</span>
+                    <span className="dossier-item-value">
+                      {selectedApplicantDetail.rescuer?.areaName ||
+                        selectedApplicantDetail.rescuer?.areaId?.name ||
+                        selectedApplicantDetail.citizen?.areaName ||
+                        selectedApplicantDetail.address ||
+                        'Chưa phân bổ'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 2. Phương tiện & Thiết bị */}
+                <div className="dossier-card">
+                  <div className="dossier-card-title">
+                    <Truck size={14} color="#0284C7" />
+                    <span>Phương Tiện &amp; Cơ Động</span>
+                  </div>
+                  <div className="dossier-item">
+                    <span className="dossier-item-label">Phương tiện cơ động</span>
+                    <span className="dossier-item-value">
+                      {renderVehicleBadge(selectedApplicantDetail.rescuer?.vehicleType)}
+                    </span>
+                  </div>
+                  <div className="dossier-item">
+                    <span className="dossier-item-label">Trạng thái cơ động</span>
+                    <span className="dossier-item-value">
+                      {selectedApplicantDetail.rescuer?.vehicleType ? 'Sẵn sàng ứng phó' : 'Không có phương tiện'}
+                    </span>
+                  </div>
+                  <div className="dossier-item">
+                    <span className="dossier-item-label">Khả năng hoạt động</span>
+                    <span className="dossier-item-value">
+                      {selectedApplicantDetail.rescuer?.vehicleType === 'BOAT'
+                        ? 'Khu vực ngập lụt, sông suối'
+                        : selectedApplicantDetail.rescuer?.vehicleType === 'AMBULANCE'
+                        ? 'Cấp cứu vận chuyển y tế'
+                        : selectedApplicantDetail.rescuer?.vehicleType === 'TRUCK'
+                        ? 'Vận chuyển cứu trợ hàng hóa'
+                        : 'Cơ động bộ / Hỗ trợ sơ tán'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Kỹ năng & Năng lực cứu hộ */}
+                <div className="dossier-card full-width">
+                  <div className="dossier-card-title">
+                    <ShieldCheck size={14} color="#059669" />
+                    <span>Kỹ Năng &amp; Năng Lực Chuyên Môn</span>
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    {Array.isArray(selectedApplicantDetail.rescuer?.skills) &&
+                    selectedApplicantDetail.rescuer.skills.length > 0 ? (
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {selectedApplicantDetail.rescuer.skills.map((s: string, idx: number) => {
+                          const label = SKILL_LABELS[s] || s;
+                          const categoryClass = getSkillCategoryClass(label);
+                          return (
+                            <span
+                              key={idx}
+                              className={`skill-tag-pill ${categoryClass}`}
+                              style={{ fontSize: 12, padding: '4px 10px', maxWidth: 'none' }}
+                            >
+                              {label}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p style={{ margin: 0, fontSize: 13, color: '#94A3B8', fontStyle: 'italic' }}>
+                        Ứng viên chưa khai báo kỹ năng chuyên biệt nào.
+                      </p>
+                    )}
+                  </div>
+
+                  {selectedApplicantDetail.rescuer?.experience && (
+                    <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #F1F5F9' }}>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: '#64748B' }}>
+                        Kinh nghiệm &amp; Ghi chú thực chiến:
+                      </span>
+                      <p style={{ margin: '4px 0 0', fontSize: 13, color: '#334155', lineHeight: 1.5 }}>
+                        {selectedApplicantDetail.rescuer.experience}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer with action buttons */}
+            <div
+              style={{
+                padding: '14px 24px',
+                borderTop: '1px solid #E2E8F0',
+                background: '#F8FAFC',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderBottomLeftRadius: 16,
+                borderBottomRightRadius: 16,
+              }}
+            >
+              <button
+                type="button"
+                className="coordination-action-btn outline"
+                onClick={() => setSelectedApplicantDetail(null)}
+              >
+                Đóng
+              </button>
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                {selectedApplicantDetail.rescuer?.verificationStatus !== 'REJECTED' && (
+                  <button
+                    type="button"
+                    className="coordination-action-btn danger-outline"
+                    onClick={() => {
+                      handleVerifyRescuer(selectedApplicantDetail._id, 'REJECTED');
+                      setSelectedApplicantDetail((prev: any) =>
+                        prev ? { ...prev, rescuer: { ...prev.rescuer, verificationStatus: 'REJECTED' } } : null
+                      );
+                    }}
+                    disabled={verifyingId === selectedApplicantDetail._id}
+                  >
+                    <X size={13} />
+                    <span>Từ chối hồ sơ</span>
+                  </button>
+                )}
+
+                {selectedApplicantDetail.rescuer?.verificationStatus !== 'VERIFIED' && (
+                  <button
+                    type="button"
+                    className="coordination-action-btn success"
+                    onClick={() => {
+                      handleVerifyRescuer(selectedApplicantDetail._id, 'VERIFIED');
+                      setSelectedApplicantDetail((prev: any) =>
+                        prev ? { ...prev, rescuer: { ...prev.rescuer, verificationStatus: 'VERIFIED' } } : null
+                      );
+                    }}
+                    disabled={verifyingId === selectedApplicantDetail._id}
+                  >
+                    {verifyingId === selectedApplicantDetail._id ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : (
+                      <Check size={13} />
+                    )}
+                    <span>Phê duyệt trở thành Cứu hộ viên</span>
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

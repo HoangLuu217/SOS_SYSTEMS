@@ -60,11 +60,15 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
     // 3. Đội cứu hộ địa phương
     case 'rescuers':
-      return <RescuersView mode="operations" />;
+      return <RescuersView mode="operations" user={user} />;
+
+    // 3.1. Duyệt hồ sơ đăng ký cứu hộ viên
+    case 'rescuers_approval':
+      return <RescuersView mode="admin" />;
 
     // 4. Phương tiện & Nhu yếu phẩm
     case 'resources':
-      return <ResourcesView />;
+      return <ResourcesView user={user} />;
 
     // 5. Phát thông báo & Cảnh báo thiên tai
     case 'notifications':

@@ -18,9 +18,26 @@ const teamMemberSchema = new mongoose.Schema(
       },
       default: 'MEMBER',
     },
+    status: {
+      type: String,
+      enum: {
+        values: ['PENDING', 'APPROVED', 'REJECTED'],
+        message: 'Trạng thái {VALUE} không hợp lệ',
+      },
+      default: 'APPROVED',
+    },
     joinedAt: {
       type: Date,
       default: Date.now,
+    },
+    approvedAt: {
+      type: Date,
+      default: null,
+    },
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
     },
   },
   { _id: true }
@@ -53,7 +70,7 @@ const rescueTeamSchema = new mongoose.Schema(
     leaderId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'Đội trưởng (leaderId) là bắt buộc'],
+      default: null,
     },
     authorityId: {
       type: mongoose.Schema.Types.ObjectId,
