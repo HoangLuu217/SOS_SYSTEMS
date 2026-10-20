@@ -39,121 +39,250 @@
   height: auto;
   overflow-y: auto !important;
   overflow-x: auto !important;
+  padding-right: 6px;
+  box-sizing: border-box;
+}
+
+.authorities-executive-container .executive-table {
+  width: 100% !important;
+  min-width: 980px !important;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed !important;
+}
+
+.authorities-executive-container .executive-table th {
+  padding: 10px 10px !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.3px !important;
+  color: #475569 !important;
+  white-space: nowrap !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  background: #f8fafc;
+}
+
+.authorities-executive-container .executive-table td {
+  padding: 10px 10px !important;
+  vertical-align: middle !important;
+  box-sizing: border-box !important;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.authorities-executive-container .executive-table tr:hover td {
+  background-color: #f8fafc;
 }
 
 .officer-avatar-box {
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
   font-size: 13.5px;
-  color: #0284c7;
+  color: #334155;
   flex-shrink: 0;
 }
 
+/* Badge trạng thái phong cách Enterprise SaaS: tinh tế, không chói màu */
 .officer-status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 9999px;
-  font-size: 11.5px;
-  font-weight: 700;
-  border: 1px solid transparent;
+  gap: 5.5px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+
+.officer-status-badge:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
 }
 
 .officer-status-badge.active {
-  background: #dcfce7;
+  background: #f0fdf4;
   color: #15803d;
   border-color: #bbf7d0;
 }
 
 .officer-status-badge.inactive {
-  background: #f1f5f9;
+  background: #f8fafc;
   color: #64748b;
-  border-color: #cbd5e1;
+  border-color: #e2e8f0;
 }
 
+/* Nút hành động phong cách tối giản, màu trung tính ở trạng thái tĩnh, hover mới đổi màu */
 .officer-action-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 5px 10px;
+  gap: 4px;
+  padding: 4px 8px;
   border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 500;
   cursor: pointer;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #e2e8f0;
   background: #ffffff;
-  color: #334155;
+  color: #475569;
   transition: all 0.15s ease;
   white-space: nowrap !important;
   flex-shrink: 0;
+  line-height: 1.2;
 }
 
 .officer-action-btn:hover {
   background: #f8fafc;
-  border-color: #94a3b8;
+  border-color: #cbd5e1;
+  color: #0f172a;
 }
 
-.officer-action-btn.edit {
+.officer-action-btn.edit:hover {
   color: #0284c7;
   border-color: #bae6fd;
   background: #f0f9ff;
 }
 
-.officer-action-btn.edit:hover {
-  background: #e0f2fe;
-}
-
-.officer-action-btn.lock {
+.officer-action-btn.lock:hover {
   color: #dc2626;
   border-color: #fecaca;
   background: #fef2f2;
 }
 
-.officer-action-btn.lock:hover {
-  background: #fee2e2;
-}
-
-.officer-action-btn.unlock {
+.officer-action-btn.unlock:hover {
   color: #16a34a;
   border-color: #bbf7d0;
   background: #f0fdf4;
 }
 
-.officer-action-btn.unlock:hover {
-  background: #dcfce7;
+/* Filter & Search Bar Horizontal Layout (Ngang hàng) */
+.executive-table-filters-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.executive-triage-pills {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #f1f5f9;
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.executive-table-filters-row .triage-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.executive-table-filters-row .triage-btn:hover {
+  color: #0f172a;
+}
+
+.executive-table-filters-row .triage-btn.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  font-weight: 600;
+}
+
+.executive-table-filters-row .executive-search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 320px;
+  max-width: 100%;
+}
+
+.executive-table-filters-row .executive-search-input {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 9999px;
+  padding: 7px 32px 7px 34px;
+  font-size: 12.5px;
+  color: #0f172a;
+  outline: none;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  box-sizing: border-box;
+}
+
+.executive-table-filters-row .executive-search-input:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
+}
+
+.executive-table-filters-row .executive-search-input-wrap .search-icon {
+  position: absolute;
+  left: 11px;
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.executive-table-filters-row .clear-search-btn {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+}
+
+.executive-table-filters-row .clear-search-btn:hover {
+  color: #475569;
 }
 
 .map-preview-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
+  padding: 3px 8px;
   border-radius: 6px;
-  border: 1px solid #bae6fd;
-  background: #f0f9ff;
-  color: #0369a1;
-  font-size: 12px;
-  font-weight: 600;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #475569;
+  font-size: 11.5px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .map-preview-btn:hover {
-  background: #e0f2fe;
-  border-color: #7dd3fc;
+  background: #f0f9ff;
+  border-color: #bae6fd;
+  color: #0284c7;
 }
 
 /* Action button styles consistent across executive views */

@@ -75,16 +75,58 @@ class RescueTeamService {
    */
   async getTeams(query = {}) {
     const page = Math.max(1, parseInt(query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 10));
+    const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 100));
     const skip = (page - 1) * limit;
 
     const filter = {};
     if (query.status) filter.status = query.status;
     if (query.type) filter.type = query.type;
-    if (query.areaId) filter.areaId = query.areaId;
     if (query.authorityId) filter.authorityId = query.authorityId;
     if (query.search) {
       filter.name = { $regex: query.search.trim(), $options: 'i' };
+    }
+
+    if (query.areaId && query.areaId !== 'ALL') {
+      const mongoose = require('mongoose');
+      let targetArea = null;
+      if (mongoose.Types.ObjectId.isValid(query.areaId)) {
+        targetArea = await AdministrativeArea.findById(query.areaId);
+      }
+      if (!targetArea) {
+        targetArea = await AdministrativeArea.findOne({
+          $or: [{ code: query.areaId }, { name: new RegExp(query.areaId, 'i') }],
+        });
+      }
+
+      if (targetArea) {
+        const relevantAreaIds = [targetArea._id];
+        // Nếu là Quận/Huyện: bao gồm tất cả các Phường/Xã trực thuộc
+        const childWards = await AdministrativeArea.find({ parentId: targetArea._id }).select('_id');
+        childWards.forEach((w) => relevantAreaIds.push(w._id));
+
+        // Nếu là Phường/Xã: bao gồm Quận/Huyện cấp trên
+        if (targetArea.parentId) {
+          relevantAreaIds.push(targetArea.parentId);
+        }
+
+        const cleanName = (targetArea.name || '')
+          .replace(/^(phường|xã|quận|huyện|thành phố|thị xã)\s+/i, '')
+          .trim();
+
+        const areaConditions = [{ areaId: { $in: relevantAreaIds } }];
+        if (cleanName.length >= 3) {
+          areaConditions.push({ name: new RegExp(cleanName, 'i') });
+        }
+
+        if (filter.$or) {
+          filter.$and = [{ $or: filter.$or }, { $or: areaConditions }];
+          delete filter.$or;
+        } else {
+          filter.$or = areaConditions;
+        }
+      } else {
+        filter.areaId = query.areaId;
+      }
     }
 
     const [teams, total] = await Promise.all([

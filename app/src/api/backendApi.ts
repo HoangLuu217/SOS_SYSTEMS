@@ -8,6 +8,7 @@ import { chatApi } from './chat.api';
 import { rescuerApi } from './rescuer.api';
 import { rescueTeamApi } from './rescueTeam.api';
 import { vehicleApi } from './vehicle.api';
+import { assignmentApi, RescuerAssignmentItem } from './assignment.api';
 import type {
   EmergencyContact,
   UserProfile,
@@ -230,24 +231,25 @@ class BackendApiService {
 
   // Sos Assignment / Mission API for Rescuers
   getMyAssignments = () =>
-    apiClient.get<import('../types').SosAssignmentData[]>('/assignments/my');
+    assignmentApi.getMyAssignments() as Promise<ApiResponse<import('../types').SosAssignmentData[]>>;
 
   getAssignmentById = (id: string) =>
     apiClient.get<import('../types').SosAssignmentData>(`/assignments/${id}`);
 
-  acceptAssignment = (id: string) =>
-    apiClient.patch<import('../types').SosAssignmentData>(`/assignments/${id}/accept`, {});
+  acceptAssignment = (id: string) => assignmentApi.acceptAssignment(id);
 
   updateAssignmentStatus = (id: string, status: string, note?: string) =>
-    apiClient.patch<import('../types').SosAssignmentData>(`/assignments/${id}/status`, {
-      status,
-      note,
-    });
+    assignmentApi.updateAssignmentStatus(id, status, note);
+
+  updateSosMissionStatus = (sosId: string, status: string, note?: string) =>
+    assignmentApi.updateSosMissionStatus(sosId, status, note);
 
   cancelAssignment = (id: string, cancelReason?: string) =>
     apiClient.patch<import('../types').SosAssignmentData>(`/assignments/${id}/cancel`, {
       cancelReason,
     });
+
+  getAvailableSosRequests = () => assignmentApi.getAvailableSosRequests();
 
   // Storage helpers
   saveTokens = (accessToken: string, refreshToken?: string) =>

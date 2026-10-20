@@ -299,10 +299,26 @@ export const INITIAL_RESCUE_TEAMS: RescueTeam[] = [
 
   // --- ĐỘI CỨU HỘ QUẬN LIÊN CHIỂU (area-lc) ---
   {
+    id: '6acf2d296102c44874cc2b43',
+    name: 'Đội Phản Ứng Nhanh Cứu Hộ Phường Liên Chiểu (43-LC-01)',
+    authorityOrganizationId: 'auth-hccd',
+    districtId: 'area-lc',
+    wardId: 'area-lc',
+    status: 'Available',
+    availableRescuersCount: 4,
+    rescuers: [
+      { id: '6ad4c91546705c7dadf70b3d', name: 'Lê Cứu Nạn', role: 'Chỉ Huy Đội', status: 'Online', teamId: '6acf2d296102c44874cc2b43', phone: '0903000003' },
+      { id: '6ad4ece4f6dd5a81b15a31af', name: 'Trần Văn Cứu', role: 'Lái Ca-nô Vượt Lũ', status: 'Online', teamId: '6acf2d296102c44874cc2b43', phone: '0905114551' },
+      { id: '6ad4ece4f6dd5a81b15a31b0', name: 'Nguyễn Văn Hộ', role: 'Y Tá Dã Chiến', status: 'Online', teamId: '6acf2d296102c44874cc2b43', phone: '0905114552' },
+      { id: '6ad4ece4f6dd5a81b15a31b1', name: 'Phạm Văn Nạn', role: 'Chiến Sĩ Đặc Nhiệm', status: 'Online', teamId: '6acf2d296102c44874cc2b43', phone: '0905114553' },
+    ],
+  },
+  {
     id: 'team-lc-01',
     name: 'Đội Đặc Nhiệm Cứu Nạn Hải Vân - Liên Chiểu',
     authorityOrganizationId: 'auth-hccd',
     districtId: 'area-lc',
+    wardId: 'area-lc',
     status: 'Available',
     availableRescuersCount: 3,
     rescuers: [
@@ -389,6 +405,24 @@ export const INITIAL_VEHICLES: Vehicle[] = [
     status: 'Available',
     capacity: '8 người',
     teamId: 'team-sea-delta',
+  },
+  {
+    id: '6ad4ece4f6dd5a81b15a31b9',
+    name: 'Ca-nô Cao Tốc Vượt Lũ 43-CN-09',
+    plate: '43-CN-09',
+    type: 'Inflatable Boat',
+    status: 'Available',
+    capacity: '8 người',
+    teamId: '6acf2d296102c44874cc2b43',
+  },
+  {
+    id: '6ad4ece4f6dd5a81b15a31ba',
+    name: 'Xe Bán Tải Cứu Hộ Gầm Cao 43A-LC.99',
+    plate: '43A-LC.99',
+    type: 'Tactical Truck',
+    status: 'Available',
+    capacity: '6 người',
+    teamId: '6acf2d296102c44874cc2b43',
   },
 ];
 

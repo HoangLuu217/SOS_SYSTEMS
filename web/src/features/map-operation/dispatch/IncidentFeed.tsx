@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
-import { Search, MapPin, ChevronLeft, RefreshCw } from 'lucide-react';
+import { Search, MapPin, ChevronLeft } from 'lucide-react';
 import type { SosRequest, AuthorityOfficer } from '@/types/domainD';
 import { useApp } from '@/context/AppContext';
 
 interface Props {
   sosRequests: SosRequest[];
-  selectedSos: SosRequest;
+  selectedSos?: SosRequest | null;
   onSelectSos: (sos: SosRequest) => void;
   activeOfficer?: AuthorityOfficer;
   onOpenCitizenModal?: () => void;
@@ -25,7 +25,7 @@ export const IncidentFeed = ({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [adminDistrictFilter, setAdminDistrictFilter] = useState<string>('ALL');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'UNASSIGNED' | 'ACTIVE' | 'RESOLVED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'UNASSIGNED' | 'ACTIVE'>('ALL');
 
   // Baseline scoped incidents for this officer (before status/search filter)
   const scopedIncidents = useMemo(() => {
@@ -41,33 +41,34 @@ export const IncidentFeed = ({
     });
   }, [sosRequests, isAdmin, adminDistrictFilter]);
 
-  // Tab counts based on current scoped jurisdiction
+  // Tab counts based on current scoped jurisdiction (bỏ hoàn thành)
   const tabCounts = useMemo(() => {
     let unassigned = 0;
     let urgent = 0;
     let active = 0;
-    let resolved = 0;
 
     scopedIncidents.forEach((s) => {
+      if (s.status === 'COMPLETED') return;
       const isAssigned = Boolean(s.assignmentId && s.status !== 'CANCELLED');
-      if (!isAssigned && s.status !== 'COMPLETED') unassigned++;
-      if ((s.priority === 'CRITICAL' || s.priority === 'HIGH') && s.status !== 'COMPLETED') urgent++;
-      if (isAssigned && s.status !== 'COMPLETED') active++;
-      if (s.status === 'COMPLETED') resolved++;
+      if (!isAssigned) unassigned++;
+      if (s.priority === 'CRITICAL' || s.priority === 'HIGH') urgent++;
+      if (isAssigned) active++;
     });
 
     return {
-      all: scopedIncidents.length,
+      all: unassigned + active,
       unassigned,
       urgent,
       active,
-      resolved,
     };
   }, [scopedIncidents]);
 
-  // Filter incidents based on search query & selected status tab
+  // Filter incidents based on search query & selected status tab (chỉ hiển thị các ca đang diễn ra)
   const filteredIncidents = useMemo(() => {
     return scopedIncidents.filter((s) => {
+      // Bỏ các ca đã hoàn thành khỏi feed tác chiến trực tiếp
+      if (s.status === 'COMPLETED') return false;
+
       // 1. Search query matching
       const matchSearch =
         searchQuery.trim() === '' ||
@@ -82,13 +83,10 @@ export const IncidentFeed = ({
       // 2. Status tabs
       const isAssigned = Boolean(s.assignmentId && s.status !== 'CANCELLED');
       if (statusFilter === 'UNASSIGNED') {
-        return !isAssigned && s.status !== 'COMPLETED';
+        return !isAssigned;
       }
       if (statusFilter === 'ACTIVE') {
-        return isAssigned && s.status !== 'COMPLETED';
-      }
-      if (statusFilter === 'RESOLVED') {
-        return s.status === 'COMPLETED';
+        return isAssigned;
       }
 
       return true;
@@ -125,15 +123,6 @@ export const IncidentFeed = ({
           </div>
 
           <div className="feed-title-actions" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <button
-              type="button"
-              className="btn-feed-collapse"
-              onClick={() => window.dispatchEvent(new CustomEvent('sos_data_updated'))}
-              title="Làm mới dữ liệu SOS từ máy chủ"
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              <RefreshCw size={13} />
-            </button>
             {onToggleCollapse && (
               <button
                 type="button"
@@ -210,7 +199,6 @@ export const IncidentFeed = ({
             { id: 'ALL', label: 'Tất cả', count: tabCounts.all },
             { id: 'UNASSIGNED', label: lang === 'vi' ? 'Chờ điều phối' : 'Pending', count: tabCounts.unassigned },
             { id: 'ACTIVE', label: 'Đang cứu', count: tabCounts.active },
-            { id: 'RESOLVED', label: 'Hoàn thành', count: tabCounts.resolved },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -228,7 +216,7 @@ export const IncidentFeed = ({
       {/* 4. Incident Cards List */}
       <div className="feed-card-list">
         {filteredIncidents.map((sos) => {
-          const isSelected = selectedSos.id === sos.id;
+          const isSelected = selectedSos?.id === sos.id;
           const priorityClass =
             sos.priority === 'CRITICAL' ? 'critical' : sos.priority === 'HIGH' ? 'high' : 'medium';
 

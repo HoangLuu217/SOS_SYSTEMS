@@ -476,7 +476,7 @@
   animation: modalFadeIn 0.25s ease-out;
 }
 
-.sos-modal-content {
+.sos-modal-backdrop .sos-modal-content {
   background: #ffffff;
   border-radius: 24px;
   max-width: 580px;
@@ -489,7 +489,7 @@
   animation: modalSlideUp 0.3s ease-out;
 }
 
-.sos-modal-header {
+.sos-modal-backdrop .sos-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -497,7 +497,7 @@
   border-bottom: 1px solid #f1f5f9;
 }
 
-.sos-modal-title {
+.sos-modal-backdrop .sos-modal-title {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -506,7 +506,7 @@
   color: #0f172a;
 }
 
-.sos-modal-close-btn {
+.sos-modal-backdrop .sos-modal-close-btn {
   background: #f1f5f9;
   border: none;
   border-radius: 50%;
@@ -520,12 +520,12 @@
   transition: all 0.2s ease;
 }
 
-.sos-modal-close-btn:hover {
+.sos-modal-backdrop .sos-modal-close-btn:hover {
   background: #e2e8f0;
   color: #0f172a;
 }
 
-.sos-modal-body {
+.sos-modal-backdrop .sos-modal-body {
   padding: 24px;
   overflow-y: auto;
   font-size: 14.5px;
@@ -533,24 +533,24 @@
   color: #334155;
 }
 
-.sos-modal-body h4 {
+.sos-modal-backdrop .sos-modal-body h4 {
   color: #0f172a;
   font-weight: 700;
   margin: 14px 0 6px 0;
 }
 
-.sos-modal-body h4:first-child {
+.sos-modal-backdrop .sos-modal-body h4:first-child {
   margin-top: 0;
 }
 
-.sos-modal-footer {
+.sos-modal-backdrop .sos-modal-footer {
   padding: 16px 24px;
   border-top: 1px solid #f1f5f9;
   display: flex;
   justify-content: flex-end;
 }
 
-.sos-modal-btn-confirm {
+.sos-modal-backdrop .sos-modal-btn-confirm {
   background: #0066f5;
   color: #ffffff;
   border: none;
@@ -562,7 +562,7 @@
   transition: background 0.2s ease;
 }
 
-.sos-modal-btn-confirm:hover {
+.sos-modal-backdrop .sos-modal-btn-confirm:hover {
   background: #0052cc;
 }
 

@@ -40,8 +40,8 @@ import {
   Globe2,
   Check,
   MessageSquare,
-  Shield,
   Camera,
+  X,
 } from 'lucide-react';
 
 import './Sidebar.css';
@@ -232,7 +232,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           key: 'coordination',
-          label: 'Điều phối & Phân công',
+          label: 'Điều phối nhiệm vụ',
           icon: <GitMerge size={18} className="sos-nav-icon" />,
           badge: sosCounts.active > 0 ? `${sosCounts.active} Vụ` : undefined,
           badgeType: 'danger',
@@ -435,42 +435,57 @@ export const Sidebar: React.FC<SidebarProps> = ({
     let isMounted = true;
     setLoadingProvinces(true);
 
-    fetchProvincesV2().then(async (list) => {
-      if (!isMounted) return;
-      setProvinces(list);
-      setLoadingProvinces(false);
+    fetchProvincesV2()
+      .then(async (list) => {
+        if (!isMounted) return;
+        const safeList = Array.isArray(list) ? list : [];
+        setProvinces(safeList);
+        setLoadingProvinces(false);
 
-      const currentArea = (localProfile.managedArea || '').toLowerCase();
-      if (currentArea && list.length > 0) {
-        // Tự động tìm Tỉnh/TP khớp với hồ sơ hiện tại
-        const foundProv = list.find((p) => {
-          const cleanName = p.name.toLowerCase().replace(/tỉnh\s+|thành phố\s+/g, '').trim();
-          return currentArea.includes(cleanName) || currentArea.includes(p.codename.replace(/_/g, ' '));
-        });
+        const currentArea = (localProfile.managedArea || '').toLowerCase();
+        if (currentArea && safeList.length > 0) {
+          // Tự động tìm Tỉnh/TP khớp với hồ sơ hiện tại
+          const foundProv = safeList.find((p) => {
+            if (!p) return false;
+            const cleanName = (p.name || '').toLowerCase().replace(/tỉnh\s+|thành phố\s+/g, '').trim();
+            const pCodeName = (p.codename || '').replace(/_/g, ' ');
+            return (cleanName && currentArea.includes(cleanName)) || (pCodeName && currentArea.includes(pCodeName));
+          });
 
-        if (foundProv) {
-          setSelectedProvinceCode(foundProv.code);
-          setLoadingWards(true);
-          const detail = await fetchProvinceWithWardsV2(foundProv.code);
-          if (!isMounted) return;
-          setLoadingWards(false);
+          if (foundProv) {
+            setSelectedProvinceCode(foundProv.code);
+            setLoadingWards(true);
+            try {
+              const detail = await fetchProvinceWithWardsV2(foundProv.code);
+              if (!isMounted) return;
+              setLoadingWards(false);
 
-          if (detail && Array.isArray(detail.wards)) {
-            setWards(detail.wards);
-            // Tìm Phường/Xã tương ứng
-            const foundWard = detail.wards.find((w) => {
-              const cleanW = w.name.toLowerCase().replace(/phường\s+|xã\s+|thị trấn\s+/g, '').trim();
-              return currentArea.includes(cleanW) || currentArea.includes(w.codename.replace(/_/g, ' '));
-            });
-            if (foundWard) {
-              setSelectedWardCode(foundWard.code);
-            } else {
-              setSelectedWardCode('ALL');
+              if (detail && Array.isArray(detail.wards)) {
+                setWards(detail.wards);
+                // Tìm Phường/Xã tương ứng
+                const foundWard = detail.wards.find((w) => {
+                  if (!w) return false;
+                  const cleanW = (w.name || '').toLowerCase().replace(/phường\s+|xã\s+|thị trấn\s+/g, '').trim();
+                  const wCodeName = (w.codename || '').replace(/_/g, ' ');
+                  return (cleanW && currentArea.includes(cleanW)) || (wCodeName && currentArea.includes(wCodeName));
+                });
+                if (foundWard) {
+                  setSelectedWardCode(foundWard.code);
+                } else {
+                  setSelectedWardCode('ALL');
+                }
+              }
+            } catch (err) {
+              console.warn('Lỗi lấy danh sách phường/xã:', err);
+              if (isMounted) setLoadingWards(false);
             }
           }
         }
-      }
-    });
+      })
+      .catch((err) => {
+        console.warn('Lỗi lấy danh mục Tỉnh/TP:', err);
+        if (isMounted) setLoadingProvinces(false);
+      });
 
     return () => {
       isMounted = false;
@@ -749,12 +764,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const rawUserName = localProfile.fullName || user?.fullName || 'Cán bộ trực ban';
+  const rawUserName = localProfile.fullName || user?.fullName || (isAdmin ? 'Quản trị viên' : 'Cán bộ điều phối');
   // Loại bỏ các phần chú thích trong ngoặc đơn như (PCTT Liên Chiểu) để họ tên hiển thị gọn gàng, trọn vẹn
   const displayUserName = rawUserName.replace(/\s*\([^\)]*\)/g, '').trim() || rawUserName;
-  const displayUserRole = localProfile.position || user?.authority?.position || (isAdmin ? 'Quản trị viên' : 'Cán bộ điều phối');
+  const displayUserRole = localProfile.position || user?.authority?.position || (isAdmin ? 'Quản trị viên' : 'Chỉ huy cứu hộ');
+  const roleBadgeLabel =
+    displayUserRole === 'Quản trị viên hệ thống' ? 'Quản trị viên' : displayUserRole;
   const displayAvatar = localProfile.avatarUrl || user?.avatarUrl || '';
-  const userInitial = displayUserName.trim().charAt(0).toUpperCase() || 'U';
+  const userInitial = (displayUserName || 'U').trim().charAt(0).toUpperCase() || 'U';
 
   return (
     <aside
@@ -775,7 +792,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="sos-brand-info">
               <span className="sos-brand-title">SOS SYSTEMS</span>
               <span className="sos-brand-subtitle">
-                {isAdmin ? 'Quản Trị Hệ Thống' : 'Điều Hành Cứu Hộ'}
+                {isAdmin ? 'Quản Trị Hệ Thống' : 'Hỗ Trợ Cứu Nạn'}
               </span>
             </div>
           )}
@@ -893,13 +910,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="sos-user-name" title={displayUserName}>
                   {displayUserName}
                 </span>
-                <span
-                  className={`sos-user-role-badge ${isAdmin ? 'admin' : 'authority'}`}
-                  title={displayUserRole}
-                >
-                  <Shield size={10} style={{ flexShrink: 0 }} />
-                  <span>{displayUserRole}</span>
-                </span>
               </div>
             )}
           </div>
@@ -936,70 +946,69 @@ export const Sidebar: React.FC<SidebarProps> = ({
         createPortal(
           <div className="sos-modal-overlay" onClick={() => setIsProfileModalOpen(false)}>
             <div
-            className="sos-profile-modal-card"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-          >
-            <div className="sos-profile-modal-header">
-              <div className="sos-profile-modal-title">
-                <div className="sos-profile-modal-icon">
-                  <i className="bi bi-person"></i>
-                </div>
-                <div>
-                  <h3>Hồ Sơ Cán Bộ &amp; Đơn Vị Địa Phương</h3>
-                  <p>Cập nhật thông tin định danh &amp; đầu mối liên lạc cứu hộ</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="sos-profile-modal-close"
-                onClick={() => setIsProfileModalOpen(false)}
-                aria-label="Đóng"
-              >
-                <i className="bi bi-x-lg"></i>
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveProfile} className="sos-profile-form">
-              <div className="sos-profile-modal-body">
-                {/* Khối tóm tắt hồ sơ & Đổi Avatar Cloudinary */}
-                <div className="sos-profile-avatar-preview">
-                  <div className="sos-profile-avatar-action-wrap">
-                    <div
-                      className="sos-profile-big-avatar"
-                      onClick={() => avatarFileInputRef.current?.click()}
-                      title="Nhấp để tải lên ảnh đại diện mới từ máy tính"
-                    >
-                      {displayAvatar ? (
-                        <img
-                          src={displayAvatar}
-                          alt="Avatar"
-                          className="sos-profile-avatar-img"
-                        />
-                      ) : (
-                        userInitial
-                      )}
-
-                      {/* Lớp phủ camera khi hover hoặc đang upload */}
-                      <div className="sos-avatar-camera-overlay">
-                        {uploadingAvatar ? (
-                          <div className="sos-avatar-spinner" />
-                        ) : (
-                          <Camera size={15} />
-                        )}
-                      </div>
-                    </div>
-
-                    <input
-                      type="file"
-                      ref={avatarFileInputRef}
-                      onChange={handleAvatarFileSelected}
-                      accept="image/jpeg,image/png,image/webp,image/gif"
-                      style={{ display: 'none' }}
-                    />
+              className="sos-profile-modal-card"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+            >
+              <div className="sos-profile-modal-header">
+                <div className="sos-profile-modal-title">
+                  <div className="sos-profile-modal-icon">
+                    <i className="bi bi-person"></i>
                   </div>
+                  <div>
+                    <h3>Hồ Sơ Cán Bộ &amp; Đơn Vị Địa Phương</h3>
+                    <p>Cập nhật thông tin định danh &amp; đầu mối liên lạc cứu hộ</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="sos-profile-modal-close"
+                  onClick={() => setIsProfileModalOpen(false)}
+                  aria-label="Đóng"
+                >
+                  <X size={18} />
+                </button>
+              </div>
 
+              <form onSubmit={handleSaveProfile} className="sos-profile-form">
+                <div className="sos-profile-modal-body">
+                  {/* Khối tóm tắt hồ sơ & Đổi Avatar Cloudinary */}
+                  <div className="sos-profile-avatar-preview">
+                    <div className="sos-profile-avatar-action-wrap">
+                      <div
+                        className="sos-profile-big-avatar"
+                        onClick={() => avatarFileInputRef.current?.click()}
+                        title="Nhấp để tải lên ảnh đại diện mới từ máy tính"
+                      >
+                        {displayAvatar ? (
+                          <img
+                            src={displayAvatar}
+                            alt="Avatar"
+                            className="sos-profile-avatar-img"
+                          />
+                        ) : (
+                          userInitial
+                        )}
+
+                        {/* Lớp phủ camera khi hover hoặc đang upload */}
+                        <div className="sos-avatar-camera-overlay">
+                          {uploadingAvatar ? (
+                            <div className="sos-avatar-spinner" />
+                          ) : (
+                            <Camera size={15} />
+                          )}
+                        </div>
+                      </div>
+
+                      <input
+                        type="file"
+                        ref={avatarFileInputRef}
+                        onChange={handleAvatarFileSelected}
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        style={{ display: 'none' }}
+                      />
+                    </div>
                   <div className="sos-profile-preview-text">
                     <strong>{localProfile.fullName || 'Cán bộ trực ban'}</strong>
                     <span>{localProfile.position || 'Chỉ huy cứu hộ'}</span>

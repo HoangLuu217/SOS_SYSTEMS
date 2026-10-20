@@ -25,6 +25,7 @@ import { useAuth } from '@/context/AuthContext';
 import { LogoSOS } from '@/components';
 import { backendApi } from '@/api';
 import type { RescueTeamData, VehicleData, RescuerVerificationStatus } from '@/types';
+import { RescuerMissionCard } from '../home/RescuerMissionCard';
 
 export type RescuerAvailability =
   | 'OFFLINE'      // Ngoại tuyến
@@ -1040,6 +1041,9 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
             <Feather name="chevron-right" size={18} color="#D97706" />
           </TouchableOpacity>
         )}
+
+        {/* 2.5. Nhiệm vụ tác chiến thực địa */}
+        <RescuerMissionCard />
 
 
         {/* 3.5. Tactical Command Dashboard (Unified Operational Readiness & Rescue Team) */}

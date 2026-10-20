@@ -1,5 +1,5 @@
 import type { FeatureCollection, Feature } from 'geojson';
-import type { AdministrativeArea, SosRequest, SosAssignment, AuthorityOfficer } from '@/types/domainD';
+import type { AdministrativeArea, SosRequest, SosAssignment, AuthorityOfficer, RescueTeam } from '@/types/domainD';
 import { getRegionColor, GEOAPIFY_CENTROIDS } from './geoapifyBoundariesService';
 
 // Tinh chỉnh apistyle chuyên dụng cho bản đồ cứu hộ & phòng chống thiên tai:
@@ -234,8 +234,8 @@ export function buildTacticalRouteGeoJSON(
     return { type: 'FeatureCollection', features: [] };
   }
 
-  const rescuerLng = assignment.rescuerLocation?.lng ?? (sos.coordinates.lng + 0.009);
-  const rescuerLat = assignment.rescuerLocation?.lat ?? (sos.coordinates.lat - 0.007);
+  const rescuerLng = assignment.rescuerLocation?.lng ?? (sos.coordinates.lng + 0.0035);
+  const rescuerLat = assignment.rescuerLocation?.lat ?? (sos.coordinates.lat + 0.0045);
 
   const midLng = (rescuerLng + sos.coordinates.lng) / 2 + 0.002;
   const midLat = (rescuerLat + sos.coordinates.lat) / 2 - 0.001;
@@ -357,6 +357,73 @@ export function isSosInOfficerJurisdiction(
     (wardKeyword && sos.wardName && sos.wardName.toLowerCase().includes(wardKeyword));
 
   return !!matchesWard;
+}
+
+/**
+ * Kiểm tra xem một đội cứu hộ có thuộc địa bàn quản lý của cán bộ hay không.
+ * Nếu là ADMIN: được quyền xem tất cả.
+ * Nếu là Cán bộ địa phương: chỉ các đội thuộc khu vực phụ trách mới được hiển thị GPS.
+ */
+export function isTeamInOfficerJurisdiction(
+  team: RescueTeam,
+  officer?: AuthorityOfficer,
+  managedArea?: AdministrativeArea
+): boolean {
+  if (!officer || officer.role === 'ADMIN') return true;
+  if (!team) return false;
+
+  const officerAreaId = officer.jurisdictionAreaId;
+  const teamWardId = team.wardId || (team as any).areaId;
+  const teamDistrictId = team.districtId;
+
+  // 1. Khớp mã định danh địa bàn
+  if (officerAreaId) {
+    if (teamWardId && (teamWardId === officerAreaId || teamWardId === `area-${officerAreaId}`)) return true;
+    if (managedArea && (teamWardId === managedArea.id || teamWardId === managedArea.code)) return true;
+    if (teamDistrictId && (teamDistrictId === officerAreaId || (managedArea && teamDistrictId === managedArea.id))) {
+      return true;
+    }
+  }
+
+  // 2. Khớp theo tên địa bàn phụ trách
+  const areaNameTarget = (officer.jurisdictionAreaName || managedArea?.name || '')
+    .toLowerCase()
+    .replace(/^(phường|xã|quận|huyện|thị trấn|tp|thành phố)\s+/i, '')
+    .trim();
+
+  if (areaNameTarget) {
+    const teamNameLower = (team.name || '').toLowerCase();
+    const teamWardName = ((team as any).wardName || '').toLowerCase();
+    const teamDistrictName = ((team as any).districtName || '').toLowerCase();
+    if (
+      teamNameLower.includes(areaNameTarget) ||
+      teamWardName.includes(areaNameTarget) ||
+      teamDistrictName.includes(areaNameTarget)
+    ) {
+      return true;
+    }
+  }
+
+  // 3. Khớp tên quận/huyện của cán bộ
+  const districtKeyword = (officer.districtName || '')
+    .toLowerCase()
+    .replace(/^(quận|huyện|thành phố|thị xã)\s+/i, '')
+    .trim();
+
+  if (districtKeyword && districtKeyword !== 'toàn quốc') {
+    const teamNameLower = (team.name || '').toLowerCase();
+    const teamDistrictLower = (team.districtId || '').toLowerCase();
+    if (teamNameLower.includes(districtKeyword)) return true;
+    if (districtKeyword.includes('hải châu') && teamDistrictLower === 'area-hc') return true;
+    if (districtKeyword.includes('cẩm lệ') && teamDistrictLower === 'area-cl') return true;
+    if (districtKeyword.includes('liên chiểu') && teamDistrictLower === 'area-lc') return true;
+    if (districtKeyword.includes('sơn trà') && teamDistrictLower === 'area-st') return true;
+    if (districtKeyword.includes('ngũ hành sơn') && teamDistrictLower === 'area-nhs') return true;
+    if (districtKeyword.includes('thanh khê') && teamDistrictLower === 'area-tk') return true;
+    if (districtKeyword.includes('hòa vang') && teamDistrictLower === 'area-hv') return true;
+  }
+
+  return false;
 }
 
 // Dynamic Centroid coordinates populated via live boundaries API (Hỗ trợ toàn bộ các tỉnh thành trên cả nước)

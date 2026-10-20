@@ -18,6 +18,14 @@ router.get('/assignments/my', authenticate, sosAssignmentController.getMyAssignm
 router.get('/assignments/:id', sosAssignmentController.getAssignmentById);
 
 /**
+ * @route   PATCH /assignments/sos/:sosId/status
+ * @route   PATCH /sos/:id/mission-status
+ * @desc    Cập nhật trạng thái tiến trình tác chiến qua mã SOS
+ */
+router.patch('/assignments/sos/:sosId/status', sosAssignmentController.updateStatusBySosId);
+router.patch('/sos/:id/mission-status', sosAssignmentController.updateStatusBySosId);
+
+/**
  * @route   POST /sos/:id/assign
  * @desc    Điều phối, phân công lực lượng cứu hộ cho một yêu cầu SOS
  */

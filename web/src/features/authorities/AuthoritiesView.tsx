@@ -371,26 +371,54 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
 
   return (
     <div className="authorities-executive-container">
-      {/* Executive Overview Header */}
-      <div className="executive-overview-container">
-        <div className="executive-overview-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 0 }}>
-          <div className="executive-header-left">
-            <span className="executive-live-pill">
-              <span className="live-dot" />
-              Danh bạ cán bộ trực ban &amp; chỉ huy phòng chống thiên tai
-            </span>
-          </div>
-
-          <div className="executive-header-right" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {/* Main Table Card */}
+      <div className="executive-table-card">
+        {/* Filter Pills, Search Input & Create Action Row */}
+        <div className="executive-table-filters-row">
+          <div className="executive-triage-pills">
             <button
               type="button"
-              className="coordination-action-btn outline"
-              onClick={refreshData}
-              title="Làm mới dữ liệu cán bộ"
+              className={`triage-btn ${authStatusFilter === 'ALL' ? 'active' : ''}`}
+              onClick={() => setAuthStatusFilter('ALL')}
             >
-              <RefreshCw size={14} className={loading ? 'executive-spin' : ''} />
-              <span>Làm mới</span>
+              Tất cả ({authorities.length})
             </button>
+            <button
+              type="button"
+              className={`triage-btn ${authStatusFilter === 'ACTIVE' ? 'active' : ''}`}
+              onClick={() => setAuthStatusFilter('ACTIVE')}
+            >
+              Đang hoạt động ({activeOfficersCount})
+            </button>
+            <button
+              type="button"
+              className={`triage-btn ${authStatusFilter === 'INACTIVE' ? 'active' : ''}`}
+              onClick={() => setAuthStatusFilter('INACTIVE')}
+            >
+              Tạm khóa / Ngừng ({inactiveOfficersCount})
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div className="executive-search-input-wrap">
+              <Search size={16} className="search-icon" />
+              <input
+                type="text"
+                className="executive-search-input"
+                placeholder="Tìm cán bộ, SĐT, email hoặc địa bàn..."
+                value={authSearchQuery}
+                onChange={(e) => setAuthSearchQuery(e.target.value)}
+              />
+              {authSearchQuery && (
+                <button
+                  type="button"
+                  className="clear-search-btn"
+                  onClick={() => setAuthSearchQuery('')}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
 
             <button
               type="button"
@@ -412,76 +440,33 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
             </button>
           </div>
         </div>
-      </div>
-
-      {/* Main Table Card */}
-      <div className="executive-table-card">
-        {/* Filter Pills & Search Input Row */}
-        <div className="executive-table-filters-row">
-          <div className="executive-triage-pills">
-            <button
-              type="button"
-              className={`triage-btn ${authStatusFilter === 'ALL' ? 'active blue' : ''}`}
-              onClick={() => setAuthStatusFilter('ALL')}
-            >
-              Tất cả ({authorities.length})
-            </button>
-            <button
-              type="button"
-              className={`triage-btn ${authStatusFilter === 'ACTIVE' ? 'active green' : ''}`}
-              onClick={() => setAuthStatusFilter('ACTIVE')}
-            >
-              Đang hoạt động ({activeOfficersCount})
-            </button>
-            <button
-              type="button"
-              className={`triage-btn ${authStatusFilter === 'INACTIVE' ? 'active red' : ''}`}
-              onClick={() => setAuthStatusFilter('INACTIVE')}
-            >
-              Tạm khóa / Ngừng ({inactiveOfficersCount})
-            </button>
-          </div>
-
-          <div className="executive-search-input-wrap">
-            <Search size={16} className="search-icon" />
-            <input
-              type="text"
-              className="executive-search-input"
-              placeholder="Tìm cán bộ, SĐT, email hoặc địa bàn..."
-              value={authSearchQuery}
-              onChange={(e) => setAuthSearchQuery(e.target.value)}
-            />
-            {authSearchQuery && (
-              <button
-                type="button"
-                className="clear-search-btn"
-                onClick={() => setAuthSearchQuery('')}
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
-        </div>
 
         {/* Content Table */}
         <div className="executive-table-wrapper">
           <table className="executive-table">
             <thead>
               <tr>
-                <th style={{ width: '16%' }}>Cán bộ chỉ huy</th>
-                <th style={{ width: '18%' }}>Số điện thoại / Email</th>
-                <th style={{ width: '16%' }}>Khu vực phụ trách (Địa bàn)</th>
-                <th style={{ width: '7%', textAlign: 'center' }}>Bản đồ</th>
-                <th style={{ width: '15%' }}>Đơn vị / Cơ quan</th>
-                <th style={{ width: '11%' }}>Chức vụ</th>
-                <th style={{ width: '9%', textAlign: 'center' }}>Trạng thái</th>
-                <th style={{ width: '8%', minWidth: '135px', textAlign: 'center' }}>Hành động</th>
+                <th style={{ width: '18%', minWidth: '150px' }}>Cán bộ chỉ huy</th>
+                <th style={{ width: '20%', minWidth: '160px' }}>Số điện thoại / Email</th>
+                <th style={{ width: '24%', minWidth: '180px' }}>Khu vực phụ trách (Địa bàn)</th>
+                <th style={{ width: '18%', minWidth: '160px' }}>Đơn vị / Cơ quan</th>
+                <th style={{ width: '10%', minWidth: '105px', textAlign: 'center' }}>Trạng thái</th>
+                <th style={{ width: '10%', minWidth: '115px', textAlign: 'center' }}>Hành động</th>
               </tr>
             </thead>
             <tbody>
-              {filteredAuthorities.length === 0 ? (
+              {loading ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+                      <Loader2 size={16} className="executive-spin" />
+                      <span>Đang tải danh sách cán bộ...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredAuthorities.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
                     {authorities.length === 0
                       ? 'Chưa có tài khoản cán bộ địa phương nào. Nhấn "+ Tạo Tài Khoản Cán Bộ" để tạo mới!'
                       : 'Không tìm thấy cán bộ nào phù hợp với bộ lọc tìm kiếm.'}
@@ -491,39 +476,34 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                 filteredAuthorities.map((a) => {
                   const areaName = a.authority?.areaName || a.authority?.areaId || 'Địa bàn phụ trách';
                   const isActive = a.status === 'ACTIVE';
-                  const initials = (a.fullName || 'CB').slice(0, 1).toUpperCase();
 
                   return (
                     <tr key={a._id}>
+                      {/* Cán bộ chỉ huy (Đã xóa avatar, tên to và in đậm) */}
                       <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div className="officer-avatar-box">
-                            {initials}
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14.5px', lineHeight: 1.3 }}>
+                            {a.fullName}
                           </div>
-                          <div>
-                            <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '13.5px' }}>
-                              {a.fullName}
-                            </div>
-                            <span style={{ fontSize: '11.5px', color: '#64748b' }}>
-                              {a.role === 'LOCAL_AUTHORITY' ? 'Chỉ huy địa phương' : a.role}
-                            </span>
-                          </div>
+                          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+                            {a.role === 'LOCAL_AUTHORITY' ? 'Chỉ huy địa phương' : a.role}
+                          </span>
                         </div>
                       </td>
+
+                      {/* SĐT / Email (SĐT in đậm, Gmail hiển thị đầy đủ không bị cắt ...) */}
                       <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '13px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>
                             {a.phone || '--'}
                           </span>
                           <span
                             style={{
-                              color: '#64748b',
-                              fontSize: '12px',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              maxWidth: '220px',
-                              display: 'block',
+                              color: '#334155',
+                              fontSize: '12.5px',
+                              fontWeight: 500,
+                              wordBreak: 'break-all',
+                              lineHeight: 1.3,
                             }}
                             title={a.email}
                           >
@@ -531,33 +511,34 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                           </span>
                         </div>
                       </td>
+
+                      {/* Khu vực phụ trách (Địa bàn) & Nút Xem Bản đồ tích hợp trực tiếp, không bị dính cột */}
                       <td>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#0369a1', fontWeight: 600, fontSize: '13px' }}>
-                          <MapPin size={14} color="#0284c7" />
-                          <span>{areaName}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#0f172a', fontWeight: 600, fontSize: '13.5px', minWidth: 0, flex: 1 }}>
+                            <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
+                            <span style={{ wordBreak: 'break-word', lineHeight: 1.3 }}>{areaName}</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="map-preview-btn"
+                            onClick={() => setSelectedMapOfficer(a)}
+                            title={`Xem bản đồ địa bàn ${areaName}`}
+                          >
+                            <MapIcon size={12} />
+                            <span>Bản đồ</span>
+                          </button>
                         </div>
                       </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <button
-                          type="button"
-                          className="map-preview-btn"
-                          onClick={() => setSelectedMapOfficer(a)}
-                          title={`Xem bản đồ khu vực ${areaName}`}
-                        >
-                          <MapIcon size={13} />
-                          <span>Xem</span>
-                        </button>
-                      </td>
+
+                      {/* Đơn vị / Cơ quan */}
                       <td>
-                        <span style={{ color: '#334155', fontSize: '12.5px', lineHeight: 1.4 }}>
+                        <span style={{ color: '#1e293b', fontSize: '13px', fontWeight: 600, lineHeight: 1.35, display: 'block' }}>
                           {a.authority?.department || 'Ban chỉ huy PCTT'}
                         </span>
                       </td>
-                      <td>
-                        <span style={{ color: '#475569', fontSize: '12.5px', fontWeight: 600 }}>
-                          {a.authority?.position || 'Cán bộ tác chiến'}
-                        </span>
-                      </td>
+
+                      {/* Trạng thái */}
                       <td style={{ textAlign: 'center' }}>
                         <button
                           type="button"
@@ -576,15 +557,17 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                           <span>{isActive ? 'HOẠT ĐỘNG' : 'TẠM KHÓA'}</span>
                         </button>
                       </td>
+
+                      {/* Hành động tối ưu: gọn gàng, vừa vặn không tràn khung */}
                       <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'inline-flex', gap: 6, justifyContent: 'center', alignItems: 'center' }}>
+                        <div style={{ display: 'inline-flex', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
                           <button
                             type="button"
                             className="officer-action-btn edit"
                             title="Chỉnh sửa thông tin cán bộ"
                             onClick={() => handleOpenEditAuthority(a)}
                           >
-                            <Edit size={13} /> <span>Sửa</span>
+                            <Edit size={12} /> <span>Sửa</span>
                           </button>
                           <button
                             type="button"
@@ -592,7 +575,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                             title={isActive ? 'Khóa tài khoản cán bộ' : 'Mở khóa kích hoạt lại'}
                             onClick={() => handleQuickToggleAuthStatus(a)}
                           >
-                            {isActive ? <Lock size={13} /> : <Unlock size={13} />}
+                            {isActive ? <Lock size={12} /> : <Unlock size={12} />}
                             <span>{isActive ? 'Khóa' : 'Mở'}</span>
                           </button>
                         </div>
@@ -1145,15 +1128,26 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
 
         return (
           <div className="executive-modal-backdrop" onClick={() => setSelectedMapOfficer(null)}>
-            <div className="executive-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 840, padding: 0 }}>
-              <div className="executive-modal-header" style={{ padding: '16px 20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div className="metric-icon-box blue" style={{ width: 36, height: 36 }}>
+            <div
+              className="executive-modal-card"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: '95%',
+                maxWidth: 1040,
+                padding: 0,
+                borderRadius: 16,
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                overflow: 'hidden',
+              }}
+            >
+              <div className="executive-modal-header" style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div className="metric-icon-box blue" style={{ width: 38, height: 38, borderRadius: 10 }}>
                     <MapIcon size={20} />
                   </div>
                   <div>
-                    <h4 className="executive-modal-title">Bản Đồ Địa Bàn Phụ Trách</h4>
-                    <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
+                    <h4 className="executive-modal-title" style={{ fontSize: '16px', fontWeight: 800 }}>Bản Đồ Địa Bàn Phụ Trách</h4>
+                    <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b', marginTop: 2 }}>
                       {officerArea}
                     </p>
                   </div>
@@ -1167,8 +1161,8 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                 </button>
               </div>
 
-              <div style={{ padding: '16px 20px', overflowY: 'auto', maxHeight: 'calc(90vh - 80px)' }}>
-                <div style={{ height: 350, width: '100%', borderRadius: 8, overflow: 'hidden', border: '1px solid #cbd5e1', marginBottom: 14 }}>
+              <div style={{ padding: '20px 24px', overflowY: 'auto', maxHeight: 'calc(90vh - 80px)' }}>
+                <div style={{ height: 360, width: '100%', borderRadius: 10, overflow: 'hidden', border: '1px solid #cbd5e1', marginBottom: 16 }}>
                   <AreaPreviewMap
                     lat={coords.lat}
                     lng={coords.lng}
@@ -1180,13 +1174,14 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
 
                 <div
                   style={{
-                    background: '#f8fafc',
-                    borderRadius: 10,
+                    background: '#ffffff',
+                    borderRadius: 12,
                     border: '1px solid #e2e8f0',
-                    padding: '14px 18px',
+                    padding: '16px 20px',
+                    boxShadow: '0 2px 8px -2px rgba(0, 0, 0, 0.05)',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 12,
+                    gap: 14,
                   }}
                 >
                   {/* Hàng 1: Avatar, Tên, Chức vụ & Trạng thái */}
@@ -1196,81 +1191,111 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       flexWrap: 'wrap',
-                      gap: 10,
-                      paddingBottom: 10,
-                      borderBottom: '1px solid #e2e8f0',
+                      gap: 12,
+                      paddingBottom: 12,
+                      borderBottom: '1px solid #f1f5f9',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                       <div
                         className="officer-avatar-box"
                         style={{
-                          width: 44,
-                          height: 44,
-                          fontSize: '16px',
+                          width: 48,
+                          height: 48,
+                          borderRadius: 12,
+                          fontSize: '18px',
+                          fontWeight: 800,
                           background: 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)',
                           border: '1.5px solid #7dd3fc',
                           color: '#0369a1',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
                         }}
                       >
                         {(selectedMapOfficer.fullName || 'CB').slice(0, 1).toUpperCase()}
                       </div>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '15px' }}>
+                          <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '16px', letterSpacing: '-0.2px' }}>
                             {selectedMapOfficer.fullName}
                           </span>
                           <span
                             style={{
                               fontSize: '11px',
                               fontWeight: 700,
-                              background: '#e0f2fe',
+                              background: '#f0f9ff',
                               color: '#0284c7',
-                              padding: '2px 8px',
-                              borderRadius: 4,
+                              padding: '3px 9px',
+                              borderRadius: 6,
                               border: '1px solid #bae6fd',
                             }}
                           >
                             {selectedMapOfficer.role === 'LOCAL_AUTHORITY' ? 'Chỉ huy địa phương' : (selectedMapOfficer.role || 'Cán bộ PCTT')}
                           </span>
                         </div>
-                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: 2 }}>
-                          {selectedMapOfficer.authority?.department || 'Ban Chỉ Huy PCTT & TKCN'} • {selectedMapOfficer.phone || '--'}
+                        <div style={{ fontSize: '12.5px', color: '#64748b', marginTop: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span>{selectedMapOfficer.authority?.department || 'Ban Chỉ Huy PCTT & TKCN'}</span>
+                          <span>•</span>
+                          <span style={{ fontWeight: 600, color: '#334155' }}>{selectedMapOfficer.phone || '--'}</span>
                         </div>
                       </div>
                     </div>
 
-                    <span className={`officer-status-badge ${isOfficerActive ? 'active' : 'inactive'}`}>
-                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: isOfficerActive ? '#16a34a' : '#94a3b8' }} />
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '4px 12px',
+                        borderRadius: 20,
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        background: isOfficerActive ? '#f0fdf4' : '#f8fafc',
+                        color: isOfficerActive ? '#15803d' : '#64748b',
+                        border: `1px solid ${isOfficerActive ? '#bbf7d0' : '#e2e8f0'}`,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 7,
+                          height: 7,
+                          borderRadius: '50%',
+                          background: isOfficerActive ? '#16a34a' : '#94a3b8',
+                          boxShadow: isOfficerActive ? '0 0 0 2px rgba(34, 197, 94, 0.2)' : 'none',
+                        }}
+                      />
                       {isOfficerActive ? 'Đang hoạt động' : 'Tạm khóa'}
                     </span>
                   </div>
 
-                  {/* Hàng 2: Chi tiết 4 khối thông tin chuyên sâu */}
+                  {/* Hàng 2: Chi tiết 4 khối thông tin chuyên sâu (Rộng rãi, không che email) */}
                   <div
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
                       gap: 12,
                     }}
                   >
                     {/* Thẻ 1: Liên hệ trực ban */}
                     <div
                       style={{
-                        background: '#ffffff',
-                        padding: '10px 12px',
-                        borderRadius: 8,
+                        background: '#f8fafc',
+                        padding: '12px 14px',
+                        borderRadius: 10,
                         border: '1px solid #e2e8f0',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: 6,
+                        gap: 8,
                       }}
                     >
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
                         Liên hệ trực ban
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '12.5px', color: '#0f172a', fontWeight: 600 }}>
-                        <Phone size={13} color="#0284c7" />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '13px', color: '#0f172a', fontWeight: 700 }}>
+                        <div style={{ width: 22, height: 22, borderRadius: 6, background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <Phone size={12} color="#0284c7" />
+                        </div>
                         <a href={`tel:${selectedMapOfficer.phone}`} style={{ color: 'inherit', textDecoration: 'none' }}>
                           {selectedMapOfficer.phone || '--'}
                         </a>
@@ -1278,18 +1303,26 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                       <div
                         style={{
                           display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
+                          alignItems: 'flex-start',
+                          gap: 8,
                           fontSize: '12px',
-                          color: '#475569',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
+                          color: '#334155',
+                          lineHeight: '1.4',
                         }}
                         title={selectedMapOfficer.email}
                       >
-                        <Mail size={13} color="#0284c7" />
-                        <a href={`mailto:${selectedMapOfficer.email}`} style={{ color: 'inherit', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div style={{ width: 22, height: 22, borderRadius: 6, background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
+                          <Mail size={12} color="#0284c7" />
+                        </div>
+                        <a
+                          href={`mailto:${selectedMapOfficer.email}`}
+                          style={{
+                            color: '#0284c7',
+                            textDecoration: 'none',
+                            wordBreak: 'break-all',
+                            fontWeight: 500,
+                          }}
+                        >
                           {selectedMapOfficer.email || '--'}
                         </a>
                       </div>
@@ -1298,26 +1331,30 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                     {/* Thẻ 2: Cơ quan & Chức vụ */}
                     <div
                       style={{
-                        background: '#ffffff',
-                        padding: '10px 12px',
-                        borderRadius: 8,
+                        background: '#f8fafc',
+                        padding: '12px 14px',
+                        borderRadius: 10,
                         border: '1px solid #e2e8f0',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: 6,
+                        gap: 8,
                       }}
                     >
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
                         Cơ quan & Chức vụ
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '12.5px', color: '#0f172a', fontWeight: 600 }}>
-                        <Building2 size={13} color="#0284c7" />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedMapOfficer.authority?.organizationName || 'UBND / BCH PCTT'}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '13px', color: '#0f172a', fontWeight: 700 }}>
+                        <div style={{ width: 22, height: 22, borderRadius: 6, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <Building2 size={12} color="#d97706" />
+                        </div>
+                        <span style={{ wordBreak: 'break-word' }} title={selectedMapOfficer.authority?.organizationName || 'UBND / BCH PCTT'}>
                           {selectedMapOfficer.authority?.organizationName || 'UBND / BCH PCTT'}
                         </span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '12px', color: '#475569' }}>
-                        <Briefcase size={13} color="#0284c7" />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '12px', color: '#475569' }}>
+                        <div style={{ width: 22, height: 22, borderRadius: 6, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <Briefcase size={12} color="#64748b" />
+                        </div>
                         <span>{selectedMapOfficer.authority?.position || 'Cán bộ trực ban'}</span>
                       </div>
                     </div>
@@ -1325,26 +1362,30 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                     {/* Thẻ 3: Địa bàn phụ trách */}
                     <div
                       style={{
-                        background: '#ffffff',
-                        padding: '10px 12px',
-                        borderRadius: 8,
+                        background: '#f8fafc',
+                        padding: '12px 14px',
+                        borderRadius: 10,
                         border: '1px solid #e2e8f0',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: 6,
+                        gap: 8,
                       }}
                     >
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
                         Địa bàn phụ trách
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '12.5px', color: '#0369a1', fontWeight: 700 }}>
-                        <MapPin size={13} color="#0284c7" />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={officerArea}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '13px', color: '#0369a1', fontWeight: 700 }}>
+                        <div style={{ width: 22, height: 22, borderRadius: 6, background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <MapPin size={12} color="#0284c7" />
+                        </div>
+                        <span style={{ wordBreak: 'break-word' }} title={officerArea}>
                           {officerArea}
                         </span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '11.5px', color: '#64748b' }}>
-                        <Navigation size={13} color="#0284c7" />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '11.5px', color: '#64748b' }}>
+                        <div style={{ width: 22, height: 22, borderRadius: 6, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <Navigation size={12} color="#64748b" />
+                        </div>
                         <span>{coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}</span>
                       </div>
                     </div>
@@ -1352,24 +1393,28 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                     {/* Thẻ 4: Hệ thống & Cấp phép */}
                     <div
                       style={{
-                        background: '#ffffff',
-                        padding: '10px 12px',
-                        borderRadius: 8,
+                        background: '#f8fafc',
+                        padding: '12px 14px',
+                        borderRadius: 10,
                         border: '1px solid #e2e8f0',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: 6,
+                        gap: 8,
                       }}
                     >
-                      <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
                         Hệ thống & Cấp phép
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '12.5px', color: '#0f172a', fontWeight: 600 }}>
-                        <ShieldCheck size={13} color="#16a34a" />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '13px', color: '#0f172a', fontWeight: 700 }}>
+                        <div style={{ width: 22, height: 22, borderRadius: 6, background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <ShieldCheck size={12} color="#16a34a" />
+                        </div>
                         <span>Mã CB: #{selectedMapOfficer._id ? selectedMapOfficer._id.slice(-6).toUpperCase() : '--'}</span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '11.5px', color: '#64748b' }}>
-                        <Calendar size={13} color="#0284c7" />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '11.5px', color: '#64748b' }}>
+                        <div style={{ width: 22, height: 22, borderRadius: 6, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <Calendar size={12} color="#64748b" />
+                        </div>
                         <span>Ngày tạo: {selectedMapOfficer.createdAt ? new Date(selectedMapOfficer.createdAt).toLocaleDateString('vi-VN') : 'Hệ thống'}</span>
                       </div>
                     </div>

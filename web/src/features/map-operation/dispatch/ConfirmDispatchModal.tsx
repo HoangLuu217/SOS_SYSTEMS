@@ -37,12 +37,12 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
         onClick={(e) => e.stopPropagation()}
         onDoubleClick={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
-        style={{ width: 480, maxWidth: '92vw' }}
+        style={{ width: 540, maxWidth: '94vw', borderRadius: 12, overflow: 'hidden' }}
       >
-        <div className="sos-modal-header" style={{ background: '#fef2f2', borderBottom: '1px solid #fee2e2' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#dc2626' }}>
-            <AlertTriangle size={18} />
-            <h3 className="sos-modal-title" style={{ color: '#b91c1c', margin: 0, fontSize: 14 }}>
+        <div className="sos-modal-header" style={{ background: '#fef2f2', borderBottom: '1px solid #fee2e2', padding: '14px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, color: '#dc2626' }}>
+            <AlertTriangle size={20} />
+            <h3 className="sos-modal-title" style={{ color: '#b91c1c', margin: 0, fontSize: 15.5, fontWeight: 800, letterSpacing: '0.2px' }}>
               XÁC NHẬN ĐIỀU ĐỘNG CỨU HỘ KHẨN CẤP
             </h3>
           </div>
@@ -50,42 +50,52 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
             type="button"
             className="sos-modal-close-icon"
             onClick={onClose}
+            style={{ width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
-            <X size={15} />
+            <X size={17} />
           </button>
         </div>
 
-        <div className="sos-modal-content" style={{ gap: 10, padding: '14px 18px' }}>
-          <p style={{ margin: 0, fontSize: 12.5, color: 'var(--sos-text-secondary)', lineHeight: 1.45 }}>
+        <div className="sos-modal-content" style={{ gap: 14, padding: '18px 22px' }}>
+          <p style={{ margin: 0, fontSize: 14, color: 'var(--sos-text-secondary)', lineHeight: 1.55 }}>
             Bạn đang chuẩn bị xuất kích lệnh điều động cứu hộ chính thức cho tín hiệu:
           </p>
 
           <div
             style={{
               background: 'var(--sos-surface-subtle)',
-              padding: '10px 12px',
-              borderRadius: 7,
+              padding: '14px 16px',
+              borderRadius: 9,
               border: '1px solid var(--sos-border)',
-              fontSize: 11.5,
+              fontSize: 13.5,
               display: 'flex',
               flexDirection: 'column',
-              gap: 6,
+              gap: 9,
+              lineHeight: 1.5,
             }}
           >
             <div>
-              <strong>Mã sự cố:</strong> <span style={{ color: '#dc2626', fontWeight: 700 }}>{selectedSos.sosCode}</span> ({selectedSos.emergencyType})
+              <strong style={{ color: '#0f172a' }}>Mã sự cố:</strong>{' '}
+              <span style={{ color: '#dc2626', fontWeight: 800, fontSize: 14.5 }}>{selectedSos.sosCode}</span>{' '}
+              <span style={{ color: 'var(--sos-text-secondary)', fontWeight: 600 }}>({selectedSos.emergencyType})</span>
             </div>
             <div>
-              <strong>Địa điểm đến:</strong> {selectedSos.locationName}
+              <strong style={{ color: '#0f172a' }}>Địa điểm đến:</strong> {selectedSos.locationName}
             </div>
             <div>
-              <strong>Số người gặp nạn:</strong> {selectedSos.affectedPeople} người
+              <strong style={{ color: '#0f172a' }}>Số người gặp nạn:</strong>{' '}
+              <span style={{ fontWeight: 700, color: '#0f172a' }}>{selectedSos.affectedPeople} người</span>
             </div>
-            <div style={{ height: 1, background: 'var(--sos-border)', margin: '3px 0' }} />
+
+            <div style={{ height: 1, background: 'var(--sos-border)', margin: '4px 0' }} />
+
             <div>
-              <strong>Đội cứu nạn xuất kích ({selectedTeams.length} đội):</strong>
+              <strong style={{ color: '#0f172a', fontSize: 13.5 }}>
+                Đội cứu nạn xuất kích ({selectedTeams.length} đội):
+              </strong>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
               {selectedTeams.map((team, idx) => {
                 const lead = team.rescuers[0];
                 const veh = vehicles.find((v) => v.teamId === team.id) || vehicles[0];
@@ -95,40 +105,41 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
                     style={{
                       background: 'rgba(2, 132, 199, 0.06)',
                       border: '1px solid #bae6fd',
-                      borderRadius: 6,
-                      padding: '7px 10px',
+                      borderRadius: 8,
+                      padding: '10px 14px',
                     }}
                   >
-                    <div style={{ color: '#0284c7', fontWeight: 700, fontSize: 12 }}>
+                    <div style={{ color: '#0284c7', fontWeight: 800, fontSize: 14 }}>
                       {idx + 1}. {team.name}
                     </div>
-                    <div style={{ color: 'var(--sos-text-secondary)', fontSize: 11, marginTop: 2 }}>
-                      Chỉ huy: <strong>{lead?.name || 'Trưởng đội'}</strong> ({team.availableRescuersCount || 4} chiến sĩ) • Phương tiện: <strong>{veh?.name || 'Ca-nô'}</strong>
+                    <div style={{ color: 'var(--sos-text-secondary)', fontSize: 13, marginTop: 4, lineHeight: 1.45 }}>
+                      Chỉ huy: <strong style={{ color: '#0f172a' }}>{lead?.name || 'Trưởng đội'}</strong> ({team.availableRescuersCount || 4} chiến sĩ) • Phương tiện: <strong style={{ color: '#0f172a' }}>{veh?.name || 'Ca-nô'}</strong>
                     </div>
                   </div>
                 );
               })}
             </div>
-            <div style={{ marginTop: 2 }}>
-              <strong>Thời gian dự kiến tiếp cận (ETA):</strong>{' '}
-              <span style={{ color: '#16a34a', fontWeight: 700 }}>~5-7 phút</span>
+
+            <div style={{ marginTop: 3, fontSize: 13.5 }}>
+              <strong style={{ color: '#0f172a' }}>Thời gian dự kiến tiếp cận (ETA):</strong>{' '}
+              <span style={{ color: '#16a34a', fontWeight: 800, fontSize: 14 }}>~5-7 phút</span>
             </div>
           </div>
         </div>
 
-        <div className="sos-modal-footer" style={{ padding: '10px 18px' }}>
+        <div className="sos-modal-footer" style={{ padding: '12px 22px', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <button
             type="button"
             className="btn-modal-cancel"
             onClick={onClose}
             style={{
-              padding: '7px 12px',
+              padding: '9px 16px',
               background: 'var(--sos-surface)',
               border: '1px solid var(--sos-border)',
-              borderRadius: 5,
+              borderRadius: 6,
               cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: 11.5,
+              fontWeight: 700,
+              fontSize: 13,
               color: 'var(--sos-text-secondary)',
             }}
           >
@@ -138,20 +149,21 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
             type="button"
             onClick={onConfirm}
             style={{
-              padding: '7px 14px',
+              padding: '9px 18px',
               background: '#dc2626',
               color: '#ffffff',
               border: 'none',
-              borderRadius: 5,
+              borderRadius: 6,
               cursor: 'pointer',
-              fontWeight: 700,
-              fontSize: 11.5,
+              fontWeight: 800,
+              fontSize: 13.5,
               display: 'flex',
               alignItems: 'center',
-              gap: 5,
+              gap: 6,
+              boxShadow: '0 2px 6px rgba(220, 38, 38, 0.25)',
             }}
           >
-            <CheckCircle2 size={13} />
+            <CheckCircle2 size={16} />
             <span>XÁC NHẬN & XUẤT KÍCH NGAY</span>
           </button>
         </div>

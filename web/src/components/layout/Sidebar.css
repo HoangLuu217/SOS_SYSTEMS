@@ -15,7 +15,7 @@
   /* --- Tiêu đề & Văn bản --- */
   --sos-sidebar-title: #0f172a;
   --sos-sidebar-subtitle: #64748b;
-  --sos-group-title-color: #94a3b8; /* gray-400 */
+  --sos-group-title-color: #334155; /* Slate-700 đậm, tương phản cao, phân cấp rõ rệt */
 
   /* --- Trạng thái Mặc định / Inactive --- */
   --sos-item-bg-default: transparent;
@@ -64,7 +64,7 @@
   --sos-sidebar-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
   --sos-sidebar-title: #f8fafc;
   --sos-sidebar-subtitle: #94a3b8;
-  --sos-group-title-color: #94a3b8;
+  --sos-group-title-color: #e2e8f0;
   --sos-item-bg-default: transparent;
   --sos-item-text-default: #cbd5e1;
   --sos-item-icon-default: #94a3b8;
@@ -303,16 +303,39 @@
   flex-direction: column;
 }
 
-/* Tiêu đề nhóm: IN HOA, màu xám nhạt (gray-400), font chữ nhỏ, letter-spacing rộng */
+.sos-nav-group:not(:first-child) {
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+[data-theme="dark"] .sos-nav-group:not(:first-child) {
+  border-top-color: #1e293b;
+}
+
+/* Tiêu đề nhóm: Phân cấp rõ rệt, tương phản cao, nổi bật mục chính */
 .sos-nav-group-title {
-  font-size: 11px;
-  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.08em; /* Letter-spacing rộng */
-  color: var(--sos-group-title-color); /* gray-400 (#94a3b8) */
-  padding: 4px 14px 6px; /* Căn lề padding đồng đều */
+  letter-spacing: 0.07em;
+  color: var(--sos-group-title-color);
+  padding: 6px 12px 8px;
   user-select: none;
   line-height: 1.3;
+}
+
+/* Thanh chỉ báo màu xanh biểu thị khối điều hướng chính */
+.sos-nav-group-title::before {
+  content: '';
+  display: inline-block;
+  width: 3.5px;
+  height: 11px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #2563eb 0%, #3b82f6 100%);
+  flex-shrink: 0;
 }
 
 /* Danh sách các item trong nhóm: Khoảng cách nhỏ gọn */
@@ -507,8 +530,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 9px 11px;
+  gap: 8px;
+  padding: 8px 10px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
@@ -516,6 +539,8 @@
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   overflow: hidden;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .sos-user-profile-card::before {
@@ -538,14 +563,15 @@
 .sos-user-profile-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  flex: 1;
+  flex: 1 1 0%;
   overflow: hidden;
   cursor: pointer;
   border-radius: 8px;
   padding: 2px 0;
   transition: opacity 0.15s ease;
+  overflow: hidden;
 }
 
 .sos-user-profile-left:hover {
@@ -555,19 +581,19 @@
 .sos-user-avatar-wrap {
   position: relative;
   flex-shrink: 0;
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
 }
 
 .sos-user-avatar {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 800;
   box-shadow: 0 3px 10px rgba(2, 132, 199, 0.3);
   user-select: none;
@@ -616,20 +642,22 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  flex: 1;
+  flex: 1 1 0%;
   gap: 3px;
   line-height: 1.25;
   overflow: hidden;
 }
 
 .sos-user-name {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 700;
   color: #0f172a;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   letter-spacing: -0.15px;
+  display: block;
+  max-width: 100%;
 }
 
 .sos-user-profile-card .sos-user-role-badge,
@@ -637,19 +665,31 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   color: #0284c7;
   background: #e0f2fe;
   border: 1px solid #bae6fd;
-  padding: 2px 7px;
+  padding: 1.5px 6px;
   border-radius: 6px;
+  width: fit-content;
   max-width: 100%;
   box-sizing: border-box;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   letter-spacing: 0;
   text-transform: none;
   margin-bottom: 0;
+  box-sizing: border-box;
+}
+
+.sos-user-profile-card .sos-user-role-badge span,
+.sos-user-role-badge span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .sos-user-role-badge span {
@@ -671,8 +711,8 @@
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   color: #64748b;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -682,6 +722,8 @@
   flex-shrink: 0;
   margin-left: auto;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  margin-left: auto;
+  z-index: 2;
 }
 
 .sos-btn-logout-icon:hover {
@@ -857,18 +899,22 @@
 
 /* Modal Overlay Toàn Cục - Luôn nổi lên trên bản đồ, thanh điều phối và mọi layer khác */
 .sos-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.55);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: rgba(15, 23, 42, 0.65) !important;
+  backdrop-filter: blur(4px) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   z-index: 999999 !important;
-  animation: modalFadeIn 0.15s ease-out;
+  animation: fadeInOverlay 0.15s ease-out;
+  padding: 16px;
+  box-sizing: border-box;
 }
 
-@keyframes modalFadeIn {
+@keyframes fadeInOverlay {
   from {
     opacity: 0;
   }

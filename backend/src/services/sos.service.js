@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { SosRequest, SosStatusHistory, AdministrativeArea } = require('../models');
+const { SosRequest, SosStatusHistory, AdministrativeArea, SosAssignment } = require('../models');
 const ApiError = require('../utils/apiError');
 
 /**
@@ -170,11 +170,24 @@ const getSosRequests = async (query = {}) => {
   const filter = {};
   if (query.citizenId) filter.citizenId = query.citizenId;
   if (query.status) filter.status = query.status;
-  if (query.areaId) filter.areaId = query.areaId;
   if (query.priority) filter.priority = query.priority;
   if (query.emergencyType) filter.emergencyType = query.emergencyType;
   if (query._id) filter._id = query._id;
   if (query.$or) filter.$or = query.$or;
+
+  // Lọc theo khu vực hành chính: Hỗ trợ phân cấp (Quận -> Các Phường trực thuộc)
+  if (query.areaId && query.areaId !== 'ALL') {
+    if (mongoose.Types.ObjectId.isValid(query.areaId)) {
+      const childAreas = await AdministrativeArea.find({ parentId: query.areaId }).select('_id');
+      if (childAreas && childAreas.length > 0) {
+        filter.areaId = { $in: [query.areaId, ...childAreas.map(c => c._id)] };
+      } else {
+        filter.areaId = query.areaId;
+      }
+    } else {
+      filter.areaId = query.areaId;
+    }
+  }
 
   // Hỗ trợ Geospatial Query (Tìm theo tọa độ và bán kính - Tính bằng mét)
   if (query.lng && query.lat && query.radius) {
@@ -190,11 +203,40 @@ const getSosRequests = async (query = {}) => {
     };
   }
 
-  return await SosRequest.find(filter)
+  const sosList = await SosRequest.find(filter)
     // Nếu dùng $near, MongoDB sẽ tự sort theo khoảng cách. Nếu không thì sort theo thời gian tạo mới nhất.
     .sort(query.lng ? {} : { createdAt: -1 })
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
-    .populate('areaId', 'name code');
+    .populate('areaId', 'name code')
+    .lean();
+
+  if (sosList.length > 0) {
+    const sosIds = sosList.map(s => s._id);
+    const assignments = await SosAssignment.find({
+      sosRequestId: { $in: sosIds },
+      status: { $nin: ['CANCELLED', 'REJECTED'] },
+    })
+      .populate('rescueTeamId', 'name type areaId status')
+      .populate('rescuerId', 'fullName phone roles')
+      .populate('vehicleId', 'plateNumber type capacity')
+      .populate('authorityOrganizationId', 'name code')
+      .lean();
+
+    const assignmentMap = new Map();
+    assignments.forEach(a => {
+      assignmentMap.set(a.sosRequestId.toString(), a);
+    });
+
+    sosList.forEach(s => {
+      const a = assignmentMap.get(s._id.toString());
+      if (a) {
+        s.assignmentId = a._id;
+        s.assignment = a;
+      }
+    });
+  }
+
+  return sosList;
 };
 
 const getSosRequestById = async (id) => {

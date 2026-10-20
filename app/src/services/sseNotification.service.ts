@@ -153,7 +153,7 @@ class SSENotificationService {
     if (this.xhr) {
       try {
         this.xhr.abort();
-      } catch (_) {}
+      } catch (_) { }
       this.xhr = null;
     }
   }
@@ -179,7 +179,7 @@ class SSENotificationService {
     this.connectionListeners.forEach((fn) => {
       try {
         fn(connected);
-      } catch (_) {}
+      } catch (_) { }
     });
   }
 
