@@ -90,6 +90,24 @@ export class UserApi {
       availabilityStatus,
     });
   }
+
+  /**
+   * Gửi mã OTP xác thực số điện thoại cho user đang đăng nhập
+   */
+  async sendPhoneOtp(phone: string): Promise<ApiResponse<any>> {
+    return await this.client.post('/users/me/send-phone-otp', { phone });
+  }
+
+  /**
+   * Xác thực mã OTP số điện thoại và cập nhật vào hồ sơ
+   */
+  async verifyPhoneOtp(phone: string, otp: string): Promise<ApiResponse<{ user: UserProfile }>> {
+    const res = await this.client.post<{ user: UserProfile }>('/users/me/verify-phone-otp', { phone, otp });
+    if (res.success && res.data?.user) {
+      await this.client.saveUser(res.data.user);
+    }
+    return res;
+  }
 }
 
 export const userApi = new UserApi();

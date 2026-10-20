@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { PROFILE_THEME } from './theme';
 import { useAuth } from '@/context/AuthContext';
 import { provinceApi, Province, Ward, FALLBACK_PROVINCES } from '@/api';
@@ -42,6 +43,36 @@ const formatDateDisplay = (val?: any): string => {
     }
   } catch {}
   return str.split('T')[0] || str;
+};
+
+// Hàm parse chuỗi ngày sinh (DD/MM/YYYY hoặc ISO) thành Date object cho DatePicker
+const parseDateString = (str?: string): Date => {
+  if (!str) {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 20); // Mặc định 20 tuổi
+    return d;
+  }
+  const clean = String(str).trim();
+  if (clean.includes('/')) {
+    const parts = clean.split('/');
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const year = parseInt(parts[2], 10);
+      if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) return d;
+      }
+    }
+  }
+  try {
+    const d = new Date(clean);
+    if (!isNaN(d.getTime())) return d;
+  } catch {}
+
+  const fallback = new Date();
+  fallback.setFullYear(fallback.getFullYear() - 20);
+  return fallback;
 };
 
 // Hàm phân tách chuỗi địa chỉ
@@ -113,6 +144,36 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
   const [showWardPicker, setShowWardPicker] = useState(false);
   const [provinceSearch, setProvinceSearch] = useState('');
   const [wardSearch, setWardSearch] = useState('');
+
+  // DatePicker chọn ngày sinh
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState<Date>(() => parseDateString(dateOfBirth));
+
+  // Mở DatePicker
+  const handleOpenDatePicker = () => {
+    setTempDate(parseDateString(dateOfBirth));
+    setShowDatePicker(true);
+  };
+
+  // Thay đổi ngày trong DatePicker
+  const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+      if (event.type === 'set' && selectedDate) {
+        setDateOfBirth(formatDateDisplay(selectedDate));
+      }
+    } else {
+      if (selectedDate) {
+        setTempDate(selectedDate);
+      }
+    }
+  };
+
+  // Xác nhận chọn ngày trên iOS modal
+  const handleConfirmIosDate = () => {
+    setDateOfBirth(formatDateDisplay(tempDate));
+    setShowDatePicker(false);
+  };
 
   // Lỗi xác thực
   const [nameError, setNameError] = useState<string | null>(null);
@@ -644,17 +705,24 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
                 {/* Ngày sinh */}
                 <View style={styles.fieldGroup}>
                   <Text style={styles.fieldLabel}>Ngày sinh (DD/MM/YYYY)</Text>
-                  <View style={styles.inputBox}>
-                    <Feather name="calendar" size={17} color="#64748B" style={styles.fieldIcon} />
-                    <TextInput
-                      style={styles.textInput}
-                      value={dateOfBirth}
-                      onChangeText={setDateOfBirth}
-                      placeholder="DD/MM/YYYY"
-                      placeholderTextColor="#94A3B8"
-                      keyboardType="numbers-and-punctuation"
-                    />
-                  </View>
+                  <TouchableOpacity
+                    style={styles.selectBox}
+                    onPress={handleOpenDatePicker}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.selectContentLeft}>
+                      <Feather name="calendar" size={17} color="#0066FF" style={styles.fieldIcon} />
+                      <Text
+                        style={[
+                          styles.selectText,
+                          !dateOfBirth && styles.selectTextPlaceholder,
+                        ]}
+                      >
+                        {dateOfBirth || 'Chọn ngày sinh...'}
+                      </Text>
+                    </View>
+                    <Feather name="chevron-down" size={18} color="#64748B" />
+                  </TouchableOpacity>
                 </View>
 
                 {/* Giới tính */}
@@ -800,6 +868,73 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
       </KeyboardAvoidingView>
 
       {/* ========================================================
+          MODAL: CHỌN NGÀY SINH (DATE PICKER)
+         ======================================================== */}
+      {Platform.OS === 'ios' && (
+        <Modal
+          visible={showDatePicker}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowDatePicker(false)}
+        >
+          <View style={styles.datePickerBackdrop}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={() => setShowDatePicker(false)}
+            />
+            <View style={styles.datePickerContainer}>
+              <View style={styles.datePickerHeader}>
+                <TouchableOpacity
+                  onPress={() => setShowDatePicker(false)}
+                  style={styles.datePickerHeaderBtn}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.datePickerCancelText}>Huỷ</Text>
+                </TouchableOpacity>
+                <Text style={styles.datePickerTitle}>Chọn ngày sinh</Text>
+                <TouchableOpacity
+                  onPress={handleConfirmIosDate}
+                  style={styles.datePickerHeaderBtn}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.datePickerDoneText}>Xong</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.datePickerWheelWrap}>
+                <DateTimePicker
+                  value={tempDate}
+                  mode="date"
+                  display="spinner"
+                  maximumDate={new Date()}
+                  minimumDate={new Date(1920, 0, 1)}
+                  onChange={handleDateChange}
+                  locale="vi-VN"
+                  textColor="#0F172A"
+                  themeVariant="light"
+                />
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {Platform.OS === 'android' && showDatePicker && (
+        <DateTimePicker
+          value={tempDate}
+          mode="date"
+          display="default"
+          maximumDate={new Date()}
+          minimumDate={new Date(1920, 0, 1)}
+          onChange={handleDateChange}
+        />
+      )}
+
+      {/* ========================================================
+          MODAL 1: CHỌN TỈNH / THÀNH PHỐ
+         ======================================================== */}
+      {/* ========================================================
           MODAL 1: CHỌN TỈNH / THÀNH PHỐ
          ======================================================== */}
       <Modal
@@ -808,82 +943,87 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
         animationType="slide"
         onRequestClose={() => setShowProvincePicker(false)}
       >
-        <TouchableWithoutFeedback onPress={() => setShowProvincePicker(false)}>
-          <View style={styles.pickerModalOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.pickerModalCard}>
-                <View style={styles.sheetHandle} />
+        <KeyboardAvoidingView
+          style={styles.pickerModalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <TouchableOpacity
+            style={styles.modalDismissArea}
+            activeOpacity={1}
+            onPress={() => setShowProvincePicker(false)}
+          />
+          <View style={styles.pickerModalCard}>
+            <View style={styles.sheetHandle} />
 
-                <View style={styles.pickerHeaderRow}>
-                  <View>
-                    <Text style={styles.pickerTitle}>Chọn Tỉnh / Thành phố</Text>
-                    <Text style={styles.pickerSubtitle}>Dữ liệu chuẩn hành chính Việt Nam</Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => setShowProvincePicker(false)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={styles.pickerCloseBtn}
-                  >
-                    <Feather name="x" size={20} color="#64748B" />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Search Bar */}
-                <View style={styles.searchBar}>
-                  <Feather name="search" size={16} color="#64748B" style={{ marginRight: 8 }} />
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder="Tìm tên tỉnh, thành phố..."
-                    placeholderTextColor="#94A3B8"
-                    value={provinceSearch}
-                    onChangeText={setProvinceSearch}
-                    autoCapitalize="none"
-                  />
-                  {provinceSearch.length > 0 && (
-                    <TouchableOpacity onPress={() => setProvinceSearch('')}>
-                      <Feather name="x-circle" size={16} color="#94A3B8" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {loadingProvinces ? (
-                  <View style={styles.pickerLoadingWrap}>
-                    <ActivityIndicator size="small" color="#0066FF" />
-                    <Text style={styles.pickerLoadingText}>Đang tải danh sách tỉnh thành...</Text>
-                  </View>
-                ) : (
-                  <FlatList
-                    data={filteredProvinces}
-                    keyExtractor={(item) => item.code.toString()}
-                    style={styles.pickerList}
-                    showsVerticalScrollIndicator={false}
-                    keyboardShouldPersistTaps="handled"
-                    renderItem={({ item }) => {
-                      const isSelected = item.name === province;
-                      return (
-                        <TouchableOpacity
-                          style={[styles.pickerItem, isSelected && styles.pickerItemActive]}
-                          onPress={() => handleSelectProvince(item)}
-                          activeOpacity={0.7}
-                        >
-                          <Text
-                            style={[
-                              styles.pickerItemText,
-                              isSelected && styles.pickerItemTextActive,
-                            ]}
-                          >
-                            {item.name}
-                          </Text>
-                          {isSelected && <Feather name="check" size={18} color="#0066FF" />}
-                        </TouchableOpacity>
-                      );
-                    }}
-                  />
-                )}
+            <View style={styles.pickerHeaderRow}>
+              <View>
+                <Text style={styles.pickerTitle}>Chọn Tỉnh / Thành phố</Text>
+                <Text style={styles.pickerSubtitle}>Dữ liệu chuẩn hành chính Việt Nam</Text>
               </View>
-            </TouchableWithoutFeedback>
+              <TouchableOpacity
+                onPress={() => setShowProvincePicker(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.pickerCloseBtn}
+              >
+                <Feather name="x" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Bar */}
+            <View style={styles.searchBar}>
+              <Feather name="search" size={16} color="#64748B" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Tìm tên tỉnh, thành phố..."
+                placeholderTextColor="#94A3B8"
+                value={provinceSearch}
+                onChangeText={setProvinceSearch}
+                autoCapitalize="none"
+              />
+              {provinceSearch.length > 0 && (
+                <TouchableOpacity onPress={() => setProvinceSearch('')}>
+                  <Feather name="x-circle" size={16} color="#94A3B8" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {loadingProvinces ? (
+              <View style={styles.pickerLoadingWrap}>
+                <ActivityIndicator size="small" color="#0066FF" />
+                <Text style={styles.pickerLoadingText}>Đang tải danh sách tỉnh thành...</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={filteredProvinces}
+                keyExtractor={(item) => item.code.toString()}
+                style={styles.pickerList}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                renderItem={({ item }) => {
+                  const isSelected = item.name === province;
+                  return (
+                    <TouchableOpacity
+                      style={[styles.pickerItem, isSelected && styles.pickerItemActive]}
+                      onPress={() => handleSelectProvince(item)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.pickerItemText,
+                          isSelected && styles.pickerItemTextActive,
+                        ]}
+                      >
+                        {item.name}
+                      </Text>
+                      {isSelected && <Feather name="check" size={18} color="#0066FF" />}
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            )}
           </View>
-        </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ========================================================
@@ -895,89 +1035,94 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
         animationType="slide"
         onRequestClose={() => setShowWardPicker(false)}
       >
-        <TouchableWithoutFeedback onPress={() => setShowWardPicker(false)}>
-          <View style={styles.pickerModalOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.pickerModalCard}>
-                <View style={styles.sheetHandle} />
+        <KeyboardAvoidingView
+          style={styles.pickerModalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <TouchableOpacity
+            style={styles.modalDismissArea}
+            activeOpacity={1}
+            onPress={() => setShowWardPicker(false)}
+          />
+          <View style={styles.pickerModalCard}>
+            <View style={styles.sheetHandle} />
 
-                <View style={styles.pickerHeaderRow}>
-                  <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={styles.pickerTitle}>Chọn Phường / Xã</Text>
-                    <Text style={styles.pickerSubtitle} numberOfLines={1}>
-                      Trực thuộc: {province}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => setShowWardPicker(false)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={styles.pickerCloseBtn}
-                  >
-                    <Feather name="x" size={20} color="#64748B" />
-                  </TouchableOpacity>
-                </View>
-
-                {/* Search Bar */}
-                <View style={styles.searchBar}>
-                  <Feather name="search" size={16} color="#64748B" style={{ marginRight: 8 }} />
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder="Tìm tên phường, xã..."
-                    placeholderTextColor="#94A3B8"
-                    value={wardSearch}
-                    onChangeText={setWardSearch}
-                    autoCapitalize="none"
-                  />
-                  {wardSearch.length > 0 && (
-                    <TouchableOpacity onPress={() => setWardSearch('')}>
-                      <Feather name="x-circle" size={16} color="#94A3B8" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {loadingWards ? (
-                  <View style={styles.pickerLoadingWrap}>
-                    <ActivityIndicator size="small" color="#2563EB" />
-                    <Text style={styles.pickerLoadingText}>Đang tải danh sách phường xã...</Text>
-                  </View>
-                ) : filteredWards.length === 0 ? (
-                  <View style={styles.pickerEmptyWrap}>
-                    <Feather name="inbox" size={32} color="#94A3B8" style={{ marginBottom: 6 }} />
-                    <Text style={styles.pickerEmptyText}>Không tìm thấy phường / xã phù hợp</Text>
-                  </View>
-                ) : (
-                  <FlatList
-                    data={filteredWards}
-                    keyExtractor={(item) => item.code.toString()}
-                    style={styles.pickerList}
-                    showsVerticalScrollIndicator={false}
-                    keyboardShouldPersistTaps="handled"
-                    renderItem={({ item }) => {
-                      const isSelected = item.name === ward;
-                      return (
-                        <TouchableOpacity
-                          style={[styles.pickerItem, isSelected && styles.pickerItemActive]}
-                          onPress={() => handleSelectWard(item)}
-                          activeOpacity={0.7}
-                        >
-                          <Text
-                            style={[
-                              styles.pickerItemText,
-                              isSelected && styles.pickerItemTextActive,
-                            ]}
-                          >
-                            {item.name}
-                          </Text>
-                          {isSelected && <Feather name="check" size={18} color="#2563EB" />}
-                        </TouchableOpacity>
-                      );
-                    }}
-                  />
-                )}
+            <View style={styles.pickerHeaderRow}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.pickerTitle}>Chọn Phường / Xã</Text>
+                <Text style={styles.pickerSubtitle} numberOfLines={1}>
+                  Trực thuộc: {province}
+                </Text>
               </View>
-            </TouchableWithoutFeedback>
+              <TouchableOpacity
+                onPress={() => setShowWardPicker(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.pickerCloseBtn}
+              >
+                <Feather name="x" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Bar */}
+            <View style={styles.searchBar}>
+              <Feather name="search" size={16} color="#64748B" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Tìm tên phường, xã..."
+                placeholderTextColor="#94A3B8"
+                value={wardSearch}
+                onChangeText={setWardSearch}
+                autoCapitalize="none"
+              />
+              {wardSearch.length > 0 && (
+                <TouchableOpacity onPress={() => setWardSearch('')}>
+                  <Feather name="x-circle" size={16} color="#94A3B8" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {loadingWards ? (
+              <View style={styles.pickerLoadingWrap}>
+                <ActivityIndicator size="small" color="#2563EB" />
+                <Text style={styles.pickerLoadingText}>Đang tải danh sách phường xã...</Text>
+              </View>
+            ) : filteredWards.length === 0 ? (
+              <View style={styles.pickerEmptyWrap}>
+                <Feather name="inbox" size={32} color="#94A3B8" style={{ marginBottom: 6 }} />
+                <Text style={styles.pickerEmptyText}>Không tìm thấy phường / xã phù hợp</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={filteredWards}
+                keyExtractor={(item) => item.code.toString()}
+                style={styles.pickerList}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                renderItem={({ item }) => {
+                  const isSelected = item.name === ward;
+                  return (
+                    <TouchableOpacity
+                      style={[styles.pickerItem, isSelected && styles.pickerItemActive]}
+                      onPress={() => handleSelectWard(item)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.pickerItemText,
+                          isSelected && styles.pickerItemTextActive,
+                        ]}
+                      >
+                        {item.name}
+                      </Text>
+                      {isSelected && <Feather name="check" size={18} color="#2563EB" />}
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            )}
           </View>
-        </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ========================================================
@@ -991,7 +1136,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
             </View>
             <Text style={styles.dialogTitle}>Cập nhật thành công!</Text>
             <Text style={styles.dialogMessage}>
-              Hồ sơ thông tin cá nhân của bạn đã được cập nhật thành công lên hệ thống RescueSOS.
+              Hồ sơ thông tin cá nhân của bạn đã được cập nhật thành công lên hệ thống hỗ trợ cứu nạn.
             </Text>
             <TouchableOpacity
               style={styles.dialogButton}
@@ -1479,12 +1624,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.55)',
     justifyContent: 'flex-end',
   },
+  modalDismissArea: {
+    flex: 1,
+  },
   pickerModalCard: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '82%',
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    height: Platform.OS === 'ios' ? 460 : 480,
+    maxHeight: '85%',
+    paddingBottom: Platform.OS === 'ios' ? 24 : 16,
   },
   sheetHandle: {
     width: 38,
@@ -1541,6 +1690,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   pickerList: {
+    flex: 1,
     paddingHorizontal: 20,
   },
   pickerItem: {
@@ -1696,5 +1846,57 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontWeight: '600',
     color: '#64748B',
+  },
+
+  // Date Picker Modal Styles
+  datePickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  datePickerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: Platform.OS === 'ios' ? 28 : 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 20,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  datePickerHeaderBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  datePickerCancelText: {
+    fontSize: 15,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  datePickerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  datePickerDoneText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0066FF',
+  },
+  datePickerWheelWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
   },
 });
