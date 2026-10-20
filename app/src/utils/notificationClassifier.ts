@@ -306,33 +306,54 @@ export const SAMPLE_FILTERED_NOTIFICATIONS: NotificationItem[] = [
   },
 ];
 
+import { NotificationSettings } from '@/types';
+export type { NotificationSettings };
+
+export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  alert: true,
+  safeLocation: true,
+  systemNotification: true,
+  news: true,
+  sound: true,
+  vibration: true,
+};
+
 /**
  * Đọc cài đặt thông báo từ AsyncStorage
  */
-export async function getSavedNotificationSettings(): Promise<{
-  alert: boolean;
-  safeLocation: boolean;
-  systemNotification: boolean;
-  news: boolean;
-  sound: boolean;
-  vibration: boolean;
-}> {
-  const DEFAULT = {
-    alert: true,
-    safeLocation: true,
-    systemNotification: true,
-    news: true,
-    sound: true,
-    vibration: true,
-  };
-
+export async function getSavedNotificationSettings(): Promise<NotificationSettings> {
   try {
     const raw = await AsyncStorage.getItem(NOTIFICATION_SETTINGS_STORAGE_KEY);
     if (raw) {
-      return { ...DEFAULT, ...JSON.parse(raw) };
+      return { ...DEFAULT_NOTIFICATION_SETTINGS, ...JSON.parse(raw) };
     }
   } catch {
     // Fallback default
   }
-  return DEFAULT;
+  return DEFAULT_NOTIFICATION_SETTINGS;
 }
+
+/**
+ * Lưu cài đặt thông báo vào AsyncStorage
+ */
+export async function saveNotificationSettings(
+  settings: NotificationSettings
+): Promise<void> {
+  try {
+    await AsyncStorage.setItem(NOTIFICATION_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  } catch (err) {
+    console.warn('Lỗi khi lưu cài đặt thông báo vào storage:', err);
+  }
+}
+
+/**
+ * Kiểm tra xem một thông báo có được bật trong cài đặt hay không
+ */
+export function isNotificationCategoryEnabled(
+  item: NotificationItem,
+  settings: NotificationSettings
+): boolean {
+  const category = classifyNotification(item);
+  return settings[category] !== false;
+}
+

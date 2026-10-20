@@ -1,17 +1,55 @@
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { Platform, Vibration } from 'react-native';
 import Constants from 'expo-constants';
 import { backendApi } from '@/api';
+import { getSavedNotificationSettings, classifyNotification } from '@/utils';
 
-// Cấu hình cách hiển thị thông báo khi ứng dụng đang chạy ở foreground
+// Cấu hình cách hiển thị thông báo khi ứng dụng đang chạy ở foreground dựa trên Cài đặt thông báo của người dùng
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
+  handleNotification: async (notification) => {
+    try {
+      const settings = await getSavedNotificationSettings();
+      const content = notification.request.content;
+      const data = (content.data || {}) as Record<string, any>;
+      const item: any = {
+        _id: String(data.notificationId || notification.request.identifier),
+        title: content.title || '',
+        content: content.body || '',
+        type: String(data.type || 'SYSTEM'),
+        priority: String(data.priority || 'NORMAL'),
+        data,
+      };
+
+      const category = classifyNotification(item);
+
+      // Nếu người dùng đã tắt nhóm thông báo này trong Cài đặt
+      if (settings[category] === false) {
+        return {
+          shouldShowAlert: false,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+          shouldShowBanner: false,
+          shouldShowList: false,
+        };
+      }
+
+      return {
+        shouldShowAlert: true,
+        shouldPlaySound: settings.sound,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      };
+    } catch {
+      return {
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      };
+    }
+  },
 });
 
 /**
@@ -66,24 +104,33 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       const projectId =
         Constants.expoConfig?.extra?.eas?.projectId ||
         (Constants as any).easConfig?.projectId;
-      const pushTokenData = await Notifications.getExpoPushTokenAsync(
+      let pushTokenData = await Notifications.getExpoPushTokenAsync(
         projectId ? { projectId } : undefined
       ).catch(() => null);
+
+      // Nếu truyền projectId thất bại (thường gặp khi chạy Expo Go trên iOS/Android), thử lại không truyền projectId
+      if (!pushTokenData?.data) {
+        pushTokenData = await Notifications.getExpoPushTokenAsync().catch(() => null);
+      }
+
       if (pushTokenData?.data) {
         token = pushTokenData.data;
+        console.log('📱 [PushNotification] Đã lấy được Push Token:', token);
         const registration = await backendApi.registerPushToken(token);
         if (!registration.success) {
           console.warn(
             '⚠️ Đã lấy được Expo Push Token nhưng máy chủ không lưu được token:',
-            registration.message || 'Không rõ lỗi'
+            registration.message || 'Chưa đăng nhập tài khoản'
           );
-          return null;
+        } else {
+          console.log('✅ Đã đăng ký Expo Push Token với máy chủ thành công cho tài khoản.');
         }
-        console.log('✅ Đã đăng ký Expo Push Token với máy chủ thành công.');
+      } else {
+        console.log('ℹ️ [PushNotification] Thiết bị chưa lấy được Expo Push Token từ Expo server.');
       }
     } catch (pushErr: any) {
       console.warn(
-        '⚠️ Không lấy được Expo Push Token. Push khi app chạy nền cần development/production build và cấu hình credential Android/iOS.',
+        '⚠️ Lỗi khi đăng ký Expo Push Token:',
         pushErr?.message || pushErr
       );
     }
@@ -105,22 +152,51 @@ export async function triggerLocalNotification(options: {
   priority?: 'NORMAL' | 'HIGH' | 'CRITICAL' | string;
 }): Promise<void> {
   try {
+    const settings = await getSavedNotificationSettings();
+    const item: any = {
+      _id: 'local-' + Date.now(),
+      title: options.title,
+      content: options.body,
+      type: options.data?.type || 'SYSTEM',
+      priority: options.priority || 'NORMAL',
+      data: options.data,
+    };
+
+    const category = classifyNotification(item);
+    // Nếu người dùng đã tắt nhóm thông báo này
+    if (settings[category] === false) {
+      console.log(`ℹ️ [triggerLocalNotification] Bỏ qua vì nhóm '${category}' đang tắt trong Cài đặt.`);
+      return;
+    }
+
+    // Rung nếu bật vibration
+    if (settings.vibration) {
+      if (options.priority === 'CRITICAL' || options.priority === 'HIGH' || category === 'alert') {
+        Vibration.vibrate([0, 500, 200, 500]);
+      } else {
+        Vibration.vibrate(300);
+      }
+    }
+
     // Đảm bảo kênh Android đã sẵn sàng trước khi bắn thông báo (nếu được hỗ trợ)
+    let channelIdToUse: string | undefined = undefined;
     if (Platform.OS === 'android') {
       try {
         await Notifications.setNotificationChannelAsync('emergency-alerts', {
           name: 'Cảnh báo khẩn cấp & Tin tức SOS',
           importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: [0, 500, 250, 500],
+          vibrationPattern: settings.vibration ? [0, 500, 250, 500] : [0],
           lightColor: '#EF4444',
-          sound: 'default',
-          enableVibrate: true,
+          sound: settings.sound ? 'default' : undefined,
+          enableVibrate: settings.vibration,
           showBadge: true,
           lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
           bypassDnd: true,
         });
+        channelIdToUse = 'emergency-alerts';
       } catch (_) {
-        // Expo Go fallback
+        // Expo Go fallback: không ép buộc kênh tùy chỉnh nếu môi trường chưa hỗ trợ
+        channelIdToUse = undefined;
       }
     }
 
@@ -128,14 +204,16 @@ export async function triggerLocalNotification(options: {
       title: options.title,
       body: options.body,
       data: options.data || {},
-      sound: 'default',
-      channelId: 'emergency-alerts',
+      sound: settings.sound ? 'default' : undefined,
       badge: 1,
       priority:
         options.priority === 'CRITICAL' || options.priority === 'HIGH'
           ? Notifications.AndroidNotificationPriority.MAX
           : Notifications.AndroidNotificationPriority.HIGH,
     };
+    if (channelIdToUse) {
+      notificationContent.channelId = channelIdToUse;
+    }
 
     await Notifications.scheduleNotificationAsync({
       content: notificationContent,

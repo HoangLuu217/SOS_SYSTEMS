@@ -17,7 +17,6 @@ const administrativeAreaRoutes = require('./administrativeArea.routes');
 const authorityOrganizationRoutes = require('./authorityOrganization.routes');
 const sosAssignmentRoutes = require('./sosAssignment.routes');
 const safeLocationRoutes = require('./safeLocation.routes');
-const alertRoutes = require('./alert.routes');
 const auditRoutes = require('./audit.routes');
 const adminRoutes = require('./admin.routes');
 const configRoutes = require('./config.routes');
@@ -41,7 +40,6 @@ router.use('/files', fileRoutes);
 
 // Mount tuyến từ nhánh main
 router.use('/safe-locations', safeLocationRoutes);
-router.use('/alerts', alertRoutes);
 router.use('/audit-logs', auditRoutes);
 router.use('/admin', adminRoutes);
 router.use('/hazard-reports', hazardReportRoutes);

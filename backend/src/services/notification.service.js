@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { Notification, User, AdministrativeArea, Alert, SafeLocation, HazardReport, WeatherNotification } = require('../models');
+const { Notification, User, AdministrativeArea, SafeLocation, HazardReport, WeatherNotification } = require('../models');
 const ApiError = require('../utils/apiError');
 const { sendExpoPushNotification } = require('../utils/expoPush');
 const eventBus = require('./eventBus');
@@ -549,40 +549,28 @@ class NotificationService {
       });
     }
 
-    // Nếu là 'INSTANT' (Tin tức thời / Cảnh báo khẩn cấp), đồng bộ vào bảng Alert để hiển thị trên bản đồ cứu trợ
-    if (normalizedType === 'INSTANT') {
-      try {
-        await Alert.create({
-          createdBy: senderUser._id,
-          areaId: targetAreaDoc ? targetAreaDoc._id : senderUser.authority?.areaId || (await AdministrativeArea.findOne())?._id,
-          title: title.trim(),
-          content: content.trim(),
-          type: extraData.disasterType || 'FLOOD',
-          severity: effectivePriority === 'CRITICAL' ? 'CRITICAL' : 'HIGH',
-          startTime: now,
-          isActive: true,
-        });
-      } catch (alertErr) {
-        console.warn('Lưu kèm bảng Alert gặp lỗi nhỏ (không ảnh hưởng notification):', alertErr.message);
-      }
-    }
-
     // Nếu là 'WEATHER' (Thông báo thời tiết), đồng bộ vào bảng WeatherNotification riêng biệt
     if (normalizedType === 'WEATHER') {
       try {
         await WeatherNotification.create({
           title: title.trim(),
           content: content.trim(),
-          category: extraData.category || extraData.weatherType || 'mua_lu',
+          summary: extraData.summary || content.trim().slice(0, 200),
+          category: extraData.category || extraData.weatherType || 'khac',
+          relevance_score: typeof extraData.score === 'number' ? extraData.score : (effectivePriority === 'CRITICAL' ? 95 : effectivePriority === 'HIGH' ? 80 : 50),
           score: typeof extraData.score === 'number' ? extraData.score : (effectivePriority === 'CRITICAL' ? 95 : effectivePriority === 'HIGH' ? 80 : 50),
+          regions: targetAreaName ? [targetAreaName] : (extraData.regions || []),
           area: targetAreaName || extraData.area || 'Toàn thành phố',
+          image_url: resolvedImageUrl,
           imageUrl: resolvedImageUrl,
+          source_url: resolvedArticleUrl,
           articleUrl: resolvedArticleUrl,
+          source_name: resolvedSourceName,
           articleTitle: extraData.articleTitle || resolvedSourceName || null,
           areaId: targetAreaDoc ? targetAreaDoc._id : null,
           createdBy: senderUser._id,
           broadcastId,
-          status: 'ACTIVE',
+          status: 'approved',
         });
       } catch (weatherErr) {
         console.warn('Lưu kèm bảng WeatherNotification gặp lỗi nhỏ (không ảnh hưởng notification):', weatherErr.message);

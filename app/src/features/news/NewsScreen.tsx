@@ -43,6 +43,7 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
     markAsRead,
     markAllAsRead,
     isRealtimeConnected,
+    settings,
   } = useNotifications();
 
   // Bộ lọc danh mục thông báo: 'all' | 'alert' | 'safeLocation' | 'systemNotification' | 'news'
@@ -105,10 +106,16 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
   // Danh sách thông báo sau khi lọc theo danh mục & trạng thái
   const filteredList = useMemo(() => {
     return uniqueNotifications.filter((item) => {
+      const itemCat = classifyNotification(item);
+
       // 1. Lọc theo danh mục đã chọn
       if (selectedCategory !== 'all') {
-        const itemCat = classifyNotification(item);
         if (itemCat !== selectedCategory) {
+          return false;
+        }
+      } else {
+        // Nếu ở tab "Tất cả", chỉ hiển thị nhóm thông báo đang BẬT trong Cài đặt
+        if (settings && settings[itemCat] === false) {
           return false;
         }
       }
@@ -120,14 +127,15 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
 
       return true;
     });
-  }, [uniqueNotifications, selectedCategory, statusFilter]);
+  }, [uniqueNotifications, selectedCategory, statusFilter, settings]);
 
-  // Bản tin khẩn cấp nổi bật nhất (nếu có thông báo ALERT chưa đọc)
+  // Bản tin khẩn cấp nổi bật nhất (nếu có thông báo ALERT chưa đọc và người dùng đang BẬT nhận ALERT)
   const topAlert = useMemo(() => {
+    if (settings && settings.alert === false) return null;
     return uniqueNotifications.find(
       (n) => classifyNotification(n) === 'alert' && (n.priority === 'CRITICAL' || !n.isRead)
     );
-  }, [uniqueNotifications]);
+  }, [uniqueNotifications, settings]);
 
   // Kéo xuống để làm mới (Pull-to-refresh)
   const handlePullRefresh = async () => {

@@ -2,7 +2,6 @@ import type {
   SosRequestItem,
   VehicleItem,
   SafeLocationItem,
-  AlertItem,
   AuditLogItem,
 } from '@/types/dashboard';
 
@@ -17,8 +16,6 @@ export const FALLBACK_RESCUERS: any[] = [];
 export const FALLBACK_VEHICLES: VehicleItem[] = [];
 
 export const FALLBACK_SHELTERS: SafeLocationItem[] = [];
-
-export const FALLBACK_ALERTS: AlertItem[] = [];
 
 export const FALLBACK_AUDIT_LOGS: AuditLogItem[] = [];
 

@@ -159,21 +159,6 @@ export interface RescueTeamItem {
   createdAt?: string;
 }
 
-export interface AlertItem {
-  _id: string;
-  title: string;
-  content: string;
-  type: string;
-  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-  areaId?: {
-    _id: string;
-    name: string;
-  } | string;
-  startTime: string;
-  endTime?: string;
-  isActive: boolean;
-  createdAt?: string;
-}
 
 export interface AuditLogItem {
   _id: string;

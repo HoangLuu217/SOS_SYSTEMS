@@ -7,7 +7,6 @@ const SosRequest = require('./SosRequest');
 const SosAssignment = require('./SosAssignment');
 const SosStatusHistory = require('./SosStatusHistory');
 const SafeLocation = require('./SafeLocation');
-const Alert = require('./Alert');
 const Notification = require('./Notification');
 const File = require('./File');
 const AuditLog = require('./AuditLog');
@@ -25,7 +24,6 @@ module.exports = {
   SosAssignment,
   SosStatusHistory,
   SafeLocation,
-  Alert,
   Notification,
   File,
   AuditLog,

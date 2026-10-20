@@ -1,7 +1,6 @@
 import { apiClient } from './client';
 import { authApi } from './auth.api';
 import { userApi } from './user.api';
-import { alertApi } from './alert.api';
 import { mapApi } from './map.api';
 import { notificationApi } from './notification.api';
 import { chatApi } from './chat.api';
@@ -12,9 +11,7 @@ import type {
   ApiResponse,
   NotificationItem,
   SafeLocation,
-  AlertItem,
 } from '../types';
-
 
 export type {
   EmergencyContact,
@@ -25,9 +22,6 @@ export type {
   SafeLocationType,
   SafeLocationStatus,
   SafeLocation,
-  AlertType,
-  AlertSeverity,
-  AlertItem,
 } from '../types';
 
 /**
@@ -156,20 +150,6 @@ class BackendApiService {
     limit: number = 50
   ) => mapApi.getNearbySafeLocations(lng, lat, maxDistance, limit);
 
-  // Alerts API
-  getActiveAlerts = (params: {
-    type?: string;
-    severity?: string;
-    limit?: number;
-  } = {}) => alertApi.getActiveAlerts(params);
-
-  getAlerts = (params: {
-    type?: string;
-    severity?: string;
-    isActive?: boolean;
-    page?: number;
-    limit?: number;
-  } = {}) => alertApi.getAlerts(params);
 
   // Chat with Local Authority API
   getLocalAuthority = (params: Parameters<typeof chatApi.getLocalAuthority>[0]) =>

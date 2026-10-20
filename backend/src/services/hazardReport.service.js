@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { HazardReport, AdministrativeArea, Alert } = require('../models');
+const { HazardReport, AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
 const eventBus = require('./eventBus');
 
@@ -132,24 +132,6 @@ class HazardReportService {
       { path: 'reviewedBy', select: 'fullName phone email' },
       { path: 'areaId', select: 'name code type' },
     ]);
-
-    // Nếu điểm nguy hiểm được DUYỆT / CÔNG BỐ NGAY LẬP TỨC, tự động tạo 1 Alert tương ứng để hiển thị trên bản đồ tác chiến
-    if (isApproved && targetAreaId) {
-      try {
-        await Alert.create({
-          createdBy: userId,
-          areaId: targetAreaId,
-          title: `[Cảnh báo nguy hiểm] ${newReport.title}`,
-          content: `${newReport.description}. Địa chỉ: ${newReport.address}`,
-          type: ['FLOOD', 'LANDSLIDE'].includes(newReport.hazardType) ? newReport.hazardType : 'DANGEROUS_AREA',
-          severity: newReport.severity || 'HIGH',
-          isActive: true,
-          startTime: new Date(),
-        });
-      } catch (err) {
-        console.warn('Không thể tự động tạo Alert cho điểm nguy hiểm:', err.message);
-      }
-    }
 
     // Bắn sự kiện realtime cho Web và các bên liên quan
     eventBus.emit('hazard_event', { action: 'CREATED', data: populated });
@@ -426,24 +408,6 @@ class HazardReportService {
     }
 
     await report.save();
-
-    // Nếu điểm nguy hiểm được DUYỆT (APPROVED), tự động tạo 1 Alert tương ứng để hiển thị trên bản đồ cứu nạn
-    if (status === 'APPROVED' && report.areaId) {
-      try {
-        await Alert.create({
-          createdBy: authorityId,
-          areaId: report.areaId,
-          title: `[Cảnh báo nguy hiểm] ${report.title}`,
-          content: `${report.description}. Địa chỉ: ${report.address}`,
-          type: ['FLOOD', 'LANDSLIDE'].includes(report.hazardType) ? report.hazardType : 'DANGEROUS_AREA',
-          severity: report.severity || 'HIGH',
-          isActive: true,
-          startTime: new Date(),
-        });
-      } catch (err) {
-        console.warn('Không thể đồng bộ sang bảng alerts:', err.message);
-      }
-    }
 
     const populated = await report.populate([
       { path: 'reportedBy', select: 'fullName phone email roles avatarUrl' },

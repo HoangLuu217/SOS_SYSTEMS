@@ -4,7 +4,7 @@ const {
   SosAssignment,
   RescueTeam,
   Vehicle,
-  Alert,
+  HazardReport,
   AuthorityOrganization,
   AdministrativeArea,
 } = require('../models');
@@ -595,12 +595,8 @@ class AdminService {
       // Nhiệm vụ hoàn thành (SosAssignment COMPLETED)
       SosAssignment.countDocuments({ status: 'COMPLETED' }),
 
-      // Cảnh báo đang hoạt động (isActive=true, startTime <= now, endTime null hoặc >= now)
-      Alert.countDocuments({
-        isActive: true,
-        startTime: { $lte: now },
-        $or: [{ endTime: null }, { endTime: { $gte: now } }],
-      }),
+      // Điểm nguy hiểm đang hoạt động (APPROVED)
+      HazardReport.countDocuments({ status: 'APPROVED' }),
     ]);
 
     return {

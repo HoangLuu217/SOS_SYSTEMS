@@ -47,10 +47,12 @@ export interface SheltersViewProps {
   areas?: AdministrativeAreaItem[];
 }
 
+const EMPTY_AREAS: AdministrativeAreaItem[] = [];
+
 export const SheltersView: React.FC<SheltersViewProps> = ({
   user,
   onOpenMap,
-  areas: propAreas = [],
+  areas: propAreas = EMPTY_AREAS,
 }) => {
   const { showToast, setConfirmModal, renderGlobalModals } = useGlobalModals();
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
@@ -72,6 +74,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
   // Modal Chi tiết Điểm trú ẩn
   const [detailShelter, setDetailShelter] = useState<SafeLocationItem | null>(null);
+
+  // Chọn hàng loạt (Bulk selection)
+  const [selectedShelterIds, setSelectedShelterIds] = useState<string[]>([]);
+  const [isBulkShelterAction, setIsBulkShelterAction] = useState<boolean>(false);
 
   // Modal Tạo Điểm Trú Ẩn Mới
   const [isCreateShelterOpen, setIsCreateShelterOpen] = useState(false);
@@ -151,14 +157,14 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [propAreas, refreshIndex]);
+  }, [propAreas.length, refreshIndex]);
 
   // Cập nhật areas nếu props thay đổi
   useEffect(() => {
     if (propAreas && propAreas.length > 0) {
       setAreas(propAreas);
     }
-  }, [propAreas]);
+  }, [propAreas.length]);
 
   useEffect(() => {
     fetchProvincesV2().then((list) => {
@@ -1127,6 +1133,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
         const res = await deleteSafeLocation(id);
         if (res.success) {
           setShelters((prev) => prev.filter((s) => s._id !== id));
+          setSelectedShelterIds((prev) => prev.filter((itemId) => itemId !== id));
           if (detailShelter && detailShelter._id === id) {
             setDetailShelter(null);
           }
@@ -1139,6 +1146,135 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       } finally {
         setLoading(false);
       }
+    };
+
+    // Ẩn hàng loạt cơ sở đã chọn
+    const handleBulkHideShelters = () => {
+      if (selectedShelterIds.length === 0) return;
+      const count = selectedShelterIds.length;
+      setConfirmModal({
+        isOpen: true,
+        title: `Xác nhận ẩn ${count} điểm trú ẩn đã chọn`,
+        message: `Bạn có chắc chắn muốn ẩn ${count} cơ sở an toàn đã chọn không? Trạng thái các cơ sở này sẽ được chuyển sang Tạm ngưng hoạt động (INACTIVE).`,
+        type: 'warning',
+        confirmText: `Xác nhận ẩn (${count})`,
+        cancelText: 'Hủy bỏ',
+        onConfirm: async () => {
+          setIsBulkShelterAction(true);
+          try {
+            let successCount = 0;
+            await Promise.allSettled(
+              selectedShelterIds.map(async (id) => {
+                const res = await updateSafeLocation(id, { status: 'INACTIVE' });
+                if (res.success && res.data) {
+                  successCount++;
+                  setShelters((prev) => prev.map((s) => (s._id === id ? res.data : s)));
+                }
+              })
+            );
+            setSelectedShelterIds([]);
+            refreshData();
+            window.dispatchEvent(new CustomEvent('sos_data_updated'));
+            setConfirmModal((c) => ({ ...c, isOpen: false }));
+            showToast(`✅ Đã chuyển ${successCount} cơ sở an toàn sang Tạm ngưng hoạt động (ẩn)!`, 'success');
+          } catch (err: any) {
+            showToast('❌ Có lỗi khi ẩn hàng loạt: ' + (err.message || 'Lỗi không xác định'), 'error');
+          } finally {
+            setIsBulkShelterAction(false);
+          }
+        },
+      });
+    };
+
+    // Mở lại hoạt động hàng loạt cơ sở đã chọn
+    const handleBulkActivateShelters = () => {
+      if (selectedShelterIds.length === 0) return;
+      const count = selectedShelterIds.length;
+      setConfirmModal({
+        isOpen: true,
+        title: `Mở lại hoạt động ${count} cơ sở an toàn đã chọn`,
+        message: `Bạn có chắc chắn muốn mở lại hoạt động đón tiếp người dân cho ${count} cơ sở đã chọn không? Trạng thái sẽ chuyển về Sẵn sàng đón tiếp (ACTIVE).`,
+        type: 'primary',
+        confirmText: `Mở lại (${count})`,
+        cancelText: 'Hủy bỏ',
+        onConfirm: async () => {
+          setIsBulkShelterAction(true);
+          try {
+            let successCount = 0;
+            await Promise.allSettled(
+              selectedShelterIds.map(async (id) => {
+                const res = await updateSafeLocation(id, { status: 'ACTIVE' });
+                if (res.success && res.data) {
+                  successCount++;
+                  setShelters((prev) => prev.map((s) => (s._id === id ? res.data : s)));
+                }
+              })
+            );
+            setSelectedShelterIds([]);
+            refreshData();
+            window.dispatchEvent(new CustomEvent('sos_data_updated'));
+            setConfirmModal((c) => ({ ...c, isOpen: false }));
+            showToast(`✅ Đã mở lại hoạt động đón tiếp cho ${successCount} cơ sở an toàn!`, 'success');
+          } catch (err: any) {
+            showToast('❌ Có lỗi khi mở lại hàng loạt: ' + (err.message || 'Lỗi không xác định'), 'error');
+          } finally {
+            setIsBulkShelterAction(false);
+          }
+        },
+      });
+    };
+
+    // Xóa vĩnh viễn hàng loạt cơ sở đã chọn
+    const handleBulkDeleteShelters = () => {
+      if (selectedShelterIds.length === 0) return;
+      const count = selectedShelterIds.length;
+      setConfirmModal({
+        isOpen: true,
+        title: `Xác nhận xóa vĩnh viễn ${count} điểm trú ẩn đã chọn`,
+        message: `Bạn có chắc chắn muốn xóa vĩnh viễn ${count} cơ sở an toàn đã chọn không? Thao tác này sẽ gỡ bỏ dữ liệu hoàn toàn khỏi cơ sở dữ liệu và bản đồ cứu hộ.`,
+        type: 'danger',
+        confirmText: `Xác nhận xóa vĩnh viễn (${count})`,
+        cancelText: 'Hủy bỏ',
+        onConfirm: async () => {
+          setIsBulkShelterAction(true);
+          try {
+            let successCount = 0;
+            let failCount = 0;
+            await Promise.allSettled(
+              selectedShelterIds.map(async (id) => {
+                try {
+                  const res = await deleteSafeLocation(id);
+                  if (res.success) {
+                    successCount++;
+                  } else {
+                    failCount++;
+                  }
+                } catch {
+                  failCount++;
+                }
+              })
+            );
+            const deletedIdSet = new Set(selectedShelterIds);
+            setShelters((prev) => prev.filter((s) => !deletedIdSet.has(s._id)));
+            if (detailShelter && deletedIdSet.has(detailShelter._id)) {
+              setDetailShelter(null);
+            }
+            setSelectedShelterIds([]);
+            refreshData();
+            window.dispatchEvent(new CustomEvent('sos_data_updated'));
+            setConfirmModal((c) => ({ ...c, isOpen: false }));
+            if (failCount === 0) {
+              showToast(`✅ Đã xóa vĩnh viễn ${successCount} cơ sở an toàn thành công!`, 'success');
+            } else {
+              showToast(`⚠️ Đã xóa ${successCount} cơ sở, ${failCount} cơ sở thất bại.`, 'warning');
+            }
+          } catch (err: any) {
+            showToast('❌ Có lỗi khi xóa hàng loạt: ' + (err.message || 'Lỗi không xác định'), 'error');
+          } finally {
+            setIsBulkShelterAction(false);
+          }
+        },
+      });
     };
 
     return (
@@ -1466,14 +1602,137 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
             flexDirection: 'column',
           }}
         >
+          {/* THANH THAO TÁC HÀNG LOẠT (BULK ACTIONS BAR) */}
+          {selectedShelterIds.length > 0 && (
+            <div
+              style={{
+                padding: '10px 16px',
+                backgroundColor: '#f0fdf4',
+                borderBottom: '1px solid #bbf7d0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontWeight: 600, color: '#166534', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <CheckCircle2 size={16} color="#16a34a" />
+                  <span>Đã chọn <strong>{selectedShelterIds.length}</strong> cơ sở an toàn</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedShelterIds([])}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#64748b',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    padding: '2px 4px',
+                  }}
+                >
+                  Bỏ chọn
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={handleBulkHideShelters}
+                  disabled={isBulkShelterAction}
+                  className="sos-btn-flat warning"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: isBulkShelterAction ? 'not-allowed' : 'pointer',
+                  }}
+                  title="Ẩn các cơ sở đã chọn (chuyển sang Tạm ngưng hoạt động)"
+                >
+                  <EyeOff size={13} />
+                  <span>Ẩn ({selectedShelterIds.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleBulkActivateShelters}
+                  disabled={isBulkShelterAction}
+                  className="sos-btn-flat success"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: isBulkShelterAction ? 'not-allowed' : 'pointer',
+                  }}
+                  title="Mở lại hoạt động đón tiếp cho các cơ sở đã chọn"
+                >
+                  <Eye size={13} />
+                  <span>Mở lại ({selectedShelterIds.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleBulkDeleteShelters}
+                  disabled={isBulkShelterAction}
+                  className="sos-btn-flat danger"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: isBulkShelterAction ? 'not-allowed' : 'pointer',
+                  }}
+                  title="Xóa vĩnh viễn các cơ sở đã chọn"
+                >
+                  <Trash2 size={13} />
+                  <span>Xóa ({selectedShelterIds.length})</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', minHeight: 0 }}>
             <table className="sos-clean-table">
               <thead>
                 <tr>
+                  <th style={{ width: '40px', textAlign: 'center', padding: '10px 8px' }}>
+                    <input
+                      type="checkbox"
+                      style={{ width: '16px', height: '16px', cursor: 'pointer', verticalAlign: 'middle' }}
+                      checked={
+                        paginatedShelters.length > 0 &&
+                        paginatedShelters.every((sh) => selectedShelterIds.includes(sh._id))
+                      }
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          const pageIds = paginatedShelters.map((sh) => sh._id);
+                          setSelectedShelterIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+                        } else {
+                          const pageIdSet = new Set(paginatedShelters.map((sh) => sh._id));
+                          setSelectedShelterIds((prev) => prev.filter((id) => !pageIdSet.has(id)));
+                        }
+                      }}
+                      title="Chọn tất cả cơ sở trên trang hiện tại"
+                    />
+                  </th>
                   <th
                     className={`sortable ${shelterSortField === 'name' ? 'sorted' : ''}`}
                     onClick={() => handleSort('name')}
-                    style={{ width: '24%' }}
+                    style={{ width: '22%' }}
                     title="Nhấn để sắp xếp theo tên cơ sở an toàn"
                   >
                     <div style={{ display: 'inline-flex', alignItems: 'center' }}>
@@ -1542,7 +1801,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
               <tbody>
                 {totalShelterItems === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b', fontSize: '13px' }}>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b', fontSize: '13px' }}>
                       <Shield size={32} color="#94a3b8" style={{ marginBottom: '8px' }} />
                       <div>Không có điểm trú ẩn an toàn nào trong danh mục này.</div>
                       {!isAdmin && (
@@ -1581,7 +1840,27 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     const statusBadge = getShelterStatusBadge(sh.status, occupancy, capacity);
 
                     return (
-                      <tr key={sh._id}>
+                      <tr
+                        key={sh._id}
+                        style={{
+                          backgroundColor: selectedShelterIds.includes(sh._id) ? '#f0fdf4' : undefined,
+                        }}
+                      >
+                        {/* 0. Checkbox chọn từng mục */}
+                        <td style={{ textAlign: 'center', width: '40px', padding: '10px 8px' }}>
+                          <input
+                            type="checkbox"
+                            style={{ width: '16px', height: '16px', cursor: 'pointer', verticalAlign: 'middle' }}
+                            checked={selectedShelterIds.includes(sh._id)}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              setSelectedShelterIds((prev) =>
+                                prev.includes(sh._id) ? prev.filter((id) => id !== sh._id) : [...prev, sh._id]
+                              );
+                            }}
+                          />
+                        </td>
+
                         {/* 1. Tên điểm & Phân loại cơ sở */}
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>

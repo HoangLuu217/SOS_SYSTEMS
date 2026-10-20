@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -9,67 +9,57 @@ import {
   Switch,
   Platform,
   Alert,
+  Vibration,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PROFILE_THEME } from './theme';
-
-export interface NotificationSettings {
-  alert: boolean; // Cảnh báo khẩn cấp (SOS Alert)
-  safeLocation: boolean; // Vị trí an toàn (Safe location)
-  systemNotification: boolean; // Thông báo hệ thống (Notification)
-  news: boolean; // Tin tức & cảnh báo thời tiết (Tin tức)
-  sound: boolean; // Âm thanh thông báo
-  vibration: boolean; // Rung thiết bị
-}
-
-const STORAGE_KEY = '@sos_notification_settings';
-
-const DEFAULT_SETTINGS: NotificationSettings = {
-  alert: true,
-  safeLocation: true,
-  systemNotification: true,
-  news: true,
-  sound: true,
-  vibration: true,
-};
+import { useNotifications } from '@/context/NotificationContext';
+import { NotificationSettings, NotificationCategoryKey } from '@/utils';
 
 interface NotificationSettingsScreenProps {
   onBack: () => void;
 }
 
 export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProps> = ({ onBack }) => {
-  const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
+  const {
+    settings,
+    updateSetting: contextUpdateSetting,
+    resetSettings: contextResetSettings,
+    testNotification,
+  } = useNotifications();
+
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
 
-  // Tải cài đặt từ AsyncStorage khi mở màn hình
-  useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(stored) });
-        }
-      } catch (err) {
-        console.warn('Lỗi khi tải cài đặt thông báo:', err);
-      }
-    };
-
-    loadSettings();
-  }, []);
-
-  // Lưu cài đặt và hiển thị phản hồi nhẹ
+  // Lưu cài đặt và phản hồi xúc giác nhẹ nếu là rung
   const updateSetting = async (key: keyof NotificationSettings, value: boolean) => {
-    const updated = { ...settings, [key]: value };
-    setSettings(updated);
+    if (key === 'vibration' && value) {
+      try {
+        Vibration.vibrate(80);
+      } catch (_) {}
+    }
 
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      setShowSavedFeedback(true);
-      setTimeout(() => setShowSavedFeedback(false), 2500);
-    } catch (err) {
-      console.warn('Lỗi khi lưu cài đặt thông báo:', err);
+    await contextUpdateSetting(key, value);
+    setShowSavedFeedback(true);
+    setTimeout(() => setShowSavedFeedback(false), 2000);
+  };
+
+  // Thử nghiệm trực tiếp kiểm tra cài đặt
+  const handleTestCategory = async (key: NotificationCategoryKey, label: string) => {
+    const isSuccess = await testNotification(key);
+    if (!isSuccess) {
+      Alert.alert(
+        `Nhóm "${label}" đang TẮT`,
+        `Bạn đã tắt nhận thông báo này trong phần cài đặt ở trên. Khi có sự kiện thật, hệ thống sẽ KHÔNG phát chuông, rung hoặc hiển thị banner cảnh báo.\n\nBạn có muốn bật lại ngay không?`,
+        [
+          { text: 'Đóng', style: 'cancel' },
+          {
+            text: 'Bật lại ngay',
+            style: 'default',
+            onPress: () => updateSetting(key, true),
+          },
+        ]
+      );
     }
   };
 
@@ -84,14 +74,9 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
           text: 'Đặt lại',
           style: 'default',
           onPress: async () => {
-            setSettings(DEFAULT_SETTINGS);
-            try {
-              await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_SETTINGS));
-              setShowSavedFeedback(true);
-              setTimeout(() => setShowSavedFeedback(false), 2500);
-            } catch (err) {
-              console.warn('Lỗi khi lưu cài đặt thông báo:', err);
-            }
+            await contextResetSettings();
+            setShowSavedFeedback(true);
+            setTimeout(() => setShowSavedFeedback(false), 2000);
           },
         },
       ]
@@ -322,6 +307,146 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
               thumbColor={settings.vibration ? '#0066FF' : '#F1F5F9'}
               ios_backgroundColor="#CBD5E1"
             />
+          </View>
+        </View>
+
+        {/* Section 3: Kiểm tra cài đặt thông báo thực tế */}
+        <Text style={styles.sectionHeader}>KIỂM TRA CÀI ĐẶT THỰC TẾ</Text>
+        <View style={styles.testCard}>
+          <Text style={styles.testCardDesc}>
+            Bấm vào từng nút để thử nghiệm phát thông báo thực tế theo đúng trạng thái BẬT/TẮT, chuông
+            và rung bạn đã chọn:
+          </Text>
+
+          <View style={styles.testButtonsGrid}>
+            {/* 1. Test Alert */}
+            <TouchableOpacity
+              style={[styles.testBtn, !settings.alert && styles.testBtnDisabled]}
+              onPress={() => handleTestCategory('alert', 'Cảnh báo khẩn cấp')}
+              activeOpacity={0.75}
+            >
+              <View style={styles.testBtnLeft}>
+                <Feather
+                  name="alert-triangle"
+                  size={16}
+                  color={settings.alert ? '#DC2626' : '#94A3B8'}
+                />
+                <Text style={[styles.testBtnText, !settings.alert && styles.testBtnTextDisabled]}>
+                  Thử Cảnh báo SOS
+                </Text>
+              </View>
+              <View style={[styles.testTag, settings.alert ? styles.testTagOn : styles.testTagOff]}>
+                <Text
+                  style={[
+                    styles.testTagText,
+                    settings.alert ? styles.testTagTextOn : styles.testTagTextOff,
+                  ]}
+                >
+                  {settings.alert ? 'BẬT' : 'TẮT'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* 2. Test Safe Location */}
+            <TouchableOpacity
+              style={[styles.testBtn, !settings.safeLocation && styles.testBtnDisabled]}
+              onPress={() => handleTestCategory('safeLocation', 'Vị trí an toàn')}
+              activeOpacity={0.75}
+            >
+              <View style={styles.testBtnLeft}>
+                <MaterialCommunityIcons
+                  name="shield-home"
+                  size={16}
+                  color={settings.safeLocation ? '#0066FF' : '#94A3B8'}
+                />
+                <Text
+                  style={[styles.testBtnText, !settings.safeLocation && styles.testBtnTextDisabled]}
+                >
+                  Thử Vị trí an toàn
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.testTag,
+                  settings.safeLocation ? styles.testTagOn : styles.testTagOff,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.testTagText,
+                    settings.safeLocation ? styles.testTagTextOn : styles.testTagTextOff,
+                  ]}
+                >
+                  {settings.safeLocation ? 'BẬT' : 'TẮT'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* 3. Test System */}
+            <TouchableOpacity
+              style={[styles.testBtn, !settings.systemNotification && styles.testBtnDisabled]}
+              onPress={() => handleTestCategory('systemNotification', 'Thông báo hệ thống')}
+              activeOpacity={0.75}
+            >
+              <View style={styles.testBtnLeft}>
+                <Feather
+                  name="bell"
+                  size={16}
+                  color={settings.systemNotification ? '#0066FF' : '#94A3B8'}
+                />
+                <Text
+                  style={[
+                    styles.testBtnText,
+                    !settings.systemNotification && styles.testBtnTextDisabled,
+                  ]}
+                >
+                  Thử Thông báo hệ thống
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.testTag,
+                  settings.systemNotification ? styles.testTagOn : styles.testTagOff,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.testTagText,
+                    settings.systemNotification ? styles.testTagTextOn : styles.testTagTextOff,
+                  ]}
+                >
+                  {settings.systemNotification ? 'BẬT' : 'TẮT'}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* 4. Test News */}
+            <TouchableOpacity
+              style={[styles.testBtn, !settings.news && styles.testBtnDisabled]}
+              onPress={() => handleTestCategory('news', 'Tin tức & Thời tiết')}
+              activeOpacity={0.75}
+            >
+              <View style={styles.testBtnLeft}>
+                <Feather
+                  name="file-text"
+                  size={16}
+                  color={settings.news ? '#D97706' : '#94A3B8'}
+                />
+                <Text style={[styles.testBtnText, !settings.news && styles.testBtnTextDisabled]}>
+                  Thử Tin tức & Thời tiết
+                </Text>
+              </View>
+              <View style={[styles.testTag, settings.news ? styles.testTagOn : styles.testTagOff]}>
+                <Text
+                  style={[
+                    styles.testTagText,
+                    settings.news ? styles.testTagTextOn : styles.testTagTextOff,
+                  ]}
+                >
+                  {settings.news ? 'BẬT' : 'TẮT'}
+                </Text>
+              </View>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -563,6 +688,85 @@ const styles = StyleSheet.create({
   resetDefaultsButtonText: {
     fontSize: 13,
     fontWeight: '600',
+    color: '#64748B',
+  },
+  testCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: PROFILE_THEME.radius.card,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  testCardDesc: {
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: '#64748B',
+    marginBottom: 12,
+  },
+  testButtonsGrid: {
+    gap: 10,
+  },
+  testBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+  },
+  testBtnDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+    opacity: 0.8,
+  },
+  testBtnLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  testBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  testBtnTextDisabled: {
+    color: '#64748B',
+  },
+  testTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  testTagOn: {
+    backgroundColor: '#DCFCE7',
+  },
+  testTagOff: {
+    backgroundColor: '#F1F5F9',
+  },
+  testTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  testTagTextOn: {
+    color: '#15803D',
+  },
+  testTagTextOff: {
     color: '#64748B',
   },
 });

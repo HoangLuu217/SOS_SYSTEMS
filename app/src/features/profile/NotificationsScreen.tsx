@@ -96,6 +96,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     refreshNotifications,
     markAsRead: markContextNotificationAsRead,
     markAllAsRead: markContextNotificationsAsRead,
+    settings,
+    updateSetting,
   } = useNotifications();
   // Trạng thái danh sách thông báo
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_RESCUER_NOTIFICATIONS);
@@ -210,25 +212,32 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     }
   };
 
-  // Tính số lượng chưa đọc động
+  // Tính số lượng chưa đọc động (chỉ tính các nhóm người dùng đang BẬT)
   const unreadCount = useMemo(() => {
-    return notifications.filter((n) => !n.isRead).length;
-  }, [notifications]);
+    return notifications.filter(
+      (n) => !n.isRead && settings[classifyNotification(n)] !== false
+    ).length;
+  }, [notifications, settings]);
 
   // Lọc theo tab & danh mục trong cài đặt
   const displayList = useMemo(() => {
     if (screenState === 'empty') return [];
     return notifications.filter((n) => {
+      const cat = classifyNotification(n);
+
       if (selectedCategory !== 'all') {
-        const cat = classifyNotification(n);
         if (cat !== selectedCategory) return false;
+      } else {
+        // Tab "Tất cả": chỉ hiển thị các nhóm thông báo đang BẬT trong Cài đặt
+        if (settings[cat] === false) return false;
       }
+
       if (activeTab === 'unread') {
         return !n.isRead;
       }
       return true;
     });
-  }, [notifications, activeTab, selectedCategory, screenState]);
+  }, [notifications, activeTab, selectedCategory, screenState, settings]);
 
   // Biểu tượng loại thông báo cứu hộ
   const renderTypeIcon = (type: string) => {
@@ -507,6 +516,24 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
             />
           }
         >
+          {selectedCategory !== 'all' && settings[selectedCategory] === false && (
+            <View style={styles.categoryDisabledNotice}>
+              <View style={styles.categoryDisabledNoticeLeft}>
+                <Feather name="bell-off" size={15} color="#DC2626" />
+                <Text style={styles.categoryDisabledNoticeText}>
+                  Bạn đang tắt nhóm thông báo này trong Cài đặt thông báo.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.categoryReEnableBtn}
+                onPress={() => updateSetting(selectedCategory, true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.categoryReEnableBtnText}>Bật lại</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {displayList.map((item) => (
             <TouchableOpacity
               key={item._id}
@@ -1382,5 +1409,41 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  categoryDisabledNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+    gap: 8,
+  },
+  categoryDisabledNoticeLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  categoryDisabledNoticeText: {
+    fontSize: 12.5,
+    color: '#DC2626',
+    fontWeight: '500',
+    flex: 1,
+  },
+  categoryReEnableBtn: {
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  categoryReEnableBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

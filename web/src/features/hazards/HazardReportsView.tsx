@@ -46,13 +46,15 @@ export interface HazardReportsViewProps {
   areas?: AdministrativeAreaItem[];
 }
 
+const EMPTY_AREAS: AdministrativeAreaItem[] = [];
+
 export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
   user,
   onOpenMap,
-  areas: propAreas = [],
+  areas: propAreas = EMPTY_AREAS,
 }) => {
   const { showToast, setConfirmModal, setConfirmPromptValue, renderGlobalModals } = useGlobalModals();
-  const [_areas, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
+  const [areas, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
   const [loading, setLoading] = useState(false);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const refreshData = () => setRefreshIndex((prev) => prev + 1);
@@ -76,6 +78,10 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
   const [jumpInputPage, setJumpInputPage] = useState<string>('');
   const [selectedHazardPhoto, setSelectedHazardPhoto] = useState<string | null>(null);
   const [detailHazard, setDetailHazard] = useState<HazardReportItem | null>(null);
+
+  // Chọn hàng loạt (Bulk selection)
+  const [selectedHazardIds, setSelectedHazardIds] = useState<string[]>([]);
+  const [isBulkHazardAction, setIsBulkHazardAction] = useState<boolean>(false);
 
   // State phục vụ Form Thẩm định & Chuẩn hóa điểm nguy hiểm (cho chính quyền nhập lại thông tin chuẩn)
   const [reviewingHazard, setReviewingHazard] = useState<HazardReportItem | null>(null);
@@ -183,14 +189,14 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       clearInterval(pollTimer);
       unsubscribeSSE();
     };
-  }, [propAreas, refreshIndex]);
+  }, [propAreas.length, refreshIndex]);
 
   // Cập nhật areas nếu props thay đổi
   useEffect(() => {
     if (propAreas && propAreas.length > 0) {
       setAreas(propAreas);
     }
-  }, [propAreas]);
+  }, [propAreas.length]);
 
   useEffect(() => {
     fetchProvincesV2().then((list) => {
@@ -280,7 +286,12 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
     };
 
     const matchedJurKey = determineOfficerJurKey();
-    const fixedJurisdictionConfig = JURISDICTION_CONFIGS[matchedJurKey] || JURISDICTION_CONFIGS.ngu_hanh_son;
+    const fixedJurisdictionConfig: JurisdictionConfig = JURISDICTION_CONFIGS[matchedJurKey] || JURISDICTION_CONFIGS.national || {
+      name: userAreaNameFromAuth || 'Toàn Quốc (63 Tỉnh Thành)',
+      district: '',
+      areaId: userAreaIdFromAuth || 'area-all',
+      keywords: [],
+    };
 
     // 2. TÊN HIỂN THỊ ĐỊA BÀN PHỤ TRÁCH CHUẨN XÁC CỦA TÀI KHOẢN (ƯU TIÊN THEO HỒ SƠ TÀI KHOẢN)
     const accountAreaDisplayName = (() => {
@@ -292,10 +303,10 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       // 3. Khớp qua tên hoặc phòng ban cơ quan
       if (foundAreaByName?.name) return foundAreaByName.name;
       if (foundAreaByDept?.name && isAreaMatchingUserAuth(foundAreaByDept.name)) return foundAreaByDept.name;
-      if (activeOfficer?.jurisdictionAreaName && activeOfficer.jurisdictionAreaName !== 'Địa Bàn Phụ Trách') {
+      if (activeOfficer?.jurisdictionAreaName && activeOfficer.jurisdictionAreaName !== 'Địa Bàn PhỤ Trách') {
         return activeOfficer.jurisdictionAreaName;
       }
-      return fixedJurisdictionConfig.name;
+      return fixedJurisdictionConfig?.name || 'Toàn quốc';
     })();
 
     // Xác định tên cấp trên (Quận/Huyện, Tỉnh/TP) từ cơ cấu cây hành chính thực tế (không mock cứng)
@@ -357,7 +368,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       foundAreaByName?._id ||
       (foundAreaByDept && isAreaMatchingUserAuth(foundAreaByDept.name) ? foundAreaByDept._id : null) ||
       (validAreaById ? userAreaIdFromAuth : null) ||
-      fixedJurisdictionConfig.areaId;
+      fixedJurisdictionConfig?.areaId ||
+      'area-all';
 
     // Tên rút gọn hiển thị trên tab (ví dụ: "Xã Hợp Kim" hoặc "Phường Ngũ Hành Sơn")
     const localTabLabel = (
@@ -778,7 +790,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
       let defaultLat = 16.0570;
       let defaultLng = 108.2170;
-      if (fixedJurisdictionConfig.bounds) {
+      if (fixedJurisdictionConfig?.bounds) {
         defaultLat = Number(((fixedJurisdictionConfig.bounds.minLat + fixedJurisdictionConfig.bounds.maxLat) / 2).toFixed(5));
         defaultLng = Number(((fixedJurisdictionConfig.bounds.minLng + fixedJurisdictionConfig.bounds.maxLng) / 2).toFixed(5));
       }
@@ -1240,6 +1252,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
         const res = await deleteHazardReport(id);
         if (res.success) {
           setHazardReports((prev) => prev.filter((r) => r._id !== id));
+          setSelectedHazardIds((prev) => prev.filter((itemId) => itemId !== id));
           setHazardCounts((prev) => {
             const currentItem = hazardReports.find((r) => r._id === id);
             const st = currentItem?.status || 'PENDING';
@@ -1261,6 +1274,97 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       } finally {
         setLoading(false);
       }
+    };
+
+    // Duyệt nhanh hàng loạt các điểm nguy hiểm đã chọn
+    const handleBulkApproveHazards = () => {
+      if (selectedHazardIds.length === 0) return;
+      const count = selectedHazardIds.length;
+      setConfirmModal({
+        isOpen: true,
+        title: `Phê duyệt nhanh ${count} điểm nguy hiểm đã chọn`,
+        message: `Bạn có chắc chắn muốn phê duyệt nhanh ${count} điểm nguy hiểm đã chọn? Các điểm này sẽ được chuyển sang trạng thái ĐÃ DUYỆT (APPROVED) và hiển thị trực tiếp lên bản đồ cứu hộ.`,
+        type: 'primary',
+        confirmText: `Duyệt (${count})`,
+        cancelText: 'Hủy bỏ',
+        onConfirm: async () => {
+          setIsBulkHazardAction(true);
+          try {
+            let successCount = 0;
+            await Promise.allSettled(
+              selectedHazardIds.map(async (id) => {
+                const res = await reviewHazardReport(id, 'APPROVED', 'Đã thẩm định và phê duyệt hàng loạt');
+                if (res.success && res.data) {
+                  successCount++;
+                  setHazardReports((prev) => prev.map((r) => (r._id === id ? res.data : r)));
+                }
+              })
+            );
+            setSelectedHazardIds([]);
+            refreshData();
+            window.dispatchEvent(new CustomEvent('sos_data_updated'));
+            setConfirmModal((c) => ({ ...c, isOpen: false }));
+            showToast(`✅ Đã phê duyệt thành công ${successCount} điểm nguy hiểm!`, 'success');
+          } catch (err: any) {
+            showToast('❌ Có lỗi khi phê duyệt hàng loạt: ' + (err.message || 'Lỗi không xác định'), 'error');
+          } finally {
+            setIsBulkHazardAction(false);
+          }
+        },
+      });
+    };
+
+    // Xóa vĩnh viễn hàng loạt các điểm nguy hiểm đã chọn
+    const handleBulkDeleteHazards = () => {
+      if (selectedHazardIds.length === 0) return;
+      const count = selectedHazardIds.length;
+      setConfirmModal({
+        isOpen: true,
+        title: `Xác nhận xóa vĩnh viễn ${count} điểm nguy hiểm đã chọn`,
+        message: `Bạn có chắc chắn muốn xóa vĩnh viễn ${count} điểm nguy hiểm đã chọn không? Thao tác này sẽ gỡ bỏ dữ liệu hoàn toàn khỏi cơ sở dữ liệu và bản đồ cứu trợ.`,
+        type: 'danger',
+        confirmText: `Xác nhận xóa vĩnh viễn (${count})`,
+        cancelText: 'Hủy bỏ',
+        onConfirm: async () => {
+          setIsBulkHazardAction(true);
+          try {
+            let successCount = 0;
+            let failCount = 0;
+            await Promise.allSettled(
+              selectedHazardIds.map(async (id) => {
+                try {
+                  const res = await deleteHazardReport(id);
+                  if (res.success) {
+                    successCount++;
+                  } else {
+                    failCount++;
+                  }
+                } catch {
+                  failCount++;
+                }
+              })
+            );
+            const deletedIdSet = new Set(selectedHazardIds);
+            setHazardReports((prev) => prev.filter((r) => !deletedIdSet.has(r._id)));
+            if (detailHazard && deletedIdSet.has(detailHazard._id)) {
+              setDetailHazard(null);
+            }
+            setSelectedHazardIds([]);
+            refreshData();
+            window.dispatchEvent(new CustomEvent('sos_data_updated'));
+            setConfirmModal((c) => ({ ...c, isOpen: false }));
+            if (failCount === 0) {
+              showToast(`✅ Đã xóa vĩnh viễn ${successCount} điểm nguy hiểm thành công!`, 'success');
+            } else {
+              showToast(`⚠️ Đã xóa ${successCount} điểm, ${failCount} điểm thất bại.`, 'warning');
+            }
+          } catch (err: any) {
+            showToast('❌ Có lỗi khi xóa hàng loạt: ' + (err.message || 'Lỗi không xác định'), 'error');
+          } finally {
+            setIsBulkHazardAction(false);
+          }
+        },
+      });
     };
 
     return (
@@ -1545,11 +1649,113 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
             flexDirection: 'column',
           }}
         >
+          {/* THANH THAO TÁC HÀNG LOẠT (BULK ACTIONS BAR) */}
+          {selectedHazardIds.length > 0 && (
+            <div
+              style={{
+                padding: '10px 16px',
+                backgroundColor: '#fef2f2',
+                borderBottom: '1px solid #fecaca',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontWeight: 600, color: '#991b1b', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <AlertTriangle size={16} color="#dc2626" />
+                  <span>Đã chọn <strong>{selectedHazardIds.length}</strong> điểm nguy hiểm</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedHazardIds([])}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#64748b',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    padding: '2px 4px',
+                  }}
+                >
+                  Bỏ chọn
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={handleBulkApproveHazards}
+                  disabled={isBulkHazardAction}
+                  className="sos-btn-flat success"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: isBulkHazardAction ? 'not-allowed' : 'pointer',
+                  }}
+                  title="Duyệt nhanh tất cả các điểm nguy hiểm đã chọn"
+                >
+                  <CheckCircle2 size={13} />
+                  <span>Duyệt nhanh ({selectedHazardIds.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleBulkDeleteHazards}
+                  disabled={isBulkHazardAction}
+                  className="sos-btn-flat danger"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: isBulkHazardAction ? 'not-allowed' : 'pointer',
+                  }}
+                  title="Xóa vĩnh viễn các điểm nguy hiểm đã chọn"
+                >
+                  <Trash2 size={13} />
+                  <span>Xóa ({selectedHazardIds.length})</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* KHUNG CUỘN CỦA BẢNG DỮ LIỆU */}
           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', minHeight: 0 }}>
             <table className="sos-clean-table">
               <thead>
                 <tr>
+                  <th style={{ width: '40px', textAlign: 'center', padding: '10px 8px' }}>
+                    <input
+                      type="checkbox"
+                      style={{ width: '16px', height: '16px', cursor: 'pointer', verticalAlign: 'middle' }}
+                      checked={
+                        paginatedReports.length > 0 &&
+                        paginatedReports.every((r) => selectedHazardIds.includes(r._id))
+                      }
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          const pageIds = paginatedReports.map((r) => r._id);
+                          setSelectedHazardIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+                        } else {
+                          const pageIdSet = new Set(paginatedReports.map((r) => r._id));
+                          setSelectedHazardIds((prev) => prev.filter((id) => !pageIdSet.has(id)));
+                        }
+                      }}
+                      title="Chọn tất cả điểm nguy hiểm trên trang hiện tại"
+                    />
+                  </th>
                   <th
                     className={`sortable ${hazardSortField === 'title' ? 'sorted' : ''}`}
                     onClick={() => handleSort('title')}
@@ -1622,7 +1828,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
               <tbody>
                 {totalHazardItems === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b', fontSize: '13px' }}>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b', fontSize: '13px' }}>
                       <AlertTriangle size={32} color="#94a3b8" style={{ marginBottom: '8px' }} />
                       <div>Không có điểm nguy hiểm nào trong danh mục này.</div>
                       {!isAdmin && (
@@ -1659,7 +1865,27 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     const districtName = getHazardDistrictName(r);
 
                     return (
-                      <tr key={r._id}>
+                      <tr
+                        key={r._id}
+                        style={{
+                          backgroundColor: selectedHazardIds.includes(r._id) ? '#fff5f5' : undefined,
+                        }}
+                      >
+                        {/* 0. Checkbox chọn từng mục */}
+                        <td style={{ textAlign: 'center', width: '40px', padding: '10px 8px' }}>
+                          <input
+                            type="checkbox"
+                            style={{ width: '16px', height: '16px', cursor: 'pointer', verticalAlign: 'middle' }}
+                            checked={selectedHazardIds.includes(r._id)}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              setSelectedHazardIds((prev) =>
+                                prev.includes(r._id) ? prev.filter((id) => id !== r._id) : [...prev, r._id]
+                              );
+                            }}
+                          />
+                        </td>
+
                         {/* 1. Điểm nguy hiểm & Loại hiểm họa */}
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -3772,7 +3998,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            if (fixedJurisdictionConfig.bounds) {
+                            if (fixedJurisdictionConfig?.bounds) {
                               const b = fixedJurisdictionConfig.bounds;
                               setCreateLat(Number(((b.minLat + b.maxLat) / 2).toFixed(5)));
                               setCreateLng(Number(((b.minLng + b.maxLng) / 2).toFixed(5)));

@@ -161,7 +161,7 @@ const weatherNotificationSchema = new mongoose.Schema(
 );
 
 // Keep the n8n field names canonical while synchronizing the legacy API aliases.
-weatherNotificationSchema.pre('validate', function (next) {
+weatherNotificationSchema.pre('validate', function () {
   if (!this.category && this.weatherType) this.category = this.weatherType.toLowerCase();
 
   if (this.relevance_score == null && this.score != null) this.relevance_score = this.score;
@@ -183,8 +183,6 @@ weatherNotificationSchema.pre('validate', function (next) {
   if (!this.imageUrl && this.image_url) this.imageUrl = this.image_url;
   if (!this.ai_reason && this.reason) this.ai_reason = this.reason;
   if (!this.reason && this.ai_reason) this.reason = this.ai_reason;
-
-  next();
 });
 
 // Indexes for feed retrieval, review queues, and duplicate-source lookup.

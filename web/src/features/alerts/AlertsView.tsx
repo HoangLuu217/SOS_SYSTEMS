@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type { User } from '@/types/auth';
-import type { AdministrativeAreaItem, AlertItem, HazardReportItem, SafeLocationItem } from '@/types/dashboard';
+import type { AdministrativeAreaItem, HazardReportItem, SafeLocationItem } from '@/types/dashboard';
 import {
-  fetchAlerts,
   broadcastNotificationApi,
   fetchBroadcastHistory,
   deleteBroadcastApi,
@@ -21,13 +20,14 @@ export interface AlertsViewProps {
   areas?: AdministrativeAreaItem[];
 }
 
+const EMPTY_AREAS: AdministrativeAreaItem[] = [];
+
 export const AlertsView: React.FC<AlertsViewProps> = ({
   user,
-  areas: propAreas = [],
+  areas: propAreas = EMPTY_AREAS,
 }) => {
   const { showToast, setConfirmModal, renderGlobalModals } = useGlobalModals();
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
-  const [_alertsList, setAlertsList] = useState<AlertItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const refreshData = () => setRefreshIndex((prev) => prev + 1);
@@ -46,6 +46,10 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
 
   // Modal Chi Tiết Thông Báo
   const [detailBroadcast, setDetailBroadcast] = useState<BroadcastItem | null>(null);
+
+  // Chọn hàng loạt (Bulk selection)
+  const [selectedAlertIds, setSelectedAlertIds] = useState<string[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState<boolean>(false);
 
   // Modal Khởi Tạo & Gửi Thông Báo Mới (Thiết kế đồng nhất với SheltersView)
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -134,7 +138,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [propAreas, refreshIndex]);
+  }, [propAreas.length, refreshIndex]);
 
   // Lắng nghe sự kiện SSE real-time khi có thông báo mới hoặc thu hồi
   useEffect(() => {
@@ -326,30 +330,39 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
   useEffect(() => {
     if (!isCreateOpen || !['SAFE_LOCATION', 'HAZARD'].includes(notificationCategory)) return;
     let isMounted = true;
+
     const loadPoints = async () => {
       setLoadingPoints(true);
       try {
         const areaId = isAuthority ? String(user?.authority?.areaId || '') : alertForm.areaId;
         const selectedArea = areas.find((area) => area._id === areaId);
         const queryAreaId = selectedArea?.type === 'PROVINCE' ? '' : areaId;
+
         const pointBelongsToSelection = (pointAreaId: SafeLocationItem['areaId'] | HazardReportItem['areaId']) => {
           if (!areaId || areaId === 'ALL') return true;
           const pointAreaKey = typeof pointAreaId === 'string' ? pointAreaId : pointAreaId?._id;
-          const pointArea = pointAreaKey ? areaById.get(pointAreaKey) : undefined;
-          if (selectedArea?.type === 'PROVINCE') return getProvinceId(pointArea) === selectedArea._id;
-          return pointAreaKey === areaId;
+          if (!pointAreaKey) return true;
+          if (String(pointAreaKey) === String(areaId)) return true;
+          const pointArea = areaById.get(pointAreaKey);
+          if (selectedArea?.type === 'PROVINCE' && pointArea) {
+            return getProvinceId(pointArea) === selectedArea._id;
+          }
+          return false;
         };
+
         if (notificationCategory === 'SAFE_LOCATION') {
           const result = await fetchSafeLocations({ all: 'true', limit: '100', ...(queryAreaId && queryAreaId !== 'ALL' ? { areaId: queryAreaId } : {}) });
           if (isMounted && result.success && Array.isArray(result.data)) {
-            setSafeLocationOptions(result.data.filter((point) => point.status === 'ACTIVE' &&
-              pointBelongsToSelection(point.areaId)));
+            const filtered = result.data.filter((point) => point.status === 'ACTIVE' && pointBelongsToSelection(point.areaId));
+            setSafeLocationOptions(filtered);
+            setSelectedPointId((prev) => (filtered.some((p) => p._id === prev) ? prev : ''));
           }
         } else {
           const result = await fetchHazardReports({ all: 'true', limit: '100', ...(queryAreaId && queryAreaId !== 'ALL' ? { areaId: queryAreaId } : {}) });
           if (isMounted && result.success && Array.isArray(result.data?.reports)) {
-            setHazardOptions(result.data.reports.filter((point) => point.status === 'APPROVED' &&
-              pointBelongsToSelection(point.areaId)));
+            const filtered = result.data.reports.filter((point) => point.status === 'APPROVED' && pointBelongsToSelection(point.areaId));
+            setHazardOptions(filtered);
+            setSelectedPointId((prev) => (filtered.some((p) => p._id === prev) ? prev : ''));
           }
         }
       } catch (error) {
@@ -358,10 +371,10 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
         if (isMounted) setLoadingPoints(false);
       }
     };
-    setSelectedPointId('');
+
     void loadPoints();
     return () => { isMounted = false; };
-  }, [isCreateOpen, notificationCategory, isAuthority, user?.authority?.areaId, alertForm.areaId, areas, areaById, getProvinceId]);
+  }, [isCreateOpen, notificationCategory, isAuthority, user?.authority?.areaId, alertForm.areaId]);
 
   const handleSelectCategory = (category: typeof notificationCategory) => {
     setNotificationCategory(category);
@@ -517,12 +530,60 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
           await deleteBroadcastApi(broadcastId);
           showToast('✅ Đã thu hồi thông báo thành công', 'success');
           setBroadcastHistory((prev) => prev.filter((b) => b.id !== broadcastId));
+          setSelectedAlertIds((prev) => prev.filter((id) => id !== broadcastId));
           if (detailBroadcast?.id === broadcastId) {
             setDetailBroadcast(null);
           }
           setConfirmModal((c) => ({ ...c, isOpen: false }));
         } catch (err: any) {
           showToast('❌ Không thể xóa thông báo: ' + err.message, 'error');
+        }
+      },
+    });
+  };
+
+  // Thu hồi / Xóa hàng loạt các thông báo đã chọn
+  const handleBulkDeleteAlerts = () => {
+    if (selectedAlertIds.length === 0) return;
+    const count = selectedAlertIds.length;
+    setConfirmModal({
+      isOpen: true,
+      title: `Thu hồi / Xóa ${count} bản tin đã chọn`,
+      message: `Bạn có chắc chắn muốn thu hồi và xóa ${count} bản tin thông báo đã chọn khỏi toàn bộ hệ thống? Thao tác này sẽ xóa đồng loạt khỏi các thiết bị nhận tin.`,
+      type: 'danger',
+      confirmText: `Xác nhận xóa (${count})`,
+      cancelText: 'Hủy bỏ',
+      onConfirm: async () => {
+        setIsBulkDeleting(true);
+        try {
+          let successCount = 0;
+          let failCount = 0;
+          await Promise.allSettled(
+            selectedAlertIds.map(async (id) => {
+              try {
+                await deleteBroadcastApi(id);
+                successCount++;
+              } catch {
+                failCount++;
+              }
+            })
+          );
+          const deletedIdSet = new Set(selectedAlertIds);
+          setBroadcastHistory((prev) => prev.filter((b) => !deletedIdSet.has(b.id)));
+          setSelectedAlertIds([]);
+          if (detailBroadcast && deletedIdSet.has(detailBroadcast.id)) {
+            setDetailBroadcast(null);
+          }
+          setConfirmModal((c) => ({ ...c, isOpen: false }));
+          if (failCount === 0) {
+            showToast(`✅ Đã thu hồi thành công ${successCount} thông báo!`, 'success');
+          } else {
+            showToast(`⚠️ Đã thu hồi ${successCount} thông báo (${failCount} lỗi)`, 'warning');
+          }
+        } catch (err: any) {
+          showToast('❌ Không thể xóa hàng loạt: ' + (err.message || 'Lỗi không xác định'), 'error');
+        } finally {
+          setIsBulkDeleting(false);
         }
       },
     });
@@ -873,6 +934,69 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
           overflow: 'hidden',
         }}
       >
+        {/* THANH THAO TÁC HÀNG LOẠT (BULK ACTIONS BAR) */}
+        {selectedAlertIds.length > 0 && (
+          <div
+            style={{
+              padding: '10px 16px',
+              backgroundColor: '#eff6ff',
+              borderBottom: '1px solid #bfdbfe',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontWeight: 600, color: '#1e40af', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <i className="bi bi-check2-square" style={{ fontSize: '16px', color: '#2563eb' }}></i>
+                <span>Đã chọn <strong>{selectedAlertIds.length}</strong> thông báo</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedAlertIds([])}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#64748b',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  padding: '2px 4px',
+                }}
+              >
+                Bỏ chọn
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={handleBulkDeleteAlerts}
+                disabled={isBulkDeleting}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 14px',
+                  backgroundColor: '#ef4444',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  cursor: isBulkDeleting ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 1px 2px rgba(239, 68, 68, 0.2)',
+                }}
+              >
+                <i className="bi bi-trash3" style={{ fontSize: '13px' }}></i>
+                <span>Thu hồi / Xóa đã chọn ({selectedAlertIds.length})</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         <div
           className="sos-table-wrapper"
           style={{
@@ -886,10 +1010,31 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
           <table className="sos-table">
             <thead>
               <tr>
+                <th style={{ width: '40px', textAlign: 'center', padding: '10px 8px' }}>
+                  <input
+                    type="checkbox"
+                    style={{ width: '16px', height: '16px', cursor: 'pointer', verticalAlign: 'middle' }}
+                    checked={
+                      paginatedBroadcasts.length > 0 &&
+                      paginatedBroadcasts.every((item) => selectedAlertIds.includes(item.id))
+                    }
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        const pageIds = paginatedBroadcasts.map((item) => item.id);
+                        setSelectedAlertIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+                      } else {
+                        const pageIdSet = new Set(paginatedBroadcasts.map((item) => item.id));
+                        setSelectedAlertIds((prev) => prev.filter((id) => !pageIdSet.has(id)));
+                      }
+                    }}
+                    title="Chọn tất cả thông báo trên trang hiện tại"
+                  />
+                </th>
+
                 <th
                   className={`sortable ${sortField === 'title' ? 'sorted' : ''}`}
                   onClick={() => handleSort('title')}
-                  style={{ width: '36%', cursor: 'pointer' }}
+                  style={{ width: '34%', cursor: 'pointer' }}
                 >
                   <div style={{ display: 'inline-flex', alignItems: 'center' }}>
                     <span>Tiêu đề &amp; Nội dung</span>
@@ -947,7 +1092,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
             <tbody>
               {paginatedBroadcasts.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b', fontSize: '13px' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b', fontSize: '13px' }}>
                     <i className="bi bi-bell" style={{ fontSize: '28px', color: '#94a3b8', display: 'inline-block', marginBottom: '8px' }}></i>
                     <div>Chưa có bản tin thông báo nào được ghi nhận trong danh mục này.</div>
                     <button
@@ -992,7 +1137,27 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                   const priorityStr = String(item.priority || 'NORMAL').toUpperCase();
 
                   return (
-                    <tr key={item.id}>
+                    <tr
+                      key={item.id}
+                      style={{
+                        backgroundColor: selectedAlertIds.includes(item.id) ? '#f0f9ff' : undefined,
+                      }}
+                    >
+                      {/* 0. Checkbox chọn từng mục */}
+                      <td style={{ textAlign: 'center', width: '40px', padding: '10px 8px' }}>
+                        <input
+                          type="checkbox"
+                          style={{ width: '16px', height: '16px', cursor: 'pointer', verticalAlign: 'middle' }}
+                          checked={selectedAlertIds.includes(item.id)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            setSelectedAlertIds((prev) =>
+                              prev.includes(item.id) ? prev.filter((id) => id !== item.id) : [...prev, item.id]
+                            );
+                          }}
+                        />
+                      </td>
+
                       {/* 1. Tiêu đề & Nội dung */}
                       <td>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
@@ -1590,25 +1755,38 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                         </label>
                         <select
                           value={selectedPointId}
-                          disabled={loadingPoints}
                           onChange={(event) => {
-                            const point = safeLocationOptions.find((item) => item._id === event.target.value);
-                            setSelectedPointId(event.target.value);
+                            const val = event.target.value;
+                            setSelectedPointId(val);
+                            const point = safeLocationOptions.find((item) => item._id === val);
                             if (point) {
+                              const lat = point.location?.coordinates?.[1];
+                              const lng = point.location?.coordinates?.[0];
+                              const coordsStr = (typeof lat === 'number' && typeof lng === 'number')
+                                ? `\nTọa độ: ${lat.toFixed(5)}, ${lng.toFixed(5)}`
+                                : '';
                               setAlertForm((prev) => ({
                                 ...prev,
                                 title: `Điểm an toàn: ${point.name}`,
-                                content: `Địa chỉ: ${point.address}\nSức chứa: ${point.currentOccupancy}/${point.capacity}\nTọa độ: ${point.location.coordinates[1].toFixed(5)}, ${point.location.coordinates[0].toFixed(5)}`,
+                                content: `Địa chỉ: ${point.address}\nSức chứa: ${point.currentOccupancy || 0}/${point.capacity || 0} người${coordsStr}`,
                               }));
                             }
                           }}
                           className="sos-form-select"
                           style={{ width: '100%', padding: '6px 9px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', fontSize: '12.5px', boxSizing: 'border-box' }}
                         >
-                          <option value="">{loadingPoints ? 'Đang tải...' : 'Chọn điểm an toàn'}</option>
-                          {safeLocationOptions.map((point) => <option key={point._id} value={point._id}>{point.name} — {point.address}</option>)}
+                          <option value="">{loadingPoints ? 'Đang tải danh sách điểm an toàn...' : '-- Chọn điểm an toàn --'}</option>
+                          {safeLocationOptions.map((point) => (
+                            <option key={point._id} value={point._id}>
+                              {point.name} — {point.address}
+                            </option>
+                          ))}
                         </select>
-                        {!loadingPoints && safeLocationOptions.length === 0 && <small style={{ color: '#b45309' }}>Chưa có điểm an toàn hoạt động.</small>}
+                        {!loadingPoints && safeLocationOptions.length === 0 && (
+                          <small style={{ color: '#b45309', display: 'block', marginTop: '3px' }}>
+                            Chưa có điểm an toàn hoạt động nào trên địa bàn đã chọn.
+                          </small>
+                        )}
                       </div>
                     )}
 
@@ -1619,26 +1797,39 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                         </label>
                         <select
                           value={selectedPointId}
-                          disabled={loadingPoints}
                           onChange={(event) => {
-                            const point = hazardOptions.find((item) => item._id === event.target.value);
-                            setSelectedPointId(event.target.value);
+                            const val = event.target.value;
+                            setSelectedPointId(val);
+                            const point = hazardOptions.find((item) => item._id === val);
                             if (point) {
+                              const lat = point.location?.coordinates?.[1];
+                              const lng = point.location?.coordinates?.[0];
+                              const coordsStr = (typeof lat === 'number' && typeof lng === 'number')
+                                ? `\nTọa độ: ${lat.toFixed(5)}, ${lng.toFixed(5)}`
+                                : '';
                               setAlertForm((prev) => ({
                                 ...prev,
                                 title: point.title,
-                                content: `${point.description}\nĐịa chỉ: ${point.address}\nTọa độ: ${point.location.coordinates[1].toFixed(5)}, ${point.location.coordinates[0].toFixed(5)}`,
-                                severity: point.severity,
+                                content: `${point.description || ''}\nĐịa chỉ: ${point.address}${coordsStr}`,
+                                severity: point.severity || prev.severity,
                               }));
                             }
                           }}
                           className="sos-form-select"
                           style={{ width: '100%', padding: '6px 9px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', fontSize: '12.5px', boxSizing: 'border-box' }}
                         >
-                          <option value="">{loadingPoints ? 'Đang tải...' : 'Chọn điểm nguy hiểm'}</option>
-                          {hazardOptions.map((point) => <option key={point._id} value={point._id}>{point.title} — {point.address}</option>)}
+                          <option value="">{loadingPoints ? 'Đang tải danh sách điểm nguy hiểm...' : '-- Chọn điểm nguy hiểm --'}</option>
+                          {hazardOptions.map((point) => (
+                            <option key={point._id} value={point._id}>
+                              {point.title} — {point.address}
+                            </option>
+                          ))}
                         </select>
-                        {!loadingPoints && hazardOptions.length === 0 && <small style={{ color: '#b45309' }}>Chưa có điểm nguy hiểm được duyệt.</small>}
+                        {!loadingPoints && hazardOptions.length === 0 && (
+                          <small style={{ color: '#b45309', display: 'block', marginTop: '3px' }}>
+                            Chưa có điểm nguy hiểm được duyệt nào trên địa bàn đã chọn.
+                          </small>
+                        )}
                       </div>
                     )}
 

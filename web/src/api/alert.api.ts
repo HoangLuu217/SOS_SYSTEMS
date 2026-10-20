@@ -1,24 +1,4 @@
 import { fetchWithAuth } from './client';
-import type { AlertItem } from '@/types/dashboard';
-
-export async function fetchAlerts(): Promise<{ success: boolean; data: AlertItem[] }> {
-  return fetchWithAuth('/alerts', { method: 'GET' });
-}
-
-export async function createAlert(payload: {
-  areaId: string;
-  title: string;
-  content: string;
-  type: string;
-  severity: string;
-  startTime?: string;
-  endTime?: string;
-}): Promise<{ success: boolean; data: AlertItem }> {
-  return fetchWithAuth('/alerts', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
 
 export interface BroadcastNotificationPayload {
   title: string;
