@@ -5,6 +5,7 @@ import { alertApi } from './alert.api';
 import { mapApi } from './map.api';
 import { notificationApi } from './notification.api';
 import { chatApi } from './chat.api';
+import { assignmentApi, RescuerAssignmentItem } from './assignment.api';
 import type {
   EmergencyContact,
   UserProfile,
@@ -179,6 +180,15 @@ class BackendApiService {
 
   markChatAsRead = (params: Parameters<typeof chatApi.markAsRead>[0]) =>
     chatApi.markAsRead(params);
+
+  // Assignment & Tactical Mission API
+  getMyAssignments = () => assignmentApi.getMyAssignments();
+  acceptAssignment = (id: string) => assignmentApi.acceptAssignment(id);
+  updateAssignmentStatus = (id: string, status: string, note?: string) =>
+    assignmentApi.updateAssignmentStatus(id, status, note);
+  updateSosMissionStatus = (sosId: string, status: string, note?: string) =>
+    assignmentApi.updateSosMissionStatus(sosId, status, note);
+  getAvailableSosRequests = () => assignmentApi.getAvailableSosRequests();
 
   // Storage helpers
   saveTokens = (accessToken: string, refreshToken?: string) =>

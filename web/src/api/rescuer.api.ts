@@ -11,10 +11,28 @@ export async function verifyRescuer(
   });
 }
 
-export async function fetchVehicles(): Promise<{ success: boolean; data: VehicleItem[] }> {
-  return fetchWithAuth('/vehicles', { method: 'GET' });
+export async function fetchVehicles(query?: Record<string, any>): Promise<{ success: boolean; data: VehicleItem[] }> {
+  const params = new URLSearchParams();
+  if (query) {
+    Object.entries(query).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '' && v !== 'ALL') {
+        params.append(k, String(v));
+      }
+    });
+  }
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  return fetchWithAuth(`/vehicles${qs}`, { method: 'GET' });
 }
 
-export async function fetchRescueTeams(): Promise<{ success: boolean; data: RescueTeamItem[] }> {
-  return fetchWithAuth('/rescue-teams', { method: 'GET' });
+export async function fetchRescueTeams(query?: Record<string, any>): Promise<{ success: boolean; data: RescueTeamItem[] }> {
+  const params = new URLSearchParams();
+  if (query) {
+    Object.entries(query).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '' && v !== 'ALL') {
+        params.append(k, String(v));
+      }
+    });
+  }
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  return fetchWithAuth(`/rescue-teams${qs}`, { method: 'GET' });
 }

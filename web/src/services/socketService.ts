@@ -81,7 +81,22 @@ export const onSosCreated = (callback: (newSos: any) => void): (() => void) => {
  */
 export const onSosUpdated = (callback: (updatedSos: any) => void): (() => void) => {
   const s = getSocket();
+  let lastEventTime = 0;
+  let lastEventSignature = '';
+
   const handler = (data: any) => {
+    const id = data?._id || data?.sosCode || '';
+    const status = data?.status || '';
+    const signature = `${id}-${status}`;
+    const now = Date.now();
+
+    // Chống trùng lặp do backend phát đồng thời cả 'sos:updated' và 'sos:status_changed'
+    if (signature && signature === lastEventSignature && now - lastEventTime < 1000) {
+      return;
+    }
+    lastEventSignature = signature;
+    lastEventTime = now;
+
     console.log('🔄 [Socket.IO Web] Nhận tín hiệu cập nhật SOS Realtime:', data);
     callback(data);
   };

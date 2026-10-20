@@ -20,6 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { PROFILE_THEME } from './theme';
 import { useAuth } from '@/context/AuthContext';
 import { LogoSOS } from '@/components';
+import { RescuerMissionCard } from '../home/RescuerMissionCard';
 
 export type RescuerAvailability =
   | 'OFFLINE'      // Ngoại tuyến
@@ -332,6 +333,9 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
             <Feather name="chevron-right" size={18} color="#D97706" />
           </TouchableOpacity>
         )}
+
+        {/* 2.5. Nhiệm vụ tác chiến thực địa */}
+        <RescuerMissionCard />
 
         {/* 3. Availability Card (Trạng thái sẵn sàng tác chiến) */}
         <View style={styles.availabilityCard}>

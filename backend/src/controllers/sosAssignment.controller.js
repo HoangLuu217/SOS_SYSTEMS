@@ -57,7 +57,7 @@ class SosAssignmentController {
    */
   async acceptAssignment(req, res, next) {
     try {
-      const assignment = await sosAssignmentService.acceptAssignment(req.params.id);
+      const assignment = await sosAssignmentService.acceptAssignment(req.params.id, req.user);
 
       await auditService.log({
         actorId: req.user?._id || assignment.rescuerId,
@@ -84,8 +84,8 @@ class SosAssignmentController {
    */
   async updateStatus(req, res, next) {
     try {
-      const { status } = req.body;
-      const assignment = await sosAssignmentService.updateStatus(req.params.id, status);
+      const { status, note } = req.body;
+      const assignment = await sosAssignmentService.updateStatus(req.params.id, status, req.user, note);
 
       const actorRole = req.user?.roles?.includes('RESCUER') ? 'RESCUER' : (req.user?.roles?.[0] || 'RESCUER');
       await auditService.log({
@@ -97,11 +97,59 @@ class SosAssignmentController {
         metadata: {
           sosId: assignment.sosId,
           status,
-          note: req.body.note,
+          note,
         },
       });
 
       return sendSuccess(res, 200, 'Cập nhật trạng thái phân công thành công', assignment);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /assignments/my
+   */
+  async getMyAssignments(req, res, next) {
+    try {
+      const userId = req.user?._id || req.query.rescuerId;
+      if (!userId) {
+        return sendSuccess(res, 200, 'Chưa đăng nhập tài khoản cứu hộ viên', []);
+      }
+      const assignments = await sosAssignmentService.getMyAssignments(userId);
+      return sendSuccess(res, 200, 'Lấy danh sách nhiệm vụ của cứu hộ viên thành công', assignments);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /assignments/sos/:sosId/status
+   */
+  async updateStatusBySosId(req, res, next) {
+    try {
+      const { status, note } = req.body;
+      const result = await sosAssignmentService.updateStatusBySosId(
+        req.params.sosId || req.params.id,
+        status,
+        req.user,
+        note
+      );
+
+      const actorRole = req.user?.roles?.includes('RESCUER') ? 'RESCUER' : (req.user?.roles?.[0] || 'RESCUER');
+      await auditService.log({
+        actorId: req.user?._id || null,
+        actorRole,
+        action: `RESCUER_${status}_MISSION`,
+        entityType: 'SosRequest',
+        entityId: req.params.sosId || req.params.id,
+        metadata: {
+          status,
+          note,
+        },
+      });
+
+      return sendSuccess(res, 200, 'Cập nhật tiến trình tác chiến thành công', result);
     } catch (error) {
       next(error);
     }
@@ -144,7 +192,7 @@ class SosAssignmentController {
    */
   async cancelAssignment(req, res, next) {
     try {
-      const { cancelReason } = req.body;
+      const cancelReason = req.body.cancelReason || req.body.reason;
       const assignment = await sosAssignmentService.cancelAssignment(req.params.id, cancelReason);
 
       const actorRole = req.user?.roles?.includes('LOCAL_AUTHORITY')

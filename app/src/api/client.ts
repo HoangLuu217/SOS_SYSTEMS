@@ -44,7 +44,8 @@ export class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
-    const baseUrl = await this.getBaseUrl();
+    const rawBaseUrl = await this.getBaseUrl();
+    const baseUrl = rawBaseUrl.trim().replace(/\/+$/, '');
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     const url = `${baseUrl}${cleanEndpoint}`;
 
