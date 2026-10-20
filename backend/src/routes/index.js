@@ -30,6 +30,7 @@ router.use('/config', configRoutes);
 router.use('/users', userRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/weather-notifications', weatherNotificationRoutes);
+router.use('/weather-articles', weatherNotificationRoutes);
 router.use('/rescuer', rescuerRoutes);
 router.use('/rescue-teams', rescueTeamRoutes);
 router.use('/vehicles', vehicleRoutes);

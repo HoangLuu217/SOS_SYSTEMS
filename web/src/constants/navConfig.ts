@@ -38,6 +38,10 @@ export const NAV_TITLES: Record<NavItemKey, NavMeta> = {
     title: 'GỬI THÔNG BÁO',
     desc: 'Quản trị viên và cán bộ gửi thông báo khẩn cấp, cảnh báo thiên tai hoặc thông báo hệ thống tới người dân',
   },
+  weather: {
+    title: 'BẢN TIN & CẢNH BÁO THỜI TIẾT',
+    desc: 'Theo dõi, khởi tạo và quản lý các bản tin dự báo, cảnh báo bão lũ và thiên tai',
+  },
   shelters: {
     title: 'ĐIỂM TRÚ ẨN & TRẠM Y TẾ AN TOÀN',
     desc: 'Quản lý các trạm sơ tán, điểm tránh lũ và năng lực tiếp nhận người dân trong địa bàn',

@@ -125,18 +125,30 @@ class WeatherNotificationService {
       }
     }
 
+    const resolvedSummary = data.summary ? data.summary.trim() : content.trim().slice(0, 250);
+    const resolvedRegions = Array.isArray(data.regions) && data.regions.length > 0
+      ? data.regions
+      : (resolvedArea ? [resolvedArea] : []);
+
     const doc = new WeatherNotification({
       title: title.trim(),
       content: content.trim(),
+      summary: resolvedSummary,
       category: category || weatherType || 'mua_lu',
       score: typeof score === 'number' ? score : (Number(score) || 0),
+      relevance_score: typeof score === 'number' ? score : (Number(score) || 0),
       area: resolvedArea.trim(),
-      imageUrl: imageUrl ? imageUrl.trim() : null,
-      articleUrl: articleUrl ? articleUrl.trim() : null,
-      articleTitle: articleTitle || sourceName || null,
+      regions: resolvedRegions,
+      imageUrl: imageUrl ? imageUrl.trim() : (data.image_url ? data.image_url.trim() : null),
+      image_url: imageUrl ? imageUrl.trim() : (data.image_url ? data.image_url.trim() : null),
+      articleUrl: articleUrl ? articleUrl.trim() : (data.source_url ? data.source_url.trim() : null),
+      source_url: articleUrl ? articleUrl.trim() : (data.source_url ? data.source_url.trim() : null),
+      articleTitle: articleTitle || sourceName || data.source_name || null,
+      source_name: sourceName || data.source_name || null,
+      original_title: articleTitle || sourceName || data.source_name || null,
       areaId: areaId && mongoose.Types.ObjectId.isValid(areaId) ? areaId : null,
       createdBy: user?._id || null,
-      status: 'ACTIVE',
+      status: data.status || 'ACTIVE',
     });
 
     await doc.save();
@@ -159,12 +171,20 @@ class WeatherNotificationService {
     const allowedFields = [
       'title',
       'content',
+      'summary',
       'category',
       'score',
+      'relevance_score',
       'area',
+      'regions',
       'imageUrl',
+      'image_url',
       'articleUrl',
+      'source_url',
       'articleTitle',
+      'sourceName',
+      'source_name',
+      'original_title',
       'areaId',
       'status',
     ];

@@ -20,6 +20,7 @@ import { CoordinationView } from '@/features/coordination';
 import { RescuersView } from '@/features/rescuers';
 import { ResourcesView } from '@/features/resources';
 import { AlertsView } from '@/features/alerts';
+import { WeatherView } from '@/features/weather';
 import { SheltersView } from '@/features/shelters';
 import { HazardReportsView } from '@/features/hazards';
 import {
@@ -74,6 +75,10 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     case 'notifications':
     case 'alerts':
       return <AlertsView user={user} />;
+
+    // 5.1. Bản tin & Cảnh báo thời tiết
+    case 'weather':
+      return <WeatherView user={user} />;
 
     // 6. Điểm trú ẩn an toàn
     case 'shelters':

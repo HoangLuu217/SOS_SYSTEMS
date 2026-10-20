@@ -42,6 +42,7 @@ import {
   MessageSquare,
   Camera,
   X,
+  CloudSun,
 } from 'lucide-react';
 
 import './Sidebar.css';
@@ -60,6 +61,7 @@ export type NavItemKey =
   | 'resources'
   | 'notifications'
   | 'alerts'
+  | 'weather'
   | 'shelters'
   | 'hazard_reports'
   | 'reports'
@@ -273,6 +275,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           key: 'notifications',
           label: 'Gửi thông báo',
           icon: <Bell size={18} className="sos-nav-icon" />,
+        },
+        {
+          key: 'weather',
+          label: 'Bản tin thời tiết',
+          icon: <CloudSun size={18} className="sos-nav-icon" />,
         },
         {
           key: 'shelters',
