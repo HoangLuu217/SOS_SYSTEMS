@@ -56,7 +56,7 @@ class ChatController {
     } catch (error) {
       next(error);
     }
-  },
+  }
 
   /**
    * PATCH /chat/read-all
@@ -68,7 +68,7 @@ class ChatController {
     } catch (error) {
       next(error);
     }
-  },
+  }
 
   /**
    * GET /chat/stream

@@ -792,8 +792,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Loại bỏ các phần chú thích trong ngoặc đơn như (PCTT Liên Chiểu) để họ tên hiển thị gọn gàng, trọn vẹn
   const displayUserName = rawUserName.replace(/\s*\([^\)]*\)/g, '').trim() || rawUserName;
   const displayUserRole = localProfile.position || user?.authority?.position || (isAdmin ? 'Quản trị viên' : 'Chỉ huy cứu hộ');
-  const roleBadgeLabel =
-    displayUserRole === 'Quản trị viên hệ thống' ? 'Quản trị viên' : displayUserRole;
   const displayAvatar = localProfile.avatarUrl || user?.avatarUrl || '';
   const userInitial = (displayUserName || 'U').trim().charAt(0).toUpperCase() || 'U';
 
