@@ -59,6 +59,18 @@ class ChatController {
   }
 
   /**
+   * PATCH /chat/read-all
+   */
+  async markAllAsRead(req, res, next) {
+    try {
+      const result = await chatService.markAllAsRead(req.user);
+      return sendSuccess(res, 200, 'Đã đánh dấu đã đọc tất cả tin nhắn', result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * GET /chat/stream
    * Server-Sent Events (SSE) để nhận tin nhắn thời gian thực mà không cần reload trang F5
    */

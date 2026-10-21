@@ -108,6 +108,9 @@ class BackendApiService {
 
   updateAvatar = (avatarUrl: string) => userApi.updateAvatar(avatarUrl);
 
+  sendUserPhoneOtp = (phone: string) => userApi.sendPhoneOtp(phone);
+  verifyUserPhoneOtp = (phone: string, otp: string) => userApi.verifyPhoneOtp(phone, otp);
+
   changePassword = (oldPassword: string, newPassword: string) =>
     userApi.changePassword(oldPassword, newPassword);
 

@@ -120,9 +120,10 @@ export class ApiClient {
     });
   }
 
-  async postFormData<T = any>(
+  async uploadFormData<T = any>(
     endpoint: string,
     formData: FormData,
+    method: 'POST' | 'PATCH' = 'POST',
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     const baseUrl = await this.getBaseUrl();
@@ -132,11 +133,18 @@ export class ApiClient {
     const headers: Record<string, string> = {
       Accept: 'application/json',
       'Bypass-Tunnel-Reminder': 'true',
+      'X-Tunnel-Skip-Anti-Phishing-Page': 'true',
+      'ngrok-skip-browser-warning': 'true',
       ...(options.headers as Record<string, string>),
     };
 
     const token = await AsyncStorage.getItem(ENV.STORAGE_KEYS.ACCESS_TOKEN);
     if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const storedUser = await this.getStoredUser();
+    if (storedUser?._id && !headers['x-user-id']) {
+      headers['x-user-id'] = storedUser._id;
+    }
 
     try {
       const controller = new AbortController();
@@ -144,7 +152,7 @@ export class ApiClient {
 
       const response = await fetch(url, {
         ...options,
-        method: 'POST',
+        method,
         headers,
         body: formData,
         signal: controller.signal,
@@ -169,6 +177,14 @@ export class ApiClient {
         error: err.message || '',
       };
     }
+  }
+
+  async postFormData<T = any>(
+    endpoint: string,
+    formData: FormData,
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    return this.uploadFormData<T>(endpoint, formData, 'POST', options);
   }
 
   async put<T = any>(endpoint: string, body: any, options: RequestInit = {}): Promise<ApiResponse<T>> {
@@ -203,14 +219,26 @@ export class ApiClient {
 
   async saveUser(user: UserProfile): Promise<void> {
     if (user) {
-      await AsyncStorage.setItem(ENV.STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+      // Đảm bảo không lưu chuỗi base64 khổng lồ vào AsyncStorage gây tràn bộ nhớ / treo app
+      const safeUser = { ...user };
+      if (typeof safeUser.avatarUrl === 'string' && (safeUser.avatarUrl.startsWith('data:image') || safeUser.avatarUrl.length > 500)) {
+        safeUser.avatarUrl = '';
+      }
+      await AsyncStorage.setItem(ENV.STORAGE_KEYS.USER_DATA, JSON.stringify(safeUser));
     }
   }
 
   async getStoredUser(): Promise<UserProfile | null> {
     try {
       const raw = await AsyncStorage.getItem(ENV.STORAGE_KEYS.USER_DATA);
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.avatarUrl === 'string' && (parsed.avatarUrl.startsWith('data:image') || parsed.avatarUrl.length > 500)) {
+        // Tự động dọn dẹp avatarUrl base64 khổng lồ bị kẹt từ trước
+        parsed.avatarUrl = '';
+        AsyncStorage.setItem(ENV.STORAGE_KEYS.USER_DATA, JSON.stringify(parsed)).catch(() => {});
+      }
+      return parsed;
     } catch {
       return null;
     }

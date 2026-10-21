@@ -137,7 +137,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
           <View style={styles.bannerTextBox}>
             <Text style={styles.bannerTitle}>Tùy chỉnh nhận thông báo</Text>
             <Text style={styles.bannerDesc}>
-              Quản lý các loại thông báo và cảnh báo khẩn cấp từ RescueSOS để đảm bảo bạn luôn nhận
+              Quản lý các loại thông báo và cảnh báo khẩn cấp từ hệ thống hỗ trợ cứu nạn để đảm bảo bạn luôn nhận
               được sự hỗ trợ kịp thời nhất.
             </Text>
           </View>
@@ -330,7 +330,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
           <Feather name="info" size={16} color="#64748B" style={{ marginTop: 2 }} />
           <Text style={styles.safetyNoticeText}>
             Lưu ý: Để nhận được thông báo cứu hộ kịp thời trong mọi điều kiện mất sóng hoặc màn hình
-            khóa, vui lòng đảm bảo ứng dụng RescueSOS được cấp quyền Thông báo trong Cài đặt hệ thống
+            khóa, vui lòng đảm bảo ứng dụng hỗ trợ cứu nạn được cấp quyền Thông báo trong Cài đặt hệ thống
             của thiết bị.
           </Text>
         </View>
