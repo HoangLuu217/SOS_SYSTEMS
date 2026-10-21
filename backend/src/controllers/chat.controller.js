@@ -56,7 +56,19 @@ class ChatController {
     } catch (error) {
       next(error);
     }
-  }
+  },
+
+  /**
+   * PATCH /chat/read-all
+   */
+  async markAllAsRead(req, res, next) {
+    try {
+      const result = await chatService.markAllAsRead(req.user);
+      return sendSuccess(res, 200, 'Đã đánh dấu đã đọc tất cả tin nhắn', result);
+    } catch (error) {
+      next(error);
+    }
+  },
 
   /**
    * GET /chat/stream

@@ -37,9 +37,17 @@ router.get('/messages', chatController.getMessages);
 router.post('/messages', chatController.sendMessage);
 
 /**
- * @route   PATCH /chat/read
- * @desc    Đánh dấu tin nhắn đã đọc
+ * @route   PATCH /chat/read hoặc POST /chat/read
+ * @desc    Đánh dấu tin nhắn trong hội thoại đã đọc
  */
 router.patch('/read', chatController.markAsRead);
+router.post('/read', chatController.markAsRead);
+
+/**
+ * @route   PATCH /chat/read-all hoặc POST /chat/read-all
+ * @desc    Đánh dấu tất cả tin nhắn đã đọc
+ */
+router.patch('/read-all', chatController.markAllAsRead);
+router.post('/read-all', chatController.markAllAsRead);
 
 module.exports = router;

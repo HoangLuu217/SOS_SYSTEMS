@@ -355,7 +355,7 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
         {!user?.phone && (
           <TouchableOpacity
             style={styles.unverifiedPhoneCard}
-            onPress={onNavigateToSecurity}
+            onPress={onNavigateToEditProfile}
             activeOpacity={0.8}
           >
             <View style={styles.unverifiedPhoneIconBox}>
@@ -514,7 +514,7 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
             </View>
             <View style={styles.menuTextBox}>
               <Text style={styles.menuTitle}>Thông tin cá nhân</Text>
-              <Text style={styles.menuDesc}>Họ tên, ngày sinh, địa chỉ cư trú</Text>
+              <Text style={styles.menuDesc}>Họ tên, SĐT, mật khẩu, địa chỉ</Text>
             </View>
             <Feather name="chevron-right" size={18} color="#94A3B8" />
           </TouchableOpacity>
@@ -547,25 +547,7 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
 
           <View style={styles.menuDivider} />
 
-          {/* Item 3: Bảo mật tài khoản */}
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onNavigateToSecurity}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.menuIconBox, { backgroundColor: '#F8FAFC' }]}>
-              <Feather name="shield" size={18} color="#475569" />
-            </View>
-            <View style={styles.menuTextBox}>
-              <Text style={styles.menuTitle}>Bảo mật tài khoản</Text>
-              <Text style={styles.menuDesc}>Mật khẩu đăng nhập & xác thực</Text>
-            </View>
-            <Feather name="chevron-right" size={18} color="#94A3B8" />
-          </TouchableOpacity>
-
-          <View style={styles.menuDivider} />
-
-          {/* Item 4: Cài đặt thông báo */}
+          {/* Item 3: Cài đặt thông báo */}
           <TouchableOpacity
             style={styles.menuItem}
             onPress={onNavigateToNotificationSettings}

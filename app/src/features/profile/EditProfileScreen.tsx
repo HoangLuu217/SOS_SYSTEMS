@@ -17,12 +17,13 @@ import {
   FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { PROFILE_THEME } from './theme';
 import { useAuth } from '@/context/AuthContext';
-import { provinceApi, Province, Ward, FALLBACK_PROVINCES } from '@/api';
+import { backendApi, provinceApi, Province, Ward, FALLBACK_PROVINCES, sendPhoneOtp, verifyPhoneOtp } from '@/api';
+import { ForgotPasswordModal } from '@/features/auth';
 
 interface EditProfileScreenProps {
   onBack: () => void;
@@ -95,7 +96,14 @@ const parseAddressComponents = (addrStr?: string | any) => {
 };
 
 export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) => {
-  const { user, updateUserProfile, updateUserAvatar } = useAuth();
+  const { user, supabaseUser, updateUserProfile, updateUserAvatar } = useAuth();
+
+  // Xác định người dùng đăng nhập qua Google OAuth
+  const isGoogleUser = Boolean(
+    user?.googleId ||
+    supabaseUser?.app_metadata?.provider === 'google' ||
+    supabaseUser?.identities?.some((id: any) => id.provider === 'google')
+  );
 
   // Chế độ màn hình: false = Xem thông tin (Mặc định khi vào), true = Chỉnh sửa
   const [isEditing, setIsEditing] = useState(false);
@@ -113,6 +121,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
 
   // Form states
   const [fullName, setFullName] = useState(user?.fullName || '');
+  const [phone, setPhone] = useState(user?.phone || '');
   const [dateOfBirth, setDateOfBirth] = useState(formatDateDisplay(user?.dateOfBirth));
   const [gender, setGender] = useState<'MALE' | 'FEMALE' | 'OTHER'>((user?.gender as any) || 'MALE');
   const [street, setStreet] = useState(initialAddr.street);
@@ -120,10 +129,62 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
   const [ward, setWard] = useState(initialAddr.ward);
   const [selectedProvinceCode, setSelectedProvinceCode] = useState<number | null>(null);
 
+  // States cho tính năng Đổi mật khẩu
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [pwdErrors, setPwdErrors] = useState<{
+    currentPassword?: string;
+    newPassword?: string;
+    confirmPassword?: string;
+    general?: string;
+  }>({});
+  const [pwdLoading, setPwdLoading] = useState(false);
+  const [pwdSuccess, setPwdSuccess] = useState<string | null>(null);
+  const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
+
+  // States cho tính năng Đổi số điện thoại (SMS OTP)
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [phoneInput, setPhoneInput] = useState('');
+  const [phoneOtpCode, setPhoneOtpCode] = useState('');
+  const [phoneSessionInfo, setPhoneSessionInfo] = useState('');
+  const [isSendingPhoneOtp, setIsSendingPhoneOtp] = useState(false);
+  const [isVerifyingPhoneOtp, setIsVerifyingPhoneOtp] = useState(false);
+  const [phoneOtpSent, setPhoneOtpSent] = useState(false);
+  const [phoneCountdown, setPhoneCountdown] = useState(0);
+  const [phoneSuccessMsg, setPhoneSuccessMsg] = useState<string | null>(null);
+  const [phoneErrorMsg, setPhoneErrorMsg] = useState<string | null>(null);
+
+  // Đếm ngược 60s chờ gửi lại mã OTP
+  useEffect(() => {
+    if (phoneCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setPhoneCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [phoneCountdown]);
+
+  // Lỗi xác thực
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [provinceError, setProvinceError] = useState<string | null>(null);
+  const [wardError, setWardError] = useState<string | null>(null);
+  const [streetError, setStreetError] = useState<string | null>(null);
+
   // Đồng bộ lại khi user thay đổi
   useEffect(() => {
     if (user) {
       setFullName(user.fullName || '');
+      setPhone(user.phone || '');
       setDateOfBirth(formatDateDisplay(user.dateOfBirth));
       setGender((user.gender as any) || 'MALE');
       const addr = parseAddressComponents(user.address);
@@ -174,12 +235,6 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
     setDateOfBirth(formatDateDisplay(tempDate));
     setShowDatePicker(false);
   };
-
-  // Lỗi xác thực
-  const [nameError, setNameError] = useState<string | null>(null);
-  const [provinceError, setProvinceError] = useState<string | null>(null);
-  const [wardError, setWardError] = useState<string | null>(null);
-  const [streetError, setStreetError] = useState<string | null>(null);
 
   // Lưu & Phản hồi
   const [isSaving, setIsSaving] = useState(false);
@@ -257,6 +312,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
   // Kiểm tra có thay đổi chưa lưu
   const hasUnsavedChanges =
     fullName !== (user?.fullName || '') ||
+    phone !== (user?.phone || '') ||
     dateOfBirth !== formatDateDisplay(user?.dateOfBirth) ||
     gender !== (user?.gender || 'MALE') ||
     province !== initialAddr.province ||
@@ -285,6 +341,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
             style: 'destructive',
             onPress: () => {
               setFullName(user?.fullName || '');
+              setPhone(user?.phone || '');
               setDateOfBirth(formatDateDisplay(user?.dateOfBirth));
               setGender((user?.gender as any) || 'MALE');
               setStreet(initialAddr.street);
@@ -403,7 +460,152 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
     }, 350);
   };
 
-  // Lưu thông tin người dùng
+  // Đổi mật khẩu
+  const handleChangePassword = async () => {
+    const newErrors: { currentPassword?: string; newPassword?: string; confirmPassword?: string } = {};
+    if (!currentPassword.trim()) {
+      newErrors.currentPassword = 'Vui lòng nhập mật khẩu hiện tại';
+    }
+    if (!newPassword.trim()) {
+      newErrors.newPassword = 'Vui lòng nhập mật khẩu mới';
+    } else if (newPassword.length < 6) {
+      newErrors.newPassword = 'Mật khẩu mới phải có ít nhất 6 ký tự';
+    }
+    if (!confirmPassword.trim()) {
+      newErrors.confirmPassword = 'Vui lòng xác nhận mật khẩu mới';
+    } else if (confirmPassword !== newPassword) {
+      newErrors.confirmPassword = 'Mật khẩu xác nhận không trùng khớp';
+    }
+
+    setPwdErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) return;
+
+    setPwdLoading(true);
+    setPwdErrors({});
+    setPwdSuccess(null);
+
+    try {
+      const res = await backendApi.changePassword(currentPassword, newPassword);
+      if (res.success) {
+        setPwdSuccess('Đổi mật khẩu thành công!');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setTimeout(() => {
+          setShowPasswordModal(false);
+          setPwdSuccess(null);
+        }, 1500);
+      } else {
+        const errorMsg = res.message || 'Không thể đổi mật khẩu';
+        if (
+          errorMsg.toLowerCase().includes('mật khẩu hiện tại') ||
+          errorMsg.toLowerCase().includes('incorrect') ||
+          errorMsg.toLowerCase().includes('current password')
+        ) {
+          setPwdErrors({ currentPassword: 'Mật khẩu hiện tại không chính xác' });
+        } else {
+          setPwdErrors({ general: errorMsg });
+        }
+      }
+    } catch (err: any) {
+      setPwdErrors({ general: err?.message || 'Có lỗi xảy ra khi kết nối máy chủ.' });
+    } finally {
+      setPwdLoading(false);
+    }
+  };
+
+  // Mở modal đổi số điện thoại
+  const handleOpenPhoneModal = () => {
+    setPhoneInput('');
+    setPhoneOtpCode('');
+    setPhoneSessionInfo('');
+    setPhoneOtpSent(false);
+    setPhoneCountdown(0);
+    setPhoneSuccessMsg(null);
+    setPhoneErrorMsg(null);
+    setShowPhoneModal(true);
+  };
+
+  // Gửi mã OTP xác thực số điện thoại mới qua SMS
+  const handleSendPhoneOtp = async () => {
+    setPhoneErrorMsg(null);
+    setPhoneSuccessMsg(null);
+    const cleanPhone = phoneInput.trim().replace(/\s+/g, '');
+    if (!cleanPhone) {
+      setPhoneErrorMsg('Vui lòng nhập số điện thoại');
+      return;
+    }
+
+    const phoneRegex = /^(?:\+84|0)(?:3|5|7|8|9)\d{8}$|^\+?[1-9]\d{8,14}$/;
+    if (!phoneRegex.test(cleanPhone)) {
+      setPhoneErrorMsg('Số điện thoại không hợp lệ (10 số VN hoặc +84...)');
+      return;
+    }
+
+    if (cleanPhone === user?.phone) {
+      setPhoneErrorMsg('Số điện thoại mới trùng với số điện thoại hiện tại.');
+      return;
+    }
+
+    setIsSendingPhoneOtp(true);
+    try {
+      const res = await sendPhoneOtp(cleanPhone);
+      if (res.success && res.sessionInfo) {
+        setPhoneSessionInfo(res.sessionInfo);
+        setPhoneOtpSent(true);
+        setPhoneCountdown(60);
+        setPhoneSuccessMsg(`Mã OTP đã được gửi qua SMS đến ${cleanPhone}`);
+      } else {
+        setPhoneErrorMsg(res.message || 'Không thể gửi mã OTP qua SMS. Vui lòng kiểm tra lại số điện thoại.');
+      }
+    } catch (err: any) {
+      setPhoneErrorMsg(err?.message || 'Có lỗi xảy ra khi gửi mã OTP qua SMS.');
+    } finally {
+      setIsSendingPhoneOtp(false);
+    }
+  };
+
+  // Xác thực mã OTP và lưu SĐT mới vào hồ sơ
+  const handleVerifyPhoneOtp = async () => {
+    setPhoneErrorMsg(null);
+    setPhoneSuccessMsg(null);
+    const cleanCode = phoneOtpCode.trim();
+    if (!cleanCode || cleanCode.length < 6) {
+      setPhoneErrorMsg('Vui lòng nhập đủ 6 chữ số mã OTP');
+      return;
+    }
+
+    setIsVerifyingPhoneOtp(true);
+    try {
+      const verifyRes = await verifyPhoneOtp(phoneSessionInfo, cleanCode);
+      if (!verifyRes.success) {
+        setPhoneErrorMsg(verifyRes.message || 'Mã OTP không chính xác hoặc đã hết hạn.');
+        setIsVerifyingPhoneOtp(false);
+        return;
+      }
+
+      // Xác thực SMS thành công -> Cập nhật số điện thoại vào tài khoản Backend
+      const cleanPhone = phoneInput.trim().replace(/\s+/g, '');
+      const updateRes = await updateUserProfile({ phone: cleanPhone });
+      if (updateRes.success) {
+        setPhoneSuccessMsg('Đổi số điện thoại thành công!');
+        setPhoneOtpSent(false);
+        setPhoneOtpCode('');
+        setTimeout(() => {
+          setShowPhoneModal(false);
+          setPhoneSuccessMsg(null);
+        }, 1500);
+      } else {
+        setPhoneErrorMsg(updateRes.message || 'Xác thực OTP thành công nhưng không thể cập nhật SĐT.');
+      }
+    } catch (err: any) {
+      setPhoneErrorMsg(err?.message || 'Lỗi khi xác thực mã OTP.');
+    } finally {
+      setIsVerifyingPhoneOtp(false);
+    }
+  };
+
+  // Lưu thông tin người dùng cơ bản (Họ tên, ngày sinh, giới tính, địa chỉ)
   const handleSave = async () => {
     let isValid = true;
 
@@ -584,16 +786,77 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
                 <View style={styles.infoDivider} />
 
                 <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Email</Text>
+                  <Text style={styles.infoValue}>{user?.email || 'Chưa có email'}</Text>
+                </View>
+              </View>
+
+              {/* Card: Bảo mật tài khoản */}
+              <View style={styles.card}>
+                <View style={styles.cardTitleRow}>
+                  <Feather name="shield" size={17} color="#0066FF" />
+                  <Text style={styles.cardTitle}>Bảo mật tài khoản</Text>
+                </View>
+
+                {/* 1. Số điện thoại */}
+                <View style={styles.passwordSecurityRow}>
                   <Text style={styles.infoLabel}>Số điện thoại</Text>
-                  <Text style={styles.infoValue}>{user?.phone || 'Chưa cập nhật SĐT'}</Text>
+                  <View style={styles.securityValueGroup}>
+                    <Text style={[styles.infoValue, !user?.phone && { color: '#94A3B8' }]}>
+                      {user?.phone || 'Chưa liên kết'}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.changePasswordBtn}
+                      onPress={handleOpenPhoneModal}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="smartphone" size={12} color="#0066FF" />
+                      <Text style={styles.changePasswordBtnText}>
+                        {user?.phone ? 'Đổi SĐT' : 'Thêm SĐT'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 <View style={styles.infoDivider} />
 
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Email</Text>
-                  <Text style={styles.infoValue}>{user?.email || 'Chưa có email'}</Text>
-                </View>
+                {/* 2. Mật khẩu đăng nhập */}
+
+                {isGoogleUser ? (
+                  <View style={styles.googleSecurityBox}>
+                    <View style={styles.googleIconCircle}>
+                      <Ionicons name="logo-google" size={20} color="#4285F4" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.googleSecurityTitle}>Đăng nhập bằng Google</Text>
+                      <Text style={styles.googleSecurityDesc}>
+                        Mật khẩu được quản lý trực tiếp và bảo vệ bởi tài khoản Google của bạn.
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.passwordSecurityRow}>
+                    <Text style={styles.infoLabel}>Mật khẩu</Text>
+                    <View style={styles.securityValueGroup}>
+                      <Text style={[styles.infoValue, { letterSpacing: 1.5 }]}>••••••••</Text>
+                      <TouchableOpacity
+                        style={styles.changePasswordBtn}
+                        onPress={() => {
+                          setCurrentPassword('');
+                          setNewPassword('');
+                          setConfirmPassword('');
+                          setPwdErrors({});
+                          setPwdSuccess(null);
+                          setShowPasswordModal(true);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Feather name="lock" size={12} color="#0066FF" />
+                        <Text style={styles.changePasswordBtnText}>Đổi mật khẩu</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
               </View>
 
               {/* Card: Địa chỉ thường trú */}
@@ -654,7 +917,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
               <View style={styles.avatarCard}>
                 <View style={styles.avatarWrap}>
                   {selectedAvatarUrl ? (
-                    <Image source={{ uri: selectedAvatarUrl }} style={styles.avatarImage} />
+                     <Image source={{ uri: selectedAvatarUrl }} style={styles.avatarImage} />
                   ) : (
                     <View style={styles.avatarPlaceholder}>
                       <Text style={styles.avatarInitial}>
@@ -1190,6 +1453,352 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* ========================================================
+          MODAL 5: ĐỔI MẬT KHẨU ĐĂNG NHẬP
+         ======================================================== */}
+      <Modal
+        visible={showPasswordModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPasswordModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.pwdOverlay}
+        >
+          <TouchableWithoutFeedback onPress={() => setShowPasswordModal(false)}>
+            <View style={styles.pwdBackdrop} />
+          </TouchableWithoutFeedback>
+
+          <View style={styles.pwdModalCard}>
+            {/* Header Modal */}
+            <View style={styles.pwdModalHeader}>
+              <View style={styles.pwdModalIconBox}>
+                <Feather name="lock" size={20} color="#0066FF" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.pwdModalTitle}>Đổi mật khẩu</Text>
+                <Text style={styles.pwdModalSubtitle}>Cập nhật mật khẩu đăng nhập tài khoản</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowPasswordModal(false)}
+                style={styles.pwdModalCloseBtn}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Feather name="x" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Thông báo thành công */}
+            {pwdSuccess && (
+              <View style={styles.pwdSuccessBanner}>
+                <Feather name="check-circle" size={16} color="#059669" />
+                <Text style={styles.pwdSuccessText}>{pwdSuccess}</Text>
+              </View>
+            )}
+
+            {/* Thông báo lỗi chung */}
+            {pwdErrors.general && (
+              <View style={styles.pwdErrorBanner}>
+                <Feather name="alert-circle" size={16} color="#DC2626" />
+                <Text style={styles.pwdErrorText}>{pwdErrors.general}</Text>
+              </View>
+            )}
+
+            {/* 1. Mật khẩu hiện tại */}
+            <View style={styles.pwdInputGroup}>
+              <Text style={styles.pwdLabel}>Mật khẩu hiện tại *</Text>
+              <View style={[styles.pwdInputBox, pwdErrors.currentPassword ? styles.inputBoxError : null]}>
+                <Feather name="key" size={16} color="#64748B" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.pwdTextInput}
+                  placeholder="Nhập mật khẩu hiện tại"
+                  placeholderTextColor="#94A3B8"
+                  secureTextEntry={!showCurrentPassword}
+                  value={currentPassword}
+                  onChangeText={(val) => {
+                    setCurrentPassword(val);
+                    if (pwdErrors.currentPassword) setPwdErrors((prev) => ({ ...prev, currentPassword: undefined }));
+                  }}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Feather name={showCurrentPassword ? 'eye-off' : 'eye'} size={18} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+              {pwdErrors.currentPassword && <Text style={styles.errorText}>{pwdErrors.currentPassword}</Text>}
+            </View>
+
+            {/* 2. Mật khẩu mới */}
+            <View style={styles.pwdInputGroup}>
+              <Text style={styles.pwdLabel}>Mật khẩu mới (tối thiểu 6 ký tự) *</Text>
+              <View style={[styles.pwdInputBox, pwdErrors.newPassword ? styles.inputBoxError : null]}>
+                <Feather name="shield" size={16} color="#64748B" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.pwdTextInput}
+                  placeholder="Nhập mật khẩu mới"
+                  placeholderTextColor="#94A3B8"
+                  secureTextEntry={!showNewPassword}
+                  value={newPassword}
+                  onChangeText={(val) => {
+                    setNewPassword(val);
+                    if (pwdErrors.newPassword) setPwdErrors((prev) => ({ ...prev, newPassword: undefined }));
+                  }}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowNewPassword(!showNewPassword)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Feather name={showNewPassword ? 'eye-off' : 'eye'} size={18} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+              {pwdErrors.newPassword && <Text style={styles.errorText}>{pwdErrors.newPassword}</Text>}
+            </View>
+
+            {/* 3. Xác nhận mật khẩu mới */}
+            <View style={styles.pwdInputGroup}>
+              <Text style={styles.pwdLabel}>Xác nhận mật khẩu mới *</Text>
+              <View style={[styles.pwdInputBox, pwdErrors.confirmPassword ? styles.inputBoxError : null]}>
+                <Feather name="lock" size={16} color="#64748B" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.pwdTextInput}
+                  placeholder="Nhập lại mật khẩu mới"
+                  placeholderTextColor="#94A3B8"
+                  secureTextEntry={!showConfirmPassword}
+                  value={confirmPassword}
+                  onChangeText={(val) => {
+                    setConfirmPassword(val);
+                    if (pwdErrors.confirmPassword) setPwdErrors((prev) => ({ ...prev, confirmPassword: undefined }));
+                  }}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Feather name={showConfirmPassword ? 'eye-off' : 'eye'} size={18} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+              {pwdErrors.confirmPassword && <Text style={styles.errorText}>{pwdErrors.confirmPassword}</Text>}
+            </View>
+
+            {/* Quên mật khẩu link */}
+            <TouchableOpacity
+              onPress={() => {
+                setShowPasswordModal(false);
+                setForgotPasswordVisible(true);
+              }}
+              style={styles.pwdForgotRow}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.pwdForgotText}>Quên mật khẩu?</Text>
+            </TouchableOpacity>
+
+            {/* Nút hành động */}
+            <View style={styles.pwdModalBtnRow}>
+              <TouchableOpacity
+                style={styles.pwdCancelBtn}
+                onPress={() => setShowPasswordModal(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.pwdCancelBtnText}>Hủy</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.pwdSubmitBtn, pwdLoading && { opacity: 0.7 }]}
+                onPress={handleChangePassword}
+                disabled={pwdLoading}
+                activeOpacity={0.8}
+              >
+                {pwdLoading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.pwdSubmitBtnText}>Cập nhật mật khẩu</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ========================================================
+          MODAL 6: QUÊN MẬT KHẨU
+         ======================================================== */}
+      <ForgotPasswordModal
+        visible={forgotPasswordVisible}
+        onClose={() => setForgotPasswordVisible(false)}
+        onSuccess={(msg) => {
+          setForgotPasswordVisible(false);
+          Alert.alert('Thành công', msg);
+        }}
+      />
+
+      {/* ========================================================
+          MODAL 7: ĐỔI SỐ ĐIỆN THOẠI VỚI XÁC THỰC OTP QUA SMS
+         ======================================================== */}
+      <Modal
+        visible={showPhoneModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPhoneModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.pwdOverlay}
+        >
+          <TouchableWithoutFeedback onPress={() => setShowPhoneModal(false)}>
+            <View style={styles.pwdBackdrop} />
+          </TouchableWithoutFeedback>
+
+          <View style={styles.pwdModalCard}>
+            {/* Header Modal */}
+            <View style={styles.pwdModalHeader}>
+              <View style={[styles.pwdModalIconBox, { backgroundColor: '#F0F9FF' }]}>
+                <Feather name="smartphone" size={20} color="#0284C7" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.pwdModalTitle}>
+                  {user?.phone ? 'Đổi số điện thoại' : 'Liên kết số điện thoại'}
+                </Text>
+                <Text style={styles.pwdModalSubtitle}>
+                  {phoneOtpSent
+                    ? 'Nhập mã OTP 6 số vừa gửi qua SMS'
+                    : 'Yêu cầu xác thực OTP qua SMS để kích hoạt'}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowPhoneModal(false)}
+                style={styles.pwdModalCloseBtn}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Feather name="x" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Thông báo thành công */}
+            {phoneSuccessMsg && (
+              <View style={styles.pwdSuccessBanner}>
+                <Feather name="check-circle" size={16} color="#059669" />
+                <Text style={styles.pwdSuccessText}>{phoneSuccessMsg}</Text>
+              </View>
+            )}
+
+            {/* Thông báo lỗi */}
+            {phoneErrorMsg && (
+              <View style={styles.pwdErrorBanner}>
+                <Feather name="alert-circle" size={16} color="#DC2626" />
+                <Text style={styles.pwdErrorText}>{phoneErrorMsg}</Text>
+              </View>
+            )}
+
+            {/* Bước 1: Nhập số điện thoại mới */}
+            <View style={styles.pwdInputGroup}>
+              <Text style={styles.pwdLabel}>Số điện thoại mới *</Text>
+              <View style={styles.pwdInputBox}>
+                <Feather name="phone" size={16} color="#64748B" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.pwdTextInput}
+                  placeholder="VD: 0912345678"
+                  placeholderTextColor="#94A3B8"
+                  value={phoneInput}
+                  onChangeText={(val) => {
+                    setPhoneInput(val);
+                    if (phoneErrorMsg) setPhoneErrorMsg(null);
+                  }}
+                  keyboardType="phone-pad"
+                  editable={!phoneOtpSent || phoneCountdown <= 0}
+                />
+                {phoneInput.length > 0 && !phoneOtpSent && (
+                  <TouchableOpacity
+                    onPress={() => setPhoneInput('')}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Feather name="x-circle" size={16} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* Bước 2: Nhập mã OTP khi đã gửi */}
+            {phoneOtpSent && (
+              <View style={styles.pwdInputGroup}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                  <Text style={styles.pwdLabel}>Mã xác thực OTP (6 chữ số) *</Text>
+                  {phoneCountdown > 0 ? (
+                    <Text style={styles.countdownText}>Gửi lại sau {phoneCountdown}s</Text>
+                  ) : (
+                    <TouchableOpacity onPress={handleSendPhoneOtp} activeOpacity={0.7}>
+                      <Text style={styles.resendText}>Gửi lại mã</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <View style={styles.pwdInputBox}>
+                  <Feather name="shield" size={16} color="#64748B" style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={[styles.pwdTextInput, { letterSpacing: 6, fontWeight: '800', fontSize: 16 }]}
+                    placeholder="••••••"
+                    placeholderTextColor="#94A3B8"
+                    value={phoneOtpCode}
+                    onChangeText={(val) => {
+                      setPhoneOtpCode(val);
+                      if (phoneErrorMsg) setPhoneErrorMsg(null);
+                    }}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* Nút hành động */}
+            <View style={styles.pwdModalBtnRow}>
+              <TouchableOpacity
+                style={styles.pwdCancelBtn}
+                onPress={() => setShowPhoneModal(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.pwdCancelBtnText}>Hủy</Text>
+              </TouchableOpacity>
+
+              {!phoneOtpSent ? (
+                <TouchableOpacity
+                  style={[styles.pwdSubmitBtn, (isSendingPhoneOtp || !phoneInput.trim()) && { opacity: 0.7 }]}
+                  onPress={handleSendPhoneOtp}
+                  disabled={isSendingPhoneOtp || !phoneInput.trim()}
+                  activeOpacity={0.8}
+                >
+                  {isSendingPhoneOtp ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.pwdSubmitBtnText}>Gửi mã OTP (SMS)</Text>
+                  )}
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[
+                    styles.pwdSubmitBtn,
+                    (isVerifyingPhoneOtp || phoneOtpCode.length < 6) && { opacity: 0.6 },
+                  ]}
+                  onPress={handleVerifyPhoneOtp}
+                  disabled={isVerifyingPhoneOtp || phoneOtpCode.length < 6}
+                  activeOpacity={0.8}
+                >
+                  {isVerifyingPhoneOtp ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.pwdSubmitBtnText}>Xác nhận & Lưu SĐT</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -1906,5 +2515,300 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 10,
     backgroundColor: '#FFFFFF',
+  },
+  /* Phone Row with Action in View Mode */
+  infoRowWithAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  changePhonePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    gap: 4,
+  },
+  changePhonePillText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0066FF',
+  },
+  verifiedTinyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    gap: 3,
+  },
+  verifiedTinyText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  unverifiedTinyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    gap: 3,
+  },
+  unverifiedTinyText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  countdownText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  resendText: {
+    fontSize: 12,
+    color: '#0066FF',
+    fontWeight: '700',
+  },
+  fieldHint: {
+    fontSize: 11.5,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  /* Card Bảo Mật Tài Khoản */
+  googleSecurityBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 4,
+    gap: 12,
+  },
+  googleIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  googleSecurityTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  googleSecurityDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 16,
+  },
+  passwordSecurityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 5,
+  },
+  securityValueGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  passwordDots: {
+    fontSize: 15,
+    color: '#0F172A',
+    fontWeight: '700',
+    letterSpacing: 2,
+    marginTop: 2,
+  },
+  changePasswordBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    gap: 4,
+  },
+  changePasswordBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0066FF',
+  },
+  /* Modal Đổi Mật Khẩu */
+  pwdOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 18,
+  },
+  pwdBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.60)',
+  },
+  pwdModalCard: {
+    width: '100%',
+    maxWidth: 390,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 12,
+      },
+    }),
+  },
+  pwdModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  pwdModalIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pwdModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  pwdModalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  pwdModalCloseBtn: {
+    padding: 4,
+  },
+  pwdSuccessBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    marginBottom: 12,
+    gap: 8,
+  },
+  pwdSuccessText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#059669',
+    flex: 1,
+  },
+  pwdErrorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    marginBottom: 12,
+    gap: 8,
+  },
+  pwdErrorText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#DC2626',
+    flex: 1,
+  },
+  pwdInputGroup: {
+    marginBottom: 12,
+  },
+  pwdLabel: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 5,
+  },
+  pwdInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.2,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    height: 44,
+    paddingHorizontal: 12,
+  },
+  pwdTextInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#0F172A',
+    paddingVertical: 0,
+  },
+  pwdForgotRow: {
+    alignSelf: 'flex-end',
+    marginTop: 2,
+    marginBottom: 14,
+  },
+  pwdForgotText: {
+    fontSize: 12.5,
+    color: '#0066FF',
+    fontWeight: '700',
+  },
+  pwdModalBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  pwdCancelBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pwdCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  pwdSubmitBtn: {
+    flex: 2,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#0066FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pwdSubmitBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

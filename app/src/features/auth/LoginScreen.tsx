@@ -117,16 +117,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     }
   };
 
-  // Mép trên bắt đầu khoảng 32% chiều cao màn hình từ đỉnh máy
-  const topPadding = Math.max(16, SCREEN_HEIGHT * 0.32);
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Vùng hiển thị form đăng nhập với nền trong suốt (nền ảnh duy trì tại cấp cha) */}
       <View style={styles.backgroundImage}>
-        <SafeAreaView style={styles.safeArea} edges={['bottom']}>
+        <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.keyboardView}
@@ -135,7 +132,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               contentContainerStyle={[
                 styles.scrollContent,
                 {
-                  paddingTop: topPadding,
                   paddingBottom: Math.max(20, insets.bottom + 12),
                 },
               ]}
@@ -328,44 +324,46 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   centerContainer: {
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 310,
     alignItems: 'center',
   },
   /* Bóng đổ mềm cho khung kính */
   cardShadow: {
     width: '100%',
-    borderRadius: 30,
+    borderRadius: 28,
     ...Platform.select({
       ios: {
         shadowColor: '#0B192C',
         shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.12,
-        shadowRadius: 16,
+        shadowOpacity: 0.14,
+        shadowRadius: 18,
       },
       android: {
-        elevation: 4,
+        elevation: 5,
       },
     }),
   },
-  /* Viền kính mờ trong suốt và góc bo tròn 30px */
+  /* Viền kính mờ trong suốt và góc bo tròn 28px */
   cardInner: {
     width: '100%',
-    borderRadius: 30,
+    borderRadius: 28,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.20)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.30)',
   },
   /* Lớp phủ kính mờ trong suốt từ trong ra ngoài */
   cardContent: {
     backgroundColor: 'transparent',
-    paddingHorizontal: 14,
-    paddingTop: 16,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 18,
     alignItems: 'center',
   },
   logoWrapper: {
