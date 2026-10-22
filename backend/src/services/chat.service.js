@@ -507,6 +507,29 @@ class ChatService {
   }
 
   /**
+   * Đánh dấu toàn bộ tin nhắn đã đọc cho người dùng hiện tại
+   */
+  async markAllAsRead(currentUser) {
+    await ChatMessage.updateMany(
+      {
+        readBy: { $ne: currentUser._id },
+      },
+      {
+        $addToSet: { readBy: currentUser._id },
+      }
+    );
+
+    eventBus.emit('chat_event', {
+      action: 'MESSAGES_READ_ALL',
+      data: {
+        readerId: currentUser._id,
+      },
+    });
+
+    return { success: true };
+  }
+
+  /**
    * Tìm thông tin Ban chỉ huy / Cán bộ địa phương theo địa bàn (GPS hoặc địa chỉ)
    */
   async getLocalAuthorityForArea({ areaName, province, ward, lat, lng, userId, currentUser }) {

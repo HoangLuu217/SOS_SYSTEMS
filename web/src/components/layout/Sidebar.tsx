@@ -6,6 +6,7 @@ import {
   fetchAdminUsers,
   fetchHazardReports,
   fetchSafeLocations,
+  fetchChatConversations,
   updateUserProfile,
   updateUserAvatar,
   sendPhoneOtp,
@@ -119,6 +120,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [hazardCount, setHazardCount] = useState<number>(0);
   const [shelterCount, setShelterCount] = useState<number>(0);
   const [pendingRescuersCount, setPendingRescuersCount] = useState<number>(0);
+  const [chatUnreadCount, setChatUnreadCount] = useState<number>(0);
 
   // Đồng bộ số liệu thời gian thực
   const fetchRealCounts = useCallback(async () => {
@@ -177,6 +179,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
     } catch {
       // ignore
     }
+
+    // Đếm số lượng tin nhắn chưa đọc trong Kênh trao đổi
+    try {
+      const chatRes = await fetchChatConversations();
+      if (chatRes.success && Array.isArray(chatRes.data)) {
+        const total = chatRes.data.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
+        setChatUnreadCount(total);
+      }
+    } catch {
+      // ignore
+    }
   }, []);
 
   useEffect(() => {
@@ -186,6 +199,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const onDataUpdated = () => fetchRealCounts();
     window.addEventListener('sos_data_updated', onDataUpdated);
     window.addEventListener('storage', onDataUpdated);
+    window.addEventListener('sos_chat_unread_updated', onDataUpdated);
 
     // Lắng nghe sự kiện hồ sơ cứu hộ mới / duyệt hồ sơ thời gian thực qua Socket.IO
     const unsubApp = onRescuerApplicationSubmitted(() => {
@@ -199,6 +213,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       clearInterval(timer);
       window.removeEventListener('sos_data_updated', onDataUpdated);
       window.removeEventListener('storage', onDataUpdated);
+      window.removeEventListener('sos_chat_unread_updated', onDataUpdated);
       unsubApp();
       unsubVer();
     };
@@ -235,6 +250,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: 'Điều phối nhiệm vụ',
           icon: <GitMerge size={18} className="sos-nav-icon" />,
           badge: sosCounts.active > 0 ? `${sosCounts.active} Vụ` : undefined,
+          badgeType: 'danger',
+        },
+      ],
+    },
+
+    // NHÓM MỚI: TRAO ĐỔI TÁC CHIẾN (Nằm giữa Điều Hành Cứu Hộ và Lực Lượng & Nguồn Lực)
+    {
+      title: 'TRAO ĐỔI TÁC CHIẾN',
+      items: [
+        {
+          key: 'chat',
+          label: 'Trao đổi',
+          icon: <MessageSquare size={18} className="sos-nav-icon" />,
+          badge: chatUnreadCount > 0 ? 'dot' : (activeKey !== 'chat' ? 'dot' : undefined),
           badgeType: 'danger',
         },
       ],
@@ -305,11 +334,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           key: 'operation_logs',
           label: 'Nhật ký',
           icon: <History size={18} className="sos-nav-icon" />,
-        },
-        {
-          key: 'chat',
-          label: 'Trao đổi',
-          icon: <MessageSquare size={18} className="sos-nav-icon" />,
         },
       ],
     },
@@ -767,6 +791,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const rawUserName = localProfile.fullName || user?.fullName || (isAdmin ? 'Quản trị viên' : 'Cán bộ điều phối');
   // Loại bỏ các phần chú thích trong ngoặc đơn như (PCTT Liên Chiểu) để họ tên hiển thị gọn gàng, trọn vẹn
   const displayUserName = rawUserName.replace(/\s*\([^\)]*\)/g, '').trim() || rawUserName;
+  const displayUserRole = localProfile.position || user?.authority?.position || (isAdmin ? 'Quản trị viên' : 'Chỉ huy cứu hộ');
   const displayAvatar = localProfile.avatarUrl || user?.avatarUrl || '';
   const userInitial = (displayUserName || 'U').trim().charAt(0).toUpperCase() || 'U';
 
@@ -848,18 +873,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <>
                         <span className="sos-nav-label">{item.label}</span>
                         {item.badge && (
-                          <span
-                            className={`sos-nav-badge-pill ${item.badgeType || 'info'
-                              }`}
-                          >
-                            {item.badge}
-                          </span>
+                          item.badge === 'dot' ? (
+                            <span className="sos-nav-badge-dot" title="Có tin nhắn mới" />
+                          ) : (
+                            <span
+                              className={`sos-nav-badge-pill ${item.badgeType || 'info'}`}
+                            >
+                              {item.badge}
+                            </span>
+                          )
                         )}
                       </>
                     )}
 
                     {/* Hiệu ứng chấm active khi collapsed */}
                     {collapsed && active && <span className="sos-nav-collapsed-active-dot" />}
+                    {collapsed && !active && item.badge && (
+                      <span className="sos-nav-collapsed-badge-dot" title="Có tin nhắn mới" />
+                    )}
                   </div>
                 );
               })}

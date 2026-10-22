@@ -9,8 +9,6 @@ import {
   Platform,
   ScrollView,
   StatusBar,
-  Modal,
-  TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -19,6 +17,7 @@ import { CustomInput, PrimaryButton, GoogleButton, AlertModal, LogoSOS } from '@
 import { OtpModal } from './OtpModal';
 import { useAuth } from '@/context/AuthContext';
 import { sendPhoneOtp, verifyPhoneOtp } from '@/api';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 interface SignupScreenProps {
   onNavigateToLogin: () => void;
@@ -34,7 +33,6 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -46,9 +44,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
     }
   }, [user]);
   const [otpModalVisible, setOtpModalVisible] = useState(false);
-  const [methodModalVisible, setMethodModalVisible] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
-  const [verifyMethod, setVerifyMethod] = useState<'phone' | 'email'>('phone');
   const [phoneSessionInfo, setPhoneSessionInfo] = useState('');
 
   const [alertInfo, setAlertInfo] = useState<{
@@ -85,20 +81,6 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
       return false;
     }
 
-    // Email là tùy chọn (không bắt buộc)
-    if (email.trim()) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email.trim())) {
-        setAlertInfo({
-          visible: true,
-          type: 'warning',
-          title: 'Lỗi thông tin',
-          message: 'Định dạng email không hợp lệ.',
-        });
-        return false;
-      }
-    }
-
     if (!password || password.length < 6) {
       setAlertInfo({
         visible: true,
@@ -125,138 +107,61 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
   const handleSignup = async () => {
     if (!validate()) return;
 
-    const hasPhone = Boolean(phone.trim());
-    const hasEmail = Boolean(email.trim());
-
-    if (hasPhone && hasEmail) {
-      // Có cả SĐT và Email -> Hiển thị bước chọn phương thức nhận mã
-      setMethodModalVisible(true);
-    } else {
-      // Chỉ có SĐT -> Gửi thẳng mã về số điện thoại và mở ô nhập OTP
-      sendOtpForMethod('phone');
-    }
-  };
-
-  const sendOtpForMethod = async (method: 'phone' | 'email') => {
-    setVerifyMethod(method);
-    setMethodModalVisible(false);
     setSendingOtp(true);
-
-    if (method === 'phone') {
-      const res = await sendPhoneOtp(phone.trim());
-      setSendingOtp(false);
-      if (res.success && res.sessionInfo) {
-        setPhoneSessionInfo(res.sessionInfo);
-        setOtpModalVisible(true);
-      } else {
-        setAlertInfo({
-          visible: true,
-          type: 'error',
-          title: 'Lỗi gửi mã OTP qua SMS',
-          message: res.message || 'Không thể gửi mã xác thực qua số điện thoại.',
-        });
-      }
+    const res = await sendPhoneOtp(phone.trim());
+    setSendingOtp(false);
+    if (res.success && res.sessionInfo) {
+      setPhoneSessionInfo(res.sessionInfo);
+      setOtpModalVisible(true);
     } else {
-      const res = await sendOtp(email.trim());
-      setSendingOtp(false);
-      if (res.success) {
-        setOtpModalVisible(true);
-      } else {
-        setAlertInfo({
-          visible: true,
-          type: 'error',
-          title: 'Lỗi gửi mã OTP qua Email',
-          message: res.message,
-        });
-      }
+      setAlertInfo({
+        visible: true,
+        type: 'error',
+        title: 'Lỗi gửi mã OTP qua SMS',
+        message: res.message || 'Không thể gửi mã xác thực qua số điện thoại.',
+      });
     }
   };
 
   const handleVerifyAndSignup = async (otpCode: string) => {
-    if (verifyMethod === 'phone') {
-      const verifyRes = await verifyPhoneOtp(phoneSessionInfo, otpCode);
-      if (!verifyRes.success) {
-        return {
-          success: false,
-          message: verifyRes.message || 'Mã OTP số điện thoại không chính xác.',
-        };
-      }
+    const verifyRes = await verifyPhoneOtp(phoneSessionInfo, otpCode);
+    if (!verifyRes.success) {
+      return {
+        success: false,
+        message: verifyRes.message || 'Mã OTP số điện thoại không chính xác.',
+      };
+    }
 
-      // Đăng ký với số điện thoại đã xác thực
-      const res = await signup({
-        fullName: fullName.trim(),
-        phone: phone.trim(),
-        email: email.trim() || undefined,
-        password,
+    // Đăng ký với số điện thoại đã xác thực
+    const res = await signup({
+      fullName: fullName.trim(),
+      phone: phone.trim(),
+      password,
+    });
+
+    if (res.success) {
+      setAlertInfo({
+        visible: true,
+        type: 'success',
+        title: 'Đăng ký thành công',
+        message: 'Tài khoản của bạn đã được xác thực số điện thoại và tạo thành công!',
       });
-
-      if (res.success) {
-        setAlertInfo({
-          visible: true,
-          type: 'success',
-          title: 'Đăng ký thành công',
-          message: 'Tài khoản của bạn đã được xác thực số điện thoại và tạo thành công!',
-        });
-        return { success: true };
-      } else {
-        return {
-          success: false,
-          message: res.message || 'Đăng ký tài khoản thất bại.',
-        };
-      }
+      return { success: true };
     } else {
-      // Xác thực qua Email OTP
-      const res = await signup({
-        fullName: fullName.trim(),
-        phone: phone.trim(),
-        email: email.trim(),
-        password,
-        otp: otpCode,
-      });
-
-      if (res.success) {
-        setAlertInfo({
-          visible: true,
-          type: 'success',
-          title: 'Đăng ký thành công',
-          message: 'Tài khoản của bạn đã được xác thực email và tạo thành công!',
-        });
-        return { success: true };
-      } else {
-        return {
-          success: false,
-          message: res.message || 'Mã OTP không chính xác hoặc đã hết hạn.',
-        };
-      }
+      return {
+        success: false,
+        message: res.message || 'Đăng ký tài khoản thất bại.',
+      };
     }
   };
 
   const handleResendOtp = async () => {
-    if (verifyMethod === 'phone') {
-      const res = await sendPhoneOtp(phone.trim());
-      if (res.success && res.sessionInfo) {
-        setPhoneSessionInfo(res.sessionInfo);
-        return { success: true, message: 'Đã gửi lại mã OTP qua SMS.' };
-      }
-      return { success: false, message: res.message };
-    } else {
-      const res = await sendOtp(email.trim());
-      return res;
+    const res = await sendPhoneOtp(phone.trim());
+    if (res.success && res.sessionInfo) {
+      setPhoneSessionInfo(res.sessionInfo);
+      return { success: true, message: 'Đã gửi lại mã OTP qua SMS.' };
     }
-  };
-
-  const handleChangeVerifyMethod = async () => {
-    const nextMethod = verifyMethod === 'phone' ? 'email' : 'phone';
-    if (nextMethod === 'email' && !email.trim()) {
-      setAlertInfo({
-        visible: true,
-        type: 'warning',
-        title: 'Chưa có Email',
-        message: 'Bạn chưa nhập địa chỉ Email khi đăng ký.',
-      });
-      return;
-    }
-    await sendOtpForMethod(nextMethod);
+    return { success: false, message: res.message };
   };
 
   const handleGoogleSignup = async () => {
@@ -267,6 +172,26 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
         type: res.message.includes('src/config/env.ts') ? 'info' : 'error',
         title: res.message.includes('src/config/env.ts') ? 'Cấu hình Supabase' : 'Lỗi xác thực Google',
         message: res.message,
+      });
+    }
+  };
+
+  const handleOpenTerms = (type: 'terms' | 'privacy') => {
+    if (type === 'terms') {
+      setAlertInfo({
+        visible: true,
+        type: 'info',
+        title: 'Điều khoản dịch vụ',
+        message:
+          'Cổng cứu nạn SOS được thiết lập nhằm tiếp nhận và hỗ trợ khẩn cấp người dân trong thiên tai, bão lũ.\n\nNgười dùng có trách nhiệm cung cấp thông tin trung thực, chính xác và không báo động sai lệch.',
+      });
+    } else {
+      setAlertInfo({
+        visible: true,
+        type: 'info',
+        title: 'Chính sách bảo mật',
+        message:
+          'Hệ thống cam kết bảo mật tuyệt đối dữ liệu định vị GPS, danh tính và thông tin cuộc gọi cứu hộ của người dân.\n\nDữ liệu chỉ được phục vụ độc quyền cho các lực lượng cứu nạn thực địa.',
       });
     }
   };
@@ -307,14 +232,33 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
                 {/* Khung đăng ký kính mờ xanh xám (Frosted Glass Card) */}
                 <View style={styles.cardShadow}>
                   <View style={styles.cardInner}>
-                    {/* Hiệu ứng làm mờ nền mạnh mẽ */}
+                    {/* Hiệu ứng làm mờ nền kính */}
                     <BlurView
-                      intensity={Platform.OS === 'ios' ? 85 : 75}
+                      intensity={Platform.OS === 'ios' ? 75 : 65}
                       tint="light"
                       style={StyleSheet.absoluteFill}
                     />
 
-                    {/* Lớp phủ màu xanh xám rgba(210, 225, 240, 0.65) */}
+                    {/* Hiệu ứng trong suốt từ trong ra ngoài: trung tâm trắng rõ, lan ra viền siêu trong suốt */}
+                    <Svg height="100%" width="100%" style={StyleSheet.absoluteFill}>
+                      <Defs>
+                        <RadialGradient
+                          id="signupCardRadialGrad"
+                          cx="50%"
+                          cy="48%"
+                          rx="56%"
+                          ry="52%"
+                        >
+                          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.90" />
+                          <Stop offset="42%" stopColor="#FFFFFF" stopOpacity="0.70" />
+                          <Stop offset="75%" stopColor="#FFFFFF" stopOpacity="0.20" />
+                          <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0.03" />
+                        </RadialGradient>
+                      </Defs>
+                      <Rect x="0" y="0" width="100%" height="100%" fill="url(#signupCardRadialGrad)" />
+                    </Svg>
+
+                    {/* Nội dung form */}
                     <View style={styles.cardContent}>
                       {/* Logo RescueSOS - Bấm giữ 2s mở cấu hình IP */}
                       <TouchableOpacity
@@ -332,12 +276,17 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
                       {/* Tiêu đề: Đăng ký */}
                       <Text style={styles.title}>Đăng ký</Text>
 
-                      {/* Phụ đề: Tối đa hai dòng, chữ xanh navy */}
-                      <Text style={styles.subtitle} numberOfLines={2}>
-                        Cùng nhau chủ động – An toàn hơn trước{'\n'}thiên tai
+                      {/* Phụ đề: Giữ trên một dòng với kích cỡ phù hợp */}
+                      <Text
+                        style={styles.subtitle}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.8}
+                      >
+                        Cùng nhau chủ động – An toàn hơn trước thiên tai
                       </Text>
 
-                      {/* Form fields: 5 ô nhập */}
+                      {/* Form fields: 4 ô nhập */}
                       <View style={styles.form}>
                         {/* 1. Họ và tên */}
                         <CustomInput
@@ -358,18 +307,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
                           returnKeyType="next"
                         />
 
-                        {/* 3. Địa chỉ Email (Tùy chọn) */}
-                        <CustomInput
-                          iconName="mail"
-                          placeholder="Địa chỉ Email (tùy chọn)"
-                          value={email}
-                          onChangeText={setEmail}
-                          keyboardType="email-address"
-                          autoCapitalize="none"
-                          returnKeyType="next"
-                        />
-
-                        {/* 4. Mật khẩu (tối thiểu 6 ký tự) */}
+                        {/* 3. Mật khẩu (tối thiểu 6 ký tự) */}
                         <CustomInput
                           iconName="lock"
                           placeholder="Mật khẩu (tối thiểu 6 ký tự)"
@@ -379,7 +317,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
                           returnKeyType="next"
                         />
 
-                        {/* 5. Xác nhận mật khẩu */}
+                        {/* 4. Xác nhận mật khẩu */}
                         <CustomInput
                           iconName="shield"
                           placeholder="Xác nhận mật khẩu"
@@ -410,22 +348,43 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
                           onPress={handleGoogleSignup}
                           disabled={isLoading || sendingOtp}
                         />
+
+                        {/* Đã có tài khoản? Đăng nhập gọn gàng ngay dưới Google Button */}
+                        <View style={styles.formLinksContainer}>
+                          <TouchableOpacity
+                            onPress={onNavigateToLogin}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 6, bottom: 6, left: 10, right: 10 }}
+                            style={styles.formSignupRow}
+                          >
+                            <Text style={styles.formSignupPrompt}>Đã có tài khoản? </Text>
+                            <Text style={styles.formSignupLink}>Đăng nhập</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
                   </View>
                 </View>
 
-                {/* Liên kết bên ngoài dưới khung: Đã có tài khoản? Đăng nhập */}
-                <View style={styles.outsideLinkContainer}>
-                  <TouchableOpacity
-                    onPress={onNavigateToLogin}
-                    activeOpacity={0.7}
-                    hitSlop={{ top: 10, bottom: 10, left: 16, right: 16 }}
-                    style={styles.outsideLoginRow}
-                  >
-                    <Text style={styles.outsideLoginPrompt}>Đã có tài khoản? </Text>
-                    <Text style={styles.outsideLoginLink}>Đăng nhập</Text>
-                  </TouchableOpacity>
+                {/* Điều khoản & chính sách nằm dưới cùng */}
+                <View style={styles.termsContainer}>
+                  <Text style={styles.termsText}>
+                    Bằng việc đăng ký, bạn đồng ý tuân thủ{' '}
+                    <Text
+                      style={styles.termsLink}
+                      onPress={() => handleOpenTerms('terms')}
+                    >
+                      Điều khoản dịch vụ
+                    </Text>
+                    {' & '}
+                    <Text
+                      style={styles.termsLink}
+                      onPress={() => handleOpenTerms('privacy')}
+                    >
+                      Chính sách bảo mật
+                    </Text>
+                    {' của Hệ thống Cứu nạn SOS.'}
+                  </Text>
                 </View>
               </View>
             </ScrollView>
@@ -433,83 +392,14 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
         </SafeAreaView>
       </View>
 
-      {/* Modal Chọn Phương Thức Nhận Mã OTP (Khi có cả SĐT và Email) */}
-      <Modal
-        visible={methodModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setMethodModalVisible(false)}
-      >
-        <TouchableWithoutFeedback onPress={() => setMethodModalVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback onPress={e => e.stopPropagation()}>
-              <View style={styles.methodModalCard}>
-                <View style={styles.methodModalHeader}>
-                  <View style={styles.methodModalIconWrap}>
-                    <Feather name="shield" size={24} color="#0066FF" />
-                  </View>
-                  <Text style={styles.methodModalTitle}>Chọn phương thức nhận mã</Text>
-                  <Text style={styles.methodModalSubtitle}>
-                    Mã xác thực 6 số sẽ được gửi để kích hoạt tài khoản của bạn. Vui lòng chọn nơi nhận mã:
-                  </Text>
-                </View>
-
-                {/* Tùy chọn 1: Số điện thoại */}
-                <TouchableOpacity
-                  style={styles.methodOptionCard}
-                  onPress={() => sendOtpForMethod('phone')}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.methodOptionIcon, { backgroundColor: '#EFF6FF' }]}>
-                    <Feather name="phone-call" size={20} color="#0066FF" />
-                  </View>
-                  <View style={styles.methodOptionTextWrap}>
-                    <Text style={styles.methodOptionTitle}>Gửi qua Số điện thoại (SMS)</Text>
-                    <Text style={styles.methodOptionValue}>{phone.trim()}</Text>
-                  </View>
-                  <Feather name="chevron-right" size={18} color="#94A3B8" />
-                </TouchableOpacity>
-
-                {/* Tùy chọn 2: Email */}
-                <TouchableOpacity
-                  style={styles.methodOptionCard}
-                  onPress={() => sendOtpForMethod('email')}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.methodOptionIcon, { backgroundColor: '#FFF7ED' }]}>
-                    <Feather name="mail" size={20} color="#EA580C" />
-                  </View>
-                  <View style={styles.methodOptionTextWrap}>
-                    <Text style={styles.methodOptionTitle}>Gửi qua Hòm thư Email</Text>
-                    <Text style={styles.methodOptionValue} numberOfLines={1}>{email.trim()}</Text>
-                  </View>
-                  <Feather name="chevron-right" size={18} color="#94A3B8" />
-                </TouchableOpacity>
-
-                {/* Nút Hủy */}
-                <TouchableOpacity
-                  style={styles.methodModalCancelBtn}
-                  onPress={() => setMethodModalVisible(false)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.methodModalCancelText}>Hủy bỏ</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
-
-      {/* Modal Xác thực OTP Đăng ký */}
+      {/* Modal Xác thực OTP Đăng ký qua SMS */}
       <OtpModal
         visible={otpModalVisible}
-        type={verifyMethod}
+        type="phone"
         phone={phone.trim()}
-        email={email.trim()}
         onClose={() => setOtpModalVisible(false)}
         onVerify={handleVerifyAndSignup}
         onResend={handleResendOtp}
-        onChangeMethod={email.trim() ? handleChangeVerifyMethod : undefined}
       />
 
       <AlertModal
@@ -539,17 +429,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   topBar: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    paddingHorizontal: '5%',
-    paddingTop: 6,
-    paddingBottom: 6,
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 52 : 36,
+    left: 18,
+    zIndex: 10,
   },
   roundButton: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: 'rgba(0, 0, 0, 0.40)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
@@ -560,13 +449,14 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: '5%',
-    paddingTop: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
   },
   centerContainer: {
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 310,
     alignItems: 'center',
   },
   /* Bóng đổ mềm cho khung */
@@ -576,29 +466,29 @@ const styles = StyleSheet.create({
     ...Platform.select({
       ios: {
         shadowColor: '#0B192C',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.16,
-        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.14,
+        shadowRadius: 18,
       },
       android: {
-        elevation: 6,
+        elevation: 5,
       },
     }),
   },
-  /* Viền trắng mảnh và bo góc 28px */
+  /* Viền kính mờ trong suốt và góc bo tròn 28px */
   cardInner: {
     width: '100%',
     borderRadius: 28,
     overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.75)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.30)',
   },
-  /* Lớp phủ kính mờ xanh xám: rgba(210, 225, 240, 0.65) */
+  /* Lớp phủ kính mờ trong suốt từ trong ra ngoài */
   cardContent: {
-    backgroundColor: 'rgba(210, 225, 240, 0.65)',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 18,
     alignItems: 'center',
   },
   logoWrapper: {
@@ -606,8 +496,8 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   logoImage: {
-    width: 74,
-    height: 48,
+    width: 76,
+    height: 50,
   },
   title: {
     fontSize: 23,
@@ -623,110 +513,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
     marginBottom: 14,
-    lineHeight: 17,
     fontWeight: '700',
     letterSpacing: -0.2,
-    paddingHorizontal: 8,
+    paddingHorizontal: 2,
   },
   form: {
     width: '100%',
-  },
-  /* Modal Chọn Phương Thức Nhận Mã */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  methodModalCard: {
-    width: '100%',
-    maxWidth: 380,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 24,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.25,
-        shadowRadius: 20,
-      },
-      android: {
-        elevation: 10,
-      },
-    }),
-  },
-  methodModalHeader: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  methodModalIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#EFF6FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  methodModalTitle: {
-    fontSize: 18.5,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 6,
-    textAlign: 'center',
-  },
-  methodModalSubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    textAlign: 'center',
-    lineHeight: 19,
-    paddingHorizontal: 8,
-  },
-  methodOptionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    marginBottom: 12,
-  },
-  methodOptionIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  methodOptionTextWrap: {
-    flex: 1,
-  },
-  methodOptionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 2,
-  },
-  methodOptionValue: {
-    fontSize: 12.5,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  methodModalCancelBtn: {
-    marginTop: 6,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-  },
-  methodModalCancelText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748B',
   },
   dividerRow: {
     flexDirection: 'row',
@@ -744,50 +536,58 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontWeight: '700',
   },
-  /* Liên kết ngoài dưới khung */
-  outsideLinkContainer: {
-    marginTop: 20,
+  /* Liên kết trong form: gọn gàng ngay dưới Google Button */
+  formLinksContainer: {
+    marginTop: 10,
     alignItems: 'center',
     width: '100%',
   },
-  outsideLoginRow: {
+  formSignupRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 2,
   },
-  outsideLoginPrompt: {
-    color: '#FFFFFF',
-    fontSize: 13.5,
+  formSignupPrompt: {
+    color: '#334155',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  formSignupLink: {
+    color: '#0066F5',
+    fontSize: 13,
+    fontWeight: '800',
+    textDecorationLine: 'underline',
+  },
+  /* Điều khoản & chính sách nằm dưới cùng */
+  termsContainer: {
+    marginTop: 16,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    width: '100%',
+  },
+  termsText: {
+    color: 'rgba(255, 255, 255, 0.90)',
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
     fontWeight: '500',
     ...Platform.select({
       ios: {
-        textShadowColor: 'rgba(0, 0, 0, 0.9)',
+        textShadowColor: 'rgba(0, 0, 0, 0.95)',
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 3,
       },
       android: {
-        textShadowColor: 'rgba(0, 0, 0, 0.9)',
+        textShadowColor: 'rgba(0, 0, 0, 0.95)',
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 3,
       },
     }),
   },
-  outsideLoginLink: {
-    color: '#FFFFFF',
-    fontSize: 13.5,
-    fontWeight: '800',
+  termsLink: {
+    color: '#60A5FA',
+    fontWeight: '700',
     textDecorationLine: 'underline',
-    ...Platform.select({
-      ios: {
-        textShadowColor: 'rgba(0, 0, 0, 0.9)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 3,
-      },
-      android: {
-        textShadowColor: 'rgba(0, 0, 0, 0.9)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 3,
-      },
-    }),
   },
 });

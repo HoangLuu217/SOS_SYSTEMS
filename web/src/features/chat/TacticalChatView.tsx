@@ -6,6 +6,7 @@ import {
   fetchChatMessages,
   sendChatMessage,
   markChatMessagesRead,
+  markAllChatMessagesRead,
 } from '@/api';
 import {
   subscribeSocketChatEvents,
@@ -100,16 +101,27 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
         setMessages(res.data.messages);
         setTimeout(() => scrollToBottom(false), 80);
 
-        // Đánh dấu đã đọc
-        await markChatMessagesRead({
-          channel: conv.channel,
-          partnerId: conv.partnerId,
-        });
-
-        // Giảm unread trong danh sách hội thoại
+        // Giảm unread trong danh sách hội thoại ngay lập tức
         setConversations((prev) =>
-          prev.map((c) => (c.channel === conv.channel ? { ...c, unreadCount: 0 } : c))
+          prev.map((c) =>
+            c.channel === conv.channel || (conv.partnerId && c.partnerId === conv.partnerId)
+              ? { ...c, unreadCount: 0 }
+              : c
+          )
         );
+
+        // Báo cho Sidebar cập nhật lại badge
+        window.dispatchEvent(new CustomEvent('sos_chat_unread_updated'));
+
+        // Đánh dấu đã đọc trên cơ sở dữ liệu
+        try {
+          await markChatMessagesRead({
+            channel: conv.channel,
+            partnerId: conv.partnerId,
+          });
+        } catch (readErr) {
+          console.warn('Lỗi khi đánh dấu đã đọc trên server:', readErr);
+        }
       }
     } catch (err) {
       console.warn('Lỗi khi tải tin nhắn:', err);
@@ -122,6 +134,19 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
   useEffect(() => {
     loadConversations(true);
   }, [loadConversations]);
+
+  // Đánh dấu đã đọc toàn bộ hội thoại
+  const handleMarkAllRead = async () => {
+    setConversations((prev) => prev.map((c) => ({ ...c, unreadCount: 0 })));
+    window.dispatchEvent(new CustomEvent('sos_chat_unread_updated'));
+    try {
+      await markAllChatMessagesRead();
+    } catch (err) {
+      console.warn('Lỗi khi đánh dấu tất cả đã đọc:', err);
+    }
+  };
+
+  const totalUnreadCount = conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
 
   // Đăng ký người dùng Socket.IO & Tham gia phòng địa bàn phụ trách
   useEffect(() => {
@@ -316,8 +341,19 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
         {/* CỘT DANH SÁCH (320–360px) */}
         <div className={`sos-chat-sidebar ${mobileShowChat ? 'mobile-hidden' : ''}`}>
           <div className="sos-chat-sidebar-header">
-            <div className="sos-chat-sidebar-title">
+            <div className="sos-chat-sidebar-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3>Kênh liên lạc</h3>
+              {totalUnreadCount > 0 && (
+                <button
+                  type="button"
+                  className="sos-chat-mark-all-read-btn"
+                  onClick={handleMarkAllRead}
+                  title="Đánh dấu đã đọc tất cả cuộc trò chuyện"
+                >
+                  <i className="bi bi-check2-all" style={{ marginRight: '4px' }} />
+                  Đã đọc tất cả
+                </button>
+              )}
             </div>
 
             <div className="sos-chat-search-wrap">
@@ -392,6 +428,14 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                     key={conv.channel}
                     className={`sos-chat-item ${isActive ? 'active' : ''}`}
                     onClick={() => {
+                      setConversations((prev) =>
+                        prev.map((c) =>
+                          c.channel === conv.channel || (conv.partnerId && c.partnerId === conv.partnerId)
+                            ? { ...c, unreadCount: 0 }
+                            : c
+                        )
+                      );
+                      window.dispatchEvent(new CustomEvent('sos_chat_unread_updated'));
                       setActiveConv(conv);
                       setMobileShowChat(true);
                     }}

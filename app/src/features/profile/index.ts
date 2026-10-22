@@ -11,4 +11,5 @@ export * from './RescuerProfileOverviewScreen';
 export * from './CitizenProfileOverviewScreen';
 export * from './CitizenSosTrackingModal';
 export * from './RescuerVerificationStatusModal';
+export * from './MandatoryOnboardingModal';
 export * from './theme';
