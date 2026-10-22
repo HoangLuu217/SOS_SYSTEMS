@@ -323,41 +323,45 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   });
   const [isWeatherLoading, setIsWeatherLoading] = useState(false);
 
-  // Danh sách tin tức thời tiết thật lấy từ CSDL (tối đa 3 bài)
-  const [featuredNews, setFeaturedNews] = useState<NewsItem[]>(FEATURED_NEWS);
-  const [loadingNews, setLoadingNews] = useState<boolean>(false);
+  // Danh sách tin tức thời tiết thật đã kích hoạt qua thông báo lấy từ CSDL (tối đa 3 bài)
+  const [featuredNews, setFeaturedNews] = useState<NewsItem[]>([]);
+  const [loadingNews, setLoadingNews] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
-  // Gọi API lấy tối đa 3 bài tin tức thời tiết thật từ MongoDB
+  // Gọi API lấy tối đa 3 bài tin tức thời tiết thật từ MongoDB (chỉ lấy bài đã kích hoạt qua thông báo)
   const fetchFeaturedWeatherNews = useCallback(async () => {
     try {
       setLoadingNews(true);
-      const res = await backendApi.getWeatherArticles({ limit: 3 });
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        const mapped: NewsItem[] = res.data.slice(0, 3).map((article: any) => {
-          const rawCat = article.category || article.weatherType || 'khac';
-          const tag = WEATHER_CATEGORY_LABELS[rawCat] || 'THỜI TIẾT';
-          const time = formatNewsCardDate(
-            article.published_at || article.createdAt || article.created_at
-          );
-          const snippet =
-            article.summary?.trim() ||
-            (article.content ? article.content.trim().slice(0, 110) + '...' : '');
-          const img = (article.imageUrl || article.image_url || '').trim();
+      const res = await backendApi.getWeatherArticles({ limit: 3, status: 'activated' });
+      if (res.success && Array.isArray(res.data)) {
+        if (res.data.length > 0) {
+          const mapped: NewsItem[] = res.data.slice(0, 3).map((article: any) => {
+            const rawCat = article.category || article.weatherType || 'khac';
+            const tag = WEATHER_CATEGORY_LABELS[rawCat] || 'THỜI TIẾT';
+            const time = formatNewsCardDate(
+              article.published_at || article.createdAt || article.created_at
+            );
+            const snippet =
+              article.summary?.trim() ||
+              (article.content ? article.content.trim().slice(0, 110) + '...' : '');
+            const img = (article.imageUrl || article.image_url || '').trim();
 
-          return {
-            id: String(article._id || article.id),
-            tag,
-            time,
-            title: article.title || '',
-            snippet,
-            imageUrl: img,
-            content: article.content || article.summary || '',
-            sourceUrl: article.source_url || article.articleUrl || '',
-            sourceName: article.source_name || article.sourceName || '',
-          };
-        });
-        setFeaturedNews(mapped);
+            return {
+              id: String(article._id || article.id),
+              tag,
+              time,
+              title: article.title || '',
+              snippet,
+              imageUrl: img,
+              content: article.content || article.summary || '',
+              sourceUrl: article.source_url || article.articleUrl || '',
+              sourceName: article.source_name || article.sourceName || '',
+            };
+          });
+          setFeaturedNews(mapped);
+        } else {
+          setFeaturedNews([]);
+        }
       }
     } catch (err) {
       console.warn('Lỗi khi tải tin tức thời tiết nổi bật từ CSDL:', err);
@@ -737,39 +741,53 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
           {/* Danh sách tối đa 3 tin tức thời tiết nổi bật từ CSDL */}
           <View style={styles.newsList}>
-            {featuredNews.slice(0, 3).map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.newsCard}
-                onPress={() => setSelectedNews(item)}
-                activeOpacity={0.75}
-              >
-                <NewsThumbnailImage imageUrl={item.imageUrl} tag={item.tag} />
+            {featuredNews.length > 0 ? (
+              featuredNews.slice(0, 3).map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.newsCard}
+                  onPress={() => setSelectedNews(item)}
+                  activeOpacity={0.75}
+                >
+                  <NewsThumbnailImage imageUrl={item.imageUrl} tag={item.tag} />
 
-                <View style={styles.newsContent}>
-                  <View style={styles.newsMetaRow}>
-                    <View style={styles.newsTagBadge}>
-                      <Text style={styles.newsTagText}>{item.tag}</Text>
+                  <View style={styles.newsContent}>
+                    <View style={styles.newsMetaRow}>
+                      <View style={styles.newsTagBadge}>
+                        <Text style={styles.newsTagText}>{item.tag}</Text>
+                      </View>
+                      <Text style={styles.newsTimeText}>{item.time}</Text>
                     </View>
-                    <Text style={styles.newsTimeText}>{item.time}</Text>
+
+                    <Text style={styles.newsTitle} numberOfLines={2}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.newsSnippet} numberOfLines={1}>
+                      {item.snippet}
+                    </Text>
                   </View>
 
-                  <Text style={styles.newsTitle} numberOfLines={2}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.newsSnippet} numberOfLines={1}>
-                    {item.snippet}
-                  </Text>
-                </View>
-
-                <Ionicons
-                  name="chevron-forward"
-                  size={16}
-                  color="#94A3B8"
-                  style={styles.newsChevron}
-                />
-              </TouchableOpacity>
-            ))}
+                  <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color="#94A3B8"
+                    style={styles.newsChevron}
+                  />
+                </TouchableOpacity>
+              ))
+            ) : loadingNews ? (
+              <View style={styles.newsEmptyCard}>
+                <ActivityIndicator size="small" color="#0066FF" />
+                <Text style={styles.newsEmptyText}>Đang tải bản tin thời tiết...</Text>
+              </View>
+            ) : (
+              <View style={styles.newsEmptyCard}>
+                <Ionicons name="newspaper-outline" size={26} color="#94A3B8" />
+                <Text style={styles.newsEmptyText}>
+                  Chưa có bản tin thời tiết nào được kích hoạt qua thông báo
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Section: Tiện ích nhanh */}
@@ -1286,6 +1304,25 @@ const styles = StyleSheet.create({
   },
   newsChevron: {
     marginLeft: 2,
+  },
+  newsEmptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingVertical: 22,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+  },
+  newsEmptyText: {
+    fontSize: 12.5,
+    color: '#64748B',
+    textAlign: 'center',
+    fontWeight: '500',
+    lineHeight: 18,
   },
 
   // ==================== TIỆN ÍCH NHANH ====================

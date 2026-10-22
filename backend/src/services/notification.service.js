@@ -204,7 +204,7 @@ class NotificationService {
           currentLocationUpdatedAt: new Date(),
         },
       },
-      { new: true, projection: '_id currentLocationUpdatedAt' }
+      { returnDocument: 'after', projection: '_id currentLocationUpdatedAt' }
     ).lean();
     if (!user) throw new ApiError(404, 'Không tìm thấy tài khoản.');
     return { updatedAt: user.currentLocationUpdatedAt };

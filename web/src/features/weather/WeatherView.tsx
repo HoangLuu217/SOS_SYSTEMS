@@ -30,6 +30,7 @@ import {
   FileText,
   ShieldAlert,
   Play,
+  CheckCircle2,
 } from 'lucide-react';
 import './WeatherView.css';
 
@@ -274,6 +275,16 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
       fetchArticles();
     } catch (err: any) {
       toast.error(err.message || 'Không thể xóa bản tin');
+    }
+  };
+
+  const handleQuickActivate = async (item: WeatherArticleItem) => {
+    try {
+      await updateWeatherArticleApi(item._id, { status: 'ACTIVE' });
+      toast.success(`Đã duyệt & kích hoạt bản tin "${item.title.slice(0, 32)}..." lên ứng dụng di động!`);
+      void fetchArticles({ silent: true });
+    } catch (err: any) {
+      toast.error(err.message || 'Không thể kích hoạt bản tin');
     }
   };
 
@@ -522,6 +533,24 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
 
                   {canManage && (
                     <div style={{ display: 'flex', gap: 4 }}>
+                      {item.status === 'pending' && (
+                        <button
+                          className="weather-btn-action"
+                          style={{
+                            color: '#16a34a',
+                            borderColor: '#bbf7d0',
+                            background: '#f0fdf4',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
+                          onClick={() => handleQuickActivate(item)}
+                          title="Duyệt & kích hoạt bản tin lên ứng dụng di động"
+                        >
+                          <CheckCircle2 size={13} />
+                          Duyệt
+                        </button>
+                      )}
                       <button
                         className="weather-btn-action"
                         onClick={() => handleOpenEditModal(item)}

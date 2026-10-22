@@ -13,9 +13,24 @@ class WeatherNotificationService {
 
     const filter = {};
 
-    if (query.status && query.status !== 'ALL') {
-      const s = String(query.status).trim();
-      filter.status = { $in: [s.toLowerCase(), s.toUpperCase()] };
+    // Lọc theo trạng thái bài viết
+    if (query.status === 'activated' || query.activated === 'true') {
+      // Chỉ lấy các bài viết thời tiết đã được kích hoạt qua thông báo (có broadcastId hoặc status là approved / ACTIVE)
+      filter.status = { $nin: ['pending', 'rejected', 'ARCHIVED', 'archived'] };
+      filter.$or = [
+        { broadcastId: { $exists: true, $ne: null } },
+        { status: { $in: ['approved', 'APPROVED', 'ACTIVE', 'active'] } },
+      ];
+    } else if (query.status && query.status !== 'ALL') {
+      const statuses = String(query.status)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const variations = [];
+      for (const s of statuses) {
+        variations.push(s, s.toLowerCase(), s.toUpperCase());
+      }
+      filter.status = { $in: Array.from(new Set(variations)) };
     }
 
     // Lọc theo danh mục (category hoặc weatherType)
@@ -215,7 +230,7 @@ class WeatherNotificationService {
     const item = await WeatherNotification.findByIdAndUpdate(
       id,
       { status: 'ARCHIVED' },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!item) {
