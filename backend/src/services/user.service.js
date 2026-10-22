@@ -236,10 +236,17 @@ class UserService {
 
         if (uploadResult && uploadResult.secure_url) {
           finalUrl = uploadResult.secure_url;
+        } else {
+          throw new Error('Cloudinary không trả về secure_url');
         }
       } catch (err) {
         console.warn('Lỗi upload avatar lên Cloudinary:', err.message);
+        throw new ApiError(500, 'Không thể tải ảnh đại diện lên kho lưu trữ đám mây. Vui lòng thử lại.');
       }
+    }
+
+    if (finalUrl.startsWith('file://') || finalUrl.startsWith('content://')) {
+      throw new ApiError(400, 'Đường dẫn ảnh cục bộ không hợp lệ. Vui lòng gửi ảnh dưới dạng multipart FormData.');
     }
 
     user.avatarUrl = finalUrl;

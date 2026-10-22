@@ -15,7 +15,7 @@ import { HomeScreen, ConfigModal } from '@/features/home';
 import { MapScreen } from '@/features/map';
 import { SosScreen } from '@/features/sos';
 import { NewsScreen } from '@/features/news';
-import { ProfileScreen } from '@/features/profile';
+import { ProfileScreen, MandatoryOnboardingModal } from '@/features/profile';
 import { RescuerMissionScreen } from '@/features/mission';
 import { backendApi } from '@/api';
 import { AlertModal, BottomNav, LogoSOS, InAppNotificationBanner } from '@/components';
@@ -246,6 +246,7 @@ export function AppNavigator() {
       {user && (
         <View style={styles.authenticatedAppLayer}>
           <AuthenticatedApp />
+          <MandatoryOnboardingModal />
         </View>
       )}
 

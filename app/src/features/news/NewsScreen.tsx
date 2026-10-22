@@ -33,6 +33,76 @@ interface NewsScreenProps {
   onOpenSettings?: () => void;
 }
 
+// Fallback dữ liệu mẫu khi chưa kết nối máy chủ
+const FALLBACK_NEWS: NotificationItem[] = [
+  {
+    _id: 'sample-instant-1',
+    type: 'INSTANT',
+    title: 'Cảnh báo ngập lụt khẩn cấp lưu vực Sông Hàn & Ngũ Hành Sơn',
+    content:
+      'Mực nước sông dâng nhanh trên 0.8m do mưa lớn kéo dài. Toàn bộ người dân vùng trũng thấp khẩn trương ngắt nguồn điện, di dời người già và trẻ nhỏ đến điểm trú ẩn an toàn của phường. Lực lượng cứu hộ đang túc trực ca-nô tại các chốt chính.',
+    priority: 'CRITICAL',
+    areaName: 'Quận Ngũ Hành Sơn',
+    createdBy: {
+      _id: 'sample-auth-1',
+      fullName: 'Ban Chỉ huy PCTT & TKCN Đà Nẵng',
+      roles: ['LOCAL_AUTHORITY'],
+    },
+    isRead: false,
+    createdAt: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
+    actionUrl: 'map',
+  },
+  {
+    _id: 'sample-instant-2',
+    type: 'INSTANT',
+    title: 'Cảnh báo bão đổ bộ sức gió cấp 9-10 tại khu vực ven biển Sơn Trà',
+    content:
+      'Gió giật mạnh nguy hiểm kèm mưa lớn. Yêu cầu toàn bộ người dân ở yên trong nhà kiên cố, chằng chống cửa nẻo, tuyệt đối không di chuyển trên đường hoặc đứng gần cây to, cột điện cao thế.',
+    priority: 'HIGH',
+    areaName: 'Quận Sơn Trà',
+    createdBy: {
+      _id: 'sample-auth-2',
+      fullName: 'Trực ban tác chiến PCTT',
+      roles: ['LOCAL_AUTHORITY'],
+    },
+    isRead: false,
+    createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+    actionUrl: 'map',
+  },
+  {
+    _id: 'sample-system-1',
+    type: 'SYSTEM',
+    title: 'Nâng cấp hệ thống điều phối cứu nạn tự động phiên bản 2.5',
+    content:
+      'Hệ thống hỗ trợ cứu nạn đã bổ sung tính năng tự động quét ca-nô gần nhất và phát thông báo khẩn cấp theo khu vực hành chính. Mọi yêu cầu cứu trợ sẽ được kết nối trực tiếp đến cán bộ địa phương phụ trách.',
+    priority: 'NORMAL',
+    areaName: 'Toàn thành phố Đà Nẵng',
+    createdBy: {
+      _id: 'sample-admin-1',
+      fullName: 'Quản trị viên Hệ thống SOS',
+      roles: ['ADMIN'],
+    },
+    isRead: true,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
+  },
+  {
+    _id: 'sample-system-2',
+    type: 'SYSTEM',
+    title: 'Thông báo danh sách các điểm cấp phát nhu yếu phẩm & nước sạch',
+    content:
+      'Ban cứu trợ thông báo các điểm tiếp nhận và cấp phát lương khô, nước uống tinh khiết và thuốc men tại các Trạm y tế và Trường học trên địa bàn Hòa Vang, Cẩm Lệ.',
+    priority: 'NORMAL',
+    areaName: 'Huyện Hòa Vang',
+    createdBy: {
+      _id: 'sample-auth-3',
+      fullName: 'Ủy ban Mặt trận Cứu trợ',
+      roles: ['LOCAL_AUTHORITY'],
+    },
+    isRead: true,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 18).toISOString(),
+  },
+];
+
 export const NewsScreen: React.FC<NewsScreenProps> = ({
   onNavigateToTab,
   onOpenSettings,

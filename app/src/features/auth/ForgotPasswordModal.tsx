@@ -31,8 +31,8 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
 }) => {
   const { forgotPassword, verifyResetOtp, resetPassword } = useAuth();
 
-  const [step, setStep] = useState<'email' | 'otp' | 'new_password'>('email');
-  const [email, setEmail] = useState('');
+  const [step, setStep] = useState<'phone' | 'otp' | 'new_password'>('phone');
+  const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -44,7 +44,8 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
 
   useEffect(() => {
     if (visible) {
-      setStep('email');
+      setStep('phone');
+      setPhone('');
       setOtp('');
       setNewPassword('');
       setConfirmPassword('');
@@ -55,18 +56,18 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   }, [visible, startCountdown]);
 
 
-  // 1. Gửi mã OTP khôi phục mật khẩu
+  // 1. Gửi mã OTP khôi phục mật khẩu qua SMS
   const handleSendOtp = async () => {
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      setError('Vui lòng nhập địa chỉ email hợp lệ.');
+    const cleanPhone = phone.trim().replace(/[^0-9]/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      setError('Vui lòng nhập số điện thoại hợp lệ (tối thiểu 10 chữ số).');
       return;
     }
 
     setError('');
     setLoading(true);
 
-    const res = await forgotPassword(cleanEmail);
+    const res = await forgotPassword(cleanPhone);
     setLoading(false);
 
     if (res.success) {
@@ -92,7 +93,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     setError('');
     setLoading(true);
 
-    const res = await verifyResetOtp(email.trim().toLowerCase(), code);
+    const res = await verifyResetOtp(phone.trim(), code);
     setLoading(false);
 
     if (res.success) {
@@ -103,13 +104,13 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     }
   };
 
-  // Gửi lại mã OTP
+  // Gửi lại mã OTP qua SMS
   const handleResendOtp = async () => {
     if (countdown > 0 || loading) return;
     setError('');
     setLoading(true);
 
-    const res = await forgotPassword(email.trim().toLowerCase());
+    const res = await forgotPassword(phone.trim());
     setLoading(false);
 
     if (res.success) {
@@ -138,7 +139,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
     setError('');
     setLoading(true);
 
-    const res = await resetPassword(email.trim().toLowerCase(), otp.trim(), newPassword);
+    const res = await resetPassword(phone.trim(), otp.trim(), newPassword);
     setLoading(false);
 
     if (res.success) {
@@ -175,26 +176,26 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                   </TouchableOpacity>
                 </View>
 
-                {/* BƯỚC 1: NHẬP EMAIL */}
-                {step === 'email' && (
+                {/* BƯỚC 1: NHẬP SỐ ĐIỆN THOẠI */}
+                {step === 'phone' && (
                   <View>
                     <Text style={styles.title}>Quên mật khẩu?</Text>
                     <Text style={styles.subtitle}>
-                      Nhập email đăng ký của bạn. Hệ thống SOS sẽ gửi mã OTP 6 số để bạn đặt lại mật khẩu mới.
+                      Nhập số điện thoại đăng ký tài khoản của bạn. Hệ thống SOS sẽ gửi mã xác thực OTP 6 số qua tin nhắn SMS để bạn đặt lại mật khẩu mới.
                     </Text>
 
                     {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
                     <CustomInput
-                      iconName="mail"
-                      placeholder="Nhập địa chỉ email của bạn"
-                      value={email}
+                      iconName="phone"
+                      placeholder="Nhập số điện thoại (ví dụ: 0903000003)"
+                      value={phone}
                       onChangeText={text => {
-                        setEmail(text);
+                        setPhone(text.replace(/[^0-9]/g, ''));
                         setError('');
                       }}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
+                      keyboardType="phone-pad"
+                      maxLength={11}
                       returnKeyType="go"
                       onSubmitEditing={handleSendOtp}
                     />
@@ -209,7 +210,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                         <ActivityIndicator color="#FFFFFF" size="small" />
                       ) : (
                         <View style={styles.buttonInner}>
-                          <Text style={styles.submitText}>Gửi mã OTP khôi phục</Text>
+                          <Text style={styles.submitText}>Gửi mã OTP qua SMS</Text>
                           <Feather name="arrow-right" size={16} color="#FFFFFF" style={{ marginLeft: 6 }} />
                         </View>
                       )}
@@ -217,8 +218,8 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
 
                     <TouchableOpacity
                       onPress={() => {
-                        if (!email.trim()) {
-                          setError('Vui lòng nhập email trước.');
+                        if (!phone.trim()) {
+                          setError('Vui lòng nhập số điện thoại trước.');
                           return;
                         }
                         setError('');
@@ -227,20 +228,20 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                       style={styles.switchStepLinkWrapper}
                     >
                       <Text style={styles.switchStepLinkText}>
-                        Đã có mã xác nhận?{' '}
+                        Đã có mã xác nhận SMS?{' '}
                         <Text style={styles.switchStepLinkHighlight}>Nhập mã ngay ➔</Text>
                       </Text>
                     </TouchableOpacity>
                   </View>
                 )}
 
-                {/* BƯỚC 2: CHỈ NHẬP VÀ XÁC THỰC MÃ OTP */}
+                {/* BƯỚC 2: CHỈ NHẬP VÀ XÁC THỰC MÃ OTP QUA SMS */}
                 {step === 'otp' && (
                   <View>
                     <Text style={styles.title}>Xác thực mã OTP</Text>
                     <Text style={styles.subtitle}>
-                      Mã OTP 6 số đã được gửi đến:{' '}
-                      <Text style={styles.highlightEmail}>{email}</Text>
+                      Mã OTP 6 số đã được gửi qua tin nhắn SMS tới:{' '}
+                      <Text style={styles.highlightEmail}>{phone}</Text>
                       {'\n'}Vui lòng nhập mã để tiếp tục thiết lập mật khẩu mới.
                     </Text>
 
@@ -308,7 +309,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                       )}
                     </TouchableOpacity>
 
-                    {/* Hàng đếm ngược gửi lại & đổi email */}
+                    {/* Hàng đếm ngược gửi lại & đổi số điện thoại */}
                     <View style={styles.resendRow}>
                       {countdown > 0 ? (
                         <Text style={styles.countdownText}>
@@ -328,12 +329,12 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
 
                       <TouchableOpacity
                         onPress={() => {
-                          setStep('email');
+                          setStep('phone');
                           setOtp('');
                           setError('');
                         }}
                       >
-                        <Text style={styles.changeEmailText}>Đổi email</Text>
+                        <Text style={styles.changeEmailText}>Đổi số điện thoại</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -345,7 +346,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                     <Text style={styles.title}>Thiết lập mật khẩu mới</Text>
                     <Text style={styles.subtitle}>
                       Mã OTP hợp lệ! Hãy tạo mật khẩu mới an toàn cho tài khoản{' '}
-                      <Text style={styles.highlightEmail}>{email}</Text>.
+                      <Text style={styles.highlightEmail}>{phone}</Text>.
                     </Text>
 
                     {error ? <Text style={styles.errorText}>{error}</Text> : null}

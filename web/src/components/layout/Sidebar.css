@@ -438,6 +438,55 @@
   border: 1px solid var(--sos-badge-pill-warning-border);
 }
 
+/* --- Chấm Đỏ Tối Giản Báo Tin Nhắn Mới (Minimalist Notification Dot) --- */
+.sos-nav-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  margin-left: auto;
+  box-shadow: 0 0 0 2.5px rgba(239, 68, 68, 0.25);
+  display: inline-block;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.sos-nav-badge-dot::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.4);
+  animation: sos-pulse-dot 2.2s infinite ease-in-out;
+}
+
+@keyframes sos-pulse-dot {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.sos-nav-collapsed-badge-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 0 5px rgba(239, 68, 68, 0.7);
+  animation: sos-pulse-dot 2.2s infinite ease-in-out;
+}
+
 /* Trạng thái khi thu gọn Sidebar */
 .sos-sidebar.collapsed .sos-nav-item {
   justify-content: center;
