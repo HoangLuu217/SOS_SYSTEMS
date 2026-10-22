@@ -620,6 +620,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     vehicleId: string;
     vehicleName: string;
     vehicleCapacity: string;
+    supplies?: import('@/types/domainD').AssignedSupplyItem[];
   }) => {
     if (!selectedSos) return;
     domainDService.assignSos(selectedSos.id, params);
@@ -655,6 +656,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
           rescuerId: realRescuerId,
           vehicleId: realVehicleId,
           note: `Lệnh điều động khẩn cấp từ Ban Chỉ Huy PCTT ${activeOfficer.jurisdictionAreaName || ''}`,
+          supplies: params.supplies,
         });
         await syncRealSosFromApi(activeOfficer);
       }

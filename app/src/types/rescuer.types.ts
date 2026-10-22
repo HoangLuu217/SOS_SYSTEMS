@@ -143,6 +143,12 @@ export interface SosAssignmentData {
     contactPhone?: string;
     secondaryPhone?: string;
     priorityGroups?: string[];
+    supplies?: Array<{
+      supplyId?: string;
+      name: string;
+      quantity: number;
+      unit?: string;
+    }>;
     status: string;
     createdAt?: string;
     citizenId?: {
@@ -188,6 +194,12 @@ export interface SosAssignmentData {
   cancelledAt?: string;
   cancelReason?: string;
   note?: string;
+  supplies?: Array<{
+    supplyId?: string;
+    name: string;
+    quantity: number;
+    unit?: string;
+  }>;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -102,6 +102,15 @@ const sosAssignmentSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    // Danh sách vật tư cứu trợ & trang thiết bị PCTT cấp phát kèm theo phân công
+    supplies: [
+      {
+        supplyId: { type: String, trim: true },
+        name: { type: String, trim: true },
+        quantity: { type: Number, default: 1 },
+        unit: { type: String, trim: true, default: 'món' },
+      },
+    ],
   },
   {
     timestamps: true,

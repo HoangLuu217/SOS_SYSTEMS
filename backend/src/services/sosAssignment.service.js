@@ -20,7 +20,7 @@ class SosAssignmentService {
       throw new ApiError(400, 'ID yêu cầu cứu nạn (sosId) không phải là ObjectId hợp lệ');
     }
 
-    const { authorityOrganizationId, rescueTeamId, rescuerId, vehicleId, priority, note, assignedBy } =
+    const { authorityOrganizationId, rescueTeamId, rescuerId, vehicleId, priority, note, assignedBy, supplies } =
       data;
 
     // 1. Kiểm tra SOS tồn tại
@@ -108,6 +108,7 @@ class SosAssignmentService {
       status: 'PENDING',
       assignedAt: new Date(),
       note: note || null,
+      supplies: Array.isArray(supplies) ? supplies : [],
     });
 
     // Cập nhật trạng thái SOS Request sang ASSIGNED nếu SOS đang ở PENDING / VERIFIED
@@ -352,6 +353,15 @@ class SosAssignmentService {
       }
     }
 
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (io) {
+        io.emit('assignment:status_updated', assignment);
+        io.emit('assignment:updated', assignment);
+      }
+    } catch (err) {}
+
     return assignment;
   }
 
@@ -487,6 +497,15 @@ class SosAssignmentService {
       }
     }
 
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (io) {
+        io.emit('assignment:status_updated', assignment);
+        io.emit('assignment:updated', assignment);
+      }
+    } catch (err) {}
+
     return assignment;
   }
 
@@ -616,6 +635,43 @@ class SosAssignmentService {
 
         emitSosUpdated(sos);
       }
+    }
+
+    // Phát sự kiện Realtime Socket.IO & notification thông báo Hủy điều động
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (io) {
+        const payload = {
+          assignmentId: assignment._id.toString(),
+          sosId: sosId ? sosId.toString() : null,
+          reason: assignment.cancelReason,
+          status: 'CANCELLED',
+        };
+        io.emit('assignment:cancelled', payload);
+        io.emit('assignment:updated', payload);
+        if (assignment.rescuerId) {
+          io.to(`user_${assignment.rescuerId}`).emit('assignment:cancelled', payload);
+        }
+      }
+
+      const eventBus = require('./eventBus');
+      if (assignment.rescuerId) {
+        eventBus.emit('notification_event', {
+          action: 'USER',
+          userId: assignment.rescuerId.toString(),
+          title: '⚠️ LỆNH ĐIỀU ĐỘNG ĐÃ BỊ HỦY',
+          content: `Ban chỉ huy đã thu hồi / hủy lệnh điều động cho ca cứu nạn.`,
+          data: {
+            type: 'SOS_SYNC',
+            action: 'CANCELLED',
+            assignmentId: assignment._id.toString(),
+            status: 'CANCELLED',
+          },
+        });
+      }
+    } catch (socketErr) {
+      console.warn('Lỗi phát socket khi hủy phân công:', socketErr);
     }
 
     return assignment;

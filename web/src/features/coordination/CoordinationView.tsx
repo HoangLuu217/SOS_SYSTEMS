@@ -16,7 +16,7 @@ import {
 import type { SosRequestItem } from '@/types/dashboard';
 import { fetchSosRequests, completeSosRequest } from '@/api';
 import { FALLBACK_SOS_LIST } from '@/constants';
-import { onSosCreated, onSosUpdated } from '@/services/socketService';
+import { onSosCreated, onSosUpdated, onAssignmentUpdated } from '@/services/socketService';
 import { toast } from '@/components/common/toast';
 import '@/features/sos/SosRequestsView.css';
 import './CoordinationView.css';
@@ -76,6 +76,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
     const unsubCreated = onSosCreated(() => {
       loadData();
     });
+
     const unsubUpdated = (updatedSos: any) => {
       if (updatedSos && (updatedSos._id || updatedSos.id)) {
         const targetId = updatedSos._id || updatedSos.id;
@@ -96,9 +97,69 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
       loadData();
     };
     const unsubUpdatedSocket = onSosUpdated(unsubUpdated);
+
+    // Lắng nghe trực tiếp khi Cứu hộ viên cập nhật trạng thái phân công / tiến trình cứu nạn
+    const unsubAssignment = onAssignmentUpdated((assignmentData: any) => {
+      if (!assignmentData) return;
+      const targetSosId = assignmentData.sosRequestId || assignmentData.sosId;
+      const newStatus = assignmentData.status;
+
+      if (targetSosId) {
+        const mappedSosStatus =
+          newStatus === 'ACCEPTED'
+            ? 'ACCEPTED'
+            : ['EN_ROUTE', 'ON_THE_WAY', 'DISPATCHED'].includes(newStatus)
+            ? 'ON_THE_WAY'
+            : newStatus === 'ARRIVED'
+            ? 'ARRIVED'
+            : ['IN_PROGRESS', 'RESCUING'].includes(newStatus)
+            ? 'RESCUING'
+            : ['COMPLETED', 'RESOLVED'].includes(newStatus)
+            ? 'COMPLETED'
+            : undefined;
+
+        setSosList((prev) =>
+          prev.map((s) => {
+            const matches = s._id === targetSosId || (s as any).id === targetSosId;
+            if (matches) {
+              const updatedAssignment = s.assignment ? { ...s.assignment, ...assignmentData } : assignmentData;
+              return {
+                ...s,
+                assignment: updatedAssignment,
+                ...(mappedSosStatus ? { status: mappedSosStatus as any } : {}),
+              };
+            }
+            return s;
+          })
+        );
+
+        setSelectedSosDetail((prev) => {
+          if (prev && (prev._id === targetSosId || (prev as any).id === targetSosId)) {
+            const updatedAssignment = prev.assignment ? { ...prev.assignment, ...assignmentData } : assignmentData;
+            return {
+              ...prev,
+              assignment: updatedAssignment,
+              ...(mappedSosStatus ? { status: mappedSosStatus as any } : {}),
+            };
+          }
+          return prev;
+        });
+      }
+
+      // Nạp dữ liệu đồng bộ với server
+      loadData();
+    });
+
+    // Polling heartbeat định kỳ 5s dự phòng rớt mạng/mất gói tin socket
+    const heartbeat = setInterval(() => {
+      loadData();
+    }, 5000);
+
     return () => {
       unsubCreated();
       unsubUpdatedSocket();
+      unsubAssignment();
+      clearInterval(heartbeat);
     };
   }, [loadData]);
 
@@ -127,38 +188,61 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
     }
   };
 
+  // Hàm tính toán trạng thái thực tế nhất dựa trên cả SOS và Assignment của Cứu Hộ Viên
+  const getEffectiveStatus = useCallback((sos?: SosRequestItem | null): string => {
+    if (!sos) return 'PENDING';
+    if (sos.status === 'COMPLETED' || (sos as any).status === 'RESOLVED') return 'COMPLETED';
+
+    const assignmentStatus = sos.assignment?.status;
+    if (assignmentStatus) {
+      if (['COMPLETED', 'RESOLVED'].includes(assignmentStatus)) return 'COMPLETED';
+      if (['IN_PROGRESS', 'RESCUING'].includes(assignmentStatus)) return 'RESCUING';
+      if (assignmentStatus === 'ARRIVED') return 'ARRIVED';
+      if (['EN_ROUTE', 'ON_THE_WAY', 'DISPATCHED'].includes(assignmentStatus)) return 'ON_THE_WAY';
+      if (assignmentStatus === 'ACCEPTED') return 'ACCEPTED';
+      if (assignmentStatus === 'PENDING') return 'ASSIGNED';
+    }
+
+    if (['COMPLETED', 'RESOLVED'].includes(sos.status)) return 'COMPLETED';
+    if (['RESCUING', 'IN_PROGRESS'].includes(sos.status)) return 'RESCUING';
+    if (sos.status === 'ARRIVED') return 'ARRIVED';
+    if (['ON_THE_WAY', 'EN_ROUTE', 'DISPATCHED'].includes(sos.status)) return 'ON_THE_WAY';
+    if (sos.status === 'ACCEPTED') return 'ACCEPTED';
+    return sos.status || 'PENDING';
+  }, []);
+
   // Tính toán KPI số liệu
   const baseSos = sosList.length > 0 ? sosList : FALLBACK_SOS_LIST;
 
   const activeMissions = useMemo(() => {
     return baseSos.filter((s) =>
-      ['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status)
+      ['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(getEffectiveStatus(s))
     );
-  }, [baseSos]);
+  }, [baseSos, getEffectiveStatus]);
 
   const criticalMissions = useMemo(() => {
     return activeMissions.filter((m) => m.priority === 'CRITICAL');
   }, [activeMissions]);
 
   const completedMissions = useMemo(() => {
-    return baseSos.filter((s) => s.status === 'COMPLETED');
-  }, [baseSos]);
+    return baseSos.filter((s) => getEffectiveStatus(s) === 'COMPLETED');
+  }, [baseSos, getEffectiveStatus]);
 
   // Lọc dữ liệu theo tab và thanh tìm kiếm
   const filteredMissions = useMemo(() => {
     return baseSos.filter((sos) => {
+      const effStatus = getEffectiveStatus(sos);
       // Bộ lọc trạng thái
       if (statusFilter === 'CRITICAL') {
-        if (sos.priority !== 'CRITICAL' || sos.status === 'COMPLETED') return false;
+        if (sos.priority !== 'CRITICAL' || effStatus === 'COMPLETED') return false;
       } else if (statusFilter === 'EN_ROUTE') {
-        if (!['ACCEPTED', 'ON_THE_WAY'].includes(sos.status)) return false;
+        if (!['ACCEPTED', 'ON_THE_WAY', 'EN_ROUTE', 'DISPATCHED'].includes(effStatus)) return false;
       } else if (statusFilter === 'ON_SCENE') {
-        if (!['ARRIVED', 'RESCUING'].includes(sos.status)) return false;
+        if (!['ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(effStatus)) return false;
       } else if (statusFilter === 'COMPLETED') {
-        if (sos.status !== 'COMPLETED') return false;
+        if (effStatus !== 'COMPLETED') return false;
       } else {
         // Tab ALL mặc định hiển thị các vụ đang tác chiến + các vụ vừa hoàn thành
-        // Không loại trừ
       }
 
       // Thanh tìm kiếm
@@ -177,11 +261,12 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
 
       return true;
     });
-  }, [baseSos, statusFilter, searchQuery]);
+  }, [baseSos, statusFilter, searchQuery, getEffectiveStatus]);
 
   // Helper hiển thị badge trạng thái tiến trình
   const renderProgressStep = (status: string) => {
     switch (status) {
+      case 'PENDING':
       case 'VERIFIED':
       case 'ASSIGNED':
         return (
@@ -200,6 +285,8 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
         );
       case 'ACCEPTED':
       case 'ON_THE_WAY':
+      case 'EN_ROUTE':
+      case 'DISPATCHED':
         return (
           <div>
             <span className="coordination-status-pill enroute">
@@ -216,6 +303,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
         );
       case 'ARRIVED':
       case 'RESCUING':
+      case 'IN_PROGRESS':
         return (
           <div>
             <span className="coordination-status-pill rescuing">
@@ -231,6 +319,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
           </div>
         );
       case 'COMPLETED':
+      case 'RESOLVED':
         return (
           <div>
             <span className="coordination-status-pill completed">
@@ -327,7 +416,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
               onClick={() => setStatusFilter('EN_ROUTE')}
             >
               <span className="dot-mini blue" />
-              Đang di chuyển ({baseSos.filter((s) => ['ACCEPTED', 'ON_THE_WAY'].includes(s.status)).length})
+              Đang di chuyển ({baseSos.filter((s) => ['ACCEPTED', 'ON_THE_WAY', 'EN_ROUTE', 'DISPATCHED'].includes(getEffectiveStatus(s))).length})
             </button>
 
             <button
@@ -336,7 +425,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
               onClick={() => setStatusFilter('ON_SCENE')}
             >
               <span className="dot-mini yellow" />
-              Tại hiện trường ({baseSos.filter((s) => ['ARRIVED', 'RESCUING'].includes(s.status)).length})
+              Tại hiện trường ({baseSos.filter((s) => ['ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(getEffectiveStatus(s))).length})
             </button>
 
             <button
@@ -406,7 +495,8 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                   const citizenName = citizenInfo?.fullName || 'Người dân';
                   const citizenPhone = citizenInfo?.phone || 'Chưa có SĐT';
                   const isCritical = sos.priority === 'CRITICAL';
-                  const isCompleted = sos.status === 'COMPLETED';
+                  const effStatus = getEffectiveStatus(sos);
+                  const isCompleted = effStatus === 'COMPLETED';
 
                   return (
                     <tr
@@ -479,7 +569,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
 
                       {/* Cột 5: Tiến trình điều phối */}
                       <td>
-                        {renderProgressStep(sos.status)}
+                        {renderProgressStep(effStatus)}
                       </td>
 
                       {/* Cột 6: Thao tác */}
@@ -540,7 +630,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                     Chi Tiết Ca Tác Chiến: {selectedSosDetail.sosCode}
                   </h3>
                   <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>
-                    Khởi tạo {formatTimeAgo(selectedSosDetail.createdAt)} • Trạng thái: {selectedSosDetail.status}
+                    Khởi tạo {formatTimeAgo(selectedSosDetail.createdAt)} • Trạng thái: {getEffectiveStatus(selectedSosDetail)}
                   </p>
                 </div>
               </div>
@@ -609,7 +699,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                   Tiến Trình Cứu Nạn
                 </span>
                 <div style={{ marginTop: 8 }}>
-                  {renderProgressStep(selectedSosDetail.status)}
+                  {renderProgressStep(getEffectiveStatus(selectedSosDetail))}
                 </div>
               </div>
             </div>
@@ -648,7 +738,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                   <span>Xem trên bản đồ</span>
                 </button>
 
-                {selectedSosDetail.status !== 'COMPLETED' && (
+                {getEffectiveStatus(selectedSosDetail) !== 'COMPLETED' && (
                   <button
                     type="button"
                     className="coordination-action-btn success"

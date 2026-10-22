@@ -55,6 +55,13 @@ const initSocket = (httpServer) => {
       }
     });
 
+    // Cập nhật vị trí GPS cứu hộ viên thời gian thực (Telemetry)
+    socket.on('rescuer:location_update', (data) => {
+      if (data) {
+        io.emit('rescuer:location_update', data);
+      }
+    });
+
     socket.on('disconnect', (reason) => {
       console.log(`🔌 [Socket.IO] Client ngắt kết nối: ${socket.id} (Lý do: ${reason})`);
     });
