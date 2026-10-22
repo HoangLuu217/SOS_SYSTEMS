@@ -8,6 +8,7 @@ import { rescuerApi } from './rescuer.api';
 import { rescueTeamApi } from './rescueTeam.api';
 import { vehicleApi } from './vehicle.api';
 import { assignmentApi, RescuerAssignmentItem } from './assignment.api';
+import { weatherApi, WeatherArticleItem } from './weather.api';
 import type {
   EmergencyContact,
   UserProfile,
@@ -182,6 +183,12 @@ class BackendApiService {
   markNotificationAsRead = (id: string) => notificationApi.markNotificationAsRead(id);
 
   deleteNotification = (id: string) => notificationApi.deleteNotification(id);
+
+  // Weather Articles & Notifications API
+  getWeatherArticles = (query?: Parameters<typeof weatherApi.getWeatherArticles>[0]) =>
+    weatherApi.getWeatherArticles(query);
+
+  getWeatherArticleById = (id: string) => weatherApi.getWeatherArticleById(id);
 
   // Map & Safe Locations API
   getSafeLocations = (params: {

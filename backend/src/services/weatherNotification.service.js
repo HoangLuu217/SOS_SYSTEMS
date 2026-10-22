@@ -14,7 +14,8 @@ class WeatherNotificationService {
     const filter = {};
 
     if (query.status && query.status !== 'ALL') {
-      filter.status = query.status.toUpperCase();
+      const s = String(query.status).trim();
+      filter.status = { $in: [s.toLowerCase(), s.toUpperCase()] };
     }
 
     // Lọc theo danh mục (category hoặc weatherType)

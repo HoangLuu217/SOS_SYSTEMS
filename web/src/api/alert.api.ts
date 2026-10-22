@@ -63,7 +63,11 @@ export async function deleteBroadcastApi(id: string): Promise<{ success: boolean
 export function subscribeNotificationEvents(onEvent: (payload: { action: 'BROADCAST' | 'USER' | 'DELETED'; data?: any; broadcastId?: string }) => void): () => void {
   let eventSource: EventSource | null = null;
   try {
-    eventSource = new EventSource('/api/notifications/stream');
+    const token = localStorage.getItem('sos_access_token');
+    const url = token
+      ? `/api/notifications/stream?token=${encodeURIComponent(token)}`
+      : '/api/notifications/stream';
+    eventSource = new EventSource(url, { withCredentials: true });
     eventSource.onmessage = (e) => {
       try {
         const payload = JSON.parse(e.data);

@@ -179,8 +179,10 @@ class NotificationController {
         return;
       }
 
-      // Broadcasts are emitted as per-recipient USER events after persistence.
-      // Keep this stream private; do not fan out arbitrary events to every client.
+      if (payload.action === 'DELETED' || payload.action === 'BROADCAST') {
+        res.write(`data: ${JSON.stringify(payload)}\n\n`);
+        if (typeof res.flush === 'function') res.flush();
+      }
     };
 
     eventBus.on('notification_event', onNotificationEvent);

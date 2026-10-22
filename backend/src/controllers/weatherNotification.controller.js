@@ -1,7 +1,20 @@
 const weatherNotificationService = require('../services/weatherNotification.service');
+const n8nWeatherWorkflowService = require('../services/n8nWeatherWorkflow.service');
 const { sendSuccess } = require('../utils/apiResponse');
 
 class WeatherNotificationController {
+  /**
+   * POST /weather-notifications/execute-workflow
+   */
+  async executeWeatherWorkflow(req, res, next) {
+    try {
+      const result = await n8nWeatherWorkflowService.execute();
+      return sendSuccess(res, 200, 'Workflow thời tiết đã hoàn tất', result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   /**
    * GET /weather-notifications
    */

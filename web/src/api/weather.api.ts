@@ -60,6 +60,17 @@ export interface WeatherFilterQuery {
   limit?: number;
 }
 
+export async function executeWeatherWorkflowApi(): Promise<{
+  success: boolean;
+  message?: string;
+  data?: { completed: boolean; message: string };
+}> {
+  return fetchWithAuth('/weather-articles/execute-workflow', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }, { directFallback: false });
+}
+
 export async function fetchWeatherArticlesApi(
   query: WeatherFilterQuery = {}
 ): Promise<{ success: boolean; data: WeatherArticleItem[]; pagination?: any; message?: string }> {

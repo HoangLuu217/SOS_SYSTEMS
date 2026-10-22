@@ -9,6 +9,8 @@ import {
   subscribeNotificationEvents,
   fetchSafeLocations,
   fetchHazardReports,
+  fetchWeatherArticlesApi,
+  type WeatherArticleItem,
   type BroadcastItem,
 } from '@/api';
 import { useGlobalModals } from '@/hooks/useGlobalModals';
@@ -73,8 +75,45 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
   const [submittingCreate, setSubmittingCreate] = useState(false);
   const [safeLocationOptions, setSafeLocationOptions] = useState<SafeLocationItem[]>([]);
   const [hazardOptions, setHazardOptions] = useState<HazardReportItem[]>([]);
+  const [weatherOptions, setWeatherOptions] = useState<WeatherArticleItem[]>([]);
   const [selectedPointId, setSelectedPointId] = useState('');
   const [loadingPoints, setLoadingPoints] = useState(false);
+
+  const isDbSourceCategory = ['WEATHER', 'SAFE_LOCATION', 'HAZARD'].includes(notificationCategory);
+
+  const selectedSafeLocation = useMemo(
+    () => safeLocationOptions.find((p) => p._id === selectedPointId),
+    [safeLocationOptions, selectedPointId]
+  );
+  const selectedHazardReport = useMemo(
+    () => hazardOptions.find((h) => h._id === selectedPointId),
+    [hazardOptions, selectedPointId]
+  );
+  const selectedWeatherArticle = useMemo(
+    () => weatherOptions.find((w) => w._id === selectedPointId),
+    [weatherOptions, selectedPointId]
+  );
+
+  const getWeatherCategoryLabel = (cat?: string) => {
+    const map: Record<string, string> = {
+      du_bao: 'Dự báo thời tiết',
+      canh_bao: 'Cảnh báo thiên tai',
+      bao_ap_thap: 'Bão & Áp thấp',
+      mua_lu: 'Mưa lũ & Ngập lụt',
+      nang_nong: 'Nắng nóng gay gắt',
+      ret_dam: 'Rét đậm, rét hại',
+      khong_khi: 'Chất lượng không khí',
+      sat_lo: 'Sạt lở đất',
+      bao: 'Bão lớn',
+      HEAVY_RAIN: 'Mưa lớn diện rộng',
+      STORM: 'Bão áp thấp',
+      THUNDERSTORM: 'Dông sét',
+      FLASH_FLOOD: 'Lũ quét',
+      HIGH_TIDE: 'Triều cường',
+      GENERAL: 'Thời tiết chung',
+    };
+    return map[cat || ''] || cat || 'Thời tiết';
+  };
 
   const isAdmin = Boolean(user?.roles?.includes('ADMIN'));
   const isAuthority = Boolean(
@@ -113,15 +152,11 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
     async function loadData() {
       try {
         setLoading(true);
-        const [alertsRes, historyRes, areasRes] = await Promise.all([
-          fetchAlerts(),
+        const [historyRes, areasRes] = await Promise.all([
           fetchBroadcastHistory(),
           propAreas.length === 0 ? fetchAdministrativeAreas() : Promise.resolve(null),
         ]);
         if (!isMounted) return;
-        if (alertsRes && alertsRes.success && Array.isArray(alertsRes.data)) {
-          setAlertsList(alertsRes.data);
-        }
         if (historyRes && historyRes.success && Array.isArray(historyRes.data)) {
           setBroadcastHistory(historyRes.data);
         }
@@ -143,7 +178,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
   // Lắng nghe sự kiện SSE real-time khi có thông báo mới hoặc thu hồi
   useEffect(() => {
     const unsubscribe = subscribeNotificationEvents((payload) => {
-      if (payload.action === 'BROADCAST') {
+      if (payload.action === 'BROADCAST' || payload.action === 'USER') {
         refreshData();
       } else if (payload.action === 'DELETED' && payload.broadcastId) {
         setBroadcastHistory((prev) => prev.filter((b) => b.id !== payload.broadcastId));
@@ -292,43 +327,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
     HAZARD: hazardTemplates,
   }[notificationCategory];
 
-  const CATEGORY_CONFIG: Record<
-    typeof notificationCategory,
-    {
-      label: string;
-      btnText: string;
-      icon: string;
-    }
-  > = {
-    INSTANT: {
-      label: 'Tin khẩn cấp',
-      btnText: 'Gửi thông báo',
-      icon: 'bi-lightning-charge',
-    },
-    WEATHER: {
-      label: 'Thời tiết',
-      btnText: 'Gửi thông báo',
-      icon: 'bi-cloud-rain',
-    },
-    SYSTEM: {
-      label: 'Hệ thống',
-      btnText: 'Gửi thông báo',
-      icon: 'bi-megaphone',
-    },
-    SAFE_LOCATION: {
-      label: 'Điểm an toàn',
-      btnText: 'Gửi thông báo',
-      icon: 'bi-geo-alt',
-    },
-    HAZARD: {
-      label: 'Điểm nguy hiểm',
-      btnText: 'Gửi thông báo',
-      icon: 'bi-exclamation-triangle',
-    },
-  };
-
   useEffect(() => {
-    if (!isCreateOpen || !['SAFE_LOCATION', 'HAZARD'].includes(notificationCategory)) return;
+    if (!isCreateOpen || !['SAFE_LOCATION', 'HAZARD', 'WEATHER'].includes(notificationCategory)) return;
     let isMounted = true;
 
     const loadPoints = async () => {
@@ -357,16 +357,23 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
             setSafeLocationOptions(filtered);
             setSelectedPointId((prev) => (filtered.some((p) => p._id === prev) ? prev : ''));
           }
-        } else {
+        } else if (notificationCategory === 'HAZARD') {
           const result = await fetchHazardReports({ all: 'true', limit: '100', ...(queryAreaId && queryAreaId !== 'ALL' ? { areaId: queryAreaId } : {}) });
           if (isMounted && result.success && Array.isArray(result.data?.reports)) {
             const filtered = result.data.reports.filter((point) => point.status === 'APPROVED' && pointBelongsToSelection(point.areaId));
             setHazardOptions(filtered);
             setSelectedPointId((prev) => (filtered.some((p) => p._id === prev) ? prev : ''));
           }
+        } else if (notificationCategory === 'WEATHER') {
+          const result = await fetchWeatherArticlesApi({ limit: 100 });
+          if (isMounted && result.success && Array.isArray(result.data)) {
+            const valid = result.data.filter((a) => a.status !== 'rejected');
+            setWeatherOptions(valid.length > 0 ? valid : result.data);
+            setSelectedPointId((prev) => (valid.some((a) => a._id === prev) ? prev : ''));
+          }
         }
       } catch (error) {
-        console.warn('Không thể tải danh sách điểm để gửi thông báo:', error);
+        console.warn('Không thể tải danh sách dữ liệu từ CSDL để gửi thông báo:', error);
       } finally {
         if (isMounted) setLoadingPoints(false);
       }
@@ -379,14 +386,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
   const handleSelectCategory = (category: typeof notificationCategory) => {
     setNotificationCategory(category);
     setSelectedPointId('');
-    if (category === 'WEATHER') {
-      setAlertForm((prev) => ({
-        ...prev,
-        type: prev.type === 'FLOOD' ? 'HEAVY_RAIN' : prev.type,
-        severity: prev.severity || 'HIGH',
-        sourceName: prev.sourceName || 'Trung tâm Dự báo KTTV Quốc gia',
-      }));
-    } else if (category === 'INSTANT') {
+    setCreateErrors({});
+    if (category === 'INSTANT') {
       setAlertForm((prev) => ({
         ...prev,
         type: ['HEAVY_RAIN', 'TYPHOON', 'THUNDERSTORM', 'FLASH_FLOOD', 'HIGH_TIDE', 'HEATWAVE', 'COLD_SURGE'].includes(prev.type) ? 'FLOOD' : prev.type,
@@ -441,22 +442,23 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
     e.preventDefault();
     const errors: { title?: string; content?: string; general?: string } = {};
 
-    if (!alertForm.title.trim()) {
-      errors.title = 'Vui lòng nhập tiêu đề thông báo';
-    }
-    if (!alertForm.content.trim()) {
-      errors.content = 'Vui lòng nhập nội dung chi tiết thông báo';
-    }
-    if (notificationCategory === 'SAFE_LOCATION' && !selectedPointId) {
-      errors.general = 'Vui lòng chọn điểm an toàn muốn gửi.';
-    }
-    if (notificationCategory === 'HAZARD' && !selectedPointId) {
-      errors.general = 'Vui lòng chọn điểm nguy hiểm đã được duyệt.';
+    if (isDbSourceCategory) {
+      if (!selectedPointId) {
+        const catName = notificationCategory === 'WEATHER' ? 'bản tin thời tiết' : notificationCategory === 'SAFE_LOCATION' ? 'điểm an toàn' : 'điểm nguy hiểm';
+        errors.general = `Vui lòng chọn một ${catName} từ cơ sở dữ liệu để phát thông báo.`;
+      }
+    } else {
+      if (!alertForm.title.trim()) {
+        errors.title = 'Vui lòng nhập tiêu đề thông báo';
+      }
+      if (!alertForm.content.trim()) {
+        errors.content = 'Vui lòng nhập nội dung chi tiết thông báo';
+      }
     }
 
     if (Object.keys(errors).length > 0) {
       setCreateErrors(errors);
-      showToast('Vui lòng điền đầy đủ các trường bắt buộc', 'warning');
+      showToast(errors.general || errors.title || errors.content || 'Vui lòng kiểm tra lại thông tin', 'warning');
       return;
     }
 
@@ -473,28 +475,82 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
         SAFE_LOCATION: 'Điểm an toàn',
         HAZARD: 'Điểm nguy hiểm',
       };
-      const pointData = notificationCategory === 'SAFE_LOCATION'
-        ? { safeLocationId: selectedPointId }
-        : notificationCategory === 'HAZARD'
-          ? { hazardReportId: selectedPointId }
-          : {};
+
+      let broadcastTitle = alertForm.title.trim();
+      let broadcastContent = alertForm.content.trim();
+      let broadcastImageUrl = alertForm.imageUrl.trim() || undefined;
+      let broadcastArticleUrl = alertForm.articleUrl.trim() || undefined;
+      let broadcastSourceName = alertForm.sourceName.trim() || undefined;
+      let broadcastPriority = ['INSTANT', 'HAZARD', 'WEATHER'].includes(notificationCategory) ? alertForm.severity : 'NORMAL';
+      let extraDataPayload: any = {};
+
+      if (notificationCategory === 'SAFE_LOCATION') {
+        const point = safeLocationOptions.find((p) => p._id === selectedPointId);
+        if (!point) throw new Error('Không tìm thấy điểm an toàn đã chọn.');
+        const lat = point.location?.coordinates?.[1];
+        const lng = point.location?.coordinates?.[0];
+        const coordsStr = (typeof lat === 'number' && typeof lng === 'number')
+          ? `\nTọa độ: ${lat.toFixed(5)}, ${lng.toFixed(5)}`
+          : '';
+        broadcastTitle = `Điểm an toàn: ${point.name}`;
+        broadcastContent = `Địa chỉ: ${point.address}\nSức chứa: ${point.currentOccupancy || 0}/${point.capacity || 0} người${coordsStr}`;
+        broadcastPriority = 'NORMAL';
+        extraDataPayload = {
+          safeLocationId: point._id,
+          deliveryScope: isAuthority ? 'GPS_IN_AREA' : 'ADMINISTRATIVE_AREA',
+        };
+      } else if (notificationCategory === 'HAZARD') {
+        const point = hazardOptions.find((p) => p._id === selectedPointId);
+        if (!point) throw new Error('Không tìm thấy điểm nguy hiểm đã chọn.');
+        const lat = point.location?.coordinates?.[1];
+        const lng = point.location?.coordinates?.[0];
+        const coordsStr = (typeof lat === 'number' && typeof lng === 'number')
+          ? `\nTọa độ: ${lat.toFixed(5)}, ${lng.toFixed(5)}`
+          : '';
+        broadcastTitle = point.title;
+        broadcastContent = `${point.description || ''}\nĐịa chỉ: ${point.address}${coordsStr}`;
+        broadcastPriority = point.severity || 'HIGH';
+        broadcastImageUrl = point.images?.[0] || undefined;
+        extraDataPayload = {
+          hazardReportId: point._id,
+          deliveryScope: isAuthority ? 'GPS_IN_AREA' : 'ADMINISTRATIVE_AREA',
+        };
+      } else if (notificationCategory === 'WEATHER') {
+        const article = weatherOptions.find((a) => a._id === selectedPointId);
+        if (!article) throw new Error('Không tìm thấy bản tin thời tiết đã chọn.');
+        broadcastTitle = article.title;
+        broadcastContent = article.summary || article.content;
+        broadcastImageUrl = article.imageUrl || article.image_url || undefined;
+        broadcastArticleUrl = article.articleUrl || article.source_url || undefined;
+        broadcastSourceName = article.sourceName || article.source_name || undefined;
+        const score = article.relevance_score ?? article.score ?? 50;
+        broadcastPriority = score >= 85 ? 'CRITICAL' : score >= 60 ? 'HIGH' : 'NORMAL';
+        extraDataPayload = {
+          weatherArticleId: article._id,
+          weatherType: article.category,
+          score,
+          category: article.category,
+        };
+      } else if (notificationCategory === 'INSTANT') {
+        extraDataPayload = {
+          disasterType: alertForm.type,
+        };
+      }
 
       await broadcastNotificationApi({
-        title: alertForm.title.trim(),
-        content: alertForm.content.trim(),
+        title: broadcastTitle,
+        content: broadcastContent,
         type: notificationCategory,
         areaId: targetAreaId,
-        priority: ['INSTANT', 'HAZARD', 'WEATHER'].includes(notificationCategory) ? alertForm.severity : 'NORMAL',
-        imageUrl: alertForm.imageUrl.trim() || undefined,
-        articleUrl: alertForm.articleUrl.trim() || undefined,
-        sourceName: alertForm.sourceName.trim() || undefined,
+        priority: broadcastPriority,
+        imageUrl: broadcastImageUrl,
+        articleUrl: broadcastArticleUrl,
+        sourceName: broadcastSourceName,
         data: {
-          ...(notificationCategory === 'INSTANT' ? { disasterType: alertForm.type } : {}),
-          ...(notificationCategory === 'WEATHER' ? { weatherType: alertForm.type } : {}),
-          ...pointData,
-          imageUrl: alertForm.imageUrl.trim() || undefined,
-          articleUrl: alertForm.articleUrl.trim() || undefined,
-          sourceName: alertForm.sourceName.trim() || undefined,
+          ...extraDataPayload,
+          imageUrl: broadcastImageUrl,
+          articleUrl: broadcastArticleUrl,
+          sourceName: broadcastSourceName,
           deliveryScope: isAuthority && ['SAFE_LOCATION', 'HAZARD'].includes(notificationCategory)
             ? 'GPS_IN_AREA'
             : 'ADMINISTRATIVE_AREA',
@@ -593,7 +649,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
   const instantCount = useMemo(() => {
     return broadcastHistory.filter((item) => {
       const t = String(item.type || '').toUpperCase();
-      return t === 'INSTANT' || t === 'TIN_TUC_THOI' || t === 'ALERT' || t === 'WEATHER';
+      return t === 'INSTANT' || t === 'TIN_TUC_THOI' || t === 'ALERT';
     }).length;
   }, [broadcastHistory]);
 
@@ -613,7 +669,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
     return broadcastHistory.filter((item) => {
       if (broadcastFilterTab === 'INSTANT') {
         const t = String(item.type || '').toUpperCase();
-        if (t !== 'INSTANT' && t !== 'TIN_TUC_THOI' && t !== 'ALERT' && t !== 'WEATHER') return false;
+        if (t !== 'INSTANT' && t !== 'TIN_TUC_THOI' && t !== 'ALERT') return false;
       }
       if (broadcastFilterTab === 'SYSTEM') {
         const t = String(item.type || '').toUpperCase();
@@ -1635,8 +1691,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                     gap: '18px',
                   }}
                 >
-                  {/* CỘT TRÁI: PHÂN LOẠI, CẤU HÌNH LOẠI, ĐỊA BÀN, MẪU SOẠN NHANH */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '11px' }}>
+                  {/* CỘT TRÁI: PHÂN LOẠI & LỰA CHỌN DỮ LIỆU */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {/* Phân loại */}
                     <div>
                       <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
@@ -1660,516 +1716,816 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                           cursor: 'pointer',
                         }}
                       >
-                        <option value="INSTANT">Tin khẩn cấp</option>
-                        <option value="WEATHER">Thời tiết</option>
-                        <option value="SYSTEM">Hệ thống</option>
-                        <option value="SAFE_LOCATION">Điểm an toàn (GPS)</option>
-                        <option value="HAZARD">Điểm nguy hiểm (GPS)</option>
+                        <option value="INSTANT">Tin khẩn cấp (Soạn thủ công)</option>
+                        <option value="SYSTEM">Hệ thống (Soạn thủ công)</option>
+                        <option value="WEATHER">Thời tiết (Chọn từ CSDL)</option>
+                        <option value="SAFE_LOCATION">Điểm an toàn (Chọn từ CSDL)</option>
+                        <option value="HAZARD">Điểm nguy hiểm (Chọn từ CSDL)</option>
                       </select>
                     </div>
 
-                    {/* Cấu hình chi tiết theo phân loại */}
-                    {notificationCategory === 'INSTANT' && (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                            Loại tình huống
-                          </label>
-                          <select
-                            value={alertForm.type}
-                            onChange={(e) => setAlertForm({ ...alertForm, type: e.target.value })}
-                            className="sos-form-select"
-                            style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', boxSizing: 'border-box' }}
-                          >
-                            <option value="FLOOD">Lũ lụt, ngập sâu</option>
-                            <option value="STORM">Bão lớn, lốc xoáy</option>
-                            <option value="LANDSLIDE">Sạt lở đất</option>
-                            <option value="EVACUATION">Sơ tán dân</option>
-                            <option value="GENERAL">Thiên tai chung</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                            Mức độ
-                          </label>
-                          <select
-                            value={alertForm.severity}
-                            onChange={(e) => setAlertForm({ ...alertForm, severity: e.target.value as any })}
-                            className="sos-form-select"
-                            style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', boxSizing: 'border-box' }}
-                          >
-                            <option value="CRITICAL">Nguy cấp (Còi hú &amp; Push)</option>
-                            <option value="HIGH">Cao</option>
-                            <option value="MEDIUM">Trung bình</option>
-                            <option value="LOW">Thông báo</option>
-                          </select>
-                        </div>
-                      </div>
-                    )}
-
-                    {notificationCategory === 'WEATHER' && (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                            Hình thái thời tiết
-                          </label>
-                          <select
-                            value={alertForm.type}
-                            onChange={(e) => setAlertForm({ ...alertForm, type: e.target.value })}
-                            className="sos-form-select"
-                            style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', boxSizing: 'border-box' }}
-                          >
-                            <option value="HEAVY_RAIN">Mưa lớn diện rộng</option>
-                            <option value="STORM">Bão, áp thấp</option>
-                            <option value="THUNDERSTORM">Dông lốc, sét</option>
-                            <option value="FLASH_FLOOD">Lũ quét, sạt lở</option>
-                            <option value="HIGH_TIDE">Triều cường</option>
-                            <option value="HEATWAVE">Nắng nóng</option>
-                            <option value="COLD_SURGE">Rét hại</option>
-                            <option value="GENERAL">Dự báo chung</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                            Cấp độ rủi ro
-                          </label>
-                          <select
-                            value={alertForm.severity}
-                            onChange={(e) => setAlertForm({ ...alertForm, severity: e.target.value as any })}
-                            className="sos-form-select"
-                            style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', boxSizing: 'border-box' }}
-                          >
-                            <option value="CRITICAL">Cấp 4 (Rất nguy hiểm)</option>
-                            <option value="HIGH">Cấp 3 (Rủi ro lớn)</option>
-                            <option value="MEDIUM">Cấp 2 (Trung bình)</option>
-                            <option value="LOW">Cấp 1 (Thấp)</option>
-                          </select>
-                        </div>
-                      </div>
-                    )}
-
-                    {notificationCategory === 'SAFE_LOCATION' && (
-                      <div>
-                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                          Điểm an toàn <span style={{ color: '#dc2626' }}>*</span>
-                        </label>
-                        <select
-                          value={selectedPointId}
-                          onChange={(event) => {
-                            const val = event.target.value;
-                            setSelectedPointId(val);
-                            const point = safeLocationOptions.find((item) => item._id === val);
-                            if (point) {
-                              const lat = point.location?.coordinates?.[1];
-                              const lng = point.location?.coordinates?.[0];
-                              const coordsStr = (typeof lat === 'number' && typeof lng === 'number')
-                                ? `\nTọa độ: ${lat.toFixed(5)}, ${lng.toFixed(5)}`
-                                : '';
-                              setAlertForm((prev) => ({
-                                ...prev,
-                                title: `Điểm an toàn: ${point.name}`,
-                                content: `Địa chỉ: ${point.address}\nSức chứa: ${point.currentOccupancy || 0}/${point.capacity || 0} người${coordsStr}`,
-                              }));
-                            }
-                          }}
-                          className="sos-form-select"
-                          style={{ width: '100%', padding: '6px 9px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', fontSize: '12.5px', boxSizing: 'border-box' }}
-                        >
-                          <option value="">{loadingPoints ? 'Đang tải danh sách điểm an toàn...' : '-- Chọn điểm an toàn --'}</option>
-                          {safeLocationOptions.map((point) => (
-                            <option key={point._id} value={point._id}>
-                              {point.name} — {point.address}
-                            </option>
-                          ))}
-                        </select>
-                        {!loadingPoints && safeLocationOptions.length === 0 && (
-                          <small style={{ color: '#b45309', display: 'block', marginTop: '3px' }}>
-                            Chưa có điểm an toàn hoạt động nào trên địa bàn đã chọn.
-                          </small>
-                        )}
-                      </div>
-                    )}
-
-                    {notificationCategory === 'HAZARD' && (
-                      <div>
-                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                          Điểm nguy hiểm <span style={{ color: '#dc2626' }}>*</span>
-                        </label>
-                        <select
-                          value={selectedPointId}
-                          onChange={(event) => {
-                            const val = event.target.value;
-                            setSelectedPointId(val);
-                            const point = hazardOptions.find((item) => item._id === val);
-                            if (point) {
-                              const lat = point.location?.coordinates?.[1];
-                              const lng = point.location?.coordinates?.[0];
-                              const coordsStr = (typeof lat === 'number' && typeof lng === 'number')
-                                ? `\nTọa độ: ${lat.toFixed(5)}, ${lng.toFixed(5)}`
-                                : '';
-                              setAlertForm((prev) => ({
-                                ...prev,
-                                title: point.title,
-                                content: `${point.description || ''}\nĐịa chỉ: ${point.address}${coordsStr}`,
-                                severity: point.severity || prev.severity,
-                              }));
-                            }
-                          }}
-                          className="sos-form-select"
-                          style={{ width: '100%', padding: '6px 9px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', fontSize: '12.5px', boxSizing: 'border-box' }}
-                        >
-                          <option value="">{loadingPoints ? 'Đang tải danh sách điểm nguy hiểm...' : '-- Chọn điểm nguy hiểm --'}</option>
-                          {hazardOptions.map((point) => (
-                            <option key={point._id} value={point._id}>
-                              {point.title} — {point.address}
-                            </option>
-                          ))}
-                        </select>
-                        {!loadingPoints && hazardOptions.length === 0 && (
-                          <small style={{ color: '#b45309', display: 'block', marginTop: '3px' }}>
-                            Chưa có điểm nguy hiểm được duyệt nào trên địa bàn đã chọn.
-                          </small>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Địa bàn tiếp nhận thông báo */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
-                        Địa bàn nhận tin <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      {isAuthority ? (
-                        <div
-                          style={{
-                            width: '100%',
-                            padding: '6px 10px',
-                            borderRadius: '6px',
-                            border: '1px solid #cbd5e1',
-                            background: '#f8fafc',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            boxSizing: 'border-box',
-                            minHeight: '34px',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <i className="bi bi-geo-alt" style={{ fontSize: '13px', color: '#64748b' }}></i>
-                            <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#0f172a' }}>
-                              {authorityAreaName}
-                            </span>
+                    {/* NẾU LÀ DỮ LIỆU TỪ DB (WEATHER / SAFE_LOCATION / HAZARD) */}
+                    {isDbSourceCategory ? (
+                      <>
+                        {notificationCategory === 'WEATHER' && (
+                          <div>
+                            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                              Chọn bản tin Thời tiết từ DB <span style={{ color: '#dc2626' }}>*</span>
+                            </label>
+                            <select
+                              value={selectedPointId}
+                              onChange={(e) => {
+                                setSelectedPointId(e.target.value);
+                                setCreateErrors((prev) => ({ ...prev, general: undefined }));
+                              }}
+                              className="sos-form-select"
+                              style={{ width: '100%', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', fontSize: '12.5px', boxSizing: 'border-box' }}
+                            >
+                              <option value="">
+                                {loadingPoints ? 'Đang tải bản tin từ DB...' : `-- Chọn bản tin thời tiết (${weatherOptions.length} bản tin) --`}
+                              </option>
+                              {weatherOptions.map((item) => (
+                                <option key={item._id} value={item._id}>
+                                  [{getWeatherCategoryLabel(item.category)}] {item.title}
+                                </option>
+                              ))}
+                            </select>
+                            {!loadingPoints && weatherOptions.length === 0 && (
+                              <small style={{ color: '#b45309', display: 'block', marginTop: '3px' }}>
+                                Chưa có bản tin thời tiết nào trong cơ sở dữ liệu.
+                              </small>
+                            )}
                           </div>
-                          <span style={{ fontSize: '11px', color: '#475569', background: '#e2e8f0', padding: '1px 6px', borderRadius: '4px' }}>
-                            Địa bàn phụ trách
-                          </span>
-                        </div>
-                      ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                          <select
-                            value={selectedProvinceId}
-                            onChange={(event) => {
-                              const provinceId = event.target.value || 'ALL';
-                              setSelectedProvinceId(provinceId);
-                              setSelectedPointId('');
-                              setAlertForm((prev) => ({
-                                ...prev,
-                                areaId: provinceId,
-                              }));
-                            }}
-                            className="sos-form-select"
-                            aria-label="Chọn tỉnh thành"
-                            style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', boxSizing: 'border-box' }}
-                          >
-                            <option value="ALL">Tất cả tỉnh/thành</option>
-                            {provinceAreas.map((province) => (
-                              <option key={province._id} value={province._id}>{province.name} ({province.code})</option>
-                            ))}
-                          </select>
-                          <select
-                            value={areas.find((area) => area._id === alertForm.areaId)?.type === 'WARD' ? alertForm.areaId : ''}
-                            disabled={selectedProvinceId === 'ALL'}
-                            onChange={(event) => {
-                              setSelectedPointId('');
-                              setAlertForm((prev) => ({
-                                ...prev,
-                                areaId: event.target.value || selectedProvinceId,
-                              }));
-                            }}
-                            className="sos-form-select"
-                            aria-label="Chọn xã phường"
-                            style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: selectedProvinceId === 'ALL' ? '#f8fafc' : '#fff', boxSizing: 'border-box' }}
-                          >
-                            <option value="">Tất cả xã/phường</option>
-                            {wardAreas.map((ward) => (
-                              <option key={ward._id} value={ward._id}>{ward.name} ({ward.code})</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                      {isAuthority && ['SAFE_LOCATION', 'HAZARD'].includes(notificationCategory) && (
-                        <div style={{ marginTop: '3px', color: '#64748b', fontSize: '11px' }}>
-                          Chỉ gửi tới thiết bị có GPS cập nhật trong 2h gần nhất tại địa bàn này.
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Mẫu nhanh */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                        Mẫu nhanh:
-                      </label>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                        {currentTemplates.map((t, idx) => (
-                          <button
-                            type="button"
-                            key={idx}
-                            onClick={() => handleApplyTemplate(t)}
-                            title={t.content}
-                            style={{
-                              padding: '4px 9px',
-                              borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              background: '#ffffff',
-                              color: '#334155',
-                              fontSize: '11.5px',
-                              fontWeight: 500,
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '5px',
-                              transition: 'all 0.15s ease',
-                              whiteSpace: 'nowrap',
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = '#f1f5f9';
-                              e.currentTarget.style.borderColor = '#94a3b8';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = '#ffffff';
-                              e.currentTarget.style.borderColor = '#cbd5e1';
-                            }}
-                          >
-                            <i className={`bi ${t.icon || 'bi-bookmark'}`} style={{ fontSize: '11px', color: '#475569' }}></i>
-                            <span>{t.title}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* CỘT PHẢI: TIÊU ĐỀ, NỘI DUNG, ẢNH & THAM CHIẾU, EXPO PUSH READY */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {/* Tiêu đề */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
-                        Tiêu đề <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={alertForm.title}
-                        onChange={(e) => {
-                          setAlertForm({ ...alertForm, title: e.target.value });
-                          if (createErrors.title) {
-                            setCreateErrors((prev) => ({ ...prev, title: undefined, general: undefined }));
-                          }
-                        }}
-                        placeholder={
-                          notificationCategory === 'INSTANT'
-                            ? 'VD: Cảnh báo nước sông dâng cao'
-                            : notificationCategory === 'WEATHER'
-                              ? 'VD: Cảnh báo mưa lớn diện rộng'
-                              : notificationCategory === 'HAZARD'
-                                ? 'VD: Cảnh báo điểm sạt lở cần tránh'
-                                : notificationCategory === 'SAFE_LOCATION'
-                                  ? 'VD: Hướng dẫn tới điểm trú ẩn an toàn'
-                                  : 'VD: Thông báo lịch tiếp nhận nhu yếu phẩm'
-                        }
-                        style={{
-                          width: '100%',
-                          padding: '7px 12px',
-                          borderRadius: '6px',
-                          border: createErrors.title ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                          background: createErrors.title ? '#fff5f5' : '#ffffff',
-                          fontSize: '13px',
-                          color: '#0f172a',
-                          boxSizing: 'border-box',
-                          outline: 'none',
-                        }}
-                      />
-                      {createErrors.title && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
-                          <i className="bi bi-exclamation-circle" style={{ flexShrink: 0, fontSize: '12px' }}></i>
-                          <span>{createErrors.title}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Nội dung */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
-                        Nội dung <span style={{ color: '#dc2626' }}>*</span>
-                      </label>
-                      <textarea
-                        rows={4}
-                        value={alertForm.content}
-                        onChange={(e) => {
-                          setAlertForm({ ...alertForm, content: e.target.value });
-                          if (createErrors.content) {
-                            setCreateErrors((prev) => ({ ...prev, content: undefined, general: undefined }));
-                          }
-                        }}
-                        placeholder="Nhập hướng dẫn an toàn, điểm sơ tán, số hotline trực ban..."
-                        style={{
-                          width: '100%',
-                          padding: '7px 12px',
-                          borderRadius: '6px',
-                          border: createErrors.content ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                          background: createErrors.content ? '#fff5f5' : '#ffffff',
-                          fontSize: '12.5px',
-                          color: '#0f172a',
-                          boxSizing: 'border-box',
-                          outline: 'none',
-                          lineHeight: '1.45',
-                          minHeight: '80px',
-                        }}
-                      />
-                      {createErrors.content && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
-                          <i className="bi bi-exclamation-circle" style={{ flexShrink: 0, fontSize: '12px' }}></i>
-                          <span>{createErrors.content}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Ảnh & Tham chiếu */}
-                    <div
-                      style={{
-                        background: '#f8fafc',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '8px',
-                        padding: '10px 12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#334155' }}>
-                          <i className="bi bi-paperclip" style={{ fontSize: '14px', color: '#475569' }}></i>
-                          <span>Ảnh &amp; Tham chiếu (tùy chọn)</span>
-                        </div>
-                        {alertForm.imageUrl && (
-                          <span style={{ fontSize: '11px', color: '#2563eb', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                            <i className="bi bi-check2"></i> Đã có ảnh
-                          </span>
                         )}
-                      </div>
 
-                      <div>
-                        <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
-                          Link ảnh
-                        </label>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          <input
-                            type="url"
-                            value={alertForm.imageUrl}
-                            onChange={(e) => setAlertForm({ ...alertForm, imageUrl: e.target.value })}
-                            placeholder="https://... link ảnh dự báo hoặc minh họa"
-                            style={{
-                              flex: 1,
-                              padding: '6px 10px',
-                              borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              background: '#ffffff',
-                              fontSize: '12px',
-                              color: '#0f172a',
-                              boxSizing: 'border-box',
-                              outline: 'none',
-                            }}
-                          />
-                          {alertForm.imageUrl && (
-                            <img
-                              src={alertForm.imageUrl}
-                              alt="preview"
-                              style={{ width: '28px', height: '28px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #cbd5e1', flexShrink: 0 }}
-                              onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                            />
+                        {notificationCategory === 'SAFE_LOCATION' && (
+                          <div>
+                            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                              Chọn Điểm an toàn từ DB <span style={{ color: '#dc2626' }}>*</span>
+                            </label>
+                            <select
+                              value={selectedPointId}
+                              onChange={(e) => {
+                                setSelectedPointId(e.target.value);
+                                setCreateErrors((prev) => ({ ...prev, general: undefined }));
+                              }}
+                              className="sos-form-select"
+                              style={{ width: '100%', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', fontSize: '12.5px', boxSizing: 'border-box' }}
+                            >
+                              <option value="">
+                                {loadingPoints ? 'Đang tải điểm an toàn từ DB...' : `-- Chọn điểm an toàn (${safeLocationOptions.length} điểm) --`}
+                              </option>
+                              {safeLocationOptions.map((point) => (
+                                <option key={point._id} value={point._id}>
+                                  {point.name} — {point.address}
+                                </option>
+                              ))}
+                            </select>
+                            {!loadingPoints && safeLocationOptions.length === 0 && (
+                              <small style={{ color: '#b45309', display: 'block', marginTop: '3px' }}>
+                                Chưa có điểm an toàn hoạt động nào trên địa bàn đã chọn.
+                              </small>
+                            )}
+                          </div>
+                        )}
+
+                        {notificationCategory === 'HAZARD' && (
+                          <div>
+                            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                              Chọn Điểm nguy hiểm từ DB <span style={{ color: '#dc2626' }}>*</span>
+                            </label>
+                            <select
+                              value={selectedPointId}
+                              onChange={(e) => {
+                                setSelectedPointId(e.target.value);
+                                setCreateErrors((prev) => ({ ...prev, general: undefined }));
+                              }}
+                              className="sos-form-select"
+                              style={{ width: '100%', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', fontSize: '12.5px', boxSizing: 'border-box' }}
+                            >
+                              <option value="">
+                                {loadingPoints ? 'Đang tải điểm nguy hiểm từ DB...' : `-- Chọn điểm nguy hiểm (${hazardOptions.length} điểm) --`}
+                              </option>
+                              {hazardOptions.map((point) => (
+                                <option key={point._id} value={point._id}>
+                                  [{point.severity || 'HIGH'}] {point.title} — {point.address}
+                                </option>
+                              ))}
+                            </select>
+                            {!loadingPoints && hazardOptions.length === 0 && (
+                              <small style={{ color: '#b45309', display: 'block', marginTop: '3px' }}>
+                                Chưa có điểm nguy hiểm được duyệt nào trên địa bàn đã chọn.
+                              </small>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Địa bàn tiếp nhận thông báo */}
+                        <div>
+                          <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
+                            Địa bàn phát thông báo <span style={{ color: '#dc2626' }}>*</span>
+                          </label>
+                          {isAuthority ? (
+                            <div
+                              style={{
+                                width: '100%',
+                                padding: '6px 10px',
+                                borderRadius: '6px',
+                                border: '1px solid #cbd5e1',
+                                background: '#f8fafc',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                boxSizing: 'border-box',
+                                minHeight: '34px',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <i className="bi bi-geo-alt" style={{ fontSize: '13px', color: '#64748b' }}></i>
+                                <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#0f172a' }}>
+                                  {authorityAreaName}
+                                </span>
+                              </div>
+                              <span style={{ fontSize: '11px', color: '#475569', background: '#e2e8f0', padding: '1px 6px', borderRadius: '4px' }}>
+                                Địa bàn phụ trách
+                              </span>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <select
+                                value={selectedProvinceId}
+                                onChange={(event) => {
+                                  const provinceId = event.target.value || 'ALL';
+                                  setSelectedProvinceId(provinceId);
+                                  setSelectedPointId('');
+                                  setAlertForm((prev) => ({
+                                    ...prev,
+                                    areaId: provinceId,
+                                  }));
+                                }}
+                                className="sos-form-select"
+                                aria-label="Chọn tỉnh thành"
+                                style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', boxSizing: 'border-box' }}
+                              >
+                                <option value="ALL">Tất cả tỉnh/thành</option>
+                                {provinceAreas.map((province) => (
+                                  <option key={province._id} value={province._id}>{province.name} ({province.code})</option>
+                                ))}
+                              </select>
+                              <select
+                                value={areas.find((area) => area._id === alertForm.areaId)?.type === 'WARD' ? alertForm.areaId : ''}
+                                disabled={selectedProvinceId === 'ALL'}
+                                onChange={(event) => {
+                                  setSelectedPointId('');
+                                  setAlertForm((prev) => ({
+                                    ...prev,
+                                    areaId: event.target.value || selectedProvinceId,
+                                  }));
+                                }}
+                                className="sos-form-select"
+                                aria-label="Chọn xã phường"
+                                style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: selectedProvinceId === 'ALL' ? '#f8fafc' : '#fff', boxSizing: 'border-box' }}
+                              >
+                                <option value="">Tất cả xã/phường</option>
+                                {wardAreas.map((ward) => (
+                                  <option key={ward._id} value={ward._id}>{ward.name} ({ward.code})</option>
+                                ))}
+                              </select>
+                            </div>
                           )}
                         </div>
-                      </div>
 
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        {/* Hộp chỉ dẫn lấy trực tiếp từ DB */}
+                        <div
+                          style={{
+                            padding: '10px 12px',
+                            background: '#f0fdf4',
+                            border: '1px solid #bbf7d0',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '8px',
+                          }}
+                        >
+                          <i className="bi bi-database-check" style={{ fontSize: '16px', color: '#16a34a', flexShrink: 0, marginTop: '2px' }}></i>
+                          <div style={{ fontSize: '12px', color: '#166534', lineHeight: 1.45 }}>
+                            <strong>Dữ liệu nguồn trực tiếp từ CSDL</strong>
+                            <div style={{ marginTop: '2px', color: '#15803d', fontSize: '11.5px' }}>
+                              Dữ liệu đã có sẵn trong cơ sở dữ liệu, không cần nhập form. Hệ thống sẽ phát trực tiếp tới điện thoại người dân.
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      /* NẾU LÀ TẠO THỦ CÔNG (INSTANT / SYSTEM) */
+                      <>
+                        {notificationCategory === 'INSTANT' && (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                                Loại tình huống
+                              </label>
+                              <select
+                                value={alertForm.type}
+                                onChange={(e) => setAlertForm({ ...alertForm, type: e.target.value })}
+                                className="sos-form-select"
+                                style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', boxSizing: 'border-box' }}
+                              >
+                                <option value="FLOOD">Lũ lụt, ngập sâu</option>
+                                <option value="STORM">Bão lớn, lốc xoáy</option>
+                                <option value="LANDSLIDE">Sạt lở đất</option>
+                                <option value="EVACUATION">Sơ tán dân</option>
+                                <option value="GENERAL">Thiên tai chung</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
+                                Mức độ
+                              </label>
+                              <select
+                                value={alertForm.severity}
+                                onChange={(e) => setAlertForm({ ...alertForm, severity: e.target.value as any })}
+                                className="sos-form-select"
+                                style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', boxSizing: 'border-box' }}
+                              >
+                                <option value="CRITICAL">Nguy cấp (Còi hú &amp; Push)</option>
+                                <option value="HIGH">Cao</option>
+                                <option value="MEDIUM">Trung bình</option>
+                                <option value="LOW">Thông báo</option>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Địa bàn tiếp nhận thông báo */}
                         <div>
-                          <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
-                            Nguồn tin
+                          <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
+                            Địa bàn nhận tin <span style={{ color: '#dc2626' }}>*</span>
+                          </label>
+                          {isAuthority ? (
+                            <div
+                              style={{
+                                width: '100%',
+                                padding: '6px 10px',
+                                borderRadius: '6px',
+                                border: '1px solid #cbd5e1',
+                                background: '#f8fafc',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                boxSizing: 'border-box',
+                                minHeight: '34px',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <i className="bi bi-geo-alt" style={{ fontSize: '13px', color: '#64748b' }}></i>
+                                <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#0f172a' }}>
+                                  {authorityAreaName}
+                                </span>
+                              </div>
+                              <span style={{ fontSize: '11px', color: '#475569', background: '#e2e8f0', padding: '1px 6px', borderRadius: '4px' }}>
+                                Địa bàn phụ trách
+                              </span>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <select
+                                value={selectedProvinceId}
+                                onChange={(event) => {
+                                  const provinceId = event.target.value || 'ALL';
+                                  setSelectedProvinceId(provinceId);
+                                  setSelectedPointId('');
+                                  setAlertForm((prev) => ({
+                                    ...prev,
+                                    areaId: provinceId,
+                                  }));
+                                }}
+                                className="sos-form-select"
+                                aria-label="Chọn tỉnh thành"
+                                style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', boxSizing: 'border-box' }}
+                              >
+                                <option value="ALL">Tất cả tỉnh/thành</option>
+                                {provinceAreas.map((province) => (
+                                  <option key={province._id} value={province._id}>{province.name} ({province.code})</option>
+                                ))}
+                              </select>
+                              <select
+                                value={areas.find((area) => area._id === alertForm.areaId)?.type === 'WARD' ? alertForm.areaId : ''}
+                                disabled={selectedProvinceId === 'ALL'}
+                                onChange={(event) => {
+                                  setSelectedPointId('');
+                                  setAlertForm((prev) => ({
+                                    ...prev,
+                                    areaId: event.target.value || selectedProvinceId,
+                                  }));
+                                }}
+                                className="sos-form-select"
+                                aria-label="Chọn xã phường"
+                                style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: selectedProvinceId === 'ALL' ? '#f8fafc' : '#fff', boxSizing: 'border-box' }}
+                              >
+                                <option value="">Tất cả xã/phường</option>
+                                {wardAreas.map((ward) => (
+                                  <option key={ward._id} value={ward._id}>{ward.name} ({ward.code})</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Mẫu nhanh */}
+                        <div>
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                            Mẫu nhanh:
+                          </label>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                            {currentTemplates.map((t, idx) => (
+                              <button
+                                type="button"
+                                key={idx}
+                                onClick={() => handleApplyTemplate(t)}
+                                title={t.content}
+                                style={{
+                                  padding: '4px 9px',
+                                  borderRadius: '6px',
+                                  border: '1px solid #cbd5e1',
+                                  background: '#ffffff',
+                                  color: '#334155',
+                                  fontSize: '11.5px',
+                                  fontWeight: 500,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  transition: 'all 0.15s ease',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                <i className={`bi ${t.icon || 'bi-bookmark'}`} style={{ fontSize: '11px', color: '#475569' }}></i>
+                                <span>{t.title}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* CỘT PHẢI: XEM TRƯỚC DỮ LIỆU TỪ DB (KHÔNG HIỂN THỊ FORM INSERT) HOẶC FORM INSERT CHO THỦ CÔNG */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {isDbSourceCategory ? (
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <label style={{ fontSize: '12.5px', fontWeight: 700, color: '#0f172a' }}>
+                            Xem trước dữ liệu phát thông báo
+                          </label>
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              background: '#eff6ff',
+                              color: '#1d4ed8',
+                              fontWeight: 600,
+                              border: '1px solid #bfdbfe',
+                            }}
+                          >
+                            <i className="bi bi-database me-1"></i>Từ cơ sở dữ liệu
+                          </span>
+                        </div>
+
+                        {/* Nếu đã chọn mục từ DB */}
+                        {selectedPointId ? (
+                          <div
+                            style={{
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '8px',
+                              background: '#ffffff',
+                              padding: '14px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '12px',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                            }}
+                          >
+                            {/* Header preview: Loại & Mức độ */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    fontSize: '11.5px',
+                                    fontWeight: 700,
+                                    padding: '3px 8px',
+                                    borderRadius: '5px',
+                                    background: '#f1f5f9',
+                                    color: '#0f172a',
+                                    border: '1px solid #e2e8f0',
+                                  }}
+                                >
+                                  {notificationCategory === 'WEATHER' && <i className="bi bi-cloud-sun text-primary"></i>}
+                                  {notificationCategory === 'SAFE_LOCATION' && <i className="bi bi-shield-check text-success"></i>}
+                                  {notificationCategory === 'HAZARD' && <i className="bi bi-exclamation-triangle text-danger"></i>}
+                                  <span>
+                                    {notificationCategory === 'WEATHER'
+                                      ? getWeatherCategoryLabel(selectedWeatherArticle?.category)
+                                      : notificationCategory === 'SAFE_LOCATION'
+                                        ? 'Điểm an toàn'
+                                        : 'Điểm nguy hiểm'}
+                                  </span>
+                                </span>
+
+                                {notificationCategory === 'WEATHER' && selectedWeatherArticle?.relevance_score !== undefined && (
+                                  <span style={{ fontSize: '11px', color: '#64748b' }}>
+                                    Độ tin cậy: <strong>{selectedWeatherArticle.relevance_score}%</strong>
+                                  </span>
+                                )}
+                              </div>
+
+                              <span
+                                style={{
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  color: '#059669',
+                                  background: '#ecfdf5',
+                                  padding: '2px 8px',
+                                  borderRadius: '4px',
+                                  border: '1px solid #a7f3d0',
+                                }}
+                              >
+                                <i className="bi bi-check-circle me-1"></i>Hợp lệ để phát
+                              </span>
+                            </div>
+
+                            {/* Tiêu đề mục được chọn */}
+                            <div>
+                              <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '2px' }}>
+                                Tiêu đề thông báo
+                              </div>
+                              <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#0f172a', lineHeight: 1.4 }}>
+                                {notificationCategory === 'WEATHER' && (selectedWeatherArticle?.title || 'Chưa có tiêu đề')}
+                                {notificationCategory === 'SAFE_LOCATION' && `Điểm an toàn: ${selectedSafeLocation?.name || ''}`}
+                                {notificationCategory === 'HAZARD' && (selectedHazardReport?.title || 'Chưa có tiêu đề')}
+                              </div>
+                            </div>
+
+                            {/* Nội dung chi tiết */}
+                            <div>
+                              <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '2px' }}>
+                                Nội dung phát đi
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: '12.5px',
+                                  color: '#334155',
+                                  lineHeight: 1.5,
+                                  background: '#f8fafc',
+                                  padding: '10px 12px',
+                                  borderRadius: '6px',
+                                  border: '1px solid #e2e8f0',
+                                  maxHeight: '140px',
+                                  overflowY: 'auto',
+                                  whiteSpace: 'pre-line',
+                                }}
+                              >
+                                {notificationCategory === 'WEATHER' && (selectedWeatherArticle?.summary || selectedWeatherArticle?.content || 'Chưa có nội dung')}
+                                {notificationCategory === 'SAFE_LOCATION' && (
+                                  <>
+                                    <div><strong>Địa chỉ:</strong> {selectedSafeLocation?.address}</div>
+                                    <div><strong>Sức chứa tiếp nhận:</strong> {selectedSafeLocation?.currentOccupancy || 0}/{selectedSafeLocation?.capacity || 0} người</div>
+                                    {selectedSafeLocation?.location?.coordinates && (
+                                      <div><strong>Tọa độ:</strong> {selectedSafeLocation.location.coordinates[1]?.toFixed(5)}, {selectedSafeLocation.location.coordinates[0]?.toFixed(5)}</div>
+                                    )}
+                                  </>
+                                )}
+                                {notificationCategory === 'HAZARD' && (
+                                  <>
+                                    <div>{selectedHazardReport?.description || 'Không có mô tả chi tiết.'}</div>
+                                    <div style={{ marginTop: '4px' }}><strong>Vị trí:</strong> {selectedHazardReport?.address}</div>
+                                    {selectedHazardReport?.location?.coordinates && (
+                                      <div><strong>Tọa độ GPS:</strong> {selectedHazardReport.location.coordinates[1]?.toFixed(5)}, {selectedHazardReport.location.coordinates[0]?.toFixed(5)}</div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Thông tin mở rộng & Nguồn bài viết */}
+                            {notificationCategory === 'WEATHER' && (
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11.5px', color: '#475569' }}>
+                                <div>
+                                  <span style={{ color: '#64748b' }}>Nguồn:</span> <strong>{selectedWeatherArticle?.sourceName || selectedWeatherArticle?.source_name || 'Trung tâm KTTV'}</strong>
+                                </div>
+                                {selectedWeatherArticle?.source_url || selectedWeatherArticle?.articleUrl ? (
+                                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    <span style={{ color: '#64748b' }}>Tham chiếu:</span>{' '}
+                                    <a
+                                      href={selectedWeatherArticle.source_url || selectedWeatherArticle.articleUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      style={{ color: '#2563eb', textDecoration: 'none' }}
+                                    >
+                                      Xem bài gốc <i className="bi bi-box-arrow-up-right" style={{ fontSize: '10px' }}></i>
+                                    </a>
+                                  </div>
+                                ) : null}
+                              </div>
+                            )}
+
+                            {/* Thumbnail ảnh đính kèm nếu có */}
+                            {((notificationCategory === 'WEATHER' && (selectedWeatherArticle?.imageUrl || selectedWeatherArticle?.image_url)) ||
+                              (notificationCategory === 'HAZARD' && selectedHazardReport?.images?.[0])) && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <img
+                                  src={
+                                    notificationCategory === 'WEATHER'
+                                      ? (selectedWeatherArticle?.imageUrl || selectedWeatherArticle?.image_url)
+                                      : selectedHazardReport?.images?.[0]
+                                  }
+                                  alt="preview"
+                                  style={{ width: '48px', height: '48px', borderRadius: '6px', objectFit: 'cover', border: '1px solid #cbd5e1' }}
+                                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                                />
+                                <span style={{ fontSize: '11.5px', color: '#64748b' }}>Hình ảnh minh họa có sẵn từ DB</span>
+                              </div>
+                            )}
+
+                            {/* Box push ready */}
+                            <div
+                              style={{
+                                background: '#eff6ff',
+                                border: '1px solid #bfdbfe',
+                                borderRadius: '6px',
+                                padding: '8px 12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <i className="bi bi-broadcast text-primary" style={{ fontSize: '14px' }}></i>
+                                <span style={{ fontSize: '12px', color: '#1e40af', fontWeight: 600 }}>
+                                  Sẵn sàng phát tới điện thoại người dân
+                                </span>
+                              </div>
+                              <span style={{ fontSize: '11px', color: '#3b82f6', fontWeight: 500 }}>
+                                Tự động đóng gói
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          /* Trạng thái chưa chọn mục từ DB */
+                          <div
+                            style={{
+                              border: '1.5px dashed #cbd5e1',
+                              borderRadius: '8px',
+                              background: '#f8fafc',
+                              padding: '36px 20px',
+                              textAlign: 'center',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              minHeight: '260px',
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: '48px',
+                                height: '48px',
+                                borderRadius: '50%',
+                                background: '#e2e8f0',
+                                color: '#64748b',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginBottom: '10px',
+                              }}
+                            >
+                              <i className="bi bi-database" style={{ fontSize: '22px' }}></i>
+                            </div>
+                            <h4 style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>
+                              Chọn dữ liệu từ cơ sở dữ liệu
+                            </h4>
+                            <p style={{ margin: 0, fontSize: '12px', color: '#64748b', maxWidth: '300px', lineHeight: 1.45 }}>
+                              {notificationCategory === 'WEATHER' && 'Vui lòng chọn một bản tin thời tiết ở danh sách bên trái để xem trước và phát thông báo.'}
+                              {notificationCategory === 'SAFE_LOCATION' && 'Vui lòng chọn một điểm an toàn ở danh sách bên trái để xem trước và phát thông báo.'}
+                              {notificationCategory === 'HAZARD' && 'Vui lòng chọn một điểm nguy hiểm đã duyệt ở danh sách bên trái để xem trước và phát thông báo.'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      /* FORM INSERT SOẠN THỦ CÔNG KHI CHỌN INSTANT HOẶC SYSTEM */
+                      <>
+                        {/* Tiêu đề */}
+                        <div>
+                          <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
+                            Tiêu đề <span style={{ color: '#dc2626' }}>*</span>
                           </label>
                           <input
                             type="text"
-                            value={alertForm.sourceName}
-                            onChange={(e) => setAlertForm({ ...alertForm, sourceName: e.target.value })}
-                            placeholder="VD: TT KTTV Quốc gia, Báo Tuổi Trẻ..."
+                            value={alertForm.title}
+                            onChange={(e) => {
+                              setAlertForm({ ...alertForm, title: e.target.value });
+                              if (createErrors.title) {
+                                setCreateErrors((prev) => ({ ...prev, title: undefined, general: undefined }));
+                              }
+                            }}
+                            placeholder={
+                              notificationCategory === 'INSTANT'
+                                ? 'VD: Cảnh báo nước sông dâng cao'
+                                : 'VD: Thông báo lịch tiếp nhận nhu yếu phẩm'
+                            }
                             style={{
                               width: '100%',
-                              padding: '6px 10px',
+                              padding: '7px 12px',
                               borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              background: '#ffffff',
-                              fontSize: '12px',
+                              border: createErrors.title ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                              background: createErrors.title ? '#fff5f5' : '#ffffff',
+                              fontSize: '13px',
                               color: '#0f172a',
                               boxSizing: 'border-box',
                               outline: 'none',
                             }}
                           />
+                          {createErrors.title && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                              <i className="bi bi-exclamation-circle" style={{ flexShrink: 0, fontSize: '12px' }}></i>
+                              <span>{createErrors.title}</span>
+                            </div>
+                          )}
                         </div>
 
+                        {/* Nội dung */}
                         <div>
-                          <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
-                            Link bài viết
+                          <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
+                            Nội dung <span style={{ color: '#dc2626' }}>*</span>
                           </label>
-                          <input
-                            type="url"
-                            value={alertForm.articleUrl}
-                            onChange={(e) => setAlertForm({ ...alertForm, articleUrl: e.target.value })}
-                            placeholder="https://nchmf.gov.vn/..."
+                          <textarea
+                            rows={4}
+                            value={alertForm.content}
+                            onChange={(e) => {
+                              setAlertForm({ ...alertForm, content: e.target.value });
+                              if (createErrors.content) {
+                                setCreateErrors((prev) => ({ ...prev, content: undefined, general: undefined }));
+                              }
+                            }}
+                            placeholder="Nhập hướng dẫn an toàn, điểm sơ tán, số hotline trực ban..."
                             style={{
                               width: '100%',
-                              padding: '6px 10px',
+                              padding: '7px 12px',
                               borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              background: '#ffffff',
-                              fontSize: '12px',
+                              border: createErrors.content ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
+                              background: createErrors.content ? '#fff5f5' : '#ffffff',
+                              fontSize: '12.5px',
                               color: '#0f172a',
                               boxSizing: 'border-box',
                               outline: 'none',
+                              lineHeight: '1.45',
+                              minHeight: '80px',
                             }}
                           />
+                          {createErrors.content && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
+                              <i className="bi bi-exclamation-circle" style={{ flexShrink: 0, fontSize: '12px' }}></i>
+                              <span>{createErrors.content}</span>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    </div>
 
-                    {/* Khối Expo Push Notification Preview */}
-                    <div
-                      style={{
-                        background: '#f8fafc',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '8px',
-                        padding: '8px 12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '10px',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <i className="bi bi-phone" style={{ fontSize: '14px', color: '#475569' }}></i>
-                        <span style={{ fontSize: '11.5px', color: '#334155', fontWeight: 500 }}>
-                          Phát push notification tới điện thoại người dân.
-                        </span>
-                      </div>
-                      <span className="sos-badge" style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', fontSize: '10.5px', whiteSpace: 'nowrap' }}>
-                        <i className="bi bi-broadcast me-1"></i>Sẵn sàng
-                      </span>
-                    </div>
+                        {/* Ảnh & Tham chiếu */}
+                        <div
+                          style={{
+                            background: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px',
+                            padding: '10px 12px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#334155' }}>
+                              <i className="bi bi-paperclip" style={{ fontSize: '14px', color: '#475569' }}></i>
+                              <span>Ảnh &amp; Tham chiếu (tùy chọn)</span>
+                            </div>
+                            {alertForm.imageUrl && (
+                              <span style={{ fontSize: '11px', color: '#2563eb', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                <i className="bi bi-check2"></i> Đã có ảnh
+                              </span>
+                            )}
+                          </div>
+
+                          <div>
+                            <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
+                              Link ảnh
+                            </label>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                              <input
+                                type="url"
+                                value={alertForm.imageUrl}
+                                onChange={(e) => setAlertForm({ ...alertForm, imageUrl: e.target.value })}
+                                placeholder="https://... link ảnh dự báo hoặc minh họa"
+                                style={{
+                                  flex: 1,
+                                  padding: '6px 10px',
+                                  borderRadius: '6px',
+                                  border: '1px solid #cbd5e1',
+                                  background: '#ffffff',
+                                  fontSize: '12px',
+                                  color: '#0f172a',
+                                  boxSizing: 'border-box',
+                                  outline: 'none',
+                                }}
+                              />
+                              {alertForm.imageUrl && (
+                                <img
+                                  src={alertForm.imageUrl}
+                                  alt="preview"
+                                  style={{ width: '28px', height: '28px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #cbd5e1', flexShrink: 0 }}
+                                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                                />
+                              )}
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
+                                Nguồn tin
+                              </label>
+                              <input
+                                type="text"
+                                value={alertForm.sourceName}
+                                onChange={(e) => setAlertForm({ ...alertForm, sourceName: e.target.value })}
+                                placeholder="VD: TT KTTV Quốc gia, Báo Tuổi Trẻ..."
+                                style={{
+                                  width: '100%',
+                                  padding: '6px 10px',
+                                  borderRadius: '6px',
+                                  border: '1px solid #cbd5e1',
+                                  background: '#ffffff',
+                                  fontSize: '12px',
+                                  color: '#0f172a',
+                                  boxSizing: 'border-box',
+                                  outline: 'none',
+                                }}
+                              />
+                            </div>
+
+                            <div>
+                              <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
+                                Link bài viết
+                              </label>
+                              <input
+                                type="url"
+                                value={alertForm.articleUrl}
+                                onChange={(e) => setAlertForm({ ...alertForm, articleUrl: e.target.value })}
+                                placeholder="https://nchmf.gov.vn/..."
+                                style={{
+                                  width: '100%',
+                                  padding: '6px 10px',
+                                  borderRadius: '6px',
+                                  border: '1px solid #cbd5e1',
+                                  background: '#ffffff',
+                                  fontSize: '12px',
+                                  color: '#0f172a',
+                                  boxSizing: 'border-box',
+                                  outline: 'none',
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Khối Expo Push Notification Preview */}
+                        <div
+                          style={{
+                            background: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px',
+                            padding: '8px 12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '10px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <i className="bi bi-phone" style={{ fontSize: '14px', color: '#475569' }}></i>
+                            <span style={{ fontSize: '11.5px', color: '#334155', fontWeight: 500 }}>
+                              Phát push notification tới điện thoại người dân.
+                            </span>
+                          </div>
+                          <span className="sos-badge" style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', fontSize: '10.5px', whiteSpace: 'nowrap' }}>
+                            <i className="bi bi-broadcast me-1"></i>Sẵn sàng
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

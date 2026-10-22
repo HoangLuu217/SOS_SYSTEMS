@@ -552,26 +552,35 @@ class NotificationService {
     // Nếu là 'WEATHER' (Thông báo thời tiết), đồng bộ vào bảng WeatherNotification riêng biệt
     if (normalizedType === 'WEATHER') {
       try {
-        await WeatherNotification.create({
-          title: title.trim(),
-          content: content.trim(),
-          summary: extraData.summary || content.trim().slice(0, 200),
-          category: extraData.category || extraData.weatherType || 'khac',
-          relevance_score: typeof extraData.score === 'number' ? extraData.score : (effectivePriority === 'CRITICAL' ? 95 : effectivePriority === 'HIGH' ? 80 : 50),
-          score: typeof extraData.score === 'number' ? extraData.score : (effectivePriority === 'CRITICAL' ? 95 : effectivePriority === 'HIGH' ? 80 : 50),
-          regions: targetAreaName ? [targetAreaName] : (extraData.regions || []),
-          area: targetAreaName || extraData.area || 'Toàn thành phố',
-          image_url: resolvedImageUrl,
-          imageUrl: resolvedImageUrl,
-          source_url: resolvedArticleUrl,
-          articleUrl: resolvedArticleUrl,
-          source_name: resolvedSourceName,
-          articleTitle: extraData.articleTitle || resolvedSourceName || null,
-          areaId: targetAreaDoc ? targetAreaDoc._id : null,
-          createdBy: senderUser._id,
-          broadcastId,
-          status: 'approved',
-        });
+        if (extraData.weatherArticleId && mongoose.Types.ObjectId.isValid(extraData.weatherArticleId)) {
+          await WeatherNotification.findByIdAndUpdate(extraData.weatherArticleId, {
+            $set: {
+              broadcastId,
+              status: 'approved',
+            },
+          });
+        } else {
+          await WeatherNotification.create({
+            title: title.trim(),
+            content: content.trim(),
+            summary: extraData.summary || content.trim().slice(0, 200),
+            category: extraData.category || extraData.weatherType || 'khac',
+            relevance_score: typeof extraData.score === 'number' ? extraData.score : (effectivePriority === 'CRITICAL' ? 95 : effectivePriority === 'HIGH' ? 80 : 50),
+            score: typeof extraData.score === 'number' ? extraData.score : (effectivePriority === 'CRITICAL' ? 95 : effectivePriority === 'HIGH' ? 80 : 50),
+            regions: targetAreaName ? [targetAreaName] : (extraData.regions || []),
+            area: targetAreaName || extraData.area || 'Toàn thành phố',
+            image_url: resolvedImageUrl,
+            imageUrl: resolvedImageUrl,
+            source_url: resolvedArticleUrl,
+            articleUrl: resolvedArticleUrl,
+            source_name: resolvedSourceName,
+            articleTitle: extraData.articleTitle || resolvedSourceName || null,
+            areaId: targetAreaDoc ? targetAreaDoc._id : null,
+            createdBy: senderUser._id,
+            broadcastId,
+            status: 'approved',
+          });
+        }
       } catch (weatherErr) {
         console.warn('Lưu kèm bảng WeatherNotification gặp lỗi nhỏ (không ảnh hưởng notification):', weatherErr.message);
       }
@@ -691,10 +700,10 @@ class NotificationService {
     }
 
     // Xóa tất cả các bản ghi cùng đợt phát
-    const result = await Notification.deleteMany({
-      title: sample.title,
-      createdAt: sample.createdAt,
-    });
+    const deleteFilter = sample.data?.broadcastId
+      ? { 'data.broadcastId': sample.data.broadcastId }
+      : { title: sample.title, createdAt: sample.createdAt };
+    const result = await Notification.deleteMany(deleteFilter);
 
     try {
       eventBus.emit('notification_event', {

@@ -5,6 +5,7 @@ import {
   createWeatherArticleApi,
   updateWeatherArticleApi,
   deleteWeatherArticleApi,
+  executeWeatherWorkflowApi,
   type WeatherArticleItem,
   type CreateWeatherPayload,
 } from '@/api/weather.api';
@@ -28,6 +29,7 @@ import {
   X,
   FileText,
   ShieldAlert,
+  Play,
 } from 'lucide-react';
 import './WeatherView.css';
 
@@ -88,6 +90,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
   const [editingItem, setEditingItem] = useState<WeatherArticleItem | null>(null);
   const [detailItem, setDetailItem] = useState<WeatherArticleItem | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const [runningWorkflow, setRunningWorkflow] = useState<boolean>(false);
 
   // Form values
   const [formValues, setFormValues] = useState<CreateWeatherPayload>({
@@ -107,10 +110,27 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
   const canManage = Boolean(
     user?.roles?.includes('ADMIN') || user?.roles?.includes('LOCAL_AUTHORITY')
   );
+  const canRunWorkflow = Boolean(user?.roles?.includes('ADMIN'));
 
-  const fetchArticles = useCallback(async () => {
+  const handleRunWorkflow = async () => {
+    if (runningWorkflow) return;
     try {
-      setLoading(true);
+      setRunningWorkflow(true);
+      await executeWeatherWorkflowApi();
+      const refreshed = await fetchArticles();
+      if (refreshed) {
+        toast.success('Workflow đã hoàn tất. Danh sách bản tin vừa được tải lại.');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Không thể chạy workflow thời tiết trên n8n');
+    } finally {
+      setRunningWorkflow(false);
+    }
+  };
+
+  const fetchArticles = useCallback(async (options: { silent?: boolean } = {}) => {
+    try {
+      if (!options.silent) setLoading(true);
       const res = await fetchWeatherArticlesApi({
         search: searchTerm.trim() || undefined,
         category: selectedCategory !== 'ALL' ? selectedCategory : undefined,
@@ -120,19 +140,40 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
 
       if (res && res.success && Array.isArray(res.data)) {
         setArticles(res.data);
+        return true;
       } else {
         setArticles([]);
+        return false;
       }
     } catch (err: any) {
-      console.error('Lỗi khi tải danh sách thời tiết:', err);
-      toast.error(err.message || 'Không thể tải danh sách bản tin thời tiết');
+      if (!options.silent) {
+        console.error('Lỗi khi tải danh sách thời tiết:', err);
+        toast.error(err.message || 'Không thể tải danh sách bản tin thời tiết');
+      }
+      return false;
     } finally {
-      setLoading(false);
+      if (!options.silent) setLoading(false);
     }
   }, [searchTerm, selectedCategory, selectedStatus]);
 
   useEffect(() => {
     fetchArticles();
+  }, [fetchArticles]);
+
+  // n8n writes directly to MongoDB for both scheduled and manual runs. Refresh
+  // while this page is visible so either kind of run appears without a reload.
+  useEffect(() => {
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void fetchArticles({ silent: true });
+      }
+    };
+    const timer = window.setInterval(refreshIfVisible, 10_000);
+    document.addEventListener('visibilitychange', refreshIfVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+    };
   }, [fetchArticles]);
 
   // Statistics
@@ -251,9 +292,20 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
         </div>
 
         <div className="weather-header-actions">
+          {canRunWorkflow && (
+            <button
+              className="btn-primary-weather"
+              onClick={handleRunWorkflow}
+              disabled={runningWorkflow}
+              title="Chạy workflow thu thập và phân loại bản tin thời tiết trên n8n"
+            >
+              {runningWorkflow ? <RefreshCw size={16} className="animate-spin" /> : <Play size={16} />}
+              {runningWorkflow ? 'Đang chạy workflow...' : 'Chạy thu thập ngay'}
+            </button>
+          )}
           <button
             className="btn-secondary-weather"
-            onClick={fetchArticles}
+            onClick={() => fetchArticles()}
             disabled={loading}
             title="Làm mới danh sách"
           >

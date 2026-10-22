@@ -22,6 +22,17 @@ router.get('/:id', weatherNotificationController.getWeatherNotificationById);
 router.use(authenticate);
 
 /**
+ * @route   POST /weather-notifications/execute-workflow
+ * @desc    Gửi yêu cầu chạy workflow thời tiết trên n8n
+ * @access  ADMIN
+ */
+router.post(
+  '/execute-workflow',
+  authorize('ADMIN'),
+  weatherNotificationController.executeWeatherWorkflow
+);
+
+/**
  * @route   POST /weather-notifications
  * @desc    Tạo thông báo thời tiết mới
  * @access  LOCAL_AUTHORITY, ADMIN
