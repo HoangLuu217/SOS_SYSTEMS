@@ -38,13 +38,17 @@ export class UserApi {
 
     if (isBase64) {
       // 1. Gửi qua JSON PATCH/POST (Tương thích 100% với Devtunnel và mọi proxy)
-      res = await this.client.patch<{ userId: string; avatarUrl: string }>('/users/me/avatar', {
-        avatarUrl: avatarInput,
-      });
+      res = await this.client.patch<{ userId: string; avatarUrl: string }>(
+        '/users/me/avatar',
+        { avatarUrl: avatarInput },
+        { timeout: 35000 } as any
+      );
       if (!res.success) {
-        res = await this.client.post<{ userId: string; avatarUrl: string }>('/users/me/avatar', {
-          avatarUrl: avatarInput,
-        });
+        res = await this.client.post<{ userId: string; avatarUrl: string }>(
+          '/users/me/avatar',
+          { avatarUrl: avatarInput },
+          { timeout: 35000 } as any
+        );
       }
     } else {
       // 2. Dự phòng: Gửi Multipart FormData cho file local URI

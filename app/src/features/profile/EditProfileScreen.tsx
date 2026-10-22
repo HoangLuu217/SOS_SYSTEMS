@@ -15,6 +15,7 @@ import {
   Alert,
   TouchableWithoutFeedback,
   FlatList,
+  ActionSheetIOS,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
@@ -381,6 +382,29 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
     setWardSearch('');
   };
 
+  // Mở menu chọn ảnh đại diện (ActionSheetIOS trên iOS, BottomSheet modal trên Android)
+  const handleOpenAvatarPicker = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Hủy', 'Chụp ảnh mới', 'Chọn từ thư viện ảnh'],
+          cancelButtonIndex: 0,
+          title: 'Ảnh đại diện',
+          message: 'Chọn phương thức tải ảnh mới',
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) {
+            handleTakeAvatar();
+          } else if (buttonIndex === 2) {
+            handlePickAvatar();
+          }
+        }
+      );
+    } else {
+      setAvatarSheetVisible(true);
+    }
+  };
+
   // Avatar từ thư viện ảnh
   const handlePickAvatar = async () => {
     setAvatarSheetVisible(false);
@@ -395,7 +419,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
           mediaTypes: ['images'],
           allowsEditing: true,
           aspect: [1, 1],
-          quality: 0.5,
+          quality: 0.6,
           base64: true,
         });
 
@@ -418,7 +442,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
         setIsSavingAvatar(false);
         Alert.alert('Lỗi', 'Không thể chọn ảnh từ thiết bị.');
       }
-    }, 350);
+    }, Platform.OS === 'ios' ? 100 : 350);
   };
 
   // Avatar từ máy ảnh
@@ -434,7 +458,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
         const res = await ImagePicker.launchCameraAsync({
           allowsEditing: true,
           aspect: [1, 1],
-          quality: 0.5,
+          quality: 0.6,
           base64: true,
         });
 
@@ -457,7 +481,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
         setIsSavingAvatar(false);
         Alert.alert('Lỗi', 'Không thể chụp ảnh mới.');
       }
-    }, 350);
+    }, Platform.OS === 'ios' ? 100 : 350);
   };
 
   // Đổi mật khẩu
@@ -934,7 +958,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
 
                   <TouchableOpacity
                     style={styles.cameraBadge}
-                    onPress={() => setAvatarSheetVisible(true)}
+                    onPress={handleOpenAvatarPicker}
                     activeOpacity={0.8}
                   >
                     <Feather name="camera" size={15} color="#FFFFFF" />

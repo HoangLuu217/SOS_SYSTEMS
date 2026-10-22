@@ -32,9 +32,9 @@ export interface AuthContextType {
   loginWithGoogle: () => Promise<{ success: boolean; message: string }>;
   sendOtp: (email: string) => Promise<{ success: boolean; message: string }>;
   verifyOtp: (email: string, token: string, verifyOnly?: boolean) => Promise<{ success: boolean; message: string }>;
-  forgotPassword: (email: string) => Promise<{ success: boolean; message: string; resetToken?: string }>;
-  verifyResetOtp: (email: string, otp: string) => Promise<{ success: boolean; message: string }>;
-  resetPassword: (email: string, otp: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
+  forgotPassword: (target: string) => Promise<{ success: boolean; message: string; resetToken?: string }>;
+  verifyResetOtp: (target: string, otp: string) => Promise<{ success: boolean; message: string }>;
+  resetPassword: (target: string, otp: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
   updateUserProfile: (data: {
     fullName?: string;
     dateOfBirth?: string;
@@ -358,27 +358,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   /**
-   * Quên mật khẩu
+   * Quên mật khẩu: Gửi mã OTP qua SMS số điện thoại (hoặc Email)
    */
-  const forgotPassword = async (email: string) => {
+  const forgotPassword = async (target: string) => {
     try {
-      if (!email.trim() || !email.includes('@')) {
-        return { success: false, message: 'Vui lòng nhập địa chỉ email hợp lệ.' };
+      const cleanTarget = target.trim();
+      const isEmail = cleanTarget.includes('@');
+
+      if (!cleanTarget) {
+        return { success: false, message: 'Vui lòng nhập số điện thoại của bạn.' };
+      }
+
+      if (!isEmail) {
+        const cleanPhone = cleanTarget.replace(/[^0-9]/g, '');
+        if (cleanPhone.length < 10) {
+          return { success: false, message: 'Số điện thoại không hợp lệ (cần ít nhất 10 số).' };
+        }
       }
 
       // Gọi backend SOS
-      const res = await backendApi.forgotPassword(email);
+      const res = await backendApi.forgotPassword(cleanTarget);
 
-      // Đồng thời gọi Supabase nếu cấu hình
-      if (isSupabaseConfigured()) {
+      // Đồng thời gọi Supabase nếu cấu hình và là email
+      if (isEmail && isSupabaseConfigured()) {
         try {
-          await supabase.auth.resetPasswordForEmail(email.trim());
+          await supabase.auth.resetPasswordForEmail(cleanTarget);
         } catch {}
       }
 
       return {
         success: res.success,
-        message: res.message || 'Mã OTP đặt lại mật khẩu đã được gửi đến email của bạn.',
+        message: res.message || (!isEmail
+          ? 'Mã OTP đặt lại mật khẩu đã được gửi qua SMS tới số điện thoại của bạn.'
+          : 'Mã OTP đặt lại mật khẩu đã được gửi đến email của bạn.'),
         resetToken: res.data?.resetToken,
       };
     } catch (err: any) {
@@ -389,13 +401,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   /**
    * Xác thực mã OTP khôi phục mật khẩu trước khi nhập mật khẩu mới
    */
-  const verifyResetOtp = async (email: string, otp: string) => {
+  const verifyResetOtp = async (target: string, otp: string) => {
     try {
       if (!otp.trim() || otp.trim().length !== 6) {
         return { success: false, message: 'Vui lòng nhập đủ 6 chữ số mã OTP.' };
       }
 
-      const res = await backendApi.verifyResetOtp(email.trim().toLowerCase(), otp.trim());
+      const res = await backendApi.verifyResetOtp(target.trim(), otp.trim());
       return {
         success: res.success,
         message: res.message || 'Mã OTP xác thực thành công.',
@@ -408,7 +420,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   /**
    * Đặt lại mật khẩu mới bằng mã OTP
    */
-  const resetPassword = async (email: string, otp: string, newPassword: string) => {
+  const resetPassword = async (target: string, otp: string, newPassword: string) => {
     try {
       if (!otp.trim()) {
         return { success: false, message: 'Vui lòng nhập mã OTP xác thực.' };
@@ -417,8 +429,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, message: 'Mật khẩu mới phải có ít nhất 6 ký tự.' };
       }
 
+      const cleanTarget = target.trim();
+      const isEmail = cleanTarget.includes('@');
+
       const res = await backendApi.resetPassword({
-        email: email.trim().toLowerCase(),
+        phone: !isEmail ? cleanTarget : undefined,
+        email: isEmail ? cleanTarget.toLowerCase() : undefined,
+        account: cleanTarget,
         token: otp.trim(),
         newPassword,
       });
