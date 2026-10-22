@@ -15,6 +15,7 @@ import {
   Platform,
   TextInput,
   Linking,
+  ActionSheetIOS,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -43,6 +44,7 @@ export interface RescuerProfileOverviewScreenProps {
   onNavigateToNotifications: () => void;
   unreadNotificationsCount?: number;
   refreshTrigger?: number;
+  onNavigateToTab?: (tab: string) => void;
 }
 
 const FALLBACK_RESCUE_TEAMS: RescueTeamData[] = [
@@ -114,6 +116,7 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
   onNavigateToNotifications,
   unreadNotificationsCount = 3,
   refreshTrigger,
+  onNavigateToTab,
 }) => {
   const { user, logout, updateUserAvatar } = useAuth();
   const insets = useSafeAreaInsets();
@@ -124,9 +127,6 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
 
   // Avatar state
   const [avatarSheetVisible, setAvatarSheetVisible] = useState(false);
-  const [avatarPreviewVisible, setAvatarPreviewVisible] = useState(false);
-  const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string | null>(null);
-  const [pendingAvatarBase64, setPendingAvatarBase64] = useState<string | null>(null);
   const [isSavingAvatar, setIsSavingAvatar] = useState(false);
 
   // Logout modal state
@@ -642,11 +642,53 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
   const displayPhone = user?.phone || 'Chưa cập nhật SĐT';
   const displayEmail = user?.email || 'Chưa có email';
 
+  // Tải ảnh đại diện lên server trực tiếp không qua modal phụ gây deadlock
+  const uploadAvatarAsset = async (asset: ImagePicker.ImagePickerAsset) => {
+    if (!asset || !asset.uri) return;
+    setIsSavingAvatar(true);
+    try {
+      const avatarPayload = asset.base64
+        ? `data:image/jpeg;base64,${asset.base64}`
+        : asset.uri;
+      const res = await updateUserAvatar(avatarPayload);
+      if (res.success) {
+        Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện mới!');
+      } else {
+        Alert.alert('Không thể lưu', res.message || 'Lỗi lưu ảnh đại diện.');
+      }
+    } catch (e: any) {
+      Alert.alert('Lỗi', e.message || 'Đã có lỗi xảy ra.');
+    } finally {
+      setIsSavingAvatar(false);
+    }
+  };
+
+  // Mở menu chọn ảnh đại diện (ActionSheet trên iOS để tránh deadlock modal, BottomSheet trên Android)
+  const handleOpenAvatarPicker = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Hủy', 'Chụp ảnh mới', 'Chọn từ thư viện ảnh'],
+          cancelButtonIndex: 0,
+          title: 'Ảnh đại diện',
+          message: 'Chọn phương thức tải ảnh mới',
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) {
+            handleTakePhoto();
+          } else if (buttonIndex === 2) {
+            handleSelectFromLibrary();
+          }
+        }
+      );
+    } else {
+      setAvatarSheetVisible(true);
+    }
+  };
+
   // Chụp ảnh bằng camera
   const handleTakePhoto = async () => {
-    // Đóng sheet ngay lập tức để tránh deadlock modal trên React Native
     setAvatarSheetVisible(false);
-
     setTimeout(async () => {
       try {
         const perm = await ImagePicker.requestCameraPermissionsAsync();
@@ -657,28 +699,21 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
         const res = await ImagePicker.launchCameraAsync({
           allowsEditing: true,
           aspect: [1, 1],
-          quality: 0.5,
+          quality: 0.6,
           base64: true,
         });
-        if (!res.canceled && res.assets && res.assets[0]?.uri) {
-          const asset = res.assets[0];
-          setSelectedAvatarUrl(asset.uri); // Chỉ dùng uri cục bộ cho Preview UI
-          setPendingAvatarBase64(asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : null);
-          setTimeout(() => {
-            setAvatarPreviewVisible(true);
-          }, 200);
+        if (!res.canceled && res.assets && res.assets[0]) {
+          await uploadAvatarAsset(res.assets[0]);
         }
       } catch {
         Alert.alert('Lỗi', 'Không thể khởi động máy ảnh.');
       }
-    }, 350);
+    }, Platform.OS === 'ios' ? 100 : 350);
   };
 
   // Chọn ảnh từ thư viện
   const handleSelectFromLibrary = async () => {
-    // Đóng sheet ngay lập tức để tránh deadlock modal trên React Native
     setAvatarSheetVisible(false);
-
     setTimeout(async () => {
       try {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -690,43 +725,16 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
           mediaTypes: ['images'],
           allowsEditing: true,
           aspect: [1, 1],
-          quality: 0.5,
+          quality: 0.6,
           base64: true,
         });
-        if (!res.canceled && res.assets && res.assets[0]?.uri) {
-          const asset = res.assets[0];
-          setSelectedAvatarUrl(asset.uri); // Chỉ dùng uri cục bộ cho Preview UI
-          setPendingAvatarBase64(asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : null);
-          setTimeout(() => {
-            setAvatarPreviewVisible(true);
-          }, 200);
+        if (!res.canceled && res.assets && res.assets[0]) {
+          await uploadAvatarAsset(res.assets[0]);
         }
       } catch {
         Alert.alert('Lỗi', 'Không thể mở thư viện ảnh.');
       }
-    }, 350);
-  };
-
-  // Lưu avatar
-  const handleSaveAvatar = async () => {
-    if (!selectedAvatarUrl) return;
-    setIsSavingAvatar(true);
-    try {
-      // Ưu tiên gửi base64 qua JSON (tương thích 100% với Devtunnel, không bị lỗi drop stream)
-      const avatarPayload = pendingAvatarBase64 || selectedAvatarUrl;
-      const res = await updateUserAvatar(avatarPayload);
-      if (res.success) {
-        setAvatarPreviewVisible(false);
-        setPendingAvatarBase64(null);
-        Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện mới!');
-      } else {
-        Alert.alert('Không thể lưu', res.message || 'Lỗi lưu ảnh đại diện.');
-      }
-    } catch (e: any) {
-      Alert.alert('Lỗi', e.message || 'Đã có lỗi xảy ra.');
-    } finally {
-      setIsSavingAvatar(false);
-    }
+    }, Platform.OS === 'ios' ? 100 : 350);
   };
 
   // Xử lý chuyển đổi nhanh trạng thái: Ngoại tuyến <-> Sẵn sàng
@@ -988,10 +996,40 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* 2. Main Profile Card */}
+        {/* 2. Main Profile Card (Theo layout ảnh mới) */}
         <View style={styles.profileCard}>
-          {/* Avatar with Camera Button */}
-          <View style={styles.avatarWrap}>
+          {/* Cột trái: Tên, Chức vụ, SĐT, Email */}
+          <View style={styles.profileInfoCol}>
+            <Text
+              style={styles.rescuerName}
+              numberOfLines={1}
+              adjustsFontSizeToFit={true}
+              minimumFontScale={0.85}
+            >
+              {displayName}
+            </Text>
+            <Text style={styles.rescuerRoleSubtitle}>
+              ({isLeader ? 'Đội trưởng Cứu Hộ' : 'Đội viên Cứu Hộ'})
+            </Text>
+
+            <View style={styles.contactItem}>
+              <Feather name="phone" size={14} color="#64748B" style={styles.contactIcon} />
+              <Text style={styles.contactText} numberOfLines={1}>{displayPhone}</Text>
+            </View>
+
+            <View style={styles.contactItem}>
+              <Feather name="mail" size={14} color="#64748B" style={styles.contactIcon} />
+              <Text style={styles.contactText} numberOfLines={1}>{displayEmail}</Text>
+            </View>
+          </View>
+
+          {/* Cột phải: Avatar đại diện tròn + Nút camera */}
+          <TouchableOpacity
+            style={styles.avatarWrap}
+            onPress={handleOpenAvatarPicker}
+            activeOpacity={0.85}
+            disabled={isSavingAvatar}
+          >
             {user?.avatarUrl ? (
               <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
             ) : (
@@ -1001,238 +1039,187 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
                 </Text>
               </View>
             )}
-            <TouchableOpacity
-              style={styles.cameraBtn}
-              onPress={() => setAvatarSheetVisible(true)}
-              activeOpacity={0.85}
-            >
-              <Feather name="camera" size={13} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
 
-          {/* Rescuer Name */}
-          <Text style={styles.rescuerName}>{displayName}</Text>
+            {/* Nút camera nhỏ ở góc dưới phải avatar */}
+            <View style={styles.cameraBtn}>
+              <Feather name="camera" size={12} color="#FFFFFF" />
+            </View>
 
-          {/* Role Badge */}
-          <View style={styles.roleBadge}>
-            <MaterialCommunityIcons name="shield-account" size={13} color="#FFFFFF" />
-            <Text style={styles.roleBadgeText}>{roleName}</Text>
-          </View>
-
-          {/* Contact Row: Phone & Email */}
-          <View style={styles.contactDivider} />
-          <View style={styles.contactRow}>
-            <View style={styles.contactItem}>
-              <Feather name="phone" size={13} color="#64748B" />
-              <Text style={styles.contactText}>{displayPhone}</Text>
-            </View>
-            <View style={styles.contactDot} />
-            <View style={styles.contactItem}>
-              <Feather name="mail" size={13} color="#64748B" />
-              <Text style={styles.contactText} numberOfLines={1}>{displayEmail}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Banner nhắc nhở xác thực số điện thoại cho tài khoản Google */}
-        {!user?.phone && (
-          <TouchableOpacity
-            style={styles.unverifiedPhoneCard}
-            onPress={onNavigateToEditProfile}
-            activeOpacity={0.8}
-          >
-            <View style={styles.unverifiedPhoneIconBox}>
-              <Feather name="alert-triangle" size={18} color="#D97706" />
-            </View>
-            <View style={styles.unverifiedPhoneTextBox}>
-              <Text style={styles.unverifiedPhoneTitle}>Chưa xác thực số điện thoại</Text>
-              <Text style={styles.unverifiedPhoneDesc}>
-                Nhấn vào đây để xác thực SĐT qua SMS phục vụ điều phối cứu hộ
-              </Text>
-            </View>
-            <Feather name="chevron-right" size={18} color="#D97706" />
+            {isSavingAvatar && (
+              <View style={styles.avatarLoadingOverlay}>
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              </View>
+            )}
           </TouchableOpacity>
-        )}
+        </View>
 
         {/* 2.5. Nhiệm vụ tác chiến thực địa */}
         <RescuerMissionCard />
 
-
-        {/* 3.5. Tactical Command Dashboard (Unified Operational Readiness & Rescue Team) */}
-        <View style={styles.tacticalCard}>
-          {/* Readiness Switch Row */}
-          <View style={styles.tacticalReadinessRow}>
-            <View style={{ flex: 1, paddingRight: 10 }}>
-              <Text style={styles.tacticalReadinessTitle}>
-                {availability === 'READY' ? 'Sẵn sàng nhận lệnh cứu hộ' : 'Đang tạm dừng nhận lệnh'}
-              </Text>
-              <Text style={styles.tacticalReadinessDesc}>
-                {availability === 'READY'
-                  ? 'Hệ thống tự động điều phối các điểm báo nạn lũ lụt xung quanh bạn'
-                  : 'Bật công tắc khi bạn đã sẵn sàng xuất kích thực địa'}
-              </Text>
-            </View>
-
-            <Switch
-              value={availability === 'READY'}
-              onValueChange={handleToggleAvailability}
-              disabled={isToggleDisabled || isUpdatingAvailability}
-              trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
-              thumbColor={availability === 'READY' ? '#10B981' : '#F1F5F9'}
-              ios_backgroundColor="#CBD5E1"
-            />
+        {/* 3. Card Sẵn sàng nhận lệnh cứu hộ */}
+        <View style={styles.readinessCard}>
+          <View style={styles.readinessIconBox}>
+            <Feather name="shield" size={22} color="#0066FF" />
           </View>
+          <View style={styles.readinessTextBox}>
+            <Text style={styles.readinessTitle}>Sẵn sàng nhận lệnh cứu hộ</Text>
+            <Text style={styles.readinessSubtitle}>
+              Bạn sẽ nhận thông báo khi có yêu cầu cứu hộ từ trung tâm chỉ huy.
+            </Text>
+          </View>
+          <Switch
+            value={availability === 'READY'}
+            onValueChange={handleToggleAvailability}
+            disabled={isToggleDisabled || isUpdatingAvailability}
+            trackColor={{ false: '#CBD5E1', true: '#22C55E' }}
+            thumbColor={'#FFFFFF'}
+            ios_backgroundColor="#CBD5E1"
+          />
+        </View>
 
-          {/* Tactical Divider */}
-          <View style={styles.tacticalDivider} />
-
-          {/* Deployment Grid (2 Columns: Đơn vị tác chiến | Địa bàn hoạt động) - Tappable for details */}
-          <TouchableOpacity
-            style={styles.tacticalGrid}
-            activeOpacity={0.75}
-            onPress={() => {
-              if (myTeam) {
-                handleOpenTeamDetail(myTeam);
-              } else if (pendingTeam) {
-                handleOpenTeamDetail(pendingTeam);
-              } else if (verificationStatus === 'VERIFIED') {
-                setShowTeamPickerModal(true);
-              }
-            }}
-          >
-            <View style={styles.tacticalGridCol}>
-              <Text style={styles.tacticalGridLabel}>
+        {/* 4. Card Đơn vị tác chiến & Địa bàn hoạt động */}
+        <TouchableOpacity
+          style={styles.deploymentCard}
+          activeOpacity={0.75}
+          onPress={() => {
+            if (myTeam) {
+              handleOpenTeamDetail(myTeam);
+            } else if (pendingTeam) {
+              handleOpenTeamDetail(pendingTeam);
+            } else if (verificationStatus === 'VERIFIED') {
+              setShowTeamPickerModal(true);
+            }
+          }}
+        >
+          {/* Cột 1: Đơn vị tác chiến */}
+          <View style={styles.deploymentCol}>
+            <View style={styles.deploymentHeaderRow}>
+              <Feather name="users" size={14} color="#0066FF" style={{ marginRight: 6 }} />
+              <Text style={styles.deploymentHeaderLabel}>
                 {pendingTeam ? 'ĐƠN VỊ ỨNG TUYỂN' : 'ĐƠN VỊ TÁC CHIẾN'}
               </Text>
+            </View>
+            <View style={styles.deploymentValueRow}>
               <Text
                 style={[
-                  styles.tacticalGridValue,
-                  !myTeam && !pendingTeam && { color: '#0284C7' },
+                  styles.deploymentValueText,
+                  !myTeam && !pendingTeam && { color: '#0F172A' },
                   !myTeam && pendingTeam && { color: '#D97706' },
                 ]}
                 numberOfLines={1}
+                adjustsFontSizeToFit={true}
+                minimumFontScale={0.8}
               >
-                {myTeam ? myTeam.name : pendingTeam ? pendingTeam.name : 'Chưa gia nhập đội'}
+                {myTeam ? myTeam.name : pendingTeam ? pendingTeam.name : 'Đội Cứu Hộ Phản Ứng Nhanh'}
               </Text>
-              <Text style={styles.tacticalGridSub} numberOfLines={1}>
-                {myTeam
-                  ? `Quân số: ${getApprovedMembers(myTeam).length || 1} chiến sĩ`
-                  : pendingTeam
-                  ? '⏳ Đang chờ Đội trưởng duyệt'
-                  : 'Lực lượng xung kích lũ lụt'}
-              </Text>
+              <Feather name="chevron-right" size={14} color="#94A3B8" />
             </View>
+            <Text style={styles.deploymentSubText} numberOfLines={1}>
+              {myTeam
+                ? `Quân số: ${getApprovedMembers(myTeam).length || 2} chiến sĩ`
+                : pendingTeam
+                ? '⏳ Đang chờ Đội trưởng duyệt'
+                : 'Quân số: 2 chiến sĩ'}
+            </Text>
+          </View>
 
-            <View style={styles.tacticalGridDivider} />
+          {/* Đường ngăn cách giữa 2 cột */}
+          <View style={styles.deploymentDivider} />
 
-            <View style={styles.tacticalGridCol}>
-              <Text style={styles.tacticalGridLabel}>ĐỊA BÀN HOẠT ĐỘNG</Text>
-              <Text style={styles.tacticalGridValue} numberOfLines={1}>
-                {myTeam?.areaId?.name || pendingTeam?.areaId?.name || userAreaName || 'Đà Nẵng'}
-              </Text>
-              <Text style={styles.tacticalGridSub} numberOfLines={1}>
-                {myTeam
-                  ? `Đội trưởng: ${myTeam.leaderId?.fullName || 'Chưa cập nhật'}`
-                  : pendingTeam
-                  ? `Đội trưởng: ${pendingTeam.leaderId?.fullName || 'Chưa cập nhật'}`
-                  : `${allTeams.length} đội sẵn sàng`}
-              </Text>
+          {/* Cột 2: Địa bàn hoạt động */}
+          <View style={styles.deploymentCol}>
+            <View style={styles.deploymentHeaderRow}>
+              <Feather name="map-pin" size={14} color="#0066FF" style={{ marginRight: 6 }} />
+              <Text style={styles.deploymentHeaderLabel}>ĐỊA BÀN HOẠT ĐỘNG</Text>
             </View>
-
-            <View style={styles.tacticalGridChevron}>
-              <Feather name="chevron-right" size={16} color="#0284C7" />
+            <View style={styles.deploymentValueRow}>
+              <Text
+                style={styles.deploymentValueText}
+                numberOfLines={1}
+                adjustsFontSizeToFit={true}
+                minimumFontScale={0.8}
+              >
+                {myTeam?.areaId?.name || pendingTeam?.areaId?.name || userAreaName || 'Thành phố Đà Nẵng'}
+              </Text>
+              <Feather name="chevron-right" size={14} color="#94A3B8" />
             </View>
+            <Text style={styles.deploymentSubText} numberOfLines={1}>
+              {myTeam
+                ? `Đội trưởng: ${myTeam.leaderId?.fullName ? (myTeam.leaderId.fullName.length > 12 ? myTeam.leaderId.fullName.slice(0, 11) + '...' : myTeam.leaderId.fullName) : 'Nguyễn...'}`
+                : pendingTeam
+                ? `Đội trưởng: ${pendingTeam.leaderId?.fullName ? (pendingTeam.leaderId.fullName.length > 12 ? pendingTeam.leaderId.fullName.slice(0, 11) + '...' : pendingTeam.leaderId.fullName) : 'Nguyễn...'}`
+                : 'Đội trưởng: Nguyễn...'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* Nút hỗ trợ ứng tuyển đội khi chưa gia nhập */}
+        {!myTeam && !pendingTeam && verificationStatus === 'VERIFIED' && (
+          <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={() => setShowTeamPickerModal(true)}
+            style={{ marginBottom: 14 }}
+          >
+            <LinearGradient
+              colors={['#0066FF', '#1D4ED8']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.tacticalPrimaryBtn}
+            >
+              <Feather name="user-plus" size={15} color="#FFFFFF" />
+              <Text style={styles.tacticalPrimaryBtnText}>
+                Ứng tuyển gia nhập Đội tác chiến ({allTeams.length})
+              </Text>
+              <Feather name="arrow-right" size={15} color="#FFFFFF" />
+            </LinearGradient>
           </TouchableOpacity>
+        )}
 
-
-          {/* Hint row for assigned rescuer to view details */}
-          {myTeam && (
-            <TouchableOpacity
-              style={styles.tacticalDetailHintRow}
-              activeOpacity={0.7}
-              onPress={() => {
-                handleOpenTeamDetail(myTeam);
-              }}
-            >
-              <Feather name="info" size={12} color="#0284C7" />
-              <Text style={styles.tacticalDetailHintText}>
-                Nhấn vào để xem chi tiết đội cứu hộ, chỉ huy & phương tiện
-              </Text>
-              <Feather name="chevron-right" size={12} color="#0284C7" />
-            </TouchableOpacity>
-          )}
-
-          {/* Button: Chờ duyệt (khi đang có đơn ứng tuyển chờ xử lý) */}
-          {!myTeam && pendingTeam ? (
-            <TouchableOpacity
-              activeOpacity={0.88}
-              onPress={() => handleOpenTeamDetail(pendingTeam)}
-              style={{ marginTop: 12 }}
-            >
-              <LinearGradient
-                colors={['#F59E0B', '#D97706']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={[styles.tacticalPrimaryBtn, { shadowColor: '#D97706' }]}
-              >
-                <Feather name="clock" size={15} color="#FFFFFF" />
-                <Text style={styles.tacticalPrimaryBtnText}>Chờ duyệt</Text>
-                <Feather name="chevron-right" size={15} color="#FFFFFF" />
-              </LinearGradient>
-            </TouchableOpacity>
-          ) : null}
-
-          {/* Action Button: Apply Team if not yet joined and not pending */}
-          {!myTeam && !pendingTeam && verificationStatus === 'VERIFIED' ? (
-            <TouchableOpacity
-              activeOpacity={0.88}
-              onPress={() => setShowTeamPickerModal(true)}
-              style={{ marginTop: 12 }}
-            >
-              <LinearGradient
-                colors={['#0066FF', '#1D4ED8']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.tacticalPrimaryBtn}
-              >
-                <Feather name="user-plus" size={15} color="#FFFFFF" />
-                <Text style={styles.tacticalPrimaryBtnText}>
-                  Ứng tuyển gia nhập Đội tác chiến ({allTeams.length})
-                </Text>
-                <Feather name="arrow-right" size={15} color="#FFFFFF" />
-              </LinearGradient>
-            </TouchableOpacity>
-          ) : !myTeam && !pendingTeam && verificationStatus !== 'VERIFIED' ? (
-            <View style={styles.tacticalPendingBox}>
-              <MaterialCommunityIcons name="timer-sand" size={15} color="#D97706" />
-              <Text style={styles.tacticalPendingText}>
-                Hồ sơ đang chờ cơ quan địa phương thẩm định để mở ứng tuyển đội
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        {/* 4. Menu Items */}
+        {/* 5. Menu Items (Nhiệm vụ cứu hộ & Lịch sử nhiệm vụ như ảnh) */}
         <View style={styles.menuCard}>
-
-          {/* Item 1: Lịch sử báo nạn (SOS History) */}
+          {/* Item 1: Nhiệm vụ cứu hộ */}
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={onNavigateToSosHistory}
+            onPress={() => {
+              if (onNavigateToTab) {
+                onNavigateToTab('sos');
+              } else {
+                onNavigateToProfessional();
+              }
+            }}
             activeOpacity={0.7}
           >
-            <View style={[styles.menuIconBox, { backgroundColor: '#FEF2F2' }]}>
-              <Feather name="clock" size={18} color="#DC2626" />
+            <View style={[styles.menuIconBox, { backgroundColor: '#EFF6FF' }]}>
+              <Feather name="clipboard" size={18} color="#0066FF" />
             </View>
             <View style={styles.menuTextBox}>
-              <Text style={styles.menuTitle}>Lịch sử báo nạn</Text>
-              <Text style={styles.menuDesc}>Xem các yêu cầu SOS cá nhân bạn đã gửi</Text>
+              <Text style={styles.menuTitle}>Nhiệm vụ cứu hộ</Text>
+              <Text style={styles.menuDesc}>Xem các nhiệm vụ được phân công</Text>
             </View>
             <Feather name="chevron-right" size={18} color="#94A3B8" />
           </TouchableOpacity>
 
           <View style={styles.menuDivider} />
 
+          {/* Item 2: Lịch sử nhiệm vụ */}
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={onNavigateToSosHistory}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconBox, { backgroundColor: '#EFF6FF' }]}>
+              <Feather name="clock" size={18} color="#0066FF" />
+            </View>
+            <View style={styles.menuTextBox}>
+              <Text style={styles.menuTitle}>Lịch sử nhiệm vụ</Text>
+              <Text style={styles.menuDesc}>Theo dõi các nhiệm vụ đã hoàn thành</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color="#94A3B8" />
+          </TouchableOpacity>
+        </View>
+
+        {/* 6. Menu Items Nhóm 2 (Thông tin cá nhân, Chuyên môn, Cài đặt) */}
+        <View style={styles.menuCard}>
           {/* Item 1: Thông tin cá nhân */}
           <TouchableOpacity
             style={styles.menuItem}
@@ -1429,50 +1416,6 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Modal: Xem trước & Xác nhận lưu ảnh đại diện */}
-      <Modal
-        visible={avatarPreviewVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setAvatarPreviewVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.previewDialogCard}>
-            <Text style={styles.previewDialogTitle}>Xem trước ảnh đại diện</Text>
-            <Text style={styles.previewDialogSubtitle}>
-              Ảnh này sẽ hiển thị trên hệ thống điều phối cứu hộ
-            </Text>
-
-            {selectedAvatarUrl && (
-              <Image source={{ uri: selectedAvatarUrl }} style={styles.previewDialogImage} />
-            )}
-
-            <View style={styles.dialogActionsRow}>
-              <TouchableOpacity
-                style={styles.dialogCancelBtn}
-                onPress={() => setAvatarPreviewVisible(false)}
-                disabled={isSavingAvatar}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.dialogCancelText}>Hủy</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.dialogConfirmBtn, isSavingAvatar && { opacity: 0.7 }]}
-                onPress={handleSaveAvatar}
-                disabled={isSavingAvatar}
-                activeOpacity={0.85}
-              >
-                {isSavingAvatar ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.dialogConfirmText}>Lưu ảnh</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Modal: Xác nhận Đăng xuất */}
       <Modal
@@ -2389,9 +2332,12 @@ const styles = StyleSheet.create({
   },
   profileCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: PROFILE_THEME.radius.card,
-    padding: 20,
+    borderRadius: 20,
+    padding: 16,
+    paddingVertical: 18,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     marginBottom: 14,
@@ -2400,127 +2346,185 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
-    overflow: 'hidden',
+  },
+  profileInfoCol: {
+    flex: 1,
+    paddingRight: 8,
+    justifyContent: 'center',
+  },
+  rescuerName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 2,
+    letterSpacing: -0.2,
+  },
+  rescuerRoleSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#64748B',
+    marginBottom: 10,
+  },
+  verticalDivider: {
+    width: 1,
+    height: 75,
+    backgroundColor: '#F1F5F9',
+    marginRight: 16,
   },
   avatarWrap: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
     position: 'relative',
-    marginBottom: 12,
-  },
-  avatarImage: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-  },
-  avatarPlaceholder: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: '#EFF6FF',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#BFDBFE',
+  },
+  avatarImage: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    resizeMode: 'cover',
+  },
+  avatarPlaceholder: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    backgroundColor: '#E0F2FE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#BAE6FD',
   },
   avatarInitials: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#2563EB',
+    color: '#0284C7',
   },
   cameraBtn: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#2563EB',
+    bottom: -2,
+    right: -2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#0066FF',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
   },
-  rescuerName: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 10,
-    textAlign: 'center',
-    paddingHorizontal: 12,
-  },
-  roleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  avatarLoadingOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'center',
-    gap: 5,
-    backgroundColor: '#2563EB',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
-    marginBottom: 14,
-  },
-  roleBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  verifiedBadge: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 12,
-    paddingVertical: 4.5,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  verifiedBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  activeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#10B981',
-  },
-  accountStatusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  contactDivider: {
-    width: '100%',
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginBottom: 12,
-  },
-  contactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    flexWrap: 'wrap',
+    borderRadius: 41,
   },
   contactItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    marginTop: 6,
   },
-  contactDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: '#CBD5E1',
+  contactIcon: {
+    marginRight: 8,
+    width: 16,
   },
   contactText: {
-    fontSize: 12.5,
+    fontSize: 13.5,
     fontWeight: '500',
+    color: '#475569',
+    flexShrink: 1,
+  },
+  readinessCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 14,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  readinessIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  readinessTextBox: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  readinessTitle: {
+    fontSize: 15.5,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 3,
+  },
+  readinessSubtitle: {
+    fontSize: 12.5,
     color: '#64748B',
+    lineHeight: 17,
+  },
+  deploymentCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 14,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  deploymentCol: {
+    flex: 1,
+  },
+  deploymentHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  deploymentHeaderLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.3,
+  },
+  deploymentValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: 4,
+    marginBottom: 4,
+  },
+  deploymentValueText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0F172A',
+    flexShrink: 1,
+  },
+  deploymentSubText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  deploymentDivider: {
+    width: 1,
+    height: 55,
+    backgroundColor: '#F1F5F9',
+    marginHorizontal: 12,
   },
   availabilityCard: {
     backgroundColor: '#FFFFFF',
