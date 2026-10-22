@@ -125,8 +125,9 @@ class AuthController {
    */
   async forgotPassword(req, res, next) {
     try {
-      const { email } = req.body;
-      const result = await authService.forgotPassword(email);
+      const { email, phone, account, identifier } = req.body;
+      const target = phone || account || identifier || email;
+      const result = await authService.forgotPassword(target);
 
       return sendSuccess(res, 200, result.message, result);
     } catch (error) {
@@ -139,8 +140,8 @@ class AuthController {
    */
   async resetPassword(req, res, next) {
     try {
-      const { email, account, identifier, token, newPassword } = req.body;
-      const result = await authService.resetPassword({ email, account, identifier, token, newPassword });
+      const { email, phone, account, identifier, token, newPassword } = req.body;
+      const result = await authService.resetPassword({ email, phone, account, identifier, token, newPassword });
 
       // Đảm bảo xóa mọi phiên cookie cũ
       clearAuthCookies(res);
@@ -156,8 +157,8 @@ class AuthController {
    */
   async verifyResetOtp(req, res, next) {
     try {
-      const { email, token } = req.body;
-      const result = await authService.verifyResetOtp({ email, token });
+      const { email, phone, account, identifier, token } = req.body;
+      const result = await authService.verifyResetOtp({ email, phone, account, identifier, token });
       return sendSuccess(res, 200, result.message, result);
     } catch (error) {
       next(error);

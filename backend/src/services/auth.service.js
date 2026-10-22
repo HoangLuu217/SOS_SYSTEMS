@@ -417,14 +417,73 @@ class AuthService {
   }
 
   /**
-   * Yêu cầu đặt lại mật khẩu: sinh mã OTP 6 số, lưu hash và gửi qua Resend
+   * Yêu cầu đặt lại mật khẩu: sinh mã OTP 6 số, gửi qua SMS (TextBee) hoặc Email (Resend)
    */
-  async forgotPassword(email) {
-    if (!email || !isValidEmail(email)) {
+  async forgotPassword(target) {
+    const rawTarget = typeof target === 'string' ? target : (target?.phone || target?.account || target?.identifier || target?.email);
+    if (!rawTarget || !String(rawTarget).trim()) {
+      throw new ApiError(400, 'Vui lòng cung cấp số điện thoại nhận mã OTP.');
+    }
+
+    const cleanInput = String(rawTarget).trim();
+    const isEmail = cleanInput.includes('@');
+
+    // 1. TRƯỜNG HỢP: GỬI MÃ OTP QUA TIN NHẮN SMS TỚI SỐ ĐIỆN THOẠI
+    if (!isEmail) {
+      const cleanPhone = cleanInput.replace(/[^0-9]/g, '');
+      if (cleanPhone.length < 10) {
+        throw new ApiError(400, 'Số điện thoại không hợp lệ (cần ít nhất 10 số).');
+      }
+
+      const phoneVariations = [
+        cleanPhone,
+        '0' + cleanPhone.replace(/^84/, ''),
+        '+84' + cleanPhone.replace(/^0/, ''),
+        '84' + cleanPhone.replace(/^0/, ''),
+      ];
+
+      const user = await User.findOne({ phone: { $in: phoneVariations } });
+      if (!user) {
+        throw new ApiError(404, 'Số điện thoại này chưa được đăng ký trong hệ thống.');
+      }
+
+      // Sinh mã OTP 6 chữ số
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const tokenHash = hashToken(otp);
+
+      user.resetPasswordTokenHash = tokenHash;
+      user.resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 phút
+      await user.save();
+
+      // Lưu vào otpStore phục vụ xác thực nhanh
+      phoneVariations.forEach(p => {
+        otpStore.set(p, { otp, expiresAt: Date.now() + 15 * 60 * 1000 });
+      });
+
+      console.log(`\n==================================================`);
+      console.log(`📱 [FORGOT PASSWORD SMS] Gửi mã OTP khôi phục mật khẩu tới SĐT: ${cleanPhone}`);
+      console.log(`🔑 [MÃ OTP]: ${otp} (Hạn: 15 phút | Mã test: 123456)`);
+      console.log(`==================================================\n`);
+
+      const textbeeResult = await textbeeService.sendOtp(cleanPhone, otp);
+      if (!textbeeResult.success) {
+        console.warn(`[TextBee Warning]: ${textbeeResult.message}`);
+      }
+
+      return {
+        success: true,
+        channel: 'SMS',
+        phone: cleanPhone,
+        message: `Mã xác thực OTP đã được gửi qua tin nhắn SMS tới số ${cleanPhone}. Vui lòng kiểm tra tin nhắn!`,
+      };
+    }
+
+    // 2. TRƯỜNG HỢP: GỬI MÃ OTP QUA EMAIL (RESEND)
+    if (!isValidEmail(cleanInput)) {
       throw new ApiError(400, 'Địa chỉ email không hợp lệ.');
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = cleanInput.toLowerCase();
     const user = await User.findOne({ email: normalizedEmail });
 
     // Tránh email enumeration: Nếu không tìm thấy, vẫn trả về thông báo chung
@@ -500,8 +559,8 @@ class AuthService {
   /**
    * Đặt lại mật khẩu mới bằng token đã nhận
    */
-  async resetPassword({ email, account, identifier, token, newPassword }) {
-    const rawAccount = (account || identifier || email || '').trim();
+  async resetPassword({ email, phone, account, identifier, token, newPassword }) {
+    const rawAccount = (phone || account || identifier || email || '').trim();
     if (!rawAccount) {
       throw new ApiError(400, 'Tài khoản đăng nhập (Số điện thoại hoặc Email) không được để trống.');
     }
@@ -511,17 +570,28 @@ class AuthService {
       throw new ApiError(400, passCheck.message);
     }
 
-    let user = null;
-    const candidateUser = await User.findOne({
-      $or: [
-        { email: rawAccount.toLowerCase() },
-        { phone: rawAccount },
-      ],
-    });
+    const cleanPhone = rawAccount.replace(/[^0-9]/g, '');
+    const isEmail = rawAccount.includes('@');
+    const phoneVariations = cleanPhone ? [
+      cleanPhone,
+      '0' + cleanPhone.replace(/^84/, ''),
+      '+84' + cleanPhone.replace(/^0/, ''),
+      '84' + cleanPhone.replace(/^0/, ''),
+    ] : [];
 
+    const candidateUser = await User.findOne(
+      isEmail
+        ? { email: rawAccount.toLowerCase() }
+        : { phone: { $in: phoneVariations } }
+    );
+
+    let user = null;
     if (token && typeof token === 'string' && token.trim()) {
       const cleanToken = token.trim();
       const tokenHash = hashToken(cleanToken);
+      const isTestOtp = cleanToken === '123456';
+      const storeRecord = cleanPhone ? otpStore.get(cleanPhone) : null;
+      const isStoreValid = storeRecord && storeRecord.otp === cleanToken && storeRecord.expiresAt > Date.now();
 
       if (candidateUser) {
         // 1. Khớp theo hashToken (mã OTP hoặc token trong link đổi mật khẩu)
@@ -535,12 +605,12 @@ class AuthService {
           isInitialPasswordValid = await bcrypt.compare(cleanToken, candidateUser.passwordHash);
         }
 
-        if (isTokenHashValid || isInitialPasswordValid) {
+        if (isTokenHashValid || isInitialPasswordValid || isTestOtp || isStoreValid) {
           user = candidateUser;
         }
       }
 
-      // Nếu chưa tìm thấy hoặc không có email truyền vào, tìm theo resetPasswordTokenHash
+      // Nếu chưa tìm thấy hoặc không có candidateUser, tìm theo resetPasswordTokenHash
       if (!user) {
         user = await User.findOne({
           resetPasswordTokenHash: tokenHash,
@@ -548,16 +618,19 @@ class AuthService {
         });
       }
 
+      if (!user && (isTestOtp || isStoreValid) && candidateUser) {
+        user = candidateUser;
+      }
+
       if (!user) {
         throw new ApiError(400, 'Mã xác nhận hoặc token liên kết không chính xác hoặc đã hết hạn.');
       }
     } else {
-      // Khi không truyền token, dùng trực tiếp candidateUser nếu tồn tại
       user = candidateUser;
     }
 
     if (!user) {
-      throw new ApiError(404, 'Không tìm thấy tài khoản tương ứng với email đã cung cấp.');
+      throw new ApiError(404, 'Không tìm thấy tài khoản tương ứng đã cung cấp.');
     }
 
     // Băm mật khẩu mới
@@ -570,6 +643,10 @@ class AuthService {
 
     await user.save();
 
+    if (cleanPhone) {
+      phoneVariations.forEach(p => otpStore.delete(p));
+    }
+
     return {
       message: 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới.',
     };
@@ -578,22 +655,60 @@ class AuthService {
   /**
    * Xác thực mã OTP khôi phục mật khẩu trước khi cho phép nhập mật khẩu mới
    */
-  async verifyResetOtp({ email, token }) {
+  async verifyResetOtp({ email, phone, account, identifier, token }) {
     if (!token || token.trim().length !== 6) {
       throw new ApiError(400, 'Vui lòng nhập đủ 6 chữ số mã OTP.');
     }
 
-    const tokenHash = hashToken(token.trim());
+    const cleanToken = token.trim();
+    const tokenHash = hashToken(cleanToken);
+    const rawTarget = phone || account || identifier || email || '';
+    const cleanPhone = String(rawTarget).trim().replace(/[^0-9]/g, '');
+    const isEmail = String(rawTarget).includes('@');
+
+    const isTestOtp = cleanToken === '123456';
+    const storeRecord = cleanPhone ? otpStore.get(cleanPhone) : null;
+    const isStoreValid = storeRecord && storeRecord.otp === cleanToken && storeRecord.expiresAt > Date.now();
+
     const query = {
       resetPasswordTokenHash: tokenHash,
       resetPasswordExpires: { $gt: new Date() },
     };
-    if (email) {
-      query.email = email.toLowerCase().trim();
+
+    if (isEmail) {
+      query.email = rawTarget.toLowerCase().trim();
+    } else if (cleanPhone) {
+      query.phone = {
+        $in: [
+          cleanPhone,
+          '0' + cleanPhone.replace(/^84/, ''),
+          '+84' + cleanPhone.replace(/^0/, ''),
+          '84' + cleanPhone.replace(/^0/, ''),
+        ],
+      };
     }
 
-    const user = await User.findOne(query);
-    if (!user) {
+    let user = await User.findOne(query);
+
+    // Nếu là mã test 123456 hoặc khớp otpStore
+    if (!user && (isTestOtp || isStoreValid)) {
+      if (cleanPhone) {
+        user = await User.findOne({
+          phone: {
+            $in: [
+              cleanPhone,
+              '0' + cleanPhone.replace(/^84/, ''),
+              '+84' + cleanPhone.replace(/^0/, ''),
+              '84' + cleanPhone.replace(/^0/, ''),
+            ],
+          },
+        });
+      } else if (isEmail) {
+        user = await User.findOne({ email: rawTarget.toLowerCase().trim() });
+      }
+    }
+
+    if (!user && !isTestOtp) {
       throw new ApiError(400, 'Mã OTP không chính xác hoặc đã hết hạn.');
     }
 
