@@ -32,6 +32,7 @@ import {
   WARD_CENTROIDS,
   getAreaCentroid,
 } from '@/services/mapGeoService';
+import { onRescuerLocationUpdate } from '@/services/socketService';
 import { useApp } from '@/context/AppContext';
 
 interface Props {
@@ -323,14 +324,41 @@ export const TacticalMap = ({
     };
   };
 
-  // Tọa độ GPS thành viên khi bung mở rộng theo các hướng Bắc/Đông/Nam/Tây để không bị đè nhau
-  const getFannedRescuerCoord = (
-    baseLat: number,
-    baseLng: number,
+  // Lưu trữ tọa độ GPS thời gian thực của từng cứu hộ viên nhận qua Socket.IO Telemetry
+  const [liveRescuerLocations, setLiveRescuerLocations] = useState<Record<string, { lat: number; lng: number }>>({});
+
+  useEffect(() => {
+    const unsubscribe = onRescuerLocationUpdate((data) => {
+      if (data?.rescuerId && data?.coords?.lat && data?.coords?.lng) {
+        setLiveRescuerLocations((prev) => ({
+          ...prev,
+          [data.rescuerId]: { lat: data.coords.lat, lng: data.coords.lng },
+        }));
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Tọa độ GPS thành viên: Lấy chính xác theo từng user trong team (không lấy bừa)
+  const getRescuerLiveCoord = (
+    rescuer: RescuerProfile,
+    teamBase: { lat: number; lng: number },
     rescuerIdx: number,
     _totalRescuers?: number
   ): { lat: number; lng: number } => {
-    // 4 hướng chính và 4 hướng phụ tránh chồng lấn chữ
+    // 1. Tọa độ Telemetry Live nhận từ thiết bị Mobile App của cứu hộ viên qua Socket
+    if (liveRescuerLocations[rescuer.id]) {
+      return liveRescuerLocations[rescuer.id];
+    }
+    // 2. Tọa độ GPS cá nhân thực tế của chính user trong team
+    if (
+      rescuer.coordinates &&
+      typeof rescuer.coordinates.lat === 'number' &&
+      typeof rescuer.coordinates.lng === 'number'
+    ) {
+      return { lat: rescuer.coordinates.lat, lng: rescuer.coordinates.lng };
+    }
+    // 3. Dự phòng phân bố nhẹ quanh xe nếu user chưa cấp quyền GPS
     const angles = [
       0,                  // 0: Bắc (North)
       Math.PI / 2,        // 1: Đông (East)
@@ -342,12 +370,11 @@ export const TacticalMap = ({
       (7 * Math.PI) / 4,  // 7: Tây Bắc
     ];
     const angle = angles[rescuerIdx % angles.length];
-    // Rộng thoáng (~200m Bắc/Nam, ~280m Đông/Tây)
     const distLat = 0.0018;
     const distLng = 0.0026;
     return {
-      lat: baseLat + Math.cos(angle) * distLat,
-      lng: baseLng + Math.sin(angle) * distLng,
+      lat: teamBase.lat + Math.cos(angle) * distLat,
+      lng: teamBase.lng + Math.sin(angle) * distLng,
     };
   };
 
@@ -919,35 +946,110 @@ export const TacticalMap = ({
                 }}
               >
                 <Popup>
-                  <div style={{ fontFamily: 'inherit', padding: '2px', minWidth: '220px' }}>
-                    <div style={{ fontWeight: 800, fontSize: '13px', color: '#0369a1', display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <span>🚤</span> {teamVeh?.name || team.name}
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#475569', marginTop: 3 }}>
-                      Biển số: <strong style={{ color: '#0f172a' }}>{teamVeh?.plate || '43B-098.21'}</strong> • Sức chứa: <strong>{teamVeh?.capacity || '6 người'}</strong>
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#0284c7', fontWeight: 600, marginTop: 2 }}>
-                      Đơn vị: {team.name}
-                    </div>
-
-                    <div style={{ height: 1, background: '#e2e8f0', margin: '6px 0' }} />
-
-                    <div style={{ fontWeight: 700, fontSize: '11px', color: '#334155', marginBottom: 4 }}>
-                      Quân số trực chiến ({team.rescuers.length} chiến sĩ):
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 130, overflowY: 'auto' }}>
-                      {team.rescuers.map((r, rIdx) => (
-                        <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px', background: '#f8fafc', padding: '3px 6px', borderRadius: 4 }}>
-                          <span style={{ fontWeight: 600, color: '#0f172a' }}>
-                            {rIdx === 0 ? '⭐' : '●'} {r.name} ({r.role.split(' ')[0]})
-                          </span>
-                          <span style={{ color: '#16a34a', fontWeight: 700, fontSize: '10px' }}>
-                            {r.phone}
-                          </span>
-                        </div>
-                      ))}
+                  <div style={{ fontFamily: 'inherit', padding: '4px 2px', minWidth: '260px' }}>
+                    {/* Header: Tên phương tiện & Biển số */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                      <div style={{ fontWeight: 900, fontSize: '14.5px', color: '#0f172a', letterSpacing: '-0.2px' }}>
+                        {teamVeh?.name || team.name}
+                      </div>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          color: '#0f172a',
+                          background: '#f1f5f9',
+                          border: '1px solid #cbd5e1',
+                          padding: '1.5px 6px',
+                          borderRadius: 4,
+                          fontFamily: 'monospace',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {teamVeh?.plate || '43B-098.21'}
+                      </span>
                     </div>
 
+                    {/* Metadata: Đơn vị & Sức chứa */}
+                    <div style={{ fontSize: '12px', color: '#334155', fontWeight: 600, lineHeight: 1.4, marginBottom: 2 }}>
+                      <span style={{ color: '#64748b', fontWeight: 700 }}>Đơn vị: </span>
+                      <strong style={{ color: '#0f172a' }}>{team.name}</strong>
+                    </div>
+                    <div style={{ fontSize: '11.5px', color: '#64748b', fontWeight: 600 }}>
+                      Sức chứa: <strong style={{ color: '#0f172a' }}>{teamVeh?.capacity || '6 người'}</strong>
+                    </div>
+
+                    <div style={{ height: 1, background: '#e2e8f0', margin: '8px 0' }} />
+
+                    {/* Danh sách quân số trực chiến */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontWeight: 800, fontSize: '11.5px', color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                        Quân số trực chiến ({team.rescuers.length} chiến sĩ)
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 150, overflowY: 'auto' }}>
+                      {team.rescuers.map((r, rIdx) => {
+                        const isLeader = rIdx === 0 || r.role.toLowerCase().includes('chỉ huy') || r.role.toLowerCase().includes('leader');
+
+                        return (
+                          <div
+                            key={r.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              fontSize: '12px',
+                              background: isLeader ? '#f8fafc' : '#ffffff',
+                              border: '1px solid #e2e8f0',
+                              padding: '5px 8px',
+                              borderRadius: 6,
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1 }}>
+                              <span style={{ fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {r.name}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  color: isLeader ? '#0284c7' : '#64748b',
+                                  background: isLeader ? '#f0f9ff' : '#f1f5f9',
+                                  border: isLeader ? '1px solid #bae6fd' : '1px solid #e2e8f0',
+                                  padding: '1px 5px',
+                                  borderRadius: 4,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {r.role}
+                              </span>
+                            </div>
+
+                            <a
+                              href={`tel:${r.phone}`}
+                              style={{
+                                color: '#0f172a',
+                                fontWeight: 800,
+                                fontSize: '11.5px',
+                                textDecoration: 'none',
+                                fontFamily: 'monospace',
+                                background: '#f8fafc',
+                                border: '1px solid #cbd5e1',
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                flexShrink: 0,
+                                marginLeft: 6,
+                              }}
+                              title={`Gọi cho ${r.name}`}
+                            >
+                              {r.phone}
+                            </a>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Nút hành động */}
                     <button
                       type="button"
                       onClick={() => {
@@ -958,18 +1060,19 @@ export const TacticalMap = ({
                       }}
                       style={{
                         width: '100%',
-                        marginTop: 8,
-                        padding: '6px 8px',
-                        background: isTeamExpanded ? '#f1f5f9' : '#0284c7',
-                        color: isTeamExpanded ? '#334155' : '#ffffff',
-                        border: isTeamExpanded ? '1px solid #cbd5e1' : 'none',
+                        marginTop: 9,
+                        padding: '7px 10px',
+                        background: isTeamExpanded ? '#f8fafc' : '#0f172a',
+                        color: isTeamExpanded ? '#0f172a' : '#ffffff',
+                        border: isTeamExpanded ? '1.5px solid #cbd5e1' : 'none',
                         borderRadius: 6,
-                        fontSize: '11px',
-                        fontWeight: 700,
+                        fontSize: '11.5px',
+                        fontWeight: 800,
                         cursor: 'pointer',
+                        transition: 'all 0.15s ease',
                       }}
                     >
-                      {isTeamExpanded ? 'Thu gọn vị trí về xe' : 'Bung vị trí GPS từng chiến sĩ'}
+                      {isTeamExpanded ? 'Thu gọn vị trí về xe' : 'Xem vị trí GPS từng chiến sĩ'}
                     </button>
                   </div>
                 </Popup>
@@ -978,7 +1081,7 @@ export const TacticalMap = ({
               {/* Chỉ khi người dùng bấm mở rộng / bung đội hình: hiển thị GPS từng thành viên fanned out không bị đè */}
               {isTeamExpanded &&
                 team.rescuers.map((rescuer, rIdx) => {
-                  const rCoord = getFannedRescuerCoord(teamBase.lat, teamBase.lng, rIdx, team.rescuers.length);
+                  const rCoord = getRescuerLiveCoord(rescuer, teamBase, rIdx, team.rescuers.length);
                   return (
                     <Fragment key={`rescuer-${team.id}-${rescuer.id}`}>
                       {/* Đường nối liên lạc từ xe chỉ huy tới vị trí chiến sĩ */}

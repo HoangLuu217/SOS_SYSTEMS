@@ -13,6 +13,7 @@ import {
   Alert,
   StatusBar,
   Platform,
+  DeviceEventEmitter,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,7 +21,7 @@ import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { backendApi } from '@/api';
 import { useAuth } from '@/context/AuthContext';
 import { SosAssignmentData, SosAssignmentStatus, TabName } from '@/types';
-import { SosScreen } from '@/features/sos';
+import { SosScreen, RescuerMissionWorkspaceModal } from '@/features/sos';
 
 interface RescuerMissionScreenProps {
   onNavigateToTab?: (tab: TabName, options?: any) => void;
@@ -61,6 +62,10 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
   // Modal SOS khẩn cấp dành cho cứu hộ viên
   const [sosModalVisible, setSosModalVisible] = useState(false);
 
+  // Modal Điều hướng Tác chiến Thực địa GrabDriver
+  const [workspaceVisible, setWorkspaceVisible] = useState(false);
+  const [activeWorkspaceMission, setActiveWorkspaceMission] = useState<SosAssignmentData | null>(null);
+
   // Tải danh sách nhiệm vụ từ backend
   const fetchMissions = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
@@ -91,6 +96,19 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
 
   useEffect(() => {
     fetchMissions();
+
+    // Lắng nghe realtime tín hiệu điều phối và cập nhật nhiệm vụ
+    const sub = DeviceEventEmitter.addListener('sos:sync', () => {
+      fetchMissions(true);
+    });
+    const interval = setInterval(() => {
+      fetchMissions(true);
+    }, 15000);
+
+    return () => {
+      sub.remove();
+      clearInterval(interval);
+    };
   }, [fetchMissions]);
 
   // Tải thông tin Đội cứu hộ và Phương tiện cơ động của Cứu hộ viên
@@ -171,15 +189,10 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     });
   };
 
-  // Xem vị trí nạn nhân trên Bản đồ
+  // Xem vị trí nạn nhân & Mở Màn hình Điều Hướng Tác Chiến
   const handleViewOnMap = (mission: SosAssignmentData) => {
-    const coords = mission.sosRequestId?.location?.coordinates;
-    if (onNavigateToTab) {
-      onNavigateToTab('map', {
-        filter: 'ALL',
-        targetCoords: coords,
-      });
-    }
+    setActiveWorkspaceMission(mission);
+    setWorkspaceVisible(true);
   };
 
   // Cập nhật trạng thái nhiệm vụ (Tiếp nhận, Xuất phát, Tiếp cận, Hoàn thành)
@@ -599,101 +612,53 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                       </Text>
                     </View>
                   )}
+
+                  {/* Vật tư & Trang thiết bị cấp phát theo lệnh phân công */}
+                  {(() => {
+                    const missionSupplies =
+                      item.supplies ||
+                      (item as any).reliefItems ||
+                      sos?.supplies ||
+                      [
+                        { name: 'Áo phao cứu sinh', quantity: Math.max(1, sos?.people || 2), unit: 'Chiếc' },
+                        { name: 'Túi sơ cứu y tế', quantity: 1, unit: 'Bộ' },
+                        { name: 'Nước uống tiệt trùng', quantity: Math.ceil(Math.max(1, sos?.people || 2) / 2), unit: 'Thùng' },
+                      ];
+
+                    if (!missionSupplies || missionSupplies.length === 0) return null;
+
+                    return (
+                      <View style={styles.suppliesCardBox}>
+                        <View style={styles.suppliesHeaderRow}>
+                          <MaterialCommunityIcons name="package-variant-closed" size={15} color="#15803D" />
+                          <Text style={styles.suppliesHeaderTitle}>VẬT TƯ CẤP THEO PHÂN CÔNG:</Text>
+                        </View>
+                        <View style={styles.suppliesTagsWrap}>
+                          {missionSupplies.map((sup: any, sIdx: number) => (
+                            <View key={sIdx} style={styles.supplyItemChip}>
+                              <Text style={styles.supplyItemChipText}>
+                                {sup.name} <Text style={{ fontWeight: '800', color: '#166534' }}>({sup.quantity} {sup.unit || 'món'})</Text>
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    );
+                  })()}
                 </View>
 
-                {/* Các nút hành động tác chiến */}
+                {/* Các nút hành động: Bên ngoài chỉ xem & điều hướng tác chiến */}
                 <View style={styles.actionRow}>
-                  {/* Nút Xem bản đồ / Chỉ đường */}
-                  <TouchableOpacity
-                    style={styles.mapActionBtn}
-                    onPress={() => handleViewOnMap(item)}
-                    activeOpacity={0.8}
-                  >
-                    <Feather name="navigation" size={15} color="#0066FF" />
-                    <Text style={styles.mapActionText}>Chỉ đường</Text>
-                  </TouchableOpacity>
-
-                  {/* Các nút theo trạng thái */}
-                  {item.status === 'PENDING' && (
+                  {item.status !== 'COMPLETED' ? (
                     <TouchableOpacity
-                      style={styles.primaryActionBtn}
-                      onPress={() => handleUpdateStatus(item._id, 'ACCEPTED')}
-                      disabled={isSubmitting}
-                      activeOpacity={0.85}
+                      style={styles.mapActionBtn}
+                      onPress={() => handleViewOnMap(item)}
+                      activeOpacity={0.8}
                     >
-                      <LinearGradient
-                        colors={['#10B981', '#059669']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.gradientBtn}
-                      >
-                        <Feather name="check" size={16} color="#FFFFFF" />
-                        <Text style={styles.primaryActionText}>Tiếp nhận lệnh</Text>
-                      </LinearGradient>
+                      <Feather name="navigation" size={16} color="#0066FF" />
+                      <Text style={styles.mapActionText}>Chỉ đường</Text>
                     </TouchableOpacity>
-                  )}
-
-                  {item.status === 'ACCEPTED' && (
-                    <TouchableOpacity
-                      style={styles.primaryActionBtn}
-                      onPress={() => handleUpdateStatus(item._id, 'EN_ROUTE')}
-                      disabled={isSubmitting}
-                      activeOpacity={0.85}
-                    >
-                      <LinearGradient
-                        colors={['#0284C7', '#0369A1']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.gradientBtn}
-                      >
-                        <Feather name="send" size={15} color="#FFFFFF" />
-                        <Text style={styles.primaryActionText}>Xuất phát (En Route)</Text>
-                      </LinearGradient>
-                    </TouchableOpacity>
-                  )}
-
-                  {(item.status === 'EN_ROUTE' || item.status === 'DISPATCHED') && (
-                    <TouchableOpacity
-                      style={styles.primaryActionBtn}
-                      onPress={() => handleUpdateStatus(item._id, 'IN_PROGRESS')}
-                      disabled={isSubmitting}
-                      activeOpacity={0.85}
-                    >
-                      <LinearGradient
-                        colors={['#D97706', '#B45309']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.gradientBtn}
-                      >
-                        <Feather name="map-pin" size={15} color="#FFFFFF" />
-                        <Text style={styles.primaryActionText}>Đã tiếp cận hiện trường</Text>
-                      </LinearGradient>
-                    </TouchableOpacity>
-                  )}
-
-                  {(item.status === 'ARRIVED' || item.status === 'IN_PROGRESS') && (
-                    <TouchableOpacity
-                      style={styles.primaryActionBtn}
-                      onPress={() => {
-                        setSelectedMission(item);
-                        setCompleteModalVisible(true);
-                      }}
-                      disabled={isSubmitting}
-                      activeOpacity={0.85}
-                    >
-                      <LinearGradient
-                        colors={['#059669', '#047857']}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.gradientBtn}
-                      >
-                        <Feather name="award" size={16} color="#FFFFFF" />
-                        <Text style={styles.primaryActionText}>Hoàn thành cứu hộ</Text>
-                      </LinearGradient>
-                    </TouchableOpacity>
-                  )}
-
-                  {item.status === 'COMPLETED' && (
+                  ) : (
                     <View style={styles.completedBadge}>
                       <Feather name="check-circle" size={16} color="#059669" />
                       <Text style={styles.completedBadgeText}>Đã cứu nạn thành công</Text>
@@ -788,6 +753,34 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
           <SosScreen onNavigateToHome={() => setSosModalVisible(false)} />
         </View>
       </Modal>
+
+      {/* 5. Modal Tác chiến Thực địa GrabDriver */}
+      <RescuerMissionWorkspaceModal
+        visible={workspaceVisible}
+        assignmentId={activeWorkspaceMission?._id}
+        initialSosData={activeWorkspaceMission?.sosRequestId || (activeWorkspaceMission as any)?.sosId}
+        initialAssignmentData={activeWorkspaceMission}
+        onClose={() => {
+          setWorkspaceVisible(false);
+          setActiveWorkspaceMission(null);
+          fetchMissions(true);
+        }}
+        onMissionCompleted={() => {
+          setWorkspaceVisible(false);
+          setActiveWorkspaceMission(null);
+          fetchMissions(true);
+        }}
+        onMissionUpdated={(updatedStatus, missionId) => {
+          if (missionId) {
+            setMissions((prev) =>
+              prev.map((m) =>
+                m._id === missionId ? { ...m, status: updatedStatus as SosAssignmentStatus } : m
+              )
+            );
+          }
+          fetchMissions(true);
+        }}
+      />
     </View>
   );
 };
@@ -1239,6 +1232,44 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: '#1E293B',
   },
+  suppliesCardBox: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5,
+    borderColor: '#BBF7D0',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 6,
+  },
+  suppliesHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  suppliesHeaderTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#166534',
+    letterSpacing: 0.3,
+  },
+  suppliesTagsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  supplyItemChip: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+  },
+  supplyItemChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803D',
+  },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1246,18 +1277,20 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   mapActionBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 11,
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 10,
     backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderWidth: 1.5,
+    borderColor: '#93C5FD',
   },
   mapActionText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0066FF',
   },
@@ -1402,5 +1435,42 @@ const styles = StyleSheet.create({
   },
   sosModalCloseBtn: {
     padding: 6,
+  },
+  openWorkspaceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1.5,
+    borderColor: '#0284C7',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 10,
+  },
+  openWorkspaceLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  openWorkspacePulse: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#0284C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  openWorkspaceTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0369A1',
+    letterSpacing: 0.3,
+  },
+  openWorkspaceSubtitle: {
+    fontSize: 10.5,
+    color: '#64748B',
+    marginTop: 1,
   },
 });

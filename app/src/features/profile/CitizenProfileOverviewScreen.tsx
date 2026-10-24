@@ -12,6 +12,8 @@ import {
   Alert,
   ActivityIndicator,
   DeviceEventEmitter,
+  ActionSheetIOS,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -51,8 +53,6 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
 
   // Avatar state
   const [avatarSheetVisible, setAvatarSheetVisible] = useState(false);
-  const [avatarPreviewVisible, setAvatarPreviewVisible] = useState(false);
-  const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string | null>(null);
   const [isSavingAvatar, setIsSavingAvatar] = useState(false);
 
   // Logout modal state
@@ -181,80 +181,99 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
     };
   }, []);
 
-  // Chụp ảnh bằng camera
-  const handleTakePhoto = async () => {
-    try {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền máy ảnh để chụp ảnh đại diện.');
-        return;
-      }
-      const res = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.6,
-        base64: true,
-      });
-      if (!res.canceled && res.assets && res.assets[0]) {
-        const asset = res.assets[0];
-        const avatarUri = asset.base64
-          ? `data:image/jpeg;base64,${asset.base64}`
-          : asset.uri;
-        setSelectedAvatarUrl(avatarUri);
-        setAvatarSheetVisible(false);
-        setAvatarPreviewVisible(true);
-      }
-    } catch {
-      Alert.alert('Lỗi', 'Không thể khởi động máy ảnh.');
-    }
-  };
-
-  // Chọn ảnh từ thư viện
-  const handleSelectFromLibrary = async () => {
-    try {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh để đổi ảnh đại diện.');
-        return;
-      }
-      const res = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.6,
-        base64: true,
-      });
-      if (!res.canceled && res.assets && res.assets[0]) {
-        const asset = res.assets[0];
-        const avatarUri = asset.base64
-          ? `data:image/jpeg;base64,${asset.base64}`
-          : asset.uri;
-        setSelectedAvatarUrl(avatarUri);
-        setAvatarSheetVisible(false);
-        setAvatarPreviewVisible(true);
-      }
-    } catch {
-      Alert.alert('Lỗi', 'Không thể mở thư viện ảnh.');
-    }
-  };
-
-  // Lưu avatar
-  const handleSaveAvatar = async () => {
-    if (!selectedAvatarUrl) return;
+  // Tải ảnh đại diện lên server trực tiếp không qua modal phụ gây deadlock
+  const uploadAvatarAsset = async (asset: ImagePicker.ImagePickerAsset) => {
+    if (!asset || !asset.uri) return;
     setIsSavingAvatar(true);
     try {
-      const res = await updateUserAvatar(selectedAvatarUrl);
+      const avatarPayload = asset.base64
+        ? `data:image/jpeg;base64,${asset.base64}`
+        : asset.uri;
+      const res = await updateUserAvatar(avatarPayload);
       if (res.success) {
-        setAvatarPreviewVisible(false);
         Alert.alert('Thành công', 'Đã cập nhật ảnh đại diện mới!');
       } else {
-        Alert.alert('Không thể lưu', res.message || 'Lỗi lưu ảnh.');
+        Alert.alert('Không thể lưu', res.message || 'Lỗi lưu ảnh đại diện.');
       }
     } catch (e: any) {
       Alert.alert('Lỗi', e.message || 'Đã có lỗi xảy ra.');
     } finally {
       setIsSavingAvatar(false);
     }
+  };
+
+  // Mở menu chọn ảnh đại diện (ActionSheet trên iOS để tránh deadlock modal, BottomSheet trên Android)
+  const handleOpenAvatarPicker = () => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Hủy', 'Chụp ảnh mới', 'Chọn từ thư viện ảnh'],
+          cancelButtonIndex: 0,
+          title: 'Ảnh đại diện',
+          message: 'Chọn phương thức tải ảnh mới',
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) {
+            handleTakePhoto();
+          } else if (buttonIndex === 2) {
+            handleSelectFromLibrary();
+          }
+        }
+      );
+    } else {
+      setAvatarSheetVisible(true);
+    }
+  };
+
+  // Chụp ảnh bằng camera
+  const handleTakePhoto = async () => {
+    setAvatarSheetVisible(false);
+    setTimeout(async () => {
+      try {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền máy ảnh để chụp ảnh đại diện.');
+          return;
+        }
+        const res = await ImagePicker.launchCameraAsync({
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.6,
+          base64: true,
+        });
+        if (!res.canceled && res.assets && res.assets[0]) {
+          await uploadAvatarAsset(res.assets[0]);
+        }
+      } catch {
+        Alert.alert('Lỗi', 'Không thể khởi động máy ảnh.');
+      }
+    }, Platform.OS === 'ios' ? 100 : 350);
+  };
+
+  // Chọn ảnh từ thư viện
+  const handleSelectFromLibrary = async () => {
+    setAvatarSheetVisible(false);
+    setTimeout(async () => {
+      try {
+        const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!perm.granted) {
+          Alert.alert('Quyền truy cập', 'Vui lòng cấp quyền thư viện ảnh để đổi ảnh đại diện.');
+          return;
+        }
+        const res = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.6,
+          base64: true,
+        });
+        if (!res.canceled && res.assets && res.assets[0]) {
+          await uploadAvatarAsset(res.assets[0]);
+        }
+      } catch {
+        Alert.alert('Lỗi', 'Không thể mở thư viện ảnh.');
+      }
+    }, Platform.OS === 'ios' ? 100 : 350);
   };
 
   const emergencyContactText = emergencyContact?.name
@@ -301,8 +320,28 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
       >
         {/* 2. Main Citizen Profile Card */}
         <View style={styles.profileCard}>
-          {/* Avatar with Camera Button */}
-          <View style={styles.avatarWrap}>
+          {/* Cột trái: Tên, SĐT, Email */}
+          <View style={styles.profileInfoCol}>
+            <Text style={styles.profileName} numberOfLines={1}>{displayName}</Text>
+
+            <View style={styles.contactItem}>
+              <Feather name="phone" size={15} color="#64748B" style={styles.contactIcon} />
+              <Text style={styles.contactText} numberOfLines={1}>{displayPhone}</Text>
+            </View>
+
+            <View style={styles.contactItem}>
+              <Feather name="mail" size={15} color="#64748B" style={styles.contactIcon} />
+              <Text style={styles.contactText} numberOfLines={1}>{displayEmail}</Text>
+            </View>
+          </View>
+
+          {/* Cột phải: Avatar đại diện tròn */}
+          <TouchableOpacity
+            style={styles.avatarWrap}
+            onPress={handleOpenAvatarPicker}
+            activeOpacity={0.8}
+            disabled={isSavingAvatar}
+          >
             {user?.avatarUrl ? (
               <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
             ) : (
@@ -312,38 +351,19 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
                 </Text>
               </View>
             )}
-            <TouchableOpacity
-              style={styles.cameraBtn}
-              onPress={() => setAvatarSheetVisible(true)}
-              activeOpacity={0.85}
-            >
-              <Feather name="camera" size={13} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Citizen Name */}
-          <Text style={styles.profileName}>{displayName}</Text>
-
-          {/* Contact Row: Phone & Email */}
-          <View style={styles.contactDivider} />
-          <View style={styles.contactRow}>
-            <View style={styles.contactItem}>
-              <Feather name="phone" size={13} color="#64748B" />
-              <Text style={styles.contactText}>{displayPhone}</Text>
-            </View>
-            <View style={styles.contactDot} />
-            <View style={styles.contactItem}>
-              <Feather name="mail" size={13} color="#64748B" />
-              <Text style={styles.contactText} numberOfLines={1}>{displayEmail}</Text>
-            </View>
-          </View>
+            {isSavingAvatar && (
+              <View style={styles.avatarLoadingOverlay}>
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Banner nhắc nhở xác thực số điện thoại cho tài khoản Google */}
         {!user?.phone && (
           <TouchableOpacity
             style={styles.unverifiedPhoneCard}
-            onPress={onNavigateToSecurity}
+            onPress={onNavigateToEditProfile}
             activeOpacity={0.8}
           >
             <View style={styles.unverifiedPhoneIconBox}>
@@ -462,7 +482,7 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
             </View>
             <View style={styles.menuTextBox}>
               <Text style={styles.menuTitle}>Thông tin cá nhân</Text>
-              <Text style={styles.menuDesc}>Họ tên, ngày sinh, địa chỉ cư trú</Text>
+              <Text style={styles.menuDesc}>Họ tên, SĐT, mật khẩu, địa chỉ</Text>
             </View>
             <Feather name="chevron-right" size={18} color="#94A3B8" />
           </TouchableOpacity>
@@ -495,25 +515,7 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
 
           <View style={styles.menuDivider} />
 
-          {/* Item 3: Bảo mật tài khoản */}
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={onNavigateToSecurity}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.menuIconBox, { backgroundColor: '#F8FAFC' }]}>
-              <Feather name="shield" size={18} color="#475569" />
-            </View>
-            <View style={styles.menuTextBox}>
-              <Text style={styles.menuTitle}>Bảo mật tài khoản</Text>
-              <Text style={styles.menuDesc}>Mật khẩu đăng nhập & xác thực</Text>
-            </View>
-            <Feather name="chevron-right" size={18} color="#94A3B8" />
-          </TouchableOpacity>
-
-          <View style={styles.menuDivider} />
-
-          {/* Item 4: Cài đặt thông báo */}
+          {/* Item 3: Cài đặt thông báo */}
           <TouchableOpacity
             style={styles.menuItem}
             onPress={onNavigateToNotificationSettings}
@@ -597,50 +599,6 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Modal: Xem trước & Xác nhận lưu ảnh đại diện */}
-      <Modal
-        visible={avatarPreviewVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setAvatarPreviewVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.previewDialogCard}>
-            <Text style={styles.previewDialogTitle}>Xem trước ảnh đại diện</Text>
-            <Text style={styles.previewDialogSubtitle}>
-              Ảnh này sẽ hiển thị trên thông tin hồ sơ cứu hộ của bạn
-            </Text>
-
-            {selectedAvatarUrl && (
-              <Image source={{ uri: selectedAvatarUrl }} style={styles.previewDialogImage} />
-            )}
-
-            <View style={styles.dialogActionsRow}>
-              <TouchableOpacity
-                style={styles.dialogCancelBtn}
-                onPress={() => setAvatarPreviewVisible(false)}
-                disabled={isSavingAvatar}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.dialogCancelText}>Hủy</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.dialogConfirmBtn, isSavingAvatar && { opacity: 0.7 }]}
-                onPress={handleSaveAvatar}
-                disabled={isSavingAvatar}
-                activeOpacity={0.85}
-              >
-                {isSavingAvatar ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.dialogConfirmText}>Lưu ảnh</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Modal: Xác nhận Đăng xuất */}
       <Modal
@@ -794,9 +752,11 @@ const styles = StyleSheet.create({
   },
   profileCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: PROFILE_THEME.radius.card,
+    borderRadius: 20,
     padding: 20,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     marginBottom: 14,
@@ -806,51 +766,52 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  avatarWrap: {
-    position: 'relative',
-    marginBottom: 12,
-  },
-  avatarImage: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-  },
-  avatarPlaceholder: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: PROFILE_THEME.colors.primaryLight,
+  profileInfoCol: {
+    flex: 1,
+    paddingRight: 16,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: PROFILE_THEME.colors.primaryBorder,
-  },
-  avatarInitials: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: PROFILE_THEME.colors.primary,
-  },
-  cameraBtn: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: PROFILE_THEME.colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
   },
   profileName: {
-    fontSize: 19,
+    fontSize: 26,
     fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 14,
-    textAlign: 'center',
+    marginBottom: 10,
+    letterSpacing: -0.3,
+  },
+  avatarWrap: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  avatarImage: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    resizeMode: 'cover',
+  },
+  avatarPlaceholder: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+  },
+  avatarInitials: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#0066FF',
+  },
+  avatarLoadingOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 41,
   },
   badgesRow: {
     flexDirection: 'row',
@@ -921,7 +882,11 @@ const styles = StyleSheet.create({
   contactItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    marginTop: 6,
+  },
+  contactIcon: {
+    marginRight: 8,
+    width: 16,
   },
   contactDot: {
     width: 3,
@@ -930,9 +895,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#CBD5E1',
   },
   contactText: {
-    fontSize: 12.5,
+    fontSize: 14,
     fontWeight: '500',
-    color: '#64748B',
+    color: '#475569',
+    flexShrink: 1,
   },
   menuCard: {
     backgroundColor: '#FFFFFF',

@@ -1,12 +1,14 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, X, Package } from 'lucide-react';
 import type { SosRequest, RescueTeam, Vehicle } from '@/types/domainD';
+import { FALLBACK_SUPPLIES } from '@/constants';
 
 interface Props {
   isOpen: boolean;
   selectedSos: SosRequest;
   selectedTeams: RescueTeam[];
   vehicles: Vehicle[];
+  allocatedSupplies?: Record<string, number>;
   onClose: () => void;
   onConfirm: () => void;
 }
@@ -16,6 +18,7 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
   selectedSos,
   selectedTeams,
   vehicles,
+  allocatedSupplies,
   onClose,
   onConfirm,
 }) => {
@@ -86,6 +89,34 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
               <strong style={{ color: '#0f172a' }}>Số người gặp nạn:</strong>{' '}
               <span style={{ fontWeight: 700, color: '#0f172a' }}>{selectedSos.affectedPeople} người</span>
             </div>
+
+            {allocatedSupplies && Object.entries(allocatedSupplies).some(([_, qty]) => qty > 0) && (
+              <div
+                style={{
+                  background: '#f0fdf4',
+                  border: '1.5px solid #86efac',
+                  borderRadius: 8,
+                  padding: '9px 12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 3,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, color: '#166534', textTransform: 'uppercase' }}>
+                  <Package size={13.5} />
+                  <span>Vật tư &amp; Hàng cứu trợ mang theo xuất kích:</span>
+                </div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#15803d', lineHeight: 1.45 }}>
+                  {Object.entries(allocatedSupplies)
+                    .filter(([_, qty]) => qty > 0)
+                    .map(([id, qty]) => {
+                      const item = FALLBACK_SUPPLIES.find((s) => s.id === id);
+                      return `${item?.name || 'Vật tư'} (${qty} ${item?.unit || 'món'})`;
+                    })
+                    .join(' • ')}
+                </div>
+              </div>
+            )}
 
             <div style={{ height: 1, background: 'var(--sos-border)', margin: '4px 0' }} />
 

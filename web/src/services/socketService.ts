@@ -111,6 +111,33 @@ export const onSosUpdated = (callback: (updatedSos: any) => void): (() => void) 
 };
 
 /**
+ * Đăng ký lắng nghe sự kiện cập nhật phân công nhiệm vụ / cứu hộ viên đổi trạng thái tác chiến
+ * @param callback Callback nhận dữ liệu phân công cập nhật
+ * @returns Hàm hủy lắng nghe (cleanup)
+ */
+export const onAssignmentUpdated = (callback: (assignment: any) => void): (() => void) => {
+  const s = getSocket();
+  const handler = (data: any) => {
+    console.log('⚡ [Socket.IO Web] Nhận tín hiệu Assignment cập nhật Realtime:', data);
+    callback(data);
+  };
+
+  s.on('assignment:status_updated', handler);
+  s.on('assignment:updated', handler);
+  s.on('assignment:created', handler);
+  s.on('assignment:new', handler);
+  s.on('assignment:cancelled', handler);
+
+  return () => {
+    s.off('assignment:status_updated', handler);
+    s.off('assignment:updated', handler);
+    s.off('assignment:created', handler);
+    s.off('assignment:new', handler);
+    s.off('assignment:cancelled', handler);
+  };
+};
+
+/**
  * Đăng ký lắng nghe sự kiện có hồ sơ đăng ký Cứu hộ viên mới gửi lên
  * @param callback Callback nhận dữ liệu người đăng ký mới từ Backend
  * @returns Hàm hủy lắng nghe (cleanup)
@@ -248,3 +275,16 @@ export function subscribeSocketChatEvents(
     s.off('new_message', handleNewMessage);
   };
 }
+
+/**
+ * Lắng nghe cập nhật GPS thời gian thực của cứu hộ viên từ Mobile App
+ */
+export const onRescuerLocationUpdate = (
+  callback: (data: { rescuerId: string; teamId?: string; assignmentId?: string; coords: { lat: number; lng: number } }) => void
+): (() => void) => {
+  const s = getSocket();
+  s.on('rescuer:location_update', callback);
+  return () => {
+    s.off('rescuer:location_update', callback);
+  };
+};

@@ -1,37 +1,102 @@
 import React, { useState } from 'react';
-import { Phone, MapPin, Maximize2, X } from 'lucide-react';
+import { Phone, MapPin, Maximize2, X, ChevronDown, ChevronUp, MessageSquareText, Package, Plus, Minus } from 'lucide-react';
 import type { SosRequest } from '@/types/domainD';
+import { FALLBACK_SUPPLIES } from '@/constants';
 
 interface Props {
   selectedSos: SosRequest;
+  allocatedSupplies?: Record<string, number>;
+  onAllocatedSuppliesChange?: (supplies: Record<string, number>) => void;
 }
 
-export const CitizenDistressProfile: React.FC<Props> = ({ selectedSos }) => {
+export const CitizenDistressProfile: React.FC<Props> = ({
+  selectedSos,
+  allocatedSupplies: propAllocatedSupplies,
+  onAllocatedSuppliesChange,
+}) => {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [isDetailExpanded, setIsDetailExpanded] = useState(false);
+  const [isSuppliesExpanded, setIsSuppliesExpanded] = useState(false);
+
+  // Danh sách vật tư đã cấp / phân bổ cho ca cứu nạn này (lấy từ kho vật tư qua)
+  const [internalSupplies, setInternalSupplies] = useState<Record<string, number>>(() => {
+    // Khởi tạo vật tư mặc định cần thiết dựa theo số người gặp nạn
+    const count = Math.max(1, selectedSos.affectedPeople || 2);
+    return {
+      'sup-01': count, // Áo phao theo đầu người
+      'sup-03': 1,     // 1 Túi sơ cứu y tế
+      'sup-04': Math.ceil(count / 2), // Nước uống tiệt trùng
+    };
+  });
+
+  const allocatedSupplies = propAllocatedSupplies ?? internalSupplies;
+
+  const commitSupplies = (next: Record<string, number>) => {
+    if (onAllocatedSuppliesChange) {
+      onAllocatedSuppliesChange(next);
+    } else {
+      setInternalSupplies(next);
+    }
+  };
+
+  const handleUpdateSupply = (supplyId: string, delta: number, maxAvailable = 999999) => {
+    const current = allocatedSupplies[supplyId] || 0;
+    const nextVal = Math.min(maxAvailable, Math.max(0, current + delta));
+    const copy = { ...allocatedSupplies };
+    if (nextVal === 0) {
+      delete copy[supplyId];
+    } else {
+      copy[supplyId] = nextVal;
+    }
+    commitSupplies(copy);
+  };
+
+  const handleSetSupplyQuantity = (supplyId: string, rawVal: string, maxAvailable = 999999) => {
+    const cleanNum = rawVal.replace(/[^0-9]/g, '');
+    const num = cleanNum === '' ? 0 : parseInt(cleanNum, 10);
+    const valid = Math.min(maxAvailable, Math.max(0, num));
+    const copy = { ...allocatedSupplies };
+    if (valid === 0) {
+      delete copy[supplyId];
+    } else {
+      copy[supplyId] = valid;
+    }
+    commitSupplies(copy);
+  };
+
+  const hasExtraDetail = Boolean(selectedSos.description || selectedSos.imageUrl);
+  const totalSuppliesUnits = Object.values(allocatedSupplies).reduce((a, b) => a + b, 0);
+
+  // Chuỗi tóm tắt yêu cầu tiếp tế
+  const suppliesSummaryText = (() => {
+    const activeEntries = Object.entries(allocatedSupplies).filter(([_, qty]) => qty > 0);
+    if (activeEntries.length === 0) return 'Chưa yêu cầu thêm vật tư';
+    return activeEntries
+      .map(([id, qty]) => {
+        const item = FALLBACK_SUPPLIES.find((s) => s.id === id);
+        return `${item?.name.split(' ')[0] || 'Vật tư'} (${qty} ${item?.unit || 'món'})`;
+      })
+      .join(', ');
+  })();
 
   return (
     <>
       <div
         style={{
-          padding: '11px 13px',
+          padding: '10px 12px',
           background: '#ffffff',
           border: '1.5px solid #cbd5e1',
-          borderRadius: 12,
+          borderRadius: 10,
           display: 'flex',
           flexDirection: 'column',
-          gap: 9,
-          boxShadow: '0 2px 6px -1px rgba(0, 0, 0, 0.05)',
+          gap: 7,
+          boxShadow: '0 1px 4px rgba(15, 23, 42, 0.05)',
         }}
       >
-        {/* Section 1: Tên người dân & Số điện thoại đường dây nóng */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-          <div>
-            <div style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 2 }}>
-              Người Dân Gặp Nạn
-            </div>
-            <span style={{ fontWeight: 900, color: '#0f172a', fontSize: 17, letterSpacing: '-0.2px' }}>
-              {selectedSos.citizenName}
-            </span>
+        {/* Section 1: Tên người dân & Số điện thoại đường dây nóng trên 1 hàng */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ fontWeight: 900, color: '#0f172a', fontSize: 15, letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {selectedSos.citizenName}
           </div>
 
           <a
@@ -39,148 +104,369 @@ export const CitizenDistressProfile: React.FC<Props> = ({ selectedSos }) => {
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 6,
+              gap: 5,
               color: '#0284c7',
               fontWeight: 800,
               textDecoration: 'none',
               background: '#f0f9ff',
-              padding: '6px 12px',
-              borderRadius: 8,
-              border: '1.5px solid #bae6fd',
-              fontSize: 13.5,
+              padding: '3.5px 9px',
+              borderRadius: 6,
+              border: '1px solid #bae6fd',
+              fontSize: 12,
+              flexShrink: 0,
               transition: 'all 0.15s ease',
             }}
             title="Gọi trực tiếp cho người dân"
           >
-            <Phone size={15} style={{ color: '#0284c7' }} />
+            <Phone size={12} style={{ color: '#0284c7' }} />
             <span>{selectedSos.citizenPhone}</span>
           </a>
         </div>
 
-        {/* Divider 1 */}
-        <div style={{ height: 1, background: '#e2e8f0', margin: '2px 0' }} />
-
-        {/* Section 2: Vị trí hiện trường khẩn cấp */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-          <MapPin size={18} style={{ color: '#dc2626', flexShrink: 0, marginTop: 2 }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 2 }}>
-              Vị Trí Cứu Trợ (Hiện Trường)
-            </div>
-            <div style={{ fontSize: 14.5, fontWeight: 800, color: '#0f172a', lineHeight: 1.45 }}>
-              {selectedSos.locationName}
-            </div>
+        {/* Section 2: Vị trí hiện trường khẩn cấp với ghim đỏ (bỏ nhãn thừa) */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+          <MapPin size={15} style={{ color: '#dc2626', flexShrink: 0, marginTop: 1 }} />
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1e293b', lineHeight: 1.35, wordBreak: 'break-word' }}>
+            {selectedSos.locationName}
           </div>
         </div>
 
-        {/* Divider 2 */}
-        <div style={{ height: 1, background: '#e2e8f0', margin: '2px 0' }} />
+        {/* Section 3: Gom 2 huy hiệu nạn nhân trên cùng 1 hàng ngang */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {/* Huy hiệu chính (Đỏ) */}
+          <span
+            style={{
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              padding: '2.5px 8px',
+              borderRadius: 5,
+              fontWeight: 900,
+              color: '#dc2626',
+              fontSize: 12,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            <span>🚨</span>
+            <span>{selectedSos.affectedPeople} người gặp nạn</span>
+          </span>
 
-        {/* Section 3: Số lượng người & Đối tượng tổn thương */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* Huy hiệu phụ (Cam/Vàng) - Bỏ dấu ngoặc đơn thừa */}
+          {selectedSos.affectedPeople > 1 && (
             <span
               style={{
-                background: '#fef2f2',
-                border: '1.5px solid #fecaca',
-                padding: '4px 10px',
-                borderRadius: 7,
-                fontWeight: 900,
-                color: '#dc2626',
-                fontSize: 14.5,
+                background: '#fefce8',
+                border: '1px solid #fde68a',
+                color: '#b45309',
+                fontSize: 11.5,
+                fontWeight: 800,
+                padding: '2.5px 8px',
+                borderRadius: 5,
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 5,
+                gap: 4,
               }}
             >
-              <span>🚨</span>
-              <span>{selectedSos.affectedPeople} người gặp nạn</span>
-            </span>
-          </div>
-
-          {selectedSos.affectedPeople > 1 && (
-            <span style={{ color: '#475569', fontSize: 13, fontWeight: 700 }}>
-              (Bao gồm người cao tuổi, trẻ nhỏ)
+              <span>👴👶</span>
+              <span>Người cao tuổi, trẻ nhỏ</span>
             </span>
           )}
         </div>
 
-        {/* Section 4: Mô tả chi tiết tình huống hiện trường */}
-        {selectedSos.description && (
+        {/* Section 4: Mục Yêu Cầu Tiếp Tế Lương Thực / Vật Tư (Nền xám nhạt trung tính) */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            background: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: 6,
+            padding: '4px 8px',
+          }}
+        >
+          <Package size={13} style={{ color: '#64748b', flexShrink: 0 }} />
+          <div style={{ fontSize: 11.5, color: '#475569', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ fontWeight: 600 }}>Tiếp tế: </span>
+            <span style={{ color: '#334155', fontWeight: 700 }}>{suppliesSummaryText}</span>
+          </div>
+        </div>
+
+        {/* Section 5: Buttons Action Bar - Nằm gọn trên 1 dòng duy nhất không rớt chữ */}
+        <div style={{ display: 'flex', gap: 6 }}>
+          {hasExtraDetail && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsDetailExpanded((prev) => !prev);
+                if (!isDetailExpanded) setIsSuppliesExpanded(false);
+              }}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 4,
+                padding: '5px 6px',
+                background: isDetailExpanded ? '#f0f9ff' : '#ffffff',
+                border: isDetailExpanded ? '1.5px solid #0284c7' : '1px solid #e2e8f0',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontSize: 11,
+                fontWeight: 800,
+                color: isDetailExpanded ? '#0369a1' : '#334155',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.15s ease',
+              }}
+              title="Nhấn để xem lời nhắn chi tiết từ hiện trường"
+            >
+              <MessageSquareText size={12.5} style={{ color: isDetailExpanded ? '#0284c7' : '#64748b', flexShrink: 0 }} />
+              <span style={{ whiteSpace: 'nowrap' }}>{isDetailExpanded ? 'Thu gọn lời nhắn' : 'Xem lời nhắn & ảnh'}</span>
+              {isDetailExpanded ? <ChevronUp size={12} style={{ flexShrink: 0 }} /> : <ChevronDown size={12} style={{ flexShrink: 0 }} />}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsSuppliesExpanded((prev) => !prev);
+              if (!isSuppliesExpanded) setIsDetailExpanded(false);
+            }}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 4,
+              padding: '5px 6px',
+              background: isSuppliesExpanded ? '#f0fdf4' : '#ffffff',
+              border: isSuppliesExpanded ? '1.5px solid #16a34a' : '1px solid #e2e8f0',
+              borderRadius: 6,
+              cursor: 'pointer',
+              fontSize: 11,
+              fontWeight: 800,
+              color: isSuppliesExpanded ? '#15803d' : '#334155',
+              whiteSpace: 'nowrap',
+              transition: 'all 0.15s ease',
+            }}
+            title="Quản lý vật tư và trang thiết bị cấp phát cho ca cứu nạn"
+          >
+            <Package size={12.5} style={{ color: isSuppliesExpanded ? '#16a34a' : '#64748b', flexShrink: 0 }} />
+            <span style={{ whiteSpace: 'nowrap' }}>
+              {isSuppliesExpanded ? 'Đóng kho vật tư' : `Vật tư cấp (${totalSuppliesUnits})`}
+            </span>
+            {isSuppliesExpanded ? <ChevronUp size={12} style={{ flexShrink: 0 }} /> : <ChevronDown size={12} style={{ flexShrink: 0 }} />}
+          </button>
+        </div>
+
+        {/* Nội dung sổ ra: Lời nhắn hiện trường & Ảnh */}
+        {isDetailExpanded && hasExtraDetail && (
           <div
             style={{
-              padding: '11px 14px',
-              background: '#f8fafc',
-              borderLeft: '4px solid #ef4444',
-              borderRadius: '0 8px 8px 0',
-              borderTop: '1px solid #e2e8f0',
-              borderRight: '1px solid #e2e8f0',
-              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              animation: 'fadeIn 0.2s ease-in-out',
             }}
           >
-            <div style={{ fontSize: 11.5, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 4 }}>
-              Lời Nhắn Hiện Trường
-            </div>
-            <div
-              style={{
-                fontStyle: 'italic',
-                color: '#1e293b',
-                lineHeight: 1.55,
-                fontSize: 13.5,
-                fontWeight: 600,
-              }}
-            >
-              "{selectedSos.description}"
-            </div>
+            {selectedSos.description && (
+              <div
+                style={{
+                  padding: '8px 11px',
+                  background: '#f8fafc',
+                  borderLeft: '3.5px solid #ef4444',
+                  borderRadius: '0 6px 6px 0',
+                  borderTop: '1px solid #e2e8f0',
+                  borderRight: '1px solid #e2e8f0',
+                  borderBottom: '1px solid #e2e8f0',
+                }}
+              >
+                <div
+                  style={{
+                    fontStyle: 'italic',
+                    color: '#1e293b',
+                    lineHeight: 1.45,
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                  }}
+                >
+                  "{selectedSos.description}"
+                </div>
+              </div>
+            )}
+
+            {/* Ảnh hiện trường xác minh (nếu có) */}
+            {selectedSos.imageUrl && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
+                <div
+                  onClick={() => setIsLightboxOpen(true)}
+                  style={{
+                    width: 58,
+                    height: 40,
+                    borderRadius: 6,
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    border: '1.5px solid #cbd5e1',
+                    flexShrink: 0,
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                  }}
+                  title="Bấm để xem ảnh phóng to"
+                >
+                  <img
+                    src={selectedSos.imageUrl}
+                    alt="Hiện trường"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsLightboxOpen(true)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    color: '#0284c7',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <Maximize2 size={13} />
+                  <span>Xem ảnh hiện trường (Phóng to)</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Section 5: Ảnh hiện trường xác minh (nếu có) */}
-        {selectedSos.imageUrl && (
-          <>
-            <div style={{ height: 1, background: '#e2e8f0', margin: '2px 0' }} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div
-                onClick={() => setIsLightboxOpen(true)}
-                style={{
-                  width: 68,
-                  height: 48,
-                  borderRadius: 8,
-                  overflow: 'hidden',
-                  cursor: 'pointer',
-                  border: '1.5px solid #cbd5e1',
-                  flexShrink: 0,
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.08)',
-                }}
-                title="Bấm để xem ảnh phóng to"
-              >
-                <img
-                  src={selectedSos.imageUrl}
-                  alt="Hiện trường"
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsLightboxOpen(true)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  padding: 0,
-                  color: '#2563eb',
-                  fontSize: 13,
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                }}
-              >
-                <Maximize2 size={15} />
-                <span>Xem ảnh hiện trường (Phóng to)</span>
-              </button>
+        {/* Nội dung sổ ra: Danh sách Thêm Vật Tư (Lấy từ kho vật tư qua) */}
+        {isSuppliesExpanded && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+              background: '#f8fafc',
+              border: '1px solid #cbd5e1',
+              borderRadius: 8,
+              padding: '8px 10px',
+              animation: 'fadeIn 0.2s ease-in-out',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#334155', textTransform: 'uppercase' }}>
+                Kho vật tư cứu trợ &amp; PCTT:
+              </span>
+              <span style={{ fontSize: 10.5, color: '#64748b' }}>Nhập số hoặc bấm +/-</span>
             </div>
-          </>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 160, overflowY: 'auto' }}>
+              {FALLBACK_SUPPLIES.slice(0, 5).map((supply) => {
+                const qty = allocatedSupplies[supply.id] || 0;
+                return (
+                  <div
+                    key={supply.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      background: qty > 0 ? '#f0f9ff' : '#ffffff',
+                      border: qty > 0 ? '1px solid #bae6fd' : '1px solid #e2e8f0',
+                      padding: '4px 8px',
+                      borderRadius: 6,
+                      fontSize: 11.5,
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
+                      <div style={{ fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {supply.name}
+                      </div>
+                      <div style={{ fontSize: 10, color: '#64748b' }}>
+                        Kho còn: {supply.available} {supply.unit}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateSupply(supply.id, -1, supply.available)}
+                        disabled={qty <= 0}
+                        title="Giảm số lượng"
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 4,
+                          border: '1px solid #cbd5e1',
+                          background: qty <= 0 ? '#f1f5f9' : '#ffffff',
+                          cursor: qty <= 0 ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: qty <= 0 ? '#94a3b8' : '#0f172a',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <Minus size={11} />
+                      </button>
+
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={qty === 0 ? '' : qty}
+                        placeholder="0"
+                        title={`Tối đa trong kho: ${supply.available} ${supply.unit}`}
+                        onChange={(e) => handleSetSupplyQuantity(supply.id, e.target.value, supply.available)}
+                        style={{
+                          width: 44,
+                          height: 24,
+                          textAlign: 'center',
+                          fontWeight: 800,
+                          fontSize: 12,
+                          color: qty > 0 ? '#0284c7' : '#64748b',
+                          background: '#ffffff',
+                          border: qty >= supply.available && supply.available > 0
+                            ? '1.5px solid #f59e0b'
+                            : qty > 0
+                            ? '1.5px solid #0284c7'
+                            : '1px solid #cbd5e1',
+                          borderRadius: 4,
+                          outline: 'none',
+                          padding: '0 2px',
+                        }}
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateSupply(supply.id, 1, supply.available)}
+                        disabled={qty >= supply.available}
+                        title={qty >= supply.available ? `Kho chỉ còn tối đa ${supply.available} ${supply.unit}` : 'Tăng số lượng'}
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 4,
+                          border: qty >= supply.available ? '1px solid #cbd5e1' : '1px solid #0284c7',
+                          background: qty >= supply.available ? '#f1f5f9' : '#0284c7',
+                          cursor: qty >= supply.available ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: qty >= supply.available ? '#94a3b8' : '#ffffff',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <Plus size={11} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
 

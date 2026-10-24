@@ -97,86 +97,26 @@ export const ActiveMissionConsole: React.FC<Props> = ({
       };
     }
 
-    // 6. Mặc định khi vừa điều động / Chờ nhận lệnh (PENDING, ASSIGNED, v.v.)
+    // 6. Mặc định khi vừa điều động / Chờ đội nhận lệnh (PENDING, ASSIGNED)
     return {
-      text: 'Đã điều động • Đang xuất phát',
-      subText: 'Định vị GPS trực tiếp từ đội cứu hộ',
-      bg: '#f0fdf4',
-      border: '#86efac',
-      textColor: '#15803d',
-      dotColor: '#16a34a',
+      text: 'Chờ đội chấp nhận nhiệm vụ',
+      subText: 'Đang truyền lệnh đến máy cứu hộ viên, chờ phản hồi',
+      bg: '#fffbeb',
+      border: '#fde68a',
+      textColor: '#b45309',
+      dotColor: '#f59e0b',
       isCompleted: false,
     };
   }, [assignment?.status, selectedSos?.status]);
 
+  const isAcceptedByTeam = useMemo(() => {
+    const aStatus = String(assignment?.status || '').toUpperCase();
+    return ['ACCEPTED', 'EN_ROUTE', 'ON_THE_WAY', 'ON_WAY', 'ARRIVED', 'ON_SCENE', 'IN_PROGRESS', 'RESCUING', 'COMPLETED'].includes(aStatus);
+  }, [assignment?.status]);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* 1. TOP MISSION STATUS & ETA BANNER */}
-      <div
-        style={{
-          padding: '14px 16px',
-          borderRadius: 12,
-          background: statusInfo.bg,
-          border: `1.5px solid ${statusInfo.border}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          boxShadow: '0 2px 6px -1px rgba(16, 185, 129, 0.08)',
-        }}
-      >
-        <div>
-          <div
-            style={{
-              fontSize: 13.5,
-              fontWeight: 900,
-              textTransform: 'uppercase',
-              letterSpacing: '0.4px',
-              color: statusInfo.textColor,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            <span
-              style={{
-                display: 'inline-block',
-                width: 9,
-                height: 9,
-                borderRadius: '50%',
-                background: statusInfo.dotColor,
-              }}
-            />
-            <span>{statusInfo.text}</span>
-          </div>
-          <div style={{ fontSize: 12, color: statusInfo.textColor, marginTop: 3, fontWeight: 600 }}>
-            {statusInfo.subText}
-          </div>
-        </div>
-
-        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          {statusInfo.isCompleted ? (
-            <>
-              <div style={{ fontSize: 16, fontWeight: 900, color: '#15803d' }}>
-                HOÀN TẤT
-              </div>
-              <div style={{ fontSize: 10.5, color: '#16a34a', fontWeight: 800, letterSpacing: '0.5px' }}>
-                AN TOÀN
-              </div>
-            </>
-          ) : (
-            <>
-              <div style={{ fontSize: 20, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.3px' }}>
-                ~{assignment?.etaMinutes ?? 3}p
-              </div>
-              <div style={{ fontSize: 10.5, color: '#64748b', fontWeight: 800, letterSpacing: '0.5px' }}>
-                DỰ KIẾN ĐẾN
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* 2. MAIN ASSIGNED FORCE & TRIP ROUTE CARD */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* MAIN ASSIGNED FORCE & TRIP ROUTE CARD WITH INTEGRATED STATUS */}
       <div
         style={{
           borderRadius: 12,
@@ -188,20 +128,158 @@ export const ActiveMissionConsole: React.FC<Props> = ({
           flexDirection: 'column',
         }}
       >
-        {/* Section Header */}
+        {/* Integrated Header: Section Title + Live Status + ETA */}
         <div
           style={{
-            padding: '10px 16px',
-            background: '#f8fafc',
-            borderBottom: '1px solid #e2e8f0',
-            fontSize: 11.5,
-            fontWeight: 800,
-            color: '#64748b',
-            textTransform: 'uppercase',
-            letterSpacing: '0.4px',
+            padding: '10px 14px',
+            background: statusInfo.bg,
+            borderBottom: `1.5px solid ${statusInfo.border}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
           }}
         >
-          Lực Lượng Tác Chiến Tiếp Cận
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+            <span
+              style={{
+                display: 'inline-block',
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: statusInfo.dotColor,
+                flexShrink: 0,
+              }}
+            />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', lineHeight: 1.2 }}>
+                Lực Lượng Tác Chiến Tiếp Cận
+              </div>
+              <div
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: 900,
+                  color: statusInfo.textColor,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.3px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  marginTop: 1,
+                }}
+              >
+                {statusInfo.text}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            {statusInfo.isCompleted ? (
+              <span
+                style={{
+                  fontSize: 11.5,
+                  fontWeight: 900,
+                  color: '#15803d',
+                  background: '#dcfce7',
+                  border: '1px solid #86efac',
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                }}
+              >
+                ✓ HOÀN TẤT
+              </span>
+            ) : (
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  background: '#ffffff',
+                  border: '1.5px solid #cbd5e1',
+                  padding: '3px 8px',
+                  borderRadius: 7,
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 900, color: '#0284c7' }}>
+                  ~{assignment?.etaMinutes ?? 7}p
+                </span>
+                <span style={{ fontSize: 10, fontWeight: 800, color: '#64748b', letterSpacing: '0.3px' }}>
+                  DỰ KIẾN
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* MỤC THEO DÕI: TEAM ĐÃ CHẤP NHẬN NHIỆM VỤ HAY CHƯA */}
+        <div
+          style={{
+            padding: '9px 14px',
+            background: isAcceptedByTeam ? '#f0fdf4' : '#fffbeb',
+            borderBottom: '1px solid #e2e8f0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: isAcceptedByTeam ? '#16a34a' : '#f59e0b',
+                boxShadow: isAcceptedByTeam ? '0 0 0 2.5px rgba(22, 163, 74, 0.25)' : '0 0 0 2.5px rgba(245, 158, 11, 0.3)',
+                flexShrink: 0,
+              }}
+            />
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 11.5,
+                  fontWeight: 900,
+                  color: isAcceptedByTeam ? '#15803d' : '#b45309',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.3px',
+                }}
+              >
+                {isAcceptedByTeam ? '✓ Đội cứu hộ đã chấp nhận nhiệm vụ' : '⏳ Chờ đội chấp nhận nhiệm vụ'}
+              </div>
+              <div style={{ fontSize: 11, color: isAcceptedByTeam ? '#166534' : '#92400e', marginTop: 1, lineHeight: 1.3 }}>
+                {isAcceptedByTeam
+                  ? 'Đội đã nhận lệnh và đang xuất phát tiếp cận vị trí ngập.'
+                  : 'Chưa bấm tiếp nhận trên App. Quá 3 phút hãy đổi đội cứu hộ!'}
+              </div>
+            </div>
+          </div>
+
+          {!isAcceptedByTeam && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenReassign();
+              }}
+              style={{
+                padding: '4px 9px',
+                background: '#ffffff',
+                border: '1.5px solid #f59e0b',
+                borderRadius: 6,
+                color: '#b45309',
+                fontSize: 11,
+                fontWeight: 800,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                boxShadow: '0 1px 2px rgba(245,158,11,0.1)',
+              }}
+              title="Đổi sang đội cứu hộ khác sẵn sàng nhận lệnh"
+            >
+              Đổi đội khác
+            </button>
+          )}
         </div>
 
         {/* 2A: Rescuer Leader Profile */}
@@ -287,7 +365,13 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               {assignment?.vehicleName || 'Ca-nô cứu hộ'}
             </div>
             <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginTop: 2 }}>
-              Sức chứa: <strong style={{ color: '#334155' }}>{assignment?.vehicleCapacity || '6'} người</strong>
+              Sức chứa:{' '}
+              <strong style={{ color: '#334155' }}>
+                {String(assignment?.vehicleCapacity || '6').includes('chiến sĩ') ||
+                String(assignment?.vehicleCapacity || '6').includes('người')
+                  ? assignment?.vehicleCapacity
+                  : `${assignment?.vehicleCapacity || '6'} người`}
+              </strong>
             </div>
           </div>
 

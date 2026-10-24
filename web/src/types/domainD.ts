@@ -145,6 +145,10 @@ export interface RescuerProfile {
   status: 'Online' | 'In Mission' | 'Offline';
   teamId: string;
   phone: string;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 export interface Vehicle {
@@ -197,4 +201,12 @@ export interface SosAssignment {
   };
   distanceRemainingKm?: number;
   etaMinutes?: number;
+  supplies?: AssignedSupplyItem[];
+}
+
+export interface AssignedSupplyItem {
+  supplyId: string;
+  name: string;
+  quantity: number;
+  unit: string;
 }

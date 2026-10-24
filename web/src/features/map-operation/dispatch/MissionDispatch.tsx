@@ -36,6 +36,7 @@ interface Props {
     vehicleId: string;
     vehicleName: string;
     vehicleCapacity: string;
+    supplies?: import('@/types/domainD').AssignedSupplyItem[];
   }) => void;
   onUpdateStatus: (assignmentId: string, nextStatus: AssignmentStatus) => void;
   onReassign: (

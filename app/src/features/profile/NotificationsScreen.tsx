@@ -70,7 +70,7 @@ const INITIAL_RESCUER_NOTIFICATIONS: NotificationItem[] = [
     type: 'SYSTEM',
     title: 'Kích hoạt tài khoản nhân viên cứu hộ thành công',
     content:
-      'Tài khoản cứu hộ của bạn đã được kích hoạt thành công trên hệ thống điều phối cứu nạn RescueSOS. Trạng thái tài khoản: Đang hoạt động.',
+      'Tài khoản cứu hộ của bạn đã được kích hoạt thành công trên hệ thống điều phối hỗ trợ cứu nạn. Trạng thái tài khoản: Đang hoạt động.',
     isRead: true,
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), // 2 ngày trước
     actionUrl: 'profile',
