@@ -84,3 +84,17 @@ export async function reassignMissionApi(assignmentId: string, payload: {
     body: JSON.stringify(payload),
   });
 }
+
+export async function assignShoreHandoffApi(sosId: string, payload: {
+  vehicleId?: string;
+  vehicleName?: string;
+  vehiclePlate?: string;
+  roadTeamName?: string;
+  driverName?: string;
+  driverPhone?: string;
+}): Promise<{ success: boolean; data: any }> {
+  return fetchWithAuth(`/sos/${sosId}/shore-handoff/assign`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}

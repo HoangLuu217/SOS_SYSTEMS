@@ -18,8 +18,7 @@ import {
 import type { User } from '@/types/auth';
 import type { SosRequestItem, AdministrativeAreaItem, VehicleItem } from '@/types';
 import { fetchSosRequests, createSosRequest, fetchAdministrativeAreas, fetchVehicles } from '@/api';
-import { onSosCreated, onSosUpdated } from '@/services/socketService';
-import { FALLBACK_SOS_LIST, FALLBACK_VEHICLES } from '@/constants/dashboardFallbackData';
+import { onSosCreated, onSosUpdated, getSocket } from '@/services/socketService';
 import { EMERGENCY_TYPE_LABELS } from '@/features/hazards';
 import { toast } from '@/components/common/toast';
 import './SosRequestsView.css';
@@ -39,7 +38,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
   const [sosList, setSosList] = useState<SosRequestItem[]>(() => memoryCachedSosList || []);
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>(() => memoryCachedAreas || []);
   const [, setVehicles] = useState<VehicleItem[]>(() => memoryCachedVehicles || []);
-  const [hasLoadedFromApi, setHasLoadedFromApi] = useState<boolean>(Boolean(memoryCachedSosList));
 
   // State lọc Triage và tìm kiếm
   const [triageFilter, setTriageFilter] = useState<'ALL' | 'CRITICAL' | 'HIGH' | 'PENDING' | 'ACTIVE'>('ALL');
@@ -74,7 +72,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
       if (sosRes.status === 'fulfilled' && sosRes.value.success && Array.isArray(sosRes.value.data)) {
         memoryCachedSosList = sosRes.value.data;
         setSosList(sosRes.value.data);
-        setHasLoadedFromApi(true);
       }
       if (areaRes.status === 'fulfilled' && areaRes.value.success && areaRes.value.data) {
         memoryCachedAreas = areaRes.value.data;
@@ -88,7 +85,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
         memoryCachedVehicles = vehRes.value.data;
         setVehicles(vehRes.value.data);
       } else {
-        setVehicles(FALLBACK_VEHICLES);
+        setVehicles([]);
       }
     } catch (err) {
       console.error('Lỗi khi tải dữ liệu SOS:', err);
@@ -113,9 +110,19 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
       loadData();
     });
 
+    const s = getSocket();
+    const handleHandoff = () => {
+      console.log('⚡ [SosRequestsView] Nhận sự kiện tiếp vận bờ Realtime');
+      loadData();
+    };
+    s.on('sos:shore_handoff_requested', handleHandoff);
+    s.on('sos:shore_handoff_assigned', handleHandoff);
+
     return () => {
       unsubCreated();
       unsubUpdated();
+      s.off('sos:shore_handoff_requested', handleHandoff);
+      s.off('sos:shore_handoff_assigned', handleHandoff);
     };
   }, [loadData]);
 
@@ -162,12 +169,16 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     }
   };
 
-  const displaySosList = hasLoadedFromApi ? sosList : (sosList.length > 0 ? sosList : (loading ? [] : FALLBACK_SOS_LIST));
+  const displaySosList = sosList;
   const totalCount = displaySosList.length;
   const criticalCount = displaySosList.filter((s) => s.priority === 'CRITICAL').length;
   const highCount = displaySosList.filter((s) => s.priority === 'HIGH').length;
   const pendingCount = displaySosList.filter((s) => s.status === 'PENDING').length;
-  const verifiedCount = displaySosList.filter((s) => ['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status)).length;
+  const verifiedCount = displaySosList.filter(
+    (s) =>
+      ['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status) ||
+      (s.shoreHandoff && s.shoreHandoff.status !== 'NONE')
+  ).length;
   const totalVictims = displaySosList.reduce((sum, s) => sum + (s.people || 1), 0);
 
   // Lọc theo thanh Triage và ô tìm kiếm
@@ -175,7 +186,13 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     if (triageFilter === 'CRITICAL' && sos.priority !== 'CRITICAL') return false;
     if (triageFilter === 'HIGH' && sos.priority !== 'HIGH') return false;
     if (triageFilter === 'PENDING' && sos.status !== 'PENDING') return false;
-    if (triageFilter === 'ACTIVE' && !['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(sos.status)) return false;
+    if (
+      triageFilter === 'ACTIVE' &&
+      !['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(sos.status) &&
+      !(sos.shoreHandoff && sos.shoreHandoff.status !== 'NONE')
+    ) {
+      return false;
+    }
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -597,6 +614,49 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                             <LifeBuoy size={11} />
                             Đang cứu nạn
                           </span>
+                        )}
+
+                        {sos.shoreHandoff && sos.shoreHandoff.status === 'REQUESTED' && (
+                          <div style={{ marginTop: 4 }}>
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 3,
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                background: '#fff7ed',
+                                border: '1px solid #fdba74',
+                                color: '#c2410c',
+                                fontSize: 10,
+                                fontWeight: 800,
+                              }}
+                              title={`Cần ${sos.shoreHandoff.vehicleTypeNeeded === 'AMBULANCE' ? 'Xe Cứu Thương 115' : 'Xe Tải'} đón ${sos.shoreHandoff.peopleCount} người tại bến ${sos.shoreHandoff.landingPoint?.name || ''}`}
+                            >
+                              ⚡ CẦN XE ĐÓN BỜ ({sos.shoreHandoff.peopleCount} người)
+                            </span>
+                          </div>
+                        )}
+                        {sos.shoreHandoff && sos.shoreHandoff.status === 'ASSIGNED' && (
+                          <div style={{ marginTop: 4 }}>
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 3,
+                                padding: '2px 6px',
+                                borderRadius: 4,
+                                background: '#f0fdf4',
+                                border: '1px solid #86efac',
+                                color: '#15803d',
+                                fontSize: 10,
+                                fontWeight: 800,
+                              }}
+                              title={`Đã điều xe: ${sos.shoreHandoff.assignedVehiclePlate || sos.shoreHandoff.assignedVehicleName || ''}`}
+                            >
+                              🚑 ĐÃ ĐIỀU XE ĐÓN BỜ
+                            </span>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -1030,10 +1090,10 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                     value={hotlineForm.priority}
                     onChange={(e) => setHotlineForm({ ...hotlineForm, priority: e.target.value })}
                   >
-                    <option value="CRITICAL">🔴 CRITICAL</option>
-                    <option value="HIGH">🟠 HIGH</option>
-                    <option value="MEDIUM">🟡 MEDIUM</option>
-                    <option value="LOW">🟢 LOW</option>
+                    <option value="CRITICAL">🔴 Cực kỳ khẩn cấp</option>
+                    <option value="HIGH">🟠 Khẩn cấp</option>
+                    <option value="MEDIUM">🟡 Trung bình</option>
+                    <option value="LOW">🟢 Thấp</option>
                   </select>
                 </div>
               </div>

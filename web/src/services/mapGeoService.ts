@@ -412,15 +412,15 @@ export function isTeamInOfficerJurisdiction(
 
   if (districtKeyword && districtKeyword !== 'toàn quốc') {
     const teamNameLower = (team.name || '').toLowerCase();
-    const teamDistrictLower = (team.districtId || '').toLowerCase();
-    if (teamNameLower.includes(districtKeyword)) return true;
-    if (districtKeyword.includes('hải châu') && teamDistrictLower === 'area-hc') return true;
-    if (districtKeyword.includes('cẩm lệ') && teamDistrictLower === 'area-cl') return true;
-    if (districtKeyword.includes('liên chiểu') && teamDistrictLower === 'area-lc') return true;
-    if (districtKeyword.includes('sơn trà') && teamDistrictLower === 'area-st') return true;
-    if (districtKeyword.includes('ngũ hành sơn') && teamDistrictLower === 'area-nhs') return true;
-    if (districtKeyword.includes('thanh khê') && teamDistrictLower === 'area-tk') return true;
-    if (districtKeyword.includes('hòa vang') && teamDistrictLower === 'area-hv') return true;
+    const teamDistrictIdLower = (team.districtId || '').toLowerCase();
+    const teamDistrictNameLower = (((team as any).districtName || '') as string).toLowerCase();
+    if (
+      teamNameLower.includes(districtKeyword) ||
+      teamDistrictNameLower.includes(districtKeyword) ||
+      (teamDistrictIdLower && teamDistrictIdLower.includes(districtKeyword))
+    ) {
+      return true;
+    }
   }
 
   return false;

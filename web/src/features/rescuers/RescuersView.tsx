@@ -248,54 +248,14 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
         setAreas(areasRes.value.data);
       }
 
-      if (teamsRes.status === 'fulfilled' && teamsRes.value.success && Array.isArray(teamsRes.value.data)) {
-        setRescueTeams(teamsRes.value.data);
-      } else if (selectedAreaId === 'ALL') {
-        // Fallback domain D mock teams
-        const fallbackTeams = domainDService.getRescueTeams().map((t) => ({
-          _id: t.id,
-          name: t.name,
-          type: t.name.includes('Ca-nô') ? 'FLOOD_RESCUE' : t.name.includes('PCCC') ? 'FIRE_RESCUE' : 'GENERAL_RESCUE',
-          status: 'ACTIVE',
-          leaderId: t.rescuers?.[0]
-            ? {
-                _id: t.rescuers[0].id,
-                fullName: t.rescuers[0].name,
-                phone: t.rescuers[0].phone,
-                status: 'ACTIVE',
-                rescuer: { skills: [t.rescuers[0].role] },
-              }
-            : undefined,
-          members: t.rescuers.map((r, idx) => ({
-            role: idx === 0 ? 'LEADER' : 'MEMBER',
-            rescuerId: {
-              _id: r.id,
-              fullName: r.name,
-              phone: r.phone,
-              status: 'ACTIVE',
-              rescuer: {
-                skills: [r.role, t.name],
-                availabilityStatus: r.status === 'Online' ? 'AVAILABLE' : 'BUSY',
-                verificationStatus: 'VERIFIED',
-              },
-            },
-          })),
-          vehicles: domainDService
-            .getVehicles()
-            .filter((v) => v.teamId === t.id)
-            .map((v) => ({
-              _id: v.id,
-              plateNumber: v.plate || v.name,
-              type: (v.type.includes('Boat') ? 'BOAT' : v.type.includes('Ambulance') ? 'AMBULANCE' : 'TRUCK') as any,
-              capacity: parseInt(v.capacity) || 6,
-              status: 'AVAILABLE' as any,
-              description: `${v.name} (Sức chứa: ${v.capacity})`,
-            })),
-        })) as RescueTeamItem[];
-        setRescueTeams(fallbackTeams);
-      } else {
-        setRescueTeams([]);
-      }
+      const rawTeams =
+        teamsRes.status === 'fulfilled' && teamsRes.value.success
+          ? Array.isArray(teamsRes.value.data)
+            ? teamsRes.value.data
+            : (teamsRes.value.data as any)?.teams || []
+          : [];
+
+      setRescueTeams(rawTeams);
 
       if (rescuersRes.status === 'fulfilled' && rescuersRes.value.success && rescuersRes.value.data?.users) {
         setRescuers(rescuersRes.value.data.users);
@@ -402,7 +362,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
       leaderId: {
         _id: `user-${Date.now()}`,
         fullName: newTeamLeader.trim() || 'Chỉ Huy Trưởng',
-        phone: newTeamPhone.trim() || '0905000000',
+        phone: newTeamPhone.trim() || '',
         status: 'ACTIVE',
       } as any,
       members: Array.from({ length: newTeamMembersCount }).map((_, i) => ({
@@ -410,7 +370,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
         rescuerId: {
           _id: `mem-${Date.now()}-${i}`,
           fullName: i === 0 ? newTeamLeader || 'Đội Trưởng' : `Đội viên ${i + 1}`,
-          phone: i === 0 ? newTeamPhone || '0905000000' : '0905123456',
+          phone: i === 0 ? newTeamPhone || '' : '',
           status: 'ACTIVE',
         } as any,
       })),
@@ -1172,7 +1132,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                       {(selectedTeamDetail.leaderId as any)?.fullName || 'Đội Trưởng'}
                     </p>
                     <p style={{ margin: '3px 0 0', fontSize: 13, color: '#0284C7', fontWeight: 600 }}>
-                      SĐT: {(selectedTeamDetail.leaderId as any)?.phone || '0905000000'}
+                      SĐT: {(selectedTeamDetail.leaderId as any)?.phone || 'Chưa cập nhật'}
                     </p>
                   </div>
                   <span className="rescuer-status-badge available">
@@ -1190,7 +1150,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   {(selectedTeamDetail.members || []).map((m: any, idx: number) => {
                     const rescuerObj = typeof m.rescuerId === 'object' && m.rescuerId !== null ? m.rescuerId : null;
                     const name = rescuerObj?.fullName || `Đội viên ${idx + 1}`;
-                    const phone = rescuerObj?.phone || '0905123456';
+                    const phone = rescuerObj?.phone || 'Chưa cập nhật';
                     const role = m.role === 'LEADER' ? 'Đội Trưởng' : 'Đội Viên';
 
                     return (

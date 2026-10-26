@@ -14,11 +14,6 @@ interface CitizenUser {
   createdAt?: string;
 }
 
-const FALLBACK_CITIZENS: CitizenUser[] = [
-  { _id: 'u-cit-01', fullName: 'Lê Minh Tuấn', phone: '0905-334-772', email: 'tuan.lm@gmail.com', address: 'Đường Tiểu La, Hòa Cường', status: 'ACTIVE', roles: ['CITIZEN'], createdAt: '2026-10-12T08:00:00Z' },
-  { _id: 'u-cit-02', fullName: 'Hoàng Văn Vinh', phone: '0905-998-331', email: 'vinh.hv@gmail.com', address: 'Đường 2 Tháng 9, Hòa Cường', status: 'ACTIVE', roles: ['CITIZEN'], createdAt: '2026-10-12T08:30:00Z' },
-];
-
 export const CitizensManagementView: React.FC = () => {
   const [citizens, setCitizens] = useState<CitizenUser[]>([]);
   const [loading, setLoading] = useState(false);
@@ -27,14 +22,14 @@ export const CitizensManagementView: React.FC = () => {
     try {
       setLoading(true);
       const res = await fetchAdminUsers({ role: 'CITIZEN' });
-      if (res.success && res.data?.users && res.data.users.length > 0) {
+      if (res.success && res.data?.users) {
         setCitizens(res.data.users);
       } else {
-        setCitizens(FALLBACK_CITIZENS);
+        setCitizens([]);
       }
     } catch (e) {
-      console.warn('[CitizensManagementView] fetchAdminUsers CITIZEN fallback:', e);
-      setCitizens(FALLBACK_CITIZENS);
+      console.warn('[CitizensManagementView] fetchAdminUsers CITIZEN error:', e);
+      setCitizens([]);
     } finally {
       setLoading(false);
     }

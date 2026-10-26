@@ -562,27 +562,6 @@ export async function fetchProvinceSubUnitsService(
     console.warn(`Lỗi khi gọi API v2 lấy phường/xã của ${provinceName}:`, err);
   }
 
-  // Fallback an toàn nếu API lỗi mạng
-  if (units.length === 0) {
-    const defaultUnits = [
-      { name: 'Phường Trung Tâm', type: 'WARD' as const },
-      { name: 'Phường Hòa An', type: 'WARD' as const },
-      { name: 'Phường Bình Minh', type: 'WARD' as const },
-      { name: 'Xã Nông Thôn Mới', type: 'COMMUNE' as const },
-      { name: 'Xã Đồng Tâm', type: 'COMMUNE' as const },
-    ];
-    defaultUnits.forEach((u, idx) => {
-      units.push({
-        id: `fb-${provCode}-${idx + 1}`,
-        name: u.name,
-        code: `VN${provCode}-W0${idx + 1}`,
-        type: u.type,
-        parentName: provinceName,
-        status: 'ACTIVE',
-      });
-    });
-  }
-
   // Sắp xếp: Quận/Huyện trước, Xã/Phường sau, theo thứ tự A-Z
   units.sort((a, b) => {
     if (a.type === 'DISTRICT' && b.type !== 'DISTRICT') return -1;

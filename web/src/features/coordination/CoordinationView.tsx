@@ -15,9 +15,7 @@ import {
 } from 'lucide-react';
 import type { SosRequestItem } from '@/types/dashboard';
 import { fetchSosRequests, completeSosRequest } from '@/api';
-import { FALLBACK_SOS_LIST } from '@/constants';
 import { onSosCreated, onSosUpdated, onAssignmentUpdated } from '@/services/socketService';
-import { domainDService } from '@/services/domainDService';
 import { toast } from '@/components/common/toast';
 import '@/features/sos/SosRequestsView.css';
 import './CoordinationView.css';
@@ -25,18 +23,19 @@ import './CoordinationView.css';
 export interface CoordinationViewProps {
   sosList?: SosRequestItem[];
   onOpenMap: (sosId?: any) => void;
+  user?: import('@/types/auth').User;
 }
 
 export const CoordinationView: React.FC<CoordinationViewProps> = ({
   sosList: propSosList,
   onOpenMap,
+  user: _user,
 }) => {
   const [sosList, setSosList] = useState<SosRequestItem[]>(propSosList || []);
   const [loading, setLoading] = useState(false);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'CRITICAL' | 'EN_ROUTE' | 'ON_SCENE' | 'COMPLETED'>('ALL');
-  const [selectedSosDetail, setSelectedSosDetail] = useState<SosRequestItem | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
 
   const refreshData = () => setRefreshIndex((p) => p + 1);
@@ -44,70 +43,19 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [sosRes] = await Promise.allSettled([
-        fetchSosRequests({ limit: '100' }),
-      ]);
-
-      if (sosRes.status === 'fulfilled' && sosRes.value.success && Array.isArray(sosRes.value.data) && sosRes.value.data.length > 0) {
-        setSosList(sosRes.value.data);
+      const sosRes = await fetchSosRequests({ limit: '100' });
+      if (sosRes.success && Array.isArray(sosRes.data)) {
+        setSosList(sosRes.data);
+      } else if (propSosList && propSosList.length > 0) {
+        setSosList(propSosList);
       } else {
-        const domainList = domainDService.getSosRequests();
-        if (domainList && domainList.length > 0) {
-          const mappedFromDomain: SosRequestItem[] = domainList.map((s: any) => ({
-            _id: s.id,
-            sosCode: s.sosCode,
-            citizenId: {
-              _id: 'citizen-ref',
-              fullName: s.citizenName || 'Người dân',
-              phone: s.citizenPhone || 'Chưa có SĐT',
-            } as any,
-            location: {
-              type: 'Point',
-              coordinates: [s.coordinates?.lng || 108.15, s.coordinates?.lat || 16.07],
-            },
-            address: s.locationName || s.address || 'Liên Chiểu, Đà Nẵng',
-            emergencyType: (s.emergencyType as any) || 'FLOOD',
-            priority: (s.priority as any) || 'CRITICAL',
-            people: s.affectedPeople || 2,
-            description: s.description || '',
-            status: (s.status as any) || 'VERIFIED',
-            createdAt: s.createdAt || new Date().toISOString(),
-            updatedAt: s.createdAt || new Date().toISOString(),
-            assignment: domainDService.getAssignmentBySosId(s.id) as any,
-          }));
-          setSosList(mappedFromDomain);
-        } else if (!propSosList || propSosList.length === 0) {
-          setSosList(FALLBACK_SOS_LIST);
-        }
+        setSosList([]);
       }
     } catch {
-      const domainList = domainDService.getSosRequests();
-      if (domainList && domainList.length > 0) {
-        const mappedFromDomain: SosRequestItem[] = domainList.map((s: any) => ({
-          _id: s.id,
-          sosCode: s.sosCode,
-          citizenId: {
-            _id: 'citizen-ref',
-            fullName: s.citizenName || 'Người dân',
-            phone: s.citizenPhone || 'Chưa có SĐT',
-          } as any,
-          location: {
-            type: 'Point',
-            coordinates: [s.coordinates?.lng || 108.15, s.coordinates?.lat || 16.07],
-          },
-          address: s.locationName || s.address || 'Liên Chiểu, Đà Nẵng',
-          emergencyType: (s.emergencyType as any) || 'FLOOD',
-          priority: (s.priority as any) || 'CRITICAL',
-          people: s.affectedPeople || 2,
-          description: s.description || '',
-          status: (s.status as any) || 'VERIFIED',
-          createdAt: s.createdAt || new Date().toISOString(),
-          updatedAt: s.createdAt || new Date().toISOString(),
-          assignment: domainDService.getAssignmentBySosId(s.id) as any,
-        }));
-        setSosList(mappedFromDomain);
-      } else if (!propSosList || propSosList.length === 0) {
-        setSosList(FALLBACK_SOS_LIST);
+      if (propSosList && propSosList.length > 0) {
+        setSosList(propSosList);
+      } else {
+        setSosList([]);
       }
     } finally {
       setLoading(false);
@@ -143,16 +91,6 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
             return s;
           })
         );
-        setSelectedSosDetail((prev) => {
-          if (prev) {
-            const pId = String(prev._id || (prev as any).id || '');
-            if (pId === targetId) {
-              const updatedAssignment = updatedSos.assignment || prev.assignment;
-              return { ...prev, ...updatedSos, assignment: updatedAssignment, status: updatedSos.status };
-            }
-          }
-          return prev;
-        });
       }
       loadData();
     };
@@ -207,28 +145,6 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
         })
       );
 
-      setSelectedSosDetail((prev) => {
-        if (prev) {
-          const pId = String(prev._id || (prev as any).id || '');
-          const pAssignmentId = String(prev.assignmentId || prev.assignment?._id || (prev.assignment as any)?.id || '');
-          const matches =
-            (targetSosId && pId === targetSosId) ||
-            (targetAssignmentId && pAssignmentId === targetAssignmentId);
-
-          if (matches) {
-            const updatedAssignment = prev.assignment
-              ? { ...prev.assignment, ...assignmentData, status: newStatus }
-              : { ...assignmentData, status: newStatus };
-            return {
-              ...prev,
-              assignment: updatedAssignment,
-              ...(mappedSosStatus ? { status: mappedSosStatus as any } : {}),
-            };
-          }
-        }
-        return prev;
-      });
-
       // Nạp dữ liệu đồng bộ với server
       loadData();
     });
@@ -261,9 +177,6 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
       }
       toast.success('Đã hoàn thành và đóng yêu cầu cứu hộ!', 'Nhiệm vụ hoàn tất');
       window.dispatchEvent(new CustomEvent('sos_data_updated'));
-      if (selectedSosDetail?._id === sosId) {
-        setSelectedSosDetail((prev) => (prev ? { ...prev, status: 'COMPLETED' } : null));
-      }
     } catch (err: any) {
       toast.error(err?.message || 'Không thể cập nhật trạng thái nhiệm vụ', 'Lỗi điều phối');
     } finally {
@@ -315,25 +228,25 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
   }, []);
 
   // Tính toán KPI số liệu
-  const baseSos = sosList.length > 0 ? sosList : FALLBACK_SOS_LIST;
+  const baseSos: SosRequestItem[] = sosList;
 
   const activeMissions = useMemo(() => {
-    return baseSos.filter((s) =>
+    return baseSos.filter((s: SosRequestItem) =>
       ['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(getEffectiveStatus(s))
     );
   }, [baseSos, getEffectiveStatus]);
 
   const criticalMissions = useMemo(() => {
-    return activeMissions.filter((m) => m.priority === 'CRITICAL');
+    return activeMissions.filter((m: SosRequestItem) => m.priority === 'CRITICAL');
   }, [activeMissions]);
 
   const completedMissions = useMemo(() => {
-    return baseSos.filter((s) => getEffectiveStatus(s) === 'COMPLETED');
+    return baseSos.filter((s: SosRequestItem) => getEffectiveStatus(s) === 'COMPLETED');
   }, [baseSos, getEffectiveStatus]);
 
   // Lọc dữ liệu theo tab và thanh tìm kiếm
   const filteredMissions = useMemo(() => {
-    return baseSos.filter((sos) => {
+    return baseSos.filter((sos: SosRequestItem) => {
       const effStatus = getEffectiveStatus(sos);
       // Bộ lọc trạng thái
       if (statusFilter === 'CRITICAL') {
@@ -497,7 +410,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
               onClick={() => setStatusFilter('EN_ROUTE')}
             >
               <span className="dot-mini blue" />
-              Đang di chuyển ({baseSos.filter((s) => ['ACCEPTED', 'ON_THE_WAY', 'EN_ROUTE', 'DISPATCHED'].includes(getEffectiveStatus(s))).length})
+              Đang di chuyển ({baseSos.filter((s: SosRequestItem) => ['ACCEPTED', 'ON_THE_WAY', 'EN_ROUTE', 'DISPATCHED'].includes(getEffectiveStatus(s))).length})
             </button>
 
             <button
@@ -506,7 +419,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
               onClick={() => setStatusFilter('ON_SCENE')}
             >
               <span className="dot-mini yellow" />
-              Tại hiện trường ({baseSos.filter((s) => ['ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(getEffectiveStatus(s))).length})
+              Tại hiện trường ({baseSos.filter((s: SosRequestItem) => ['ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(getEffectiveStatus(s))).length})
             </button>
 
             <button
@@ -571,7 +484,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredMissions.map((sos) => {
+                filteredMissions.map((sos: SosRequestItem) => {
                   const citizenInfo = typeof sos.citizenId === 'object' && sos.citizenId !== null ? (sos.citizenId as any) : null;
                   const citizenName = citizenInfo?.fullName || 'Người dân';
                   const citizenPhone = citizenInfo?.phone || 'Chưa có SĐT';
@@ -580,13 +493,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                   const isCompleted = effStatus === 'COMPLETED';
 
                   return (
-                    <tr
-                      key={sos._id}
-                      className="executive-table-row"
-                      onClick={() => setSelectedSosDetail(sos)}
-                      style={{ cursor: 'pointer' }}
-                      title="Nhấp để xem chi tiết lộ trình tác chiến ca này"
-                    >
+                    <tr key={sos._id} className="executive-table-row">
                       {/* Cột 1: Mã sự cố */}
                       <td>
                         <div className="table-code-cell">
@@ -644,7 +551,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                       {/* Cột 4: Mức độ */}
                       <td>
                         <span className={`sos-badge ${sos.priority ? sos.priority.toLowerCase() : 'medium'}`}>
-                          {sos.priority === 'CRITICAL' ? 'Cực kỳ khẩn cấp' : sos.priority === 'HIGH' ? 'Khẩn cấp' : sos.priority || 'Bình thường'}
+                          {sos.priority === 'CRITICAL' ? 'Cực kỳ khẩn cấp' : sos.priority === 'HIGH' ? 'Khẩn cấp' : sos.priority === 'LOW' ? 'Thấp' : 'Trung bình'}
                         </span>
                       </td>
 
@@ -654,7 +561,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                       </td>
 
                       {/* Cột 6: Thao tác */}
-                      <td onClick={(e) => e.stopPropagation()}>
+                      <td>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                           <button
                             type="button"
@@ -692,148 +599,6 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
           </table>
         </div>
       </div>
-
-      {/* 4. MODAL CHI TIẾT ĐIỀU PHỐI NHIỆM VỤ */}
-      {selectedSosDetail && (
-        <div className="executive-modal-backdrop" onClick={() => setSelectedSosDetail(null)}>
-          <div
-            className="executive-modal-card"
-            style={{ maxWidth: 620, width: '92%' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="executive-modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div className="executive-icon-squircle">
-                  <Compass size={18} />
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
-                    Chi Tiết Ca Tác Chiến: {selectedSosDetail.sosCode}
-                  </h3>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>
-                    Khởi tạo {formatTimeAgo(selectedSosDetail.createdAt)} • Trạng thái: {getEffectiveStatus(selectedSosDetail)}
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="executive-toggle-btn"
-                onClick={() => setSelectedSosDetail(null)}
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* Hiện trường */}
-              <div style={{ background: '#F8FAFC', padding: 14, borderRadius: 10, border: '1px solid #E2E8F0' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
-                  Địa Điểm &amp; Tọa Độ Hiện Trường
-                </span>
-                <p style={{ margin: '6px 0 0', fontWeight: 600, color: '#0F172A', fontSize: 14 }}>
-                  {selectedSosDetail.address}
-                </p>
-                {selectedSosDetail.location?.coordinates && (
-                  <p style={{ margin: '4px 0 0', fontSize: 12, color: '#0284C7', fontFamily: 'monospace' }}>
-                    GPS: [{selectedSosDetail.location.coordinates[1]?.toFixed(5)}, {selectedSosDetail.location.coordinates[0]?.toFixed(5)}]
-                  </p>
-                )}
-              </div>
-
-              {/* Thông tin người dân */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div style={{ background: '#F8FAFC', padding: 12, borderRadius: 8, border: '1px solid #E2E8F0' }}>
-                  <span style={{ fontSize: 11, color: '#64748B' }}>Người cần cứu hộ:</span>
-                  <p style={{ margin: '4px 0 0', fontWeight: 700, color: '#0F172A' }}>
-                    {(selectedSosDetail.citizenId as any)?.fullName || 'Người dân'}
-                  </p>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>
-                    {(selectedSosDetail.citizenId as any)?.phone || 'Chưa cung cấp SĐT'}
-                  </p>
-                </div>
-
-                <div style={{ background: '#F8FAFC', padding: 12, borderRadius: 8, border: '1px solid #E2E8F0' }}>
-                  <span style={{ fontSize: 11, color: '#64748B' }}>Số người &amp; Mức độ:</span>
-                  <p style={{ margin: '4px 0 0', fontWeight: 700, color: '#0F172A' }}>
-                    {selectedSosDetail.people || 1} người gặp nạn
-                  </p>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#DC2626', fontWeight: 600 }}>
-                    Ưu tiên: {selectedSosDetail.priority}
-                  </p>
-                </div>
-              </div>
-
-              {/* Nội dung mô tả */}
-              {selectedSosDetail.description && (
-                <div style={{ background: '#FFFBEB', border: '1px solid #FEF3C7', padding: 12, borderRadius: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#B45309' }}>Ghi chú tình huống:</span>
-                  <p style={{ margin: '4px 0 0', fontSize: 13, color: '#78350F' }}>
-                    {selectedSosDetail.description}
-                  </p>
-                </div>
-              )}
-
-              {/* Tiến trình tác chiến */}
-              <div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
-                  Tiến Trình Cứu Nạn
-                </span>
-                <div style={{ marginTop: 8 }}>
-                  {renderProgressStep(getEffectiveStatus(selectedSosDetail))}
-                </div>
-              </div>
-            </div>
-
-            <div
-              style={{
-                padding: '14px 24px',
-                borderTop: '1px solid #E2E8F0',
-                background: '#F8FAFC',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderBottomLeftRadius: 16,
-                borderBottomRightRadius: 16,
-              }}
-            >
-              <button
-                type="button"
-                className="coordination-action-btn outline"
-                onClick={() => setSelectedSosDetail(null)}
-              >
-                Đóng
-              </button>
-
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  type="button"
-                  className="coordination-action-btn primary"
-                  onClick={() => {
-                    const id = selectedSosDetail._id;
-                    setSelectedSosDetail(null);
-                    onOpenMap(id);
-                  }}
-                >
-                  <MapPin size={14} />
-                  <span>Xem trên bản đồ</span>
-                </button>
-
-                {getEffectiveStatus(selectedSosDetail) !== 'COMPLETED' && (
-                  <button
-                    type="button"
-                    className="coordination-action-btn success"
-                    onClick={(e) => handleCompleteSos(e, selectedSosDetail._id)}
-                  >
-                    <CheckCircle2 size={14} />
-                    <span>Xác nhận hoàn thành</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
