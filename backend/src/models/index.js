@@ -7,12 +7,13 @@ const SosRequest = require('./SosRequest');
 const SosAssignment = require('./SosAssignment');
 const SosStatusHistory = require('./SosStatusHistory');
 const SafeLocation = require('./SafeLocation');
-const Alert = require('./Alert');
 const Notification = require('./Notification');
 const File = require('./File');
 const AuditLog = require('./AuditLog');
 const HazardReport = require('./HazardReport');
 const ChatMessage = require('./ChatMessage');
+const WeatherArticle = require('./WeatherArticle');
+const WeatherNotification = WeatherArticle;
 
 module.exports = {
   User,
@@ -24,11 +25,13 @@ module.exports = {
   SosAssignment,
   SosStatusHistory,
   SafeLocation,
-  Alert,
   Notification,
   File,
   AuditLog,
   HazardReport,
   ChatMessage,
+  WeatherArticle,
+  WeatherNotification,
+  weather_article: WeatherArticle,
 };
 

@@ -10,6 +10,7 @@
     "expo": "~57.0.25",
     "expo-auth-session": "~57.0.13",
     "expo-blur": "~57.0.3",
+    "expo-constants": "~57.0.19",
     "expo-crypto": "~57.0.3",
     "expo-font": "~57.0.4",
     "expo-image-picker": "~57.0.20",
@@ -34,6 +35,9 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
+    "prestart": "node scripts/patch-expo-notifications.js",
+    "predev": "node scripts/patch-expo-notifications.js",
+    "pretunnel": "node scripts/patch-expo-notifications.js",
     "start": "expo start",
     "dev": "expo start",
     "tunnel": "expo start --tunnel",

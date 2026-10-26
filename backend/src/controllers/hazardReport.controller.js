@@ -1,21 +1,36 @@
 const hazardReportService = require('../services/hazardReport.service');
 const auditService = require('../services/audit.service');
+const ApiError = require('../utils/apiError');
 const { sendSuccess } = require('../utils/apiResponse');
 
 class HazardReportController {
   /**
    * POST /hazard-reports
-   * Tạo đóng góp điểm nguy hiểm từ Citizen / Rescuer (Trạng thái PENDING)
+   * Tạo đóng góp điểm nguy hiểm từ Citizen / Rescuer (Trạng thái PENDING) hoặc do Cán bộ chính quyền tạo
    */
   async createHazardReport(req, res, next) {
     try {
       const userId = req.user._id;
-      const userRoles = req.user.roles || [];
-      const report = await hazardReportService.createHazardReport(req.body, userId, userRoles);
+      const userRoles = Array.isArray(req.user.roles)
+        ? [...req.user.roles]
+        : (req.user.roles ? [req.user.roles] : []);
+      if (req.user.role && !userRoles.includes(req.user.role)) {
+        userRoles.push(req.user.role);
+      }
+
+      const isAuthority = userRoles.includes('LOCAL_AUTHORITY') || userRoles.includes('AUTHORITY');
+      if (userRoles.includes('ADMIN') && !isAuthority) {
+        throw new ApiError(
+          403,
+          'Quản trị viên (ADMIN) không có thẩm quyền tạo điểm nguy hiểm. Chức năng này chỉ dành riêng cho Cán bộ chính quyền địa phương (LOCAL_AUTHORITY) hoặc người dân đóng góp báo cáo.'
+        );
+      }
+
+      const report = await hazardReportService.createHazardReport(req.body, userId, userRoles, req.user);
 
       await auditService.log({
         actorId: userId,
-        actorRole: userRoles[0] || 'CITIZEN',
+        actorRole: userRoles[0] || req.user.role || 'CITIZEN',
         action: 'CITIZEN_REPORT_HAZARD',
         entityType: 'HazardReport',
         entityId: report._id,
@@ -28,7 +43,7 @@ class HazardReportController {
         },
       });
 
-      const isAuth = userRoles.includes('LOCAL_AUTHORITY') || userRoles.includes('ADMIN');
+      const isAuth = userRoles.includes('LOCAL_AUTHORITY') || userRoles.includes('AUTHORITY');
       const message = isAuth
         ? (report.status === 'APPROVED'
             ? 'Tạo điểm nguy hiểm thành công và đã được công bố trên bản đồ!'
@@ -46,7 +61,12 @@ class HazardReportController {
    */
   async getHazardReports(req, res, next) {
     try {
-      const userRoles = req.user?.roles || [];
+      const userRoles = Array.isArray(req.user?.roles)
+        ? [...req.user.roles]
+        : (req.user?.roles ? [req.user.roles] : []);
+      if (req.user?.role && !userRoles.includes(req.user.role)) {
+        userRoles.push(req.user.role);
+      }
       const currentUserId = req.user?._id || null;
       const result = await hazardReportService.getHazardReports(req.query, userRoles, currentUserId);
       return sendSuccess(res, 200, 'Lấy danh sách điểm nguy hiểm thành công', result);

@@ -1,7 +1,6 @@
 export * from './client';
 export * from './auth.api';
 export * from './user.api';
-export * from './alert.api';
 export * from './map.api';
 export * from './notification.api';
 export * from './province.api';
@@ -11,4 +10,5 @@ export * from './rescuer.api';
 export * from './rescueTeam.api';
 export * from './vehicle.api';
 export * from './assignment.api';
+export * from './weather.api';
 export * from './backendApi';

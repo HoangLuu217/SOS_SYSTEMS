@@ -1,7 +1,6 @@
 import { apiClient } from './client';
 import { authApi } from './auth.api';
 import { userApi } from './user.api';
-import { alertApi } from './alert.api';
 import { mapApi } from './map.api';
 import { notificationApi } from './notification.api';
 import { chatApi } from './chat.api';
@@ -9,6 +8,7 @@ import { rescuerApi } from './rescuer.api';
 import { rescueTeamApi } from './rescueTeam.api';
 import { vehicleApi } from './vehicle.api';
 import { assignmentApi, RescuerAssignmentItem } from './assignment.api';
+import { weatherApi, WeatherArticleItem } from './weather.api';
 import type {
   EmergencyContact,
   UserProfile,
@@ -16,9 +16,7 @@ import type {
   ApiResponse,
   NotificationItem,
   SafeLocation,
-  AlertItem,
 } from '../types';
-
 
 export type {
   EmergencyContact,
@@ -29,9 +27,6 @@ export type {
   SafeLocationType,
   SafeLocationStatus,
   SafeLocation,
-  AlertType,
-  AlertSeverity,
-  AlertItem,
 } from '../types';
 
 /**
@@ -41,6 +36,7 @@ export type {
 class BackendApiService {
   // HTTP Client core
   getBaseUrl = () => apiClient.getBaseUrl();
+  getAccessToken = () => apiClient.getAccessToken();
   setBaseUrl = (url: string) => apiClient.setBaseUrl(url);
   clearCustomBaseUrl = () => apiClient.clearCustomBaseUrl();
   request = <T = any>(endpoint: string, options: RequestInit = {}) =>
@@ -182,11 +178,20 @@ class BackendApiService {
   registerPushToken = (pushToken: string) =>
     notificationApi.registerPushToken(pushToken);
 
+  updateCurrentLocation = (latitude: number, longitude: number) =>
+    notificationApi.updateCurrentLocation(latitude, longitude);
+
   markAllNotificationsAsRead = () => notificationApi.markAllNotificationsAsRead();
 
   markNotificationAsRead = (id: string) => notificationApi.markNotificationAsRead(id);
 
   deleteNotification = (id: string) => notificationApi.deleteNotification(id);
+
+  // Weather Articles & Notifications API
+  getWeatherArticles = (query?: Parameters<typeof weatherApi.getWeatherArticles>[0]) =>
+    weatherApi.getWeatherArticles(query);
+
+  getWeatherArticleById = (id: string) => weatherApi.getWeatherArticleById(id);
 
   // Map & Safe Locations API
   getSafeLocations = (params: {
@@ -204,20 +209,6 @@ class BackendApiService {
     limit: number = 50
   ) => mapApi.getNearbySafeLocations(lng, lat, maxDistance, limit);
 
-  // Alerts API
-  getActiveAlerts = (params: {
-    type?: string;
-    severity?: string;
-    limit?: number;
-  } = {}) => alertApi.getActiveAlerts(params);
-
-  getAlerts = (params: {
-    type?: string;
-    severity?: string;
-    isActive?: boolean;
-    page?: number;
-    limit?: number;
-  } = {}) => alertApi.getAlerts(params);
 
   // Chat with Local Authority API
   getLocalAuthority = (params: Parameters<typeof chatApi.getLocalAuthority>[0]) =>
