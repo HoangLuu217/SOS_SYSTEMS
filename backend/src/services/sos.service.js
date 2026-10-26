@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { SosRequest, SosStatusHistory, AdministrativeArea, SosAssignment } = require('../models');
+const { SosRequest, SosStatusHistory, AdministrativeArea, SosAssignment, Vehicle } = require('../models');
 const ApiError = require('../utils/apiError');
 
 /**
@@ -185,7 +185,22 @@ const getSosRequests = async (query = {}) => {
         filter.areaId = query.areaId;
       }
     } else {
-      filter.areaId = query.areaId;
+      // Nếu areaId là chuỗi mã/slug (như area-nhs, DAD-NHS,...), tìm area tương ứng trong CSDL
+      const cleanKey = String(query.areaId).replace(/^area-/, '');
+      const matchedArea = await AdministrativeArea.findOne({
+        $or: [
+          { code: new RegExp(`^${cleanKey}$`, 'i') },
+          { name: new RegExp(cleanKey, 'i') },
+        ],
+      });
+      if (matchedArea) {
+        const childAreas = await AdministrativeArea.find({ parentId: matchedArea._id }).select('_id');
+        if (childAreas && childAreas.length > 0) {
+          filter.areaId = { $in: [matchedArea._id, ...childAreas.map(c => c._id)] };
+        } else {
+          filter.areaId = matchedArea._id;
+        }
+      }
     }
   }
 
@@ -353,6 +368,110 @@ const updateSosRequest = async (id, updateData, userId) => {
   return populated || sos;
 };
 
+/**
+ * Đội cứu hộ (Ca-nô) gửi yêu cầu xe đường bộ đón nạn nhân tại bến cập bờ
+ */
+const requestShoreHandoff = async (id, data, user) => {
+  const sos = await SosRequest.findById(id);
+  if (!sos) throw new ApiError(404, 'Không tìm thấy yêu cầu SOS');
+
+  // Đảm bảo ca cứu hộ đang hoạt động nếu trước đó từng bị đánh dấu hoàn thành
+  if (['COMPLETED', 'RESOLVED', 'CANCELLED'].includes(sos.status)) {
+    sos.status = 'ARRIVED';
+    sos.resolvedAt = null;
+  }
+
+  sos.shoreHandoff = {
+    status: 'REQUESTED',
+    requestedAt: new Date(),
+    requestedByRescuerName: user?.fullName || data.requestedByRescuerName || null,
+    rescueTeamName: data.rescueTeamName || null,
+    rescueTeamId: data.rescueTeamId || null,
+    landingPoint: {
+      name: data.landingPoint?.name || 'Bến Cập Bờ',
+      address: data.landingPoint?.address || null,
+      coordinates: data.landingPoint?.coordinates || (sos.location?.coordinates ? [sos.location.coordinates[0], sos.location.coordinates[1]] : null),
+    },
+    vehicleTypeNeeded: data.vehicleTypeNeeded || 'AMBULANCE',
+    peopleCount: data.peopleCount || sos.people || 1,
+    notes: data.notes || '',
+    assignedVehicleId: null,
+    assignedVehicleName: null,
+    assignedVehiclePlate: null,
+    assignedRoadTeamName: null,
+    assignedDriverName: null,
+    assignedDriverPhone: null,
+    assignedAt: null,
+    completedAt: null,
+  };
+
+  await sos.save();
+
+  const populated = await SosRequest.findById(sos._id)
+    .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
+    .populate('areaId', 'name code');
+
+  return populated || sos;
+};
+
+/**
+ * Ban chỉ huy điều phối xe đường bộ (Xe cấp cứu / Xe tải) đến bến đón
+ */
+const assignShoreHandoff = async (id, data, _user) => {
+  const sos = await SosRequest.findById(id);
+  if (!sos) throw new ApiError(404, 'Không tìm thấy yêu cầu SOS');
+
+  if (!sos.shoreHandoff) {
+    sos.shoreHandoff = { status: 'REQUESTED', requestedAt: new Date() };
+  }
+
+  // Tra cứu phương tiện thật từ CSDL nếu có vehicleId hợp lệ
+  let vehicle = null;
+  if (data.vehicleId && mongoose.isValidObjectId(data.vehicleId)) {
+    vehicle = await Vehicle.findById(data.vehicleId).populate({
+      path: 'teamId',
+      populate: { path: 'leaderId', select: 'fullName phone' },
+    });
+  }
+
+  sos.shoreHandoff.status = 'ASSIGNED';
+  sos.shoreHandoff.assignedVehicleId = vehicle?._id || data.vehicleId || null;
+  sos.shoreHandoff.assignedVehicleName = vehicle ? (vehicle.description || `${vehicle.type} (${vehicle.plateNumber})`) : (data.vehicleName || null);
+  sos.shoreHandoff.assignedVehiclePlate = vehicle?.plateNumber || data.vehiclePlate || null;
+  sos.shoreHandoff.assignedRoadTeamName = vehicle?.teamId?.name || data.roadTeamName || null;
+  sos.shoreHandoff.assignedDriverName = vehicle?.teamId?.leaderId?.fullName || data.driverName || null;
+  sos.shoreHandoff.assignedDriverPhone = vehicle?.teamId?.leaderId?.phone || data.driverPhone || null;
+  sos.shoreHandoff.assignedAt = new Date();
+
+  await sos.save();
+
+  const populated = await SosRequest.findById(sos._id)
+    .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
+    .populate('areaId', 'name code');
+
+  return populated || sos;
+};
+
+/**
+ * Hoàn thành bàn giao nạn nhân tại bờ cho xe đường bộ
+ */
+const completeShoreHandoff = async (id, _user) => {
+  const sos = await SosRequest.findById(id);
+  if (!sos) throw new ApiError(404, 'Không tìm thấy yêu cầu SOS');
+
+  if (sos.shoreHandoff) {
+    sos.shoreHandoff.status = 'COMPLETED';
+    sos.shoreHandoff.completedAt = new Date();
+    await sos.save();
+  }
+
+  const populated = await SosRequest.findById(sos._id)
+    .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
+    .populate('areaId', 'name code');
+
+  return populated || sos;
+};
+
 module.exports = {
   createSosRequest,
   getSosRequests,
@@ -360,5 +479,8 @@ module.exports = {
   updateSosRequest,
   changeStatus,
   getSosHistory,
-  verifyAndClassifySos
+  verifyAndClassifySos,
+  requestShoreHandoff,
+  assignShoreHandoff,
+  completeShoreHandoff,
 };

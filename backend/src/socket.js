@@ -62,6 +62,21 @@ const initSocket = (httpServer) => {
       }
     });
 
+    // Luồng hiệp đồng 2 giai đoạn: Ca-nô yêu cầu xe đường bộ đón bờ
+    socket.on('rescuer:request_shore_handoff', (data) => {
+      if (data) {
+        console.log(`⚡ [Socket.IO] Nhận yêu cầu xe đón bờ từ Ca-nô:`, data);
+        io.emit('sos:shore_handoff_requested', data);
+      }
+    });
+
+    socket.on('dispatcher:assign_shore_handoff', (data) => {
+      if (data) {
+        console.log(`🚑 [Socket.IO] Điều xe đón bờ thành công:`, data);
+        io.emit('sos:shore_handoff_assigned', data);
+      }
+    });
+
     socket.on('disconnect', (reason) => {
       console.log(`🔌 [Socket.IO] Client ngắt kết nối: ${socket.id} (Lý do: ${reason})`);
     });

@@ -48,8 +48,11 @@ export const IncidentFeed = ({
     let active = 0;
 
     scopedIncidents.forEach((s) => {
-      if (s.status === 'COMPLETED') return;
-      const isAssigned = Boolean(s.assignmentId && s.status !== 'CANCELLED');
+      const hasPendingShoreRelay = Boolean(
+        s.shoreHandoff && (s.shoreHandoff.status === 'REQUESTED' || s.shoreHandoff.status === 'ASSIGNED')
+      );
+      if (s.status === 'COMPLETED' && !hasPendingShoreRelay) return;
+      const isAssigned = Boolean((s.assignmentId && s.status !== 'CANCELLED') || hasPendingShoreRelay);
       if (!isAssigned) unassigned++;
       if (s.priority === 'CRITICAL' || s.priority === 'HIGH') urgent++;
       if (isAssigned) active++;
@@ -66,8 +69,11 @@ export const IncidentFeed = ({
   // Filter incidents based on search query & selected status tab (chỉ hiển thị các ca đang diễn ra)
   const filteredIncidents = useMemo(() => {
     return scopedIncidents.filter((s) => {
-      // Bỏ các ca đã hoàn thành khỏi feed tác chiến trực tiếp
-      if (s.status === 'COMPLETED') return false;
+      const hasPendingShoreRelay = Boolean(
+        s.shoreHandoff && (s.shoreHandoff.status === 'REQUESTED' || s.shoreHandoff.status === 'ASSIGNED')
+      );
+      // Bỏ các ca đã hoàn thành khỏi feed tác chiến trực tiếp (trừ khi đang có yêu cầu đón bờ cần điều xe)
+      if (s.status === 'COMPLETED' && !hasPendingShoreRelay) return false;
 
       // 1. Search query matching
       const matchSearch =
@@ -81,7 +87,7 @@ export const IncidentFeed = ({
       if (!matchSearch) return false;
 
       // 2. Status tabs
-      const isAssigned = Boolean(s.assignmentId && s.status !== 'CANCELLED');
+      const isAssigned = Boolean((s.assignmentId && s.status !== 'CANCELLED') || hasPendingShoreRelay);
       if (statusFilter === 'UNASSIGNED') {
         return !isAssigned;
       }
@@ -93,17 +99,21 @@ export const IncidentFeed = ({
     });
   }, [scopedIncidents, searchQuery, statusFilter]);
 
-  // District options for Admin filter
-  const DISTRICT_OPTIONS = [
-    { id: 'ALL', name: 'Toàn TP' },
-    { id: 'area-hc', name: 'Hải Châu' },
-    { id: 'area-cl', name: 'Cẩm Lệ' },
-    { id: 'area-st', name: 'Sơn Trà' },
-    { id: 'area-tk', name: 'Thanh Khê' },
-    { id: 'area-nhs', name: 'Ngũ Hành Sơn' },
-    { id: 'area-lc', name: 'Liên Chiểu' },
-    { id: 'area-hv', name: 'Hòa Vang' },
-  ];
+  // Dynamic district options extracted from incoming SOS requests (plus 'ALL')
+  const districtOptions = useMemo(() => {
+    const list: { id: string; name: string }[] = [
+      { id: 'ALL', name: lang === 'vi' ? 'Toàn bộ' : 'All' },
+    ];
+    const seen = new Set<string>();
+    sosRequests.forEach((s) => {
+      if (s.districtId && !seen.has(s.districtId)) {
+        seen.add(s.districtId);
+        const name = (s as any).districtName || s.districtId;
+        list.push({ id: s.districtId, name });
+      }
+    });
+    return list;
+  }, [sosRequests, lang]);
 
   return (
     <div className="dispatch-left-col">
@@ -136,8 +146,8 @@ export const IncidentFeed = ({
           </div>
         </div>
 
-        {/* Admin District Selector Tabs (If logged in as Admin) */}
-        {isAdmin && (
+        {/* Admin District Selector Tabs (If logged in as Admin and multiple districts exist) */}
+        {isAdmin && districtOptions.length > 2 && (
           <div
             style={{
               display: 'flex',
@@ -148,7 +158,7 @@ export const IncidentFeed = ({
               scrollbarWidth: 'none',
             }}
           >
-            {DISTRICT_OPTIONS.map((dist) => (
+            {districtOptions.map((dist) => (
               <button
                 key={dist.id}
                 type="button"
@@ -304,11 +314,70 @@ export const IncidentFeed = ({
 
                 <div className="card-meta-top">
                   <span className={`compact-priority-badge ${priorityClass}`}>
-                    {sos.priority}
+                    {sos.priority === 'CRITICAL'
+                      ? 'Nguy cấp'
+                      : sos.priority === 'HIGH'
+                      ? 'Khẩn cấp'
+                      : sos.priority === 'LOW'
+                      ? 'Thấp'
+                      : 'Trung bình'}
                   </span>
                   <span className="compact-time-ago">{sos.timeAgo}</span>
                 </div>
               </div>
+
+              {/* Cờ hiệu Bàn giao Tiếp vận Đón bờ (Shore Handoff Relay Banner) */}
+              {sos.shoreHandoff && sos.shoreHandoff.status === 'REQUESTED' && (
+                <div
+                  style={{
+                    marginTop: 6,
+                    marginBottom: 4,
+                    padding: '4px 8px',
+                    background: 'linear-gradient(90deg, #fff7ed 0%, #ffedd5 100%)',
+                    border: '1.2px solid #f97316',
+                    borderRadius: 6,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    boxShadow: '0 1px 3px rgba(249, 115, 22, 0.15)',
+                  }}
+                >
+                  <span style={{ fontSize: 13, lineHeight: 1 }}>⚡</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 900, color: '#c2410c', textTransform: 'uppercase', letterSpacing: '0.2px' }}>
+                      CẦN XE ĐÓN BỜ: {sos.shoreHandoff.vehicleTypeNeeded === 'AMBULANCE' ? 'XE CỨU THƯƠNG' : 'XE TẢI'}
+                    </div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9a3412', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {sos.shoreHandoff.landingPoint?.name || 'Bến Cập Bờ'} • {sos.shoreHandoff.peopleCount} người
+                    </div>
+                  </div>
+                </div>
+              )}
+              {sos.shoreHandoff && sos.shoreHandoff.status === 'ASSIGNED' && (
+                <div
+                  style={{
+                    marginTop: 6,
+                    marginBottom: 4,
+                    padding: '4px 8px',
+                    background: 'linear-gradient(90deg, #f0fdf4 0%, #dcfce7 100%)',
+                    border: '1.2px solid #22c55e',
+                    borderRadius: 6,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <span style={{ fontSize: 13, lineHeight: 1 }}>🚑</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 900, color: '#15803d', textTransform: 'uppercase' }}>
+                      XE ĐANG ĐẾN BẾN ĐÓN
+                    </div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#166534', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {sos.shoreHandoff.assignedVehiclePlate || sos.shoreHandoff.assignedVehicleName} ({sos.shoreHandoff.landingPoint?.name})
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Card Middle: Request Type + Priority Targets + (Side Thumbnail) */}
               <div className="compact-card-content">

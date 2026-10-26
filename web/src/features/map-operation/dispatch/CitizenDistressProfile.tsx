@@ -20,13 +20,14 @@ export const CitizenDistressProfile: React.FC<Props> = ({
 
   // Danh sách vật tư đã cấp / phân bổ cho ca cứu nạn này (lấy từ kho vật tư qua)
   const [internalSupplies, setInternalSupplies] = useState<Record<string, number>>(() => {
-    // Khởi tạo vật tư mặc định cần thiết dựa theo số người gặp nạn
-    const count = Math.max(1, selectedSos.affectedPeople || 2);
-    return {
-      'sup-01': count, // Áo phao theo đầu người
-      'sup-03': 1,     // 1 Túi sơ cứu y tế
-      'sup-04': Math.ceil(count / 2), // Nước uống tiệt trùng
-    };
+    const count = Number(selectedSos.affectedPeople ?? (selectedSos as any)?.people ?? 0);
+    const initial: Record<string, number> = {};
+    if (count > 0) {
+      initial['sup-01'] = count;
+      initial['sup-03'] = 1;
+      initial['sup-04'] = Math.ceil(count / 2);
+    }
+    return initial;
   });
 
   const allocatedSupplies = propAllocatedSupplies ?? internalSupplies;

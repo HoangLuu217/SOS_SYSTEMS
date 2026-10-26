@@ -113,8 +113,8 @@ export interface SosRequest {
   coordinates: {
     lat: number;
     lng: number;
-    svgX: number; // for interactive SVG map
-    svgY: number;
+    svgX?: number;
+    svgY?: number;
   };
   assignmentId?: string | null;
   images?: string[];
@@ -122,9 +122,35 @@ export interface SosRequest {
   priorityGroups?: string[];
   senderRole?: 'CITIZEN' | 'RESCUER' | string;
   repeatCount?: number;
-  lastRepeatedAt?: string;
   isSecondaryRequest?: boolean;
   primarySosId?: string;
+  shoreHandoff?: ShoreHandoffRequest;
+}
+
+export interface ShoreHandoffRequest {
+  status: 'NONE' | 'REQUESTED' | 'ASSIGNED' | 'COMPLETED' | 'CANCELLED';
+  requestedAt?: string;
+  requestedByRescuerName?: string;
+  rescueTeamName?: string;
+  rescueTeamId?: string;
+  landingPoint: {
+    name: string;
+    address?: string;
+    coordinates?: [number, number]; // [lng, lat]
+    lat?: number;
+    lng?: number;
+  };
+  vehicleTypeNeeded: 'AMBULANCE' | 'TRUCK' | 'ANY';
+  peopleCount: number;
+  notes?: string;
+  assignedVehicleId?: string;
+  assignedVehicleName?: string;
+  assignedVehiclePlate?: string;
+  assignedRoadTeamName?: string;
+  assignedDriverName?: string;
+  assignedDriverPhone?: string;
+  assignedAt?: string;
+  completedAt?: string;
 }
 
 export interface RescueTeam {
@@ -159,6 +185,10 @@ export interface Vehicle {
   status: 'Available' | 'In Mission' | 'Maintenance';
   capacity: string;
   teamId: string;
+  teamName?: string;
+  districtId?: string;
+  wardId?: string;
+  areaId?: string;
 }
 
 export type AssignmentStatus =

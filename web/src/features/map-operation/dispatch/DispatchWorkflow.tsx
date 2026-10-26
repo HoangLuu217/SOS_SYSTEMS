@@ -142,7 +142,7 @@ export const DispatchWorkflow = ({
       setSelectedVehicleId('');
 
       if (selectedSos) {
-        const count = Math.max(1, selectedSos.affectedPeople || 2);
+        const count = Math.max(1, selectedSos.affectedPeople || (selectedSos as any)?.people || 1);
         setAllocatedSupplies({
           'sup-01': count,
           'sup-03': 1,
@@ -154,12 +154,14 @@ export const DispatchWorkflow = ({
 
   // Quản lý vật tư cấp phát được chọn trong phiên phân công
   const [allocatedSupplies, setAllocatedSupplies] = useState<Record<string, number>>(() => {
-    const count = Math.max(1, selectedSos?.affectedPeople || 2);
-    return {
-      'sup-01': count,
-      'sup-03': 1,
-      'sup-04': Math.ceil(count / 2),
-    };
+    const count = Number(selectedSos?.affectedPeople ?? (selectedSos as any)?.people ?? 0);
+    const initial: Record<string, number> = {};
+    if (count > 0) {
+      initial['sup-01'] = count;
+      initial['sup-03'] = 1;
+      initial['sup-04'] = Math.ceil(count / 2);
+    }
+    return initial;
   });
 
   const handleToggleTeam = (teamId: string) => {
@@ -304,13 +306,13 @@ export const DispatchWorkflow = ({
     const rawName = selectedSos.wardName || selectedSos.districtName || activeOfficer?.jurisdictionAreaName || '';
     const clean = rawName.replace(/^(phường|xã|quận|huyện|thị xã|thành phố)\s+/i, '').trim();
     if (clean) return clean;
-    if (selectedSos.districtId === 'area-lc' || selectedSos.wardId?.includes('lc')) return 'Liên Chiểu';
+    if (selectedSos.districtId === 'area-nhs') return 'Ngũ Hành Sơn';
     if (selectedSos.districtId === 'area-cl') return 'Cẩm Lệ';
     if (selectedSos.districtId === 'area-st') return 'Sơn Trà';
     if (selectedSos.districtId === 'area-tk') return 'Thanh Khê';
-    if (selectedSos.districtId === 'area-nhs') return 'Ngũ Hành Sơn';
     if (selectedSos.districtId === 'area-hv') return 'Hòa Vang';
-    return 'Liên Chiểu';
+    if (selectedSos.districtId === 'area-lc' || selectedSos.wardId?.includes('lc')) return 'Liên Chiểu';
+    return clean || 'Khu vực phụ trách';
   })();
 
   return (
@@ -363,7 +365,6 @@ export const DispatchWorkflow = ({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {/* Badge mức độ ưu tiên theo yêu cầu: CRITICAL nền đỏ đậm chữ trắng in đậm, HIGH nền cam, MEDIUM nền vàng */}
               <span
                 style={{
                   fontSize: 10.5,
@@ -377,6 +378,8 @@ export const DispatchWorkflow = ({
                       ? '#dc2626'
                       : selectedSos.priority === 'HIGH'
                       ? '#ea580c'
+                      : selectedSos.priority === 'LOW'
+                      ? '#16a34a'
                       : '#d97706',
                   boxShadow:
                     selectedSos.priority === 'CRITICAL'
@@ -384,7 +387,13 @@ export const DispatchWorkflow = ({
                       : 'none',
                 }}
               >
-                {selectedSos.priority}
+                {selectedSos.priority === 'CRITICAL'
+                  ? 'NGUY CẤP'
+                  : selectedSos.priority === 'HIGH'
+                  ? 'KHẨN CẤP'
+                  : selectedSos.priority === 'LOW'
+                  ? 'THẤP'
+                  : 'TRUNG BÌNH'}
               </span>
               {onToggleCollapse && (
                 <button
@@ -553,6 +562,8 @@ export const DispatchWorkflow = ({
             selectedSos={selectedSos}
             rescueTeams={rescueTeams}
             vehicles={vehicles}
+            activeOfficer={activeOfficer}
+            areas={areas}
             onOpenReassign={onOpenReassign}
             onOpenCancel={onOpenCancel}
           />

@@ -111,6 +111,24 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   const [supplyUrgency, setSupplyUrgency] = useState<'NORMAL' | 'URGENT'>('NORMAL');
   const [supplyNote, setSupplyNote] = useState<string>('');
 
+  // Luồng cứu hộ 2 giai đoạn: Ca-nô đón nước -> Bến cập bờ -> Xe đường bộ chở viện/trú ẩn
+  const [shoreHandoffModalVisible, setShoreHandoffModalVisible] = useState<boolean>(false);
+  const [shoreHandoffData, setShoreHandoffData] = useState<any>(initialSosData?.shoreHandoff || null);
+  const [landingAddress, setLandingAddress] = useState<string>('');
+  const [landingCoords, setLandingCoords] = useState<{ lat: number; lng: number }>({
+    lat: initialSosData?.location?.coordinates?.[1] || 16.0345,
+    lng: initialSosData?.location?.coordinates?.[0] || 108.2325,
+  });
+  const [isPickingLandingLocation, setIsPickingLandingLocation] = useState<boolean>(false);
+  const [pickedTempCoords, setPickedTempCoords] = useState<{ lat: number; lng: number }>({
+    lat: initialSosData?.location?.coordinates?.[1] || 16.0345,
+    lng: initialSosData?.location?.coordinates?.[0] || 108.2325,
+  });
+  const [isFetchingAddress, setIsFetchingAddress] = useState<boolean>(false);
+  const [selectedRelayVehicleType, setSelectedRelayVehicleType] = useState<'AMBULANCE' | 'TRUCK'>('AMBULANCE');
+  const [relayVictimCount, setRelayVictimCount] = useState<number>(initialSosData?.people ?? 0);
+  const [relayNotes, setRelayNotes] = useState<string>('');
+
   // State 1 Rejection Modal (Từ chối nhận lệnh)
   const [rejectModalVisible, setRejectModalVisible] = useState<boolean>(false);
   const [rejectReason, setRejectReason] = useState<string>('Phương tiện gặp sự cố kỹ thuật đột xuất');
@@ -160,6 +178,10 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'MAP_DRAGGED') {
         setIsHeadingLocked(false);
+      } else if (data.type === 'LANDING_PIN_MOVED' || data.type === 'LANDING_PIN_DRAGGED') {
+        if (typeof data.lat === 'number' && typeof data.lng === 'number') {
+          setPickedTempCoords({ lat: data.lat, lng: data.lng });
+        }
       }
     } catch (err) {}
   }, []);
@@ -224,6 +246,10 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             setSos(sosRes.data);
             if (sosRes.data.people) {
               setRescuedHeadcount(sosRes.data.people);
+              setRelayVictimCount(sosRes.data.people);
+            }
+            if (sosRes.data.shoreHandoff) {
+              setShoreHandoffData(sosRes.data.shoreHandoff);
             }
           }
         }
@@ -231,6 +257,10 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         setSos(initialSosData);
         if (initialSosData.people) {
           setRescuedHeadcount(initialSosData.people);
+          setRelayVictimCount(initialSosData.people);
+        }
+        if (initialSosData.shoreHandoff) {
+          setShoreHandoffData(initialSosData.shoreHandoff);
         }
         syncStateFromStatus(initialSosData.status);
       }
@@ -259,17 +289,21 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         if (status === 'granted') {
           const curr = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
           if (isMounted && curr.coords) {
-            // Kiểm tra xem GPS máy thật có gần hiện trường (< 5km) không
-            const dLat = Math.abs(curr.coords.latitude - victimCoords.lat);
-            const dLng = Math.abs(curr.coords.longitude - victimCoords.lng);
-            const isNearIncident = dLat < 0.05 && dLng < 0.05;
+            const initialLoc = {
+              lat: curr.coords.latitude,
+              lng: curr.coords.longitude,
+              heading: curr.coords.heading || 45,
+            };
+            setTeamLocation(initialLoc);
 
-            // Nếu người dùng đang test từ xa (> 5km), giữ tọa độ trạm cứu hộ Phường Liên Chiểu để hiển thị tuyến đường 1.1km thực tế
-            if (isNearIncident) {
-              setTeamLocation({
-                lat: curr.coords.latitude,
-                lng: curr.coords.longitude,
-                heading: curr.coords.heading || 45,
+            if (socketRef.current && socketRef.current.connected) {
+              socketRef.current.emit('rescuer:location_update', {
+                rescuerId: user?._id,
+                phone: user?.phone,
+                assignmentId: assignment?._id,
+                teamId: assignment?.rescueTeamId?._id || assignment?.rescueTeamId,
+                location: initialLoc,
+                coords: { lat: initialLoc.lat, lng: initialLoc.lng },
               });
             }
           }
@@ -282,27 +316,24 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             },
             (loc) => {
               if (isMounted && loc.coords) {
-                const dLat = Math.abs(loc.coords.latitude - victimCoords.lat);
-                const dLng = Math.abs(loc.coords.longitude - victimCoords.lng);
-                const isNearIncident = dLat < 0.05 && dLng < 0.05;
+                const newLoc = {
+                  lat: loc.coords.latitude,
+                  lng: loc.coords.longitude,
+                  heading: loc.coords.heading || 45,
+                };
+                setTeamLocation(newLoc);
 
-                if (isNearIncident) {
-                  const newLoc = {
-                    lat: loc.coords.latitude,
-                    lng: loc.coords.longitude,
-                    heading: loc.coords.heading || 45,
-                  };
-                  setTeamLocation(newLoc);
-
-                  // Phát telemetry lên Socket.IO
-                  if (socketRef.current && socketRef.current.connected) {
-                    socketRef.current.emit('rescuer:location_update', {
-                      rescuerId: user?._id,
-                      assignmentId: assignment?._id,
-                      teamId: assignment?.rescueTeamId?._id || assignment?.rescueTeamId,
-                      location: newLoc,
-                    });
-                  }
+                // Phát telemetry GPS thực tế lên Socket.IO
+                if (socketRef.current && socketRef.current.connected) {
+                  socketRef.current.emit('rescuer:location_update', {
+                    rescuerId: user?._id,
+                    phone: user?.phone,
+                    assignmentId: assignment?._id,
+                    teamId: assignment?.rescueTeamId?._id || assignment?.rescueTeamId,
+                    location: newLoc,
+                    coords: { lat: newLoc.lat, lng: newLoc.lng },
+                  });
+                }
 
                   // Cập nhật vị trí lên WebView
                   if (webViewRef.current) {
@@ -318,8 +349,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   }
                 }
               }
-            }
-          );
+            );
         }
       } catch (err) {
         console.warn('[Location Permission / Watch Error]:', err);
@@ -385,14 +415,30 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             handleMissionCancelled({ sosId: updatedSos._id, reason: 'Ca cứu nạn đã được trung tâm chuyển trạng thái điều phối lại.' });
             return;
           }
+          if (updatedSos.shoreHandoff) {
+            setShoreHandoffData(updatedSos.shoreHandoff);
+          }
           setSos((prev: any) => ({ ...prev, ...updatedSos }));
           syncStateFromStatus(updatedSos.status);
           onMissionUpdated?.(updatedSos.status, assignment?._id);
         }
       });
 
+      // Lắng nghe thông báo khi Ban Chỉ Huy điều động xe cứu thương/xe tải đón tại bờ
+      socket.on('sos:shore_handoff_assigned', (data: any) => {
+        if (data?.shoreHandoff) {
+          setShoreHandoffData(data.shoreHandoff);
+          Vibration.vibrate([200, 100, 200]);
+          Alert.alert(
+            '🚑 Xe đón bờ đã xuất phát!',
+            `Ban Chỉ Huy đã điều động ${data.shoreHandoff.assignedVehicleName} (${data.shoreHandoff.assignedVehiclePlate}) do tài xế ${data.shoreHandoff.assignedDriverName} (${data.shoreHandoff.assignedDriverPhone}) phụ trách đang đến bến đón!`
+          );
+        }
+      });
+
       return () => {
         socket.off('assignment:cancelled', handleMissionCancelled);
+        socket.off('sos:shore_handoff_assigned');
         socket.disconnect();
         socketRef.current = null;
       };
@@ -658,24 +704,157 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     }
   };
 
-  // Dữ liệu hiển thị chi tiết
-  const sosCode = sos?.sosCode || 'SOS-8924';
-  const citizenName = sos?.citizenId?.fullName || sos?.reporterName || 'Người dân khẩn cấp';
-  const citizenPhone = sos?.citizenId?.phone || sos?.contactPhone || '0905123987';
-  const incidentAddress = sos?.address || '456 Tôn Đức Thắng, Phường Liên Chiểu, TP Đà Nẵng';
-  const victimHeadcount = sos?.people || 2;
-  const rawDescription = sos?.description || 'Nước ngập sâu, cần hỗ trợ ca-nô di tản người già';
-  const teamName = assignment?.rescueTeamId?.name || assignment?.teamName || 'Đội Phản Ứng Nhanh Cứu Hộ Phường Liên Chiểu (43-LC-01)';
-  const vehiclePlate = assignment?.vehicleId?.plateNumber || assignment?.vehicleName || '43A-LC.99';
-  const vehicleName = assignment?.vehicleId?.plateNumber
-    ? `Ca-nô / Xe: ${assignment.vehicleId.plateNumber}`
-    : `Ca-nô / Xe: ${vehiclePlate}`;
+  // 12. Helper tra cứu địa chỉ từ toạ độ (Reverse Geocode hoặc tọa độ thực tế)
+  const fetchAddressFromCoords = async (lat: number, lng: number): Promise<string> => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+        { headers: { 'User-Agent': 'SOS-Rescue-App/1.0' } }
+      );
+      const data = await res.json();
+      if (data && data.display_name) {
+        const parts = data.display_name.split(',').slice(0, 3).join(',').trim();
+        return parts;
+      }
+    } catch {}
+    return `Bến cập bờ tại tọa độ (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+  };
+
+  const handleStartPickOnMap = () => {
+    setPickedTempCoords(landingCoords);
+    setShoreHandoffModalVisible(false);
+    setIsPickingLandingLocation(true);
+    setIsSheetCollapsed(true);
+    if (webViewRef.current) {
+      webViewRef.current.postMessage(
+        JSON.stringify({
+          type: 'ENABLE_LANDING_PICKER',
+          lat: landingCoords.lat,
+          lng: landingCoords.lng,
+        })
+      );
+    }
+  };
+
+  const handleUseCurrentGps = async () => {
+    try {
+      setIsFetchingAddress(true);
+      let curLat = teamLocation.lat;
+      let curLng = teamLocation.lng;
+
+      try {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        if (loc && loc.coords) {
+          curLat = loc.coords.latitude;
+          curLng = loc.coords.longitude;
+          setTeamLocation((prev) => ({ ...prev, lat: curLat, lng: curLng }));
+        }
+      } catch {}
+
+      setLandingCoords({ lat: curLat, lng: curLng });
+      setPickedTempCoords({ lat: curLat, lng: curLng });
+      const addr = await fetchAddressFromCoords(curLat, curLng);
+      setLandingAddress(addr);
+      Vibration.vibrate(50);
+    } catch {
+      setLandingCoords({ lat: teamLocation.lat, lng: teamLocation.lng });
+      setLandingAddress(`Vị trí GPS của Đội (${teamLocation.lat.toFixed(4)}, ${teamLocation.lng.toFixed(4)})`);
+    } finally {
+      setIsFetchingAddress(false);
+    }
+  };
+
+  // Xử lý Gửi Yêu Cầu Xe Đón Tại Bờ (Shore Relay Handoff)
+  const handleSendShoreHandoffRequest = async () => {
+    try {
+      setActionLoading(true);
+      const targetSosId = sos?._id || assignment?.sosRequestId || assignment?.sosId;
+      const landingName = landingAddress.trim() || 'Bến Cập Bờ';
+      const landing = {
+        name: landingName,
+        address: landingAddress.trim() || `Tọa độ: ${landingCoords.lat.toFixed(5)}, ${landingCoords.lng.toFixed(5)}`,
+        coordinates: [landingCoords.lng, landingCoords.lat] as [number, number],
+      };
+      const payload = {
+        landingPoint: landing,
+        vehicleTypeNeeded: selectedRelayVehicleType,
+        peopleCount: relayVictimCount,
+        notes: relayNotes,
+        rescueTeamName: assignment?.rescueTeamName || 'Đội Cứu Hộ',
+        rescueTeamId: assignment?.rescueTeamId || null,
+      };
+
+      if (socketRef.current && socketRef.current.connected) {
+        socketRef.current.emit('rescuer:request_shore_handoff', {
+          sosId: targetSosId,
+          sosCode: sos?.sosCode || 'SOS',
+          shoreHandoff: {
+            status: 'REQUESTED',
+            ...payload,
+          },
+        });
+      }
+
+      if (targetSosId) {
+        try {
+          await backendApi.requestShoreHandoff(targetSosId, payload);
+        } catch (err) {
+          console.warn('Backend requestShoreHandoff error:', err);
+        }
+      }
+
+      setShoreHandoffData({
+        status: 'REQUESTED',
+        ...payload,
+      });
+      setShoreHandoffModalVisible(false);
+      Vibration.vibrate(300);
+      Alert.alert(
+        '⚡ Đã gửi yêu cầu xe đón bờ',
+        `Đã báo Ban Chỉ Huy điều động ${selectedRelayVehicleType === 'AMBULANCE' ? 'Xe Cứu Thương 115' : 'Xe Tải Cứu Hộ'} đến ${landing.name} đón ${relayVictimCount} nạn nhân.`
+      );
+    } catch (err) {
+      console.error('Lỗi gửi yêu cầu đón bờ:', err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCompleteShoreHandoff = async () => {
+    try {
+      setActionLoading(true);
+      const targetSosId = sos?._id || assignment?.sosRequestId || assignment?.sosId;
+      if (targetSosId) {
+        try {
+          await backendApi.completeShoreHandoff(targetSosId);
+        } catch (err) {
+          console.warn('Backend completeShoreHandoff error:', err);
+        }
+      }
+      setShoreHandoffData((prev: any) => (prev ? { ...prev, status: 'COMPLETED' } : null));
+      Vibration.vibrate(200);
+      Alert.alert('✓ Bàn giao hoàn tất', 'Đã hoàn thành bàn giao nạn nhân lên xe đường bộ an toàn!');
+    } catch (err) {
+      console.warn('Lỗi hoàn tất bàn giao bờ:', err);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Dữ liệu hiển thị chi tiết (Động theo dữ liệu API thực tế)
+  const sosCode = sos?.sosCode || 'SOS';
+  const citizenName = sos?.citizenId?.fullName || sos?.reporterName || 'Người dân';
+  const citizenPhone = sos?.citizenId?.phone || sos?.contactPhone || '';
+  const incidentAddress = sos?.address ?? '';
+  const victimHeadcount = sos?.people ?? 0;
+  const rawDescription = sos?.description ?? '';
+  const teamName = assignment?.rescueTeamId?.name || assignment?.teamName || assignment?.rescueTeamName || '';
+  const vehiclePlate = assignment?.vehicleId?.plateNumber || assignment?.vehicleName || '';
+  const vehicleName = vehiclePlate ? `Phương tiện: ${vehiclePlate}` : '';
   const authorityName =
     assignment?.authorityOrganizationId?.name ||
     assignment?.authorityOrganizationName ||
-    (incidentAddress?.includes('Liên Chiểu')
-      ? 'Ban Chỉ Huy PCTT Phường Liên Chiểu'
-      : 'Ban Chỉ Huy PCTT & TKCN');
+    '';
 
   // Khoảng cách an toàn tránh notch / Dynamic Island của iPhone (tránh bị che phủ status bar)
   const safeTop = Math.max(insets.top, Platform.OS === 'ios' ? 56 : 40) + 12;
@@ -1151,8 +1330,72 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 }
               } else if (msg.type === 'CHANGE_MAP_LAYER') {
                 setTileLayer(msg.layer);
+              } else if (msg.type === 'ENABLE_LANDING_PICKER') {
+                var pLat = msg.lat || map.getCenter().lat;
+                var pLng = msg.lng || map.getCenter().lng;
+                if (!window.landingPickerMarker) {
+                  var landingPinHtml = '<div style="position:relative; width:46px; height:46px; display:flex; align-items:center; justify-content:center;">' +
+                    '<div style="width:38px; height:38px; border-radius:50%; background:#ea580c; border:3px solid #ffffff; box-shadow:0 4px 14px rgba(234,88,12,0.85); display:flex; align-items:center; justify-content:center; color:#ffffff; font-size:20px;">⚓</div>' +
+                    '<div style="position:absolute; bottom:-7px; left:17px; width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-top:8px solid #ea580c;"></div>' +
+                    '</div>';
+                  var landingPinIcon = L.divIcon({
+                    className: 'custom-landing-picker-icon',
+                    html: landingPinHtml,
+                    iconSize: [46, 46],
+                    iconAnchor: [23, 46]
+                  });
+                  window.landingPickerMarker = L.marker([pLat, pLng], {
+                    icon: landingPinIcon,
+                    draggable: true,
+                    zIndexOffset: 3000
+                  }).addTo(map);
+
+                  window.landingPickerMarker.on('drag', function(ev) {
+                    var ll = ev.target.getLatLng();
+                    if (window.ReactNativeWebView) {
+                      window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'LANDING_PIN_DRAGGED',
+                        lat: ll.lat,
+                        lng: ll.lng
+                      }));
+                    }
+                  });
+
+                  window.landingPickerMarker.on('dragend', function(ev) {
+                    var ll = ev.target.getLatLng();
+                    if (window.ReactNativeWebView) {
+                      window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'LANDING_PIN_MOVED',
+                        lat: ll.lat,
+                        lng: ll.lng
+                      }));
+                    }
+                  });
+                } else {
+                  window.landingPickerMarker.setLatLng([pLat, pLng]);
+                  window.landingPickerMarker.addTo(map);
+                }
+                map.setView([pLat, pLng], 17, { animate: true });
+              } else if (msg.type === 'DISABLE_LANDING_PICKER') {
+                if (window.landingPickerMarker && !msg.keepVisible) {
+                  map.removeLayer(window.landingPickerMarker);
+                  window.landingPickerMarker = null;
+                }
               }
             } catch(err) {}
+          });
+
+          map.on('click', function(ev) {
+            if (window.landingPickerMarker) {
+              window.landingPickerMarker.setLatLng(ev.latlng);
+              if (window.ReactNativeWebView) {
+                window.ReactNativeWebView.postMessage(JSON.stringify({
+                  type: 'LANDING_PIN_MOVED',
+                  lat: ev.latlng.lat,
+                  lng: ev.latlng.lng
+                }));
+              }
+            }
           });
         </script>
       </body>
@@ -1183,10 +1426,12 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           />
         </View>
 
-        {/* ======================================================== */}
-        {/* B. TOP FLOATING NAVIGATION HUD (KHÔNG BỊ DYNAMIC ISLAND CHE) */}
-        {/* ======================================================== */}
-        <View style={[styles.grabTopNavContainer, { top: safeTop }]} pointerEvents="box-none">
+        {!isPickingLandingLocation ? (
+          <>
+            {/* ======================================================== */}
+            {/* B. TOP FLOATING NAVIGATION HUD (KHÔNG BỊ DYNAMIC ISLAND CHE) */}
+            {/* ======================================================== */}
+            <View style={[styles.grabTopNavContainer, { top: safeTop }]} pointerEvents="box-none">
           {/* Nút Đóng X bên trái */}
           <TouchableOpacity style={styles.grabCloseCircleBtn} onPress={onClose} activeOpacity={0.8}>
             <Feather name="x" size={20} color="#0F172A" />
@@ -1577,14 +1822,185 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 )}
 
                 {missionState === 'ON_SCENE_RESCUING' && (
-                  <TouchableOpacity
-                    style={[styles.grabBigGreenBtn, { backgroundColor: '#059669' }]}
-                    onPress={handleOpenCompleteModal}
-                    activeOpacity={0.88}
-                  >
-                    <Ionicons name="checkmark-done-circle" size={24} color="#FFFFFF" />
-                    <Text style={styles.grabBigBtnText}>HOÀN TẤT CỨU HỘ & BÁO CÁO</Text>
-                  </TouchableOpacity>
+                  <View style={{ gap: 10, width: '100%' }}>
+                    {/* Banner hiển thị khi đã yêu cầu xe đón bờ */}
+                    {shoreHandoffData && shoreHandoffData.status === 'ASSIGNED' && (
+                      <View
+                        style={{
+                          backgroundColor: '#ECFDF5',
+                          borderWidth: 1.5,
+                          borderColor: '#10B981',
+                          borderRadius: 12,
+                          padding: 12,
+                          gap: 6,
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Ionicons name="medical" size={18} color="#059669" />
+                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#065F46', textTransform: 'uppercase' }}>
+                              Xe đón bờ đang đến!
+                            </Text>
+                          </View>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669', backgroundColor: '#D1FAE5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                            ĐÃ ĐIỀU XE
+                          </Text>
+                        </View>
+
+                        <Text style={{ fontSize: 12.5, color: '#1F2937', fontWeight: '600' }}>
+                          Xe: <Text style={{ fontWeight: '800' }}>{shoreHandoffData.assignedVehicleName} ({shoreHandoffData.assignedVehiclePlate})</Text>
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#4B5563' }}>
+                          Tài xế: {shoreHandoffData.assignedDriverName} • {shoreHandoffData.assignedDriverPhone}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#4B5563' }}>
+                          Bến đón: <Text style={{ fontWeight: '700', color: '#B45309' }}>{shoreHandoffData.landingPoint?.name}</Text>
+                        </Text>
+
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                          {shoreHandoffData.assignedDriverPhone && (
+                            <TouchableOpacity
+                              style={{
+                                flex: 1,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 6,
+                                backgroundColor: '#FFFFFF',
+                                borderWidth: 1,
+                                borderColor: '#10B981',
+                                paddingVertical: 8,
+                                borderRadius: 8,
+                              }}
+                              onPress={() => Linking.openURL(`tel:${shoreHandoffData.assignedDriverPhone}`)}
+                            >
+                              <Ionicons name="call" size={14} color="#059669" />
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#059669' }}>Gọi Tài Xế</Text>
+                            </TouchableOpacity>
+                          )}
+
+                          <TouchableOpacity
+                            style={{
+                              flex: 1.4,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 6,
+                              backgroundColor: '#059669',
+                              paddingVertical: 8,
+                              borderRadius: 8,
+                            }}
+                            onPress={handleCompleteShoreHandoff}
+                          >
+                            <Ionicons name="checkmark-done" size={16} color="#FFFFFF" />
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>Đã Lên Xe Đón</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+
+                    {shoreHandoffData && shoreHandoffData.status === 'REQUESTED' && (
+                      <View
+                        style={{
+                          backgroundColor: '#FFFBEB',
+                          borderWidth: 1.5,
+                          borderColor: '#F59E0B',
+                          borderRadius: 12,
+                          padding: 12,
+                          gap: 6,
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Ionicons name="flash" size={18} color="#D97706" />
+                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#92400E', textTransform: 'uppercase' }}>
+                              Đang Chờ Xe Đón Bờ
+                            </Text>
+                          </View>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#B45309', backgroundColor: '#FDE68A', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                            ĐÃ BÁO BAN CHỈ HUY
+                          </Text>
+                        </View>
+
+                        <Text style={{ fontSize: 12.5, color: '#374151' }}>
+                          Cần: <Text style={{ fontWeight: '700' }}>{shoreHandoffData.vehicleTypeNeeded === 'AMBULANCE' ? '01 Xe Cứu Thương' : '01 Xe Tải'}</Text> cho {shoreHandoffData.peopleCount} nạn nhân
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#4B5563' }}>
+                          Bến đón: <Text style={{ fontWeight: '700', color: '#B45309' }}>{shoreHandoffData.landingPoint?.name}</Text>
+                        </Text>
+
+                        <TouchableOpacity
+                          style={{
+                            alignSelf: 'flex-start',
+                            marginTop: 4,
+                            paddingVertical: 6,
+                            paddingHorizontal: 10,
+                            backgroundColor: '#FFFFFF',
+                            borderWidth: 1,
+                            borderColor: '#F59E0B',
+                            borderRadius: 6,
+                          }}
+                          onPress={() => setShoreHandoffModalVisible(true)}
+                        >
+                          <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#D97706' }}>Chỉnh Sửa / Gửi Lại</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {/* Yêu cầu xe đón tại bờ (Nút nhỏ phụ ở trên dành cho ca cần xe chuyển tiếp) */}
+                    {(!shoreHandoffData || shoreHandoffData.status === 'NONE') && (
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          backgroundColor: '#FFF7ED',
+                          borderWidth: 1.5,
+                          borderColor: '#FDBA74',
+                          borderRadius: 12,
+                          paddingVertical: 10,
+                          paddingHorizontal: 12,
+                          marginBottom: 8,
+                        }}
+                        onPress={() => setShoreHandoffModalVisible(true)}
+                        activeOpacity={0.85}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                          <View
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 16,
+                              backgroundColor: '#FFEDD5',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <MaterialCommunityIcons name="car-emergency" size={18} color="#EA580C" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#9A3412' }}>
+                              Yêu Cầu Xe Đón Nạn Nhân Tại Bờ
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#C2410C' }}>
+                              Điều xe cấp cứu / xe tải đón tại mép nước (Tùy chọn)
+                            </Text>
+                          </View>
+                        </View>
+                        <Feather name="chevron-right" size={18} color="#EA580C" />
+                      </TouchableOpacity>
+                    )}
+
+                    {/* NÚT CHÍNH TO BẢN: HOÀN TẤT CỨU HỘ & BÁO CÁO (LUÔN GIỮ NGUYÊN) */}
+                    <TouchableOpacity
+                      style={[styles.grabBigGreenBtn, { backgroundColor: '#059669' }]}
+                      onPress={handleOpenCompleteModal}
+                      activeOpacity={0.88}
+                    >
+                      <Ionicons name="checkmark-done-circle" size={24} color="#FFFFFF" />
+                      <Text style={styles.grabBigBtnText}>HOÀN TẤT CỨU HỘ & BÁO CÁO</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
 
                 {missionState === 'COMPLETED' && (
@@ -1601,6 +2017,68 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             )}
           </View>
         </View>
+        </>
+        ) : (
+          <>
+            {/* ======================================================== */}
+            {/* OVERLAY CHỌN ĐIỂM HẸN XE ĐÓN BỜ TRỰC TIẾP TRÊN BẢN ĐỒ    */}
+            {/* ======================================================== */}
+            <View style={[styles.pickLandingTopBanner, { top: safeTop }]}>
+              <View style={styles.pickLandingTopIcon}>
+                <Text style={{ fontSize: 18 }}>⚓</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pickLandingTopTitle}>CHỌN ĐIỂM HẸN XE ĐÓN BỜ</Text>
+                <Text style={styles.pickLandingTopSubtitle}>
+                  Chạm bản đồ hoặc kéo ghim ⚓ đến vị trí xe có thể tiếp cận đón
+                </Text>
+              </View>
+            </View>
+
+            <View style={[styles.pickLandingBottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+              <View style={styles.pickLandingCoordRow}>
+                <Ionicons name="location-sharp" size={18} color="#EA580C" />
+                <Text style={styles.pickLandingCoordText}>
+                  Tọa độ đã ghim: {pickedTempCoords.lat.toFixed(5)}, {pickedTempCoords.lng.toFixed(5)}
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                <TouchableOpacity
+                  style={styles.pickLandingCancelBtn}
+                  onPress={() => {
+                    setIsPickingLandingLocation(false);
+                    setShoreHandoffModalVisible(true);
+                    if (webViewRef.current) {
+                      webViewRef.current.postMessage(JSON.stringify({ type: 'DISABLE_LANDING_PICKER', keepVisible: false }));
+                    }
+                  }}
+                >
+                  <Text style={styles.pickLandingCancelText}>Hủy bỏ</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.pickLandingConfirmBtn}
+                  onPress={async () => {
+                    setLandingCoords(pickedTempCoords);
+                    setIsPickingLandingLocation(false);
+                    setShoreHandoffModalVisible(true);
+                    setIsFetchingAddress(true);
+                    const addr = await fetchAddressFromCoords(pickedTempCoords.lat, pickedTempCoords.lng);
+                    setLandingAddress(addr);
+                    setIsFetchingAddress(false);
+                    if (webViewRef.current) {
+                      webViewRef.current.postMessage(JSON.stringify({ type: 'DISABLE_LANDING_PICKER', keepVisible: true }));
+                    }
+                  }}
+                >
+                  <Ionicons name="checkmark-sharp" size={18} color="#FFFFFF" />
+                  <Text style={styles.pickLandingConfirmText}>Xác Nhận Điểm Này</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </>
+        )}
 
         {/* ======================================================== */}
         {/* MODAL: XÁC NHẬN ĐẾN HIỆN TRƯỜNG TÁC CHIẾN               */}
@@ -2072,6 +2550,232 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   disabled={actionLoading}
                 >
                   <Text style={styles.supplySubmitBtnText}>Gửi Lên Địa Phương</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ======================================================== */}
+        {/* MODAL: YÊU CẦU XE ĐÓN NẠN NHÂN TẠI BẾN CẬP BỜ (RELAY)     */}
+        {/* ======================================================== */}
+        <Modal visible={shoreHandoffModalVisible} transparent animationType="slide">
+          <View style={styles.modalBackdrop}>
+            <View style={[styles.modalCard, { maxHeight: SCREEN_HEIGHT * 0.88 }]}>
+              <View style={styles.modalHeaderRow}>
+                <MaterialCommunityIcons name="car-emergency" size={24} color="#EA580C" />
+                <Text style={styles.modalTitle}>Yêu Cầu Xe Đón Tại Bờ</Text>
+                <TouchableOpacity onPress={() => setShoreHandoffModalVisible(false)}>
+                  <Feather name="x" size={20} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.modalDesc}>
+                Ca-nô đưa người ra mép ngập. Yêu cầu Ban Chỉ Huy điều động xe đường bộ đón nạn nhân đưa đến Bệnh viện hoặc Khu an toàn:
+              </Text>
+
+              <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+                {/* 1. Chọn / Nhập Bến Cập Bờ */}
+                <Text style={[styles.supplyInputLabel, { marginBottom: 6 }]}>1. Vị trí bến cập bờ đón nạn nhân (Mép ngập):</Text>
+
+                {/* Ô nhập địa chỉ tự do */}
+                <View style={{ marginBottom: 10 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 4 }}>
+                    Tên bến / Địa chỉ đón nạn nhân:
+                  </Text>
+                  <TextInput
+                    style={[styles.supplyNoteInput, { minHeight: 46, paddingVertical: 10 }]}
+                    placeholder="Nhập tên bến / điểm hẹn xe đón (Ví dụ: Chân cầu, mép ngập đường...)"
+                    placeholderTextColor="#94A3B8"
+                    value={landingAddress}
+                    onChangeText={setLandingAddress}
+                  />
+                </View>
+
+                {/* 2 nút thao tác vị trí: Chọn trên bản đồ + Lấy GPS hiện tại */}
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      paddingVertical: 10,
+                      paddingHorizontal: 8,
+                      backgroundColor: '#FFF7ED',
+                      borderWidth: 1.5,
+                      borderColor: '#EA580C',
+                      borderRadius: 8,
+                    }}
+                    onPress={handleStartPickOnMap}
+                  >
+                    <Ionicons name="map" size={17} color="#EA580C" />
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#EA580C' }}>
+                      Chọn Trên Bản Đồ
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      paddingVertical: 10,
+                      paddingHorizontal: 8,
+                      backgroundColor: '#EFF6FF',
+                      borderWidth: 1.5,
+                      borderColor: '#0284C7',
+                      borderRadius: 8,
+                    }}
+                    onPress={handleUseCurrentGps}
+                    disabled={isFetchingAddress}
+                  >
+                    {isFetchingAddress ? (
+                      <ActivityIndicator size="small" color="#0284C7" />
+                    ) : (
+                      <MaterialCommunityIcons name="crosshairs-gps" size={18} color="#0284C7" />
+                    )}
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#0284C7' }}>
+                      Lấy GPS Hiện Tại
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Card hiển thị tọa độ GPS xác thực */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    backgroundColor: '#F8FAFC',
+                    borderWidth: 1,
+                    borderColor: '#E2E8F0',
+                    borderRadius: 8,
+                    padding: 10,
+                    marginBottom: 14,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 14,
+                      backgroundColor: '#FFEDD5',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ fontSize: 14 }}>⚓</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11.5, color: '#64748B' }}>Tọa độ GPS điểm hẹn xe đón:</Text>
+                    <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#0F172A' }}>
+                      {landingCoords.lat.toFixed(5)}, {landingCoords.lng.toFixed(5)}
+                    </Text>
+                  </View>
+                  <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+                </View>
+
+                {/* 2. Loại Xe Cần Đón */}
+                <Text style={[styles.supplyInputLabel, { marginBottom: 6 }]}>2. Loại phương tiện đường bộ cần đón:</Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      padding: 10,
+                      borderRadius: 10,
+                      borderWidth: selectedRelayVehicleType === 'AMBULANCE' ? 2 : 1,
+                      borderColor: selectedRelayVehicleType === 'AMBULANCE' ? '#DC2626' : '#E2E8F0',
+                      backgroundColor: selectedRelayVehicleType === 'AMBULANCE' ? '#FEF2F2' : '#F8FAFC',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                    onPress={() => setSelectedRelayVehicleType('AMBULANCE')}
+                  >
+                    <Ionicons name="medical" size={20} color={selectedRelayVehicleType === 'AMBULANCE' ? '#DC2626' : '#64748B'} />
+                    <Text style={{ fontSize: 12.5, fontWeight: '800', color: selectedRelayVehicleType === 'AMBULANCE' ? '#DC2626' : '#334155', textAlign: 'center' }}>
+                      Xe Cứu Thương
+                    </Text>
+                    <Text style={{ fontSize: 10.5, color: '#64748B', textAlign: 'center' }}>
+                      Cấp cứu y tế / Bị thương
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      flex: 1,
+                      padding: 10,
+                      borderRadius: 10,
+                      borderWidth: selectedRelayVehicleType === 'TRUCK' ? 2 : 1,
+                      borderColor: selectedRelayVehicleType === 'TRUCK' ? '#0284C7' : '#E2E8F0',
+                      backgroundColor: selectedRelayVehicleType === 'TRUCK' ? '#F0F9FF' : '#F8FAFC',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                    onPress={() => setSelectedRelayVehicleType('TRUCK')}
+                  >
+                    <MaterialCommunityIcons name="truck" size={22} color={selectedRelayVehicleType === 'TRUCK' ? '#0284C7' : '#64748B'} />
+                    <Text style={{ fontSize: 12.5, fontWeight: '800', color: selectedRelayVehicleType === 'TRUCK' ? '#0284C7' : '#334155', textAlign: 'center' }}>
+                      Xe Tải / Bán Tải
+                    </Text>
+                    <Text style={{ fontSize: 10.5, color: '#64748B', textAlign: 'center' }}>
+                      Chở dân về khu sơ tán
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* 3. Số người cần chuyển tiếp */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <Text style={styles.supplyInputLabel}>3. Số lượng nạn nhân bàn giao:</Text>
+                  <View style={styles.qtyControlRow}>
+                    <TouchableOpacity
+                      style={styles.qtyBtn}
+                      onPress={() => setRelayVictimCount((prev) => Math.max(1, prev - 1))}
+                    >
+                      <Feather name="minus" size={14} color="#475569" />
+                    </TouchableOpacity>
+                    <Text style={[styles.qtyValueText, { fontWeight: '900', color: '#EA580C', fontSize: 16 }]}>
+                      {relayVictimCount}
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.qtyBtn, styles.qtyBtnPlus]}
+                      onPress={() => setRelayVictimCount((prev) => prev + 1)}
+                    >
+                      <Feather name="plus" size={14} color="#0284C7" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* 4. Ghi chú tình trạng nạn nhân */}
+                <Text style={styles.supplyInputLabel}>4. Tình trạng sức khỏe & Ghi chú cho tài xế:</Text>
+                <TextInput
+                  style={[styles.supplyNoteInput, { minHeight: 60 }]}
+                  placeholder="Ghi chú: Người già lạnh run, 1 bé sơ sinh cần bình ủ ấm..."
+                  placeholderTextColor="#94A3B8"
+                  value={relayNotes}
+                  onChangeText={setRelayNotes}
+                  multiline
+                />
+              </ScrollView>
+
+              {/* Action buttons */}
+              <View style={styles.modalActionButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setShoreHandoffModalVisible(false)}
+                >
+                  <Text style={styles.modalCancelBtnText}>Quay lại</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.supplySubmitBtn, { backgroundColor: '#EA580C' }]}
+                  onPress={handleSendShoreHandoffRequest}
+                  disabled={actionLoading}
+                >
+                  <Text style={styles.supplySubmitBtnText}>⚡ Gửi Yêu Cầu Đón</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -3848,5 +4552,108 @@ const styles = StyleSheet.create({
   zoomedImg: {
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT * 0.8,
+  },
+
+  pickLandingTopBanner: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    zIndex: 999,
+    backgroundColor: 'rgba(15, 23, 42, 0.94)',
+    borderRadius: 14,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  pickLandingTopIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#EA580C',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickLandingTopTitle: {
+    fontSize: 12.5,
+    fontWeight: '900',
+    color: '#FDBA74',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  pickLandingTopSubtitle: {
+    fontSize: 11.5,
+    color: '#E2E8F0',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  pickLandingBottomBar: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 20,
+    zIndex: 999,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 10,
+    borderWidth: 1.5,
+    borderColor: '#FDBA74',
+  },
+  pickLandingCoordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  pickLandingCoordText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#0F172A',
+    flex: 1,
+  },
+  pickLandingCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickLandingCancelText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  pickLandingConfirmBtn: {
+    flex: 1.6,
+    flexDirection: 'row',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#EA580C',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#EA580C',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  pickLandingConfirmText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
 });

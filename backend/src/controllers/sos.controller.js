@@ -190,6 +190,60 @@ const getSosFiles = async (req, res, next) => {
   }
 };
 
+const requestShoreHandoff = async (req, res, next) => {
+  try {
+    const updatedSos = await sosService.requestShoreHandoff(req.params.id, req.body, req.user);
+    emitSosUpdated(updatedSos);
+    const io = require('../socket').getIO();
+    if (io) {
+      io.emit('sos:shore_handoff_requested', {
+        sosId: updatedSos._id,
+        sosCode: updatedSos.sosCode,
+        shoreHandoff: updatedSos.shoreHandoff,
+      });
+    }
+    res.status(200).json({ success: true, data: updatedSos });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const assignShoreHandoff = async (req, res, next) => {
+  try {
+    const updatedSos = await sosService.assignShoreHandoff(req.params.id, req.body, req.user);
+    emitSosUpdated(updatedSos);
+    const io = require('../socket').getIO();
+    if (io) {
+      io.emit('sos:shore_handoff_assigned', {
+        sosId: updatedSos._id,
+        sosCode: updatedSos.sosCode,
+        shoreHandoff: updatedSos.shoreHandoff,
+      });
+    }
+    res.status(200).json({ success: true, data: updatedSos });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const completeShoreHandoff = async (req, res, next) => {
+  try {
+    const updatedSos = await sosService.completeShoreHandoff(req.params.id, req.user);
+    emitSosUpdated(updatedSos);
+    const io = require('../socket').getIO();
+    if (io) {
+      io.emit('sos:shore_handoff_completed', {
+        sosId: updatedSos._id,
+        sosCode: updatedSos.sosCode,
+        shoreHandoff: updatedSos.shoreHandoff,
+      });
+    }
+    res.status(200).json({ success: true, data: updatedSos });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createSos,
   getSosRequests,
@@ -199,5 +253,8 @@ module.exports = {
   completeSos,
   getSosHistory,
   verifySos,
-  getSosFiles
+  getSosFiles,
+  requestShoreHandoff,
+  assignShoreHandoff,
+  completeShoreHandoff,
 };

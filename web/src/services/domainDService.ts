@@ -66,32 +66,10 @@ class DomainDService {
   constructor() {
     this.areas = this.load(STORAGE_AREAS, INITIAL_AREAS);
     this.authorities = this.load(STORAGE_AUTHORITIES, INITIAL_AUTHORITIES);
-    const loadedSos = this.load(STORAGE_SOS, INITIAL_SOS_REQUESTS);
-    // Sanitize any invalid/mock SOS requests (such as 8924, 8927, 8938)
-    this.sosRequests = loadedSos.filter(
-      (s) =>
-        !s.id?.includes('8924') &&
-        !s.id?.includes('8927') &&
-        !s.sosCode?.includes('8924') &&
-        !s.sosCode?.includes('8927') &&
-        !s.sosCode?.includes('8938') &&
-        !s.locationName?.includes('Nam Kỳ Khởi Nghĩa')
-    );
-    // Đảm bảo các ca SOS khởi tạo mới (như Phường Hòa Xuân) được merge vào nếu localStorage chưa có
-    const existingIds = new Set(this.sosRequests.map((s) => s.id));
-    let hasNew = false;
-    for (const initSos of INITIAL_SOS_REQUESTS) {
-      if (!existingIds.has(initSos.id)) {
-        this.sosRequests.push(initSos);
-        hasNew = true;
-      }
-    }
-    if (this.sosRequests.length !== loadedSos.length || hasNew) {
-      this.save(STORAGE_SOS, this.sosRequests);
-    }
+    this.sosRequests = [];
     this.rescueTeams = INITIAL_RESCUE_TEAMS;
     this.vehicles = INITIAL_VEHICLES;
-    this.assignments = this.load(STORAGE_ASSIGNMENTS, INITIAL_ASSIGNMENTS);
+    this.assignments = {};
     this.officers = SAMPLE_OFFICERS;
     this.activeOfficerId = this.load(STORAGE_ACTIVE_OFFICER, SAMPLE_OFFICERS[0].id);
   }
@@ -333,8 +311,8 @@ class DomainDService {
     const rescuerLoc = {
       lat: sos.coordinates.lat + 0.0045,
       lng: sos.coordinates.lng + 0.0035,
-      svgX: Math.max(100, Math.min(750, sos.coordinates.svgX + 40)),
-      svgY: Math.max(80, Math.min(500, sos.coordinates.svgY - 40)),
+      svgX: Math.max(100, Math.min(750, (sos.coordinates.svgX ?? 0) + 40)),
+      svgY: Math.max(80, Math.min(500, (sos.coordinates.svgY ?? 0) - 40)),
     };
 
     const assignment: SosAssignment = {
@@ -580,9 +558,14 @@ class DomainDService {
     }
 
     const cfg = jurKey ? JURISDICTION_CONFIGS[jurKey] : null;
-    const finalAreaId = userAreaId || cfg?.areaId || (userAreaName ? `area-${slugifyVietnamese(userAreaName)}` : 'area-default');
-    const finalAreaName = userAreaName || cfg?.name || user.authority?.department || 'Địa Bàn Phụ Trách';
-    const finalDistrictName = userDistrict || cfg?.district || '';
+    const rawAreaStr = `${areaName} ${userAreaName || ''} ${userDistrict || ''}`.toLowerCase();
+    const isNhsOfficer = rawAreaStr.includes('ngũ hành sơn') || rawAreaStr.includes('mỹ an') || rawAreaStr.includes('khuê mỹ');
+    const isLcOfficer = rawAreaStr.includes('liên chiểu') || rawAreaStr.includes('hòa khánh');
+
+    const defaultAreaId = isNhsOfficer ? 'area-nhs' : isLcOfficer ? 'area-lc' : (userAreaName ? `area-${slugifyVietnamese(userAreaName)}` : 'area-default');
+    const finalAreaId = userAreaId || (isNhsOfficer ? 'area-nhs' : (cfg?.areaId || defaultAreaId));
+    const finalAreaName = userAreaName || (isNhsOfficer ? 'Quận Ngũ Hành Sơn' : cfg?.name || user.authority?.department || 'Địa Bàn Phụ Trách');
+    const finalDistrictName = userDistrict || (isNhsOfficer ? 'Quận Ngũ Hành Sơn' : cfg?.district || '');
 
     // Check if matching officer already exists
     const matched = this.officers.find(
@@ -701,11 +684,6 @@ class DomainDService {
       }
     } catch (err) {
       console.warn('Lỗi load boundary cho cán bộ:', err);
-    }
-
-    // Fallback centroid cho Hòa Cường nếu chưa có boundary
-    if (isDanang && (officer.jurisdictionAreaName?.toLowerCase().includes('hòa cường') || officer.jurisdictionAreaId === 'area-htd')) {
-      GEOAPIFY_CENTROIDS[officer.jurisdictionAreaId] = [108.2175, 16.0416];
     }
 
     return area;
