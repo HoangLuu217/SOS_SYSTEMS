@@ -34,6 +34,10 @@ const errorHandler = (err, req, res, next) => {
     message = 'Mã xác thực đã hết hạn. Vui lòng đăng nhập lại!';
   }
 
+  if (statusCode >= 500) {
+    console.error(`[API ${statusCode}] ${req.method} ${req.originalUrl}:`, err.stack || err.message);
+  }
+
   return res.status(statusCode).json({
     success: false,
     message,

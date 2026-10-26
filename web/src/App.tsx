@@ -98,8 +98,17 @@ function MainRouter() {
       setActiveNavKey(parsed.navKey);
     };
 
+    const handleProfileUpdated = (e: any) => {
+      const updatedUser = e?.detail || getAuthorizedUser();
+      if (updatedUser) {
+        setAuthUser(updatedUser);
+        domainDService.syncLoggedInUser(updatedUser);
+      }
+    };
+
     window.addEventListener('popstate', handlePopState);
     window.addEventListener('storage', checkRouteAccess);
+    window.addEventListener('sos_user_profile_updated', handleProfileUpdated);
 
     // Initial check: Nếu đang ở luồng reset mật khẩu từ email thì không auto-redirect vào dashboard
     if (checkIsResetPasswordFlow()) {
@@ -128,6 +137,7 @@ function MainRouter() {
     return () => {
       window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('storage', checkRouteAccess);
+      window.removeEventListener('sos_user_profile_updated', handleProfileUpdated);
     };
   }, [checkRouteAccess]);
 

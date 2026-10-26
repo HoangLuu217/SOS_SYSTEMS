@@ -15,7 +15,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { PROFILE_THEME } from './theme';
 import { backendApi, NotificationItem } from '@/api';
-import { formatRelativeTimeVi } from '@/utils';
+import {
+  formatRelativeTimeVi,
+  classifyNotification,
+  NOTIFICATION_CATEGORIES,
+  NotificationFilterKey,
+} from '@/utils';
+import { useNotifications } from '@/context/NotificationContext';
 
 interface NotificationsScreenProps {
   onBack?: () => void;
@@ -85,9 +91,18 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
   onNavigateToTab,
   onNavigateToProfile,
 }) => {
+  const {
+    notifications: realtimeNotifications,
+    refreshNotifications,
+    markAsRead: markContextNotificationAsRead,
+    markAllAsRead: markContextNotificationsAsRead,
+    settings,
+    updateSetting,
+  } = useNotifications();
   // Trạng thái danh sách thông báo
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_RESCUER_NOTIFICATIONS);
   const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<NotificationFilterKey>('all');
 
   // Quản lý 4 trạng thái giao diện: Populated, Empty, Loading, Error
   const [screenState, setScreenState] = useState<ScreenStateMode>('populated');
@@ -100,15 +115,12 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
   const [notifToDelete, setNotifToDelete] = useState<NotificationItem | null>(null);
 
-  // Tải dữ liệu từ backend hoặc fallback danh sách cứu hộ thực tế
+  // Đồng bộ danh sách từ nguồn realtime dùng chung trong app.
   const loadNotifications = async (isPull = false) => {
     if (isPull) setRefreshing(true);
 
     try {
-      const res = await backendApi.getNotifications();
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        setNotifications(res.data);
-      }
+      await refreshNotifications();
     } catch {
       // Giữ nguyên dữ liệu cứu hộ mẫu
     } finally {
@@ -120,6 +132,12 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     loadNotifications();
   }, []);
 
+  useEffect(() => {
+    if (realtimeNotifications.length > 0) {
+      setNotifications(realtimeNotifications);
+    }
+  }, [realtimeNotifications]);
+
   const onRefresh = () => {
     loadNotifications(true);
   };
@@ -127,11 +145,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
   // Đọc tất cả thông báo
   const handleMarkAllAsRead = async () => {
     setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
-    try {
-      await backendApi.markAllNotificationsAsRead();
-    } catch {
-      // Ignored
-    }
+    await markContextNotificationsAsRead();
   };
 
   // Đánh dấu 1 thông báo là đã đọc
@@ -144,11 +158,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     }
     setActionMenuVisible(false);
 
-    try {
-      await backendApi.markNotificationAsRead(item._id);
-    } catch {
-      // Ignored
-    }
+    await markContextNotificationAsRead(item._id);
   };
 
   // Mở menu 3 chấm
@@ -202,19 +212,32 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     }
   };
 
-  // Tính số lượng chưa đọc động
+  // Tính số lượng chưa đọc động (chỉ tính các nhóm người dùng đang BẬT)
   const unreadCount = useMemo(() => {
-    return notifications.filter((n) => !n.isRead).length;
-  }, [notifications]);
+    return notifications.filter(
+      (n) => !n.isRead && settings[classifyNotification(n)] !== false
+    ).length;
+  }, [notifications, settings]);
 
-  // Lọc theo tab
+  // Lọc theo tab & danh mục trong cài đặt
   const displayList = useMemo(() => {
     if (screenState === 'empty') return [];
-    if (activeTab === 'unread') {
-      return notifications.filter((n) => !n.isRead);
-    }
-    return notifications;
-  }, [notifications, activeTab, screenState]);
+    return notifications.filter((n) => {
+      const cat = classifyNotification(n);
+
+      if (selectedCategory !== 'all') {
+        if (cat !== selectedCategory) return false;
+      } else {
+        // Tab "Tất cả": chỉ hiển thị các nhóm thông báo đang BẬT trong Cài đặt
+        if (settings[cat] === false) return false;
+      }
+
+      if (activeTab === 'unread') {
+        return !n.isRead;
+      }
+      return true;
+    });
+  }, [notifications, activeTab, selectedCategory, screenState, settings]);
 
   // Biểu tượng loại thông báo cứu hộ
   const renderTypeIcon = (type: string) => {
@@ -235,6 +258,18 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
         return (
           <View style={[styles.typeIconBox, { backgroundColor: '#FEF2F2' }]}>
             <Feather name="alert-triangle" size={20} color={PROFILE_THEME.colors.primary} />
+          </View>
+        );
+      case 'HAZARD':
+        return (
+          <View style={[styles.typeIconBox, { backgroundColor: '#FFF7ED' }]}>
+            <Feather name="alert-triangle" size={20} color="#EA580C" />
+          </View>
+        );
+      case 'SAFE_LOCATION':
+        return (
+          <View style={[styles.typeIconBox, { backgroundColor: '#ECFDF5' }]}>
+            <Feather name="map-pin" size={20} color="#16A34A" />
           </View>
         );
       case 'SYSTEM':
@@ -286,70 +321,71 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
         )}
       </View>
 
-      {/* Trình chuyển đổi 4 trạng thái giao diện (Populated, Empty, Loading, Error) */}
-      <View style={styles.stateBarContainer}>
-        <Text style={styles.stateBarLabel}>Trạng thái xem:</Text>
-        <View style={styles.statePillsRow}>
-          <TouchableOpacity
-            style={[styles.statePill, screenState === 'populated' && styles.statePillActive]}
-            onPress={() => setScreenState('populated')}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                styles.statePillText,
-                screenState === 'populated' && styles.statePillTextActive,
-              ]}
-            >
-              Đầy đủ
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.statePill, screenState === 'empty' && styles.statePillActive]}
-            onPress={() => setScreenState('empty')}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                styles.statePillText,
-                screenState === 'empty' && styles.statePillTextActive,
-              ]}
-            >
-              Trống
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.statePill, screenState === 'loading' && styles.statePillActive]}
-            onPress={() => setScreenState('loading')}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                styles.statePillText,
-                screenState === 'loading' && styles.statePillTextActive,
-              ]}
-            >
-              Đang tải
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.statePill, screenState === 'error' && styles.statePillActive]}
-            onPress={() => setScreenState('error')}
-            activeOpacity={0.7}
-          >
-            <Text
-              style={[
-                styles.statePillText,
-                screenState === 'error' && styles.statePillTextActive,
-              ]}
-            >
-              Lỗi mạng
-            </Text>
-          </TouchableOpacity>
-        </View>
+      {/* Bộ lọc danh mục như trong Cài đặt thông báo */}
+      <View style={styles.categoryScrollWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryScrollContent}
+        >
+          {[
+            { key: 'all' as const, label: 'Tất cả', icon: 'layers' },
+            {
+              key: 'alert' as const,
+              label: NOTIFICATION_CATEGORIES.alert.shortLabel,
+              icon: 'alert-triangle',
+              color: NOTIFICATION_CATEGORIES.alert.color,
+            },
+            {
+              key: 'safeLocation' as const,
+              label: NOTIFICATION_CATEGORIES.safeLocation.shortLabel,
+              icon: 'shield',
+              color: NOTIFICATION_CATEGORIES.safeLocation.color,
+            },
+            {
+              key: 'systemNotification' as const,
+              label: NOTIFICATION_CATEGORIES.systemNotification.shortLabel,
+              icon: 'bell',
+              color: NOTIFICATION_CATEGORIES.systemNotification.color,
+            },
+            {
+              key: 'news' as const,
+              label: NOTIFICATION_CATEGORIES.news.shortLabel,
+              icon: 'file-text',
+              color: NOTIFICATION_CATEGORIES.news.color,
+            },
+          ].map((cat) => {
+            const isSel = selectedCategory === cat.key;
+            return (
+              <TouchableOpacity
+                key={cat.key}
+                style={[
+                  styles.categoryFilterChip,
+                  isSel && styles.categoryFilterChipActive,
+                  isSel && cat.color && { borderColor: cat.color },
+                ]}
+                onPress={() => setSelectedCategory(cat.key)}
+                activeOpacity={0.75}
+              >
+                <Feather
+                  name={cat.icon as any}
+                  size={13}
+                  color={isSel && cat.color ? cat.color : isSel ? '#0066FF' : '#64748B'}
+                  style={{ marginRight: 5 }}
+                />
+                <Text
+                  style={[
+                    styles.categoryFilterChipText,
+                    isSel && styles.categoryFilterChipTextActive,
+                    isSel && cat.color && { color: cat.color },
+                  ]}
+                >
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* Filter Tabs: Tất cả & Chưa đọc kèm số lượng động */}
@@ -480,6 +516,24 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
             />
           }
         >
+          {selectedCategory !== 'all' && settings[selectedCategory] === false && (
+            <View style={styles.categoryDisabledNotice}>
+              <View style={styles.categoryDisabledNoticeLeft}>
+                <Feather name="bell-off" size={15} color="#DC2626" />
+                <Text style={styles.categoryDisabledNoticeText}>
+                  Bạn đang tắt nhóm thông báo này trong Cài đặt thông báo.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.categoryReEnableBtn}
+                onPress={() => updateSetting(selectedCategory, true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.categoryReEnableBtnText}>Bật lại</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {displayList.map((item) => (
             <TouchableOpacity
               key={item._id}
@@ -815,45 +869,45 @@ const styles = StyleSheet.create({
     color: PROFILE_THEME.colors.primary,
   },
 
-  /* State Bar Switcher */
-  stateBarContainer: {
+  /* Category Filter Scroll Bar */
+  categoryScrollWrap: {
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  categoryScrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 4,
+    gap: 8,
   },
-  stateBarLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: PROFILE_THEME.colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-    marginBottom: 6,
-  },
-  statePillsRow: {
+  categoryFilterChip: {
     flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 10,
-    padding: 3,
-    gap: 4,
-  },
-  statePill: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
     paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  statePillActive: {
-    backgroundColor: PROFILE_THEME.colors.primary,
+  categoryFilterChipActive: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#0066FF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  statePillText: {
-    fontSize: 11.5,
+  categoryFilterChipText: {
+    fontSize: 12,
     fontWeight: '600',
-    color: PROFILE_THEME.colors.textSecondary,
+    color: '#64748B',
   },
-  statePillTextActive: {
-    color: '#FFFFFF',
+  categoryFilterChipTextActive: {
     fontWeight: '700',
+    color: '#0066FF',
   },
 
   /* Tabs */
@@ -1355,5 +1409,41 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  categoryDisabledNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+    gap: 8,
+  },
+  categoryDisabledNoticeLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  categoryDisabledNoticeText: {
+    fontSize: 12.5,
+    color: '#DC2626',
+    fontWeight: '500',
+    flex: 1,
+  },
+  categoryReEnableBtn: {
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  categoryReEnableBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

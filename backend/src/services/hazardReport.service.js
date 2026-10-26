@@ -1,14 +1,16 @@
 const mongoose = require('mongoose');
-const { HazardReport, AdministrativeArea, Alert } = require('../models');
+const { HazardReport, AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
 const eventBus = require('./eventBus');
+const { findAreaByCoordinates, checkPointInAuthorityJurisdiction } = require('../utils/geoUtils');
 
 class HazardReportService {
   /**
-   * Tạo đóng góp điểm nguy hiểm mới từ Citizen / Rescuer
-   * Mặc định luôn ở trạng thái 'PENDING' chờ Local Authority duyệt
+   * Tạo đóng góp điểm nguy hiểm mới từ Citizen / Rescuer / Local Authority
+   * Mặc định Citizen ở trạng thái 'PENDING' chờ Local Authority duyệt
+   * GPS tọa độ được dùng để tự động gán đúng khu vực hành chính quản lý
    */
-  async createHazardReport(data, userId, userRoles = []) {
+  async createHazardReport(data, userId, userRoles = [], creatorUser = null) {
     const {
       title,
       description,
@@ -42,20 +44,42 @@ class HazardReportService {
       throw new ApiError(400, 'Địa chỉ cụ thể (address) là bắt buộc');
     }
 
-    // Xác định khu vực hành chính (areaId)
-    let targetAreaId = areaId;
-    if (targetAreaId && !mongoose.Types.ObjectId.isValid(targetAreaId)) {
-      const codeCandidate = String(targetAreaId).replace(/^area-/i, '').toUpperCase();
-      const matchedArea = await AdministrativeArea.findOne({
-        $or: [
-          { code: targetAreaId },
-          { code: codeCandidate },
-        ],
-      });
-      if (matchedArea) {
-        targetAreaId = matchedArea._id;
-      } else {
-        targetAreaId = null;
+    // 1. Tự động xác định khu vực hành chính (areaId) chính xác thông qua tọa độ GPS
+    let targetAreaId = null;
+    const geoMatchedArea = await findAreaByCoordinates([lng, lat], AdministrativeArea);
+    if (geoMatchedArea) {
+      targetAreaId = geoMatchedArea._id;
+    }
+
+    // 2. Nếu GPS chưa rơi vào ranh giới cụ thể, fallback qua areaId gửi lên hoặc từ khóa địa chỉ
+    if (!targetAreaId && areaId) {
+      targetAreaId = areaId;
+      if (targetAreaId && !mongoose.Types.ObjectId.isValid(targetAreaId)) {
+        const cleanAreaId = String(targetAreaId).replace(/^PROV_/i, '').trim();
+        const codeCandidate = cleanAreaId.replace(/^area-/i, '').toUpperCase();
+        const matchedArea = await AdministrativeArea.findOne({
+          $or: [
+            { code: cleanAreaId },
+            { code: codeCandidate },
+            { name: new RegExp(cleanAreaId, 'i') },
+          ],
+        });
+        if (matchedArea) {
+          targetAreaId = matchedArea._id;
+        } else if (!cleanAreaId.startsWith('area-')) {
+          try {
+            const newArea = await AdministrativeArea.create({
+              name: cleanAreaId,
+              code: cleanAreaId.toUpperCase().replace(/^(TỈNH|THÀNH PHỐ|TP\.?)\s+/i, '').replace(/\s+/g, '_'),
+              type: 'PROVINCE',
+            });
+            targetAreaId = newArea._id;
+          } catch (_) {
+            targetAreaId = null;
+          }
+        } else {
+          targetAreaId = null;
+        }
       }
     }
 
@@ -70,7 +94,7 @@ class HazardReportService {
       if (matched) {
         targetAreaId = matched._id;
       } else {
-        const defaultArea = await AdministrativeArea.findOne({ code: 'DANANG' });
+        const defaultArea = (await AdministrativeArea.findOne({ code: 'DANANG' })) || (await AdministrativeArea.findOne());
         targetAreaId = defaultArea ? defaultArea._id : null;
       }
     }
@@ -86,6 +110,24 @@ class HazardReportService {
     }
 
     const isAuthority = userRoles.includes('LOCAL_AUTHORITY') || userRoles.includes('ADMIN');
+    const isLocalAuthorityOnly = userRoles.includes('LOCAL_AUTHORITY') && !userRoles.includes('ADMIN');
+
+    // Cán bộ chính quyền địa phương (LOCAL_AUTHORITY):
+    // Bắt buộc điểm nguy hiểm tạo mới phải có GPS nằm trong khu vực quản lý!
+    if (isLocalAuthorityOnly && creatorUser) {
+      const jurisdictionCheck = await checkPointInAuthorityJurisdiction(
+        { coordinates: [lng, lat], areaId: targetAreaId, address },
+        creatorUser,
+        AdministrativeArea
+      );
+      if (!jurisdictionCheck.allowed) {
+        throw new ApiError(
+          403,
+          `Bạn chỉ có quyền tạo điểm nguy hiểm có GPS trong khu vực quản lý của mình (${jurisdictionCheck.authAreaName || 'Địa bàn được phân công'}). Tọa độ GPS đã chọn nằm ngoài khu vực quản lý!`
+        );
+      }
+    }
+
     // Khi Cán bộ chính quyền (LOCAL_AUTHORITY) hoặc Quản trị viên (ADMIN) chủ động tạo điểm nguy hiểm:
     // Mặc định công bố trực tiếp 'APPROVED' (trừ khi chỉ định PENDING để lưu nháp)
     const finalStatus = isAuthority ? (data.status || 'APPROVED') : 'PENDING';
@@ -119,24 +161,6 @@ class HazardReportService {
       { path: 'reviewedBy', select: 'fullName phone email' },
       { path: 'areaId', select: 'name code type' },
     ]);
-
-    // Nếu điểm nguy hiểm được DUYỆT / CÔNG BỐ NGAY LẬP TỨC, tự động tạo 1 Alert tương ứng để hiển thị trên bản đồ tác chiến
-    if (isApproved && targetAreaId) {
-      try {
-        await Alert.create({
-          createdBy: userId,
-          areaId: targetAreaId,
-          title: `[Cảnh báo nguy hiểm] ${newReport.title}`,
-          content: `${newReport.description}. Địa chỉ: ${newReport.address}`,
-          type: ['FLOOD', 'LANDSLIDE'].includes(newReport.hazardType) ? newReport.hazardType : 'DANGEROUS_AREA',
-          severity: newReport.severity || 'HIGH',
-          isActive: true,
-          startTime: new Date(),
-        });
-      } catch (err) {
-        console.warn('Không thể tự động tạo Alert cho điểm nguy hiểm:', err.message);
-      }
-    }
 
     // Bắn sự kiện realtime cho Web và các bên liên quan
     eventBus.emit('hazard_event', { action: 'CREATED', data: populated });
@@ -254,86 +278,26 @@ class HazardReportService {
   }
 
   /**
-   * Kiểm tra quyền hạn duyệt/xóa điểm nguy hiểm theo địa bàn quản lý của cán bộ (Actor LOCAL_AUTHORITY)
+   * Kiểm tra quyền hạn duyệt/xóa điểm nguy hiểm theo địa bàn quản lý của cán bộ (Actor LOCAL_AUTHORITY / ADMIN)
+   * Sử dụng thuật toán GIS xác thực tọa độ GPS nằm trong ranh giới đa giác quản lý
    */
   async checkAuthorityJurisdiction(report, authorityUser) {
     if (!authorityUser) return false;
-    const userRoles = authorityUser.roles || [];
-
-    // 1. ADMIN có toàn quyền chỉ huy & phê duyệt trên mọi địa bàn
-    if (userRoles.includes('ADMIN')) return true;
-
-    // 2. Chỉ có LOCAL_AUTHORITY mới được duyệt điểm nguy hiểm
-    if (!userRoles.includes('LOCAL_AUTHORITY')) return false;
-
-    const deptStr = String(authorityUser.authority?.department || '').toLowerCase();
-    const posStr = String(authorityUser.authority?.position || '').toLowerCase();
-
-    // 3. Nếu là cán bộ Ban chỉ huy cấp Thành phố (Toàn TP Đà Nẵng)
-    if (
-      deptStr.includes('tp. đà nẵng') ||
-      deptStr.includes('thành phố đà nẵng') ||
-      posStr.includes('điều phối tác chiến') ||
-      posStr.includes('chỉ huy trưởng điều hành')
-    ) {
-      return true;
-    }
-
-    // 4. Tìm khu vực hành chính được phân công của cán bộ
-    let authArea = null;
-    if (authorityUser.authority?.areaId) {
-      authArea = await AdministrativeArea.findById(authorityUser.authority.areaId);
-    }
-
-    if (!authArea && deptStr) {
-      const allAreas = await AdministrativeArea.find({ status: 'ACTIVE' });
-      authArea = allAreas.find((a) => {
-        if (!a.name) return false;
-        const clean = a.name.toLowerCase().replace(/^(phường|quận|huyện|xã)\s+/i, '').trim();
-        return clean.length > 2 && (deptStr.includes(clean) || posStr.includes(clean));
-      });
-    }
-
-    const reportAddress = String(report.address || '').toLowerCase();
-    const reportDesc = String(report.description || '').toLowerCase();
-    const reportAreaId = report.areaId ? String(report.areaId._id || report.areaId) : null;
-
-    // 5. Kiểm tra trùng khớp ID khu vực trực tiếp
-    if (authArea && reportAreaId && String(authArea._id) === reportAreaId) {
-      return true;
-    }
-
-    // 6. Kiểm tra từ khóa địa bàn từ tên khu vực được gán
-    if (authArea && authArea.name) {
-      const areaKeyword = authArea.name.toLowerCase().replace(/^(phường|quận|huyện|xã)\s+/i, '').trim();
-      if (areaKeyword.length > 2 && (reportAddress.includes(areaKeyword) || reportDesc.includes(areaKeyword))) {
-        return true;
-      }
-    }
-
-    // 7. Kiểm tra từ khóa địa danh từ phòng ban cán bộ
-    const districtKeywords = [
-      'hải châu', 'hòa cường', 'thuận phước', 'thạch thang',
-      'cẩm lệ', 'hòa xuân',
-      'sơn trà', 'phước mỹ', 'an hải',
-      'ngũ hành sơn',
-      'thanh khê', 'an khê',
-      'liên chiểu', 'hòa khánh', 'hải vân',
-      'hòa vang', 'bà nà', 'hòa tiến',
-      'hoàng sa'
-    ];
-
-    for (const kw of districtKeywords) {
-      if (deptStr.includes(kw) && (reportAddress.includes(kw) || reportDesc.includes(kw))) {
-        return true;
-      }
-    }
-
-    return false;
+    const result = await checkPointInAuthorityJurisdiction(
+      {
+        coordinates: report?.location?.coordinates,
+        areaId: report?.areaId,
+        address: report?.address,
+      },
+      authorityUser,
+      AdministrativeArea
+    );
+    return result.allowed;
   }
 
   /**
    * Phê duyệt hoặc từ chối điểm nguy hiểm (Dành riêng cho LOCAL_AUTHORITY & ADMIN trong địa bàn quản lý)
+   * Đảm bảo điểm do người dân đóng góp có GPS đúng khu vực quản lý mới được duyệt
    */
   async reviewHazardReport(id, data, authorityUser) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -363,13 +327,22 @@ class HazardReportService {
       throw new ApiError(404, 'Không tìm thấy điểm nguy hiểm cần duyệt');
     }
 
-    // Kiểm tra thẩm quyền địa bàn: LOCAL_AUTHORITY chỉ được duyệt các điểm trong khu vực quản lý
-    const isAllowed = await this.checkAuthorityJurisdiction(report, authorityUser);
-    if (!isAllowed) {
-      const areaLabel = authorityUser?.authority?.department || 'Địa bàn được phân công';
+    // Kiểm tra thẩm quyền địa bàn: LOCAL_AUTHORITY chỉ được duyệt các điểm có GPS trong khu vực quản lý
+    const jurisdictionCheck = await checkPointInAuthorityJurisdiction(
+      {
+        coordinates: report.location?.coordinates,
+        areaId: report.areaId,
+        address: report.address,
+      },
+      authorityUser,
+      AdministrativeArea
+    );
+
+    if (!jurisdictionCheck.allowed) {
+      const areaLabel = jurisdictionCheck.authAreaName || authorityUser?.authority?.department || 'Địa bàn được phân công';
       throw new ApiError(
         403,
-        `Bạn chỉ có quyền phê duyệt các điểm nguy hiểm thuộc khu vực quản lý của mình (${areaLabel}). Điểm nguy hiểm này thuộc địa bàn khác!`
+        `Bạn chỉ có quyền phê duyệt các đóng góp có GPS nằm trong khu vực quản lý của mình (${areaLabel}). Điểm nguy hiểm này nằm ngoài địa bàn!`
       );
     }
 
@@ -399,6 +372,8 @@ class HazardReportService {
     if (description !== undefined) {
       report.description = String(description).trim();
     }
+
+    // Nếu cán bộ cập nhật tọa độ GPS, kiểm tra tọa độ mới có nằm trong khu vực quản lý không
     if (
       location &&
       Array.isArray(location.coordinates) &&
@@ -406,31 +381,31 @@ class HazardReportService {
       !isNaN(location.coordinates[0]) &&
       !isNaN(location.coordinates[1])
     ) {
+      const newCoords = [Number(location.coordinates[0]), Number(location.coordinates[1])];
+      const updateCheck = await checkPointInAuthorityJurisdiction(
+        { coordinates: newCoords, areaId: report.areaId, address: report.address },
+        authorityUser,
+        AdministrativeArea
+      );
+      if (!updateCheck.allowed) {
+        throw new ApiError(
+          403,
+          `Tọa độ GPS mới cập nhật nằm ngoài khu vực quản lý của bạn (${updateCheck.authAreaName || 'Địa bàn phân công'})!`
+        );
+      }
       report.location = {
         type: 'Point',
-        coordinates: [Number(location.coordinates[0]), Number(location.coordinates[1])],
+        coordinates: newCoords,
       };
+
+      // Tự động đồng bộ lại areaId theo tọa độ GPS mới nếu tìm thấy
+      const newMatchedArea = await findAreaByCoordinates(newCoords, AdministrativeArea);
+      if (newMatchedArea) {
+        report.areaId = newMatchedArea._id;
+      }
     }
 
     await report.save();
-
-    // Nếu điểm nguy hiểm được DUYỆT (APPROVED), tự động tạo 1 Alert tương ứng để hiển thị trên bản đồ cứu nạn
-    if (status === 'APPROVED' && report.areaId) {
-      try {
-        await Alert.create({
-          createdBy: authorityId,
-          areaId: report.areaId,
-          title: `[Cảnh báo nguy hiểm] ${report.title}`,
-          content: `${report.description}. Địa chỉ: ${report.address}`,
-          type: ['FLOOD', 'LANDSLIDE'].includes(report.hazardType) ? report.hazardType : 'DANGEROUS_AREA',
-          severity: report.severity || 'HIGH',
-          isActive: true,
-          startTime: new Date(),
-        });
-      } catch (err) {
-        console.warn('Không thể đồng bộ sang bảng alerts:', err.message);
-      }
-    }
 
     const populated = await report.populate([
       { path: 'reportedBy', select: 'fullName phone email roles avatarUrl' },

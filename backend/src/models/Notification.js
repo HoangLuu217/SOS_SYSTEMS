@@ -49,6 +49,21 @@ const notificationSchema = new mongoose.Schema(
       enum: ['LOW', 'NORMAL', 'MEDIUM', 'HIGH', 'CRITICAL'],
       default: 'NORMAL',
     },
+    imageUrl: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    articleUrl: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    sourceName: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     data: {
       type: mongoose.Schema.Types.Mixed,
       default: {},

@@ -246,6 +246,10 @@ export class ApiClient {
     }
   }
 
+  async getAccessToken(): Promise<string | null> {
+    return AsyncStorage.getItem(ENV.STORAGE_KEYS.ACCESS_TOKEN);
+  }
+
   async clearStorage(): Promise<void> {
     await AsyncStorage.multiRemove([
       ENV.STORAGE_KEYS.ACCESS_TOKEN,

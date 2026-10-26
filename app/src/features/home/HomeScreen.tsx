@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
+  AppState,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
@@ -12,6 +13,8 @@ import {
   ImageBackground,
   ActivityIndicator,
   Modal,
+  Linking,
+  RefreshControl,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
@@ -41,6 +44,8 @@ interface NewsItem {
   snippet: string;
   imageUrl: string;
   content?: string;
+  sourceUrl?: string;
+  sourceName?: string;
 }
 
 interface WeatherState {
@@ -73,6 +78,87 @@ const WEATHER_ICONS = {
   muagiong: require('../../../assets/thoitiet/muagiong.png'),
   nang: require('../../../assets/thoitiet/nang.png'),
   tuyetroi: require('../../../assets/thoitiet/tuyetroi.png'),
+};
+
+const WEATHER_CATEGORY_LABELS: Record<string, string> = {
+  du_bao: 'DỰ BÁO',
+  canh_bao: 'CẢNH BÁO',
+  bao_ap_thap: 'BÃO & ÁP THẤP',
+  mua_lu: 'MƯA LŨ',
+  nang_nong: 'NẮNG NÓNG',
+  ret_dam: 'RÉT ĐẬM',
+  khong_khi: 'KHÔNG KHÍ',
+  sat_lo: 'SẠT LỞ',
+  bao: 'BÃO LỚN',
+  thoi_tiet: 'THỜI TIẾT',
+  HEAVY_RAIN: 'MƯA LỚN',
+  STORM: 'BÃO ÁP THẤP',
+  THUNDERSTORM: 'DÔNG SÉT',
+  FLASH_FLOOD: 'LŨ QUÉT',
+  HIGH_TIDE: 'TRIỀU CƯỜNG',
+  GENERAL: 'THỜI TIẾT',
+  khac: 'TIN TỨC',
+};
+
+function formatNewsCardDate(dateStr?: string | Date | null): string {
+  if (!dateStr) return 'Hôm nay';
+  try {
+    const d = typeof dateStr === 'string' ? new Date(dateStr) : dateStr;
+    if (isNaN(d.getTime())) return 'Hôm nay';
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${day}/${month} ${hours}:${minutes}`;
+  } catch {
+    return 'Hôm nay';
+  }
+}
+
+/**
+ * Component hiển thị ảnh thumbnail bài viết, tự động chuyển về fallback đẹp mắt khi link lỗi
+ */
+const NewsThumbnailImage: React.FC<{
+  imageUrl?: string;
+  tag?: string;
+}> = ({ imageUrl, tag }) => {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [imageUrl]);
+
+  if (!imageUrl || hasError) {
+    const isAlert =
+      tag?.includes('CẢNH BÁO') ||
+      tag?.includes('BÃO') ||
+      tag?.includes('LŨ') ||
+      tag?.includes('SẠT LỞ');
+    return (
+      <View style={[styles.newsThumbnailPlaceholder, isAlert ? styles.newsThumbnailAlertBg : null]}>
+        <Ionicons
+          name={isAlert ? 'warning' : 'cloudy'}
+          size={24}
+          color={isAlert ? '#DC2626' : '#0284C7'}
+        />
+        <Text
+          style={[styles.newsThumbnailPlaceholderText, isAlert ? styles.newsThumbnailAlertText : null]}
+          numberOfLines={1}
+        >
+          {tag || 'THỜI TIẾT'}
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <Image
+      source={{ uri: imageUrl }}
+      style={styles.newsThumbnail}
+      resizeMode="cover"
+      onError={() => setHasError(true)}
+    />
+  );
 };
 
 const FEATURED_NEWS: NewsItem[] = [
@@ -237,91 +323,169 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   });
   const [isWeatherLoading, setIsWeatherLoading] = useState(false);
 
+  // Danh sách tin tức thời tiết thật đã kích hoạt qua thông báo lấy từ CSDL (tối đa 3 bài)
+  const [featuredNews, setFeaturedNews] = useState<NewsItem[]>([]);
+  const [loadingNews, setLoadingNews] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+
+  // Gọi API lấy tối đa 3 bài tin tức thời tiết thật từ MongoDB (chỉ lấy bài đã kích hoạt qua thông báo)
+  const fetchFeaturedWeatherNews = useCallback(async () => {
+    try {
+      setLoadingNews(true);
+      const res = await backendApi.getWeatherArticles({ limit: 3, status: 'activated' });
+      if (res.success && Array.isArray(res.data)) {
+        if (res.data.length > 0) {
+          const mapped: NewsItem[] = res.data.slice(0, 3).map((article: any) => {
+            const rawCat = article.category || article.weatherType || 'khac';
+            const tag = WEATHER_CATEGORY_LABELS[rawCat] || 'THỜI TIẾT';
+            const time = formatNewsCardDate(
+              article.published_at || article.createdAt || article.created_at
+            );
+            const snippet =
+              article.summary?.trim() ||
+              (article.content ? article.content.trim().slice(0, 110) + '...' : '');
+            const img = (article.imageUrl || article.image_url || '').trim();
+
+            return {
+              id: String(article._id || article.id),
+              tag,
+              time,
+              title: article.title || '',
+              snippet,
+              imageUrl: img,
+              content: article.content || article.summary || '',
+              sourceUrl: article.source_url || article.articleUrl || '',
+              sourceName: article.source_name || article.sourceName || '',
+            };
+          });
+          setFeaturedNews(mapped);
+        } else {
+          setFeaturedNews([]);
+        }
+      }
+    } catch (err) {
+      console.warn('Lỗi khi tải tin tức thời tiết nổi bật từ CSDL:', err);
+    } finally {
+      setLoadingNews(false);
+    }
+  }, []);
+
   // Tự động lấy tọa độ thực tế và gọi API thời tiết thật
+  const fetchRealWeather = useCallback(async () => {
+    try {
+      setIsWeatherLoading(true);
+
+      let lat = 16.0544; // Tọa độ mặc định: Đà Nẵng
+      let lon = 108.2022;
+      let detectedCity = 'Đà Nẵng';
+
+      // 1. Lấy vị trí GPS của người dùng
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        lat = loc.coords.latitude;
+        lon = loc.coords.longitude;
+        // Lưu GPS foreground mới nhất
+        void backendApi.updateCurrentLocation(lat, lon);
+
+        // Dịch ngược tọa độ GPS thành tên Tỉnh / Thành phố
+        const geoList = await Location.reverseGeocodeAsync({
+          latitude: lat,
+          longitude: lon,
+        });
+        if (geoList && geoList.length > 0) {
+          const place = geoList[0];
+          detectedCity =
+            place.city ||
+            place.subregion ||
+            place.region ||
+            place.district ||
+            'Vị trí hiện tại';
+        }
+      }
+
+      // 2. Gọi Open-Meteo API lấy dữ liệu thời tiết thời gian thực
+      const res = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,is_day,precipitation,weather_code&hourly=precipitation_probability&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto`
+      );
+      const json = await res.json();
+
+      if (json && json.current) {
+        const code = json.current.weather_code ?? 0;
+        const currentHour = new Date().getHours();
+        const isDay = json.current.is_day ?? (currentHour >= 6 && currentHour < 18 ? 1 : 0);
+        const weatherInfo = mapWmoToWeather(code, isDay);
+
+        const curTemp = Math.round(json.current.temperature_2m);
+        const minTemp = json.daily?.temperature_2m_min?.[0]
+          ? Math.round(json.daily.temperature_2m_min[0])
+          : curTemp - 2;
+        const maxTemp = json.daily?.temperature_2m_max?.[0]
+          ? Math.round(json.daily.temperature_2m_max[0])
+          : curTemp + 2;
+
+        const rainProb =
+          json.hourly?.precipitation_probability?.[currentHour] ??
+          json.daily?.precipitation_probability_max?.[0] ??
+          Math.min(100, Math.round((json.current.precipitation || 0) * 20));
+
+        setWeatherData({
+          city: detectedCity,
+          temp: `${curTemp}°C`,
+          tempRange: `${minTemp}° - ${maxTemp}°`,
+          desc: weatherInfo.desc,
+          rainChance: `Khả năng mưa ${rainProb}%`,
+          icon: weatherInfo.icon,
+          isDay,
+        });
+      }
+    } catch (err) {
+      console.log('Lỗi khi cập nhật thời tiết thực:', err);
+    } finally {
+      setIsWeatherLoading(false);
+    }
+  }, []);
+
+  // Nạp thời tiết và tin tức thực tế khi vào màn hình
   useEffect(() => {
-    let isMounted = true;
+    void fetchRealWeather();
+    void fetchFeaturedWeatherNews();
+  }, [fetchRealWeather, fetchFeaturedWeatherNews]);
 
-    const fetchRealWeather = async () => {
+  // Kéo xuống để làm mới (Pull-to-refresh)
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.allSettled([
+      fetchRealWeather(),
+      fetchFeaturedWeatherNews(),
+    ]);
+    setRefreshing(false);
+  }, [fetchRealWeather, fetchFeaturedWeatherNews]);
+
+  // Cập nhật GPS khi người dùng quay lại app; không bật theo dõi vị trí nền.
+  useEffect(() => {
+    const syncCurrentLocation = async () => {
       try {
-        setIsWeatherLoading(true);
-
-        let lat = 16.0544; // Tọa độ mặc định: Đà Nẵng
-        let lon = 108.2022;
-        let detectedCity = 'Đà Nẵng';
-
-        // 1. Lấy vị trí GPS của người dùng
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const loc = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          });
-          lat = loc.coords.latitude;
-          lon = loc.coords.longitude;
-
-          // Dịch ngược tọa độ GPS thành tên Tỉnh / Thành phố
-          const geoList = await Location.reverseGeocodeAsync({
-            latitude: lat,
-            longitude: lon,
-          });
-          if (geoList && geoList.length > 0) {
-            const place = geoList[0];
-            detectedCity =
-              place.city ||
-              place.subregion ||
-              place.region ||
-              place.district ||
-              'Vị trí hiện tại';
-          }
-        }
-
-        // 2. Gọi Open-Meteo API lấy dữ liệu thời tiết thời gian thực (bao gồm cả dự báo theo giờ và ngày)
-        const res = await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,is_day,precipitation,weather_code&hourly=precipitation_probability&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto`
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        await backendApi.updateCurrentLocation(
+          position.coords.latitude,
+          position.coords.longitude
         );
-        const json = await res.json();
-
-        if (isMounted && json && json.current) {
-          const code = json.current.weather_code ?? 0;
-          const currentHour = new Date().getHours();
-          const isDay = json.current.is_day ?? (currentHour >= 6 && currentHour < 18 ? 1 : 0);
-          const weatherInfo = mapWmoToWeather(code, isDay);
-
-          const curTemp = Math.round(json.current.temperature_2m);
-          const minTemp = json.daily?.temperature_2m_min?.[0]
-            ? Math.round(json.daily.temperature_2m_min[0])
-            : curTemp - 2;
-          const maxTemp = json.daily?.temperature_2m_max?.[0]
-            ? Math.round(json.daily.temperature_2m_max[0])
-            : curTemp + 2;
-
-          // Lấy khả năng mưa theo đúng giờ hiện tại thay vì lấy số cực đại cả ngày
-          const rainProb =
-            json.hourly?.precipitation_probability?.[currentHour] ??
-            json.daily?.precipitation_probability_max?.[0] ??
-            Math.min(100, Math.round((json.current.precipitation || 0) * 20));
-
-          setWeatherData({
-            city: detectedCity,
-            temp: `${curTemp}°C`,
-            tempRange: `${minTemp}° - ${maxTemp}°`,
-            desc: weatherInfo.desc,
-            rainChance: `Khả năng mưa ${rainProb}%`,
-            icon: weatherInfo.icon,
-            isDay,
-          });
-        }
-      } catch (err) {
-        console.log('Lỗi khi cập nhật thời tiết thực:', err);
-      } finally {
-        if (isMounted) setIsWeatherLoading(false);
+      } catch {
+        // Vị trí không bắt buộc để dùng ứng dụng; lần mở app tiếp theo sẽ thử lại.
       }
     };
 
-    fetchRealWeather();
-
-    return () => {
-      isMounted = false;
-    };
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void syncCurrentLocation();
+    });
+    return () => subscription.remove();
   }, []);
 
   // Xử lý các nút bấm trong phần Tiện ích nhanh
@@ -363,8 +527,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 Alert.alert(
                   'Thành công',
                   'Đã cập nhật trạng thái AN TOÀN cho tài khoản ' +
-                    (user?.fullName || 'Người dùng') +
-                    '. Đội cứu trợ đã ghi nhận vị trí an toàn của bạn!'
+                  (user?.fullName || 'Người dùng') +
+                  '. Đội cứu trợ đã ghi nhận vị trí an toàn của bạn!'
                 );
               },
             },
@@ -385,8 +549,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 Alert.alert(
                   'Đã ghi nhận',
                   'Cảm ơn tấm lòng của bạn! Đội ngũ y tế SOS sẽ liên hệ qua số điện thoại ' +
-                    (user?.phone || 'của bạn') +
-                    ' khi có đợt tiếp nhận máu phù hợp.'
+                  (user?.phone || 'của bạn') +
+                  ' khi có đợt tiếp nhận máu phù hợp.'
                 );
               },
             },
@@ -415,8 +579,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           Alert.alert(
             'Đăng tin cảnh báo (Ban chỉ huy)',
             'Bạn đang đăng nhập với quyền hạn ' +
-              (user?.roles?.[0] || 'AUTHORITY') +
-              '. Bạn có thể soạn thông báo khẩn hoặc duyệt tin từ Web Dashboard.',
+            (user?.roles?.[0] || 'AUTHORITY') +
+            '. Bạn có thể soạn thông báo khẩn hoặc duyệt tin từ Web Dashboard.',
             [
               { text: 'Đóng', style: 'cancel' },
               {
@@ -446,7 +610,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        bounces={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#0066FF']}
+            tintColor="#0066FF"
+          />
+        }
       >
         {/* ==================== 1. HEADER SECTION ==================== */}
         <View style={styles.headerContainer}>
@@ -563,45 +734,55 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Danh sách 3 tin tức nổi bật */}
+          {/* Danh sách tối đa 3 tin tức thời tiết nổi bật từ CSDL */}
           <View style={styles.newsList}>
-            {FEATURED_NEWS.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.newsCard}
-                onPress={() => setSelectedNews(item)}
-                activeOpacity={0.75}
-              >
-                <Image
-                  source={{ uri: item.imageUrl }}
-                  style={styles.newsThumbnail}
-                  resizeMode="cover"
-                />
+            {featuredNews.length > 0 ? (
+              featuredNews.slice(0, 3).map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.newsCard}
+                  onPress={() => setSelectedNews(item)}
+                  activeOpacity={0.75}
+                >
+                  <NewsThumbnailImage imageUrl={item.imageUrl} tag={item.tag} />
 
-                <View style={styles.newsContent}>
-                  <View style={styles.newsMetaRow}>
-                    <View style={styles.newsTagBadge}>
-                      <Text style={styles.newsTagText}>{item.tag}</Text>
+                  <View style={styles.newsContent}>
+                    <View style={styles.newsMetaRow}>
+                      <View style={styles.newsTagBadge}>
+                        <Text style={styles.newsTagText}>{item.tag}</Text>
+                      </View>
+                      <Text style={styles.newsTimeText}>{item.time}</Text>
                     </View>
-                    <Text style={styles.newsTimeText}>{item.time}</Text>
+
+                    <Text style={styles.newsTitle} numberOfLines={2}>
+                      {item.title}
+                    </Text>
+                    <Text style={styles.newsSnippet} numberOfLines={1}>
+                      {item.snippet}
+                    </Text>
                   </View>
 
-                  <Text style={styles.newsTitle} numberOfLines={2}>
-                    {item.title}
-                  </Text>
-                  <Text style={styles.newsSnippet} numberOfLines={1}>
-                    {item.snippet}
-                  </Text>
-                </View>
-
-                <Ionicons
-                  name="chevron-forward"
-                  size={16}
-                  color="#94A3B8"
-                  style={styles.newsChevron}
-                />
-              </TouchableOpacity>
-            ))}
+                  <Ionicons
+                    name="chevron-forward"
+                    size={16}
+                    color="#94A3B8"
+                    style={styles.newsChevron}
+                  />
+                </TouchableOpacity>
+              ))
+            ) : loadingNews ? (
+              <View style={styles.newsEmptyCard}>
+                <ActivityIndicator size="small" color="#0066FF" />
+                <Text style={styles.newsEmptyText}>Đang tải bản tin thời tiết...</Text>
+              </View>
+            ) : (
+              <View style={styles.newsEmptyCard}>
+                <Ionicons name="newspaper-outline" size={26} color="#94A3B8" />
+                <Text style={styles.newsEmptyText}>
+                  Chưa có bản tin thời tiết nào được kích hoạt qua thông báo
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Section: Tiện ích nhanh */}
@@ -767,11 +948,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <View style={styles.newsModalContent}>
             {selectedNews && (
               <>
-                <Image
-                  source={{ uri: selectedNews.imageUrl }}
-                  style={styles.newsModalImage}
-                  resizeMode="cover"
-                />
+                {selectedNews.imageUrl ? (
+                  <Image
+                    source={{ uri: selectedNews.imageUrl }}
+                    style={styles.newsModalImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.newsModalImageFallback}>
+                    <Ionicons name="newspaper-outline" size={44} color="#0066FF" />
+                  </View>
+                )}
                 <View style={styles.newsModalBody}>
                   <View style={styles.newsMetaRow}>
                     <View style={styles.newsTagBadge}>
@@ -785,6 +972,22 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       {selectedNews.content || selectedNews.snippet}
                     </Text>
                   </ScrollView>
+                  {selectedNews.sourceUrl ? (
+                    <TouchableOpacity
+                      style={styles.newsModalSourceBtn}
+                      onPress={() => {
+                        if (selectedNews.sourceUrl) {
+                          Linking.openURL(selectedNews.sourceUrl).catch(() => {});
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="open-outline" size={15} color="#0066FF" />
+                      <Text style={styles.newsModalSourceText}>
+                        Đọc bài gốc trên {selectedNews.sourceName || 'nguồn tin'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
                   <TouchableOpacity
                     style={styles.newsModalCloseBtn}
                     onPress={() => setSelectedNews(null)}
@@ -1033,6 +1236,31 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#E2E8F0',
   },
+  newsThumbnailPlaceholder: {
+    width: 86,
+    height: 72,
+    borderRadius: 10,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 4,
+  },
+  newsThumbnailPlaceholderText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#0284C7',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  newsThumbnailAlertBg: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  newsThumbnailAlertText: {
+    color: '#DC2626',
+  },
   newsContent: {
     flex: 1,
   },
@@ -1071,6 +1299,25 @@ const styles = StyleSheet.create({
   },
   newsChevron: {
     marginLeft: 2,
+  },
+  newsEmptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingVertical: 22,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+  },
+  newsEmptyText: {
+    fontSize: 12.5,
+    color: '#64748B',
+    textAlign: 'center',
+    fontWeight: '500',
+    lineHeight: 18,
   },
 
   // ==================== TIỆN ÍCH NHANH ====================
@@ -1153,6 +1400,30 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     color: '#334155',
     lineHeight: 20,
+  },
+  newsModalImageFallback: {
+    width: '100%',
+    height: 120,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newsModalSourceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    marginBottom: 10,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  newsModalSourceText: {
+    color: '#0066FF',
+    fontSize: 13,
+    fontWeight: '700',
   },
   newsModalCloseBtn: {
     backgroundColor: '#0066FF',

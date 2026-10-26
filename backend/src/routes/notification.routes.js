@@ -20,6 +20,7 @@ router.delete('/broadcasts/:id', authorize('ADMIN', 'LOCAL_AUTHORITY'), notifica
 
 // 3. Đăng ký Expo Push Token cho thiết bị điện thoại
 router.post('/register-push-token', notificationController.registerPushToken);
+router.patch('/location', notificationController.updateCurrentLocation);
 
 // 4. Quản lý trạng thái thông báo cá nhân
 router.patch('/read-all', notificationController.markAllAsRead);

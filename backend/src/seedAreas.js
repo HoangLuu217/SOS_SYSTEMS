@@ -13,23 +13,39 @@ async function syncFromLiveApi() {
   await mongoose.connect(process.env.MONGODB_URI);
   console.log('Connected to MongoDB:', process.env.MONGODB_URI);
 
-  console.log('Đang gọi trực tiếp API bản đồ Việt Nam...');
-  const res = await fetch('https://provinces.open-api.vn/api/p/48?depth=3');
-  if (!res.ok) throw new Error('Không thể gọi API: ' + res.status);
-  const provData = await res.json();
+  // 1. Đồng bộ toàn bộ 63 Tỉnh/Thành phố của Việt Nam từ API
+  console.log('Đang gọi API lấy danh mục toàn bộ 63 Tỉnh/Thành phố Việt Nam...');
+  const provListRes = await fetch('https://provinces.open-api.vn/api/p/');
+  if (!provListRes.ok) throw new Error('Không thể tải danh sách tỉnh thành: ' + provListRes.status);
+  const provList = await provListRes.json();
 
-  // 1. Tỉnh/Thành gốc
-  let danang = await AdministrativeArea.findOne({ code: 'DANANG' });
-  if (!danang) {
-    danang = await AdministrativeArea.create({
-      name: provData.name || 'Thành phố Đà Nẵng',
-      code: 'DANANG',
-      type: 'PROVINCE',
-      status: 'ACTIVE',
-    });
+  let danangDoc = null;
+  for (const p of provList) {
+    const isDaNang = p.code === 48 || p.name.includes('Đà Nẵng');
+    const code = isDaNang ? 'DANANG' : `VN-P-${p.code}`;
+    const doc = await AdministrativeArea.findOneAndUpdate(
+      { code },
+      {
+        $set: {
+          name: p.name,
+          code,
+          type: 'PROVINCE',
+          parentId: null,
+          status: 'ACTIVE',
+        },
+      },
+      { upsert: true, returnDocument: 'after' }
+    );
+    if (isDaNang) danangDoc = doc;
   }
+  console.log(`✅ Đã đồng bộ thành công ${provList.length} Tỉnh/Thành phố Việt Nam từ API.`);
 
-  // 2. 8 Quận / Huyện từ API
+  // 2. Đồng bộ chi tiết Quận/Huyện & Phường/Xã trọng điểm của Đà Nẵng
+  console.log('Đang gọi API lấy chi tiết Quận/Huyện và Phường/Xã Đà Nẵng...');
+  const dnRes = await fetch('https://provinces.open-api.vn/api/p/48?depth=3');
+  if (!dnRes.ok) throw new Error('Không thể gọi API Đà Nẵng: ' + dnRes.status);
+  const provData = await dnRes.json();
+
   const districtMap = {};
   for (const [idx, d] of provData.districts.entries()) {
     const code = `DAD-D-${idx + 1}`;
@@ -40,7 +56,7 @@ async function syncFromLiveApi() {
           name: d.name,
           code,
           type: 'DISTRICT',
-          parentId: danang._id,
+          parentId: danangDoc ? danangDoc._id : null,
           status: 'ACTIVE',
         },
       },
@@ -48,7 +64,7 @@ async function syncFromLiveApi() {
     );
     districtMap[d.name] = doc._id;
   }
-  console.log(`Đã đồng bộ ${Object.keys(districtMap).length} Quận/Huyện từ API.`);
+  console.log(`✅ Đã đồng bộ ${Object.keys(districtMap).length} Quận/Huyện từ API.`);
 
   // 3. Phường / Xã từ API (Tự động gộp các phường tách nhỏ như Phường An Hải)
   const mergedWardsMap = new Map();
@@ -65,7 +81,7 @@ async function syncFromLiveApi() {
   let wardIdx = 1;
   for (const item of mergedWardsMap.values()) {
     const code = `DAD-W-${wardIdx++}`;
-    const parentId = districtMap[item.district] || danang._id;
+    const parentId = districtMap[item.district] || (danangDoc ? danangDoc._id : null);
     await AdministrativeArea.findOneAndUpdate(
       { code },
       {
@@ -81,12 +97,13 @@ async function syncFromLiveApi() {
     );
   }
 
-  console.log(`Đã đồng bộ ${mergedWardsMap.size} Phường/Xã hợp nhất trực tiếp từ API vào CSDL.`);
+  console.log(`✅ Đã đồng bộ ${mergedWardsMap.size} Phường/Xã hợp nhất trực tiếp từ API vào CSDL.`);
   await mongoose.disconnect();
-  console.log('Hoàn tất đồng bộ từ API.');
+  console.log('🎉 Hoàn tất toàn bộ quá trình đồng bộ khu vực hành chính từ API.');
+  process.exit(0);
 }
 
 syncFromLiveApi().catch((err) => {
-  console.error(err);
+  console.error('❌ Lỗi đồng bộ khu vực từ API:', err);
   process.exit(1);
 });

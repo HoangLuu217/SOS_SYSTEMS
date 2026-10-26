@@ -49,3 +49,4 @@ coverage/
 ehthumbs.db
 Thumbs.db
 /backend/postman
+app/google-services.json

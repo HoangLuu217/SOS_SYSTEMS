@@ -49,6 +49,7 @@ app.use((req, res, next) => {
 const healthHandler = (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 };
+app.get('/', healthHandler);
 app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 

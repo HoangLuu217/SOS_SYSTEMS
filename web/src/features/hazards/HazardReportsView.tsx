@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   MapPin,
   Search,
@@ -27,6 +27,8 @@ import {
   deleteHazardReport,
   subscribeHazardEvents,
   fetchAdministrativeAreas,
+  fetchProvincesV2,
+  type ProvinceV2,
 } from '@/api';
 import { resolveGoogleMapsInput } from '@/utils/mapLinkParser';
 import { domainDService, JURISDICTION_CONFIGS, type JurisdictionConfig } from '@/services/domainDService';
@@ -44,13 +46,15 @@ export interface HazardReportsViewProps {
   areas?: AdministrativeAreaItem[];
 }
 
+const EMPTY_AREAS: AdministrativeAreaItem[] = [];
+
 export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
   user,
   onOpenMap,
-  areas: propAreas = [],
+  areas: propAreas = EMPTY_AREAS,
 }) => {
   const { showToast, setConfirmModal, setConfirmPromptValue, renderGlobalModals } = useGlobalModals();
-  const [_areas, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
+  const [areas, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
   const [loading, setLoading] = useState(false);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const refreshData = () => setRefreshIndex((prev) => prev + 1);
@@ -65,6 +69,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
   }>({ TOTAL: 0, PENDING: 0, APPROVED: 0, REJECTED: 0, RESOLVED: 0 });
   const [hazardFilter, setHazardFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
   const [managementScope, setManagementScope] = useState<'LOCAL' | 'CITY'>('LOCAL');
+  const [selectedAdminProvince, setSelectedAdminProvince] = useState<string>('ALL');
+  const [allProvinces, setAllProvinces] = useState<ProvinceV2[]>([]);
   const [hazardSearchText, setHazardSearchText] = useState('');
   const [hazardPage, setHazardPage] = useState<number>(1);
   const [hazardSortField, setHazardSortField] = useState<'createdAt' | 'severity' | 'title' | 'district' | 'address' | 'status'>('createdAt');
@@ -72,6 +78,10 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
   const [jumpInputPage, setJumpInputPage] = useState<string>('');
   const [selectedHazardPhoto, setSelectedHazardPhoto] = useState<string | null>(null);
   const [detailHazard, setDetailHazard] = useState<HazardReportItem | null>(null);
+
+  // Chọn hàng loạt (Bulk selection)
+  const [selectedHazardIds, setSelectedHazardIds] = useState<string[]>([]);
+  const [isBulkHazardAction, setIsBulkHazardAction] = useState<boolean>(false);
 
   // State phục vụ Form Thẩm định & Chuẩn hóa điểm nguy hiểm (cho chính quyền nhập lại thông tin chuẩn)
   const [reviewingHazard, setReviewingHazard] = useState<HazardReportItem | null>(null);
@@ -99,6 +109,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
   // State phục vụ Modal Tạo điểm nguy hiểm mới (Cán bộ chính quyền LOCAL_AUTHORITY / ADMIN)
   const [isCreateHazardOpen, setIsCreateHazardOpen] = useState(false);
+  const [createHazardAreaId, setCreateHazardAreaId] = useState('');
   const [createTitle, setCreateTitle] = useState('');
   const [createHazardType, setCreateHazardType] = useState('FLOOD');
   const [createCustomHazardType, setCreateCustomHazardType] = useState('');
@@ -178,109 +189,326 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       clearInterval(pollTimer);
       unsubscribeSSE();
     };
-  }, [propAreas, refreshIndex]);
+  }, [propAreas.length, refreshIndex]);
 
   // Cập nhật areas nếu props thay đổi
   useEffect(() => {
     if (propAreas && propAreas.length > 0) {
       setAreas(propAreas);
     }
-  }, [propAreas]);
+  }, [propAreas.length]);
 
-    domainDService.syncFromStoredAuthUser();
-    const authUserStr = typeof localStorage !== 'undefined' ? localStorage.getItem('sos_auth_user') : null;
-    const authUser = user || (authUserStr ? JSON.parse(authUserStr) : null);
-    const activeOfficer = domainDService.getActiveOfficer();
+  useEffect(() => {
+    fetchProvincesV2().then((list) => {
+      if (Array.isArray(list) && list.length > 0) {
+        setAllProvinces(list);
+      }
+    });
+  }, []);
 
-    // 1. XÁC ĐỊNH ĐỊA BÀN PHÂN CÔNG QUẢN LÝ CỐ ĐỊNH TỪ TÀI KHOẢN (KHÔNG CHO PHÉP THAY ĐỔI)
-    const determineOfficerJurKey = (): string => {
-      if (user?.roles?.includes('ADMIN') || authUser?.roles?.includes('ADMIN')) return 'national';
-      const userAreaName = (user?.authority?.areaName || authUser?.authority?.areaName || activeOfficer?.jurisdictionAreaName || '').toLowerCase();
-      if (userAreaName) return userAreaName;
-      return 'national';
+  domainDService.syncFromStoredAuthUser();
+  const authUserStr = typeof localStorage !== 'undefined' ? localStorage.getItem('sos_auth_user') : null;
+  const authUser = (authUserStr ? JSON.parse(authUserStr) : null) || user;
+  const activeOfficer = domainDService.getActiveOfficer();
+  const isAdmin = Boolean(
+    user?.roles?.includes('ADMIN') ||
+    authUser?.roles?.includes('ADMIN') ||
+    (user as any)?.role === 'ADMIN' ||
+    (authUser as any)?.role === 'ADMIN'
+  );
+
+    // 1. XÁC ĐỊNH THÔNG TIN ĐỊA BÀN PHÂN CÔNG TỪ TÀI KHOẢN CÁN BỘ CHÍNH QUYỀN
+    const userAreaIdFromAuth = (user?.authority?.areaId || authUser?.authority?.areaId || '') ? String(user?.authority?.areaId || authUser?.authority?.areaId) : '';
+    const userAreaNameFromAuth = (user?.authority?.areaName || authUser?.authority?.areaName || '').trim();
+    const userDepartment = (user?.authority?.department || authUser?.authority?.department || '').trim();
+
+    // Tìm đơn vị hành chính tương ứng trong danh mục Administrative Areas từ ID hoặc Tên
+    const foundAreaById = userAreaIdFromAuth
+      ? areas.find((a) => String(a._id) === userAreaIdFromAuth || a.code === userAreaIdFromAuth)
+      : null;
+
+    const foundAreaByName = userAreaNameFromAuth
+      ? areas.find((a) => {
+          const aName = (a.name || '').toLowerCase();
+          const uName = userAreaNameFromAuth.toLowerCase();
+          const cleanUName = uName.split(',')[0].replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '').trim();
+          const cleanAName = aName.replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '').trim();
+          return (
+            aName === uName ||
+            uName.includes(aName) ||
+            aName.includes(uName) ||
+            (cleanUName.length > 2 && (cleanAName === cleanUName || cleanAName.includes(cleanUName) || cleanUName.includes(cleanAName)))
+          );
+        })
+      : null;
+
+    const foundAreaByDept = userDepartment
+      ? areas.find((a) => {
+          if (!a.name) return false;
+          const cleanAName = a.name.replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '').trim().toLowerCase();
+          return cleanAName.length > 2 && userDepartment.toLowerCase().includes(cleanAName);
+        })
+      : null;
+
+    const isAreaMatchingUserAuth = (areaName?: string) => {
+      if (!areaName || !userAreaNameFromAuth) return true;
+      const cleanA = areaName.toLowerCase().replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '').trim();
+      const cleanU = userAreaNameFromAuth.toLowerCase().replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '').trim();
+      const uFirstPart = cleanU.split(',')[0].trim();
+      return cleanA.length > 1 && (uFirstPart.includes(cleanA) || cleanA.includes(uFirstPart));
     };
 
-    const fixedJurKey = determineOfficerJurKey();
-    const fixedJurisdictionConfig: JurisdictionConfig = JURISDICTION_CONFIGS[fixedJurKey] || {
-      name: user?.authority?.areaName || authUser?.authority?.areaName || activeOfficer?.jurisdictionAreaName || 'Toàn Quốc (63 Tỉnh Thành)',
+    // Chỉ dùng foundAreaById nếu tên của nó phù hợp với địa bàn hiện tại của tài khoản
+    const validAreaById = (foundAreaById && isAreaMatchingUserAuth(foundAreaById.name)) ? foundAreaById : null;
+
+    // Xác định cấu hình quận/huyện tương ứng trong JURISDICTION_CONFIGS (dùng cho bounds / GPS map)
+    const determineOfficerJurKey = (): string => {
+      const rawCheck = (
+        userAreaNameFromAuth + ' ' +
+        (validAreaById?.name || '') + ' ' +
+        (foundAreaByName?.name || '') + ' ' +
+        (foundAreaByDept?.name || '') + ' ' +
+        userDepartment + ' ' +
+        (activeOfficer?.jurisdictionAreaName || '') + ' ' +
+        (activeOfficer?.districtName || '')
+      ).toLowerCase();
+
+      if (rawCheck.includes('ngũ hành sơn') || rawCheck.includes('ngu hanh son')) return 'ngu_hanh_son';
+      if (rawCheck.includes('hải châu') || rawCheck.includes('hai chau')) return 'hai_chau';
+      if (rawCheck.includes('sơn trà') || rawCheck.includes('son tra')) return 'son_tra';
+      if (rawCheck.includes('thanh khê') || rawCheck.includes('thanh khe')) return 'thanh_khe';
+      if (rawCheck.includes('cẩm lệ') || rawCheck.includes('cam le')) return 'cam_le';
+      if (rawCheck.includes('liên chiểu') || rawCheck.includes('lien chieu')) return 'lien_chieu';
+      if (rawCheck.includes('hòa vang') || rawCheck.includes('hoa vang')) return 'hoa_vang';
+      if (rawCheck.includes('hoàng sa') || rawCheck.includes('hoang sa')) return 'hoang_sa';
+
+      return 'ngu_hanh_son';
+    };
+
+    const matchedJurKey = determineOfficerJurKey();
+    const fixedJurisdictionConfig: JurisdictionConfig = JURISDICTION_CONFIGS[matchedJurKey] || JURISDICTION_CONFIGS.national || {
+      name: userAreaNameFromAuth || 'Toàn Quốc (63 Tỉnh Thành)',
       district: '',
-      areaId: user?.authority?.areaId || authUser?.authority?.areaId || 'area-all',
+      areaId: userAreaIdFromAuth || 'area-all',
       keywords: [],
     };
 
-    try {
-      localStorage.setItem('sos_authority_jurisdiction_key', fixedJurKey);
-    } catch {}
+    // 2. TÊN HIỂN THỊ ĐỊA BÀN PHỤ TRÁCH CHUẨN XÁC CỦA TÀI KHOẢN (ƯU TIÊN THEO HỒ SƠ TÀI KHOẢN)
+    const accountAreaDisplayName = (() => {
+      if (isAdmin) return 'Toàn quốc';
+      // 1. Ưu tiên hàng đầu: Tên địa bàn khai báo trong hồ sơ cán bộ (areaName)
+      if (userAreaNameFromAuth) return userAreaNameFromAuth;
+      // 2. Khu vực theo ID trong cơ sở dữ liệu nếu hợp lệ
+      if (validAreaById?.name) return validAreaById.name;
+      // 3. Khớp qua tên hoặc phòng ban cơ quan
+      if (foundAreaByName?.name) return foundAreaByName.name;
+      if (foundAreaByDept?.name && isAreaMatchingUserAuth(foundAreaByDept.name)) return foundAreaByDept.name;
+      if (activeOfficer?.jurisdictionAreaName && activeOfficer.jurisdictionAreaName !== 'Địa Bàn PhỤ Trách') {
+        return activeOfficer.jurisdictionAreaName;
+      }
+      return fixedJurisdictionConfig?.name || 'Toàn quốc';
+    })();
 
-    // 2. HÀM KIỂM TRA ĐIỂM NGUY HIỂM CÓ THUỘC ĐỊA BÀN PHÂN CÔNG HAY KHÔNG
+    // Xác định tên cấp trên (Quận/Huyện, Tỉnh/TP) từ cơ cấu cây hành chính thực tế (không mock cứng)
+    const targetArea = validAreaById || foundAreaByName || (foundAreaByDept && isAreaMatchingUserAuth(foundAreaByDept.name) ? foundAreaByDept : null);
+    const resolveAreaParents = (area: typeof targetArea) => {
+      if (!area || !area.name) return { parentName: '', provinceName: '', fullName: '' };
+      const chain: string[] = [area.name];
+      const visited = new Set<string>();
+      if (area._id) visited.add(String(area._id));
+      let curr = area;
+      let province = '';
+      let depth = 0;
+
+      while (curr && curr.parentId && depth < 10) {
+        depth++;
+        const pId = String((curr.parentId as any)?._id || curr.parentId);
+        if (!pId || visited.has(pId)) break;
+        visited.add(pId);
+
+        const parent = areas.find(
+          (a) => String(a._id) === pId || (a.code && a.code === pId)
+        );
+        if (!parent || parent === curr || visited.has(String(parent._id))) break;
+        visited.add(String(parent._id));
+        chain.push(parent.name);
+        if (parent.type === 'PROVINCE') {
+          province = parent.name;
+        }
+        curr = parent;
+      }
+
+      if (!province && chain.length > 1) {
+        province = chain[chain.length - 1];
+      }
+
+      return {
+        parentName: chain[1] || '',
+        provinceName: province,
+        fullName: chain.join(', '),
+      };
+    };
+
+    const areaHierarchy = resolveAreaParents(targetArea);
+
+    // Tên đầy đủ kèm tỉnh/thành phố cho Địa bàn phụ trách (lấy theo dữ liệu thực tế)
+    const accountAreaWithCity = (() => {
+      if (isAdmin) return 'Toàn quốc';
+      if (userAreaNameFromAuth) {
+        return userAreaNameFromAuth;
+      }
+      if (areaHierarchy.fullName && areaHierarchy.fullName.includes(',')) {
+        return areaHierarchy.fullName;
+      }
+      return accountAreaDisplayName;
+    })();
+
+    const accountAreaId =
+      validAreaById?._id ||
+      foundAreaByName?._id ||
+      (foundAreaByDept && isAreaMatchingUserAuth(foundAreaByDept.name) ? foundAreaByDept._id : null) ||
+      (validAreaById ? userAreaIdFromAuth : null) ||
+      fixedJurisdictionConfig?.areaId ||
+      'area-all';
+
+    // Tên rút gọn hiển thị trên tab (ví dụ: "Xã Hợp Kim" hoặc "Phường Ngũ Hành Sơn")
+    const localTabLabel = (
+      userAreaNameFromAuth
+        ? userAreaNameFromAuth.split(',')[0]
+        : targetArea?.name || accountAreaDisplayName.split(',')[0]
+    ).trim();
+
+    // Tên tỉnh/thành phố hiển thị trên tab cấp thành phố (lấy động theo cây đơn vị hành chính)
+    const cityTabLabel = (() => {
+      if (userAreaNameFromAuth && userAreaNameFromAuth.includes(',')) {
+        return userAreaNameFromAuth.split(',').slice(-1)[0].trim();
+      }
+      if (areaHierarchy.provinceName) return areaHierarchy.provinceName;
+      const prov = areas.find((a) => a.type === 'PROVINCE');
+      if (prov) return prov.name;
+      return 'Thành phố Đà Nẵng';
+    })();
+
+    // 3. HÀM KIỂM TRA ĐIỂM NGUY HIỂM CÓ THUỘC ĐỊA BÀN PHÂN CÔNG HAY KHÔNG
     const isHazardInOfficerJurisdiction = (r: HazardReportItem): boolean => {
-      const cfg = fixedJurisdictionConfig;
+      if (isAdmin) return true;
 
+      const deptLower = userDepartment.toLowerCase();
+      if (
+        deptLower.includes('toàn thành phố') ||
+        deptLower.includes('tp. đà nẵng') ||
+        deptLower.includes('tp đà nẵng') ||
+        deptLower.includes('thành phố đà nẵng') ||
+        accountAreaDisplayName.toLowerCase().includes('toàn tp')
+      ) {
+        return true;
+      }
+
+      // 1. So khớp ID khu vực trực tiếp (chỉ khi có validAreaById)
+      const rAreaId = String((r.areaId as any)?._id || (r.areaId as any)?.id || (r.areaId as any)?.code || r.areaId || '');
+      if (validAreaById && rAreaId && String(rAreaId) === String(validAreaById._id)) {
+        return true;
+      }
+
+      // 2. So khớp theo tên đơn vị hành chính trong areaId của report
+      const rAreaName = String((r.areaId as any)?.name || (r as any).district || (r as any).districtName || '').toLowerCase();
+      const cleanAccAreaName = localTabLabel.replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '').trim().toLowerCase();
+
+      if (rAreaName && cleanAccAreaName.length > 2) {
+        const cleanRArea = rAreaName.replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '').trim().toLowerCase();
+        if (cleanRArea === cleanAccAreaName || cleanRArea.includes(cleanAccAreaName) || cleanAccAreaName.includes(cleanRArea)) {
+          return true;
+        }
+      }
+
+      // 3. So khớp từ khóa đặc trưng trong văn bản (địa chỉ, tiêu đề, mô tả)
       const addrLower = (r.address || '').toLowerCase();
       const descLower = (r.description || '').toLowerCase();
       const titleLower = (r.title || '').toLowerCase();
       const fullText = `${addrLower} ${descLower} ${titleLower}`;
 
-      // 1. So khớp từ khóa đặc trưng của địa bàn phụ trách
-      const matchesKeyword = cfg.keywords.some((kw) => fullText.includes(kw));
+      const targetKeywords: string[] = [];
+      if (cleanAccAreaName.length > 2) {
+        targetKeywords.push(cleanAccAreaName);
+        targetKeywords.push(localTabLabel.toLowerCase());
+      }
+      if (validAreaById?.name) {
+        targetKeywords.push(validAreaById.name.toLowerCase());
+        targetKeywords.push(validAreaById.name.replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '').trim().toLowerCase());
+      }
+
+      // Chỉ áp dụng keywords quận Đà Nẵng nếu cán bộ thuộc địa bàn Đà Nẵng
+      const isDaNangOfficer =
+        userAreaNameFromAuth.toLowerCase().includes('đà nẵng') ||
+        userAreaNameFromAuth.toLowerCase().includes('da nang') ||
+        Boolean(validAreaById && !userAreaNameFromAuth);
+
+      if (isDaNangOfficer && fixedJurisdictionConfig && fixedJurisdictionConfig.keywords) {
+        const isDistrictOfficer =
+          accountAreaDisplayName.toLowerCase().includes('quận') ||
+          accountAreaDisplayName.toLowerCase().includes('huyện') ||
+          cleanAccAreaName === fixedJurisdictionConfig.name.replace(/^(quận|huyện)\s+/i, '').toLowerCase();
+
+        if (isDistrictOfficer) {
+          targetKeywords.push(...fixedJurisdictionConfig.keywords);
+        } else {
+          const specificKeywords = fixedJurisdictionConfig.keywords.filter((kw) => fullText.includes(kw) && fullText.includes(cleanAccAreaName));
+          targetKeywords.push(...specificKeywords);
+        }
+      }
+
+      const matchesKeyword = targetKeywords.some((kw) => kw && kw.length > 2 && fullText.includes(kw));
       if (matchesKeyword) return true;
 
-      // 2. So khớp tọa độ GPS nằm trong bounding box địa lý của quận/huyện
+      // 4. So khớp tọa độ GPS nằm trong bounds nếu cán bộ thuộc Đà Nẵng
       const coords = r.location?.coordinates;
-      if (Array.isArray(coords) && coords.length === 2) {
+      if (isDaNangOfficer && Array.isArray(coords) && coords.length === 2 && fixedJurisdictionConfig?.bounds) {
         const lng = Number(coords[0]);
         const lat = Number(coords[1]);
-        if (!isNaN(lat) && !isNaN(lng) && cfg.bounds) {
-          if (
-            lat >= cfg.bounds.minLat &&
-            lat <= cfg.bounds.maxLat &&
-            lng >= cfg.bounds.minLng &&
-            lng <= cfg.bounds.maxLng
-          ) {
-            // Kiểm tra xem địa chỉ có ghi rõ quận huyện khác hay không
-            const otherConfigs = Object.entries(JURISDICTION_CONFIGS).filter(
-              ([k]) => k !== fixedJurKey && k !== 'toan_thanh_pho'
-            );
-            const inOtherDistrict = otherConfigs.some(([, other]) =>
-              other.keywords.some((k) => addrLower.includes(k))
-            );
-            if (!inOtherDistrict) {
+        if (!isNaN(lat) && !isNaN(lng)) {
+          const b = fixedJurisdictionConfig.bounds;
+          if (lat >= b.minLat && lat <= b.maxLat && lng >= b.minLng && lng <= b.maxLng) {
+            const matchesLocalWard = cleanAccAreaName.length > 2 && fullText.includes(cleanAccAreaName);
+            const isDistrictLevel = accountAreaDisplayName.toLowerCase().includes('quận') || accountAreaDisplayName.toLowerCase().includes('huyện');
+
+            if (matchesLocalWard || isDistrictLevel) {
               return true;
             }
           }
         }
       }
 
-      // 3. So khớp ID khu vực nếu có
-      const rAreaId = (r.areaId as any)?._id || (r.areaId as any)?.id || (r.areaId as any)?.code || r.areaId;
-      if (rAreaId && (rAreaId === cfg.areaId || (r.areaId as any)?.name === cfg.name)) {
-        return true;
-      }
-
       return false;
     };
 
-    // 3. HÀM XÁC ĐỊNH TÊN ĐỊA PHƯƠNG QUẢN LÝ CHO TỪNG ĐIỂM NGUY HIỂM
+    // 4. HÀM XÁC ĐỊNH TÊN ĐỊA PHƯƠNG QUẢN LÝ CHO TỪNG ĐIỂM NGUY HIỂM
     const getHazardDistrictName = (r: HazardReportItem): string => {
-      // Nếu thuộc địa bàn cán bộ
-      if (isHazardInOfficerJurisdiction(r)) {
-        return fixedJurisdictionConfig.name;
+      // 1. Tên khu vực cụ thể từ areaId của report
+      const rAreaName = (r.areaId as any)?.name || (r.areaId as any)?.districtName;
+      if (rAreaName && typeof rAreaName === 'string' && rAreaName.trim()) {
+        return rAreaName;
       }
 
-      // Nếu có district rõ ràng
+      // 2. Tên quận/huyện từ thuộc tính district của report
       const dName = (r as any).district || (r as any).districtName;
       if (dName && typeof dName === 'string' && dName.trim()) {
         return dName;
       }
 
-      // Nếu có areaId
-      const rAreaName = (r.areaId as any)?.name || (r.areaId as any)?.districtName;
-      if (rAreaName && typeof rAreaName === 'string') {
-        return rAreaName;
+      // 3. Nếu điểm thuộc địa bàn của cán bộ, trả về tên địa bàn cán bộ
+      if (isHazardInOfficerJurisdiction(r)) {
+        return localTabLabel;
       }
 
-      // So khớp từ khóa các quận/huyện
+      // 4. So khớp danh mục AdministrativeAreas trong hệ thống
       const fullText = `${r.address || ''} ${r.title || ''} ${r.description || ''}`.toLowerCase();
+      const matchedArea = areas.find((a) => {
+        if (!a.name) return false;
+        return fullText.includes(a.name.toLowerCase());
+      });
+      if (matchedArea) return matchedArea.name;
+
+      // 5. So khớp cấu hình quận huyện
       for (const [key, cfg] of Object.entries(JURISDICTION_CONFIGS)) {
         if (key === 'toan_thanh_pho') continue;
         if (cfg.keywords && cfg.keywords.some((kw) => fullText.includes(kw))) {
@@ -288,43 +516,95 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
         }
       }
 
-      // So khớp tọa độ GPS bounds
-      const coords = r.location?.coordinates;
-      if (Array.isArray(coords) && coords.length === 2) {
-        const lng = Number(coords[0]);
-        const lat = Number(coords[1]);
-        if (!isNaN(lat) && !isNaN(lng)) {
-          for (const [key, cfg] of Object.entries(JURISDICTION_CONFIGS)) {
-            if (key === 'toan_thanh_pho' || !cfg.bounds) continue;
-            if (
-              lat >= cfg.bounds.minLat &&
-              lat <= cfg.bounds.maxLat &&
-              lng >= cfg.bounds.minLng &&
-              lng <= cfg.bounds.maxLng
-            ) {
-              return cfg.name;
-            }
-          }
-        }
-      }
-
-      // Quét các tên quận thông dụng trong địa chỉ
+      // 6. Quét các tên quận thông dụng
       if (fullText.includes('hải châu') || fullText.includes('hai chau')) return 'Quận Hải Châu';
       if (fullText.includes('sơn trà') || fullText.includes('son tra')) return 'Quận Sơn Trà';
       if (fullText.includes('thanh khê') || fullText.includes('thanh khe')) return 'Quận Thanh Khê';
       if (fullText.includes('cẩm lệ') || fullText.includes('cam le')) return 'Quận Cẩm Lệ';
       if (fullText.includes('liên chiểu') || fullText.includes('lien chieu')) return 'Quận Liên Chiểu';
+      if (fullText.includes('ngũ hành sơn') || fullText.includes('ngu hanh son')) return 'Quận Ngũ Hành Sơn';
       if (fullText.includes('hòa vang') || fullText.includes('hoa vang')) return 'Huyện Hòa Vang';
       if (fullText.includes('hoàng sa') || fullText.includes('hoang sa')) return 'Huyện Hoàng Sa';
 
-      return 'Quận Hải Châu';
+      return 'TP Đà Nẵng';
     };
+
+    // Hàm xác định điểm nguy hiểm có thuộc Tỉnh / Thành phố được chọn (cho Admin)
+    const isHazardInProvince = (r: HazardReportItem, provinceName: string): boolean => {
+      if (!provinceName || provinceName === 'ALL') return true;
+      const targetClean = provinceName
+        .toLowerCase()
+        .replace(/^(tỉnh|thành phố|tp\.?)\s+/i, '')
+        .trim();
+
+      const addr = (r.address || '').toLowerCase();
+      const title = (r.title || '').toLowerCase();
+      const desc = (r.description || '').toLowerCase();
+      const fullText = `${addr} ${title} ${desc}`;
+
+      if (fullText.includes(targetClean)) return true;
+
+      const removeAccents = (str: string) =>
+        str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      if (removeAccents(fullText).includes(removeAccents(targetClean))) return true;
+
+      const areaName = (r.areaId as any)?.name || (r.areaId as any)?.districtName;
+      if (areaName && typeof areaName === 'string') {
+        const cleanArea = areaName.toLowerCase();
+        if (cleanArea.includes(targetClean) || removeAccents(cleanArea).includes(removeAccents(targetClean))) {
+          return true;
+        }
+      }
+
+      if (targetClean.includes('đà nẵng') || targetClean.includes('da nang')) {
+        const daNangDistricts = ['ngũ hành sơn', 'hải châu', 'sơn trà', 'thanh khê', 'cẩm lệ', 'liên chiểu', 'hòa vang', 'hoàng sa'];
+        if (daNangDistricts.some((d) => fullText.includes(d) || removeAccents(fullText).includes(removeAccents(d)))) {
+          return true;
+        }
+        const coords = r.location?.coordinates;
+        if (Array.isArray(coords) && coords.length === 2) {
+          const lng = Number(coords[0]);
+          const lat = Number(coords[1]);
+          if (lat >= 15.9 && lat <= 16.3 && lng >= 107.9 && lng <= 108.4) return true;
+        }
+      }
+
+      return false;
+    };
+
+    // Danh sách Tỉnh/Thành cho Admin kèm số lượng điểm nguy hiểm thực tế (không mock)
+    const adminProvinceOptions = useMemo(() => {
+      if (!isAdmin) return [];
+      const countsMap = new Map<string, number>();
+
+      allProvinces.forEach((p) => {
+        const c = hazardReports.filter((r) => isHazardInProvince(r, p.name)).length;
+        countsMap.set(p.name, c);
+      });
+
+      return [...allProvinces]
+        .map((p) => ({
+          code: p.code,
+          name: p.name,
+          count: countsMap.get(p.name) || 0,
+        }))
+        .sort((a, b) => {
+          if (a.count > 0 && b.count === 0) return -1;
+          if (a.count === 0 && b.count > 0) return 1;
+          if (b.count !== a.count) return b.count - a.count;
+          return a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' });
+        });
+    }, [isAdmin, allProvinces, hazardReports]);
 
     // 4. TẬP DỮ LIỆU ĐỊA PHƯƠNG & THÀNH PHỐ QUẢN LÝ
     const localReports = hazardReports.filter((r) => isHazardInOfficerJurisdiction(r));
 
-    // Lọc theo Cấp quản lý: Địa phương vs Điểm nguy hiểm Thành phố (Tổng cả thành phố)
-    const baseScopedReports = managementScope === 'LOCAL' ? localReports : hazardReports;
+    // Lọc theo Cấp quản lý: Admin lọc theo 1 tab và chọn Tỉnh/Thành phố (Toàn quốc hoặc Tỉnh cụ thể), Cán bộ lọc theo Địa phương vs Tổng Tỉnh/Thành
+    const baseScopedReports = isAdmin
+      ? (selectedAdminProvince === 'ALL'
+          ? hazardReports
+          : hazardReports.filter((r) => isHazardInProvince(r, selectedAdminProvince)))
+      : (managementScope === 'LOCAL' ? localReports : hazardReports);
 
     // Lọc theo Tab trạng thái và Tìm kiếm từ khóa
     const filteredReports = baseScopedReports.filter((r) => {
@@ -501,11 +781,16 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       setEditErrors({});
     };
 
-    // Mở Form Tạo Điểm Nguy Hiểm Mới (Dành cho cán bộ quản lý / Admin)
+    // Mở Form Tạo Điểm Nguy Hiểm Mới (Chỉ dành cho Cán bộ chính quyền địa phương)
     const handleOpenCreateHazardModal = () => {
+      if (isAdmin) {
+        showToast('Quản trị viên (ADMIN) không có thẩm quyền tạo điểm nguy hiểm. Quyền này chỉ dành riêng cho Cán bộ chính quyền địa phương.', 'error');
+        return;
+      }
+
       let defaultLat = 16.0570;
       let defaultLng = 108.2170;
-      if (fixedJurisdictionConfig.bounds) {
+      if (fixedJurisdictionConfig?.bounds) {
         defaultLat = Number(((fixedJurisdictionConfig.bounds.minLat + fixedJurisdictionConfig.bounds.maxLat) / 2).toFixed(5));
         defaultLng = Number(((fixedJurisdictionConfig.bounds.minLng + fixedJurisdictionConfig.bounds.maxLng) / 2).toFixed(5));
       }
@@ -513,12 +798,28 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       setCreateHazardType('FLOOD');
       setCreateCustomHazardType('');
       setCreateSeverity('HIGH');
-      setCreateAddress(`${fixedJurisdictionConfig.name}, TP Đà Nẵng`);
+      let initAreaId = '';
+      if (isAdmin) {
+        if (selectedAdminProvince !== 'ALL') {
+          const matched = areas.find(
+            (a) =>
+              a.name.toLowerCase().includes(selectedAdminProvince.toLowerCase()) ||
+              selectedAdminProvince.toLowerCase().includes(a.name.toLowerCase())
+          );
+          initAreaId = matched ? String(matched._id) : `PROV_${selectedAdminProvince}`;
+        } else if (areas.length > 0) {
+          initAreaId = String(areas[0]._id);
+        }
+      } else {
+        initAreaId = (validAreaById?._id as string) || (foundAreaByName?._id as string) || accountAreaId || '';
+      }
+      setCreateHazardAreaId(initAreaId);
+      setCreateAddress(isAdmin ? (selectedAdminProvince !== 'ALL' ? selectedAdminProvince : '') : (accountAreaWithCity || accountAreaDisplayName));
       setCreateLat(defaultLat);
       setCreateLng(defaultLng);
       setCreateDescription('');
       setCreateStatus('APPROVED');
-      setCreateReviewNote(`Điểm nguy hiểm được thiết lập bởi Cán bộ ${fixedJurisdictionConfig.name}`);
+      setCreateReviewNote(isAdmin ? 'Điểm nguy hiểm được thiết lập bởi Quản Trị Viên Hệ Thống SOS' : `Điểm nguy hiểm được thiết lập bởi Cán bộ ${localTabLabel}`);
       setCreateMapLinkInput('');
       setCreateMapLinkStatus(null);
       setCreateErrors({});
@@ -569,7 +870,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
         setCreateLat(res.lat);
         setCreateLng(res.lng);
         setCreateErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-        if (res.placeName && (!createAddress || createAddress.includes('TP Đà Nẵng'))) {
+        if (res.placeName && (!createAddress || createAddress === (accountAreaWithCity || accountAreaDisplayName) || createAddress === localTabLabel)) {
           setCreateAddress(res.placeName);
           setCreateErrors((prev) => ({ ...prev, address: undefined }));
         }
@@ -589,6 +890,11 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
     // Gửi yêu cầu Tạo Điểm Nguy Hiểm Mới lên server
     const handleSubmitCreateHazard = async () => {
+      if (isAdmin) {
+        showToast('Quản trị viên (ADMIN) không có thẩm quyền tạo điểm nguy hiểm. Quyền này chỉ dành riêng cho Cán bộ chính quyền địa phương.', 'error');
+        return;
+      }
+
       const errors: {
         title?: string;
         address?: string;
@@ -655,8 +961,20 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
     // Thực hiện gọi API tạo điểm nguy hiểm sau khi đã xác nhận
     const executeSubmitCreateHazard = async () => {
+      if (isAdmin) {
+        showToast('Quản trị viên (ADMIN) không có thẩm quyền tạo điểm nguy hiểm. Quyền này chỉ dành riêng cho Cán bộ chính quyền địa phương.', 'error');
+        return;
+      }
       try {
         setSubmittingCreate(true);
+        const resolvedAreaId =
+          createHazardAreaId ||
+          (isAdmin && selectedAdminProvince !== 'ALL' ? `PROV_${selectedAdminProvince}` : '') ||
+          (validAreaById?._id as string) ||
+          (foundAreaByName?._id as string) ||
+          (areas[0]?._id as string) ||
+          accountAreaId;
+
         const payload = {
           title: createTitle.trim(),
           description: createDescription.trim(),
@@ -668,9 +986,9 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
             coordinates: [Number(createLng), Number(createLat)] as [number, number],
           },
           address: createAddress.trim(),
-          areaId: fixedJurisdictionConfig.areaId,
+          areaId: resolvedAreaId,
           status: createStatus,
-          reviewNote: createReviewNote.trim() || `Cán bộ ${fixedJurisdictionConfig.name} tạo trực tiếp`,
+          reviewNote: createReviewNote.trim() || `Cán bộ ${localTabLabel} tạo trực tiếp`,
         };
 
         const res = await createHazardReport(payload);
@@ -934,6 +1252,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
         const res = await deleteHazardReport(id);
         if (res.success) {
           setHazardReports((prev) => prev.filter((r) => r._id !== id));
+          setSelectedHazardIds((prev) => prev.filter((itemId) => itemId !== id));
           setHazardCounts((prev) => {
             const currentItem = hazardReports.find((r) => r._id === id);
             const st = currentItem?.status || 'PENDING';
@@ -955,6 +1274,97 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       } finally {
         setLoading(false);
       }
+    };
+
+    // Duyệt nhanh hàng loạt các điểm nguy hiểm đã chọn
+    const handleBulkApproveHazards = () => {
+      if (selectedHazardIds.length === 0) return;
+      const count = selectedHazardIds.length;
+      setConfirmModal({
+        isOpen: true,
+        title: `Phê duyệt nhanh ${count} điểm nguy hiểm đã chọn`,
+        message: `Bạn có chắc chắn muốn phê duyệt nhanh ${count} điểm nguy hiểm đã chọn? Các điểm này sẽ được chuyển sang trạng thái ĐÃ DUYỆT (APPROVED) và hiển thị trực tiếp lên bản đồ cứu hộ.`,
+        type: 'primary',
+        confirmText: `Duyệt (${count})`,
+        cancelText: 'Hủy bỏ',
+        onConfirm: async () => {
+          setIsBulkHazardAction(true);
+          try {
+            let successCount = 0;
+            await Promise.allSettled(
+              selectedHazardIds.map(async (id) => {
+                const res = await reviewHazardReport(id, 'APPROVED', 'Đã thẩm định và phê duyệt hàng loạt');
+                if (res.success && res.data) {
+                  successCount++;
+                  setHazardReports((prev) => prev.map((r) => (r._id === id ? res.data : r)));
+                }
+              })
+            );
+            setSelectedHazardIds([]);
+            refreshData();
+            window.dispatchEvent(new CustomEvent('sos_data_updated'));
+            setConfirmModal((c) => ({ ...c, isOpen: false }));
+            showToast(`✅ Đã phê duyệt thành công ${successCount} điểm nguy hiểm!`, 'success');
+          } catch (err: any) {
+            showToast('❌ Có lỗi khi phê duyệt hàng loạt: ' + (err.message || 'Lỗi không xác định'), 'error');
+          } finally {
+            setIsBulkHazardAction(false);
+          }
+        },
+      });
+    };
+
+    // Xóa vĩnh viễn hàng loạt các điểm nguy hiểm đã chọn
+    const handleBulkDeleteHazards = () => {
+      if (selectedHazardIds.length === 0) return;
+      const count = selectedHazardIds.length;
+      setConfirmModal({
+        isOpen: true,
+        title: `Xác nhận xóa vĩnh viễn ${count} điểm nguy hiểm đã chọn`,
+        message: `Bạn có chắc chắn muốn xóa vĩnh viễn ${count} điểm nguy hiểm đã chọn không? Thao tác này sẽ gỡ bỏ dữ liệu hoàn toàn khỏi cơ sở dữ liệu và bản đồ cứu trợ.`,
+        type: 'danger',
+        confirmText: `Xác nhận xóa vĩnh viễn (${count})`,
+        cancelText: 'Hủy bỏ',
+        onConfirm: async () => {
+          setIsBulkHazardAction(true);
+          try {
+            let successCount = 0;
+            let failCount = 0;
+            await Promise.allSettled(
+              selectedHazardIds.map(async (id) => {
+                try {
+                  const res = await deleteHazardReport(id);
+                  if (res.success) {
+                    successCount++;
+                  } else {
+                    failCount++;
+                  }
+                } catch {
+                  failCount++;
+                }
+              })
+            );
+            const deletedIdSet = new Set(selectedHazardIds);
+            setHazardReports((prev) => prev.filter((r) => !deletedIdSet.has(r._id)));
+            if (detailHazard && deletedIdSet.has(detailHazard._id)) {
+              setDetailHazard(null);
+            }
+            setSelectedHazardIds([]);
+            refreshData();
+            window.dispatchEvent(new CustomEvent('sos_data_updated'));
+            setConfirmModal((c) => ({ ...c, isOpen: false }));
+            if (failCount === 0) {
+              showToast(`✅ Đã xóa vĩnh viễn ${successCount} điểm nguy hiểm thành công!`, 'success');
+            } else {
+              showToast(`⚠️ Đã xóa ${successCount} điểm, ${failCount} điểm thất bại.`, 'warning');
+            }
+          } catch (err: any) {
+            showToast('❌ Có lỗi khi xóa hàng loạt: ' + (err.message || 'Lỗi không xác định'), 'error');
+          } finally {
+            setIsBulkHazardAction(false);
+          }
+        },
+      });
     };
 
     return (
@@ -985,50 +1395,39 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
             gap: '12px',
           }}
         >
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <AlertTriangle size={20} color="#0284c7" />
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: '18px',
-                  fontWeight: 800,
-                  color: '#0f172a',
-                  letterSpacing: '0.2px',
-                  textTransform: 'uppercase',
-                }}
-              >
-                Duyệt & Quản Lý Điểm Nguy Hiểm
-              </h2>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '5px', fontSize: '13.5px' }}>
-              <MapPin size={15} color="#64748b" />
-              <span style={{ color: '#64748b', fontWeight: 500 }}>Địa bàn phụ trách:</span>
-              <strong style={{ color: '#0f172a', fontWeight: 700 }}>{fixedJurisdictionConfig.name}</strong>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <MapPin size={16} color="#0284c7" />
+            <span style={{ color: '#64748b', fontWeight: 500, fontSize: '13.5px' }}>
+              {isAdmin ? 'Phạm vi quản trị:' : 'Địa bàn phụ trách:'}
+            </span>
+            <strong style={{ color: '#0f172a', fontWeight: 700, fontSize: '14px' }}>
+              {isAdmin ? 'Toàn quốc' : accountAreaWithCity}
+            </strong>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              type="button"
-              className="sos-btn-flat primary"
-              onClick={handleOpenCreateHazardModal}
-              style={{
-                padding: '8px 16px',
-                fontSize: '13px',
-                backgroundColor: '#0284c7',
-                color: '#ffffff',
-                borderColor: '#0284c7',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <PlusCircle size={15} />
-              <span>Tạo Điểm Nguy Hiểm</span>
-            </button>
+            {!isAdmin && (
+              <button
+                type="button"
+                className="sos-btn-flat primary"
+                onClick={handleOpenCreateHazardModal}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  backgroundColor: '#0284c7',
+                  color: '#ffffff',
+                  borderColor: '#0284c7',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <PlusCircle size={15} />
+                <span>Tạo Điểm Nguy Hiểm</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -1042,31 +1441,106 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
           </div>
         </div>
 
-        {/* 2. CHỌN PHẠM VI XEM: TÊN ĐỊA PHƯƠNG & TÊN THÀNH PHỐ (CỐ ĐỊNH) */}
-        <div className="sos-scope-tabs" style={{ flexShrink: 0 }}>
-          <button
-            type="button"
-            className={`sos-scope-tab ${managementScope === 'LOCAL' ? 'active' : ''}`}
-            onClick={() => {
-              setManagementScope('LOCAL');
-              setHazardPage(1);
-            }}
-          >
-            <span>{fixedJurisdictionConfig.name}</span>
-            <span className="sos-scope-badge">{localReports.length}</span>
-          </button>
+        {/* 2. CHỌN PHẠM VI XEM: ADMIN (1 TAB TOÀN QUỐC + DROPDOWN CHỌN TỈNH/THÀNH) VS CÁN BỘ ĐỊA PHƯƠNG (2 TAB) */}
+        <div className="sos-scope-tabs" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          {isAdmin ? (
+            <>
+              <button
+                type="button"
+                className="sos-scope-tab active"
+                onClick={() => {
+                  setSelectedAdminProvince('ALL');
+                  setHazardPage(1);
+                }}
+                title="Hiển thị tất cả điểm nguy hiểm trên toàn quốc"
+              >
+                <span>{selectedAdminProvince === 'ALL' ? 'Toàn quốc' : selectedAdminProvince}</span>
+                <span className="sos-scope-badge">{baseScopedReports.length}</span>
+              </button>
 
-          <button
-            type="button"
-            className={`sos-scope-tab ${managementScope === 'CITY' ? 'active' : ''}`}
-            onClick={() => {
-              setManagementScope('CITY');
-              setHazardPage(1);
-            }}
-          >
-            <span>Thành phố Đà Nẵng</span>
-            <span className="sos-scope-badge">{hazardReports.length}</span>
-          </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '4px' }}>
+                <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500 }}>
+                  Lọc theo Tỉnh / Thành phố:
+                </span>
+                <select
+                  value={selectedAdminProvince}
+                  onChange={(e) => {
+                    setSelectedAdminProvince(e.target.value);
+                    setHazardPage(1);
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '13px',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    backgroundColor: '#ffffff',
+                    color: '#0f172a',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    outline: 'none',
+                    minWidth: '220px',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                  }}
+                >
+                  <option value="ALL">-- Tất cả Tỉnh / Thành phố (Toàn quốc) --</option>
+                  {adminProvinceOptions.map((p: { code?: number; name: string; count: number }) => (
+                    <option key={p.code || p.name} value={p.name}>
+                      {p.name} {p.count > 0 ? `(${p.count})` : ''}
+                    </option>
+                  ))}
+                </select>
+
+                {selectedAdminProvince !== 'ALL' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedAdminProvince('ALL');
+                      setHazardPage(1);
+                    }}
+                    title="Quay lại xem Toàn quốc"
+                    style={{
+                      padding: '5px 10px',
+                      fontSize: '12px',
+                      color: '#0284c7',
+                      backgroundColor: '#f0f9ff',
+                      border: '1px solid #bae6fd',
+                      borderRadius: '5px',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                    }}
+                  >
+                    ✕ Xem Toàn quốc
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className={`sos-scope-tab ${managementScope === 'LOCAL' ? 'active' : ''}`}
+                onClick={() => {
+                  setManagementScope('LOCAL');
+                  setHazardPage(1);
+                }}
+              >
+                <span>{localTabLabel}</span>
+                <span className="sos-scope-badge">{localReports.length}</span>
+              </button>
+
+              <button
+                type="button"
+                className={`sos-scope-tab ${managementScope === 'CITY' ? 'active' : ''}`}
+                onClick={() => {
+                  setManagementScope('CITY');
+                  setHazardPage(1);
+                }}
+              >
+                <span>{cityTabLabel}</span>
+                <span className="sos-scope-badge">{hazardReports.length}</span>
+              </button>
+            </>
+          )}
         </div>
 
         {/* 3. THANH CÔNG CỤ: TAB LỌC TRẠNG THÁI & TÌM KIẾM (CỐ ĐỊNH) */}
@@ -1175,11 +1649,113 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
             flexDirection: 'column',
           }}
         >
+          {/* THANH THAO TÁC HÀNG LOẠT (BULK ACTIONS BAR) */}
+          {selectedHazardIds.length > 0 && (
+            <div
+              style={{
+                padding: '10px 16px',
+                backgroundColor: '#fef2f2',
+                borderBottom: '1px solid #fecaca',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontWeight: 600, color: '#991b1b', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <AlertTriangle size={16} color="#dc2626" />
+                  <span>Đã chọn <strong>{selectedHazardIds.length}</strong> điểm nguy hiểm</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedHazardIds([])}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#64748b',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    padding: '2px 4px',
+                  }}
+                >
+                  Bỏ chọn
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={handleBulkApproveHazards}
+                  disabled={isBulkHazardAction}
+                  className="sos-btn-flat success"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: isBulkHazardAction ? 'not-allowed' : 'pointer',
+                  }}
+                  title="Duyệt nhanh tất cả các điểm nguy hiểm đã chọn"
+                >
+                  <CheckCircle2 size={13} />
+                  <span>Duyệt nhanh ({selectedHazardIds.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleBulkDeleteHazards}
+                  disabled={isBulkHazardAction}
+                  className="sos-btn-flat danger"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: isBulkHazardAction ? 'not-allowed' : 'pointer',
+                  }}
+                  title="Xóa vĩnh viễn các điểm nguy hiểm đã chọn"
+                >
+                  <Trash2 size={13} />
+                  <span>Xóa ({selectedHazardIds.length})</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* KHUNG CUỘN CỦA BẢNG DỮ LIỆU */}
           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto', minHeight: 0 }}>
             <table className="sos-clean-table">
               <thead>
                 <tr>
+                  <th style={{ width: '40px', textAlign: 'center', padding: '10px 8px' }}>
+                    <input
+                      type="checkbox"
+                      style={{ width: '16px', height: '16px', cursor: 'pointer', verticalAlign: 'middle' }}
+                      checked={
+                        paginatedReports.length > 0 &&
+                        paginatedReports.every((r) => selectedHazardIds.includes(r._id))
+                      }
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          const pageIds = paginatedReports.map((r) => r._id);
+                          setSelectedHazardIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+                        } else {
+                          const pageIdSet = new Set(paginatedReports.map((r) => r._id));
+                          setSelectedHazardIds((prev) => prev.filter((id) => !pageIdSet.has(id)));
+                        }
+                      }}
+                      title="Chọn tất cả điểm nguy hiểm trên trang hiện tại"
+                    />
+                  </th>
                   <th
                     className={`sortable ${hazardSortField === 'title' ? 'sorted' : ''}`}
                     onClick={() => handleSort('title')}
@@ -1252,30 +1828,32 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
               <tbody>
                 {totalHazardItems === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b', fontSize: '13px' }}>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b', fontSize: '13px' }}>
                       <AlertTriangle size={32} color="#94a3b8" style={{ marginBottom: '8px' }} />
                       <div>Không có điểm nguy hiểm nào trong danh mục này.</div>
-                      <button
-                        type="button"
-                        onClick={handleOpenCreateHazardModal}
-                        style={{
-                          marginTop: '12px',
-                          padding: '6px 14px',
-                          fontSize: '12px',
-                          color: '#0284c7',
-                          background: '#f0f9ff',
-                          border: '1px solid #bae6fd',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontWeight: 600,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '5px',
-                        }}
-                      >
-                        <PlusCircle size={13} />
-                        <span>Tạo điểm nguy hiểm mới ngay</span>
-                      </button>
+                      {!isAdmin && (
+                        <button
+                          type="button"
+                          onClick={handleOpenCreateHazardModal}
+                          style={{
+                            marginTop: '12px',
+                            padding: '6px 14px',
+                            fontSize: '12px',
+                            color: '#0284c7',
+                            background: '#f0f9ff',
+                            border: '1px solid #bae6fd',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                          }}
+                        >
+                          <PlusCircle size={13} />
+                          <span>Tạo điểm nguy hiểm mới ngay</span>
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ) : (
@@ -1287,7 +1865,27 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     const districtName = getHazardDistrictName(r);
 
                     return (
-                      <tr key={r._id}>
+                      <tr
+                        key={r._id}
+                        style={{
+                          backgroundColor: selectedHazardIds.includes(r._id) ? '#fff5f5' : undefined,
+                        }}
+                      >
+                        {/* 0. Checkbox chọn từng mục */}
+                        <td style={{ textAlign: 'center', width: '40px', padding: '10px 8px' }}>
+                          <input
+                            type="checkbox"
+                            style={{ width: '16px', height: '16px', cursor: 'pointer', verticalAlign: 'middle' }}
+                            checked={selectedHazardIds.includes(r._id)}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              setSelectedHazardIds((prev) =>
+                                prev.includes(r._id) ? prev.filter((id) => id !== r._id) : [...prev, r._id]
+                              );
+                            }}
+                          />
+                        </td>
+
                         {/* 1. Điểm nguy hiểm & Loại hiểm họa */}
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1983,7 +2581,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                       >
                         <i className="bi bi-shield-lock-fill" style={{ fontSize: '15px', color: '#b45309' }}></i>
                         <span>
-                          Điểm nguy hiểm này ngoài khu vực quản lý ({activeOfficer?.jurisdictionAreaName || 'Địa bàn phụ trách'}) — Bạn chỉ có quyền xem thông tin.
+                          Điểm nguy hiểm này ngoài khu vực quản lý ({accountAreaDisplayName}) — Bạn chỉ có quyền xem thông tin.
                         </span>
                       </div>
                     )}
@@ -2826,8 +3424,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
           </div>
         )}
 
-        {/* MODAL TẠO ĐIỂM NGUY HIỂM MỚI (CHO CÁN BỘ ĐỊA PHƯƠNG & ADMIN) */}
-        {isCreateHazardOpen && (
+        {/* MODAL TẠO ĐIỂM NGUY HIỂM MỚI (CHỈ DÀNH CHO CÁN BỘ CHÍNH QUYỀN ĐỊA PHƯƠNG) */}
+        {isCreateHazardOpen && !isAdmin && (
           <div
             style={{
               position: 'fixed',
@@ -2887,7 +3485,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                       Khởi Tạo Điểm Nguy Hiểm Mới
                     </h3>
                     <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                      Cán bộ địa phương {fixedJurisdictionConfig.name} thiết lập điểm cảnh báo và công bố trực tiếp lên hệ thống.
+                      Cán bộ địa phương {localTabLabel} thiết lập điểm cảnh báo và công bố trực tiếp lên hệ thống.
                     </p>
                   </div>
                 </div>
@@ -3086,7 +3684,81 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                       </div>
                     </div>
 
-                    {/* 4. Địa chỉ hiện trường */}
+                    {/* 4. Khu vực quản lý hành chính */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
+                        Khu vực / Tỉnh thành
+                      </label>
+                      {isAdmin ? (
+                        <select
+                          value={createHazardAreaId}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setCreateHazardAreaId(val);
+                            const found = areas.find((a) => a._id === val);
+                            if (found && !createAddress) {
+                              setCreateAddress(found.name);
+                            }
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 10px',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '12.5px',
+                            color: '#0f172a',
+                            background: '#ffffff',
+                            boxSizing: 'border-box',
+                          }}
+                        >
+                          <option value="">-- Chọn khu vực hành chính ({accountAreaDisplayName || 'Toàn quốc'}) --</option>
+                          {areas.length > 0 && (
+                            <optgroup label="Khu vực hành chính hệ thống">
+                              {areas.map((a) => (
+                                <option key={`h-area-${a._id}`} value={a._id}>
+                                  {a.name} {a.code ? `[${a.code}]` : ''}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                          {allProvinces.length > 0 && (
+                            <optgroup label="Tất cả 63 Tỉnh / Thành phố">
+                              {allProvinces.map((p) => {
+                                const matchedArea = areas.find((a) => a.name.toLowerCase() === p.name.toLowerCase());
+                                const val = matchedArea ? matchedArea._id : `PROV_${p.name}`;
+                                return (
+                                  <option key={`h-prov-${p.code || p.name}`} value={val}>
+                                    {p.name}
+                                  </option>
+                                );
+                              })}
+                            </optgroup>
+                          )}
+                        </select>
+                      ) : (
+                        <div
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            background: '#f8fafc',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            boxSizing: 'border-box',
+                            minHeight: '36px',
+                          }}
+                        >
+                          <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
+                            {accountAreaDisplayName}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 5. Địa chỉ hiện trường */}
                     <div>
                       <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
                         Địa chỉ hiện trường cụ thể <span style={{ color: '#dc2626' }}>*</span>
@@ -3326,7 +3998,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            if (fixedJurisdictionConfig.bounds) {
+                            if (fixedJurisdictionConfig?.bounds) {
                               const b = fixedJurisdictionConfig.bounds;
                               setCreateLat(Number(((b.minLat + b.maxLat) / 2).toFixed(5)));
                               setCreateLng(Number(((b.minLng + b.maxLng) / 2).toFixed(5)));
