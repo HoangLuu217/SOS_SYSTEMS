@@ -42,6 +42,7 @@ export interface RescuerProfileOverviewScreenProps {
   onNavigateToNotifications: () => void;
   unreadNotificationsCount?: number;
   refreshTrigger?: number;
+  onNavigateToTab?: (tab: any) => void;
 }
 
 const FALLBACK_RESCUE_TEAMS: RescueTeamData[] = [
@@ -939,7 +940,7 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle="dark-content" />
 
       {/* 1. Header: RescueSOS Branding + Notification Bell */}
       <View style={styles.header}>
@@ -1526,7 +1527,7 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
         statusBarTranslucent={true}
       >
         <View style={styles.teamModalContainer}>
-          <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={true} />
+          <StatusBar barStyle="dark-content" />
 
           {/* Header Modal */}
           <View style={[styles.teamModalHeader, { paddingTop: topSafeInset }]}>
@@ -1746,7 +1747,7 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
       >
         {selectedTeamForDetail && (
           <View style={styles.teamModalContainer}>
-            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={true} />
+            <StatusBar barStyle="dark-content" />
 
             {/* Header Modal */}
             <View style={[styles.teamModalHeader, { paddingTop: topSafeInset }]}>
