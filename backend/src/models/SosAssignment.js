@@ -5,17 +5,18 @@ const sosAssignmentSchema = new mongoose.Schema(
     sosRequestId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'SosRequest',
-      required: [true, 'Yêu cầu cứu nạn (sosRequestId) là bắt buộc'],
+      default: null,
     },
     // Trường tương thích ngược nếu code cũ gọi sosId
     sosId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'SosRequest',
+      default: null,
     },
     authorityOrganizationId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'AuthorityOrganization',
-      required: [true, 'Cơ quan chỉ đạo điều phối (authorityOrganizationId) là bắt buộc'],
+      default: null,
     },
     rescueTeamId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -26,6 +27,22 @@ const sosAssignmentSchema = new mongoose.Schema(
     teamId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'RescueTeam',
+    },
+    // Loại nhiệm vụ: Cứu nạn khẩn cấp hoặc Vận chuyển xuất cấp cứu trợ
+    missionType: {
+      type: String,
+      enum: ['SOS_RESCUE', 'RELIEF_DISPATCH'],
+      default: 'SOS_RESCUE',
+    },
+    destination: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    recipientName: {
+      type: String,
+      trim: true,
+      default: null,
     },
     rescuerId: {
       type: mongoose.Schema.Types.ObjectId,

@@ -1,4 +1,4 @@
-﻿const mongoose = require("mongoose");
+const mongoose = require("mongoose");
 
 /**
  * Model: Equipment (Vat tu / Trang thiet bi doi cuu ho)
@@ -13,11 +13,11 @@
  */
 const equipmentSchema = new mongoose.Schema(
   {
-    // Doi cuu ho so huu vat tu nay
+    // Doi cuu ho so huu vat tu nay (null neu o Kho tong du tru)
     teamId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "RescueTeam",
-      required: [true, "Doi cuu ho (teamId) la bat buoc"],
+      default: null,
     },
 
     // Co quan cap phat vat tu
@@ -48,17 +48,38 @@ const equipmentSchema = new mongoose.Schema(
       enum: {
         values: [
           "LIFE_VEST",      // Ao phao
+          "LIFE_SAVING",    // Tuong thich cu (Cuu sinh)
           "MEDICAL_KIT",    // Tui y te
+          "MEDICAL_DEVICE", // Thiet bi y te (May soc tim, ...)
           "COMMUNICATION",  // Bo dam, thiet bi lien lac
           "LIGHTING",       // Den pin, den chieu sang
           "ROPE_TOOL",      // Day thua, dung cu leo tree
+          "TOOL",           // Dung cu cuu ho (may cua, ...)
+          "VEHICLE_ACCESSORY", // Phu kien phuong tien (mai cheo, bom...)
           "SHELTER",        // Leu trai, bat
           "PPE",            // Bao ho ca nhan (mu, gang, kinh)
-          "FOOD_WATER",     // Luong kho, binh nuoc
+          "FOOD_WATER",     // Luong kho, nuoc uong
+          "WATER_PURIFICATION", // Vien loc nuoc, hoa chat khu khuan
+          "MEDICAL_SUPPLY", // Bong bang, thuoc men tieu hao
+          "FUEL",           // Xang, dau chay may
+          "HYGIENE",        // Nhu yeu pham, ve sinh
           "OTHER",
         ],
         message: "Danh muc vat tu {VALUE} khong hop le",
       },
+    },
+
+    // Loai vat tu: DURABLE (Trang thiet bi / Khi tai tai su dung) hoac CONSUMABLE (Vat tu tieu hao / Cuu tro)
+    supplyType: {
+      type: String,
+      enum: ["DURABLE", "CONSUMABLE"],
+      default: "DURABLE",
+    },
+
+    // Nguong canh bao ton kho toi thieu (khi quantity <= minThreshold thi canh bao)
+    minThreshold: {
+      type: Number,
+      default: 20,
     },
 
     // Vat tu tai su dung: co serialNumber
@@ -92,6 +113,7 @@ const equipmentSchema = new mongoose.Schema(
         values: [
           "AVAILABLE",    // Co san, dung duoc
           "IN_USE",       // Dang duoc doi dung trong nhiem vu
+          "BORROWED",     // Dang xuat kho cho doi
           "MAINTENANCE",  // Dang bao tri / sua chua
           "DAMAGED",      // Hu hong, khong dung duoc
           "LOST",         // Mat mat
@@ -100,12 +122,6 @@ const equipmentSchema = new mongoose.Schema(
         message: "Trang thai vat tu {VALUE} khong hop le",
       },
       default: "AVAILABLE",
-    },
-
-    // Ngay het han su dung (ao phao, thuoc, binh chua chay)
-    expiryDate: {
-      type: Date,
-      default: null,
     },
 
     // Ghi chu (nguon goc, tinh trang chi tiet, li do hong/mat)
@@ -125,6 +141,7 @@ const equipmentSchema = new mongoose.Schema(
 equipmentSchema.index({ teamId: 1 });
 equipmentSchema.index({ providedBy: 1 });
 equipmentSchema.index({ category: 1 });
+equipmentSchema.index({ supplyType: 1 });
 equipmentSchema.index({ status: 1 });
 // sparse: true vi vat tu tieu hao khong co serialNumber
 equipmentSchema.index({ serialNumber: 1 }, { sparse: true });

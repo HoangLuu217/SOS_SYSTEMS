@@ -9,3 +9,4 @@ export * from './hazard.api';
 export * from './shelter.api';
 export * from './chat.api';
 export * from './province.api';
+export * from './equipment.api';

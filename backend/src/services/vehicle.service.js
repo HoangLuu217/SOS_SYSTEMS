@@ -8,10 +8,13 @@ class VehicleService {
   async createVehicle(data) {
     const { teamId, type, plateNumber, capacity, status, description } = data;
 
-    // Kiểm tra Đội cứu hộ sở hữu
-    const team = await RescueTeam.findById(teamId);
-    if (!team) {
-      throw new ApiError(404, 'Không tìm thấy Đội cứu hộ sở hữu (teamId)');
+    let validTeamId = null;
+    if (teamId) {
+      const team = await RescueTeam.findById(teamId);
+      if (!team) {
+        throw new ApiError(404, 'Không tìm thấy Đội cứu hộ sở hữu (teamId)');
+      }
+      validTeamId = teamId;
     }
 
     // Kiểm tra trùng biển số
@@ -22,7 +25,7 @@ class VehicleService {
     }
 
     const vehicle = await Vehicle.create({
-      teamId,
+      teamId: validTeamId,
       type,
       plateNumber: cleanPlateNumber,
       capacity: capacity !== undefined ? Number(capacity) : 1,
@@ -42,7 +45,13 @@ class VehicleService {
     const skip = (page - 1) * limit;
 
     const filter = {};
-    if (query.teamId) filter.teamId = query.teamId;
+    if (query.teamId) {
+      if (query.teamId === 'UNASSIGNED' || query.teamId === 'null') {
+        filter.teamId = null;
+      } else {
+        filter.teamId = query.teamId;
+      }
+    }
     if (query.type) filter.type = query.type;
     if (query.status) filter.status = query.status;
     if (query.plateNumber) {
@@ -85,7 +94,13 @@ class VehicleService {
 
       const teamsInArea = await RescueTeam.find({ $or: areaConditions }).select('_id');
       const teamIds = teamsInArea.map((t) => t._id);
-      filter.teamId = { $in: teamIds };
+      if (!filter.teamId) {
+        filter.$or = [
+          { teamId: { $in: teamIds } },
+          { teamId: null },
+          { teamId: { $exists: false } },
+        ];
+      }
     }
 
     const [vehicles, total] = await Promise.all([
@@ -144,10 +159,14 @@ class VehicleService {
       throw new ApiError(404, 'Không tìm thấy phương tiện cần cập nhật');
     }
 
-    if (updateData.teamId) {
-      const team = await RescueTeam.findById(updateData.teamId);
-      if (!team) throw new ApiError(404, 'Đội cứu hộ mới (teamId) không tồn tại');
-      vehicle.teamId = updateData.teamId;
+    if (updateData.teamId !== undefined) {
+      if (!updateData.teamId || updateData.teamId === 'NONE' || updateData.teamId === 'null') {
+        vehicle.teamId = null;
+      } else {
+        const team = await RescueTeam.findById(updateData.teamId);
+        if (!team) throw new ApiError(404, 'Đội cứu hộ mới (teamId) không tồn tại');
+        vehicle.teamId = updateData.teamId;
+      }
     }
 
     if (updateData.plateNumber) {

@@ -938,6 +938,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="sos-user-name" title={displayUserName}>
                   {displayUserName}
                 </span>
+                <span className="sos-user-role" style={{ fontSize: 11, color: '#94a3b8', display: 'block', lineHeight: 1.2 }} title={displayUserRole}>
+                  {displayUserRole}
+                </span>
               </div>
             )}
           </div>
