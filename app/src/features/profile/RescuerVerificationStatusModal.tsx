@@ -110,7 +110,7 @@ export const RescuerVerificationStatusModal: React.FC<RescuerVerificationStatusM
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <StatusBar barStyle="dark-content" />
 
         {/* Top Header */}
         <View style={styles.topHeader}>
