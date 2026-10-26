@@ -45,65 +45,8 @@ export interface RescuerProfileOverviewScreenProps {
   onNavigateToTab?: (tab: any, options?: any) => void;
 }
 
-const FALLBACK_RESCUE_TEAMS: RescueTeamData[] = [
-  {
-    _id: 'team_dn_flood_01',
-    name: 'Đội Cứu Hộ Ca-nô Sông Hàn 01',
-    type: 'FLOOD_RESCUE',
-    status: 'ACTIVE',
-    areaId: { name: 'Phường Hòa Cường Bắc' },
-    authorityId: { name: 'UBND Quận Hải Châu' },
-    leaderId: { fullName: 'Nguyễn Văn An (Chỉ huy)', phone: '0905123456' },
-    members: [
-      { rescuerId: 'mem_1' as any, role: 'LEADER', joinedAt: '2024-01-01T00:00:00.000Z' },
-      { rescuerId: 'mem_2' as any, role: 'MEMBER', joinedAt: '2024-01-01T00:00:00.000Z' },
-      { rescuerId: 'mem_3' as any, role: 'MEMBER', joinedAt: '2024-01-01T00:00:00.000Z' },
-    ],
-    description: 'Chuyên trách cứu nạn đường thủy, vượt lũ, tiếp tế vùng cô lập.',
-  },
-  {
-    _id: 'team_dn_flood_02',
-    name: 'Đội Xuồng Máy Sơ Tán Lũ Lụt Hải Châu',
-    type: 'FLOOD_RESCUE',
-    status: 'ACTIVE',
-    areaId: { name: 'Phường Hòa Cường Nam' },
-    authorityId: { name: 'Ban Chỉ Huy PCTT Quận Hải Châu' },
-    leaderId: { fullName: 'Hoàng Quốc Tuấn (Đội trưởng)', phone: '0913445566' },
-    members: [
-      { rescuerId: 'mem_4' as any, role: 'LEADER', joinedAt: '2024-01-01T00:00:00.000Z' },
-      { rescuerId: 'mem_5' as any, role: 'MEMBER', joinedAt: '2024-01-01T00:00:00.000Z' },
-    ],
-    description: 'Xuồng máy cao tốc sơ tán hộ gia đình ngập sâu và tiếp tế lương thực.',
-  },
-  {
-    _id: 'team_dn_med_03',
-    name: 'Đội Y Tế Cứu Thương Khẩn Cấp Đà Nẵng',
-    type: 'MEDICAL_RESCUE',
-    status: 'ACTIVE',
-    areaId: { name: 'Phường Thuận Phước' },
-    authorityId: { name: 'Trung Tâm Y Tế Hải Châu' },
-    leaderId: { fullName: 'BS. Trần Minh Tuấn', phone: '0905999888' },
-    members: [
-      { rescuerId: 'mem_6' as any, role: 'LEADER', joinedAt: '2024-01-01T00:00:00.000Z' },
-      { rescuerId: 'mem_7' as any, role: 'MEMBER', joinedAt: '2024-01-01T00:00:00.000Z' },
-    ],
-    description: 'Sơ cứu chấn thương, vận chuyển cấp cứu vùng ngập sâu.',
-  },
-  {
-    _id: 'team_dn_search_04',
-    name: 'Đội Tìm Kiếm & Cứu Hộ Sạt Lở Sơn Trà',
-    type: 'SEARCH_RESCUE',
-    status: 'ACTIVE',
-    areaId: { name: 'Phường Thọ Quang' },
-    authorityId: { name: 'Ban Chỉ Huy PCTT Sơn Trà' },
-    leaderId: { fullName: 'Phạm Quốc Hưng (Chỉ huy)', phone: '0905333444' },
-    members: [
-      { rescuerId: 'mem_8' as any, role: 'LEADER', joinedAt: '2024-01-01T00:00:00.000Z' },
-      { rescuerId: 'mem_9' as any, role: 'MEMBER', joinedAt: '2024-01-01T00:00:00.000Z' },
-    ],
-    description: 'Ứng phó sạt lở đèo dốc, cứu hộ rừng và ven biển.',
-  },
-];
+const FALLBACK_RESCUE_TEAMS: RescueTeamData[] = [];
+
 
 export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreenProps> = ({
   onNavigateToEditProfile,
@@ -167,18 +110,35 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
   };
 
   const isUserLeaderOfTeam = (team?: RescueTeamData | null) => {
-    if (!team || !user?._id) return false;
-    const currentUserId = user._id.toString();
+    if (!team || !user) return false;
+    const currentUserId = (user._id || (user as any)?.id)?.toString();
+    const currentUserPhone = user.phone;
+    const currentUserEmail = user.email?.toLowerCase();
     const leaderIdStr = (team.leaderId?._id || team.leaderId)?.toString();
-    return !!currentUserId && currentUserId === leaderIdStr;
+    const leaderPhone = team.leaderId?.phone;
+    const leaderEmail = team.leaderId?.email?.toLowerCase();
+    return (
+      (!!currentUserId && currentUserId === leaderIdStr) ||
+      (!!currentUserPhone && currentUserPhone === leaderPhone) ||
+      (!!currentUserEmail && currentUserEmail === leaderEmail)
+    );
   };
 
   const isUserPendingInTeam = (team?: RescueTeamData | null) => {
-    if (!team || !user?._id || !Array.isArray(team.members)) return false;
-    const currentUserId = user._id.toString();
+    if (!team || !user || !Array.isArray(team.members)) return false;
+    const currentUserId = (user._id || (user as any)?.id)?.toString();
+    const currentUserPhone = user.phone;
+    const currentUserEmail = user.email?.toLowerCase();
     return team.members.some((m: any) => {
-      const rId = (m.rescuerId?._id || m.rescuerId)?.toString();
-      return rId === currentUserId && m.status === 'PENDING';
+      const r = m.rescuerId;
+      const rId = (r?._id || r)?.toString();
+      const rPhone = r?.phone;
+      const rEmail = r?.email?.toLowerCase();
+      const matchesUser =
+        (currentUserId && rId === currentUserId) ||
+        (currentUserPhone && rPhone === currentUserPhone) ||
+        (currentUserEmail && rEmail === currentUserEmail);
+      return matchesUser && m.status === 'PENDING';
     });
   };
 
@@ -189,11 +149,20 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
 
   const getOtherTeamMembers = (team?: RescueTeamData | null) => {
     if (!team || !Array.isArray(team.members)) return [];
-    const currentUserId = user?._id?.toString();
+    const currentUserId = (user?._id || (user as any)?.id)?.toString();
+    const currentUserPhone = user?.phone;
+    const currentUserEmail = user?.email?.toLowerCase();
     return team.members.filter((m: any) => {
-      const mId = (m.rescuerId?._id || m.rescuerId)?.toString();
+      const r = m.rescuerId;
+      const mId = (r?._id || r)?.toString();
+      const mPhone = r?.phone;
+      const mEmail = r?.email?.toLowerCase();
+      const matchesUser =
+        (currentUserId && mId === currentUserId) ||
+        (currentUserPhone && mPhone === currentUserPhone) ||
+        (currentUserEmail && mEmail === currentUserEmail);
       const isApproved = m.status === 'APPROVED' || !m.status;
-      return mId && mId !== currentUserId && isApproved;
+      return !matchesUser && isApproved;
     });
   };
 
@@ -571,16 +540,33 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
           const combinedTeams = rawTeams.length > 0 ? rawTeams : FALLBACK_RESCUE_TEAMS;
           setAllTeams(combinedTeams);
 
-          const currentUserId = user?._id?.toString();
+          const currentUserId = (user?._id || (user as any)?.id)?.toString();
+          const currentUserPhone = user?.phone;
+          const currentUserEmail = user?.email?.toLowerCase();
+
           // Đội đã tham gia chính thức (Leader hoặc Member đã được Approved)
           const foundTeam = combinedTeams.find((t: any) => {
             if (t.status === 'INACTIVE') return false;
-            const isLead = (t.leaderId?._id || t.leaderId)?.toString() === currentUserId;
+            const leaderIdStr = (t.leaderId?._id || t.leaderId)?.toString();
+            const leaderPhone = t.leaderId?.phone;
+            const leaderEmail = t.leaderId?.email?.toLowerCase();
+            const isLead =
+              (currentUserId && leaderIdStr === currentUserId) ||
+              (currentUserPhone && leaderPhone === currentUserPhone) ||
+              (currentUserEmail && leaderEmail === currentUserEmail);
+
             const isMem =
               Array.isArray(t.members) &&
               t.members.some((m: any) => {
-                const rId = (m.rescuerId?._id || m.rescuerId)?.toString();
-                return rId === currentUserId && (m.status === 'APPROVED' || !m.status);
+                const r = m.rescuerId;
+                const rId = (r?._id || r)?.toString();
+                const rPhone = r?.phone;
+                const rEmail = r?.email?.toLowerCase();
+                const matchesUser =
+                  (currentUserId && rId === currentUserId) ||
+                  (currentUserPhone && rPhone === currentUserPhone) ||
+                  (currentUserEmail && rEmail === currentUserEmail);
+                return matchesUser && (m.status === 'APPROVED' || !m.status);
               });
             return isLead || isMem;
           });
@@ -591,8 +577,15 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
             return (
               Array.isArray(t.members) &&
               t.members.some((m: any) => {
-                const rId = (m.rescuerId?._id || m.rescuerId)?.toString();
-                return rId === currentUserId && m.status === 'PENDING';
+                const r = m.rescuerId;
+                const rId = (r?._id || r)?.toString();
+                const rPhone = r?.phone;
+                const rEmail = r?.email?.toLowerCase();
+                const matchesUser =
+                  (currentUserId && rId === currentUserId) ||
+                  (currentUserPhone && rPhone === currentUserPhone) ||
+                  (currentUserEmail && rEmail === currentUserEmail);
+                return matchesUser && m.status === 'PENDING';
               })
             );
           });

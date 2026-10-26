@@ -188,7 +188,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
 
                     <CustomInput
                       iconName="phone"
-                      placeholder="Nhập số điện thoại (ví dụ: 0903000003)"
+                      placeholder="Nhập số điện thoại của bạn"
                       value={phone}
                       onChangeText={text => {
                         setPhone(text.replace(/[^0-9]/g, ''));

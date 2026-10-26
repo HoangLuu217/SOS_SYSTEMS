@@ -18,6 +18,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
+import { io } from 'socket.io-client';
+import { ENV } from '@/config/env';
 import { backendApi } from '@/api';
 import { useAuth } from '@/context/AuthContext';
 import { SosAssignmentData, SosAssignmentStatus, TabName } from '@/types';
@@ -54,9 +57,9 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     vehiclePlate: string;
     vehicleType: string;
   }>({
-    teamName: 'Đội Y Tế Cứu Thương Dã Chiến',
-    vehiclePlate: '43B-115.88',
-    vehicleType: 'AMBULANCE',
+    teamName: 'Đội Cứu Hộ Phản Ứng Nhanh Ngũ Hành Sơn (43-NHS-01)',
+    vehiclePlate: '43-CN-08',
+    vehicleType: 'BOAT',
   });
 
   // Modal SOS khẩn cấp dành cho cứu hộ viên
@@ -129,17 +132,35 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     let isMounted = true;
     const fetchTeamInfo = async () => {
       try {
-        const teamsRes = await backendApi.getRescueTeams();
-        const teams = Array.isArray(teamsRes.data) ? teamsRes.data : [];
-        const currentUserId = user?._id?.toString();
+        const teamsRes = await backendApi.getRescueTeams({ limit: 100 });
+        const teams = Array.isArray(teamsRes.data)
+          ? teamsRes.data
+          : (teamsRes.data as any)?.teams || [];
+        const currentUserId = (user?._id || (user as any)?.id)?.toString();
+        const currentUserPhone = user?.phone;
+        const currentUserEmail = user?.email?.toLowerCase();
 
         const myTeam = teams.find((t: any) => {
-          const isLeader = (t.leaderId?._id || t.leaderId)?.toString() === currentUserId;
+          const leaderIdStr = (t.leaderId?._id || t.leaderId)?.toString();
+          const leaderPhone = t.leaderId?.phone;
+          const leaderEmail = t.leaderId?.email?.toLowerCase();
+          const isLeader =
+            (currentUserId && leaderIdStr === currentUserId) ||
+            (currentUserPhone && leaderPhone === currentUserPhone) ||
+            (currentUserEmail && leaderEmail === currentUserEmail);
+
           const isMember =
             Array.isArray(t.members) &&
             t.members.some((m: any) => {
-              const rId = (m.rescuerId?._id || m.rescuerId)?.toString();
-              return rId === currentUserId && m.status !== 'REJECTED';
+              const r = m.rescuerId;
+              const rId = (r?._id || r)?.toString();
+              const rPhone = r?.phone;
+              const rEmail = r?.email?.toLowerCase();
+              const matchesUser =
+                (currentUserId && rId === currentUserId) ||
+                (currentUserPhone && rPhone === currentUserPhone) ||
+                (currentUserEmail && rEmail === currentUserEmail);
+              return matchesUser && m.status !== 'REJECTED';
             });
           return isLeader || isMember;
         });
@@ -180,6 +201,59 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
       isMounted = false;
     };
   }, [user?._id]);
+
+  // Phát telemetry GPS thời gian thực của cứu hộ viên lên Socket.IO
+  useEffect(() => {
+    let locSub: Location.LocationSubscription | null = null;
+    let s: any = null;
+    let isMounted = true;
+
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted' && isMounted) {
+          const socketUrl = ENV.API_BASE_URL.replace(/\/api\/?$/, '');
+          s = io(socketUrl, { transports: ['websocket', 'polling'] });
+          s.on('connect', () => {
+            if (user?._id) s.emit('register_user', user._id);
+          });
+
+          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+          if (isMounted && pos?.coords) {
+            const locData = {
+              rescuerId: user?._id,
+              phone: user?.phone,
+              location: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+              coords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+            };
+            if (s?.connected) s.emit('rescuer:location_update', locData);
+          }
+
+          locSub = await Location.watchPositionAsync(
+            { accuracy: Location.Accuracy.High, distanceInterval: 5, timeInterval: 4000 },
+            (p) => {
+              if (isMounted && p?.coords && s?.connected) {
+                s.emit('rescuer:location_update', {
+                  rescuerId: user?._id,
+                  phone: user?.phone,
+                  location: { lat: p.coords.latitude, lng: p.coords.longitude },
+                  coords: { lat: p.coords.latitude, lng: p.coords.longitude },
+                });
+              }
+            }
+          );
+        }
+      } catch (err) {
+        console.warn('GPS rescuer telemetry error:', err);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+      if (locSub) locSub.remove();
+      if (s) s.disconnect();
+    };
+  }, [user?._id, user?.phone]);
 
   // Lọc nhiệm vụ theo Tab & Áp dụng nguyên tắc: 1 nhóm chỉ được phép làm 1 nhiệm vụ tại một thời điểm
   const allActiveMissions = useMemo<SosAssignmentData[]>(() => {
@@ -655,14 +729,9 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                   {/* Vật tư & Trang thiết bị cấp phát theo lệnh phân công */}
                   {(() => {
                     const missionSupplies =
-                      item.supplies ||
-                      (item as any).reliefItems ||
-                      sos?.supplies ||
-                      [
-                        { name: 'Áo phao cứu sinh', quantity: Math.max(1, sos?.people || 2), unit: 'Chiếc' },
-                        { name: 'Túi sơ cứu y tế', quantity: 1, unit: 'Bộ' },
-                        { name: 'Nước uống tiệt trùng', quantity: Math.ceil(Math.max(1, sos?.people || 2) / 2), unit: 'Thùng' },
-                      ];
+                      (item.supplies && item.supplies.length > 0 ? item.supplies : null) ||
+                      ((item as any).reliefItems && (item as any).reliefItems.length > 0 ? (item as any).reliefItems : null) ||
+                      (sos?.supplies && sos.supplies.length > 0 ? sos.supplies : null);
 
                     if (!missionSupplies || missionSupplies.length === 0) return null;
 
@@ -838,6 +907,14 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
           fetchMissions(true);
         }}
         onMissionCompleted={() => {
+          if (activeWorkspaceMission?._id) {
+            dismissedMissionsRef.current.add(activeWorkspaceMission._id);
+            setMissions((prev) =>
+              prev.map((m) =>
+                m._id === activeWorkspaceMission._id ? { ...m, status: 'COMPLETED' } : m
+              )
+            );
+          }
           setWorkspaceVisible(false);
           setActiveWorkspaceMission(null);
           fetchMissions(true);

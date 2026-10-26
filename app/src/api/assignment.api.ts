@@ -73,6 +73,30 @@ export class AssignmentApi {
   async getAvailableSosRequests(): Promise<ApiResponse<any[]>> {
     return apiClient.get<any[]>('/sos?status=VERIFIED,ASSIGNED,ACCEPTED,ON_THE_WAY,ARRIVED,RESCUING');
   }
+
+  /**
+   * Yêu cầu xe đón tại bờ (Shore Relay Handoff)
+   */
+  async requestShoreHandoff(
+    sosId: string,
+    data: {
+      landingPoint: { name: string; address?: string; coordinates: [number, number] };
+      vehicleTypeNeeded: 'AMBULANCE' | 'TRUCK' | 'ANY';
+      peopleCount: number;
+      notes?: string;
+      rescueTeamName?: string;
+      rescueTeamId?: string;
+    }
+  ): Promise<ApiResponse<any>> {
+    return apiClient.post<any>(`/sos/${sosId}/shore-handoff/request`, data);
+  }
+
+  /**
+   * Xác nhận hoàn thành bàn giao nạn nhân tại bờ
+   */
+  async completeShoreHandoff(sosId: string): Promise<ApiResponse<any>> {
+    return apiClient.post<any>(`/sos/${sosId}/shore-handoff/complete`, {});
+  }
 }
 
 export const assignmentApi = new AssignmentApi();

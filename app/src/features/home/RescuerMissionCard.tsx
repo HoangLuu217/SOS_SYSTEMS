@@ -191,7 +191,7 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
             </View>
             <View style={styles.priorityBadge}>
               <Text style={styles.priorityBadgeText}>
-                {sos.priority === 'CRITICAL' ? 'NGUY CẤP' : 'KHẨN CẤP'}
+                {sos.priority === 'CRITICAL' ? 'NGUY CẤP' : sos.priority === 'HIGH' ? 'KHẨN CẤP' : sos.priority === 'LOW' ? 'THẤP' : 'TRUNG BÌNH'}
               </Text>
             </View>
           </View>
@@ -380,6 +380,7 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
           initialAssignmentData={activeAssignment}
           onClose={() => setWorkspaceVisible(false)}
           onMissionCompleted={() => {
+            setWorkspaceVisible(false);
             loadMissionData();
             if (onMissionUpdated) onMissionUpdated();
           }}
