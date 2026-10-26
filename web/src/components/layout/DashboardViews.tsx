@@ -57,7 +57,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
     // 2. Điều phối & Phân công
     case 'coordination':
-      return <CoordinationView onOpenMap={onOpenMap} />;
+      return <CoordinationView onOpenMap={onOpenMap} user={user} />;
 
     // 3. Đội cứu hộ địa phương
     case 'rescuers':
@@ -102,7 +102,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
     // 8. Báo cáo thống kê
     case 'reports':
-      return <ReportsView />;
+      return <ReportsView user={user} onOpenMap={onOpenMap} />;
 
     // 9. Tổng quan & Giám sát quản trị
     case 'admin_overview':
