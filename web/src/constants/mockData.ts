@@ -307,10 +307,10 @@ export const INITIAL_RESCUE_TEAMS: RescueTeam[] = [
     status: 'Available',
     availableRescuersCount: 4,
     rescuers: [
-      { id: '6ad4c91546705c7dadf70b3d', name: 'Lê Cứu Nạn', role: 'Chỉ Huy Đội', status: 'Online', teamId: '6acf2d296102c44874cc2b43', phone: '0903000003' },
-      { id: '6ad4ece4f6dd5a81b15a31af', name: 'Trần Văn Cứu', role: 'Lái Ca-nô Vượt Lũ', status: 'Online', teamId: '6acf2d296102c44874cc2b43', phone: '0905114551' },
-      { id: '6ad4ece4f6dd5a81b15a31b0', name: 'Nguyễn Văn Hộ', role: 'Y Tá Dã Chiến', status: 'Online', teamId: '6acf2d296102c44874cc2b43', phone: '0905114552' },
-      { id: '6ad4ece4f6dd5a81b15a31b1', name: 'Phạm Văn Nạn', role: 'Chiến Sĩ Đặc Nhiệm', status: 'Online', teamId: '6acf2d296102c44874cc2b43', phone: '0905114553' },
+      { id: '6ad4c91546705c7dadf70b3d', name: 'Lê Cứu Nạn', role: 'Chỉ Huy Đội', status: 'Online', teamId: '6acf2d296102c44874cc2b43', phone: '0903000003', coordinates: { lat: 16.0812, lng: 108.1488 } },
+      { id: '6ad4ece4f6dd5a81b15a31af', name: 'Trần Văn Cứu', role: 'Lái Ca-nô Vượt Lũ', status: 'Online', teamId: '6acf2d296102c44874cc2b43', phone: '0905114551', coordinates: { lat: 16.0792, lng: 108.1518 } },
+      { id: '6ad4ece4f6dd5a81b15a31b0', name: 'Nguyễn Văn Hộ', role: 'Y Tá Dã Chiến', status: 'Online', teamId: '6acf2d296102c44874cc2b43', phone: '0905114552', coordinates: { lat: 16.0772, lng: 108.1492 } },
+      { id: '6ad4ece4f6dd5a81b15a31b1', name: 'Phạm Văn Nạn', role: 'Chiến Sĩ Đặc Nhiệm', status: 'Online', teamId: '6acf2d296102c44874cc2b43', phone: '0905114553', coordinates: { lat: 16.0790, lng: 108.1452 } },
     ],
   },
   {
@@ -322,8 +322,8 @@ export const INITIAL_RESCUE_TEAMS: RescueTeam[] = [
     status: 'Available',
     availableRescuersCount: 3,
     rescuers: [
-      { id: 'rescuer-lc-01', name: 'Hoàng Quốc Tuấn', role: 'Đội Trưởng', status: 'Online', teamId: 'team-lc-01', phone: '0905-114-120' },
-      { id: 'rescuer-lc-02', name: 'Trịnh Văn Cảnh', role: 'Cứu Nạn Địa Hình Đèo', status: 'Online', teamId: 'team-lc-01', phone: '0905-114-130' },
+      { id: 'rescuer-lc-01', name: 'Hoàng Quốc Tuấn', role: 'Đội Trưởng', status: 'Online', teamId: 'team-lc-01', phone: '0905-114-120', coordinates: { lat: 16.0835, lng: 108.1465 } },
+      { id: 'rescuer-lc-02', name: 'Trịnh Văn Cảnh', role: 'Cứu Nạn Địa Hình Đèo', status: 'Online', teamId: 'team-lc-01', phone: '0905-114-130', coordinates: { lat: 16.0820, lng: 108.1505 } },
     ],
   },
 
@@ -336,8 +336,8 @@ export const INITIAL_RESCUE_TEAMS: RescueTeam[] = [
     status: 'Available',
     availableRescuersCount: 4,
     rescuers: [
-      { id: 'rescuer-hv-01', name: 'Đặng Thanh Tùng', role: 'Đội Trưởng', status: 'Online', teamId: 'team-hv-01', phone: '0905-114-121' },
-      { id: 'rescuer-hv-02', name: 'Bùi Văn Hùng', role: 'Lái Ca-nô Lũ Xiết', status: 'Online', teamId: 'team-hv-01', phone: '0905-114-131' },
+      { id: 'rescuer-hv-01', name: 'Đặng Thanh Tùng', role: 'Đội Trưởng', status: 'Online', teamId: 'team-hv-01', phone: '0905-114-121', coordinates: { lat: 16.0125, lng: 108.1320 } },
+      { id: 'rescuer-hv-02', name: 'Bùi Văn Hùng', role: 'Lái Ca-nô Lũ Xiết', status: 'Online', teamId: 'team-hv-01', phone: '0905-114-131', coordinates: { lat: 16.0140, lng: 108.1355 } },
     ],
   },
 ];

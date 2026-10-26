@@ -213,7 +213,10 @@ const getSosRequests = async (query = {}) => {
   if (sosList.length > 0) {
     const sosIds = sosList.map(s => s._id);
     const assignments = await SosAssignment.find({
-      sosRequestId: { $in: sosIds },
+      $or: [
+        { sosRequestId: { $in: sosIds } },
+        { sosId: { $in: sosIds } },
+      ],
       status: { $nin: ['CANCELLED', 'REJECTED'] },
     })
       .populate('rescueTeamId', 'name type areaId status')
@@ -224,7 +227,10 @@ const getSosRequests = async (query = {}) => {
 
     const assignmentMap = new Map();
     assignments.forEach(a => {
-      assignmentMap.set(a.sosRequestId.toString(), a);
+      const targetId = (a.sosRequestId || a.sosId)?.toString();
+      if (targetId) {
+        assignmentMap.set(targetId, a);
+      }
     });
 
     sosList.forEach(s => {

@@ -290,6 +290,7 @@ class DomainDService {
       vehicleId: string;
       vehicleName: string;
       vehicleCapacity: string;
+      supplies?: import('@/types/domainD').AssignedSupplyItem[];
     }
   ): { sos: SosRequest; assignment: SosAssignment } {
     const sosIndex = this.sosRequests.findIndex((s) => s.id === sosId);
@@ -324,6 +325,7 @@ class DomainDService {
       rescuerLocation: rescuerLoc,
       distanceRemainingKm: 1.4,
       etaMinutes: 7,
+      supplies: params.supplies || [],
     };
 
     this.assignments[assignmentId] = assignment;

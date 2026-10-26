@@ -12,6 +12,7 @@ import type {
 } from '@/types/domainD';
 import { isTeamInOfficerJurisdiction } from '@/services/mapGeoService';
 import { useApp } from '@/context/AppContext';
+import { FALLBACK_SUPPLIES } from '@/constants';
 import { CitizenDistressProfile } from './CitizenDistressProfile';
 import { TeamSelectorCard } from './TeamSelectorCard';
 import { TeamMembersModal } from './TeamMembersModal';
@@ -37,6 +38,7 @@ interface Props {
     vehicleId: string;
     vehicleName: string;
     vehicleCapacity: string;
+    supplies?: import('@/types/domainD').AssignedSupplyItem[];
   }) => void;
   onUpdateStatus: (assignmentId: string, nextStatus: AssignmentStatus) => void;
   onOpenReassign: () => void;
@@ -124,13 +126,40 @@ export const DispatchWorkflow = ({
       onSelectedTeamsChange?.(ids);
       setSelectedRescuerId(assignment.rescuerId);
       setSelectedVehicleId(assignment.vehicleId);
+
+      if (assignment.supplies && assignment.supplies.length > 0) {
+        const map: Record<string, number> = {};
+        assignment.supplies.forEach((s) => {
+          map[s.supplyId] = s.quantity;
+        });
+        setAllocatedSupplies(map);
+      }
     } else {
       setLocalSelectedTeamIds([]);
       onSelectedTeamsChange?.([]);
       setSelectedRescuerId('');
       setSelectedVehicleId('');
+
+      if (selectedSos) {
+        const count = Math.max(1, selectedSos.affectedPeople || 2);
+        setAllocatedSupplies({
+          'sup-01': count,
+          'sup-03': 1,
+          'sup-04': Math.ceil(count / 2),
+        });
+      }
     }
   }, [selectedSos?.id, assignment?.id]);
+
+  // Quản lý vật tư cấp phát được chọn trong phiên phân công
+  const [allocatedSupplies, setAllocatedSupplies] = useState<Record<string, number>>(() => {
+    const count = Math.max(1, selectedSos?.affectedPeople || 2);
+    return {
+      'sup-01': count,
+      'sup-03': 1,
+      'sup-04': Math.ceil(count / 2),
+    };
+  });
 
   const handleToggleTeam = (teamId: string) => {
     let next: string[];
@@ -159,6 +188,18 @@ export const DispatchWorkflow = ({
     const primaryRescuer = primaryTeam.rescuers[0];
     const primaryVehicle = vehicles.find((v) => v.teamId === primaryTeam.id) || vehicles[0];
 
+    const supplyList = Object.entries(allocatedSupplies)
+      .filter(([_, qty]) => qty > 0)
+      .map(([id, qty]) => {
+        const item = FALLBACK_SUPPLIES.find((s) => s.id === id);
+        return {
+          supplyId: id,
+          name: item?.name || 'Vật tư',
+          quantity: qty,
+          unit: item?.unit || 'món',
+        };
+      });
+
     onConfirmAssign({
       authorityOrganizationId: matchedAuthority?.id || 'auth-general',
       authorityOrganizationName: matchedAuthority?.name || 'Cơ quan Cứu Hộ & Phòng Chống Thiên Tai',
@@ -175,6 +216,7 @@ export const DispatchWorkflow = ({
         })
         .join(' + '),
       vehicleCapacity: `${selectedTeams.reduce((acc, t) => acc + (t.availableRescuersCount || 4), 0)} chiến sĩ`,
+      supplies: supplyList,
     });
     setIsConfirmModalOpen(false);
   };
@@ -199,27 +241,16 @@ export const DispatchWorkflow = ({
         {onToggleCollapse && (
           <button
             type="button"
+            className="btn-feed-collapse"
             onClick={onToggleCollapse}
             style={{
               position: 'absolute',
               top: 12,
               right: 12,
-              background: 'none',
-              border: '1px solid var(--sos-border)',
-              borderRadius: 5,
-              padding: '4px 6px',
-              cursor: 'pointer',
-              color: 'var(--sos-text-secondary)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 3,
-              fontSize: 10,
-              fontWeight: 600,
             }}
             title="Thu gọn bảng tác chiến để mở rộng bản đồ"
           >
-            <span>Thu gọn</span>
-            <ChevronRight size={13} />
+            <ChevronRight size={16} />
           </button>
         )}
         <div
@@ -288,147 +319,185 @@ export const DispatchWorkflow = ({
         borderLeft: '1px solid var(--sos-border)',
       }}
     >
-      {/* 1. CLEAN TOP HEADER */}
+      {/* 1. VÙNG 1 - CỐ ĐỊNH Ở TRÊN (shrink-0): HEADER SỰ CỐ & KHUNG NẠN NHÂN */}
       <div
         style={{
           flexShrink: 0,
-          padding: '12px 16px',
           borderBottom: '1px solid var(--sos-border)',
           background: 'var(--sos-surface)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span
-              style={{
-                display: 'inline-block',
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                background: isAssigned ? '#1e293b' : '#dc2626',
-                boxShadow: isAssigned ? '0 0 0 2px rgba(30, 41, 59, 0.2)' : '0 0 0 2px rgba(220, 38, 38, 0.2)',
-              }}
-            />
-            <span
-              style={{
-                fontSize: 13,
-                fontWeight: 900,
-                textTransform: 'uppercase',
-                letterSpacing: '0.4px',
-                color: isAssigned ? '#1e293b' : '#dc2626',
-              }}
-            >
-              {isAssigned ? 'Đang Điều Động Cứu Nạn' : 'Yêu Cầu Chờ Phân Công'}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span
-              className={`badge-priority ${
-                selectedSos.priority === 'CRITICAL' ? 'critical' : selectedSos.priority === 'HIGH' ? 'high' : 'medium'
-              }`}
-              style={{ fontSize: 12, fontWeight: 900, padding: '3px 8px', borderRadius: 5 }}
-            >
-              {selectedSos.priority}
-            </span>
-            {onToggleCollapse && (
-              <button
-                type="button"
-                onClick={onToggleCollapse}
+        {/* Header Sự Cố */}
+        <div style={{ padding: '9px 12px 6px 12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span
                 style={{
-                  background: '#f8fafc',
-                  border: '1.5px solid #cbd5e1',
-                  borderRadius: 6,
-                  padding: '4px 9px',
-                  cursor: 'pointer',
-                  color: '#334155',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  fontSize: 12,
-                  fontWeight: 800,
-                  transition: 'all 0.15s ease',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                  display: 'inline-block',
+                  width: 9,
+                  height: 9,
+                  borderRadius: '50%',
+                  background: isAssigned ? '#1e293b' : '#dc2626',
+                  boxShadow: isAssigned ? '0 0 0 2px rgba(30, 41, 59, 0.2)' : '0 0 0 2px rgba(220, 38, 38, 0.2)',
                 }}
-                title="Thu gọn bảng tác chiến để mở rộng toàn màn hình bản đồ"
+              />
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 900,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.4px',
+                  color: isAssigned ? '#1e293b' : '#dc2626',
+                }}
               >
-                <span>Thu gọn</span>
-                <ChevronRight size={14} />
-              </button>
-            )}
+                {isAssigned ? 'Hỗ Trợ Cứu Nạn (Đã Điều Động)' : 'Hỗ Trợ Cứu Nạn (Chờ Phân Công)'}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {/* Badge mức độ ưu tiên theo yêu cầu: CRITICAL nền đỏ đậm chữ trắng in đậm, HIGH nền cam, MEDIUM nền vàng */}
+              <span
+                style={{
+                  fontSize: 10.5,
+                  fontWeight: 900,
+                  padding: '2px 7px',
+                  borderRadius: 5,
+                  letterSpacing: '0.4px',
+                  color: '#ffffff',
+                  background:
+                    selectedSos.priority === 'CRITICAL'
+                      ? '#dc2626'
+                      : selectedSos.priority === 'HIGH'
+                      ? '#ea580c'
+                      : '#d97706',
+                  boxShadow:
+                    selectedSos.priority === 'CRITICAL'
+                      ? '0 1px 4px rgba(220, 38, 38, 0.4)'
+                      : 'none',
+                }}
+              >
+                {selectedSos.priority}
+              </span>
+              {onToggleCollapse && (
+                <button
+                  type="button"
+                  className="btn-feed-collapse"
+                  onClick={onToggleCollapse}
+                  title="Thu gọn bảng tác chiến để mở rộng bản đồ"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>
+            <h2 style={{ fontSize: 17, fontWeight: 900, color: '#0f172a', margin: 0, letterSpacing: '-0.3px' }}>
+              {selectedSos.sosCode}
+            </h2>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#0369a1', background: '#f0f9ff', border: '1.5px solid #bae6fd', padding: '1px 6px', borderRadius: 4 }}>
+              {selectedSos.emergencyType}
+            </span>
+            <span style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600 }}>
+              • {selectedSos.timeAgo || 'Vừa xong'}
+            </span>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 900, color: '#0f172a', margin: 0, letterSpacing: '-0.3px' }}>
-            {selectedSos.sosCode}
-          </h2>
-          <span style={{ fontSize: 13, fontWeight: 800, color: '#0369a1', background: '#f0f9ff', border: '1.5px solid #bae6fd', padding: '2px 8px', borderRadius: 6 }}>
-            {selectedSos.emergencyType}
-          </span>
-          <span style={{ fontSize: 13, color: '#64748b', fontWeight: 600 }}>
-            • {selectedSos.timeAgo || 'Vừa xong'}
-          </span>
+        {/* Khung Thông Tin Nạn Nhân / Hiện Trường (CỐ ĐỊNH Ở VÙNG 1) */}
+        <div style={{ padding: '0 12px 8px 12px' }}>
+          <CitizenDistressProfile
+            selectedSos={selectedSos}
+            allocatedSupplies={allocatedSupplies}
+            onAllocatedSuppliesChange={setAllocatedSupplies}
+          />
         </div>
       </div>
 
-      {/* 2. FIXED CITIZEN DISTRESS PROFILE */}
-      <div style={{ flexShrink: 0, padding: '12px 14px 4px 14px' }}>
-        <CitizenDistressProfile selectedSos={selectedSos} />
-      </div>
-
-      {/* 3. RESCUE TEAMS ALLOCATION SECTION (CHỈ CUỘN Ở CÁC ĐỘI) */}
+      {/* 2. VÙNG 2 - KHUNG PHÂN CÔNG ĐỘI CỨU HỘ (flex-1 min-h-0 flex flex-col overflow-hidden) */}
       {!isAssigned ? (
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {/* Cố định tiêu đề phân công */}
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            padding: '10px 12px 0 12px',
+          }}
+        >
+          {/* Header tiêu đề phân công CỐ ĐỊNH (shrink-0) */}
           <div
             style={{
               flexShrink: 0,
-              padding: '10px 14px 8px 14px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
+              paddingBottom: 7,
+              borderBottom: '1px solid #f1f5f9',
             }}
           >
             <div>
-              <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span>🛟</span>
+              <div
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: 900,
+                  color: '#0f172a',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  letterSpacing: '-0.1px',
+                }}
+              >
+                <span style={{ fontSize: 14 }}>🛟</span>
                 <span>PHÂN CÔNG ĐỘI CỨU HỘ {districtNameLabel.toUpperCase()}</span>
               </div>
-              <div style={{ fontSize: 11.5, color: 'var(--sos-text-muted)', marginTop: 2 }}>
-                {availableTeams.length} đội trực chiến sẵn sàng xuất kích
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginTop: 1 }}>
+                ({availableTeams.length} đội trực chiến sẵn sàng xuất kích)
               </div>
             </div>
 
             <span
               style={{
                 fontSize: 10.5,
-                fontWeight: 700,
-                background: 'rgba(37, 99, 235, 0.08)',
-                color: '#2563eb',
-                padding: '2px 8px',
-                borderRadius: 12,
-                border: '1px solid rgba(37, 99, 235, 0.2)',
+                fontWeight: 800,
+                background: '#eff6ff',
+                color: '#0284c7',
+                padding: '2.5px 8px',
+                borderRadius: 10,
+                border: '1.5px solid #bfdbfe',
               }}
             >
               {districtNameLabel}
             </span>
           </div>
 
-          {/* CHỈ CUỘN DANH SÁCH CÁC ĐỘI CỨU HỘ */}
+          {/* DANH SÁCH THẺ ĐỘI CỨU HỘ: DUY NHẤT VÙNG NÀY ĐƯỢC PHÉP CUỘN (flex-1 min-h-0 overflow-y-auto) */}
           <div
             style={{
               flex: 1,
               minHeight: 0,
               overflowY: 'auto',
-              padding: '2px 14px 12px 14px',
+              paddingRight: 3,
+              paddingTop: 8,
+              paddingBottom: 8,
               display: 'flex',
               flexDirection: 'column',
-              gap: 9,
+              gap: 8,
             }}
           >
             {availableTeams.length === 0 ? (
-              <div style={{ padding: '22px 14px', textAlign: 'center', background: '#f8fafc', borderRadius: 8, border: '1px dashed #cbd5e1', color: '#64748b', fontSize: 12.5, lineHeight: 1.5 }}>
+              <div
+                style={{
+                  padding: '20px 14px',
+                  textAlign: 'center',
+                  background: '#f8fafc',
+                  borderRadius: 8,
+                  border: '1px dashed #cbd5e1',
+                  color: '#64748b',
+                  fontSize: 12,
+                }}
+              >
                 Chưa có đội cứu hộ nào thuộc địa bàn {activeOfficer?.jurisdictionAreaName || 'quản lý'}.
               </div>
             ) : (
@@ -439,15 +508,19 @@ export const DispatchWorkflow = ({
 
                 const vehicleSpec =
                   team.id === 'team-water-alpha'
-                    ? 'Ca-nô 50HP + Bán tải (5 người)'
+                    ? 'Ca-nô 50HP + Bán tải (Sức chứa: 5 người)'
                     : team.id === 'team-qr-bravo'
-                    ? 'Xe lội nước 4x4 (4 người)'
+                    ? 'Xe lội nước 4x4 (Sức chứa: 4 người)'
                     : team.id === 'team-hc-htd'
-                    ? 'Ca-nô cứu sinh 43-HC (6 người)'
-                    : `${teamVeh?.name || 'Ca-nô'} (${teamVeh?.capacity || '6 người'})`;
+                    ? 'Ca-nô cứu sinh 43-HC (Sức chứa: 6 người)'
+                    : `${teamVeh?.name || 'Ca-nô'} (Sức chứa: ${teamVeh?.capacity || '6 người'})`;
 
-                // Khoảng cách & thời gian tính bằng xe ô tô (chuẩn Google Maps)
-                const etaText = index === 0 ? '5 phút (1.8 km)' : index === 1 ? '7 phút (2.6 km)' : `${5 + index * 3} phút (${(1.8 + index * 1.1).toFixed(1)} km)`;
+                const etaText =
+                  index === 0
+                    ? '5 phút (1.8 km)'
+                    : index === 1
+                    ? '7 phút (2.6 km)'
+                    : `${5 + index * 3} phút (${(1.8 + index * 1.1).toFixed(1)} km)`;
 
                 const teamDisplayName =
                   team.id === 'team-hc-htd'
@@ -472,8 +545,7 @@ export const DispatchWorkflow = ({
           </div>
         </div>
       ) : (
-        /* Khi đã phân công: Console nhiệm vụ cuộn linh hoạt */
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 14px' }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 12px' }}>
           <ActiveMissionConsole
             assignment={assignment}
             selectedSos={selectedSos}
@@ -485,12 +557,12 @@ export const DispatchWorkflow = ({
         </div>
       )}
 
-      {/* 3. STICKY ACTION FOOTER (ALWAYS VISIBLE AT BOTTOM) */}
+      {/* 3. VÙNG 3 - CỐ ĐỊNH Ở ĐÁY (shrink-0): STICKY ACTION FOOTER */}
       {!isAssigned && (
         <div
           style={{
             flexShrink: 0,
-            padding: '12px 16px',
+            padding: '10px 14px 12px 14px',
             borderTop: '1px solid var(--sos-border)',
             background: 'var(--sos-surface)',
             boxShadow: '0 -4px 14px rgba(0,0,0,0.06)',
@@ -505,31 +577,38 @@ export const DispatchWorkflow = ({
             onClick={() => setIsConfirmModalOpen(true)}
             style={{
               width: '100%',
-              padding: '11px 18px',
-              background: activeSelectedTeamIds.length === 0 ? '#94a3b8' : '#dc2626',
+              padding: '11px 16px',
+              background:
+                activeSelectedTeamIds.length === 0
+                  ? '#94a3b8'
+                  : '#dc2626', // Màu đỏ khẩn cấp theo yêu cầu
               color: '#ffffff',
               border: 'none',
-              borderRadius: 6,
+              borderRadius: 8,
               fontSize: 13,
-              fontWeight: 700,
+              fontWeight: 900,
               cursor: activeSelectedTeamIds.length === 0 ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 8,
-              letterSpacing: '0.2px',
+              letterSpacing: '0.4px',
+              boxShadow:
+                activeSelectedTeamIds.length === 0
+                  ? 'none'
+                  : '0 3px 12px rgba(220, 38, 38, 0.35)',
               transition: 'all 0.15s ease',
             }}
           >
             <span>
               {activeSelectedTeamIds.length === 0
-                ? 'VUI LÒNG CHỌN ĐỘI CỨU HỘ'
+                ? 'CHỌN ĐỘI CỨU HỘ'
                 : activeSelectedTeamIds.length === 1
-                ? 'XÁC NHẬN PHÂN CÔNG & XUẤT KÍCH (1 ĐỘI)'
-                : `XÁC NHẬN PHÂN CÔNG & XUẤT KÍCH (${activeSelectedTeamIds.length} ĐỘI)`}
+                ? '⚡ XÁC NHẬN PHÂN CÔNG & XUẤT KÍCH (1 ĐỘI)'
+                : `⚡ XÁC NHẬN PHÂN CÔNG & XUẤT KÍCH (${activeSelectedTeamIds.length} ĐỘI)`}
             </span>
           </button>
-          <div style={{ textAlign: 'center', fontSize: 10, color: 'var(--sos-text-muted)' }}>
+          <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--sos-text-muted)' }}>
             Lệnh xuất kích sẽ truyền tức thời đến máy bộ đàm &amp; App cứu hộ viên
           </div>
         </div>
@@ -541,6 +620,7 @@ export const DispatchWorkflow = ({
         selectedSos={selectedSos}
         selectedTeams={selectedTeams}
         vehicles={vehicles}
+        allocatedSupplies={allocatedSupplies}
         onClose={() => setIsConfirmModalOpen(false)}
         onConfirm={handleExecuteDispatch}
       />

@@ -52,6 +52,8 @@ export interface SosRequestItem {
   lastRepeatedAt?: string;
   isSecondaryRequest?: boolean;
   primarySosId?: string;
+  assignmentId?: string;
+  assignment?: any;
   createdAt: string;
   updatedAt: string;
 }
