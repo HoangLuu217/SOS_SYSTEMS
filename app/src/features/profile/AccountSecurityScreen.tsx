@@ -361,7 +361,7 @@ export const AccountSecurityScreen: React.FC<AccountSecurityScreenProps> = ({
                   <View style={styles.googleFeatureRow}>
                     <Feather name="lock" size={16} color="#64748B" />
                     <Text style={styles.googleFeatureTextMuted}>
-                      Không lưu trữ mật khẩu trực tiếp trên hệ thống RescueSOS
+                      Không lưu trữ mật khẩu trực tiếp trên hệ thống hỗ trợ cứu nạn
                     </Text>
                   </View>
                 </View>

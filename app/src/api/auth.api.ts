@@ -105,18 +105,28 @@ export class AuthApi {
   }
 
   /**
-   * Quên mật khẩu
+   * Quên mật khẩu (hỗ trợ số điện thoại nhận SMS hoặc email)
    */
-  async forgotPassword(email: string): Promise<ApiResponse<{ message: string; resetToken?: string }>> {
-    return await this.client.post('/auth/forgot-password', { email: email.trim() });
+  async forgotPassword(target: string): Promise<ApiResponse<{ message: string; resetToken?: string; channel?: string }>> {
+    const clean = target.trim();
+    const isEmail = clean.includes('@');
+    return await this.client.post('/auth/forgot-password', {
+      phone: !isEmail ? clean : undefined,
+      email: isEmail ? clean.toLowerCase() : undefined,
+      account: clean,
+    });
   }
 
   /**
    * Xác thực mã OTP khôi phục mật khẩu trước khi nhập mật khẩu mới
    */
-  async verifyResetOtp(email: string, otp: string): Promise<ApiResponse> {
+  async verifyResetOtp(target: string, otp: string): Promise<ApiResponse> {
+    const clean = target.trim();
+    const isEmail = clean.includes('@');
     return await this.client.post('/auth/verify-reset-otp', {
-      email: email.trim().toLowerCase(),
+      phone: !isEmail ? clean : undefined,
+      email: isEmail ? clean.toLowerCase() : undefined,
+      account: clean,
       token: otp.trim(),
     });
   }
@@ -125,15 +135,23 @@ export class AuthApi {
    * Đặt lại mật khẩu bằng mã OTP và mật khẩu mới
    */
   async resetPassword(
-    param1: string | { email?: string; token: string; newPassword: string },
+    param1: string | { email?: string; phone?: string; account?: string; token: string; newPassword: string },
     param2?: string,
     param3?: string
   ): Promise<ApiResponse> {
-    let payload: { email?: string; token: string; newPassword: string };
+    let payload: { email?: string; phone?: string; account?: string; token: string; newPassword: string };
     if (typeof param1 === 'object') {
       payload = param1;
     } else {
-      payload = { token: param1, newPassword: param2 || '', email: param3 };
+      const cleanTarget = (param3 || '').trim();
+      const isEmail = cleanTarget.includes('@');
+      payload = {
+        token: param1,
+        newPassword: param2 || '',
+        email: isEmail ? cleanTarget.toLowerCase() : undefined,
+        phone: !isEmail && cleanTarget ? cleanTarget : undefined,
+        account: cleanTarget,
+      };
     }
     return await this.client.post('/auth/reset-password', payload);
   }

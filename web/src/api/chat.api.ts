@@ -36,8 +36,14 @@ export async function markChatMessagesRead(payload: {
   partnerId?: string;
 }): Promise<{ success: boolean; data: any }> {
   return fetchWithAuth('/chat/read', {
-    method: 'POST',
+    method: 'PATCH',
     body: JSON.stringify(payload),
+  });
+}
+
+export async function markAllChatMessagesRead(): Promise<{ success: boolean; data: any }> {
+  return fetchWithAuth('/chat/read-all', {
+    method: 'PATCH',
   });
 }
 

@@ -67,7 +67,7 @@ const FALLBACK_NEWS: NotificationItem[] = [
     type: 'SYSTEM',
     title: 'Nâng cấp hệ thống điều phối cứu nạn tự động phiên bản 2.5',
     content:
-      'Hệ thống RescueSOS đã bổ sung tính năng tự động quét ca-nô gần nhất và phát thông báo khẩn cấp theo khu vực hành chính. Mọi yêu cầu cứu trợ sẽ được kết nối trực tiếp đến cán bộ địa phương phụ trách.',
+      'Hệ thống hỗ trợ cứu nạn đã bổ sung tính năng tự động quét ca-nô gần nhất và phát thông báo khẩn cấp theo khu vực hành chính. Mọi yêu cầu cứu trợ sẽ được kết nối trực tiếp đến cán bộ địa phương phụ trách.',
     priority: 'NORMAL',
     areaName: 'Toàn thành phố Đà Nẵng',
     createdBy: {

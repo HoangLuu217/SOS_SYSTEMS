@@ -25,7 +25,7 @@ import { SOSMapScreen, ContributeHazardModal } from '@/features/sos';
 import { LocalAuthorityChatModal } from './LocalAuthorityChatModal';
 import { TabName } from '@/types';
 import { backendApi } from '@/api';
-import { RescuerMissionCard } from './RescuerMissionCard';
+
 
 export interface HomeScreenProps {
   onOpenSettings: () => void;
@@ -550,11 +550,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         {/* ==================== 2. NỘI DUNG CHÍNH (NỀN TRẮNG) ==================== */}
         <View style={styles.bodyContainer}>
-          {/* Section: Nhiệm vụ tác chiến cứu hộ (dành riêng cho Rescuer / Leader) */}
-          {(user?.roles?.includes('RESCUER') || user?.roles?.includes('LEADER')) && (
-            <RescuerMissionCard />
-          )}
-
           {/* Section: Tin nổi bật */}
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Tin nổi bật</Text>

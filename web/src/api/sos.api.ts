@@ -46,6 +46,12 @@ export async function assignSosApi(sosId: string, payload: {
   rescuerId: string;
   vehicleId?: string;
   note?: string;
+  supplies?: Array<{
+    supplyId: string;
+    name: string;
+    quantity: number;
+    unit?: string;
+  }>;
 }): Promise<{ success: boolean; data: any }> {
   return fetchWithAuth(`/sos/${sosId}/assign`, {
     method: 'POST',

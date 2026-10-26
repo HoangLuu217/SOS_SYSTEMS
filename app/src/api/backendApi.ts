@@ -85,12 +85,12 @@ class BackendApiService {
   verifyOtp = (target: string, otp: string, verifyOnly: boolean = false) =>
     authApi.verifyOtp(target, otp, verifyOnly);
 
-  forgotPassword = (email: string) => authApi.forgotPassword(email);
+  forgotPassword = (target: string) => authApi.forgotPassword(target);
 
-  verifyResetOtp = (email: string, otp: string) => authApi.verifyResetOtp(email, otp);
+  verifyResetOtp = (target: string, otp: string) => authApi.verifyResetOtp(target, otp);
 
   resetPassword = (
-    param1: string | { email?: string; token: string; newPassword: string },
+    param1: string | { email?: string; phone?: string; account?: string; token: string; newPassword: string },
     param2?: string,
     param3?: string
   ) => authApi.resetPassword(param1, param2, param3);
@@ -107,6 +107,9 @@ class BackendApiService {
   }) => userApi.updateProfile(data);
 
   updateAvatar = (avatarUrl: string) => userApi.updateAvatar(avatarUrl);
+
+  sendUserPhoneOtp = (phone: string) => userApi.sendPhoneOtp(phone);
+  verifyUserPhoneOtp = (phone: string, otp: string) => userApi.verifyPhoneOtp(phone, otp);
 
   changePassword = (oldPassword: string, newPassword: string) =>
     userApi.changePassword(oldPassword, newPassword);

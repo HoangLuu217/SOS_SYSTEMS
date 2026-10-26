@@ -17,7 +17,6 @@ import {
   CreditCard,
   Sailboat,
   Bike,
-  Clock,
   ShieldCheck,
   MapPinOff,
 } from 'lucide-react';

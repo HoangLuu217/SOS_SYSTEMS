@@ -52,6 +52,26 @@
   letter-spacing: -0.2px;
 }
 
+.sos-chat-mark-all-read-btn {
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  color: #0284c7;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.sos-chat-mark-all-read-btn:hover {
+  background: #f0f9ff;
+  border-color: #0284c7;
+  color: #0369a1;
+}
+
 .sos-chat-search-wrap {
   position: relative;
   width: 100%;
