@@ -23,10 +23,6 @@ import {
   Package,
   Send,
   PackageCheck,
-  LayoutGrid,
-  List,
-  Shield,
-  Users,
 } from 'lucide-react';
 import type { VehicleItem, RescueTeamItem, AdministrativeAreaItem } from '@/types/dashboard';
 import type { User } from '@/types/auth';
@@ -159,7 +155,6 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState<string>('ALL');
   const [vehicleTeamFilter, setVehicleTeamFilter] = useState<string>('ALL');
-  const [vehicleViewMode, setVehicleViewMode] = useState<'CARDS' | 'TABLE'>('CARDS');
   const [supplyCategoryFilter, setSupplyCategoryFilter] = useState<string>('ALL');
   const [supplyTeamFilter, setSupplyTeamFilter] = useState<string>('DEPOT');
   const [consumableCategoryFilter, setConsumableCategoryFilter] = useState<string>('ALL');
@@ -437,36 +432,6 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     });
   }, [vehiclesWithTeam, vehicleTypeFilter, vehicleTeamFilter, searchQuery, isAdmin, managedArea, userAreaId, userAreaName]);
 
-  // Group vehicles by Team (Phương án 1: Thẻ Đội Cứu Hộ Tác Chiến Địa Phương)
-  const groupedVehiclesByTeam = useMemo(() => {
-    const unassignedList: typeof filteredVehicles = [];
-    const teamMap = new Map<string, { team: RescueTeamItem; vehicles: typeof filteredVehicles }>();
-
-    filteredVehicles.forEach((v) => {
-      const team = v.assignedTeam;
-      if (!team || !team._id) {
-        unassignedList.push(v);
-      } else {
-        if (!teamMap.has(team._id)) {
-          teamMap.set(team._id, { team, vehicles: [] });
-        }
-        teamMap.get(team._id)!.vehicles.push(v);
-      }
-    });
-
-    const teamsList = Array.from(teamMap.values());
-    const totalCapacity = filteredVehicles.reduce((sum, v) => sum + (Number(v.capacity) || 0), 0);
-    const unassignedCapacity = unassignedList.reduce((sum, v) => sum + (Number(v.capacity) || 0), 0);
-
-    return {
-      unassignedVehicles: unassignedList,
-      teamsWithVehicles: teamsList,
-      totalTeams: teamsList.length,
-      totalVehicles: filteredVehicles.length,
-      totalCapacity,
-      unassignedCapacity,
-    };
-  }, [filteredVehicles]);
 
   // Durable equipments (Khí tài tác chiến tái sử dụng)
   const durableEquipments = useMemo(() => {
@@ -1454,28 +1419,6 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            {resourceTab === 'VEHICLES' && (
-              <div className="executive-view-mode-pill">
-                <button
-                  type="button"
-                  className={`view-mode-btn ${vehicleViewMode === 'CARDS' ? 'active' : ''}`}
-                  onClick={() => setVehicleViewMode('CARDS')}
-                  title="Chế độ Thẻ Đội Cứu Hộ & Kho Dự Trữ (Phương án 1)"
-                >
-                  <LayoutGrid size={13} />
-                  <span>Theo Đội</span>
-                </button>
-                <button
-                  type="button"
-                  className={`view-mode-btn ${vehicleViewMode === 'TABLE' ? 'active' : ''}`}
-                  onClick={() => setVehicleViewMode('TABLE')}
-                  title="Chế độ Bảng danh sách phương tiện"
-                >
-                  <List size={13} />
-                  <span>Dạng Bảng</span>
-                </button>
-              </div>
-            )}
             <div className="executive-search-input-wrap">
               <Search size={14} className="search-icon" />
               <input
@@ -1502,506 +1445,156 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         {/* BẢNG NỘI DUNG CUỘN NỘI BỘ (CHỈ CUỘN NỘI BỘ BẢNG) */}
         <div className="executive-table-scroll">
           {resourceTab === 'VEHICLES' ? (
-            vehicleViewMode === 'CARDS' ? (
-              /* CHẾ ĐỘ THẺ ĐỘI CỨU HỘ TÁC CHIẾN (PHƯƠNG ÁN 1 CHO CÁN BỘ ĐỊA PHƯƠNG) */
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {/* 1. Thanh tóm tắt năng lực toàn địa bàn */}
-                <div className="local-fleet-summary-bar">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-                    <div className="local-fleet-summary-item">
-                      <MapPin size={15} style={{ color: '#0284c7' }} />
-                      <span className="local-fleet-summary-label">Địa bàn:</span>
-                      <span className="local-fleet-summary-val">
-                        {userAreaName || managedArea?.name || 'Toàn địa bàn quản lý'}
-                      </span>
-                    </div>
-                    <div style={{ width: 1, height: 16, background: '#bae6fd' }} />
-                    <div className="local-fleet-summary-item">
-                      <Users size={15} style={{ color: '#0284c7' }} />
-                      <span className="local-fleet-summary-label">Đơn vị tác chiến:</span>
-                      <span className="local-fleet-summary-val">
-                        {groupedVehiclesByTeam.teamsWithVehicles.length} Đội Cứu Hộ
-                      </span>
-                    </div>
-                    <div style={{ width: 1, height: 16, background: '#bae6fd' }} />
-                    <div className="local-fleet-summary-item">
-                      <Truck size={15} style={{ color: '#0284c7' }} />
-                      <span className="local-fleet-summary-label">Lực lượng xe:</span>
-                      <span className="local-fleet-summary-val">
-                        {groupedVehiclesByTeam.totalVehicles} Phương tiện
-                      </span>
-                    </div>
-                    <div style={{ width: 1, height: 16, background: '#bae6fd' }} />
-                    <div className="local-fleet-summary-item">
-                      <LifeBuoy size={15} style={{ color: '#059669' }} />
-                      <span className="local-fleet-summary-label">Sức sơ tán đồng thời:</span>
-                      <span className="local-fleet-summary-val" style={{ color: '#059669' }}>
-                        {groupedVehiclesByTeam.totalCapacity} Người
-                      </span>
-                    </div>
-                  </div>
-                  {groupedVehiclesByTeam.unassignedVehicles.length > 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span className="team-fleet-badge-pill amber">
-                        <Package size={12} />
-                        {groupedVehiclesByTeam.unassignedVehicles.length} xe dự trữ sẵn sàng cấp phát
-                      </span>
-                    </div>
-                  )}
-                </div>
-
+            /* BẢNG PHƯƠNG TIỆN BIÊN CHẾ THEO ĐỘI */
+            <table className="executive-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '18%' }}>Biển Số &amp; Định Danh</th>
+                  <th style={{ width: '15%' }}>Loại Phương Tiện</th>
+                  <th style={{ width: '28%' }}>Đội Cứu Hộ Tiếp Nhận &amp; Chỉ Huy</th>
+                  <th style={{ width: '14%' }}>Sức Chở &amp; Tải Trọng</th>
+                  <th style={{ width: '13%' }}>Trạng Thái</th>
+                  <th style={{ width: '12%', textAlign: 'center' }}>Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody>
                 {filteredVehicles.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '60px 20px', background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0' }}>
-                    <AlertTriangle size={36} style={{ color: '#94a3b8', margin: '0 auto 10px', display: 'block' }} />
-                    <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: '#0f172a' }}>
-                      Không tìm thấy phương tiện hoặc đội cứu hộ nào phù hợp với bộ lọc
-                    </p>
-                  </div>
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '50px 20px' }}>
+                      <AlertTriangle size={32} style={{ color: '#94a3b8', margin: '0 auto 8px', display: 'block' }} />
+                      <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: '#0f172a' }}>
+                        Không tìm thấy phương tiện nào phù hợp với bộ lọc
+                      </p>
+                    </td>
+                  </tr>
                 ) : (
-                  <>
-                    {/* 2. KHỐI KHO TỔNG / DỰ TRỮ ĐỊA BÀN (NẾU CÓ XE CHƯA BIÊN CHẾ) */}
-                    {groupedVehiclesByTeam.unassignedVehicles.length > 0 &&
-                      (vehicleTeamFilter === 'ALL' || vehicleTeamFilter === 'UNASSIGNED') && (
-                        <div className="team-fleet-card depot">
-                          <div className="team-fleet-header">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <div style={{ width: 34, height: 34, borderRadius: 8, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#b45309' }}>
-                                <Package size={18} />
-                              </div>
-                              <div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                  <span className="team-title-bold" style={{ color: '#b45309' }}>
-                                    📦 Kho Tổng / Phương Tiện Dự Trữ Chưa Biên Chế
-                                  </span>
-                                  <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: '#fef3c7', color: '#b45309', fontWeight: 800 }}>
-                                    DỰ TRỮ ĐỊA BÀN
-                                  </span>
-                                </div>
-                                <span style={{ fontSize: 12, color: '#64748b' }}>
-                                  Xe lưu kho dự phòng — Sẵn sàng bàn giao tác chiến cho các Đội cứu hộ khi có yêu cầu khẩn cấp
-                                </span>
-                              </div>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span className="team-fleet-badge-pill amber">
-                                {groupedVehiclesByTeam.unassignedVehicles.length} Phương tiện
-                              </span>
-                              <span className="team-fleet-badge-pill" style={{ background: '#f1f5f9', color: '#334155', borderColor: '#e2e8f0' }}>
-                                Sức chở: {groupedVehiclesByTeam.unassignedCapacity} Người
-                              </span>
-                            </div>
+                  filteredVehicles.map((v) => {
+                    const team = v.assignedTeam;
+                    const isUnassigned = !team;
+                    const teamName = team?.name || '📦 Kho Tổng / Chưa Biên Chế';
+                    const leaderObj = typeof team?.leaderId === 'object' && team?.leaderId !== null ? team?.leaderId : null;
+                    const leaderName = leaderObj?.fullName || (isUnassigned ? 'Kho Quản Lý SOS' : 'Chưa phân công');
+                    const leaderPhone = leaderObj?.phone || '';
+                    const areaName = typeof team?.areaId === 'object' && team?.areaId !== null ? (team?.areaId as any)?.name : (isUnassigned ? 'Kho Dự Trữ' : 'Địa bàn chung');
+
+                    const typeLabel =
+                      v.type === 'BOAT'
+                        ? 'Ca-nô / Xuồng lội nước'
+                        : v.type === 'AMBULANCE'
+                          ? 'Xe cấp cứu dã chiến'
+                          : v.type === 'TRUCK'
+                            ? 'Xe tải tác chiến 4x4'
+                            : v.type === 'MOTORBIKE'
+                              ? 'Xe máy cơ động ngõ hẻm'
+                              : 'Phương tiện đặc chủng khác';
+
+                    return (
+                      <tr
+                        key={v._id}
+                        className="executive-table-row"
+                        onClick={() => setSelectedVehicle(v)}
+                        style={{ cursor: 'pointer' }}
+                        title="Bấm để xem hồ sơ kỹ thuật chi tiết phương tiện"
+                      >
+                        {/* Cột 1: Biển số & Định danh */}
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span className="code-mono-bold">{v.plateNumber}</span>
                           </div>
+                        </td>
 
-                          {/* Bảng xe thuộc Kho Dự Trữ */}
-                          <table className="executive-table" style={{ margin: 0 }}>
-                            <thead>
-                              <tr style={{ background: '#fffbeb' }}>
-                                <th style={{ width: '20%' }}>Biển Số / Định Danh</th>
-                                <th style={{ width: '25%' }}>Loại Phương Tiện</th>
-                                <th style={{ width: '22%' }}>Sức Chở &amp; Động Cơ</th>
-                                <th style={{ width: '18%' }}>Trạng Thái</th>
-                                <th style={{ width: '15%', textAlign: 'center' }}>Thao Tác</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {groupedVehiclesByTeam.unassignedVehicles.map((v) => (
-                                <tr
-                                  key={v._id}
-                                  className="executive-table-row"
-                                  onClick={() => setSelectedVehicle(v)}
-                                  style={{ cursor: 'pointer' }}
-                                >
-                                  <td>
-                                    <span className="code-mono-bold">{v.plateNumber}</span>
-                                  </td>
-                                  <td>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1e293b', fontSize: 13, fontWeight: 500 }}>
-                                      <span style={{ color: '#64748b', display: 'flex', alignItems: 'center' }}>
-                                        {v.type === 'BOAT' ? <LifeBuoy size={14} /> : v.type === 'MOTORBIKE' ? <Bike size={14} /> : v.type === 'OTHER' ? <Wrench size={14} /> : <Truck size={14} />}
-                                      </span>
-                                      <span>
-                                        {v.type === 'BOAT'
-                                          ? 'Ca-nô / Xuồng lội nước'
-                                          : v.type === 'AMBULANCE'
-                                            ? 'Xe cấp cứu dã chiến'
-                                            : v.type === 'TRUCK'
-                                              ? 'Xe tải tác chiến 4x4'
-                                              : v.type === 'MOTORBIKE'
-                                                ? 'Xe máy cơ động ngõ hẻm'
-                                                : 'Phương tiện đặc chủng khác'}
-                                      </span>
-                                    </div>
-                                  </td>
-                                  <td>
-                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                      <span style={{ fontWeight: 800, color: '#0284c7', fontSize: 13 }}>
-                                        {v.capacity} Người / Cứu nạn
-                                      </span>
-                                      <span style={{ fontSize: 11, color: '#64748b' }}>
-                                        {v.type === 'BOAT' ? 'Động cơ thủy 60HP' : 'Dẫn động 4x4'}
-                                      </span>
-                                    </div>
-                                  </td>
-                                  <td>
-                                    <span className="resource-status-badge available">
-                                      <span className="live-dot" style={{ width: 5, height: 5 }} />
-                                      Sẵn sàng cấp phát
-                                    </span>
-                                  </td>
-                                  <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                      <button
-                                        type="button"
-                                        className="coordination-action-btn primary"
-                                        style={{ padding: '4px 8px', fontSize: 11.5 }}
-                                        onClick={() => {
-                                          setTransferVehicleTarget(v);
-                                          setTransferNewTeamId('');
-                                        }}
-                                        title="Bàn giao xe dự trữ vào một Đội cứu hộ"
-                                      >
-                                        <ArrowRightLeft size={12} />
-                                        <span>Biên chế vào Đội</span>
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="coordination-action-btn outline"
-                                        style={{ padding: '4px 8px', fontSize: 11.5 }}
-                                        onClick={() => setSelectedVehicle(v)}
-                                      >
-                                        <Eye size={12} />
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-
-                    {/* 3. DANH SÁCH THẺ ĐỘI CỨU HỘ BIÊN CHẾ */}
-                    {groupedVehiclesByTeam.teamsWithVehicles.map(({ team, vehicles }) => {
-                      const leaderObj = typeof team.leaderId === 'object' && team.leaderId !== null ? team.leaderId : null;
-                      const leaderName = leaderObj?.fullName || 'Chưa phân công chỉ huy';
-                      const leaderPhone = leaderObj?.phone || '';
-                      const areaName = typeof team.areaId === 'object' && team.areaId !== null ? (team.areaId as any)?.name : 'Địa bàn chung';
-                      const teamCapacity = vehicles.reduce((s, v) => s + (Number(v.capacity) || 0), 0);
-
-                      return (
-                        <div key={team._id} className="team-fleet-card">
-                          {/* Header Đội */}
-                          <div className="team-fleet-header">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f0f9ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7' }}>
-                                <Shield size={19} />
-                              </div>
-                              <div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                  <span className="team-title-bold" style={{ fontSize: 15 }}>
-                                    {team.name}
-                                  </span>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 3, flexWrap: 'wrap', fontSize: 12 }}>
-                                  <span style={{ color: '#1e293b', fontWeight: 600 }}>
-                                    👤 Chỉ huy: <strong style={{ color: '#0f172a' }}>{leaderName}</strong>
-                                  </span>
-                                  {leaderPhone && (
-                                    <a
-                                      href={`tel:${leaderPhone}`}
-                                      className="leader-phone-pill"
-                                      title="Gọi nhanh cho Đội trưởng"
-                                    >
-                                      <Phone size={11} />
-                                      <span>{leaderPhone}</span>
-                                    </a>
-                                  )}
-                                  <span style={{ color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <MapPin size={11} color="#0284c7" />
-                                    {areaName}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Badge chỉ số của Đội */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                              <span className="team-fleet-badge-pill">
-                                🚗 {vehicles.length} Phương tiện
-                              </span>
-                              <span className="team-fleet-badge-pill" style={{ background: '#f0fdf4', color: '#15803d', borderColor: '#bbf7d0' }}>
-                                👥 Sức chở: {teamCapacity} Người
-                              </span>
-                              <span className="team-fleet-badge-pill emerald">
-                                🟢 Sẵn sàng cơ động
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Bảng danh sách xe của đội */}
-                          <table className="executive-table" style={{ margin: 0 }}>
-                            <thead>
-                              <tr>
-                                <th style={{ width: '20%' }}>Biển Số &amp; Định Danh</th>
-                                <th style={{ width: '25%' }}>Loại Phương Tiện</th>
-                                <th style={{ width: '22%' }}>Sức Chở &amp; Tải Trọng</th>
-                                <th style={{ width: '18%' }}>Trạng Thái</th>
-                                <th style={{ width: '15%', textAlign: 'center' }}>Thao Tác</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {vehicles.map((v) => (
-                                <tr
-                                  key={v._id}
-                                  className="executive-table-row"
-                                  onClick={() => setSelectedVehicle(v)}
-                                  style={{ cursor: 'pointer' }}
-                                >
-                                  <td>
-                                    <span className="code-mono-bold">{v.plateNumber}</span>
-                                  </td>
-                                  <td>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1e293b', fontSize: 13, fontWeight: 500 }}>
-                                      <span style={{ color: '#64748b', display: 'flex', alignItems: 'center' }}>
-                                        {v.type === 'BOAT' ? <LifeBuoy size={14} /> : v.type === 'MOTORBIKE' ? <Bike size={14} /> : v.type === 'OTHER' ? <Wrench size={14} /> : <Truck size={14} />}
-                                      </span>
-                                      <span>
-                                        {v.type === 'BOAT'
-                                          ? 'Ca-nô / Xuồng lội nước'
-                                          : v.type === 'AMBULANCE'
-                                            ? 'Xe cấp cứu dã chiến'
-                                            : v.type === 'TRUCK'
-                                              ? 'Xe tải tác chiến 4x4'
-                                              : v.type === 'MOTORBIKE'
-                                                ? 'Xe máy cơ động ngõ hẻm'
-                                                : 'Phương tiện đặc chủng khác'}
-                                      </span>
-                                    </div>
-                                  </td>
-                                  <td>
-                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                      <span style={{ fontWeight: 800, color: '#0284c7', fontSize: 13 }}>
-                                        {v.capacity} Người / Cứu nạn
-                                      </span>
-                                      <span style={{ fontSize: 11, color: '#64748b' }}>
-                                        {v.type === 'BOAT' ? 'Động cơ thủy 60HP' : 'Dẫn động 4x4 vượt lũ'}
-                                      </span>
-                                    </div>
-                                  </td>
-                                  <td>
-                                    <span className="resource-status-badge available">
-                                      <span className="live-dot" style={{ width: 5, height: 5 }} />
-                                      Sẵn sàng cơ động
-                                    </span>
-                                  </td>
-                                  <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                      <button
-                                        type="button"
-                                        className="coordination-action-btn outline"
-                                        style={{ padding: '4px 8px', fontSize: 11.5 }}
-                                        onClick={() => setSelectedVehicle(v)}
-                                        title="Xem hồ sơ kỹ thuật chi tiết xe"
-                                      >
-                                        <Eye size={12} />
-                                        <span>Hồ sơ xe</span>
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="coordination-action-btn outline"
-                                        style={{ padding: '4px 8px', fontSize: 11.5 }}
-                                        onClick={() => {
-                                          setTransferVehicleTarget(v);
-                                          setTransferNewTeamId('');
-                                        }}
-                                        title="Điều chuyển phương tiện sang đội khác hoặc trả về kho"
-                                      >
-                                        <ArrowRightLeft size={12} />
-                                        <span>Điều chuyển</span>
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-
-                          {/* Footer thẻ Đội */}
-                          <div className="team-fleet-footer">
-                            <span>
-                              Trực thuộc địa bàn <strong>{areaName}</strong> • Sẵn sàng nhận lệnh điều động 24/7
+                        {/* Cột 2: Loại phương tiện */}
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1e293b', fontSize: 13, fontWeight: 500 }}>
+                            <span style={{ color: '#64748b', display: 'flex', alignItems: 'center' }}>
+                              {v.type === 'BOAT' ? (
+                                <LifeBuoy size={14} />
+                              ) : v.type === 'MOTORBIKE' ? (
+                                <Bike size={14} />
+                              ) : v.type === 'OTHER' ? (
+                                <Wrench size={14} />
+                              ) : (
+                                <Truck size={14} />
+                              )}
                             </span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span>{typeLabel}</span>
+                          </div>
+                        </td>
+
+                        {/* Cột 3: Đội cứu hộ tiếp nhận & quản lý */}
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span className="team-title-bold" style={{ color: isUnassigned ? '#d97706' : undefined }}>
+                                {teamName}
+                              </span>
+                              {isUnassigned && (
+                                <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#fef3c7', color: '#b45309', fontWeight: 700 }}>
+                                  DỰ TRỮ
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span className="leader-title-bold">{leaderName}</span>
                               {leaderPhone && (
                                 <a
                                   href={`tel:${leaderPhone}`}
-                                  className="coordination-action-btn outline"
-                                  style={{ padding: '3px 8px', fontSize: 11, textDecoration: 'none' }}
+                                  className="leader-phone-pill"
+                                  onClick={(e) => e.stopPropagation()}
+                                  title="Gọi nhanh cho Đội trưởng quản lý xe"
                                 >
                                   <Phone size={11} />
-                                  <span>Gọi chỉ huy</span>
+                                  <span>{leaderPhone}</span>
                                 </a>
                               )}
                             </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
-              </div>
-            ) : (
-              /* BẢNG PHƯƠNG TIỆN BIÊN CHẾ THEO ĐỘI (CHẾ ĐỘ BẢNG TRUYỀN THỐNG) */
-              <table className="executive-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '18%' }}>Biển Số &amp; Định Danh</th>
-                    <th style={{ width: '15%' }}>Loại Phương Tiện</th>
-                    <th style={{ width: '28%' }}>Đội Cứu Hộ Tiếp Nhận &amp; Chỉ Huy</th>
-                    <th style={{ width: '14%' }}>Sức Chở &amp; Tải Trọng</th>
-                    <th style={{ width: '13%' }}>Trạng Thái</th>
-                    <th style={{ width: '12%', textAlign: 'center' }}>Thao Tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredVehicles.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} style={{ textAlign: 'center', padding: '50px 20px' }}>
-                        <AlertTriangle size={32} style={{ color: '#94a3b8', margin: '0 auto 8px', display: 'block' }} />
-                        <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: '#0f172a' }}>
-                          Không tìm thấy phương tiện nào phù hợp với bộ lọc
-                        </p>
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredVehicles.map((v) => {
-                      const team = v.assignedTeam;
-                      const isUnassigned = !team;
-                      const teamName = team?.name || '📦 Kho Tổng / Chưa Biên Chế';
-                      const leaderObj = typeof team?.leaderId === 'object' && team?.leaderId !== null ? team?.leaderId : null;
-                      const leaderName = leaderObj?.fullName || (isUnassigned ? 'Kho Quản Lý SOS' : 'Chưa phân công');
-                      const leaderPhone = leaderObj?.phone || '';
-                      const areaName = typeof team?.areaId === 'object' && team?.areaId !== null ? (team?.areaId as any)?.name : (isUnassigned ? 'Kho Dự Trữ' : 'Địa bàn chung');
-
-                      const typeLabel =
-                        v.type === 'BOAT'
-                          ? 'Ca-nô / Xuồng lội nước'
-                          : v.type === 'AMBULANCE'
-                            ? 'Xe cấp cứu dã chiến'
-                            : v.type === 'TRUCK'
-                              ? 'Xe tải tác chiến 4x4'
-                              : v.type === 'MOTORBIKE'
-                                ? 'Xe máy cơ động ngõ hẻm'
-                                : 'Phương tiện đặc chủng khác';
-
-                      return (
-                        <tr
-                          key={v._id}
-                          className="executive-table-row"
-                          onClick={() => setSelectedVehicle(v)}
-                          style={{ cursor: 'pointer' }}
-                          title="Bấm để xem hồ sơ kỹ thuật chi tiết phương tiện"
-                        >
-                          {/* Cột 1: Biển số & Định danh */}
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span className="code-mono-bold">{v.plateNumber}</span>
-                            </div>
-                          </td>
-
-                          {/* Cột 2: Loại phương tiện */}
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1e293b', fontSize: 13, fontWeight: 500 }}>
-                              <span style={{ color: '#64748b', display: 'flex', alignItems: 'center' }}>
-                                {v.type === 'BOAT' ? (
-                                  <LifeBuoy size={14} />
-                                ) : v.type === 'MOTORBIKE' ? (
-                                  <Bike size={14} />
-                                ) : v.type === 'OTHER' ? (
-                                  <Wrench size={14} />
-                                ) : (
-                                  <Truck size={14} />
-                                )}
-                              </span>
-                              <span>{typeLabel}</span>
-                            </div>
-                          </td>
-
-                          {/* Cột 3: Đội cứu hộ tiếp nhận & quản lý */}
-                          <td>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span className="team-title-bold" style={{ color: isUnassigned ? '#d97706' : undefined }}>
-                                  {teamName}
-                                </span>
-                                {isUnassigned && (
-                                  <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#fef3c7', color: '#b45309', fontWeight: 700 }}>
-                                    DỰ TRỮ
-                                  </span>
-                                )}
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span className="leader-title-bold">{leaderName}</span>
-                                {leaderPhone && (
-                                  <a
-                                    href={`tel:${leaderPhone}`}
-                                    className="leader-phone-pill"
-                                    onClick={(e) => e.stopPropagation()}
-                                    title="Gọi nhanh cho Đội trưởng quản lý xe"
-                                  >
-                                    <Phone size={11} />
-                                    <span>{leaderPhone}</span>
-                                  </a>
-                                )}
-                              </div>
-                              <span style={{ fontSize: 11.5, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <MapPin size={11} color="#0284c7" />
-                                {areaName}
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Cột 4: Sức chở */}
-                          <td>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                              <span style={{ fontWeight: 800, color: '#0284c7', fontSize: 13.5 }}>
-                                {v.capacity} Người / Cứu nạn
-                              </span>
-                              <span style={{ fontSize: 11.5, color: '#64748b' }}>
-                                {v.type === 'BOAT' ? 'Động cơ thủy 60HP' : 'Dẫn động 4x4 vượt lũ'}
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Cột 5: Trạng thái */}
-                          <td>
-                            <span className="resource-status-badge available">
-                              <span className="live-dot" style={{ width: 5, height: 5 }} />
-                              Sẵn sàng cơ động
+                            <span style={{ fontSize: 11.5, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <MapPin size={11} color="#0284c7" />
+                              {areaName}
                             </span>
-                          </td>
+                          </div>
+                        </td>
 
-                          {/* Cột 6: Thao tác */}
-                          <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <button
-                                type="button"
-                                className="coordination-action-btn outline"
-                                onClick={() => setSelectedVehicle(v)}
-                                title="Xem hồ sơ chi tiết phương tiện"
-                              >
-                                <Eye size={12} />
-                                <span>Hồ sơ xe</span>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            )
+                        {/* Cột 4: Sức chở */}
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <span style={{ fontWeight: 800, color: '#0284c7', fontSize: 13.5 }}>
+                              {v.capacity} Người / Cứu nạn
+                            </span>
+                            <span style={{ fontSize: 11.5, color: '#64748b' }}>
+                              {v.type === 'BOAT' ? 'Động cơ thủy 60HP' : 'Dẫn động 4x4 vượt lũ'}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Cột 5: Trạng thái */}
+                        <td>
+                          <span className="resource-status-badge available">
+                            <span className="live-dot" style={{ width: 5, height: 5 }} />
+                            Sẵn sàng cơ động
+                          </span>
+                        </td>
+
+                        {/* Cột 6: Thao tác */}
+                        <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <button
+                              type="button"
+                              className="coordination-action-btn outline"
+                              onClick={() => setSelectedVehicle(v)}
+                              title="Xem hồ sơ chi tiết phương tiện"
+                            >
+                              <Eye size={12} />
+                              <span>Hồ sơ xe</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           ) : resourceTab === 'CONSUMABLES' ? (
             /* BẢNG VẬT TƯ CỨU TRỢ & NHU YẾU PHẨM */
             <table className="executive-table">
