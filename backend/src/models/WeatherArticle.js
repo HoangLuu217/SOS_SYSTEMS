@@ -87,6 +87,7 @@ const weatherArticleSchema = new mongoose.Schema(
     },
     published_at: {
       type: Date,
+      alias: 'publishedAt',
       default: null,
     },
     status: {

@@ -1,4 +1,4 @@
-import { fetchWithAuth } from './client';
+import { API_BASE, fetchWithAuth } from './client';
 
 export interface WeatherArticleItem {
   _id: string;
@@ -17,6 +17,8 @@ export interface WeatherArticleItem {
   articleTitle?: string;
   sourceName?: string;
   source_name?: string;
+  publishedAt?: string | null;
+  published_at?: string | null;
   status: 'ACTIVE' | 'ARCHIVED' | 'pending' | 'approved' | 'rejected' | string;
   areaId?: {
     _id: string;
@@ -30,7 +32,8 @@ export interface WeatherArticleItem {
     phone?: string;
     roles?: string[];
   } | null;
-  createdAt: string;
+  createdAt?: string;
+  created_at?: string;
   updatedAt?: string;
 }
 
@@ -46,6 +49,7 @@ export interface CreateWeatherPayload {
   articleUrl?: string;
   articleTitle?: string;
   sourceName?: string;
+  publishedAt?: string | null;
   areaId?: string;
   status?: string;
 }
@@ -69,6 +73,31 @@ export async function executeWeatherWorkflowApi(): Promise<{
     method: 'POST',
     body: JSON.stringify({}),
   }, { directFallback: false });
+}
+
+export function subscribeWeatherArticleUpdates(onUpdated: () => void): () => void {
+  let eventSource: EventSource | null = null;
+  try {
+    eventSource = new EventSource(`${API_BASE}/weather-articles/events/stream`, { withCredentials: true });
+    eventSource.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload?.action === 'WEATHER_ARTICLES_UPDATED') onUpdated();
+      } catch (error) {
+        console.warn('[Weather SSE] Không đọc được sự kiện cập nhật:', error);
+      }
+    };
+    eventSource.onerror = () => {
+      // EventSource reconnects automatically. No periodic polling is needed.
+    };
+  } catch (error) {
+    console.warn('[Weather SSE] Không thể kết nối luồng cập nhật:', error);
+  }
+
+  return () => {
+    eventSource?.close();
+    eventSource = null;
+  };
 }
 
 export async function fetchWeatherArticlesApi(

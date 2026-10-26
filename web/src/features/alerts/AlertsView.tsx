@@ -353,23 +353,37 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
         if (notificationCategory === 'SAFE_LOCATION') {
           const result = await fetchSafeLocations({ all: 'true', limit: '100', ...(queryAreaId && queryAreaId !== 'ALL' ? { areaId: queryAreaId } : {}) });
           if (isMounted && result.success && Array.isArray(result.data)) {
-            const filtered = result.data.filter((point) => point.status === 'ACTIVE' && pointBelongsToSelection(point.areaId));
+            const filtered = result.data.filter((point) => {
+              if (point.status !== 'ACTIVE') return false;
+              const coords = point.location?.coordinates;
+              const hasGps = Array.isArray(coords) && coords.length === 2 && typeof coords[0] === 'number' && typeof coords[1] === 'number' && !isNaN(coords[0]) && !isNaN(coords[1]);
+              if (!hasGps) return false;
+              return pointBelongsToSelection(point.areaId);
+            });
             setSafeLocationOptions(filtered);
             setSelectedPointId((prev) => (filtered.some((p) => p._id === prev) ? prev : ''));
           }
         } else if (notificationCategory === 'HAZARD') {
           const result = await fetchHazardReports({ all: 'true', limit: '100', ...(queryAreaId && queryAreaId !== 'ALL' ? { areaId: queryAreaId } : {}) });
           if (isMounted && result.success && Array.isArray(result.data?.reports)) {
-            const filtered = result.data.reports.filter((point) => point.status === 'APPROVED' && pointBelongsToSelection(point.areaId));
+            const filtered = result.data.reports.filter((point) => {
+              if (point.status !== 'APPROVED') return false;
+              const coords = point.location?.coordinates;
+              const hasGps = Array.isArray(coords) && coords.length === 2 && typeof coords[0] === 'number' && typeof coords[1] === 'number' && !isNaN(coords[0]) && !isNaN(coords[1]);
+              if (!hasGps) return false;
+              return pointBelongsToSelection(point.areaId);
+            });
             setHazardOptions(filtered);
             setSelectedPointId((prev) => (filtered.some((p) => p._id === prev) ? prev : ''));
           }
         } else if (notificationCategory === 'WEATHER') {
-          const result = await fetchWeatherArticlesApi({ limit: 100 });
+          const result = await fetchWeatherArticlesApi({ limit: 100, status: 'approved,ACTIVE' });
           if (isMounted && result.success && Array.isArray(result.data)) {
-            const valid = result.data.filter((a) => a.status !== 'rejected');
-            setWeatherOptions(valid.length > 0 ? valid : result.data);
-            setSelectedPointId((prev) => (valid.some((a) => a._id === prev) ? prev : ''));
+            const approvedList = result.data.filter((a) =>
+              ['approved', 'ACTIVE', 'APPROVED', 'active'].includes(String(a.status || ''))
+            );
+            setWeatherOptions(approvedList);
+            setSelectedPointId((prev) => (approvedList.some((a) => a._id === prev) ? prev : ''));
           }
         }
       } catch (error) {
@@ -1730,7 +1744,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                         {notificationCategory === 'WEATHER' && (
                           <div>
                             <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                              Chọn bản tin Thời tiết từ DB <span style={{ color: '#dc2626' }}>*</span>
+                              Chọn bản tin Thời tiết đã duyệt từ CSDL <span style={{ color: '#dc2626' }}>*</span>
                             </label>
                             <select
                               value={selectedPointId}
@@ -1742,7 +1756,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               style={{ width: '100%', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', fontSize: '12.5px', boxSizing: 'border-box' }}
                             >
                               <option value="">
-                                {loadingPoints ? 'Đang tải bản tin từ DB...' : `-- Chọn bản tin thời tiết (${weatherOptions.length} bản tin) --`}
+                                {loadingPoints ? 'Đang tải bản tin từ DB...' : `-- Chọn bản tin thời tiết đã duyệt (${weatherOptions.length} bản tin) --`}
                               </option>
                               {weatherOptions.map((item) => (
                                 <option key={item._id} value={item._id}>
@@ -1752,7 +1766,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                             </select>
                             {!loadingPoints && weatherOptions.length === 0 && (
                               <small style={{ color: '#b45309', display: 'block', marginTop: '3px' }}>
-                                Chưa có bản tin thời tiết nào trong cơ sở dữ liệu.
+                                Chưa có bản tin thời tiết nào được duyệt (APPROVED / ACTIVE) trong cơ sở dữ liệu. Vui lòng duyệt bản tin tại mục Quản lý thời tiết trước khi phát thông báo.
                               </small>
                             )}
                           </div>
@@ -1775,15 +1789,19 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               <option value="">
                                 {loadingPoints ? 'Đang tải điểm an toàn từ DB...' : `-- Chọn điểm an toàn (${safeLocationOptions.length} điểm) --`}
                               </option>
-                              {safeLocationOptions.map((point) => (
-                                <option key={point._id} value={point._id}>
-                                  {point.name} — {point.address}
-                                </option>
-                              ))}
+                              {safeLocationOptions.map((point) => {
+                                const coords = point.location?.coordinates;
+                                const gpsStr = coords ? `[GPS: ${coords[1]?.toFixed(4)}, ${coords[0]?.toFixed(4)}]` : '';
+                                return (
+                                  <option key={point._id} value={point._id}>
+                                    {point.name} {gpsStr} — {point.address}
+                                  </option>
+                                );
+                              })}
                             </select>
                             {!loadingPoints && safeLocationOptions.length === 0 && (
                               <small style={{ color: '#b45309', display: 'block', marginTop: '3px' }}>
-                                Chưa có điểm an toàn hoạt động nào trên địa bàn đã chọn.
+                                Chưa có điểm an toàn hoạt động nào có GPS hợp lệ trên địa bàn quản lý.
                               </small>
                             )}
                           </div>
@@ -1806,11 +1824,15 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               <option value="">
                                 {loadingPoints ? 'Đang tải điểm nguy hiểm từ DB...' : `-- Chọn điểm nguy hiểm (${hazardOptions.length} điểm) --`}
                               </option>
-                              {hazardOptions.map((point) => (
-                                <option key={point._id} value={point._id}>
-                                  [{point.severity || 'HIGH'}] {point.title} — {point.address}
-                                </option>
-                              ))}
+                              {hazardOptions.map((point) => {
+                                const coords = point.location?.coordinates;
+                                const gpsStr = coords ? `[GPS: ${coords[1]?.toFixed(4)}, ${coords[0]?.toFixed(4)}]` : '';
+                                return (
+                                  <option key={point._id} value={point._id}>
+                                    [{point.severity || 'HIGH'}] {point.title} {gpsStr} — {point.address}
+                                  </option>
+                                );
+                              })}
                             </select>
                             {!loadingPoints && hazardOptions.length === 0 && (
                               <small style={{ color: '#b45309', display: 'block', marginTop: '3px' }}>

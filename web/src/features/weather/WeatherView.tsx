@@ -6,13 +6,13 @@ import {
   updateWeatherArticleApi,
   deleteWeatherArticleApi,
   executeWeatherWorkflowApi,
+  subscribeWeatherArticleUpdates,
   type WeatherArticleItem,
   type CreateWeatherPayload,
 } from '@/api/weather.api';
 import { toast } from '@/components/common/toast';
 import {
   CloudSun,
-  Plus,
   RefreshCw,
   Search,
   CloudRain,
@@ -79,6 +79,28 @@ const CATEGORY_MAP: Record<
   },
 };
 
+const toDateInputValue = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const formatDate = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('vi-VN');
+};
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('vi-VN');
+};
+
 export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
   const [articles, setArticles] = useState<WeatherArticleItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -105,12 +127,11 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     articleUrl: '',
     articleTitle: '',
     sourceName: '',
+    publishedAt: '',
     status: 'ACTIVE',
   });
 
-  const canManage = Boolean(
-    user?.roles?.includes('ADMIN') || user?.roles?.includes('LOCAL_AUTHORITY')
-  );
+  const canManage = Boolean(user?.roles?.includes('ADMIN'));
   const canRunWorkflow = Boolean(user?.roles?.includes('ADMIN'));
 
   const handleRunWorkflow = async () => {
@@ -161,21 +182,25 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     fetchArticles();
   }, [fetchArticles]);
 
-  // n8n writes directly to MongoDB for both scheduled and manual runs. Refresh
-  // while this page is visible so either kind of run appears without a reload.
+  // n8n calls the backend after a successful write; SSE tells open pages to reload.
   useEffect(() => {
-    const refreshIfVisible = () => {
+    const unsubscribe = subscribeWeatherArticleUpdates(async () => {
       if (document.visibilityState === 'visible') {
-        void fetchArticles({ silent: true });
+        const refreshed = await fetchArticles({ silent: true });
+        if (refreshed && !runningWorkflow) {
+          toast.success('n8n đã lưu dữ liệu thời tiết mới. Danh sách vừa được cập nhật.');
+        }
       }
+    });
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void fetchArticles({ silent: true });
     };
-    const timer = window.setInterval(refreshIfVisible, 10_000);
-    document.addEventListener('visibilitychange', refreshIfVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
     return () => {
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', refreshIfVisible);
+      unsubscribe();
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
-  }, [fetchArticles]);
+  }, [fetchArticles, runningWorkflow]);
 
   // Statistics
   const metrics = useMemo(() => {
@@ -200,23 +225,6 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     return { total, severeCount, activeCount, avgScore };
   }, [articles]);
 
-  const handleOpenCreateModal = () => {
-    setEditingItem(null);
-    setFormValues({
-      title: '',
-      content: '',
-      summary: '',
-      category: 'mua_lu',
-      score: 80,
-      area: user?.authority?.areaName || 'Toàn thành phố',
-      imageUrl: '',
-      articleUrl: '',
-      articleTitle: '',
-      sourceName: 'Ban Chỉ Huy PCTT & TKCN',
-      status: 'ACTIVE',
-    });
-    setIsFormOpen(true);
-  };
 
   const handleOpenEditModal = (item: WeatherArticleItem) => {
     setEditingItem(item);
@@ -231,6 +239,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
       articleUrl: item.articleUrl || item.source_url || '',
       articleTitle: item.articleTitle || item.source_name || '',
       sourceName: item.sourceName || item.source_name || '',
+      publishedAt: toDateInputValue(item.published_at || item.publishedAt),
       status: item.status || 'ACTIVE',
     });
     setIsFormOpen(true);
@@ -294,7 +303,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
       <div className="weather-header">
         <div className="weather-header-info">
           <h2>
-            <CloudSun size={24} color="#38bdf8" />
+            <CloudSun size={22} color="#0284c7" />
             QUẢN LÝ BẢN TIN &amp; CẢNH BÁO THỜI TIẾT
           </h2>
           <p>
@@ -323,12 +332,6 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             Làm mới
           </button>
-          {canManage && (
-            <button className="btn-primary-weather" onClick={handleOpenCreateModal}>
-              <Plus size={18} />
-              Tạo bản tin thời tiết
-            </button>
-          )}
         </div>
       </div>
 
@@ -428,16 +431,6 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
           <div className="weather-empty-state">
             <CloudSun size={48} />
             <p>Chưa có bản tin thời tiết nào phù hợp với bộ lọc.</p>
-            {canManage && (
-              <button
-                className="btn-primary-weather"
-                style={{ marginTop: 12 }}
-                onClick={handleOpenCreateModal}
-              >
-                <Plus size={16} />
-                Tạo bản tin ngay
-              </button>
-            )}
           </div>
         ) : (
           articles.map((item) => {
@@ -487,18 +480,18 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                       <MapPin size={13} />
                       <span>{areaText}</span>
                     </div>
-                    <div className="weather-detail-item">
-                      <Calendar size={13} />
-                      <span>
-                        {new Date(item.createdAt || Date.now()).toLocaleDateString('vi-VN', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                        })}
-                      </span>
-                    </div>
+                    {(item.published_at || item.publishedAt) && (
+                      <div className="weather-detail-item">
+                        <Calendar size={13} />
+                        <span>Báo đăng: {formatDate(item.published_at || item.publishedAt)}</span>
+                      </div>
+                    )}
+                    {(item.createdAt || item.created_at) && (
+                      <div className="weather-detail-item">
+                        <Calendar size={13} />
+                        <span>Lưu hệ thống: {formatDateTime(item.createdAt || item.created_at)}</span>
+                      </div>
+                    )}
                     {(item.sourceName || item.source_name || item.articleTitle) && (
                       <div className="weather-detail-item">
                         <FileText size={13} />
@@ -580,8 +573,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
           <div className="weather-modal" onClick={(e) => e.stopPropagation()}>
             <div className="weather-modal-header">
               <h3>
-                <CloudSun size={20} color="#38bdf8" />
-                {editingItem ? 'CHỈNH SỬA BẢN TIN THỜI TIẾT' : 'TẠO MỚI BẢN TIN THỜI TIẾT'}
+                <CloudSun size={20} color="#0284c7" />
+                CHỈNH SỬA BẢN TIN THỜI TIẾT
               </h3>
               <button
                 className="weather-modal-close"
@@ -753,6 +746,19 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                     }
                   />
                 </div>
+
+                <div className="weather-form-group">
+                  <label className="weather-form-label">Ngày đăng trên trang báo</label>
+                  <input
+                    type="date"
+                    className="weather-form-input"
+                    value={formValues.publishedAt || ''}
+                    onChange={(e) =>
+                      setFormValues({ ...formValues, publishedAt: e.target.value || null })
+                    }
+                  />
+                  <small>Để trống nếu chưa xác định được ngày đăng trên nguồn tin.</small>
+                </div>
               </div>
 
               <div className="weather-modal-footer">
@@ -769,11 +775,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                   className="btn-primary-weather"
                   disabled={submitting}
                 >
-                  {submitting
-                    ? 'Đang lưu...'
-                    : editingItem
-                    ? 'Lưu cập nhật'
-                    : 'Tạo bản tin ngay'}
+                  {submitting ? 'Đang lưu...' : 'Lưu cập nhật'}
                 </button>
               </div>
             </form>
@@ -787,7 +789,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
           <div className="weather-modal" onClick={(e) => e.stopPropagation()}>
             <div className="weather-modal-header">
               <h3>
-                <CloudSun size={20} color="#38bdf8" />
+                <CloudSun size={20} color="#0284c7" />
                 CHI TIẾT BẢN TIN KHÍ TƯỢNG
               </h3>
               <button
@@ -825,26 +827,33 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                 </span>
               </div>
 
-              <h2 style={{ fontSize: 18, color: '#f8fafc', margin: '4px 0', lineHeight: 1.4 }}>
+              <h2 style={{ fontSize: 18, color: '#0f172a', margin: '4px 0', lineHeight: 1.4, fontWeight: 700 }}>
                 {detailItem.title}
               </h2>
 
               <div className="weather-card-details" style={{ border: 'none', padding: 0 }}>
                 <div className="weather-detail-item">
-                  <MapPin size={14} color="#38bdf8" />
+                  <MapPin size={14} color="#0284c7" />
                   <strong>Khu vực:</strong>{' '}
                   {detailItem.area ||
                     (detailItem.regions && detailItem.regions.join(', ')) ||
                     'Toàn quốc'}
                 </div>
+                {(detailItem.published_at || detailItem.publishedAt) && (
+                  <div className="weather-detail-item">
+                    <Calendar size={14} color="#0284c7" />
+                    <strong>Đăng trên báo:</strong>{' '}
+                    {formatDate(detailItem.published_at || detailItem.publishedAt)}
+                  </div>
+                )}
                 <div className="weather-detail-item">
-                  <Calendar size={14} color="#38bdf8" />
-                  <strong>Ngày đăng:</strong>{' '}
-                  {new Date(detailItem.createdAt || Date.now()).toLocaleString('vi-VN')}
+                  <Calendar size={14} color="#0284c7" />
+                  <strong>Lưu hệ thống:</strong>{' '}
+                  {formatDateTime(detailItem.createdAt || detailItem.created_at) || 'Chưa có dữ liệu'}
                 </div>
                 {(detailItem.sourceName || detailItem.source_name || detailItem.articleTitle) && (
                   <div className="weather-detail-item">
-                    <FileText size={14} color="#38bdf8" />
+                    <FileText size={14} color="#0284c7" />
                     <strong>Nguồn cấp:</strong>{' '}
                     {detailItem.sourceName || detailItem.source_name || detailItem.articleTitle}
                   </div>
@@ -854,12 +863,12 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
               {detailItem.summary && (
                 <div
                   style={{
-                    background: 'rgba(14, 165, 233, 0.1)',
-                    borderLeft: '4px solid #38bdf8',
+                    background: '#f0f9ff',
+                    borderLeft: '4px solid #0284c7',
                     padding: '12px 16px',
                     borderRadius: 6,
                     fontSize: 14,
-                    color: '#e0f2fe',
+                    color: '#0369a1',
                     lineHeight: 1.5,
                   }}
                 >
@@ -868,7 +877,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
               )}
 
               <div>
-                <h4 style={{ color: '#94a3b8', margin: '0 0 8px 0', fontSize: 13 }}>
+                <h4 style={{ color: '#64748b', margin: '0 0 8px 0', fontSize: 13, fontWeight: 700 }}>
                   NỘI DUNG TOÀN VĂN:
                 </h4>
                 <div className="weather-detail-content">{detailItem.content}</div>

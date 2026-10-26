@@ -2,6 +2,22 @@ const mongoose = require('mongoose');
 const { WeatherNotification, AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
 
+const parsePublishedAt = (value) => {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new ApiError(400, 'Ngày đăng bài trên báo không hợp lệ');
+  }
+  return date;
+};
+
+const getPublishedAtInput = (data) => (
+  Object.prototype.hasOwnProperty.call(data, 'publishedAt')
+    ? data.publishedAt
+    : data.published_at
+);
+
 class WeatherNotificationService {
   /**
    * Lấy danh sách thông báo thời tiết (có bộ lọc và phân trang)
@@ -125,6 +141,7 @@ class WeatherNotificationService {
       weatherType,
       sourceName,
     } = data;
+    const publishedAt = parsePublishedAt(getPublishedAtInput(data));
 
     if (!title || !title.trim()) {
       throw new ApiError(400, 'Tiêu đề thông báo thời tiết là bắt buộc');
@@ -162,6 +179,7 @@ class WeatherNotificationService {
       articleTitle: articleTitle || sourceName || data.source_name || null,
       source_name: sourceName || data.source_name || null,
       original_title: articleTitle || sourceName || data.source_name || null,
+      published_at: publishedAt === undefined ? null : publishedAt,
       areaId: areaId && mongoose.Types.ObjectId.isValid(areaId) ? areaId : null,
       createdBy: user?._id || null,
       status: data.status || 'ACTIVE',
@@ -201,6 +219,7 @@ class WeatherNotificationService {
       'sourceName',
       'source_name',
       'original_title',
+      'published_at',
       'areaId',
       'status',
     ];
@@ -214,6 +233,8 @@ class WeatherNotificationService {
     if (data.weatherType && !data.category) item.category = data.weatherType;
     if (data.areaName && !data.area) item.area = data.areaName;
     if (data.sourceName && !data.articleTitle) item.articleTitle = data.sourceName;
+    const publishedAt = parsePublishedAt(getPublishedAtInput(data));
+    if (publishedAt !== undefined) item.published_at = publishedAt;
 
     await item.save();
     return item;

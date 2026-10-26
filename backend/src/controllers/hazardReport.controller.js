@@ -26,7 +26,7 @@ class HazardReportController {
         );
       }
 
-      const report = await hazardReportService.createHazardReport(req.body, userId, userRoles);
+      const report = await hazardReportService.createHazardReport(req.body, userId, userRoles, req.user);
 
       await auditService.log({
         actorId: userId,

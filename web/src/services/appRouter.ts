@@ -150,6 +150,22 @@ export function parseRoute(
     navKey = 'map';
   }
 
+  // Route Guard: Các tab chỉ dành riêng cho Admin (bao gồm 'weather')
+  const isAdmin = Boolean(user?.roles?.includes('ADMIN'));
+  const ADMIN_ONLY_KEYS: Set<NavItemKey> = new Set([
+    'weather',
+    'admin_overview',
+    'citizens',
+    'rescuers_admin',
+    'authorities',
+    'areas',
+    'rbac',
+  ]);
+
+  if (!isAdmin && ADMIN_ONLY_KEYS.has(navKey)) {
+    navKey = 'rescuers';
+  }
+
   const sosId = navKey === 'map' && subSegments[0] ? subSegments[0] : undefined;
 
   return {

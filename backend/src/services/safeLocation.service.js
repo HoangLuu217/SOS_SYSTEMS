@@ -1,17 +1,40 @@
 const mongoose = require('mongoose');
 const { SafeLocation, AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
+const { findAreaByCoordinates, checkPointInAuthorityJurisdiction } = require('../utils/geoUtils');
 
 class SafeLocationService {
   /**
    * Tạo địa điểm an toàn mới
+   * Bắt buộc có tọa độ GPS hợp lệ và thuộc khu vực quản lý đối với Cán bộ địa phương
    */
-  async createSafeLocation(data, actorId) {
+  async createSafeLocation(data, actorId, creatorUser = null) {
     const { name, type, location, areaId, address, capacity, currentOccupancy, status } = data;
 
-    // Kiểm tra và gán khu vực hành chính linh hoạt
-    let area = null;
-    if (areaId && mongoose.isValidObjectId(areaId)) {
+    if (!name || !String(name).trim()) {
+      throw new ApiError(400, 'Tên địa điểm an toàn là bắt buộc');
+    }
+
+    // Bắt buộc phải có tọa độ GPS
+    if (
+      !location ||
+      !location.coordinates ||
+      !Array.isArray(location.coordinates) ||
+      location.coordinates.length !== 2
+    ) {
+      throw new ApiError(400, 'Tọa độ GPS [lng, lat] là bắt buộc đối với điểm an toàn.');
+    }
+
+    const [lng, lat] = location.coordinates;
+    if (typeof lng !== 'number' || typeof lat !== 'number' || isNaN(lng) || isNaN(lat) || lng < -180 || lng > 180 || lat < -90 || lat > 90) {
+      throw new ApiError(400, 'Tọa độ GPS kinh độ (-180..180) hoặc vĩ độ (-90..90) không hợp lệ');
+    }
+
+    // 1. Tự động xác định khu vực hành chính (areaId) chính xác qua tọa độ GPS
+    let area = await findAreaByCoordinates([lng, lat], AdministrativeArea);
+
+    // 2. Fallback nếu GPS chưa trúng ranh giới polygon cụ thể
+    if (!area && areaId && mongoose.isValidObjectId(areaId)) {
       area = await AdministrativeArea.findById(areaId);
     }
     if (!area && areaId) {
@@ -36,7 +59,7 @@ class SafeLocationService {
     }
     if (!area && address) {
       const addressStr = String(address || '').toLowerCase();
-      const allAreas = await AdministrativeArea.find();
+      const allAreas = await AdministrativeArea.find({ status: 'ACTIVE' });
       const matched = allAreas.find((a) => {
         if (!a.name) return false;
         const cleanName = a.name.toLowerCase().replace(/^(phường|quận|huyện|xã|thành phố|tỉnh)\s+/i, '').trim();
@@ -45,7 +68,7 @@ class SafeLocationService {
       if (matched) area = matched;
     }
     if (!area) {
-      area = await AdministrativeArea.findOne();
+      area = await AdministrativeArea.findOne({ code: 'DANANG' }) || await AdministrativeArea.findOne();
     }
     if (!area) {
       area = await AdministrativeArea.create({
@@ -55,12 +78,34 @@ class SafeLocationService {
       });
     }
 
+    // Kiểm tra thẩm quyền địa bàn: LOCAL_AUTHORITY chỉ được tạo điểm an toàn có GPS trong khu vực quản lý
+    if (creatorUser) {
+      const userRoles = creatorUser.roles || [];
+      const isLocalAuth = userRoles.includes('LOCAL_AUTHORITY') && !userRoles.includes('ADMIN');
+      if (isLocalAuth) {
+        const jurisdictionCheck = await checkPointInAuthorityJurisdiction(
+          { coordinates: [lng, lat], areaId: area?._id, address },
+          creatorUser,
+          AdministrativeArea
+        );
+        if (!jurisdictionCheck.allowed) {
+          throw new ApiError(
+            403,
+            `Bạn chỉ có quyền tạo điểm an toàn có GPS trong khu vực quản lý của mình (${jurisdictionCheck.authAreaName || 'Địa bàn được phân công'}). Tọa độ GPS đã chọn nằm ngoài khu vực quản lý!`
+          );
+        }
+      }
+    }
+
     const safeLocation = await SafeLocation.create({
-      name,
-      type,
-      location,
+      name: String(name).trim(),
+      type: type || 'SHELTER',
+      location: {
+        type: 'Point',
+        coordinates: [lng, lat],
+      },
       areaId: area._id,
-      address,
+      address: address ? String(address).trim() : '',
       capacity: capacity ?? 0,
       currentOccupancy: currentOccupancy ?? 0,
       status: status || 'ACTIVE',

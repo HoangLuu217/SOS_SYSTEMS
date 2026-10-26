@@ -3,6 +3,7 @@ const { Notification, User, AdministrativeArea, SafeLocation, HazardReport, Weat
 const ApiError = require('../utils/apiError');
 const { sendExpoPushNotification } = require('../utils/expoPush');
 const eventBus = require('./eventBus');
+const { checkPointInAuthorityJurisdiction } = require('../utils/geoUtils');
 
 class NotificationService {
   /**
@@ -294,9 +295,38 @@ class NotificationService {
         status: 'ACTIVE',
       }).lean();
       if (!point) throw new ApiError(404, 'Điểm an toàn không còn hoạt động.');
-      if (targetAreaId !== 'ALL' && targetAreaDoc && point.areaId.toString() !== targetAreaDoc._id.toString()) {
+
+      // Bắt buộc điểm an toàn phải có tọa độ GPS hợp lệ
+      const coords = point.location?.coordinates;
+      const hasValidCoords =
+        Array.isArray(coords) &&
+        coords.length === 2 &&
+        typeof coords[0] === 'number' &&
+        typeof coords[1] === 'number' &&
+        !isNaN(coords[0]) &&
+        !isNaN(coords[1]);
+
+      if (!hasValidCoords) {
+        throw new ApiError(400, 'Điểm an toàn này chưa có tọa độ GPS hợp lệ nên không thể gửi thông báo phát sóng.');
+      }
+
+      // Cán bộ địa phương chỉ được tạo thông báo cho điểm an toàn có GPS trong khu vực quản lý
+      if (isLocalAuthority && !isAdmin) {
+        const jurisdictionCheck = await checkPointInAuthorityJurisdiction(
+          { coordinates: coords, areaId: point.areaId, address: point.address },
+          senderUser,
+          AdministrativeArea
+        );
+        if (!jurisdictionCheck.allowed) {
+          throw new ApiError(
+            403,
+            `Bạn chỉ có quyền gửi thông báo phát sóng cho điểm an toàn có GPS thuộc khu vực quản lý của mình (${jurisdictionCheck.authAreaName || 'Địa bàn phân công'}). Điểm an toàn này nằm ngoài khu vực quản lý!`
+          );
+        }
+      } else if (targetAreaId !== 'ALL' && targetAreaDoc && point.areaId?.toString() !== targetAreaDoc._id.toString()) {
         throw new ApiError(403, 'Điểm an toàn nằm ngoài địa bàn được chọn.');
       }
+
       pointDetails = {
         safeLocation: {
           id: point._id.toString(),
@@ -319,9 +349,38 @@ class NotificationService {
         status: 'APPROVED',
       }).lean();
       if (!point) throw new ApiError(404, 'Điểm nguy hiểm chưa được duyệt hoặc không còn tồn tại.');
-      if (targetAreaId !== 'ALL' && targetAreaDoc && point.areaId?.toString() !== targetAreaDoc._id.toString()) {
+
+      // Bắt buộc điểm nguy hiểm phải có tọa độ GPS hợp lệ
+      const coords = point.location?.coordinates;
+      const hasValidCoords =
+        Array.isArray(coords) &&
+        coords.length === 2 &&
+        typeof coords[0] === 'number' &&
+        typeof coords[1] === 'number' &&
+        !isNaN(coords[0]) &&
+        !isNaN(coords[1]);
+
+      if (!hasValidCoords) {
+        throw new ApiError(400, 'Điểm nguy hiểm này chưa có tọa độ GPS hợp lệ nên không thể gửi thông báo phát sóng.');
+      }
+
+      // Cán bộ địa phương chỉ được tạo thông báo cho điểm nguy hiểm có GPS trong khu vực quản lý
+      if (isLocalAuthority && !isAdmin) {
+        const jurisdictionCheck = await checkPointInAuthorityJurisdiction(
+          { coordinates: coords, areaId: point.areaId, address: point.address },
+          senderUser,
+          AdministrativeArea
+        );
+        if (!jurisdictionCheck.allowed) {
+          throw new ApiError(
+            403,
+            `Bạn chỉ có quyền gửi thông báo phát sóng cho điểm nguy hiểm có GPS thuộc khu vực quản lý của mình (${jurisdictionCheck.authAreaName || 'Địa bàn phân công'}). Điểm nguy hiểm này nằm ngoài khu vực quản lý!`
+          );
+        }
+      } else if (targetAreaId !== 'ALL' && targetAreaDoc && point.areaId?.toString() !== targetAreaDoc._id.toString()) {
         throw new ApiError(403, 'Điểm nguy hiểm nằm ngoài địa bàn được chọn.');
       }
+
       pointDetails = {
         hazardPoint: {
           id: point._id.toString(),
@@ -335,6 +394,31 @@ class NotificationService {
       };
     }
 
+    if (normalizedType === 'WEATHER') {
+      if (extraData.weatherArticleId) {
+        if (!mongoose.Types.ObjectId.isValid(extraData.weatherArticleId)) {
+          throw new ApiError(400, 'Vui lòng chọn một bản tin thời tiết hợp lệ.');
+        }
+        const article = await WeatherNotification.findById(extraData.weatherArticleId).lean();
+        if (!article) {
+          throw new ApiError(404, 'Bản tin thời tiết không tồn tại.');
+        }
+        const isApproved = ['approved', 'APPROVED', 'ACTIVE', 'active'].includes(article.status);
+        if (!isApproved) {
+          throw new ApiError(400, 'Chỉ các bài viết thời tiết đã được duyệt (APPROVED / ACTIVE) mới được chọn để phát thông báo.');
+        }
+        pointDetails = {
+          weatherArticle: {
+            id: article._id.toString(),
+            title: article.title,
+            category: article.category,
+            summary: article.summary,
+            status: article.status,
+          },
+        };
+      }
+    }
+
     // Tìm kiếm các tài khoản người dùng mục tiêu trong khu vực
     let userFilter = { status: { $ne: 'SUSPENDED' } };
 
@@ -342,15 +426,25 @@ class NotificationService {
       ['SAFE_LOCATION', 'HAZARD'].includes(normalizedType);
 
     if (gpsScopedLocalBroadcast) {
-      if (!targetAreaDoc?.boundary?.type || !Array.isArray(targetAreaDoc.boundary.coordinates)) {
-        throw new ApiError(400, 'Địa bàn chưa có ranh giới bản đồ nên không thể lọc người nhận theo GPS.');
+      const geoConditions = [];
+      if (targetAreaDoc?.boundary?.type && Array.isArray(targetAreaDoc.boundary.coordinates) && targetAreaDoc.boundary.coordinates.length > 0) {
+        geoConditions.push({
+          currentLocation: {
+            $geoWithin: { $geometry: targetAreaDoc.boundary },
+          },
+        });
       }
+      geoConditions.push(
+        { 'authority.areaId': targetAreaDoc._id },
+        { 'citizen.areaId': targetAreaDoc._id },
+        { 'rescuer.areaId': targetAreaDoc._id },
+        { areaId: targetAreaDoc._id },
+        { address: { $regex: targetAreaDoc.name, $options: 'i' } }
+      );
+
       userFilter = {
         status: { $ne: 'SUSPENDED' },
-        currentLocation: {
-          $geoWithin: { $geometry: targetAreaDoc.boundary },
-        },
-        currentLocationUpdatedAt: { $gte: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+        $or: geoConditions,
       };
     } else if (targetAreaDoc?.type === 'PROVINCE' && targetAreaId !== 'ALL') {
       // Province is the first recipient selector; include its child districts/wards.
@@ -398,10 +492,9 @@ class NotificationService {
 
     const recipientUsers = await User.find(userFilter).select('_id fullName roles pushToken citizen.pushToken').lean();
 
-    // Với broadcast GPS, người gửi cũng phải nằm trong ranh giới và có GPS cập nhật gần đây.
-    // Các loại thông báo khác vẫn được lưu cho người gửi như hành vi hiện tại.
+    // Luôn đảm bảo tài khoản người gửi nhận được bản sao lưu trong danh sách thông báo
     const senderIncluded = recipientUsers.some((u) => u._id.toString() === senderUser._id.toString());
-    if (!senderIncluded && !gpsScopedLocalBroadcast) {
+    if (!senderIncluded) {
       recipientUsers.push({
         _id: senderUser._id,
         fullName: senderUser.fullName,
@@ -413,9 +506,7 @@ class NotificationService {
     if (recipientUsers.length === 0) {
       throw new ApiError(
         400,
-        gpsScopedLocalBroadcast
-          ? 'Không có tài khoản nào có GPS cập nhật trong 2 giờ gần nhất nằm trong ranh giới địa phương.'
-          : 'Không tìm thấy tài khoản người dùng nào thuộc phạm vi khu vực này.'
+        'Không tìm thấy tài khoản người dùng nào thuộc phạm vi khu vực này để phát thông báo.'
       );
     }
 

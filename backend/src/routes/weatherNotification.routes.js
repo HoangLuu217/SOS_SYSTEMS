@@ -1,8 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const weatherNotificationController = require('../controllers/weatherNotification.controller');
-const { authenticate } = require('../middlewares/authMiddleware');
+const { authenticate, optionalAuthenticate } = require('../middlewares/authMiddleware');
 const { authorize } = require('../middlewares/roleMiddleware');
+
+// A generic invalidation event contains no article data, so anonymous EventSource
+// connections are safe; clients still use the normal authenticated API to fetch rows.
+router.get('/events/stream', optionalAuthenticate, weatherNotificationController.streamWeatherArticleEvents);
+
+// Called server-to-server by n8n after it finishes successfully.
+router.post('/workflow-callback', weatherNotificationController.workflowCompletedCallback);
 
 /**
  * @route   GET /weather-notifications

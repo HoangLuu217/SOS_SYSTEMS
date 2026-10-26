@@ -21,7 +21,7 @@ class SafeLocationController {
       }
 
       const actorRole = req.user.roles?.[0] || req.user.role || 'LOCAL_AUTHORITY';
-      const safeLocation = await safeLocationService.createSafeLocation(req.body, req.user._id);
+      const safeLocation = await safeLocationService.createSafeLocation(req.body, req.user._id, req.user);
 
       // Ghi audit log
       await auditService.log({
