@@ -53,7 +53,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
       } else {
         const domainList = domainDService.getSosRequests();
         if (domainList && domainList.length > 0) {
-          const mappedFromDomain: SosRequestItem[] = domainList.map((s) => ({
+          const mappedFromDomain: SosRequestItem[] = domainList.map((s: any) => ({
             _id: s.id,
             sosCode: s.sosCode,
             citizenId: {
@@ -72,6 +72,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
             description: s.description || '',
             status: (s.status as any) || 'VERIFIED',
             createdAt: s.createdAt || new Date().toISOString(),
+            updatedAt: s.createdAt || new Date().toISOString(),
             assignment: domainDService.getAssignmentBySosId(s.id) as any,
           }));
           setSosList(mappedFromDomain);
@@ -82,7 +83,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
     } catch {
       const domainList = domainDService.getSosRequests();
       if (domainList && domainList.length > 0) {
-        const mappedFromDomain: SosRequestItem[] = domainList.map((s) => ({
+        const mappedFromDomain: SosRequestItem[] = domainList.map((s: any) => ({
           _id: s.id,
           sosCode: s.sosCode,
           citizenId: {
@@ -101,6 +102,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
           description: s.description || '',
           status: (s.status as any) || 'VERIFIED',
           createdAt: s.createdAt || new Date().toISOString(),
+          updatedAt: s.createdAt || new Date().toISOString(),
           assignment: domainDService.getAssignmentBySosId(s.id) as any,
         }));
         setSosList(mappedFromDomain);

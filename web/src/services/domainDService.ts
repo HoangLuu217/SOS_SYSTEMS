@@ -459,7 +459,7 @@ class DomainDService {
   }
 
   cancelAssignment(assignmentId: string, reason: string): { assignment?: SosAssignment; sos?: SosRequest } {
-    let assign = this.assignments[assignmentId];
+    let assign: SosAssignment | undefined = this.assignments[assignmentId];
     if (!assign) {
       assign = Object.values(this.assignments).find(
         (a) => a.id === assignmentId || a.sosRequestId === assignmentId

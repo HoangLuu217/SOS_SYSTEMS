@@ -16,7 +16,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
   selectedSos,
   rescueTeams,
   vehicles,
-  onOpenReassign,
+  onOpenReassign: _onOpenReassign,
   onOpenCancel,
 }) => {
   const assignedRescuer = rescueTeams
