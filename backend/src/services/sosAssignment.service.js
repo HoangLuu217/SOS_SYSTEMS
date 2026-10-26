@@ -620,12 +620,27 @@ class SosAssignmentService {
       throw new ApiError(400, 'ID phân công không phải là ObjectId hợp lệ');
     }
 
-    const assignment = await SosAssignment.findById(id);
+    let assignment = await SosAssignment.findById(id);
     if (!assignment) {
+      assignment = await SosAssignment.findOne({
+        $or: [{ sosRequestId: id }, { sosId: id }],
+        status: { $nin: ['CANCELLED', 'REJECTED'] },
+      });
+    }
+    if (!assignment) {
+      // Tìm xem có assignment nào đã CANCELLED trước đó không để trả về mà không ném lỗi 404
+      const existing = await SosAssignment.findOne({
+        $or: [{ _id: id }, { sosRequestId: id }, { sosId: id }],
+      });
+      if (existing) return existing;
       throw new ApiError(404, 'Không tìm thấy phân công cứu hộ (Assignment)');
     }
 
-    if (['COMPLETED', 'CANCELLED'].includes(assignment.status)) {
+    if (assignment.status === 'CANCELLED') {
+      return assignment;
+    }
+
+    if (assignment.status === 'COMPLETED') {
       throw new ApiError(
         400,
         `Không thể hủy phân công đã ở trạng thái '${assignment.status}'`

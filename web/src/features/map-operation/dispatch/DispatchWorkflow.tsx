@@ -314,6 +314,8 @@ export const DispatchWorkflow = ({
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
+        maxHeight: '100%',
+        minHeight: 0,
         overflow: 'hidden',
         background: 'var(--sos-surface)',
         borderLeft: '1px solid var(--sos-border)',
@@ -473,19 +475,7 @@ export const DispatchWorkflow = ({
           </div>
 
           {/* DANH SÁCH THẺ ĐỘI CỨU HỘ: DUY NHẤT VÙNG NÀY ĐƯỢC PHÉP CUỘN (flex-1 min-h-0 overflow-y-auto) */}
-          <div
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: 'auto',
-              paddingRight: 3,
-              paddingTop: 8,
-              paddingBottom: 8,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-            }}
-          >
+          <div className="dispatch-teams-scroll-list">
             {availableTeams.length === 0 ? (
               <div
                 style={{

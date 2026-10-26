@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   X,
   Loader2,
-  RefreshCw,
   Compass,
   LifeBuoy,
   XCircle,
@@ -18,6 +17,7 @@ import type { SosRequestItem } from '@/types/dashboard';
 import { fetchSosRequests, completeSosRequest } from '@/api';
 import { FALLBACK_SOS_LIST } from '@/constants';
 import { onSosCreated, onSosUpdated, onAssignmentUpdated } from '@/services/socketService';
+import { domainDService } from '@/services/domainDService';
 import { toast } from '@/components/common/toast';
 import '@/features/sos/SosRequestsView.css';
 import './CoordinationView.css';
@@ -48,13 +48,63 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
         fetchSosRequests({ limit: '100' }),
       ]);
 
-      if (sosRes.status === 'fulfilled' && sosRes.value.success && Array.isArray(sosRes.value.data)) {
+      if (sosRes.status === 'fulfilled' && sosRes.value.success && Array.isArray(sosRes.value.data) && sosRes.value.data.length > 0) {
         setSosList(sosRes.value.data);
-      } else if (!propSosList || propSosList.length === 0) {
-        setSosList(FALLBACK_SOS_LIST);
+      } else {
+        const domainList = domainDService.getSosRequests();
+        if (domainList && domainList.length > 0) {
+          const mappedFromDomain: SosRequestItem[] = domainList.map((s) => ({
+            _id: s.id,
+            sosCode: s.sosCode,
+            citizenId: {
+              _id: 'citizen-ref',
+              fullName: s.citizenName || 'Người dân',
+              phone: s.citizenPhone || 'Chưa có SĐT',
+            } as any,
+            location: {
+              type: 'Point',
+              coordinates: [s.coordinates?.lng || 108.15, s.coordinates?.lat || 16.07],
+            },
+            address: s.locationName || s.address || 'Liên Chiểu, Đà Nẵng',
+            emergencyType: (s.emergencyType as any) || 'FLOOD',
+            priority: (s.priority as any) || 'CRITICAL',
+            people: s.affectedPeople || 2,
+            description: s.description || '',
+            status: (s.status as any) || 'VERIFIED',
+            createdAt: s.createdAt || new Date().toISOString(),
+            assignment: domainDService.getAssignmentBySosId(s.id) as any,
+          }));
+          setSosList(mappedFromDomain);
+        } else if (!propSosList || propSosList.length === 0) {
+          setSosList(FALLBACK_SOS_LIST);
+        }
       }
     } catch {
-      if (!propSosList || propSosList.length === 0) {
+      const domainList = domainDService.getSosRequests();
+      if (domainList && domainList.length > 0) {
+        const mappedFromDomain: SosRequestItem[] = domainList.map((s) => ({
+          _id: s.id,
+          sosCode: s.sosCode,
+          citizenId: {
+            _id: 'citizen-ref',
+            fullName: s.citizenName || 'Người dân',
+            phone: s.citizenPhone || 'Chưa có SĐT',
+          } as any,
+          location: {
+            type: 'Point',
+            coordinates: [s.coordinates?.lng || 108.15, s.coordinates?.lat || 16.07],
+          },
+          address: s.locationName || s.address || 'Liên Chiểu, Đà Nẵng',
+          emergencyType: (s.emergencyType as any) || 'FLOOD',
+          priority: (s.priority as any) || 'CRITICAL',
+          people: s.affectedPeople || 2,
+          description: s.description || '',
+          status: (s.status as any) || 'VERIFIED',
+          createdAt: s.createdAt || new Date().toISOString(),
+          assignment: domainDService.getAssignmentBySosId(s.id) as any,
+        }));
+        setSosList(mappedFromDomain);
+      } else if (!propSosList || propSosList.length === 0) {
         setSosList(FALLBACK_SOS_LIST);
       }
     } finally {
@@ -417,41 +467,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
 
   return (
     <div className="coordination-executive-container oceanic-executive-theme">
-      {/* 1. HEADER CARD TỔNG QUAN TÁC CHIẾN (CHUẨN OCEANIC EXECUTIVE) */}
-      <div className="executive-overview-container">
-        <div className="executive-overview-header" style={{ marginBottom: 0 }}>
-          <div className="executive-header-left">
-            <span className="executive-live-pill">
-              <span className="live-dot" />
-              Trực ban chỉ huy tác chiến 24/7
-            </span>
-          </div>
-
-          <div className="executive-header-right">
-            <button
-              type="button"
-              className="coordination-action-btn outline"
-              onClick={refreshData}
-              title="Cập nhật dữ liệu mới nhất"
-            >
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              <span>Làm mới</span>
-            </button>
-
-            <button
-              type="button"
-              className="coordination-action-btn primary"
-              onClick={() => onOpenMap()}
-              title="Xem vị trí tất cả các đội và yêu cầu cứu hộ trên bản đồ tác chiến"
-            >
-              <MapPin size={15} />
-              <span>Mở Bản Đồ Realtime</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. BẢNG DỮ LIỆU ĐIỀU PHỐI (CHUẨN EXECUTIVE TABLE CARD) */}
+      {/* BẢNG DỮ LIỆU ĐIỀU PHỐI (CHUẨN EXECUTIVE TABLE CARD) */}
       <div className="executive-table-card">
         {/* Toolbar: Bộ lọc tab + Ô tìm kiếm */}
         <div className="executive-table-toolbar">

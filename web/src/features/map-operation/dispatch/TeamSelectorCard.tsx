@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check } from 'lucide-react';
+import { Check, Users } from 'lucide-react';
 import type { RescueTeam } from '@/types/domainD';
 
 interface Props {
@@ -26,7 +26,7 @@ export const TeamSelectorCard: React.FC<Props> = ({
   const leadRescuer = team.rescuers?.[0];
   const memberCount = team.rescuers?.length || team.availableRescuersCount || 4;
 
-  // Tách mã đội (nếu nằm trong dấu ngoặc) để hiển thị thành tag xám nhỏ gọn, tránh rớt 3 dòng
+  // Tách mã đội (nếu nằm trong dấu ngoặc) để hiển thị thành tag xám nhỏ gọn, tránh rớt dòng
   const { title: cleanTeamName, codeTag } = (() => {
     const match = teamDisplayName.match(/^(.*?)(?:\s*\(([^)]+)\))?$/);
     if (match && match[2]) {
@@ -39,33 +39,33 @@ export const TeamSelectorCard: React.FC<Props> = ({
     <div
       onClick={onToggle}
       style={{
-        padding: '10px 12px',
+        padding: '9px 12px',
         borderRadius: 9,
-        border: isSelected ? '2px solid #2563eb' : '1.5px solid #e2e8f0',
-        background: isSelected ? '#eff6ff' : '#ffffff',
-        boxShadow: isSelected ? '0 3px 12px -2px rgba(37, 99, 235, 0.18)' : '0 1px 3px rgba(0,0,0,0.04)',
+        border: isSelected ? '2px solid #0284c7' : '1.5px solid #e2e8f0',
+        background: isSelected ? '#f0f9ff' : '#ffffff',
+        boxShadow: isSelected ? '0 3px 12px -2px rgba(2, 132, 199, 0.2)' : '0 1px 3px rgba(0,0,0,0.04)',
         cursor: 'pointer',
         transition: 'all 0.15s ease',
         display: 'flex',
         flexDirection: 'column',
-        gap: 7,
+        gap: 6,
       }}
     >
-      {/* HÀNG 1: MỤC CHÍNH - CHECKBOX + TÊN ĐỘI & HUY HIỆU TRẠNG THÁI */}
+      {/* HÀNG 1: CHECKBOX + TÊN ĐỘI + CODE TAG + KHUYẾN NGHỊ + TRẠNG THÁI */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, flex: 1 }}>
           {/* Checkbox chọn đội */}
           <div
             style={{
               width: 18,
               height: 18,
               borderRadius: 4,
-              border: `2px solid ${isSelected ? '#2563eb' : '#94a3b8'}`,
+              border: `2px solid ${isSelected ? '#0284c7' : '#94a3b8'}`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
-              background: isSelected ? '#2563eb' : '#ffffff',
+              background: isSelected ? '#0284c7' : '#ffffff',
               color: '#ffffff',
               transition: 'all 0.12s ease',
             }}
@@ -93,47 +93,46 @@ export const TeamSelectorCard: React.FC<Props> = ({
                 {codeTag}
               </span>
             )}
+            {isRecommended && (
+              <span
+                style={{
+                  background: '#fef3c7',
+                  color: '#b45309',
+                  border: '1px solid #fde68a',
+                  fontSize: 9.5,
+                  fontWeight: 800,
+                  padding: '1px 5px',
+                  borderRadius: 4,
+                  letterSpacing: '0.2px',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                ★ KHUYẾN NGHỊ
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Khuyến nghị & Trạng thái */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-          {isRecommended && (
-            <span
-              style={{
-                background: '#fef3c7',
-                color: '#b45309',
-                border: '1px solid #fde68a',
-                fontSize: 9.5,
-                fontWeight: 800,
-                padding: '2px 5px',
-                borderRadius: 4,
-                letterSpacing: '0.2px',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              ★ KHUYẾN NGHỊ
-            </span>
-          )}
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 800,
-              background: '#dcfce7',
-              color: '#15803d',
-              border: '1px solid #bbf7d0',
-              padding: '2px 6px',
-              borderRadius: 4,
-              letterSpacing: '0.2px',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            SẴN SÀNG
-          </span>
-        </div>
+        {/* Trạng thái sẵn sàng */}
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 800,
+            background: '#dcfce7',
+            color: '#15803d',
+            border: '1px solid #86efac',
+            padding: '2px 6px',
+            borderRadius: 4,
+            letterSpacing: '0.2px',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
+          SẴN SÀNG
+        </span>
       </div>
 
-      {/* HÀNG 2: THÔNG SỐ TÁC CHIẾN - KHOẢNG CÁCH & PHƯƠNG TIỆN */}
+      {/* HÀNG 2: THÔNG SỐ TÁC CHIẾN - KHOẢNG CÁCH (ETA) & PHƯƠNG TIỆN */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         {/* Hộp chỉ số thời gian & khoảng cách nổi bật */}
         <div
@@ -145,8 +144,8 @@ export const TeamSelectorCard: React.FC<Props> = ({
             border: '1px solid #bfdbfe',
             padding: '2px 7px',
             borderRadius: 5,
-            color: '#1d4ed8',
-            fontSize: 11.5,
+            color: '#0369a1',
+            fontSize: 11,
             fontWeight: 800,
             flexShrink: 0,
           }}
@@ -160,7 +159,7 @@ export const TeamSelectorCard: React.FC<Props> = ({
           style={{
             fontSize: 11.5,
             color: '#334155',
-            fontWeight: 700,
+            fontWeight: 600,
             flex: 1,
             minWidth: 0,
             textAlign: 'right',
@@ -171,26 +170,26 @@ export const TeamSelectorCard: React.FC<Props> = ({
           title={vehicleSpec}
         >
           <span>Phương tiện: </span>
-          <strong style={{ color: '#0f172a', fontWeight: 800 }}>{vehicleSpec}</strong>
+          <strong style={{ color: '#0f172a', fontWeight: 700 }}>{vehicleSpec}</strong>
         </div>
       </div>
 
-      {/* HÀNG 3: MỤC PHỤ - CHỈ HUY & LINK XEM THÀNH VIÊN DẠNG GỌN */}
+      {/* HÀNG 3: CHỈ HUY & LINK XEM THÀNH VIÊN GỌN GÀNG */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           borderTop: '1px dashed #e2e8f0',
-          paddingTop: 6,
+          paddingTop: 5,
           fontSize: 11,
           color: '#64748b',
         }}
       >
-        <div>
-          <span>Chỉ huy: </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span>Chỉ huy:</span>
           <strong style={{ color: '#1e293b', fontWeight: 700 }}>{leadRescuer?.name || 'Trưởng đội'}</strong>
-          <span style={{ color: '#64748b', marginLeft: 4 }}>({memberCount} chiến sĩ)</span>
+          <span style={{ color: '#64748b' }}>• {memberCount} chiến sĩ</span>
         </div>
 
         <button
@@ -200,22 +199,25 @@ export const TeamSelectorCard: React.FC<Props> = ({
             onViewMembers();
           }}
           style={{
-            background: 'none',
-            border: 'none',
-            padding: 0,
-            color: '#2563eb',
-            fontSize: 11,
+            background: 'rgba(2, 132, 199, 0.08)',
+            border: '1px solid rgba(2, 132, 199, 0.25)',
+            borderRadius: 5,
+            padding: '2px 7px',
+            color: '#0284c7',
+            fontSize: 10.5,
             fontWeight: 700,
             cursor: 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 2,
+            gap: 3,
+            flexShrink: 0,
+            transition: 'all 0.15s ease',
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
-          onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(2, 132, 199, 0.18)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(2, 132, 199, 0.08)')}
         >
-          <span>Xem thành viên</span>
-          <span style={{ fontSize: 9 }}>⌄</span>
+          <Users size={11} />
+          <span>Thành viên ({memberCount})</span>
         </button>
       </div>
     </div>

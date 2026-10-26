@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Phone, RefreshCw, XCircle } from 'lucide-react';
+import { Phone, XCircle } from 'lucide-react';
 import type { SosRequest, SosAssignment, RescueTeam, Vehicle } from '@/types/domainD';
 
 interface Props {
@@ -7,7 +7,7 @@ interface Props {
   selectedSos: SosRequest;
   rescueTeams: RescueTeam[];
   vehicles: Vehicle[];
-  onOpenReassign: () => void;
+  onOpenReassign?: () => void;
   onOpenCancel: () => void;
 }
 
@@ -458,39 +458,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             </div>
           </div>
         </div>
-      </div>
 
-      {/* 3. TACTICAL ACTION BUTTONS (Đổi đội cứu hộ / Hủy điều động) - CỐ ĐỊNH Ở ĐÁY CHUẨN ẢNH ĐÍNH KÈM */}
-      <div style={{ flexShrink: 0, display: 'flex', gap: 8, paddingTop: 2 }}>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenReassign();
-          }}
-          style={{
-            flex: 1,
-            height: 42,
-            padding: '0 14px',
-            background: '#ffffff',
-            border: '1.5px solid #cbd5e1',
-            borderRadius: 9,
-            color: '#0f172a',
-            fontSize: 13,
-            fontWeight: 800,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 7,
-            boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-            transition: 'all 0.15s ease',
-          }}
-        >
-          <RefreshCw size={15} style={{ color: '#0284c7' }} />
-          <span>Đổi đội cứu hộ</span>
-        </button>
-
+      {/* 3. TACTICAL ACTION BUTTON (Hủy điều động) - CỐ ĐỊNH Ở ĐÁY CHUẨN YÊU CẦU */}
+      <div style={{ flexShrink: 0, paddingTop: 4 }}>
         <button
           type="button"
           onClick={(e) => {
@@ -498,21 +468,21 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             onOpenCancel();
           }}
           style={{
-            flex: 1,
-            height: 42,
-            padding: '0 14px',
+            width: '100%',
+            height: 44,
+            padding: '0 16px',
             background: '#fef2f2',
             border: '1.5px solid #fecaca',
-            borderRadius: 9,
+            borderRadius: 10,
             color: '#dc2626',
-            fontSize: 13,
+            fontSize: 13.5,
             fontWeight: 800,
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 7,
-            boxShadow: '0 1px 2px rgba(220,38,38,0.05)',
+            gap: 8,
+            boxShadow: '0 2px 4px rgba(220,38,38,0.08)',
             transition: 'all 0.15s ease',
           }}
         >

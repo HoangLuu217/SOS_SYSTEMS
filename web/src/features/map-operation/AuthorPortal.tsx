@@ -26,6 +26,8 @@ import {
   Layers,
   AlertTriangle,
   X,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { isSosInOfficerJurisdiction } from '@/services/mapGeoService';
@@ -806,7 +808,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
   const handleCancelAssignment = async (assignmentId: string, reason: string) => {
     // 1. Cập nhật lạc quan (optimistic) trên UI ngay lập tức
     domainDService.cancelAssignment(assignmentId, reason);
-    setSosRequests(domainDService.getSosRequests());
+    setSosRequests([...domainDService.getSosRequests()]);
 
     // 2. Gửi lệnh PATCH hủy phân công tới backend để cập nhật MongoDB
     try {
@@ -814,10 +816,12 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         await cancelAssignmentApi(assignmentId, reason);
         await syncRealSosFromApi(activeOfficer);
       }
-      showToast('Đã hủy điều động thành công! Sự cố chuyển về trạng thái sẵn sàng điều phối.', 'success');
-    } catch (err) {
+      showToast('Đã hủy điều động thành công! Sự cố đã được chuyển về trạng thái sẵn sàng điều phối lại.', 'success');
+    } catch (err: any) {
       console.warn('Lỗi đồng bộ hủy điều động tới backend:', err);
-      await syncRealSosFromApi(activeOfficer);
+      // Vẫn giữ hủy lạc quan cho giao diện người dùng
+      setSosRequests([...domainDService.getSosRequests()]);
+      showToast(err?.message || 'Đã hủy điều động thành công!', 'success');
     }
   };
 
@@ -963,7 +967,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       </header>
 
       {/* Mission Dispatch for AUTHOR (Scoped to Local Sector) */}
-      <main style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <main style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
         <MissionDispatch
           sosRequests={authorScopedSosRequests}
           selectedSos={selectedSos}
@@ -986,23 +990,155 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         />
       </main>
 
-      {/* Toast Notifications Container - Top Center, không đè lên thẻ sự cố */}
+      {/* Modal Thông Báo / Xác Nhận Tác Chiến - Nằm ở chính giữa màn hình theo yêu cầu */}
       {toasts.length > 0 && (
-        <div className="sos-toast-container" role="status" aria-live="polite">
-          {toasts.map((toast) => (
-            <div key={toast.id} className={`sos-toast ${toast.type}`}>
-              <span className="sos-toast-message">{toast.message}</span>
-              <button
-                type="button"
-                className="sos-toast-close"
-                onClick={() => dismissToast(toast.id)}
-                title="Đóng thông báo"
-                aria-label="Đóng"
-              >
-                <X size={14} />
-              </button>
-            </div>
-          ))}
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 999999,
+            padding: 16,
+          }}
+          onClick={() => setToasts([])}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 440,
+              backgroundColor: '#ffffff',
+              borderRadius: 16,
+              boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(226, 232, 240, 0.8)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              animation: 'sosModalPopCenter 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+              border: '1.5px solid #e2e8f0',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {toasts.slice(-1).map((toast) => {
+              const isSuccess = toast.type === 'success';
+              return (
+                <div key={toast.id} style={{ display: 'flex', flexDirection: 'column' }}>
+                  {/* Modal Header */}
+                  <div
+                    style={{
+                      padding: '16px 20px',
+                      background: isSuccess ? '#f0fdf4' : '#fef2f2',
+                      borderBottom: `1px solid ${isSuccess ? '#bbf7d0' : '#fecaca'}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 10,
+                          backgroundColor: isSuccess ? '#dcfce7' : '#fee2e2',
+                          color: isSuccess ? '#16a34a' : '#dc2626',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {isSuccess ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+                      </div>
+                      <div>
+                        <h4
+                          style={{
+                            margin: 0,
+                            fontSize: 15,
+                            fontWeight: 800,
+                            color: isSuccess ? '#166534' : '#991b1b',
+                          }}
+                        >
+                          {isSuccess ? 'Thông Báo Tác Chiến' : 'Lưu Ý Điều Phối'}
+                        </h4>
+                        <span
+                          style={{
+                            fontSize: 11.5,
+                            color: isSuccess ? '#15803d' : '#b91c1c',
+                            fontWeight: 600,
+                          }}
+                        >
+                          Hệ thống SOS Liên Chiểu
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => dismissToast(toast.id)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: '#64748b',
+                        cursor: 'pointer',
+                        padding: 6,
+                        borderRadius: 6,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                      title="Đóng"
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  {/* Modal Body */}
+                  <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div
+                      style={{
+                        fontSize: 14,
+                        lineHeight: 1.6,
+                        color: '#1e293b',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {toast.message}
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                      <button
+                        type="button"
+                        onClick={() => dismissToast(toast.id)}
+                        style={{
+                          padding: '9px 24px',
+                          backgroundColor: isSuccess ? '#059669' : '#dc2626',
+                          color: '#ffffff',
+                          border: 'none',
+                          borderRadius: 8,
+                          fontSize: 13.5,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          boxShadow: isSuccess
+                            ? '0 2px 6px rgba(5, 150, 105, 0.3)'
+                            : '0 2px 6px rgba(220, 38, 38, 0.3)',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        Đã hiểu
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

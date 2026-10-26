@@ -134,7 +134,6 @@ export const MissionDispatch = ({
     if (!assignment) return;
     onCancelAssignment(assignment.id, reason);
     setIsCancelOpen(false);
-    showToast(`Đã hủy điều động cứu hộ cho ${selectedSos?.sosCode || 'nhiệm vụ này'}.`, 'error');
   };
 
   const handleCitizenSosSubmit = (newSos: Omit<SosRequest, 'id' | 'sosCode' | 'timeAgo' | 'createdAt' | 'status' | 'assignmentId'>) => {
@@ -257,6 +256,8 @@ export const MissionDispatch = ({
           display: 'flex',
           flexDirection: 'column',
           height: '100%',
+          maxHeight: '100%',
+          minHeight: 0,
         }}
       >
         <DispatchWorkflow

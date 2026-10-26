@@ -54,13 +54,7 @@ const getSosRequests = async (req, res, next) => {
       query.citizenId = userId;
     }
 
-    // Cán bộ địa phương (LOCAL_AUTHORITY) xem các ca thuộc địa bàn của mình và các ca chưa phân bổ khu vực
-    const isLocalAuthorityOnly = userRoles.includes('LOCAL_AUTHORITY') && !userRoles.includes('ADMIN');
-    if (isLocalAuthorityOnly && req.user?.authority?.areaId) {
-      query.$or = [
-        { areaId: req.user.authority.areaId },
-        { areaId: null },
-      ];
+    if (query.areaId === 'ALL') {
       delete query.areaId;
     }
     

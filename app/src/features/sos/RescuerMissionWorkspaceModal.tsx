@@ -95,6 +95,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   const [isSheetCollapsed, setIsSheetCollapsed] = useState<boolean>(false); // Cho phép kéo gọn xuống để xem map
   const [isNavigating, setIsNavigating] = useState<boolean>(false); // Dẫn đường trực tiếp trong App chuẩn Grab
   const [isHeadingLocked, setIsHeadingLocked] = useState<boolean>(true); // Ghim theo dõi vị trí và hướng xe chuẩn Grab
+  const [isTopHudHidden, setIsTopHudHidden] = useState<boolean>(false); // Thu gọn HUD trên để thoáng bản đồ
   const [suppliesExpanded, setSuppliesExpanded] = useState<boolean>(false); // Xem chi tiết / thu gọn danh mục vật tư
   const [supplyRequestModalVisible, setSupplyRequestModalVisible] = useState<boolean>(false); // Modal yêu cầu cấp thêm vật tư
   const [requestedSuppliesList, setRequestedSuppliesList] = useState<any[]>([]); // Danh sách vật tư đã gửi yêu cầu
@@ -910,7 +911,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             attributionControl: false
           }).setView([${teamLocation.lat}, ${teamLocation.lng}], 16);
 
-          // Tile Layer (Google Streets vs Google Hybrid Satellite - Khắc phục hoàn toàn lỗi API KEY REQUIRED của CartoDB)
+          // Tile Layer: Google Maps Streets (Đầy đủ tên đường, ngõ hẻm tiếng Việt, tải nhanh, không bị watermark Carto)
           var currentTileLayer = null;
           function setTileLayer(type) {
             if (currentTileLayer) map.removeLayer(currentTileLayer);
@@ -920,8 +921,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 maxZoom: 20
               }).addTo(map);
             } else {
-              // Google Maps Streets (Đầy đủ tên đường tiếng Việt, ngõ hẻm, tải cực nhanh, không dính lỗi bản quyền)
-              currentTileLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+              currentTileLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&apistyle=s.t:33|p.v:off%2Cs.t:21|s.e:l|p.v:off&x={x}&y={y}&z={z}', {
                 subdomains: ['0', '1', '2', '3'],
                 maxZoom: 20
               }).addTo(map);
@@ -932,7 +932,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           // 1. SOS Incident Marker
           var sosIcon = L.divIcon({
             className: 'sos-marker-div',
-            html: '<div class="sos-beacon-container"><div class="sos-floating-pill">${sosCode} • CRITICAL</div><div class="sos-beacon-wave"></div><div class="sos-beacon-core">🆘</div></div>',
+            html: '<div class="sos-beacon-container"><div class="sos-floating-pill">📍 ${sosCode} • Điểm cứu hộ</div><div class="sos-beacon-wave"></div><div class="sos-beacon-core">🆘</div></div>',
             iconSize: [50, 50],
             iconAnchor: [25, 25]
           });
@@ -955,39 +955,72 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           });
           var rescuerMarker = L.marker([${teamLocation.lat}, ${teamLocation.lng}], { icon: rescuerIcon }).addTo(map);
 
-          // 3. Đường điều hướng mượt mà chuẩn Grab (Không bị gãy đoạn đâm vào nhà dân)
+          // 3. Đường điều hướng mượt mà chuẩn Grab (Bám chặt tim đường, không cắt qua nhà dân)
           var roadCasingPolyline = null;
           var roadCorePolyline = null;
           var directWaterwayLine = null;
+          var footApproachLine = null;
+
+          function getBearing(lat1, lon1, lat2, lon2) {
+            var dLon = (lon2 - lon1) * Math.PI / 180;
+            var y = Math.sin(dLon) * Math.cos(lat2 * Math.PI / 180);
+            var x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
+                    Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLon);
+            return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
+          }
 
           function renderRoadSnappedRoute(coords) {
             if (roadCasingPolyline) map.removeLayer(roadCasingPolyline);
             if (roadCorePolyline) map.removeLayer(roadCorePolyline);
             if (directWaterwayLine) map.removeLayer(directWaterwayLine);
+            if (footApproachLine) map.removeLayer(footApproachLine);
 
             var latLngs = coords.map(function(c) { return [c[1], c[0]]; });
             if (latLngs.length < 2) return;
 
-            // Nối liền mạch từ vị trí xe -> lộ trình đường bộ OSRM -> điểm SOS
-            var fullRoute = [rescuerMarker.getLatLng()].concat(latLngs).concat([sosMarker.getLatLng()]);
+            // 1. Ghim vị trí xe cứu hộ bám chặt vào ĐẦU ĐƯỜNG của lộ trình (Chuẩn Grab)
+            rescuerMarker.setLatLng(latLngs[0]);
 
-            // Lớp viền ngoài (Casing tạo độ tương phản cao như Grab)
-            roadCasingPolyline = L.polyline(fullRoute, {
+            // Tự động xoay mũi tên xe cứu hộ theo hướng xuất phát của con đường
+            if (latLngs.length > 1) {
+              var heading = getBearing(latLngs[0][0], latLngs[0][1], latLngs[1][0], latLngs[1][1]);
+              var puck = document.getElementById('rescuerPuck');
+              if (puck) {
+                puck.style.transform = 'rotate(' + Math.round(heading) + 'deg)';
+              }
+            }
+
+            // 2. Tuyến đường chạy 100% bám theo tim đường (Road-Snapped, không cắt xuyên qua nhà dân)
+            roadCasingPolyline = L.polyline(latLngs, {
               color: '#0055CC',
-              weight: 8.5,
+              weight: 9,
               opacity: 0.65,
               lineCap: 'round',
               lineJoin: 'round'
             }).addTo(map);
 
-            // Lớp lõi chỉ đường xanh Grab
-            roadCorePolyline = L.polyline(fullRoute, {
+            roadCorePolyline = L.polyline(latLngs, {
               color: '#0084FF',
-              weight: 5.5,
+              weight: 6,
               opacity: 1,
               lineCap: 'round',
               lineJoin: 'round'
             }).addTo(map);
+
+            // 3. Đường nét đứt tiếp cận hiện trường nếu điểm SOS nằm sâu trong ngõ/nhà
+            var lastRoadPoint = latLngs[latLngs.length - 1];
+            var sosLatLng = sosMarker.getLatLng();
+            var dLat = Math.abs(lastRoadPoint[0] - sosLatLng.lat);
+            var dLng = Math.abs(lastRoadPoint[1] - sosLatLng.lng);
+            if (dLat > 0.00008 || dLng > 0.00008) {
+              footApproachLine = L.polyline([lastRoadPoint, [sosLatLng.lat, sosLatLng.lng]], {
+                color: '#EF4444',
+                weight: 3,
+                dashArray: '5, 5',
+                opacity: 0.85,
+                lineCap: 'round'
+              }).addTo(map);
+            }
 
             if (!inAppNavActive) {
               var allBounds = L.featureGroup([sosMarker, rescuerMarker, roadCasingPolyline]).getBounds();
@@ -1159,63 +1192,54 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             <Feather name="x" size={20} color="#0F172A" />
           </TouchableOpacity>
 
-          {/* Hộp chỉ dẫn điều hướng rẽ chuẩn Grab (Dark HUD Card) */}
-          <View style={[styles.grabManeuverCard, isNavigating && styles.grabManeuverCardNavigating]}>
-            {/* Maneuver Turn Icon */}
-            <View style={[styles.grabTurnIconBox, isNavigating && { backgroundColor: '#10B981' }]}>
-              <MaterialCommunityIcons
-                name={isNavigating ? 'navigation-variant' : (missionState === 'ON_SCENE_RESCUING' ? 'target' : 'arrow-up-right')}
-                size={22}
-                color="#FFFFFF"
-              />
-            </View>
-
-            {/* Distance & Street Name */}
-            <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={styles.grabDistanceText}>{roadMetrics.distanceKm}</Text>
-                <Text style={styles.grabDurationText}>• {roadMetrics.durationMin}</Text>
+          {!isTopHudHidden ? (
+            <View style={[styles.grabManeuverCard, isNavigating && styles.grabManeuverCardNavigating]}>
+              {/* Maneuver Turn Icon */}
+              <View style={[styles.grabTurnIconBox, isNavigating && { backgroundColor: '#10B981' }]}>
+                <MaterialCommunityIcons
+                  name={isNavigating ? 'navigation-variant' : (missionState === 'ON_SCENE_RESCUING' ? 'target' : 'arrow-up-right')}
+                  size={20}
+                  color="#FFFFFF"
+                />
               </View>
-              <Text style={styles.grabRoadText} numberOfLines={1}>
-                {isNavigating ? `Đang dẫn đường: ${incidentAddress}` : `Đến: ${incidentAddress || 'Hiện trường cứu nạn'}`}
-              </Text>
-            </View>
 
-            {/* Tốc độ giới hạn / An toàn chuẩn Grab */}
-            <View style={styles.grabSpeedLimitBadge}>
-              <Text style={styles.grabSpeedLimitText}>50</Text>
-            </View>
+              {/* Distance & Street Name */}
+              <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.grabDistanceText}>{roadMetrics.distanceKm}</Text>
+                  <Text style={styles.grabDurationText}>• {roadMetrics.durationMin}</Text>
+                </View>
+                <Text style={styles.grabRoadText} numberOfLines={1}>
+                  {isNavigating ? `Dẫn đường: ${incidentAddress}` : `Đến: ${incidentAddress || 'Hiện trường cứu nạn'}`}
+                </Text>
+              </View>
 
-            {/* Nút Ghim lại vị trí mình (Thay cho nút Chỉ đường theo yêu cầu người dùng) */}
+              {/* Tốc độ giới hạn chuẩn Grab */}
+              <View style={styles.grabSpeedLimitBadge}>
+                <Text style={styles.grabSpeedLimitText}>50</Text>
+              </View>
+
+              {/* Nút thu gọn HUD để thoáng bản đồ */}
+              <TouchableOpacity
+                style={styles.grabHideHudBtn}
+                onPress={() => setIsTopHudHidden(true)}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Feather name="chevron-up" size={16} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+          ) : (
             <TouchableOpacity
-              style={[
-                styles.grabNavActionBtn,
-                isHeadingLocked ? styles.grabNavActionBtnLocked : styles.grabNavActionBtnRecenter,
-              ]}
-              onPress={() => {
-                setIsHeadingLocked(true);
-                Vibration.vibrate(30);
-                if (webViewRef.current) {
-                  webViewRef.current.postMessage(JSON.stringify({ type: 'RECENTER_TEAM' }));
-                }
-              }}
+              style={styles.grabShowHudMiniPill}
+              onPress={() => setIsTopHudHidden(false)}
               activeOpacity={0.8}
             >
-              <MaterialCommunityIcons
-                name={isHeadingLocked ? 'crosshairs-gps' : 'crosshairs'}
-                size={14}
-                color={isHeadingLocked ? '#38BDF8' : '#FFFFFF'}
-              />
-              <Text
-                style={[
-                  styles.grabNavActionBtnText,
-                  isHeadingLocked && { color: '#38BDF8' },
-                ]}
-              >
-                {isHeadingLocked ? 'Đang ghim' : 'Ghim vị trí'}
-              </Text>
+              <MaterialCommunityIcons name="navigation-variant" size={14} color="#0084FF" />
+              <Text style={styles.grabShowHudMiniText}>{roadMetrics.distanceKm} • {roadMetrics.durationMin}</Text>
+              <Feather name="chevron-down" size={14} color="#64748B" />
             </TouchableOpacity>
-          </View>
+          )}
         </View>
 
         {/* ======================================================== */}
@@ -2225,92 +2249,91 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    paddingVertical: 9,
+    paddingVertical: 8,
     paddingHorizontal: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
     shadowRadius: 8,
-    elevation: 6,
-    borderWidth: 1,
-    borderColor: '#1E293B',
-    gap: 8,
+    elevation: 4,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    gap: 9,
   },
   grabManeuverCardNavigating: {
     borderColor: '#0084FF',
-    borderWidth: 1.5,
+    borderWidth: 2,
     shadowColor: '#0084FF',
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
   },
   grabTurnIconBox: {
-    width: 38,
-    height: 38,
+    width: 36,
+    height: 36,
     borderRadius: 10,
     backgroundColor: '#0084FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   grabDistanceText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '900',
-    color: '#38BDF8',
+    color: '#0F172A',
   },
   grabDurationText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#94A3B8',
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0084FF',
   },
   grabRoadText: {
-    fontSize: 12,
-    color: '#E2E8F0',
-    marginTop: 2,
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 1,
   },
   grabSpeedLimitBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2.2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
     borderColor: '#EF4444',
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   grabSpeedLimitText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '900',
-    color: '#0F172A',
+    color: '#DC2626',
   },
-  grabNavActionBtn: {
+  grabHideHudBtn: {
+    padding: 5,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  grabShowHudMiniPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 9,
-    gap: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    elevation: 4,
+    gap: 6,
   },
-  grabNavActionBtnRecenter: {
-    backgroundColor: '#0084FF',
-  },
-  grabNavActionBtnLocked: {
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
-    borderWidth: 1,
-    borderColor: '#38BDF8',
-  },
-  grabNavActionBtnInactive: {
-    backgroundColor: '#0084FF',
-  },
-  grabNavActionBtnActive: {
-    backgroundColor: '#FEE2E2',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-  },
-  grabNavActionBtnText: {
-    fontSize: 12,
+  grabShowHudMiniText: {
+    fontSize: 12.5,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#0F172A',
   },
 
   /* Grab-style Bottom Deck */

@@ -442,23 +442,32 @@ class DomainDService {
     return updated;
   }
 
-  cancelAssignment(assignmentId: string, reason: string): { assignment: SosAssignment; sos: SosRequest } {
-    const assign = this.assignments[assignmentId];
-    if (!assign) throw new Error('Assignment not found');
+  cancelAssignment(assignmentId: string, reason: string): { assignment?: SosAssignment; sos?: SosRequest } {
+    let assign = this.assignments[assignmentId];
+    if (!assign) {
+      assign = Object.values(this.assignments).find(
+        (a) => a.id === assignmentId || a.sosRequestId === assignmentId
+      );
+    }
 
-    assign.status = 'CANCELLED';
-    assign.cancelledAt = new Date().toISOString();
-    assign.cancelReason = reason;
+    if (assign) {
+      assign.status = 'CANCELLED';
+      assign.cancelledAt = new Date().toISOString();
+      assign.cancelReason = reason;
+      this.assignments[assign.id] = { ...assign };
+      this.save(STORAGE_ASSIGNMENTS, this.assignments);
+    }
 
-    this.assignments[assignmentId] = { ...assign };
-    this.save(STORAGE_ASSIGNMENTS, this.assignments);
-
-    const sosIdx = this.sosRequests.findIndex((s) => s.id === assign.sosRequestId);
-    let updatedSos = this.sosRequests[sosIdx];
+    // Luôn reset ca SOS tương ứng về trạng thái VERIFIED và assignmentId = null
+    const targetSosId = assign?.sosRequestId || assignmentId;
+    const sosIdx = this.sosRequests.findIndex(
+      (s) => s.id === targetSosId || s.assignmentId === assignmentId || (assign && s.id === assign.sosRequestId)
+    );
+    let updatedSos: SosRequest | undefined;
     if (sosIdx !== -1) {
       this.sosRequests[sosIdx] = {
         ...this.sosRequests[sosIdx],
-        status: 'VERIFIED', // Reset to verified so it can be redispatched
+        status: 'VERIFIED',
         assignmentId: null,
       };
       updatedSos = this.sosRequests[sosIdx];
