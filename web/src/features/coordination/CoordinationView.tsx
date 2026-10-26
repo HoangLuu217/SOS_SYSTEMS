@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Compass,
   LifeBuoy,
+  XCircle,
 } from 'lucide-react';
 import type { SosRequestItem } from '@/types/dashboard';
 import { fetchSosRequests, completeSosRequest } from '@/api';
@@ -79,17 +80,24 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
 
     const unsubUpdated = (updatedSos: any) => {
       if (updatedSos && (updatedSos._id || updatedSos.id)) {
-        const targetId = updatedSos._id || updatedSos.id;
+        const targetId = String(updatedSos._id || updatedSos.id);
         setSosList((prev) =>
-          prev.map((s) =>
-            s._id === targetId || (s as any).id === targetId
-              ? { ...s, ...updatedSos, status: updatedSos.status }
-              : s
-          )
+          prev.map((s) => {
+            const sId = String(s._id || (s as any).id || '');
+            if (sId === targetId) {
+              const updatedAssignment = updatedSos.assignment || s.assignment;
+              return { ...s, ...updatedSos, assignment: updatedAssignment, status: updatedSos.status };
+            }
+            return s;
+          })
         );
         setSelectedSosDetail((prev) => {
-          if (prev && (prev._id === targetId || (prev as any).id === targetId)) {
-            return { ...prev, ...updatedSos, status: updatedSos.status };
+          if (prev) {
+            const pId = String(prev._id || (prev as any).id || '');
+            if (pId === targetId) {
+              const updatedAssignment = updatedSos.assignment || prev.assignment;
+              return { ...prev, ...updatedSos, assignment: updatedAssignment, status: updatedSos.status };
+            }
           }
           return prev;
         });
@@ -101,50 +109,73 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
     // Lắng nghe trực tiếp khi Cứu hộ viên cập nhật trạng thái phân công / tiến trình cứu nạn
     const unsubAssignment = onAssignmentUpdated((assignmentData: any) => {
       if (!assignmentData) return;
-      const targetSosId = assignmentData.sosRequestId || assignmentData.sosId;
-      const newStatus = assignmentData.status;
+      const targetSosId = String(
+        assignmentData.sosRequestId ||
+        assignmentData.sosId ||
+        (assignmentData.sosRequest && (assignmentData.sosRequest._id || assignmentData.sosRequest.id)) ||
+        ''
+      );
+      const targetAssignmentId = String(assignmentData._id || assignmentData.id || '');
+      const newStatus = String(assignmentData.status || '').toUpperCase();
 
-      if (targetSosId) {
-        const mappedSosStatus =
-          newStatus === 'ACCEPTED'
-            ? 'ACCEPTED'
-            : ['EN_ROUTE', 'ON_THE_WAY', 'DISPATCHED'].includes(newStatus)
-            ? 'ON_THE_WAY'
-            : newStatus === 'ARRIVED'
-            ? 'ARRIVED'
-            : ['IN_PROGRESS', 'RESCUING'].includes(newStatus)
-            ? 'RESCUING'
-            : ['COMPLETED', 'RESOLVED'].includes(newStatus)
-            ? 'COMPLETED'
-            : undefined;
+      const mappedSosStatus =
+        newStatus === 'ACCEPTED'
+          ? 'ACCEPTED'
+          : ['EN_ROUTE', 'ON_THE_WAY', 'DISPATCHED'].includes(newStatus)
+          ? 'ON_THE_WAY'
+          : newStatus === 'ARRIVED'
+          ? 'ARRIVED'
+          : ['IN_PROGRESS', 'RESCUING'].includes(newStatus)
+          ? 'RESCUING'
+          : ['COMPLETED', 'RESOLVED'].includes(newStatus)
+          ? 'COMPLETED'
+          : newStatus === 'REJECTED'
+          ? 'REJECTED'
+          : undefined;
 
-        setSosList((prev) =>
-          prev.map((s) => {
-            const matches = s._id === targetSosId || (s as any).id === targetSosId;
-            if (matches) {
-              const updatedAssignment = s.assignment ? { ...s.assignment, ...assignmentData } : assignmentData;
-              return {
-                ...s,
-                assignment: updatedAssignment,
-                ...(mappedSosStatus ? { status: mappedSosStatus as any } : {}),
-              };
-            }
-            return s;
-          })
-        );
+      setSosList((prev) =>
+        prev.map((s) => {
+          const sId = String(s._id || (s as any).id || '');
+          const sAssignmentId = String(s.assignmentId || s.assignment?._id || (s.assignment as any)?.id || '');
+          const matches =
+            (targetSosId && sId === targetSosId) ||
+            (targetAssignmentId && sAssignmentId === targetAssignmentId);
 
-        setSelectedSosDetail((prev) => {
-          if (prev && (prev._id === targetSosId || (prev as any).id === targetSosId)) {
-            const updatedAssignment = prev.assignment ? { ...prev.assignment, ...assignmentData } : assignmentData;
+          if (matches) {
+            const updatedAssignment = s.assignment
+              ? { ...s.assignment, ...assignmentData, status: newStatus }
+              : { ...assignmentData, status: newStatus };
+            return {
+              ...s,
+              assignment: updatedAssignment,
+              ...(mappedSosStatus ? { status: mappedSosStatus as any } : {}),
+            };
+          }
+          return s;
+        })
+      );
+
+      setSelectedSosDetail((prev) => {
+        if (prev) {
+          const pId = String(prev._id || (prev as any).id || '');
+          const pAssignmentId = String(prev.assignmentId || prev.assignment?._id || (prev.assignment as any)?.id || '');
+          const matches =
+            (targetSosId && pId === targetSosId) ||
+            (targetAssignmentId && pAssignmentId === targetAssignmentId);
+
+          if (matches) {
+            const updatedAssignment = prev.assignment
+              ? { ...prev.assignment, ...assignmentData, status: newStatus }
+              : { ...assignmentData, status: newStatus };
             return {
               ...prev,
               assignment: updatedAssignment,
               ...(mappedSosStatus ? { status: mappedSosStatus as any } : {}),
             };
           }
-          return prev;
-        });
-      }
+        }
+        return prev;
+      });
 
       // Nạp dữ liệu đồng bộ với server
       loadData();
@@ -188,27 +219,47 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
     }
   };
 
+  // Helper chuẩn hóa trọng số tiến trình cứu hộ (để luôn lấy trạng thái tiến xa nhất giữa SOS và Assignment)
+  const normalizeStatusRank = (status?: string): number => {
+    if (!status) return 0;
+    const s = String(status).toUpperCase();
+    if (['COMPLETED', 'RESOLVED'].includes(s)) return 6;
+    if (['RESCUING', 'IN_PROGRESS'].includes(s)) return 5;
+    if (['ARRIVED', 'ON_SCENE'].includes(s)) return 4;
+    if (['ON_THE_WAY', 'EN_ROUTE', 'DISPATCHED'].includes(s)) return 3;
+    if (s === 'ACCEPTED') return 2;
+    if (['ASSIGNED', 'PENDING_RESCUER'].includes(s)) return 1;
+    if (['REJECTED', 'CANCELLED'].includes(s)) return -1;
+    return 0; // PENDING, VERIFIED
+  };
+
   // Hàm tính toán trạng thái thực tế nhất dựa trên cả SOS và Assignment của Cứu Hộ Viên
   const getEffectiveStatus = useCallback((sos?: SosRequestItem | null): string => {
     if (!sos) return 'PENDING';
-    if (sos.status === 'COMPLETED' || (sos as any).status === 'RESOLVED') return 'COMPLETED';
 
-    const assignmentStatus = sos.assignment?.status;
-    if (assignmentStatus) {
-      if (['COMPLETED', 'RESOLVED'].includes(assignmentStatus)) return 'COMPLETED';
-      if (['IN_PROGRESS', 'RESCUING'].includes(assignmentStatus)) return 'RESCUING';
-      if (assignmentStatus === 'ARRIVED') return 'ARRIVED';
-      if (['EN_ROUTE', 'ON_THE_WAY', 'DISPATCHED'].includes(assignmentStatus)) return 'ON_THE_WAY';
-      if (assignmentStatus === 'ACCEPTED') return 'ACCEPTED';
-      if (assignmentStatus === 'PENDING') return 'ASSIGNED';
+    const sRank = normalizeStatusRank(sos.status);
+    const aRank = normalizeStatusRank(sos.assignment?.status);
+
+    if (sRank === -1 && aRank === -1) return 'REJECTED';
+    if (aRank === -1 && sRank <= 1) return 'REJECTED';
+
+    const maxRank = Math.max(sRank, aRank);
+    switch (maxRank) {
+      case 6:
+        return 'COMPLETED';
+      case 5:
+        return 'RESCUING';
+      case 4:
+        return 'ARRIVED';
+      case 3:
+        return 'ON_THE_WAY';
+      case 2:
+        return 'ACCEPTED';
+      case 1:
+        return 'ASSIGNED';
+      default:
+        return sos.status || 'PENDING';
     }
-
-    if (['COMPLETED', 'RESOLVED'].includes(sos.status)) return 'COMPLETED';
-    if (['RESCUING', 'IN_PROGRESS'].includes(sos.status)) return 'RESCUING';
-    if (sos.status === 'ARRIVED') return 'ARRIVED';
-    if (['ON_THE_WAY', 'EN_ROUTE', 'DISPATCHED'].includes(sos.status)) return 'ON_THE_WAY';
-    if (sos.status === 'ACCEPTED') return 'ACCEPTED';
-    return sos.status || 'PENDING';
   }, []);
 
   // Tính toán KPI số liệu
@@ -324,6 +375,18 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
           <div>
             <span className="coordination-status-pill completed">
               <CheckCircle2 size={12} /> Đã Hoàn Thành
+            </span>
+          </div>
+        );
+      case 'REJECTED':
+      case 'CANCELLED':
+        return (
+          <div>
+            <span
+              className="coordination-status-pill rejected"
+              style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}
+            >
+              <XCircle size={12} /> Đội Từ Chối
             </span>
           </div>
         );

@@ -42,6 +42,7 @@ export interface RescuerProfileOverviewScreenProps {
   onNavigateToNotifications: () => void;
   unreadNotificationsCount?: number;
   refreshTrigger?: number;
+  onNavigateToTab?: (tab: any, options?: any) => void;
 }
 
 const FALLBACK_RESCUE_TEAMS: RescueTeamData[] = [

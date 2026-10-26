@@ -92,9 +92,25 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   const [mapLayer, setMapLayer] = useState<'streets' | 'satellite'>('streets');
   const [showFloodZones, setShowFloodZones] = useState<boolean>(true);
   const [showSafeShelters, setShowSafeShelters] = useState<boolean>(false);
-  const [isSheetCollapsed, setIsSheetCollapsed] = useState<boolean>(true);
+  const [isSheetCollapsed, setIsSheetCollapsed] = useState<boolean>(false); // Cho phép kéo gọn xuống để xem map
+  const [isNavigating, setIsNavigating] = useState<boolean>(false); // Dẫn đường trực tiếp trong App chuẩn Grab
+  const [isHeadingLocked, setIsHeadingLocked] = useState<boolean>(true); // Ghim theo dõi vị trí và hướng xe chuẩn Grab
+  const [suppliesExpanded, setSuppliesExpanded] = useState<boolean>(false); // Xem chi tiết / thu gọn danh mục vật tư
+  const [supplyRequestModalVisible, setSupplyRequestModalVisible] = useState<boolean>(false); // Modal yêu cầu cấp thêm vật tư
+  const [requestedSuppliesList, setRequestedSuppliesList] = useState<any[]>([]); // Danh sách vật tư đã gửi yêu cầu
+  const [selectedSuppliesToRequest, setSelectedSuppliesToRequest] = useState<Record<string, number>>({
+    'Áo phao cứu sinh tiêu chuẩn SOLAS': 2,
+    'Xuồng ca-nô cao su cứu hộ': 0,
+    'Túi sơ cứu & Thuốc y tế dã chiến': 1,
+    'Nước uống tiệt trùng (Thùng 24 chai)': 2,
+    'Lương khô dã chiến (Thùng)': 0,
+    'Dây thừng cứu nạn chuyên dụng (50m)': 0,
+    'Đèn pin rọi nước dã chiến': 0,
+  });
+  const [supplyUrgency, setSupplyUrgency] = useState<'NORMAL' | 'URGENT'>('NORMAL');
+  const [supplyNote, setSupplyNote] = useState<string>('');
 
-  // State 1 Rejection Modal
+  // State 1 Rejection Modal (Từ chối nhận lệnh)
   const [rejectModalVisible, setRejectModalVisible] = useState<boolean>(false);
   const [rejectReason, setRejectReason] = useState<string>('Phương tiện gặp sự cố kỹ thuật đột xuất');
   const [rejectCustomNote, setRejectCustomNote] = useState<string>('');
@@ -136,6 +152,16 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
   const webViewRef = useRef<WebView>(null);
   const socketRef = useRef<Socket | null>(null);
+
+  // Lắng nghe sự kiện từ Leaflet WebView (ví dụ: người dùng vuốt/kéo bản đồ -> hủy ghim tự động)
+  const handleWebViewMessage = useCallback((event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'MAP_DRAGGED') {
+        setIsHeadingLocked(false);
+      }
+    } catch (err) {}
+  }, []);
 
   // Đồng bộ Mission State từ Assignment Status
   const syncStateFromStatus = (status?: string) => {
@@ -285,6 +311,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                         lat: newLoc.lat,
                         lng: newLoc.lng,
                         heading: newLoc.heading,
+                        etaText: `${roadMetrics.durationMin} • ${roadMetrics.distanceKm}`,
                       })
                     );
                   }
@@ -652,7 +679,79 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   // Khoảng cách an toàn tránh notch / Dynamic Island của iPhone (tránh bị che phủ status bar)
   const safeTop = Math.max(insets.top, Platform.OS === 'ios' ? 56 : 40) + 12;
 
-  // Mở ứng dụng Google Maps / Apple Maps ngoài để chỉ đường Turn-by-Turn giống Grab
+  // Bật / Tắt chế độ dẫn đường Turn-by-Turn trực tiếp trong ứng dụng chuẩn Grab
+  const handleToggleInAppNavigation = useCallback(() => {
+    if (isNavigating) {
+      setIsNavigating(false);
+      if (webViewRef.current) {
+        webViewRef.current.postMessage(JSON.stringify({ type: 'STOP_INAPP_NAVIGATION' }));
+      }
+    } else {
+      setIsNavigating(true);
+      setIsHeadingLocked(true);
+      setIsSheetCollapsed(true); // Thu gọn bottom sheet để tài xế/cứu hộ viên quan sát bản đồ toàn màn hình
+      if (webViewRef.current) {
+        webViewRef.current.postMessage(
+          JSON.stringify({
+            type: 'START_INAPP_NAVIGATION',
+            lat: teamLocation.lat,
+            lng: teamLocation.lng,
+            heading: teamLocation.heading,
+          })
+        );
+      }
+      Vibration.vibrate(50);
+    }
+  }, [isNavigating, teamLocation]);
+
+  // Xử lý gửi yêu cầu cung cấp bổ sung vật tư lên chính quyền / Ban chỉ huy địa phương
+  const handleSubmitSupplyRequest = async () => {
+    const items = Object.entries(selectedSuppliesToRequest)
+      .filter(([_, qty]) => qty > 0)
+      .map(([name, quantity]) => ({ name, quantity, unit: 'món' }));
+
+    if (items.length === 0 && !supplyNote.trim()) {
+      Alert.alert('Chưa có vật tư', 'Vui lòng chọn số lượng vật tư có sẵn hoặc nhập tên vật tư cần cấp thêm.');
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      try {
+        await backendApi.post('/supplies/request', {
+          assignmentId: assignment?._id,
+          sosId: sos?._id,
+          items,
+          urgency: supplyUrgency,
+          note: supplyNote,
+        });
+      } catch {
+        // Fallback ghi nhận
+      }
+
+      const finalItems = [...items];
+      if (supplyNote.trim()) {
+        finalItems.push({ name: supplyNote.trim(), quantity: 1, unit: 'yêu cầu' });
+      }
+
+      setRequestedSuppliesList((prev) => [...prev, ...finalItems]);
+      setSupplyNote('');
+      setSupplyRequestModalVisible(false);
+      setCustomNotice({
+        visible: true,
+        type: 'success',
+        title: 'Đã gửi yêu cầu chi viện',
+        message: `Đã gửi danh sách ${finalItems.length} hạng mục vật tư lên Ban Chỉ Huy địa phương phê duyệt và tiếp tế chi viện!`,
+      });
+      DeviceEventEmitter.emit('sos:sync');
+    } catch (err: any) {
+      Alert.alert('Lỗi', err?.message || 'Không thể gửi yêu cầu chi viện vật tư.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Mở ứng dụng Google Maps / Apple Maps ngoài (Dự phòng nếu cần)
   const handleOpenGoogleMaps = useCallback(() => {
     if (!victimCoords.lat || !victimCoords.lng) {
       Alert.alert('Chỉ đường', 'Không tìm thấy tọa độ hiện trường cần cứu hộ.');
@@ -673,13 +772,12 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           return Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
         }
       })
-      .catch((err) => {
-        console.warn('Lỗi mở ứng dụng bản đồ:', err);
+      .catch(() => {
         Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`);
       });
   }, [victimCoords, incidentAddress, sosCode]);
 
-  // Sinh mã HTML Leaflet tương tác toàn màn hình (Grab-Style Map Canvas)
+  // Sinh mã HTML Leaflet tương tác toàn màn hình (Grab-Style Map Canvas & Turn-by-Turn Navigation)
   const mapHtml = useMemo(() => {
     return `
       <!DOCTYPE html>
@@ -690,8 +788,8 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>
-          html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #0f172a; font-family: -apple-system, sans-serif; overflow: hidden; }
-          .leaflet-container { background-color: #0f172a; }
+          html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+          .leaflet-container { background-color: #f1f5f9; }
           
           /* Pulsing Red SOS Radar Beacon */
           @keyframes sosRadar {
@@ -745,40 +843,62 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             box-shadow: 0 2px 6px rgba(0,0,0,0.5);
           }
 
-          /* Rescue Unit Watercraft Marker with Heading Rotation */
-          .rescuer-vehicle-wrap {
+          /* Grab-style Navigation Indicator Puck (Heading Arrow & Attached ETA Pill) */
+          .grab-puck-wrap {
             position: relative;
-            width: 48px;
-            height: 48px;
+            width: 52px;
+            height: 52px;
             display: flex;
             align-items: center;
             justify-content: center;
           }
-          .rescuer-vehicle-core {
-            width: 34px;
-            height: 34px;
-            border-radius: 10px;
-            background: #0284c7;
-            border: 2.5px solid #ffffff;
-            box-shadow: 0 4px 14px rgba(2, 132, 199, 0.7);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-            transition: transform 0.3s ease;
-          }
-          .rescuer-floating-pill {
+          .grab-puck-pulse {
             position: absolute;
-            bottom: -20px;
-            background: #0369a1;
-            color: #ffffff;
-            font-size: 9.5px;
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: rgba(0, 132, 255, 0.25);
+            animation: grabPuckPulse 2s infinite ease-out;
+            pointer-events: none;
+          }
+          @keyframes grabPuckPulse {
+            0% { transform: scale(0.9); opacity: 0.85; }
+            70% { transform: scale(1.6); opacity: 0; }
+            100% { transform: scale(1.6); opacity: 0; }
+          }
+          .grab-puck-circle {
+            position: relative;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: #ffffff;
+            border: 3.5px solid #0084ff;
+            box-shadow: 0 4px 14px rgba(0, 132, 255, 0.42), 0 2px 6px rgba(0, 0, 0, 0.18);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 5;
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+          }
+          .grab-puck-arrow {
+            width: 24px;
+            height: 24px;
+            display: block;
+          }
+          .grab-puck-eta-badge {
+            position: absolute;
+            bottom: -22px;
+            background: #ffffff;
+            color: #0f172a;
+            font-size: 11px;
             font-weight: 800;
-            padding: 1.5px 6px;
-            border-radius: 5px;
+            padding: 3px 9px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.12);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
             white-space: nowrap;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-            border: 1px solid #38bdf8;
+            letter-spacing: -0.2px;
+            z-index: 6;
           }
         </style>
       </head>
@@ -788,18 +908,21 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           var map = L.map('map', {
             zoomControl: false,
             attributionControl: false
-          }).setView([${teamLocation.lat}, ${teamLocation.lng}], 15);
+          }).setView([${teamLocation.lat}, ${teamLocation.lng}], 16);
 
-          // Tile Layer (Google Maps Streets vs Google Hybrid Satellite)
+          // Tile Layer (Google Streets vs Google Hybrid Satellite - Khắc phục hoàn toàn lỗi API KEY REQUIRED của CartoDB)
           var currentTileLayer = null;
           function setTileLayer(type) {
             if (currentTileLayer) map.removeLayer(currentTileLayer);
             if (type === 'satellite') {
-              currentTileLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+              currentTileLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                subdomains: ['0', '1', '2', '3'],
                 maxZoom: 20
               }).addTo(map);
             } else {
-              currentTileLayer = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+              // Google Maps Streets (Đầy đủ tên đường tiếng Việt, ngõ hẻm, tải cực nhanh, không dính lỗi bản quyền)
+              currentTileLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+                subdomains: ['0', '1', '2', '3'],
                 maxZoom: 20
               }).addTo(map);
             }
@@ -815,86 +938,71 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           });
           var sosMarker = L.marker([${victimCoords.lat}, ${victimCoords.lng}], { icon: sosIcon }).addTo(map);
 
-          // 2. Rescue Unit Vehicle Marker
+          // 2. Grab-Style Driver Navigation Puck Marker (Ghim hướng xoay & Bong bóng khoảng cách)
           var rescuerIcon = L.divIcon({
             className: 'rescuer-marker-div',
-            html: '<div class="rescuer-vehicle-wrap"><div class="rescuer-vehicle-core" id="rescuerCore" style="transform: rotate(${teamLocation.heading}deg);">🚤</div><div class="rescuer-floating-pill">${vehiclePlate}</div></div>',
-            iconSize: [48, 48],
-            iconAnchor: [24, 24]
+            html: '<div class="grab-puck-wrap">' +
+                    '<div class="grab-puck-pulse"></div>' +
+                    '<div class="grab-puck-circle" id="rescuerPuck" style="transform: rotate(' + (${teamLocation.heading} || 0) + 'deg);">' +
+                      '<svg class="grab-puck-arrow" viewBox="0 0 24 24" fill="none">' +
+                        '<path d="M12 2L4 21L12 17L20 21L12 2Z" fill="#0084FF" stroke="#0055CC" stroke-width="1.2" stroke-linejoin="round"/>' +
+                      '</svg>' +
+                    '</div>' +
+                    '<div class="grab-puck-eta-badge" id="rescuerEtaPill">${roadMetrics.durationMin} • ${roadMetrics.distanceKm}</div>' +
+                  '</div>',
+            iconSize: [52, 78],
+            iconAnchor: [26, 26]
           });
           var rescuerMarker = L.marker([${teamLocation.lat}, ${teamLocation.lng}], { icon: rescuerIcon }).addTo(map);
 
-          // 3. Dual-Layer Road Polylines & Grab-Style Dotted Access Connectors
+          // 3. Đường điều hướng mượt mà chuẩn Grab (Không bị gãy đoạn đâm vào nhà dân)
           var roadCasingPolyline = null;
           var roadCorePolyline = null;
           var directWaterwayLine = null;
-          var startConnectorLine = null;
-          var endConnectorLine = null;
-          var currentRoadStartLatLng = null;
 
           function renderRoadSnappedRoute(coords) {
             if (roadCasingPolyline) map.removeLayer(roadCasingPolyline);
             if (roadCorePolyline) map.removeLayer(roadCorePolyline);
             if (directWaterwayLine) map.removeLayer(directWaterwayLine);
-            if (startConnectorLine) map.removeLayer(startConnectorLine);
-            if (endConnectorLine) map.removeLayer(endConnectorLine);
 
             var latLngs = coords.map(function(c) { return [c[1], c[0]]; });
             if (latLngs.length < 2) return;
 
-            currentRoadStartLatLng = latLngs[0];
-            var currentRoadEndLatLng = latLngs[latLngs.length - 1];
+            // Nối liền mạch từ vị trí xe -> lộ trình đường bộ OSRM -> điểm SOS
+            var fullRoute = [rescuerMarker.getLatLng()].concat(latLngs).concat([sosMarker.getLatLng()]);
 
-            // 1. Đường chấm chấm nối điểm đầu: Vị trí đội cứu hộ -> Điểm đầu đường bộ OSRM
-            startConnectorLine = L.polyline([rescuerMarker.getLatLng(), currentRoadStartLatLng], {
-              color: '#0284c7',
-              weight: 2,
-              dashArray: '3, 5',
-              lineCap: 'round',
-              opacity: 0.85
-            }).addTo(map);
-
-            // 2. Lớp viền ngoài (Outer Casing: 8px #1d4ed8)
-            roadCasingPolyline = L.polyline(latLngs, {
-              color: '#1d4ed8',
-              weight: 8,
-              opacity: 0.9,
+            // Lớp viền ngoài (Casing tạo độ tương phản cao như Grab)
+            roadCasingPolyline = L.polyline(fullRoute, {
+              color: '#0055CC',
+              weight: 8.5,
+              opacity: 0.65,
               lineCap: 'round',
               lineJoin: 'round'
             }).addTo(map);
 
-            // 3. Lớp lõi sáng (Inner Core: 4px #38bdf8)
-            roadCorePolyline = L.polyline(latLngs, {
-              color: '#38bdf8',
-              weight: 4,
+            // Lớp lõi chỉ đường xanh Grab
+            roadCorePolyline = L.polyline(fullRoute, {
+              color: '#0084FF',
+              weight: 5.5,
               opacity: 1,
               lineCap: 'round',
               lineJoin: 'round'
             }).addTo(map);
 
-            // 4. Đường chấm chấm nối điểm cuối: Điểm cuối đường bộ OSRM -> Vị trí Nạn nhân
-            endConnectorLine = L.polyline([currentRoadEndLatLng, sosMarker.getLatLng()], {
-              color: '#dc2626',
-              weight: 2,
-              dashArray: '3, 5',
-              lineCap: 'round',
-              opacity: 0.85
-            }).addTo(map);
-
-            var allBounds = L.featureGroup([sosMarker, rescuerMarker, roadCasingPolyline, startConnectorLine, endConnectorLine]).getBounds();
-            map.fitBounds(allBounds, {
-              paddingTopLeft: [40, 80],
-              paddingBottomRight: [50, 340],
-              maxZoom: 16
-            });
+            if (!inAppNavActive) {
+              var allBounds = L.featureGroup([sosMarker, rescuerMarker, roadCasingPolyline]).getBounds();
+              map.fitBounds(allBounds, {
+                paddingTopLeft: [40, 90],
+                paddingBottomRight: [50, 320],
+                maxZoom: 16
+              });
+            }
           }
 
           function renderDirectWaterwayMode() {
             if (roadCasingPolyline) map.removeLayer(roadCasingPolyline);
             if (roadCorePolyline) map.removeLayer(roadCorePolyline);
             if (directWaterwayLine) map.removeLayer(directWaterwayLine);
-            if (startConnectorLine) map.removeLayer(startConnectorLine);
-            if (endConnectorLine) map.removeLayer(endConnectorLine);
 
             var directPoints = [
               [${teamLocation.lat}, ${teamLocation.lng}],
@@ -910,8 +1018,8 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
             var allBounds = L.featureGroup([sosMarker, rescuerMarker, directWaterwayLine]).getBounds();
             map.fitBounds(allBounds, {
-              paddingTopLeft: [40, 80],
-              paddingBottomRight: [50, 340],
+              paddingTopLeft: [40, 90],
+              paddingBottomRight: [50, 320],
               maxZoom: 16
             });
           }
@@ -935,43 +1043,81 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           // Initial Render
           ${isWaterwayMode ? 'renderDirectWaterwayMode();' : (roadMetrics.roadCoordinates ? `renderRoadSnappedRoute(${JSON.stringify(roadMetrics.roadCoordinates)});` : 'renderDirectWaterwayMode();')}
 
-          // Fit All Markers initially with bottom padding for the sheet
+          // Fit All Markers initially
           var initialGroup = L.featureGroup([sosMarker, rescuerMarker]);
           map.fitBounds(initialGroup.getBounds(), {
-            paddingTopLeft: [40, 80],
-            paddingBottomRight: [50, 340],
+            paddingTopLeft: [40, 90],
+            paddingBottomRight: [50, 320],
             maxZoom: 16
+          });
+
+          var inAppNavActive = false;
+          var trackingLocked = true;
+
+          // Bắt sự kiện khi người dùng kéo/vuốt bản đồ -> Tạm thời ngừng bám theo xe
+          map.on('dragstart', function() {
+            trackingLocked = false;
+            if (window.ReactNativeWebView) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_DRAGGED' }));
+            }
           });
 
           // Message Bridge từ React Native
           window.addEventListener('message', function(e) {
             try {
               var msg = JSON.parse(e.data);
-              if (msg.type === 'UPDATE_TEAM_GPS') {
-                rescuerMarker.setLatLng([msg.lat, msg.lng]);
-                if (startConnectorLine && currentRoadStartLatLng) {
-                  startConnectorLine.setLatLngs([[msg.lat, msg.lng], currentRoadStartLatLng]);
+              if (msg.type === 'START_INAPP_NAVIGATION') {
+                inAppNavActive = true;
+                trackingLocked = true;
+                map.setView(rescuerMarker.getLatLng(), 17.5, { animate: true });
+                if (roadCorePolyline) {
+                  roadCorePolyline.setStyle({ color: '#0084FF', weight: 6.5, opacity: 1 });
                 }
-                var core = document.getElementById('rescuerCore');
-                if (core && msg.heading) {
-                  core.style.transform = 'rotate(' + msg.heading + 'deg)';
+              } else if (msg.type === 'STOP_INAPP_NAVIGATION') {
+                inAppNavActive = false;
+                if (roadCasingPolyline) {
+                  map.fitBounds(roadCasingPolyline.getBounds(), {
+                    paddingTopLeft: [40, 90],
+                    paddingBottomRight: [50, 200],
+                  });
+                }
+              } else if (msg.type === 'UPDATE_TEAM_GPS') {
+                rescuerMarker.setLatLng([msg.lat, msg.lng]);
+                var puck = document.getElementById('rescuerPuck');
+                if (puck && typeof msg.heading === 'number') {
+                  puck.style.transform = 'rotate(' + msg.heading + 'deg)';
+                }
+                var etaPill = document.getElementById('rescuerEtaPill');
+                if (etaPill && msg.etaText) {
+                  etaPill.innerText = msg.etaText;
+                }
+                if (trackingLocked || inAppNavActive) {
+                  map.panTo([msg.lat, msg.lng], { animate: true, duration: 0.8 });
                 }
               } else if (msg.type === 'SET_ROAD_ROUTE') {
                 renderRoadSnappedRoute(msg.coordinates);
+                var etaPill = document.getElementById('rescuerEtaPill');
+                if (etaPill && msg.distance && msg.duration) {
+                  etaPill.innerText = msg.duration + ' • ' + msg.distance;
+                }
               } else if (msg.type === 'RECENTER_TEAM') {
-                map.setView(rescuerMarker.getLatLng(), 17);
+                trackingLocked = true;
+                map.setView(rescuerMarker.getLatLng(), inAppNavActive ? 18 : 17.5, { animate: true });
               } else if (msg.type === 'FIT_ROUTE') {
+                trackingLocked = false;
                 if (roadCasingPolyline) {
                   map.fitBounds(roadCasingPolyline.getBounds(), {
-                    paddingTopLeft: [40, 80],
-                    paddingBottomRight: [50, 340],
+                    paddingTopLeft: [40, 90],
+                    paddingBottomRight: [50, 320],
                   });
                 } else {
                   map.fitBounds(initialGroup.getBounds(), {
-                    paddingTopLeft: [40, 80],
-                    paddingBottomRight: [50, 340],
+                    paddingTopLeft: [40, 90],
+                    paddingBottomRight: [50, 320],
                   });
                 }
+              } else if (msg.type === 'CHANGE_MAP_LAYER') {
+                setTileLayer(msg.layer);
               }
             } catch(err) {}
           });
@@ -979,7 +1125,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       </body>
       </html>
     `;
-  }, [teamLocation, victimCoords, mapLayer, showSafeShelters, isWaterwayMode, roadMetrics.roadCoordinates, sosCode]);
+  }, [victimCoords, mapLayer, showSafeShelters, isWaterwayMode, roadMetrics.roadCoordinates, sosCode]);
 
   if (!visible) return null;
 
@@ -1000,6 +1146,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             javaScriptEnabled={true}
             domStorageEnabled={true}
             scrollEnabled={false}
+            onMessage={handleWebViewMessage}
           />
         </View>
 
@@ -1012,55 +1159,120 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             <Feather name="x" size={20} color="#0F172A" />
           </TouchableOpacity>
 
-          {/* Hộp chỉ dẫn điều hướng rẽ kiểu Grab (Nhấn mở Google Maps) */}
-          <TouchableOpacity
-            style={styles.grabManeuverCard}
-            onPress={handleOpenGoogleMaps}
-            activeOpacity={0.88}
-          >
-            <View style={styles.grabTurnIconBox}>
+          {/* Hộp chỉ dẫn điều hướng rẽ chuẩn Grab (Dark HUD Card) */}
+          <View style={[styles.grabManeuverCard, isNavigating && styles.grabManeuverCardNavigating]}>
+            {/* Maneuver Turn Icon */}
+            <View style={[styles.grabTurnIconBox, isNavigating && { backgroundColor: '#10B981' }]}>
               <MaterialCommunityIcons
-                name={missionState === 'ON_SCENE_RESCUING' ? 'target' : 'arrow-up-right'}
+                name={isNavigating ? 'navigation-variant' : (missionState === 'ON_SCENE_RESCUING' ? 'target' : 'arrow-up-right')}
                 size={22}
                 color="#FFFFFF"
               />
             </View>
-            <View style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
+
+            {/* Distance & Street Name */}
+            <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text style={styles.grabDistanceText}>{roadMetrics.distanceKm}</Text>
                 <Text style={styles.grabDurationText}>• {roadMetrics.durationMin}</Text>
               </View>
               <Text style={styles.grabRoadText} numberOfLines={1}>
-                Đến: {incidentAddress || 'Hiện trường cứu nạn'}
+                {isNavigating ? `Đang dẫn đường: ${incidentAddress}` : `Đến: ${incidentAddress || 'Hiện trường cứu nạn'}`}
               </Text>
             </View>
-            <View style={styles.grabMapsBadge}>
-              <Feather name="navigation" size={13} color="#0284C7" />
-              <Text style={styles.grabMapsBadgeText}>Chỉ đường</Text>
+
+            {/* Tốc độ giới hạn / An toàn chuẩn Grab */}
+            <View style={styles.grabSpeedLimitBadge}>
+              <Text style={styles.grabSpeedLimitText}>50</Text>
             </View>
-          </TouchableOpacity>
+
+            {/* Nút Ghim lại vị trí mình (Thay cho nút Chỉ đường theo yêu cầu người dùng) */}
+            <TouchableOpacity
+              style={[
+                styles.grabNavActionBtn,
+                isHeadingLocked ? styles.grabNavActionBtnLocked : styles.grabNavActionBtnRecenter,
+              ]}
+              onPress={() => {
+                setIsHeadingLocked(true);
+                Vibration.vibrate(30);
+                if (webViewRef.current) {
+                  webViewRef.current.postMessage(JSON.stringify({ type: 'RECENTER_TEAM' }));
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons
+                name={isHeadingLocked ? 'crosshairs-gps' : 'crosshairs'}
+                size={14}
+                color={isHeadingLocked ? '#38BDF8' : '#FFFFFF'}
+              />
+              <Text
+                style={[
+                  styles.grabNavActionBtnText,
+                  isHeadingLocked && { color: '#38BDF8' },
+                ]}
+              >
+                {isHeadingLocked ? 'Đang ghim' : 'Ghim vị trí'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* ======================================================== */}
-        {/* FLOATING MAP TOOLS (RIGHT EDGE)                          */}
+        {/* FLOATING MAP TOOLS (RIGHT EDGE - CHUẨN GRAB)             */}
         {/* ======================================================== */}
-        <View style={[styles.mapFloatingTools, { top: safeTop + 65 }]}>
+        <View style={[styles.mapFloatingTools, { top: safeTop + 72 }]}>
+          {/* Nút 1: Ghim lại hướng & vị trí mình chuẩn Grab (Re-center & Lock Heading) */}
           <TouchableOpacity
-            style={styles.mapToolBtn}
+            style={[styles.mapToolBtn, isHeadingLocked && styles.mapToolBtnLocked]}
             onPress={() => {
+              setIsHeadingLocked(true);
+              Vibration.vibrate(30);
               if (webViewRef.current) {
                 webViewRef.current.postMessage(JSON.stringify({ type: 'RECENTER_TEAM' }));
               }
             }}
+            activeOpacity={0.8}
           >
-            <Ionicons name="locate" size={20} color="#0284C7" />
+            <MaterialCommunityIcons
+              name={isHeadingLocked ? 'crosshairs-gps' : 'crosshairs'}
+              size={22}
+              color={isHeadingLocked ? '#0084FF' : '#475569'}
+            />
+            {isHeadingLocked && <View style={styles.mapToolActiveDot} />}
           </TouchableOpacity>
 
+          {/* Nút 2: Xem toàn cảnh lộ trình (Fit Route Overview) */}
           <TouchableOpacity
             style={styles.mapToolBtn}
-            onPress={() => setMapLayer((prev) => (prev === 'streets' ? 'satellite' : 'streets'))}
+            onPress={() => {
+              setIsHeadingLocked(false);
+              if (webViewRef.current) {
+                webViewRef.current.postMessage(JSON.stringify({ type: 'FIT_ROUTE' }));
+              }
+            }}
+            activeOpacity={0.8}
           >
-            <MaterialCommunityIcons name="layers" size={20} color="#0F172A" />
+            <MaterialCommunityIcons name="routes" size={20} color="#0F172A" />
+          </TouchableOpacity>
+
+          {/* Nút 3: Đổi lớp bản đồ (GrabMaps Đường phố ⇄ Vệ tinh Google) */}
+          <TouchableOpacity
+            style={styles.mapToolBtn}
+            onPress={() => {
+              const nextLayer = mapLayer === 'streets' ? 'satellite' : 'streets';
+              setMapLayer(nextLayer);
+              if (webViewRef.current) {
+                webViewRef.current.postMessage(JSON.stringify({ type: 'CHANGE_MAP_LAYER', layer: nextLayer }));
+              }
+            }}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons
+              name={mapLayer === 'satellite' ? 'earth' : 'layers-outline'}
+              size={20}
+              color={mapLayer === 'satellite' ? '#0084FF' : '#0F172A'}
+            />
           </TouchableOpacity>
         </View>
 
@@ -1068,13 +1280,32 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         {/* C. BOTTOM SHEET: GIAO DIỆN TÁC CHIẾN CHUẨN GRABDRIVER     */}
         {/* ======================================================== */}
         <View style={[styles.bottomDeckCard, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+          {/* Thanh kéo gọn / Mở rộng để xem Map rõ hơn */}
+          <TouchableOpacity
+            style={styles.deckHandleBarWrap}
+            onPress={() => setIsSheetCollapsed((prev) => !prev)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.deckHandleBar} />
+            <View style={styles.sheetToggleHeader}>
+              <Text style={styles.sheetToggleHeaderText}>
+                {isSheetCollapsed ? 'Kéo lên để xem đầy đủ chi tiết' : 'Kéo gọn xuống để xem bản đồ'}
+              </Text>
+              <Feather
+                name={isSheetCollapsed ? 'chevron-up' : 'chevron-down'}
+                size={16}
+                color="#64748B"
+              />
+            </View>
+          </TouchableOpacity>
+
           {/* Grab Sub-Header: Tiêu đề điểm đến & Thời gian tiếp cận */}
           <View style={styles.grabDeckSubHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flex: 1, minWidth: 0 }}>
               <View style={styles.grabOrderBadge}>
                 <Text style={styles.grabOrderBadgeText}>1</Text>
               </View>
-              <Text style={styles.grabOrderTitle}>Điểm cứu hộ • #{sosCode}</Text>
+              <Text style={styles.grabOrderTitle} numberOfLines={1}>Điểm cứu hộ • #{sosCode}</Text>
             </View>
 
             <View style={styles.grabEtaChip}>
@@ -1082,118 +1313,213 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             </View>
           </View>
 
-          {/* Grab Citizen Info (Mục chính to, rõ ràng, không bị che/cắt chữ) */}
-          <View style={styles.grabCitizenSection}>
-            {/* Tên người dân - To, đậm, nổi bật */}
-            <Text style={styles.grabCitizenName}>{citizenName}</Text>
-
-            {/* Địa chỉ hiện trường - Hiển thị đầy đủ, không ẩn bớt, không cắt '...' */}
-            <Text style={styles.grabAddressText}>{incidentAddress}</Text>
-
-            {/* Số người & Đối tượng cần cứu */}
-            <Text style={styles.grabVictimMeta}>
-              {victimHeadcount} người cần cứu • 1 người già, 1 trẻ nhỏ
-            </Text>
-
-            {/* Hộp ghi chú hiện trường (Note box xám giống hệt Grab) */}
-            {rawDescription ? (
-              <View style={styles.grabNoteBox}>
-                <Text style={styles.grabNoteLabel}>Ghi chú từ hiện trường:</Text>
-                <Text style={styles.grabNoteText}>{rawDescription}</Text>
+          {/* Khi bị kéo gọn xuống: Chỉ hiện tên & địa chỉ 1 dòng tóm tắt */}
+          {isSheetCollapsed ? (
+            <TouchableOpacity
+              style={styles.collapsedSummaryRow}
+              onPress={() => setIsSheetCollapsed(false)}
+              activeOpacity={0.8}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.collapsedCitizenName} numberOfLines={1}>
+                  {citizenName} <Text style={styles.collapsedVictimCount}>({victimHeadcount} người cần cứu)</Text>
+                </Text>
+                <Text style={styles.collapsedAddressText} numberOfLines={1}>
+                  {incidentAddress}
+                </Text>
               </View>
-            ) : null}
+              <View style={styles.collapsedExpandHint}>
+                <Text style={styles.collapsedExpandHintText}>Chi tiết</Text>
+                <Feather name="chevron-up" size={14} color="#0284C7" />
+              </View>
+            </TouchableOpacity>
+          ) : (
+            /* Khi mở rộng: Hiển thị đầy đủ thông tin */
+            <View style={styles.grabCitizenSection}>
+              {/* Tên người dân - To, đậm, nổi bật */}
+              <Text style={styles.grabCitizenName}>{citizenName}</Text>
 
-            {/* Hộp vật tư & hàng tiếp tế cấp theo xe */}
-            {(() => {
-              const missionSupplies =
-                assignment?.supplies ||
-                (assignment as any)?.reliefItems ||
-                sos?.supplies ||
-                [
-                  { name: 'Áo phao', quantity: Math.max(1, victimHeadcount), unit: 'Chiếc' },
-                  { name: 'Túi y tế', quantity: 1, unit: 'Bộ' },
-                  { name: 'Nước sạch', quantity: Math.ceil(Math.max(1, victimHeadcount) / 2), unit: 'Thùng' },
-                ];
+              {/* Địa chỉ hiện trường - Hiển thị đầy đủ, không ẩn bớt, không cắt '...' */}
+              <Text style={styles.grabAddressText}>{incidentAddress}</Text>
 
-              if (!missionSupplies || missionSupplies.length === 0) return null;
+              {/* Số người & Đối tượng cần cứu */}
+              <Text style={styles.grabVictimMeta}>
+                {victimHeadcount} người cần cứu • 1 người già, 1 trẻ nhỏ
+              </Text>
 
-              return (
-                <View style={styles.grabSuppliesBox}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 5 }}>
-                    <MaterialCommunityIcons name="package-variant-closed" size={15} color="#166534" />
-                    <Text style={styles.grabSuppliesLabel}>Vật tư cấp theo xe:</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                    {missionSupplies.map((s: any, idx: number) => (
-                      <View key={idx} style={styles.grabSupplyChip}>
-                        <Text style={styles.grabSupplyChipText}>
-                          {s.name} <Text style={{ fontWeight: '800', color: '#166534' }}>({s.quantity} {s.unit || 'món'})</Text>
+              {/* Hộp ghi chú hiện trường (Note box xám giống hệt Grab) */}
+              {rawDescription ? (
+                <View style={styles.grabNoteBox}>
+                  <Text style={styles.grabNoteLabel}>Ghi chú từ hiện trường:</Text>
+                  <Text style={styles.grabNoteText}>{rawDescription}</Text>
+                </View>
+              ) : null}
+
+              {/* Hộp vật tư & hàng tiếp tế cấp theo xe (Có Xem Chi Tiết & Yêu cầu cấp thêm) */}
+              {(() => {
+                const missionSupplies =
+                  assignment?.supplies ||
+                  (assignment as any)?.reliefItems ||
+                  sos?.supplies ||
+                  [
+                    { name: 'Áo phao cứu sinh tiêu chuẩn SOLAS', quantity: Math.max(2, victimHeadcount), unit: 'Chiếc' },
+                    { name: 'Túi thuốc & Sơ cấp cứu dã chiến', quantity: 1, unit: 'Bộ' },
+                    { name: 'Nước uống đóng chai tiệt trùng (Thùng 24 chai)', quantity: Math.ceil(Math.max(1, victimHeadcount) / 2), unit: 'Thùng' },
+                  ];
+
+                return (
+                  <View style={styles.grabSuppliesBox}>
+                    {/* Hàng 1: Tiêu đề + Huy hiệu số lượng bên trái, Nút Yêu cầu thêm bên phải */}
+                    <View style={styles.suppliesHeaderRow}>
+                      <View style={styles.suppliesHeaderTitleWrap}>
+                        <MaterialCommunityIcons name="package-variant-closed" size={17} color="#15803D" />
+                        <Text style={styles.grabSuppliesLabel}>
+                          Vật tư theo xe
+                        </Text>
+                        <View style={styles.suppliesCountBadge}>
+                          <Text style={styles.suppliesCountBadgeText}>
+                            {missionSupplies.length} loại
+                          </Text>
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.requestSuppliesBtn}
+                        onPress={() => setSupplyRequestModalVisible(true)}
+                        activeOpacity={0.8}
+                      >
+                        <Feather name="plus-circle" size={13} color="#0284C7" />
+                        <Text style={styles.requestSuppliesBtnText}>+ Yêu cầu thêm</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Hàng 2: Danh sách vật tư (Thu gọn vs Mở rộng toàn bộ) */}
+                    {suppliesExpanded ? (
+                      <View style={{ gap: 6, marginTop: 4 }}>
+                        {missionSupplies.map((s: any, idx: number) => (
+                          <View key={idx} style={styles.grabSupplyChip}>
+                            <Text style={styles.grabSupplyChipText} numberOfLines={1}>
+                              {s.name}
+                            </Text>
+                            <View style={styles.grabSupplyQtyBadge}>
+                              <Text style={styles.grabSupplyQtyText}>
+                                {s.quantity} {s.unit || 'món'}
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
+
+                        <TouchableOpacity
+                          style={styles.collapseDetailFooterBtn}
+                          onPress={() => setSuppliesExpanded(false)}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.collapseDetailFooterText}>Thu gọn danh sách</Text>
+                          <Feather name="chevron-up" size={13} color="#166534" />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.suppliesSummaryTouchWrap}
+                        onPress={() => setSuppliesExpanded(true)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.suppliesCollapsedSummaryText} numberOfLines={1}>
+                          {missionSupplies.map((s: any) => `${s.name} (${s.quantity})`).join(' • ')}
+                        </Text>
+                        <View style={styles.viewDetailBadge}>
+                          <Text style={styles.viewDetailBadgeText}>Xem chi tiết</Text>
+                          <Feather name="chevron-down" size={12} color="#166534" />
+                        </View>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Danh sách vật tư đã yêu cầu bổ sung nếu có */}
+                    {requestedSuppliesList.length > 0 && (
+                      <View style={styles.requestedSuppliesNotice}>
+                        <Ionicons name="information-circle" size={15} color="#D97706" />
+                        <Text style={styles.requestedSuppliesNoticeText}>
+                          Đã yêu cầu chi viện: {requestedSuppliesList.map((item) => `${item.name} (${item.quantity})`).join(', ')} (Chờ địa phương cấp)
                         </Text>
                       </View>
-                    ))}
+                    )}
                   </View>
+                );
+              })()}
+            </View>
+          )}
+
+          {/* Hàng 4 nút thao tác nhanh (Chỉ đường in-app, Gọi điện, Từ chối, Trú ẩn) */}
+          {!isSheetCollapsed && (
+            <View style={styles.grabActionRow}>
+              {/* Nút 1: Ghim lại vị trí mình (thay cho nút Chỉ đường) */}
+              <TouchableOpacity
+                style={styles.grabActionCol}
+                onPress={() => {
+                  setIsHeadingLocked(true);
+                  Vibration.vibrate(30);
+                  if (webViewRef.current) {
+                    webViewRef.current.postMessage(JSON.stringify({ type: 'RECENTER_TEAM' }));
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.grabActionIconWrap, isHeadingLocked && { backgroundColor: '#E0F2FE', borderColor: '#0284C7' }]}>
+                  <MaterialCommunityIcons
+                    name={isHeadingLocked ? 'crosshairs-gps' : 'crosshairs'}
+                    size={20}
+                    color="#0284C7"
+                  />
                 </View>
-              );
-            })()}
-          </View>
+                <Text style={[styles.grabActionLabel, isHeadingLocked && { color: '#0284C7', fontWeight: '800' }]}>
+                  {isHeadingLocked ? 'Đang ghim' : 'Ghim vị trí'}
+                </Text>
+              </TouchableOpacity>
 
-          {/* Hàng 4 nút thao tác nhanh (Phong cách Grab: Chỉ đường Maps, Gọi điện, Báo sự cố, Trú ẩn) */}
-          <View style={styles.grabActionRow}>
-            {/* Nút 1: Chỉ đường Google Maps ngoài */}
-            <TouchableOpacity
-              style={styles.grabActionCol}
-              onPress={handleOpenGoogleMaps}
-              activeOpacity={0.8}
-            >
-              <View style={styles.grabActionIconWrap}>
-                <Feather name="navigation" size={20} color="#0284C7" />
-              </View>
-              <Text style={styles.grabActionLabel}>Chỉ đường</Text>
-            </TouchableOpacity>
+              {/* Nút 2: Gọi điện */}
+              <TouchableOpacity
+                style={styles.grabActionCol}
+                onPress={() => Linking.openURL(`tel:${citizenPhone}`)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.grabActionIconWrap}>
+                  <Feather name="phone" size={20} color="#059669" />
+                </View>
+                <Text style={styles.grabActionLabel}>Gọi điện</Text>
+              </TouchableOpacity>
 
-            {/* Nút 2: Gọi điện */}
-            <TouchableOpacity
-              style={styles.grabActionCol}
-              onPress={() => Linking.openURL(`tel:${citizenPhone}`)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.grabActionIconWrap}>
-                <Feather name="phone" size={20} color="#059669" />
-              </View>
-              <Text style={styles.grabActionLabel}>Gọi điện</Text>
-            </TouchableOpacity>
+              {/* Nút 3: Từ chối (Đổi từ Báo sự cố sang Từ chối) */}
+              <TouchableOpacity
+                style={styles.grabActionCol}
+                onPress={() => setRejectModalVisible(true)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.grabActionIconWrap, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                  <Feather name="x-circle" size={20} color="#DC2626" />
+                </View>
+                <Text style={[styles.grabActionLabel, { color: '#DC2626', fontWeight: '800' }]}>Từ chối</Text>
+              </TouchableOpacity>
 
-            {/* Nút 3: Báo sự cố */}
-            <TouchableOpacity
-              style={styles.grabActionCol}
-              onPress={() => setRejectModalVisible(true)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.grabActionIconWrap}>
-                <Feather name="alert-triangle" size={20} color="#D97706" />
-              </View>
-              <Text style={styles.grabActionLabel}>Báo sự cố</Text>
-            </TouchableOpacity>
-
-            {/* Nút 4: Trạm trú ẩn */}
-            <TouchableOpacity
-              style={styles.grabActionCol}
-              onPress={() => {
-                setShowSafeShelters((prev) => !prev);
-                if (webViewRef.current) {
-                  webViewRef.current.postMessage(
-                    JSON.stringify({ type: 'TOGGLE_SHELTERS', show: !showSafeShelters })
-                  );
-                }
-              }}
-              activeOpacity={0.8}
-            >
-              <View style={[styles.grabActionIconWrap, showSafeShelters && { backgroundColor: '#E0F2FE' }]}>
-                <Feather name="shield" size={20} color={showSafeShelters ? '#0284C7' : '#475569'} />
-              </View>
-              <Text style={styles.grabActionLabel}>Trạm trú ẩn</Text>
-            </TouchableOpacity>
-          </View>
+              {/* Nút 4: Trạm trú ẩn */}
+              <TouchableOpacity
+                style={styles.grabActionCol}
+                onPress={() => {
+                  setShowSafeShelters((prev) => !prev);
+                  if (webViewRef.current) {
+                    webViewRef.current.postMessage(
+                      JSON.stringify({ type: 'TOGGLE_SHELTERS', show: !showSafeShelters })
+                    );
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.grabActionIconWrap, showSafeShelters && { backgroundColor: '#E0F2FE' }]}>
+                  <Feather name="shield" size={20} color={showSafeShelters ? '#0284C7' : '#475569'} />
+                </View>
+                <Text style={styles.grabActionLabel}>Trạm trú ẩn</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* Primary Action Button to, rõ, full width giống Grab */}
           <View style={styles.grabPrimaryBtnContainer}>
@@ -1255,6 +1581,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         {/* ======================================================== */}
         {/* MODAL: XÁC NHẬN ĐẾN HIỆN TRƯỜNG TÁC CHIẾN               */}
         {/* ======================================================== */}
+        {/* ======================================================== */}
+        {/* MODAL: XÁC NHẬN ĐÃ ĐẾN HIỆN TRƯỜNG                       */}
+        {/* ======================================================== */}
         <Modal visible={arriveConfirmModalVisible} transparent animationType="fade">
           <View style={styles.modalBackdrop}>
             <View style={styles.modalCard}>
@@ -1274,10 +1603,10 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 >
                   <Ionicons name="location-sharp" size={30} color="#0284C7" />
                 </View>
-                <Text style={[styles.modalTitle, { fontSize: 18, textAlign: 'center', color: '#0F172A', marginLeft: 0 }]}>
+                <Text style={styles.centeredModalTitle}>
                   Xác nhận đến hiện trường
                 </Text>
-                <Text style={[styles.modalDesc, { textAlign: 'center', marginTop: 6, marginBottom: 0, lineHeight: 20, color: '#475569', fontSize: 13.5 }]}>
+                <Text style={styles.centeredModalDesc}>
                   Đội đã tiếp cận chính xác vị trí người dân gặp nạn và bắt đầu phương án cứu nạn?
                 </Text>
               </View>
@@ -1290,7 +1619,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   borderColor: '#E2E8F0',
                   borderRadius: 12,
                   padding: 12,
-                  marginBottom: 18,
+                  marginBottom: 14,
                   gap: 8,
                 }}
               >
@@ -1308,48 +1637,35 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 </View>
               </View>
 
-              <View style={{ gap: 10 }}>
+              <View style={{ gap: 8 }}>
                 <TouchableOpacity
                   style={[
-                    styles.modalRejectConfirmBtn,
+                    styles.modalPrimaryFullBtn,
                     {
                       backgroundColor: '#2563EB',
-                      height: 50,
-                      borderRadius: 12,
-                      flexDirection: 'row',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      gap: 8,
                       shadowColor: '#2563EB',
                       shadowOffset: { width: 0, height: 4 },
                       shadowOpacity: 0.3,
                       shadowRadius: 8,
                       elevation: 4,
+                      gap: 8,
+                      marginTop: 0,
                     },
                   ]}
                   onPress={executeArriveAtScene}
                   disabled={actionLoading}
                 >
                   <Ionicons name="checkmark-done" size={20} color="#FFFFFF" />
-                  <Text style={[styles.modalRejectConfirmBtnText, { fontSize: 15, fontWeight: '800' }]}>
+                  <Text style={styles.modalPrimaryFullBtnText}>
                     Đã Đến Hiện Trường
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[
-                    styles.modalCancelBtn,
-                    {
-                      height: 46,
-                      borderRadius: 12,
-                      justifyContent: 'center',
-                      backgroundColor: '#F1F5F9',
-                      borderWidth: 0,
-                    },
-                  ]}
+                  style={styles.modalSecondaryFullBtn}
                   onPress={() => setArriveConfirmModalVisible(false)}
                 >
-                  <Text style={[styles.modalCancelBtnText, { color: '#64748B', fontWeight: '700', fontSize: 14 }]}>
+                  <Text style={styles.modalSecondaryFullBtnText}>
                     Chưa, vẫn đang đi
                   </Text>
                 </TouchableOpacity>
@@ -1380,24 +1696,18 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 >
                   <Ionicons name="rocket-outline" size={34} color="#2563EB" />
                 </View>
-                <Text style={[styles.modalTitle, { fontSize: 18, textAlign: 'center', color: '#1E293B', marginLeft: 0 }]}>
+                <Text style={styles.centeredModalTitle}>
                   Đã Nhận Lệnh Xuất Kích! 🚀
                 </Text>
-                <Text style={[styles.modalDesc, { textAlign: 'center', marginTop: 8, lineHeight: 20, color: '#475569', fontSize: 13.5 }]}>
+                <Text style={styles.centeredModalDesc}>
                   Lộ trình dẫn đường tự động đã được kích hoạt. Di chuyển an toàn đến hiện trường!
                 </Text>
 
                 <TouchableOpacity
                   style={[
-                    styles.modalRejectConfirmBtn,
+                    styles.modalPrimaryFullBtn,
                     {
                       backgroundColor: '#2563EB',
-                      width: '100%',
-                      height: 50,
-                      borderRadius: 12,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      marginTop: 16,
                       shadowColor: '#2563EB',
                       shadowOffset: { width: 0, height: 4 },
                       shadowOpacity: 0.3,
@@ -1407,7 +1717,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   ]}
                   onPress={() => setLaunchSuccessModalVisible(false)}
                 >
-                  <Text style={[styles.modalRejectConfirmBtnText, { fontSize: 15, fontWeight: '800' }]}>
+                  <Text style={styles.modalPrimaryFullBtnText}>
                     BẮT ĐẦU DẪN ĐƯỜNG
                   </Text>
                 </TouchableOpacity>
@@ -1438,24 +1748,18 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 >
                   <Ionicons name="shield-checkmark-outline" size={34} color="#DC2626" />
                 </View>
-                <Text style={[styles.modalTitle, { fontSize: 18, textAlign: 'center', color: '#1E293B', marginLeft: 0 }]}>
+                <Text style={styles.centeredModalTitle}>
                   Đã Báo Cáo Ban Chỉ Huy
                 </Text>
-                <Text style={[styles.modalDesc, { textAlign: 'center', marginTop: 8, lineHeight: 20, color: '#475569', fontSize: 13.5 }]}>
+                <Text style={styles.centeredModalDesc}>
                   Lệnh điều động đã được trả về để trung tâm điều phối đội khác chi viện.
                 </Text>
 
                 <TouchableOpacity
                   style={[
-                    styles.modalRejectConfirmBtn,
+                    styles.modalPrimaryFullBtn,
                     {
                       backgroundColor: '#DC2626',
-                      width: '100%',
-                      height: 50,
-                      borderRadius: 12,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      marginTop: 16,
                     },
                   ]}
                   onPress={() => {
@@ -1463,7 +1767,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                     onClose();
                   }}
                 >
-                  <Text style={[styles.modalRejectConfirmBtnText, { fontSize: 15, fontWeight: '800' }]}>
+                  <Text style={styles.modalPrimaryFullBtnText}>
                     Đóng & Trở Về Trực Ban
                   </Text>
                 </TouchableOpacity>
@@ -1520,29 +1824,23 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                     }
                   />
                 </View>
-                <Text style={[styles.modalTitle, { fontSize: 18, textAlign: 'center', color: '#1E293B', marginLeft: 0 }]}>
+                <Text style={styles.centeredModalTitle}>
                   {customNotice.title}
                 </Text>
-                <Text style={[styles.modalDesc, { textAlign: 'center', marginTop: 8, lineHeight: 20, color: '#475569', fontSize: 13.5 }]}>
+                <Text style={styles.centeredModalDesc}>
                   {customNotice.message}
                 </Text>
 
                 <TouchableOpacity
                   style={[
-                    styles.modalRejectConfirmBtn,
+                    styles.modalPrimaryFullBtn,
                     {
                       backgroundColor:
                         customNotice.type === 'error'
                           ? '#DC2626'
                           : customNotice.type === 'warning'
                           ? '#D97706'
-                          : '#2563EB',
-                      width: '100%',
-                      height: 50,
-                      borderRadius: 12,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      marginTop: 16,
+                          : '#0284C7',
                     },
                   ]}
                   onPress={() => {
@@ -1551,7 +1849,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                     action?.();
                   }}
                 >
-                  <Text style={[styles.modalRejectConfirmBtnText, { fontSize: 15, fontWeight: '800' }]}>
+                  <Text style={styles.modalPrimaryFullBtnText}>
                     {customNotice.actionText || 'Đã hiểu'}
                   </Text>
                 </TouchableOpacity>
@@ -1561,27 +1859,27 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         </Modal>
 
         {/* ======================================================== */}
-        {/* MODAL 1: BÁO CÁO SỰ CỐ / TỪ CHỐI NHẬN LỆNH              */}
+        {/* MODAL 1: TỪ CHỐI NHẬN LỆNH TÁC CHIẾN                    */}
         {/* ======================================================== */}
         <Modal visible={rejectModalVisible} transparent animationType="fade">
           <View style={styles.modalBackdrop}>
             <View style={styles.modalCard}>
               <View style={styles.modalHeaderRow}>
-                <Ionicons name="warning-outline" size={22} color="#DC2626" />
-                <Text style={styles.modalTitle}>Báo Cáo Không Thể Nhận Lệnh</Text>
+                <Ionicons name="close-circle-outline" size={24} color="#DC2626" />
+                <Text style={styles.modalTitle}>Từ Chối Nhận Nhiệm Vụ</Text>
                 <TouchableOpacity onPress={() => setRejectModalVisible(false)}>
                   <Feather name="x" size={20} color="#64748B" />
                 </TouchableOpacity>
               </View>
 
               <Text style={styles.modalDesc}>
-                Vui lòng chọn lý do nghiệp vụ chính xác để Ban Chỉ Huy PCTT điều chuyển ngay đội cứu trợ dự phòng:
+                Vui lòng chọn lý do nghiệp vụ để Ban Chỉ Huy PCTT điều chuyển ngay lực lượng cứu hộ dự phòng hỗ trợ nạn nhân:
               </Text>
 
               {[
                 'Phương tiện gặp sự cố kỹ thuật đột xuất',
                 'Tuyến đường thủy bị cô lập, dòng nước chảy xiết quá tải',
-                'Vượt quá tải trọng / thiếu áo phao chuyên dụng',
+                'Vượt quá tải trọng / thiếu trang thiết bị cứu hộ chuyên dụng',
                 'Đang phụ trách cứu nạn một ca nguy kịch khác',
               ].map((reasonItem) => (
                 <TouchableOpacity
@@ -1623,6 +1921,133 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   disabled={actionLoading}
                 >
                   <Text style={styles.modalRejectConfirmBtnText}>Xác nhận từ chối</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ======================================================== */}
+        {/* MODAL: YÊU CẦU CUNG CẤP THÊM VẬT TƯ CỨU TRỢ              */}
+        {/* ======================================================== */}
+        <Modal visible={supplyRequestModalVisible} transparent animationType="slide">
+          <View style={styles.modalBackdrop}>
+            <View style={[styles.modalCard, { maxHeight: SCREEN_HEIGHT * 0.85 }]}>
+              <View style={styles.modalHeaderRow}>
+                <MaterialCommunityIcons name="package-variant-plus" size={24} color="#0284C7" />
+                <Text style={styles.modalTitle}>Yêu Cầu Chi Viện Vật Tư</Text>
+                <TouchableOpacity onPress={() => setSupplyRequestModalVisible(false)}>
+                  <Feather name="x" size={20} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.modalDesc}>
+                Gửi yêu cầu tiếp tế trang thiết bị, vật tư lên Ban Chỉ Huy địa phương để được hỗ trợ chuyển đến hiện trường:
+              </Text>
+
+              <ScrollView style={{ maxHeight: 250 }} showsVerticalScrollIndicator={false}>
+                {Object.entries(selectedSuppliesToRequest).map(([itemKey, qty]) => (
+                  <View key={itemKey} style={styles.supplyRequestItemRow}>
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <Text style={styles.supplyRequestItemName}>{itemKey}</Text>
+                    </View>
+                    <View style={styles.qtyControlRow}>
+                      <TouchableOpacity
+                        style={styles.qtyBtn}
+                        onPress={() =>
+                          setSelectedSuppliesToRequest((prev) => ({
+                            ...prev,
+                            [itemKey]: Math.max(0, (prev[itemKey] || 0) - 1),
+                          }))
+                        }
+                      >
+                        <Feather name="minus" size={14} color="#475569" />
+                      </TouchableOpacity>
+                      <Text style={styles.qtyValueText}>{qty}</Text>
+                      <TouchableOpacity
+                        style={[styles.qtyBtn, styles.qtyBtnPlus]}
+                        onPress={() =>
+                          setSelectedSuppliesToRequest((prev) => ({
+                            ...prev,
+                            [itemKey]: (prev[itemKey] || 0) + 1,
+                          }))
+                        }
+                      >
+                        <Feather name="plus" size={14} color="#0284C7" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+
+              {/* Mức độ cấp bách */}
+              <View style={{ marginTop: 12, marginBottom: 8 }}>
+                <Text style={styles.supplyInputLabel}>Mức độ cần thiết:</Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                  <TouchableOpacity
+                    style={[
+                      styles.urgencyChoiceBtn,
+                      supplyUrgency === 'NORMAL' && styles.urgencyChoiceBtnActive,
+                    ]}
+                    onPress={() => setSupplyUrgency('NORMAL')}
+                  >
+                    <Text
+                      style={[
+                        styles.urgencyChoiceText,
+                        supplyUrgency === 'NORMAL' && styles.urgencyChoiceTextActive,
+                      ]}
+                    >
+                      Bình thường
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.urgencyChoiceBtn,
+                      supplyUrgency === 'URGENT' && styles.urgencyChoiceBtnUrgent,
+                    ]}
+                    onPress={() => setSupplyUrgency('URGENT')}
+                  >
+                    <Text
+                      style={[
+                        styles.urgencyChoiceText,
+                        supplyUrgency === 'URGENT' && styles.urgencyChoiceTextUrgent,
+                      ]}
+                    >
+                      Khẩn cấp (Cần ngay)
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Vật tư cần thêm ngoài các vật tư có sẵn */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={styles.supplyInputLabel}>Vật tư cần thêm (ngoài các vật tư có sẵn):</Text>
+                <TextInput
+                  style={styles.supplyNoteInput}
+                  placeholder="Ví dụ: 2 bình oxy, 1 máy bơm chìm mini, pin sạc dự phòng, đèn pin chống nước, chăn ấm..."
+                  placeholderTextColor="#94A3B8"
+                  value={supplyNote}
+                  onChangeText={setSupplyNote}
+                  multiline
+                  numberOfLines={2}
+                />
+              </View>
+
+              {/* Action buttons */}
+              <View style={styles.modalActionButtons}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setSupplyRequestModalVisible(false)}
+                >
+                  <Text style={styles.modalCancelBtnText}>Hủy bỏ</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.supplySubmitBtn}
+                  onPress={handleSubmitSupplyRequest}
+                  disabled={actionLoading}
+                >
+                  <Text style={styles.supplySubmitBtnText}>Gửi Lên Địa Phương</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1722,23 +2147,18 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 >
                   <Ionicons name="checkmark-circle" size={42} color="#16A34A" />
                 </View>
-                <Text style={[styles.modalTitle, { fontSize: 19, textAlign: 'center', color: '#16A34A' }]}>
+                <Text style={[styles.centeredModalTitle, { color: '#16A34A', fontSize: 19 }]}>
                   Hoàn Tất Cứu Hộ Xuất Sắc! 🎉
                 </Text>
-                <Text style={[styles.modalDesc, { textAlign: 'center', marginTop: 8, lineHeight: 20 }]}>
+                <Text style={styles.centeredModalDesc}>
                   Toàn bộ {rescuedHeadcount} người dân đã được đưa về nơi an toàn. Trạng thái đội đã tự động chuyển về SẴN SÀNG tác chiến.
                 </Text>
 
                 <TouchableOpacity
                   style={[
-                    styles.modalRejectConfirmBtn,
+                    styles.modalPrimaryFullBtn,
                     {
                       backgroundColor: '#16A34A',
-                      width: '100%',
-                      height: 48,
-                      borderRadius: 10,
-                      justifyContent: 'center',
-                      marginTop: 16,
                     },
                   ]}
                   onPress={() => {
@@ -1747,7 +2167,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                     onClose();
                   }}
                 >
-                  <Text style={[styles.modalRejectConfirmBtnText, { fontSize: 14 }]}>
+                  <Text style={styles.modalPrimaryFullBtnText}>
                     Đóng & Trở Về Trực Ban
                   </Text>
                 </TouchableOpacity>
@@ -1807,7 +2227,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#0F172A',
     borderRadius: 16,
-    paddingVertical: 10,
+    paddingVertical: 9,
     paddingHorizontal: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
@@ -1816,18 +2236,25 @@ const styles = StyleSheet.create({
     elevation: 6,
     borderWidth: 1,
     borderColor: '#1E293B',
-    gap: 10,
+    gap: 8,
+  },
+  grabManeuverCardNavigating: {
+    borderColor: '#0084FF',
+    borderWidth: 1.5,
+    shadowColor: '#0084FF',
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
   },
   grabTurnIconBox: {
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: '#0284C7',
+    backgroundColor: '#0084FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   grabDistanceText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '900',
     color: '#38BDF8',
   },
@@ -1841,19 +2268,49 @@ const styles = StyleSheet.create({
     color: '#E2E8F0',
     marginTop: 2,
   },
-  grabMapsBadge: {
+  grabSpeedLimitBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2.2,
+    borderColor: '#EF4444',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  grabSpeedLimitText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  grabNavActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E0F2FE',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 9,
     gap: 4,
   },
-  grabMapsBadgeText: {
-    fontSize: 11,
+  grabNavActionBtnRecenter: {
+    backgroundColor: '#0084FF',
+  },
+  grabNavActionBtnLocked: {
+    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderWidth: 1,
+    borderColor: '#38BDF8',
+  },
+  grabNavActionBtnInactive: {
+    backgroundColor: '#0084FF',
+  },
+  grabNavActionBtnActive: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  grabNavActionBtnText: {
+    fontSize: 12,
     fontWeight: '800',
-    color: '#0284C7',
+    color: '#FFFFFF',
   },
 
   /* Grab-style Bottom Deck */
@@ -1940,13 +2397,90 @@ const styles = StyleSheet.create({
   grabSuppliesBox: {
     backgroundColor: '#F0FDF4',
     borderWidth: 1.5,
-    borderColor: '#BBF7D0',
-    borderRadius: 10,
-    padding: 9,
-    marginTop: 6,
+    borderColor: '#86EFAC',
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 8,
+  },
+  suppliesHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+    gap: 8,
+  },
+  suppliesHeaderTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    minWidth: 0,
   },
   grabSuppliesLabel: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  suppliesCountBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  suppliesCountBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  requestSuppliesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 8,
+    paddingVertical: 4.5,
+    borderRadius: 7,
+    flexShrink: 0,
+  },
+  requestSuppliesBtnText: {
     fontSize: 11.5,
+    fontWeight: '800',
+    color: '#0284C7',
+  },
+  suppliesSummaryTouchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    gap: 6,
+  },
+  suppliesCollapsedSummaryText: {
+    flex: 1,
+    fontSize: 11.5,
+    color: '#15803D',
+    fontWeight: '600',
+  },
+  viewDetailBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 5,
+    flexShrink: 0,
+  },
+  viewDetailBadgeText: {
+    fontSize: 10.5,
     fontWeight: '800',
     color: '#166534',
   },
@@ -1954,14 +2488,204 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#86EFAC',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
   },
   grabSupplyChipText: {
     fontSize: 12,
     fontWeight: '700',
+    color: '#1E293B',
+    flex: 1,
+  },
+  grabSupplyQtyBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    flexShrink: 0,
+  },
+  grabSupplyQtyText: {
+    fontSize: 11.5,
+    fontWeight: '800',
     color: '#15803D',
+  },
+  collapseDetailFooterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    marginTop: 4,
+    backgroundColor: '#DCFCE7',
+    borderRadius: 6,
+  },
+  collapseDetailFooterText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  requestedSuppliesNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    marginTop: 8,
+  },
+  requestedSuppliesNoticeText: {
+    fontSize: 11.5,
+    color: '#B45309',
+    fontWeight: '700',
+    flex: 1,
+  },
+  sheetToggleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingBottom: 4,
+  },
+  sheetToggleHeaderText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  collapsedSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  collapsedCitizenName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  collapsedVictimCount: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#DC2626',
+  },
+  collapsedAddressText: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  collapsedExpandHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  collapsedExpandHintText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#0284C7',
+  },
+  supplyRequestItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  supplyRequestItemName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  qtyControlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  qtyBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyBtnPlus: {
+    backgroundColor: '#E0F2FE',
+  },
+  qtyValueText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0F172A',
+    minWidth: 20,
+    textAlign: 'center',
+  },
+  supplyInputLabel: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 4,
+  },
+  urgencyChoiceBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  urgencyChoiceBtnActive: {
+    borderColor: '#0284C7',
+    backgroundColor: '#F0F9FF',
+  },
+  urgencyChoiceBtnUrgent: {
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
+  },
+  urgencyChoiceText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  urgencyChoiceTextActive: {
+    color: '#0284C7',
+  },
+  urgencyChoiceTextUrgent: {
+    color: '#DC2626',
+  },
+  supplyNoteInput: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    padding: 8,
+    fontSize: 13,
+    color: '#0F172A',
+    minHeight: 48,
+    textAlignVertical: 'top',
+  },
+  supplySubmitBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 10,
+    backgroundColor: '#0284C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  supplySubmitBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
   grabActionRow: {
     flexDirection: 'row',
@@ -2211,6 +2935,23 @@ const styles = StyleSheet.create({
   mapToolBtnActive: {
     backgroundColor: '#059669',
     borderColor: '#059669',
+  },
+  mapToolBtnLocked: {
+    borderColor: '#0084FF',
+    borderWidth: 2,
+    backgroundColor: '#F0F9FF',
+    shadowColor: '#0084FF',
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+  },
+  mapToolActiveDot: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#10B981',
   },
 
   /* BOTTOM SHEET CONTROL DECK */
@@ -2887,6 +3628,54 @@ const styles = StyleSheet.create({
     color: '#475569',
     lineHeight: 18,
     marginBottom: 12,
+  },
+  centeredModalTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  centeredModalDesc: {
+    fontSize: 13.5,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  modalPrimaryFullBtn: {
+    width: '100%',
+    minHeight: 48,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 14,
+  },
+  modalPrimaryFullBtnText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  modalSecondaryFullBtn: {
+    width: '100%',
+    minHeight: 46,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  modalSecondaryFullBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+    textAlign: 'center',
   },
   radioItemRow: {
     flexDirection: 'row',

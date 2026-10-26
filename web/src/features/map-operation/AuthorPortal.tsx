@@ -30,7 +30,7 @@ import {
 import { useApp } from '@/context/AppContext';
 import { isSosInOfficerJurisdiction } from '@/services/mapGeoService';
 import { navigateTo, getCurrentSosIdFromUrl } from '@/services/appRouter';
-import { onSosCreated, onSosUpdated, getSocket } from '@/services/socketService';
+import { onSosCreated, onSosUpdated, onAssignmentUpdated, getSocket } from '@/services/socketService';
 import './RescueSos.css';
 
 interface ToastState {
@@ -409,6 +409,35 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
 
     // Lắng nghe sự kiện Realtime cập nhật trạng thái SOS (xác minh, hoàn thành ca)
     const unsubUpdated = onSosUpdated((updatedSos) => {
+      if (updatedSos && (updatedSos._id || updatedSos.id)) {
+        const uId = updatedSos._id || updatedSos.id;
+        const rawStatus = String(updatedSos.status || '').toUpperCase();
+        domainDService.updateSosStatus(uId, rawStatus as any);
+        if (updatedSos.assignment) {
+          const assign = updatedSos.assignment;
+          domainDService.syncRealAssignment({
+            id: assign._id || assign.id,
+            sosRequestId: uId,
+            authorityOrganizationId: assign.authorityOrganizationId?._id || assign.authorityOrganizationId || 'auth-org-lc',
+            authorityOrganizationName: assign.authorityOrganizationId?.name || 'Ban Chỉ Huy PCTT & TKCN',
+            rescueTeamId: assign.rescueTeamId?._id || assign.rescueTeamId || 'team-1',
+            rescueTeamName: assign.rescueTeamId?.name || 'Đội Cứu Hộ',
+            rescuerId: assign.rescuerId?._id || assign.rescuerId || 'rescuer-1',
+            rescuerName: assign.rescuerId?.fullName || 'Cứu Hộ Viên',
+            rescuerRole: 'LEADER',
+            vehicleId: assign.vehicleId?._id || assign.vehicleId || 'veh-1',
+            vehicleName: assign.vehicleId?.plateNumber || 'Phương tiện',
+            vehicleCapacity: String(assign.vehicleId?.capacity || '6'),
+            status: assign.status || 'PENDING',
+            priority: (updatedSos.priority || 'CRITICAL') as any,
+            assignedAt: assign.assignedAt || new Date().toISOString(),
+            rescuerLocation: { lat: 16.0795, lng: 108.1485, svgX: 520, svgY: 260 },
+            distanceRemainingKm: 1.1,
+            etaMinutes: 3,
+          });
+        }
+        setSosRequests([...domainDService.getSosRequests()]);
+      }
       syncRealSosFromApi(activeOfficer);
       if (updatedSos?._id) {
         const rawStatus = String(updatedSos.status || '').toUpperCase();
@@ -418,13 +447,76 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     });
 
     // Lắng nghe các sự kiện phân công & cứu hộ viên đổi trạng thái Realtime
+    const handleAssignmentRealtime = (assignmentData: any) => {
+      if (!assignmentData) return;
+      const assignId = assignmentData._id || assignmentData.id;
+      const targetSosId = assignmentData.sosRequestId || assignmentData.sosId || (assignmentData.sosRequest?._id || assignmentData.sosRequest?.id);
+      const newStatus = assignmentData.status;
+
+      if (assignId && targetSosId) {
+        const teamObj = assignmentData.rescueTeamId;
+        const rescuerObj = assignmentData.rescuerId;
+        const vehicleObj = assignmentData.vehicleId;
+
+        const teamName = (typeof teamObj === 'object' && teamObj ? teamObj.name || teamObj.teamName : null) || 'Đội Cứu Hộ';
+        const rescuerName = (typeof rescuerObj === 'object' && rescuerObj ? rescuerObj.fullName : null) || 'Cứu Hộ Viên';
+        const vehiclePlate = (typeof vehicleObj === 'object' && vehicleObj ? vehicleObj.plateNumber : null) || 'Phương tiện';
+
+        domainDService.syncRealAssignment({
+          id: assignId,
+          sosRequestId: targetSosId,
+          authorityOrganizationId: assignmentData.authorityOrganizationId?._id || assignmentData.authorityOrganizationId || 'auth-org-lc',
+          authorityOrganizationName: assignmentData.authorityOrganizationId?.name || 'Ban Chỉ Huy PCTT & TKCN',
+          rescueTeamId: typeof teamObj === 'object' && teamObj ? teamObj._id : (assignmentData.rescueTeamId || 'team-1'),
+          rescueTeamName: teamName,
+          rescuerId: typeof rescuerObj === 'object' && rescuerObj ? rescuerObj._id : (assignmentData.rescuerId || 'rescuer-1'),
+          rescuerName: rescuerName,
+          rescuerRole: 'LEADER',
+          vehicleId: typeof vehicleObj === 'object' && vehicleObj ? vehicleObj._id : (assignmentData.vehicleId || 'veh-1'),
+          vehicleName: vehiclePlate,
+          vehicleCapacity: String(vehicleObj?.capacity || '6'),
+          status: newStatus || 'PENDING',
+          priority: assignmentData.priority || 'CRITICAL',
+          assignedAt: assignmentData.assignedAt || new Date().toISOString(),
+          rescuerLocation: { lat: 16.0795, lng: 108.1485, svgX: 520, svgY: 260 },
+          distanceRemainingKm: newStatus === 'ARRIVED' ? 0.1 : (newStatus === 'ON_THE_WAY' || newStatus === 'EN_ROUTE' ? 0.8 : 1.4),
+          etaMinutes: newStatus === 'ARRIVED' ? 0 : (newStatus === 'ON_THE_WAY' || newStatus === 'EN_ROUTE' ? 3 : 7),
+        });
+
+        const mappedSosStatus =
+          newStatus === 'ACCEPTED'
+            ? 'ACCEPTED'
+            : ['EN_ROUTE', 'ON_THE_WAY', 'DISPATCHED'].includes(newStatus)
+            ? 'ON_THE_WAY'
+            : newStatus === 'ARRIVED'
+            ? 'ARRIVED'
+            : ['IN_PROGRESS', 'RESCUING'].includes(newStatus)
+            ? 'RESCUING'
+            : ['COMPLETED', 'RESOLVED'].includes(newStatus)
+            ? 'COMPLETED'
+            : newStatus === 'REJECTED'
+            ? 'REJECTED'
+            : undefined;
+
+        if (mappedSosStatus) {
+          domainDService.updateSosStatus(targetSosId, mappedSosStatus as any);
+        }
+        setSosRequests([...domainDService.getSosRequests()]);
+      }
+
+      syncRealSosFromApi(activeOfficer);
+    };
+
+    const unsubAssignment = onAssignmentUpdated(handleAssignmentRealtime);
+
     const socket = getSocket();
     const handleRealtimeSync = () => syncRealSosFromApi(activeOfficer);
     socket.on('connect', handleRealtimeSync);
     socket.on('assignment:created', handleRealtimeSync);
-    socket.on('assignment:updated', handleRealtimeSync);
-    socket.on('assignment:status_changed', handleRealtimeSync);
-    socket.on('sos:assignment:status_changed', handleRealtimeSync);
+    socket.on('assignment:updated', handleAssignmentRealtime);
+    socket.on('assignment:status_updated', handleAssignmentRealtime);
+    socket.on('assignment:status_changed', handleAssignmentRealtime);
+    socket.on('sos:assignment:status_changed', handleAssignmentRealtime);
 
     // Định kỳ 3 giây dự phòng kiểm tra lại tín hiệu SOS từ server đảm bảo Realtime liên tục không cần reset thủ công
     const interval = setInterval(() => {
@@ -437,11 +529,13 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     return () => {
       unsubCreated();
       unsubUpdated();
+      unsubAssignment();
       socket.off('connect', handleRealtimeSync);
       socket.off('assignment:created', handleRealtimeSync);
-      socket.off('assignment:updated', handleRealtimeSync);
-      socket.off('assignment:status_changed', handleRealtimeSync);
-      socket.off('sos:assignment:status_changed', handleRealtimeSync);
+      socket.off('assignment:updated', handleAssignmentRealtime);
+      socket.off('assignment:status_updated', handleAssignmentRealtime);
+      socket.off('assignment:status_changed', handleAssignmentRealtime);
+      socket.off('sos:assignment:status_changed', handleAssignmentRealtime);
       clearInterval(interval);
       window.removeEventListener('sos_data_updated', handleUpdateEvent);
     };

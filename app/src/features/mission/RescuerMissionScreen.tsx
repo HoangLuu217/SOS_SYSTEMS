@@ -65,6 +65,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
   // Modal Điều hướng Tác chiến Thực địa GrabDriver
   const [workspaceVisible, setWorkspaceVisible] = useState(false);
   const [activeWorkspaceMission, setActiveWorkspaceMission] = useState<SosAssignmentData | null>(null);
+  const dismissedMissionsRef = React.useRef<Set<string>>(new Set());
 
   // Tải danh sách nhiệm vụ từ backend
   const fetchMissions = useCallback(async (isRefresh = false) => {
@@ -78,10 +79,20 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
       const res = await backendApi.getMyAssignments();
       if (res.success && Array.isArray(res.data)) {
         setMissions(res.data);
-        const activeCount = res.data.filter(
+        const activeList = res.data.filter(
           (m) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(m.status)
-        ).length;
+        );
+        const activeCount = activeList.length;
         onMissionsCountChange?.(activeCount);
+
+        // TỰ ĐỘNG BAY VÔ TRANG TÁC CHIẾN KHI CÓ NHIỆM VỤ ĐIỀU PHỐI
+        if (activeList.length > 0 && !workspaceVisible) {
+          const targetMission = activeList[0];
+          if (!dismissedMissionsRef.current.has(targetMission._id)) {
+            setActiveWorkspaceMission(targetMission);
+            setWorkspaceVisible(true);
+          }
+        }
       } else {
         setMissions([]);
         onMissionsCountChange?.(0);
@@ -92,7 +103,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
       setLoading(false);
       setRefreshing(false);
     }
-  }, [onMissionsCountChange]);
+  }, [onMissionsCountChange, workspaceVisible]);
 
   useEffect(() => {
     fetchMissions();
@@ -191,6 +202,9 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
 
   // Xem vị trí nạn nhân & Mở Màn hình Điều Hướng Tác Chiến
   const handleViewOnMap = (mission: SosAssignmentData) => {
+    if (mission?._id) {
+      dismissedMissionsRef.current.delete(mission._id);
+    }
     setActiveWorkspaceMission(mission);
     setWorkspaceVisible(true);
   };
@@ -345,7 +359,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+      <StatusBar barStyle="light-content" />
 
       {/* 1. Header tác chiến chuyên nghiệp */}
       <View style={[styles.headerContainer, { paddingTop: Math.max(insets.top, 14) }]}>
@@ -761,6 +775,9 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
         initialSosData={activeWorkspaceMission?.sosRequestId || (activeWorkspaceMission as any)?.sosId}
         initialAssignmentData={activeWorkspaceMission}
         onClose={() => {
+          if (activeWorkspaceMission?._id) {
+            dismissedMissionsRef.current.add(activeWorkspaceMission._id);
+          }
           setWorkspaceVisible(false);
           setActiveWorkspaceMission(null);
           fetchMissions(true);

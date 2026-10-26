@@ -271,10 +271,25 @@ class DomainDService {
 
   getAssignmentBySosId(sosId: string): SosAssignment | null {
     const req = this.sosRequests.find((s) => s.id === sosId);
-    if (!req || !req.assignmentId) return null;
-    const assign = this.assignments[req.assignmentId];
-    if (!assign || assign.status === 'CANCELLED') return null;
-    return assign;
+    if (req?.assignmentId && this.assignments[req.assignmentId]) {
+      const assign = this.assignments[req.assignmentId];
+      if (assign && assign.status !== 'CANCELLED') return assign;
+    }
+    const found = Object.values(this.assignments).find(
+      (a) => a.sosRequestId === sosId && a.status !== 'CANCELLED'
+    );
+    return found || null;
+  }
+
+  updateSosStatus(sosId: string, nextStatus: any): void {
+    const sosIdx = this.sosRequests.findIndex((s) => s.id === sosId);
+    if (sosIdx !== -1) {
+      this.sosRequests[sosIdx] = {
+        ...this.sosRequests[sosIdx],
+        status: nextStatus,
+      };
+      this.save(STORAGE_SOS, this.sosRequests);
+    }
   }
 
   assignSos(

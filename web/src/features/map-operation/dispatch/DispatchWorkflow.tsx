@@ -545,7 +545,7 @@ export const DispatchWorkflow = ({
           </div>
         </div>
       ) : (
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '10px 12px' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '6px 12px 10px 12px' }}>
           <ActiveMissionConsole
             assignment={assignment}
             selectedSos={selectedSos}

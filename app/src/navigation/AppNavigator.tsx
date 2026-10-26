@@ -6,6 +6,7 @@ import {
   ImageBackground,
   Keyboard,
   LogBox,
+  DeviceEventEmitter,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '@/context/AuthContext';
@@ -47,7 +48,8 @@ export function AuthenticatedApp() {
 
   const { unreadCount, setNavigateHandler } = useNotifications();
 
-  // Tải số lượng nhiệm vụ đang xử lý cho Cứu hộ viên
+  // Tải số lượng nhiệm vụ đang xử lý cho Cứu hộ viên & tự động điều hướng sang tab SOS tác chiến
+  const hasAutoSwitchedToSosRef = React.useRef(false);
   React.useEffect(() => {
     if (!isRescuer) return;
     const loadMissionsCount = async () => {
@@ -56,14 +58,24 @@ export function AuthenticatedApp() {
         if (res.success && Array.isArray(res.data)) {
           const active = res.data.filter(
             (m) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(m.status)
-          ).length;
-          setActiveMissionsCount(active);
+          );
+          setActiveMissionsCount(active.length);
+          if (active.length > 0 && !hasAutoSwitchedToSosRef.current) {
+            hasAutoSwitchedToSosRef.current = true;
+            setActiveTab('sos');
+          }
         }
       } catch {
         // ignore
       }
     };
     loadMissionsCount();
+    const sub = DeviceEventEmitter.addListener('sos:sync', () => {
+      loadMissionsCount();
+    });
+    return () => {
+      sub.remove();
+    };
   }, [isRescuer]);
 
   const handleNavigateToTab = React.useCallback((tab: TabName, options?: { filter?: MapFilterType; areaId?: string }) => {

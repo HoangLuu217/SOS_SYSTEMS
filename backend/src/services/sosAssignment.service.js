@@ -349,7 +349,19 @@ class SosAssignmentService {
           });
         } catch (err) {}
 
-        emitSosUpdated(sos);
+        try {
+          await assignment.populate([
+            { path: 'rescueTeamId', select: 'name code phone leaderId' },
+            { path: 'rescuerId', select: 'fullName phone avatarUrl' },
+            { path: 'vehicleId', select: 'plateNumber type capacity' },
+            { path: 'authorityOrganizationId', select: 'name code' },
+          ]);
+        } catch (popErr) {}
+
+        const sosObj = sos.toObject ? sos.toObject() : { ...sos };
+        sosObj.assignment = assignment.toObject ? assignment.toObject() : assignment;
+        sosObj.assignmentId = assignment._id;
+        emitSosUpdated(sosObj);
       }
     }
 
@@ -493,7 +505,19 @@ class SosAssignmentService {
           });
         } catch (err) {}
 
-        emitSosUpdated(sos);
+        try {
+          await assignment.populate([
+            { path: 'rescueTeamId', select: 'name code phone leaderId' },
+            { path: 'rescuerId', select: 'fullName phone avatarUrl' },
+            { path: 'vehicleId', select: 'plateNumber type capacity' },
+            { path: 'authorityOrganizationId', select: 'name code' },
+          ]);
+        } catch (popErr) {}
+
+        const sosObj = sos.toObject ? sos.toObject() : { ...sos };
+        sosObj.assignment = assignment.toObject ? assignment.toObject() : assignment;
+        sosObj.assignmentId = assignment._id;
+        emitSosUpdated(sosObj);
       }
     }
 
