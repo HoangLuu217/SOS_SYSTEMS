@@ -56,7 +56,12 @@ const calculateDistanceMeters = (coord1, coord2) => {
 
 const createSosRequest = async (citizenId, sosData) => {
   // Extract fields matching citizen mobile app form
-  const { location, areaId, address, emergencyType, priority, people, description, images, imageUrl, contactPhone, secondaryPhone, priorityGroups } = sosData;
+  const { location, areaId, address, emergencyType, emergencyTypes, priority, people, description, images, imageUrl, contactPhone, secondaryPhone, priorityGroups } = sosData;
+
+  const normalizedEmergencyTypes = Array.isArray(emergencyTypes) && emergencyTypes.length > 0
+    ? emergencyTypes
+    : (emergencyType ? [emergencyType] : ['FLOOD']);
+  const primaryEmergencyType = normalizedEmergencyTypes[0] || emergencyType || 'FLOOD';
 
   const normalizedImages = Array.isArray(images)
     ? images
@@ -134,7 +139,8 @@ const createSosRequest = async (citizenId, sosData) => {
     location,
     areaId: assignedAreaId,
     address: address || 'Khu vực cứu nạn (Định vị GPS)',
-    emergencyType: emergencyType || 'FLOOD',
+    emergencyType: primaryEmergencyType,
+    emergencyTypes: normalizedEmergencyTypes,
     priority: priority || 'HIGH',
     people: people ? Number(people) : 1,
     description: description ? description.replace(/⚡\s*/g, '').trim() : null,
@@ -323,6 +329,7 @@ const updateSosRequest = async (id, updateData, userId) => {
     'people',
     'priorityGroups',
     'emergencyType',
+    'emergencyTypes',
     'contactPhone',
     'secondaryPhone',
     'images',
@@ -331,6 +338,11 @@ const updateSosRequest = async (id, updateData, userId) => {
     if (updateData[field] !== undefined) {
       sos[field] = updateData[field];
     }
+  }
+
+  // Nếu cập nhật danh sách emergencyTypes, đồng bộ luôn emergencyType chính
+  if (Array.isArray(updateData.emergencyTypes) && updateData.emergencyTypes.length > 0) {
+    sos.emergencyType = updateData.emergencyTypes[0];
   }
 
   // Tự động làm sạch SĐT phụ nếu không hợp lệ

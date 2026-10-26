@@ -14,12 +14,44 @@ import {
   Animated,
   PanResponder,
   Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
+import { WebView } from 'react-native-webview';
+import * as Location from 'expo-location';
 import { PROFILE_THEME } from './theme';
 import { backendApi, EmergencyContact } from '@/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+/**
+ * Kiểm tra định dạng số điện thoại chuẩn thực tế tại Việt Nam:
+ * - 10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09 (hoặc +84)
+ * - Loại trừ các chuỗi số ảo, số rác phổ biến
+ */
+export const isValidVietnamesePhone = (phoneStr: string): boolean => {
+  if (!phoneStr) return false;
+  const clean = phoneStr.replace(/[\s\.\-]+/g, '');
+  const vnPhoneRegex = /^(?:\+84|0)(?:3|5|7|8|9)\d{8}$/;
+  if (!vnPhoneRegex.test(clean)) return false;
+
+  const junkNumbers = [
+    '0123456789',
+    '0987654321',
+    '0000000000',
+    '0999999999',
+    '0888888888',
+    '0777777777',
+    '0333333333',
+    '0555555555',
+  ];
+  if (junkNumbers.includes(clean)) return false;
+
+  const last8 = clean.slice(-8);
+  if (/^(\d)\1{7}$/.test(last8)) return false;
+
+  return true;
+};
 
 interface EmergencyContactScreenProps {
   onBack: () => void;
@@ -169,6 +201,20 @@ const ContactSwipeableRow: React.FC<ContactSwipeableRowProps> = ({
               </View>
             </View>
             <Text style={styles.savedPhone}>{contact.phone}</Text>
+            {contact.address ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
+                <Feather name="map-pin" size={11} color="#0284C7" style={{ marginRight: 4 }} />
+                <Text style={{ fontSize: 12, color: '#64748B', flexShrink: 1 }} numberOfLines={1}>
+                  {contact.address}
+                </Text>
+                {typeof contact.latitude === 'number' && typeof contact.longitude === 'number' && (
+                  <View style={styles.miniGpsTag}>
+                    <Ionicons name="location" size={9} color="#0284C7" />
+                    <Text style={styles.miniGpsTagText}>GPS</Text>
+                  </View>
+                )}
+              </View>
+            ) : null}
           </View>
         </TouchableOpacity>
 
@@ -190,7 +236,7 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
   onContactSaved,
 }) => {
   // Suggested relationship chips
-  const relationshipSuggestions = ['Cha', 'Mẹ', 'Vợ/Chồng', 'Anh/Chị/Em', 'Bạn bè', 'Khác'];
+  const relationshipSuggestions = ['Mẹ', 'Cha', 'Vợ/Chồng', 'Người yêu', 'Bạn thân', 'Anh/Chị/Em', 'Khác'];
 
   // Danh sách các người liên hệ khẩn cấp
   const [contacts, setContacts] = useState<EmergencyContact[]>([]);
@@ -200,8 +246,18 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
   // Form states
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [selectedRelation, setSelectedRelation] = useState('Cha');
+  const [address, setAddress] = useState('');
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [selectedRelation, setSelectedRelation] = useState('Mẹ');
   const [customRelation, setCustomRelation] = useState('');
+
+  // Map Picker Modal states
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [pickerCoords, setPickerCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [pickerAddress, setPickerAddress] = useState('');
+  const [isReverseGeocoding, setIsReverseGeocoding] = useState(false);
+  const mapPickerWebViewRef = useRef<WebView>(null);
 
   const [errors, setErrors] = useState<{ name?: string; phone?: string; relation?: string }>({});
   const [saving, setSaving] = useState(false);
@@ -263,7 +319,10 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
   const handleOpenAdd = () => {
     setName('');
     setPhone('');
-    setSelectedRelation('Cha');
+    setAddress('');
+    setLatitude(null);
+    setLongitude(null);
+    setSelectedRelation('Mẹ');
     setCustomRelation('');
     setErrors({});
     setEditingContactId(null);
@@ -274,6 +333,9 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
   const handleStartEditing = (contact: EmergencyContact) => {
     setName(contact.name || '');
     setPhone(contact.phone || '');
+    setAddress(contact.address || '');
+    setLatitude(typeof contact.latitude === 'number' ? contact.latitude : null);
+    setLongitude(typeof contact.longitude === 'number' ? contact.longitude : null);
     if (relationshipSuggestions.includes(contact.relation)) {
       setSelectedRelation(contact.relation);
       setCustomRelation('');
@@ -292,6 +354,7 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
     setErrors({});
   };
 
+  // Xác thực thông tin người liên hệ
   const validate = () => {
     const newErrors: { name?: string; phone?: string; relation?: string } = {};
 
@@ -299,10 +362,9 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
       newErrors.name = 'Vui lòng nhập họ và tên người liên hệ.';
     }
 
-    const phoneRegex = /^(?:\+84|0)(?:3|5|7|8|9)\d{8}$|^\+?[1-9]\d{8,14}$/;
-    const cleanPhone = phone.replace(/\s+/g, '');
-    if (!cleanPhone || !phoneRegex.test(cleanPhone)) {
-      newErrors.phone = 'Số điện thoại không hợp lệ (hỗ trợ định dạng 10 số VN).';
+    const cleanPhone = phone.replace(/[\s\.\-]+/g, '');
+    if (!cleanPhone || !isValidVietnamesePhone(cleanPhone)) {
+      newErrors.phone = 'Số điện thoại không hợp lệ (cần 10 số di động chuẩn VN: 03, 05, 07, 08, 09).';
     }
 
     if (selectedRelation === 'Khác' && !customRelation.trim()) {
@@ -313,12 +375,272 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
+  // Mở modal bản đồ Leaflet để chọn vị trí địa chỉ
+  const openMapPicker = async () => {
+    // 1. Nếu đã có toạ độ sẵn trong form
+    if (typeof latitude === 'number' && typeof longitude === 'number') {
+      setPickerCoords({ lat: latitude, lng: longitude });
+      setPickerAddress(address || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`);
+      setShowMapModal(true);
+      return;
+    }
+
+    // 2. Nếu đã có địa chỉ dạng chữ, thử geocode
+    if (address && address.trim()) {
+      setIsReverseGeocoding(true);
+      setShowMapModal(true);
+      try {
+        const geoResults = await Location.geocodeAsync(address.trim());
+        if (geoResults && geoResults.length > 0) {
+          const lat = geoResults[0].latitude;
+          const lng = geoResults[0].longitude;
+          setPickerCoords({ lat, lng });
+          setPickerAddress(address.trim());
+          mapPickerWebViewRef.current?.injectJavaScript(`window.setMapLocation(${lat}, ${lng}); true;`);
+          return;
+        }
+      } catch (err) {
+        console.warn('Geocoding error:', err);
+      } finally {
+        setIsReverseGeocoding(false);
+      }
+    }
+
+    // 3. Mặc định lấy vị trí hiện tại của thiết bị (fallback Đà Nẵng)
+    let fallbackLat = 15.96836;
+    let fallbackLng = 108.26054;
+    try {
+      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      fallbackLat = current.coords.latitude;
+      fallbackLng = current.coords.longitude;
+    } catch {}
+
+    setPickerCoords({ lat: fallbackLat, lng: fallbackLng });
+    setPickerAddress(address || 'Chạm vào vị trí trên bản đồ để chọn');
+    setShowMapModal(true);
+
+    if (!address) {
+      try {
+        const [geo] = await Location.reverseGeocodeAsync({ latitude: fallbackLat, longitude: fallbackLng });
+        if (geo) {
+          const parts = [geo.streetNumber, geo.street, geo.subregion, geo.district, geo.city || geo.region].filter(Boolean);
+          if (parts.length > 0) {
+            setPickerAddress(parts.join(', '));
+          }
+        }
+      } catch {}
+    }
+  };
+
+  // Lắng nghe sự kiện click / kéo thả marker trên bản đồ WebView Leaflet
+  const handleMapPickerMessage = async (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'MAP_CLICK') {
+        const { lat, lng } = data;
+        setPickerCoords({ lat, lng });
+        setIsReverseGeocoding(true);
+        try {
+          const [geo] = await Location.reverseGeocodeAsync({
+            latitude: lat,
+            longitude: lng,
+          });
+          if (geo) {
+            const parts = [
+              geo.streetNumber,
+              geo.street,
+              geo.subregion,
+              geo.district,
+              geo.city || geo.region,
+            ].filter(Boolean);
+            const addr = parts.length > 0 ? parts.join(', ') : `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+            setPickerAddress(addr);
+          } else {
+            setPickerAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+          }
+        } catch {
+          setPickerAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+        } finally {
+          setIsReverseGeocoding(false);
+        }
+      }
+    } catch {
+      // Bỏ qua lỗi parse
+    }
+  };
+
+  // Quay về vị trí GPS hiện tại của máy trong bản đồ
+  const moveToMyGps = async () => {
+    try {
+      setIsReverseGeocoding(true);
+      const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const lat = current.coords.latitude;
+      const lng = current.coords.longitude;
+      setPickerCoords({ lat, lng });
+      mapPickerWebViewRef.current?.injectJavaScript(`window.setMapLocation(${lat}, ${lng}); true;`);
+      try {
+        const [geo] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+        if (geo) {
+          const parts = [geo.streetNumber, geo.street, geo.subregion, geo.district, geo.city || geo.region].filter(Boolean);
+          setPickerAddress(parts.join(', '));
+        }
+      } catch {
+        setPickerAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+      }
+    } catch {
+      Alert.alert('Không thể lấy GPS', 'Vui lòng kiểm tra quyền truy cập vị trí của thiết bị.');
+    } finally {
+      setIsReverseGeocoding(false);
+    }
+  };
+
+  // Xác nhận vị trí đã chọn trên bản đồ cho người thân
+  const handleConfirmMapLocation = () => {
+    if (pickerCoords) {
+      setLatitude(pickerCoords.lat);
+      setLongitude(pickerCoords.lng);
+      setAddress(pickerAddress || `${pickerCoords.lat.toFixed(5)}, ${pickerCoords.lng.toFixed(5)}`);
+    }
+    setShowMapModal(false);
+  };
+
+  // HTML bản đồ Leaflet tương tác
+  const generatePickerMapHtml = (lat: number, lng: number) => `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+      <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body, #map { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #f1f5f9; }
+        @keyframes pulseWave {
+          0% { transform: scale(0.6); opacity: 0.95; }
+          70% { transform: scale(1.6); opacity: 0; }
+          100% { transform: scale(1.8); opacity: 0; }
+        }
+        .sos-picker-pin {
+          position: relative;
+          width: 48px;
+          height: 48px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          touch-action: none;
+          user-select: none;
+          -webkit-user-select: none;
+          cursor: grab;
+        }
+        .sos-picker-pin * {
+          pointer-events: none;
+        }
+        .sos-picker-wave {
+          position: absolute;
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          background-color: rgba(0, 102, 255, 0.4);
+          border: 2px solid #0066FF;
+          animation: pulseWave 1.5s ease-out infinite;
+        }
+        .sos-picker-core {
+          position: relative;
+          width: 36px;
+          height: 36px;
+          background: #0066FF;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          box-shadow: 0 0 12px rgba(0, 102, 255, 0.8), 0 3px 6px rgba(0,0,0,0.3);
+          border: 2.5px solid white;
+          z-index: 2;
+          transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .is-dragging .sos-picker-core {
+          transform: scale(1.28) translateY(-8px);
+          box-shadow: 0 12px 24px rgba(0, 102, 255, 0.6), 0 4px 8px rgba(0,0,0,0.3);
+          background: #0052CC;
+        }
+        .is-dragging .sos-picker-wave {
+          opacity: 0;
+        }
+        .leaflet-control-attribution {
+          display: none !important;
+        }
+      </style>
+    </head>
+    <body>
+      <div id="map"></div>
+      <script>
+        var map = L.map('map', { zoomControl: false, preferCanvas: true, attributionControl: false }).setView([${lat}, ${lng}], 16);
+        L.control.zoom({ position: 'topright' }).addTo(map);
+
+        L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&apistyle=s.t:33|p.v:off%2Cs.t:21|s.e:l|p.v:off&x={x}&y={y}&z={z}', {
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 20
+        }).addTo(map);
+
+        var pinIcon = L.divIcon({
+          html: '<div class="sos-picker-pin"><div class="sos-picker-wave"></div><div class="sos-picker-core"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"/><circle cx="12" cy="10" r="3"/></svg></div></div>',
+          className: 'custom-picker-pin',
+          iconSize: [48, 48],
+          iconAnchor: [24, 24]
+        });
+
+        var marker = L.marker([${lat}, ${lng}], {
+          icon: pinIcon,
+          draggable: true,
+          autoPan: true
+        }).addTo(map);
+
+        marker.on('dragstart', function() {
+          var el = marker.getElement();
+          if (el) el.classList.add('is-dragging');
+        });
+
+        marker.on('dragend', function(e) {
+          var el = marker.getElement();
+          if (el) el.classList.remove('is-dragging');
+          var pos = marker.getLatLng();
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'MAP_CLICK',
+              lat: pos.lat,
+              lng: pos.lng
+            }));
+          }
+        });
+
+        map.on('click', function(e) {
+          marker.setLatLng(e.latlng);
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'MAP_CLICK',
+              lat: e.latlng.lat,
+              lng: e.latlng.lng
+            }));
+          }
+        });
+
+        window.setMapLocation = function(newLat, newLng) {
+          map.setView([newLat, newLng], 16);
+          marker.setLatLng([newLat, newLng]);
+        };
+      </script>
+    </body>
+    </html>
+  `;
+
   // Lưu liên hệ: Cập nhật UI & local storage NGAY TỨC THÌ (Optimistic Update)
   const handleSaveContact = () => {
     if (!validate()) return;
 
     const relationFinal = selectedRelation === 'Khác' ? customRelation.trim() : selectedRelation;
-    const cleanPhone = phone.replace(/\s+/g, '');
+    const cleanPhone = phone.replace(/[\s\.\-]+/g, '');
+    const cleanAddress = address.trim() || undefined;
 
     let updatedContacts: EmergencyContact[] = [];
 
@@ -326,7 +648,15 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
       // Cập nhật người liên hệ hiện tại
       updatedContacts = contacts.map((c) =>
         c.id === editingContactId
-          ? { ...c, name: name.trim(), phone: cleanPhone, relation: relationFinal }
+          ? {
+              ...c,
+              name: name.trim(),
+              phone: cleanPhone,
+              relation: relationFinal,
+              address: cleanAddress,
+              latitude: typeof latitude === 'number' ? latitude : c.latitude,
+              longitude: typeof longitude === 'number' ? longitude : c.longitude,
+            }
           : c
       );
     } else {
@@ -336,6 +666,9 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
         name: name.trim(),
         phone: cleanPhone,
         relation: relationFinal,
+        address: cleanAddress,
+        latitude: typeof latitude === 'number' ? latitude : undefined,
+        longitude: typeof longitude === 'number' ? longitude : undefined,
       };
       updatedContacts = [...contacts, newContact];
     }
@@ -570,7 +903,7 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
               {/* Field: Họ và tên */}
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>
-                  Họ và tên người liên hệ <Text style={styles.requiredStar}>*</Text>
+                  Họ và tên người liên hệ: <Text style={styles.requiredStar}>*</Text>
                 </Text>
                 <View style={[styles.inputBox, errors.name ? styles.inputBoxError : null]}>
                   <Feather name="user" size={18} color="#64748B" style={styles.fieldIcon} />
@@ -591,9 +924,16 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
               {/* Field: Số điện thoại */}
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>
-                  Số điện thoại <Text style={styles.requiredStar}>*</Text>
+                  Số điện thoại: <Text style={styles.requiredStar}>*</Text>
                 </Text>
-                <View style={[styles.inputBox, errors.phone ? styles.inputBoxError : null]}>
+                <View
+                  style={[
+                    styles.inputBox,
+                    errors.phone || (phone.trim().length >= 4 && !isValidVietnamesePhone(phone))
+                      ? styles.inputBoxError
+                      : null,
+                  ]}
+                >
                   <Feather name="phone" size={18} color="#64748B" style={styles.fieldIcon} />
                   <TextInput
                     style={styles.textInput}
@@ -605,14 +945,21 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
                     placeholder="Ví dụ: 0912 345 678"
                     placeholderTextColor="#94A3B8"
                     keyboardType="phone-pad"
+                    maxLength={12}
                   />
                 </View>
-                {errors.phone ? <Text style={styles.fieldErrorText}>{errors.phone}</Text> : null}
+                {errors.phone ? (
+                  <Text style={styles.fieldErrorText}>{errors.phone}</Text>
+                ) : phone.trim().length >= 4 && !isValidVietnamesePhone(phone) ? (
+                  <Text style={styles.fieldErrorText}>
+                    * Cần 10 số di động chuẩn VN (bắt đầu bằng 03, 05, 07, 08, 09)
+                  </Text>
+                ) : null}
               </View>
 
               {/* Field: Mối quan hệ */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Mối quan hệ</Text>
+                <Text style={styles.fieldLabel}>Mối quan hệ:</Text>
                 <View style={styles.chipsRow}>
                   {relationshipSuggestions.map((item) => {
                     const isSelected = selectedRelation === item;
@@ -660,6 +1007,60 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
                 {errors.relation ? <Text style={styles.fieldErrorText}>{errors.relation}</Text> : null}
               </View>
 
+              {/* Field: Địa chỉ người thân */}
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Địa chỉ của người thân:</Text>
+
+                <View style={styles.inputBox}>
+                  <TouchableOpacity
+                    onPress={openMapPicker}
+                    activeOpacity={0.75}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={styles.inputLeftMapBtn}
+                  >
+                    <Ionicons name="location" size={17} color="#0066FF" />
+                  </TouchableOpacity>
+
+                  <TextInput
+                    style={styles.textInput}
+                    value={address}
+                    onChangeText={(t) => {
+                      setAddress(t);
+                      if (!t.trim()) {
+                        setLatitude(null);
+                        setLongitude(null);
+                      }
+                    }}
+                    placeholder="Chạm icon bản đồ hoặc nhập địa chỉ"
+                    placeholderTextColor="#94A3B8"
+                  />
+
+                  {address ? (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setAddress('');
+                        setLatitude(null);
+                        setLongitude(null);
+                      }}
+                      style={{ padding: 4 }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Feather name="x-circle" size={16} color="#94A3B8" />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                {/* Badge thông báo đã ghim toạ độ GPS chính xác */}
+                {typeof latitude === 'number' && typeof longitude === 'number' && (
+                  <View style={styles.coordsAttachedBadge}>
+                    <Ionicons name="checkmark-circle" size={14} color="#10B981" style={{ marginRight: 5 }} />
+                    <Text style={styles.coordsAttachedText}>
+                      Đã ghim toạ độ GPS: {latitude.toFixed(5)}, {longitude.toFixed(5)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
               {/* Nhóm nút trong form */}
               <View style={styles.formActionRow}>
                 <TouchableOpacity
@@ -679,21 +1080,104 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
                   {saving ? (
                     <ActivityIndicator color="#FFFFFF" size="small" />
                   ) : (
-                    <View style={styles.btnRow}>
-                      <Feather name="check" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.formSaveBtnText}>
-                        {editingContactId ? 'Cập nhật' : 'Lưu liên hệ'}
-                      </Text>
-                    </View>
+                    <Text style={styles.formSaveBtnText}>
+                      {editingContactId ? 'Cập nhật' : 'Lưu liên hệ'}
+                    </Text>
                   )}
                 </TouchableOpacity>
               </View>
             </View>
           )}
-
-          <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* MODAL BẢN ĐỒ CHỌN ĐỊA CHỈ NGƯỜI THÂN */}
+      <Modal
+        visible={showMapModal}
+        animationType="slide"
+        onRequestClose={() => setShowMapModal(false)}
+      >
+        <SafeAreaView style={styles.mapModalContainer} edges={['top', 'bottom']}>
+          <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
+          {/* Header Modal */}
+          <View style={styles.mapModalHeader}>
+            <TouchableOpacity
+              style={styles.mapModalBackBtn}
+              onPress={() => setShowMapModal(false)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Feather name="arrow-left" size={22} color="#0F172A" />
+            </TouchableOpacity>
+
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <Text style={styles.mapModalTitle}>Chọn địa chỉ người thân</Text>
+              <Text style={styles.mapModalSubtitle}>Chạm hoặc kéo ghim đến đúng nhà người thân</Text>
+            </View>
+
+            {/* Nút định vị GPS máy */}
+            <TouchableOpacity
+              style={styles.mapModalGpsBtn}
+              onPress={moveToMyGps}
+              activeOpacity={0.75}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="locate" size={20} color="#0066FF" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Floating Address Bar */}
+          <View style={styles.mapModalAddressBar}>
+            <View style={styles.mapModalAddressIconWrap}>
+              <Ionicons name="location-sharp" size={20} color="#0066FF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.mapModalAddressLabel}>Vị trí đang chọn:</Text>
+              <Text style={styles.mapModalAddressText} numberOfLines={2}>
+                {isReverseGeocoding
+                  ? 'Đang xác định địa chỉ...'
+                  : pickerAddress ||
+                    (pickerCoords ? `${pickerCoords.lat.toFixed(5)}, ${pickerCoords.lng.toFixed(5)}` : 'Chạm trên bản đồ để chọn')}
+              </Text>
+            </View>
+            {isReverseGeocoding && <ActivityIndicator size="small" color="#0066FF" style={{ marginLeft: 6 }} />}
+          </View>
+
+          {/* Bản đồ Leaflet WebView */}
+          <View style={styles.mapWebViewContainer}>
+            {pickerCoords && (
+              <WebView
+                ref={mapPickerWebViewRef}
+                source={{ html: generatePickerMapHtml(pickerCoords.lat, pickerCoords.lng) }}
+                onMessage={handleMapPickerMessage}
+                style={{ flex: 1 }}
+                javaScriptEnabled
+                domStorageEnabled
+                startInLoadingState
+                renderLoading={() => (
+                  <View style={styles.mapLoadingOverlay}>
+                    <ActivityIndicator size="large" color="#0066FF" />
+                    <Text style={{ marginTop: 8, fontSize: 13, color: '#64748B' }}>Đang tải bản đồ...</Text>
+                  </View>
+                )}
+              />
+            )}
+          </View>
+
+          {/* Footer Xác nhận vị trí */}
+          <View style={styles.mapModalFooter}>
+            <TouchableOpacity
+              style={styles.confirmMapLocationBtn}
+              onPress={handleConfirmMapLocation}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.confirmMapLocationBtnText}>XÁC NHẬN ĐỊA CHỈ NÀY</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -766,7 +1250,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 24,
+    paddingBottom: 16,
     gap: 16,
   },
   infoCard: {
@@ -1133,5 +1617,166 @@ const styles = StyleSheet.create({
   btnRow: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  // Icon bản đồ bên trái ô input
+  inputLeftMapBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    marginRight: 8,
+  },
+  coordsAttachedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  coordsAttachedText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#065F46',
+  },
+  miniGpsTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    marginLeft: 6,
+    borderWidth: 0.5,
+    borderColor: '#BFDBFE',
+  },
+  miniGpsTagText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#0284C7',
+    marginLeft: 2,
+  },
+  // Modal bản đồ
+  mapModalContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  mapModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
+  },
+  mapModalBackBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  mapModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  mapModalSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  mapModalGpsBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  mapModalAddressBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  mapModalAddressIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  mapModalAddressLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  mapModalAddressText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 1,
+  },
+  mapWebViewContainer: {
+    flex: 1,
+    position: 'relative',
+    backgroundColor: '#F1F5F9',
+  },
+  mapLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  mapModalFooter: {
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  confirmMapLocationBtn: {
+    backgroundColor: '#0066FF',
+    height: 50,
+    borderRadius: 14,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#0066FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  confirmMapLocationBtnText: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
 });

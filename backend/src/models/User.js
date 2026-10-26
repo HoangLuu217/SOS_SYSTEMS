@@ -22,6 +22,9 @@ const citizenSchema = new mongoose.Schema(
         },
       },
       relation: { type: String, trim: true, default: null },
+      address: { type: String, trim: true, default: null },
+      latitude: { type: Number, default: null },
+      longitude: { type: Number, default: null },
     },
     emergencyContacts: [
       {
@@ -30,6 +33,9 @@ const citizenSchema = new mongoose.Schema(
         name: { type: String, trim: true },
         phone: { type: String, trim: true },
         relation: { type: String, trim: true },
+        address: { type: String, trim: true, default: null },
+        latitude: { type: Number, default: null },
+        longitude: { type: Number, default: null },
       },
     ],
     areaId: {

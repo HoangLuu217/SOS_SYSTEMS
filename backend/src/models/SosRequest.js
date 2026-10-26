@@ -84,11 +84,17 @@ const sosRequestSchema = new mongoose.Schema(
           'STORM',
           'ACCIDENT',
           'MISSING_PERSON',
+          'FOOD',
+          'EVACUATION',
           'OTHER',
         ],
         message: 'Loại khẩn cấp {VALUE} không hợp lệ',
       },
     },
+    emergencyTypes: [{
+      type: String,
+      trim: true,
+    }],
     priority: {
       type: String,
       required: [true, 'Mức độ ưu tiên là bắt buộc'],
