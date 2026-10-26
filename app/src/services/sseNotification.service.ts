@@ -26,17 +26,17 @@ class SSENotificationService {
 
     this.isManualDisconnect = false;
 
+    if (!this.currentUserId) {
+      this.disconnect();
+      return;
+    }
+
     // Hủy kết nối cũ trước khi mở kết nối mới
     this.cleanupCurrentConnection();
 
     try {
       const baseUrl = await backendApi.getBaseUrl();
-      const params = new URLSearchParams();
-      if (this.currentUserId) params.append('userId', this.currentUserId);
-      if (this.currentAreaId) params.append('areaId', this.currentAreaId);
-
-      const qStr = params.toString() ? `?${params.toString()}` : '';
-      const streamUrl = `${baseUrl}/notifications/stream${qStr}`;
+      const streamUrl = `${baseUrl}/notifications/stream`;
       this.currentUrl = streamUrl;
 
       console.log(`📡 [SSE_NOTIFICATION] Đang kết nối SSE Stream: ${streamUrl}`);
@@ -46,8 +46,12 @@ class SSENotificationService {
       xhr.open('GET', streamUrl, true);
       xhr.setRequestHeader('Accept', 'text/event-stream');
       xhr.setRequestHeader('Cache-Control', 'no-cache');
+      const accessToken = await backendApi.getAccessToken();
+      if (!accessToken) throw new Error('Chưa có access token để mở kết nối thông báo.');
+      xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
 
       let lastIndex = 0;
+      let pendingText = '';
 
       const processChunks = () => {
         if (this.xhr !== xhr) return;
@@ -64,7 +68,8 @@ class SSENotificationService {
         const newChunk = text.slice(lastIndex);
         lastIndex = text.length;
 
-        const lines = newChunk.split('\n');
+        const lines = (pendingText + newChunk).split('\n');
+        pendingText = lines.pop() || '';
         for (const line of lines) {
           const trimmed = line.trim();
           if (trimmed.startsWith('data:')) {

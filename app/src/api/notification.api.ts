@@ -35,6 +35,10 @@ export class NotificationApi {
     });
   }
 
+  async updateCurrentLocation(latitude: number, longitude: number): Promise<ApiResponse<{ updatedAt: string }>> {
+    return await this.client.patch('/notifications/location', { latitude, longitude });
+  }
+
   /**
    * Đánh dấu tất cả thông báo đã đọc
    */

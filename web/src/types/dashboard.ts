@@ -162,21 +162,6 @@ export interface RescueTeamItem {
   createdAt?: string;
 }
 
-export interface AlertItem {
-  _id: string;
-  title: string;
-  content: string;
-  type: string;
-  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-  areaId?: {
-    _id: string;
-    name: string;
-  } | string;
-  startTime: string;
-  endTime?: string;
-  isActive: boolean;
-  createdAt?: string;
-}
 
 export interface AuditLogItem {
   _id: string;
@@ -296,5 +281,54 @@ export interface SafeLocationItem {
     fullName: string;
   } | string;
   createdAt?: string;
+}
+
+export interface WeatherNotificationItem {
+  _id: string;
+  title: string;
+  content: string;
+  weatherType:
+    | 'GENERAL'
+    | 'HEAVY_RAIN'
+    | 'STORM'
+    | 'TYPHOON'
+    | 'THUNDERSTORM'
+    | 'FLASH_FLOOD'
+    | 'HEATWAVE'
+    | 'COLD_SURGE'
+    | 'HIGH_TIDE'
+    | string;
+  severity: 'LOW' | 'NORMAL' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  imageUrl?: string;
+  articleUrl?: string;
+  sourceName?: string;
+  areaId?: any;
+  areaName?: string;
+  affectedAreas?: any[];
+  temperature?: {
+    min?: number;
+    max?: number;
+    unit?: string;
+  };
+  rainfall?: {
+    min?: number;
+    max?: number;
+    unit?: string;
+  };
+  windLevel?: string;
+  humidity?: number;
+  startTime?: string;
+  endTime?: string;
+  status: 'ACTIVE' | 'EXPIRED' | 'CANCELLED';
+  createdBy?: {
+    _id: string;
+    fullName: string;
+    roles?: string[];
+  };
+  broadcastId?: string;
+  isBroadcasted?: boolean;
+  data?: any;
+  createdAt: string;
+  updatedAt?: string;
 }
 

@@ -13,3 +13,4 @@ export * from './chat';
 export * from './audit';
 export * from './auth';
 export * from './map-operation';
+export * from './weather';

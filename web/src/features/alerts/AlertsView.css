@@ -136,6 +136,24 @@
   box-shadow: 0 0 20px rgba(37, 99, 235, 0.15);
 }
 
+.sos-notif-category-card.safe-active {
+  background: rgba(22, 163, 74, 0.12);
+  border-color: #16a34a;
+  box-shadow: 0 0 20px rgba(22, 163, 74, 0.12);
+}
+
+.sos-notif-category-card.weather-active {
+  background: rgba(2, 132, 199, 0.12);
+  border-color: #0284c7;
+  box-shadow: 0 0 20px rgba(2, 132, 199, 0.12);
+}
+
+.sos-notif-category-card.hazard-active {
+  background: rgba(234, 88, 12, 0.12);
+  border-color: #ea580c;
+  box-shadow: 0 0 20px rgba(234, 88, 12, 0.12);
+}
+
 .sos-notif-card-header {
   display: flex;
   align-items: center;
@@ -201,6 +219,21 @@
 [data-theme="light"] .sos-notif-category-card.system-active {
   background: #eff6ff;
   border-color: #2563eb;
+}
+
+[data-theme="light"] .sos-notif-category-card.safe-active {
+  background: #f0fdf4;
+  border-color: #16a34a;
+}
+
+[data-theme="light"] .sos-notif-category-card.weather-active {
+  background: #f0f9ff;
+  border-color: #0284c7;
+}
+
+[data-theme="light"] .sos-notif-category-card.hazard-active {
+  background: #fff7ed;
+  border-color: #ea580c;
 }
 
 [data-theme="light"] .sos-notif-card-title {

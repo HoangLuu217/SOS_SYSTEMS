@@ -30,9 +30,17 @@ export const NAV_TITLES: Record<NavItemKey, NavMeta> = {
     title: 'PHƯƠNG TIỆN & VẬT TƯ',
     desc: 'Quản lý thuyền cano, xe cấp cứu, áo phao, túi y tế ứng phó thiên tai lũ lụt',
   },
+  notifications: {
+    title: 'GỬI THÔNG BÁO',
+    desc: 'Quản trị viên và cán bộ gửi thông báo khẩn cấp, cảnh báo thiên tai hoặc thông báo hệ thống tới người dân',
+  },
   alerts: {
-    title: 'PHÁT CẢNH BÁO ĐỊA PHƯƠNG',
-    desc: 'Cán bộ phát cảnh báo thiên tai khẩn cấp tới toàn thể người dân trong cùng địa bàn quản lý',
+    title: 'GỬI THÔNG BÁO',
+    desc: 'Quản trị viên và cán bộ gửi thông báo khẩn cấp, cảnh báo thiên tai hoặc thông báo hệ thống tới người dân',
+  },
+  weather: {
+    title: 'BẢN TIN & CẢNH BÁO THỜI TIẾT',
+    desc: 'Theo dõi, khởi tạo và quản lý các bản tin dự báo, cảnh báo bão lũ và thiên tai',
   },
   shelters: {
     title: 'ĐIỂM TRÚ ẨN & TRẠM Y TẾ AN TOÀN',

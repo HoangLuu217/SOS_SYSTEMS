@@ -20,6 +20,7 @@ import { CoordinationView } from '@/features/coordination';
 import { RescuersView } from '@/features/rescuers';
 import { ResourcesView } from '@/features/resources';
 import { AlertsView } from '@/features/alerts';
+import { WeatherView } from '@/features/weather';
 import { SheltersView } from '@/features/shelters';
 import { HazardReportsView } from '@/features/hazards';
 import {
@@ -71,8 +72,25 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
       return <ResourcesView user={user} />;
 
     // 5. Phát thông báo & Cảnh báo thiên tai
+    case 'notifications':
     case 'alerts':
       return <AlertsView user={user} />;
+
+    // 5.1. Bản tin & Cảnh báo thời tiết (Chỉ dành riêng cho ADMIN)
+    case 'weather': {
+      const isAdmin = Boolean(user?.roles?.includes('ADMIN'));
+      if (!isAdmin) {
+        return (
+          <div className="sos-views-container" style={{ padding: 24, textAlign: 'center' }}>
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 32 }}>
+              <h3 style={{ color: '#ef4444', marginBottom: 8, fontWeight: 700 }}>Không có quyền truy cập</h3>
+              <p style={{ color: '#64748b', margin: 0 }}>Chức năng Quản lý Bản tin & Cảnh báo thời tiết chỉ dành riêng cho Quản trị viên hệ thống (Admin).</p>
+            </div>
+          </div>
+        );
+      }
+      return <WeatherView user={user} />;
+    }
 
     // 6. Điểm trú ẩn an toàn
     case 'shelters':

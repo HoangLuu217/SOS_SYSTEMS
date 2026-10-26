@@ -74,6 +74,19 @@ class NotificationController {
   }
 
   /**
+   * PATCH /notifications/location
+   * Lưu vị trí foreground gần nhất để giới hạn broadcast điểm an toàn/nguy hiểm theo GPS.
+   */
+  async updateCurrentLocation(req, res, next) {
+    try {
+      const result = await notificationService.updateCurrentLocation(req.user._id, req.body);
+      return sendSuccess(res, 200, 'Đã cập nhật vị trí GPS.', result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * GET /notifications/:id
    */
   async getNotificationById(req, res, next) {
@@ -144,8 +157,12 @@ class NotificationController {
       res.flushHeaders();
     }
 
-    const clientUserId = req.query?.userId || (req.user ? req.user._id.toString() : null);
-    const clientAreaId = req.query?.areaId || null;
+    // The authenticated identity is authoritative. Never trust a userId supplied in the URL.
+    const clientUserId = req.user?._id?.toString();
+    if (!clientUserId) {
+      res.end();
+      return;
+    }
 
     res.write(`data: ${JSON.stringify({ type: 'CONNECTED', timestamp: Date.now() })}\n\n`);
     if (typeof res.flush === 'function') res.flush();
@@ -162,9 +179,10 @@ class NotificationController {
         return;
       }
 
-      // Thông báo broadcast toàn hệ thống hoặc theo khu vực
-      res.write(`data: ${JSON.stringify(payload)}\n\n`);
-      if (typeof res.flush === 'function') res.flush();
+      if (payload.action === 'DELETED' || payload.action === 'BROADCAST') {
+        res.write(`data: ${JSON.stringify(payload)}\n\n`);
+        if (typeof res.flush === 'function') res.flush();
+      }
     };
 
     eventBus.on('notification_event', onNotificationEvent);

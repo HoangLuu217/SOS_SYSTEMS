@@ -10,7 +10,6 @@ const {
   SosRequest,
   HazardReport,
   SafeLocation,
-  Alert,
 } = require('./models');
 
 const seed = async () => {
@@ -491,82 +490,6 @@ const seed = async () => {
       if (!exists) {
         await SafeLocation.create(loc);
         console.log(`✅ Đã tạo SafeLocation: ${loc.name}`);
-      }
-    }
-
-    // 10. Tạo các Cảnh báo thiên tai mẫu (Alerts)
-    const sampleAlerts = [
-      {
-        title: 'Cảnh báo ngập lụt cục bộ do triều cường sông Hàn',
-        content: 'Mực nước dâng cao gây ngập 0.5m - 1.2m tại các tuyến đường trũng thấp ven sông Hàn. Người dân không di chuyển bằng xe máy.',
-        type: 'FLOOD',
-        severity: 'HIGH',
-        location: {
-          type: 'Point',
-          coordinates: [108.2235, 16.0645],
-        },
-        radius: 800,
-        areaId: area._id,
-        startTime: new Date(Date.now() - 3600000 * 2),
-        endTime: new Date(Date.now() + 3600000 * 24),
-        isActive: true,
-        createdBy: admin._id,
-      },
-      {
-        title: 'Nguy cơ sạt lở đất nghiêm trọng tại bán đảo Sơn Trà',
-        content: 'Mưa lớn kéo dài làm mềm đất đá ven đường dốc. Tạm dừng lưu thông trên tuyến Hoàng Sa lên Đỉnh Bàn Cờ.',
-        type: 'LANDSLIDE',
-        severity: 'CRITICAL',
-        location: {
-          type: 'Point',
-          coordinates: [108.275, 16.115],
-        },
-        radius: 1500,
-        areaId: area._id,
-        startTime: new Date(Date.now() - 3600000),
-        endTime: new Date(Date.now() + 3600000 * 48),
-        isActive: true,
-        createdBy: admin._id,
-      },
-      {
-        title: 'Cảnh báo lốc xoáy và gió giật mạnh ven biển Mỹ Khê',
-        content: 'Gió giật cấp 8-9, sóng biển cao 3-4m. Cấm tắm biển và cấm tất cả các phương tiện ghe thuyền ra khơi.',
-        type: 'STORM',
-        severity: 'MEDIUM',
-        location: {
-          type: 'Point',
-          coordinates: [108.248, 16.062],
-        },
-        radius: 1200,
-        areaId: area._id,
-        startTime: new Date(),
-        endTime: new Date(Date.now() + 3600000 * 12),
-        isActive: true,
-        createdBy: admin._id,
-      },
-      {
-        title: 'Cảnh báo khói bụi đám cháy kho phế liệu Cẩm Lệ',
-        content: 'Đám cháy đã được cô lập nhưng lượng khói độc hại cao. Người dân trong bán kính 600m nên đóng kín cửa và đeo khẩu trang.',
-        type: 'FIRE',
-        severity: 'HIGH',
-        location: {
-          type: 'Point',
-          coordinates: [108.198, 16.022],
-        },
-        radius: 700,
-        areaId: area._id,
-        startTime: new Date(Date.now() - 1800000),
-        endTime: new Date(Date.now() + 3600000 * 6),
-        isActive: true,
-        createdBy: admin._id,
-      },
-    ];
-
-    for (const alt of sampleAlerts) {
-      const exists = await Alert.findOne({ title: alt.title });
-      if (!exists) {
-        await Alert.create(alt);
-        console.log(`✅ Đã tạo Alert: ${alt.title}`);
       }
     }
 

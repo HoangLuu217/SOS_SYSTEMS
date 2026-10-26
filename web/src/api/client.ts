@@ -49,7 +49,11 @@ export async function refreshAccessToken(): Promise<string | null> {
 /**
  * Helper gọi API kèm Header Authorization token tự động và xử lý fallback URL & Silent Refresh Token
  */
-export async function fetchWithAuth<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+export async function fetchWithAuth<T>(
+  endpoint: string,
+  options: RequestInit = {},
+  behavior: { directFallback?: boolean } = {}
+): Promise<T> {
   let token = localStorage.getItem('sos_access_token');
   const userStr = localStorage.getItem('sos_auth_user');
   let userId = '';
@@ -100,9 +104,6 @@ export async function fetchWithAuth<T>(endpoint: string, options: RequestInit = 
       }
     }
 
-    if (!res.ok && res.status >= 500) {
-      throw new Error(`Proxy error HTTP ${res.status}`);
-    }
     const data = await safeParseResponse(res);
     if (!res.ok) {
       throw new Error(data.message || 'Lỗi xử lý yêu cầu máy chủ');
@@ -113,9 +114,13 @@ export async function fetchWithAuth<T>(endpoint: string, options: RequestInit = 
     if (
       message.includes('Failed to fetch') ||
       message.includes('NetworkError') ||
-      message.includes('Proxy error') ||
       message.includes('không phản hồi')
     ) {
+      // Non-repeatable requests can opt out when an ambiguous network failure
+      // might mean the server already processed the original request.
+      if (behavior.directFallback === false) {
+        throw err;
+      }
       const directRes = await fetch(`${DIRECT_BACKEND}${endpoint}`, mergedOptions);
       const directData = await safeParseResponse(directRes);
       if (!directRes.ok) {

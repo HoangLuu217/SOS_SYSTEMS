@@ -1,31 +1,14 @@
 import { fetchWithAuth } from './client';
-import type { AlertItem } from '@/types/dashboard';
-
-export async function fetchAlerts(): Promise<{ success: boolean; data: AlertItem[] }> {
-  return fetchWithAuth('/alerts', { method: 'GET' });
-}
-
-export async function createAlert(payload: {
-  areaId: string;
-  title: string;
-  content: string;
-  type: string;
-  severity: string;
-  startTime?: string;
-  endTime?: string;
-}): Promise<{ success: boolean; data: AlertItem }> {
-  return fetchWithAuth('/alerts', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
 
 export interface BroadcastNotificationPayload {
   title: string;
   content: string;
-  type: 'INSTANT' | 'SYSTEM' | string;
+  type: 'INSTANT' | 'SYSTEM' | 'WEATHER' | 'SAFE_LOCATION' | 'HAZARD' | string;
   areaId?: string;
   priority?: 'NORMAL' | 'HIGH' | 'CRITICAL' | string;
+  imageUrl?: string;
+  articleUrl?: string;
+  sourceName?: string;
   data?: any;
 }
 
@@ -35,6 +18,9 @@ export interface BroadcastItem {
   content: string;
   type: 'INSTANT' | 'SYSTEM' | string;
   priority?: string;
+  imageUrl?: string;
+  articleUrl?: string;
+  sourceName?: string;
   areaName?: string;
   areaId?: string;
   createdBy?: {
@@ -77,7 +63,11 @@ export async function deleteBroadcastApi(id: string): Promise<{ success: boolean
 export function subscribeNotificationEvents(onEvent: (payload: { action: 'BROADCAST' | 'USER' | 'DELETED'; data?: any; broadcastId?: string }) => void): () => void {
   let eventSource: EventSource | null = null;
   try {
-    eventSource = new EventSource('/api/notifications/stream');
+    const token = localStorage.getItem('sos_access_token');
+    const url = token
+      ? `/api/notifications/stream?token=${encodeURIComponent(token)}`
+      : '/api/notifications/stream';
+    eventSource = new EventSource(url, { withCredentials: true });
     eventSource.onmessage = (e) => {
       try {
         const payload = JSON.parse(e.data);

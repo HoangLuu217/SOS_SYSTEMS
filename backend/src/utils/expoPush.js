@@ -6,6 +6,7 @@ async function sendExpoPushNotification({
   title,
   body,
   data = {},
+  dataByToken = {},
   priority = 'high',
   sound = 'default',
 }) {
@@ -34,23 +35,30 @@ async function sendExpoPushNotification({
     channelId: 'emergency-alerts',
     data: {
       ...data,
+      ...(dataByToken[token] || {}),
       timestamp: new Date().toISOString(),
     },
   }));
 
   try {
-    const response = await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Accept-Encoding': 'gzip, deflate',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(messages),
-    });
-
-    const result = await response.json();
-    return { success: true, result };
+    const results = [];
+    for (let index = 0; index < messages.length; index += 100) {
+      const response = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Accept-Encoding': 'gzip, deflate',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(messages.slice(index, index + 100)),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        return { success: false, status: response.status, result };
+      }
+      results.push(result);
+    }
+    return { success: true, result: results.flatMap((batch) => batch.data || []) };
   } catch (error) {
     console.error('Lỗi khi gửi Expo Push Notification:', error.message);
     return { success: false, error: error.message };

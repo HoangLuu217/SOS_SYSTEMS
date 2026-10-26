@@ -52,7 +52,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       <main
         className="sos-main-content"
         style={{
-          overflow: 'hidden',
+          overflow:
+            (activeNavKey === 'map' && isAuthority) ||
+            activeNavKey === 'hazard_reports' ||
+            activeNavKey === 'shelters' ||
+            activeNavKey === 'notifications' ||
+            activeNavKey === 'alerts'
+              ? 'hidden'
+              : 'auto',
           height: '100vh',
           display: 'flex',
           flexDirection: 'column',
@@ -114,11 +121,23 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
                 minHeight: 0,
-                overflow: 'hidden',
-                padding: '12px 18px 14px',
+                overflow:
+                  activeNavKey === 'hazard_reports' ||
+                  activeNavKey === 'shelters' ||
+                  activeNavKey === 'notifications' ||
+                  activeNavKey === 'alerts'
+                    ? 'hidden'
+                    : 'auto',
+                padding:
+                  activeNavKey === 'hazard_reports' ||
+                  activeNavKey === 'shelters' ||
+                  activeNavKey === 'notifications' ||
+                  activeNavKey === 'alerts'
+                    ? '14px 20px 16px'
+                    : '12px 18px 14px',
               }}
             >
-              <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+              <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                 {children}
               </div>
             </div>
