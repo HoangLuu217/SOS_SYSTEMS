@@ -12,6 +12,7 @@ const File = require('./File');
 const AuditLog = require('./AuditLog');
 const HazardReport = require('./HazardReport');
 const ChatMessage = require('./ChatMessage');
+const Equipment = require('./Equipment');
 const WeatherArticle = require('./WeatherArticle');
 const WeatherNotification = WeatherArticle;
 
@@ -30,6 +31,7 @@ module.exports = {
   AuditLog,
   HazardReport,
   ChatMessage,
+  Equipment,
   WeatherArticle,
   WeatherNotification,
   weather_article: WeatherArticle,

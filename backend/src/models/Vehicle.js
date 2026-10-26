@@ -5,7 +5,7 @@ const vehicleSchema = new mongoose.Schema(
     teamId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'RescueTeam',
-      required: [true, 'Đội cứu hộ sở hữu (teamId) là bắt buộc'],
+      default: null,
     },
     type: {
       type: String,

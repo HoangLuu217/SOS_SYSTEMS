@@ -833,7 +833,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Loại bỏ các phần chú thích trong ngoặc đơn như (PCTT Liên Chiểu) để họ tên hiển thị gọn gàng, trọn vẹn
   const displayUserName = rawUserName.replace(/\s*\([^\)]*\)/g, '').trim() || rawUserName;
   const displayUserRole = localProfile.position || user?.authority?.position || (isAdmin ? 'Quản trị viên' : 'Chỉ huy cứu hộ');
-  const roleBadgeLabel = displayUserRole;
   const displayAvatar = localProfile.avatarUrl || user?.avatarUrl || '';
   const userInitial = (displayUserName || 'U').trim().charAt(0).toUpperCase() || 'U';
 
@@ -980,8 +979,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="sos-user-name" title={displayUserName}>
                   {displayUserName}
                 </span>
-                <span className="sos-user-role" title={roleBadgeLabel} style={{ fontSize: '11px', color: '#64748b' }}>
-                  {roleBadgeLabel}
+                <span className="sos-user-role" style={{ fontSize: 11, color: '#64748b', display: 'block', lineHeight: 1.2 }} title={displayUserRole}>
+                  {displayUserRole}
                 </span>
               </div>
             )}

@@ -493,6 +493,9 @@
 .dot-mini.orange { background: #F59E0B; }
 .dot-mini.yellow { background: #EAB308; }
 .dot-mini.blue { background: #0284C7; }
+.dot-mini.green { background: #10B981; }
+.dot-mini.purple { background: #8B5CF6; }
+.dot-mini.gray { background: #64748B; }
 
 .executive-search-input-wrap {
   position: relative;

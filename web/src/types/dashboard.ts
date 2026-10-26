@@ -100,6 +100,7 @@ export interface VehicleItem {
   status: 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | 'INACTIVE';
   description?: string;
   createdAt?: string;
+  assignedTeam?: RescueTeamItem;
 }
 
 export interface RescueTeamMemberItem {
