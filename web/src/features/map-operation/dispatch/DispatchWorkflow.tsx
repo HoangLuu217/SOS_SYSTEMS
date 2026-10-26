@@ -11,6 +11,7 @@ import type {
   AdministrativeArea,
 } from '@/types/domainD';
 import { isTeamInOfficerJurisdiction } from '@/services/mapGeoService';
+import { domainDService } from '@/services/domainDService';
 import { useApp } from '@/context/AppContext';
 import { FALLBACK_SUPPLIES } from '@/constants';
 import { CitizenDistressProfile } from './CitizenDistressProfile';
@@ -166,6 +167,11 @@ export const DispatchWorkflow = ({
     if (activeSelectedTeamIds.includes(teamId)) {
       next = activeSelectedTeamIds.filter((id) => id !== teamId);
     } else {
+      const activeTask = domainDService.getActiveAssignmentForTeam(teamId, selectedSos?.id);
+      if (activeTask) {
+        alert('Đội cứu hộ này đang thực hiện nhiệm vụ khác. Mỗi đội chỉ được phép làm 1 nhiệm vụ tại một thời điểm!');
+        return;
+      }
       next = [...activeSelectedTeamIds, teamId];
     }
     setLocalSelectedTeamIds(next);
@@ -517,15 +523,21 @@ export const DispatchWorkflow = ({
                     ? 'Đội Cứu Hộ Phường Hòa Cường'
                     : team.name;
 
+                const activeTask = domainDService.getActiveAssignmentForTeam(team.id, selectedSos?.id);
+                const isBusy = !!activeTask;
+                const busyMissionCode = activeTask ? (activeTask.sosRequestId ? `SOS-${activeTask.sosRequestId.slice(-5)}` : 'Đang làm nhiệm vụ') : undefined;
+
                 return (
                   <TeamSelectorCard
                     key={team.id}
                     team={team}
                     isSelected={isSelected}
-                    isRecommended={isRecommended}
+                    isRecommended={isRecommended && !isBusy}
                     vehicleSpec={vehicleSpec}
                     etaText={etaText}
                     teamDisplayName={teamDisplayName}
+                    isBusy={isBusy}
+                    busyMissionCode={busyMissionCode}
                     onToggle={() => handleToggleTeam(team.id)}
                     onViewMembers={() => setViewingTeamDetail(team)}
                   />

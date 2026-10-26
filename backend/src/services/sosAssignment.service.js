@@ -67,6 +67,27 @@ class SosAssignmentService {
       throw new ApiError(404, 'Không tìm thấy cứu hộ viên (Rescuer)');
     }
 
+    // 4.1. Quy tắc tác chiến: 1 nhóm/đội chỉ được phép làm 1 nhiệm vụ tại một thời điểm
+    const activeAssignment = await SosAssignment.findOne({
+      $or: [
+        { rescueTeamId: team._id },
+        { teamId: team._id },
+        { rescuerId: rescuer._id },
+      ],
+      status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+    }).populate('sosRequestId');
+
+    if (activeAssignment) {
+      const activeCode =
+        activeAssignment.sosRequestId?.sosCode ||
+        activeAssignment.sosId?.sosCode ||
+        'đang thực hiện';
+      throw new ApiError(
+        400,
+        `Đội cứu hộ "${team.name}" đang thực hiện nhiệm vụ (${activeCode}). Mỗi đội chỉ được phép thực hiện 1 nhiệm vụ tại một thời điểm! Vui lòng hoàn thành nhiệm vụ hiện tại trước khi phân công nhiệm vụ mới.`
+      );
+    }
+
     // 5. Kiểm tra Vehicle tồn tại (nếu có truyền hoặc lấy theo Đội)
     let validVehicleId = null;
     if (vehicleId && mongoose.Types.ObjectId.isValid(vehicleId)) {
@@ -595,6 +616,35 @@ class SosAssignmentService {
 
     if (note !== undefined) {
       assignment.note = note ? String(note).trim() : null;
+    }
+
+    // Kiểm tra đội hoặc nhân sự nhận bàn giao có đang bận làm nhiệm vụ khác không
+    if (rescueTeamId || rescuerId) {
+      const busyOrFilters = [];
+      if (rescueTeamId) {
+        busyOrFilters.push({ rescueTeamId: assignment.rescueTeamId }, { teamId: assignment.rescueTeamId });
+      }
+      if (rescuerId) {
+        busyOrFilters.push({ rescuerId: assignment.rescuerId });
+      }
+      if (busyOrFilters.length > 0) {
+        const busyAssignment = await SosAssignment.findOne({
+          _id: { $ne: assignment._id },
+          $or: busyOrFilters,
+          status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+        }).populate('sosRequestId');
+
+        if (busyAssignment) {
+          const activeCode =
+            busyAssignment.sosRequestId?.sosCode ||
+            busyAssignment.sosId?.sosCode ||
+            'nhiệm vụ khác';
+          throw new ApiError(
+            400,
+            `Đội cứu hộ hoặc nhân sự được bàn giao đang thực hiện nhiệm vụ (${activeCode}). Mỗi đội chỉ được phép thực hiện 1 nhiệm vụ tại một thời điểm!`
+          );
+        }
+      }
     }
 
     await assignment.save();

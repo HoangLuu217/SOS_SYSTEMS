@@ -490,11 +490,14 @@ async function seedLienChieu() {
     // ========================================================
     console.log('\n--- 7. Tạo Lệnh Phân Công Tác Chiến (SosAssignment) ---');
 
-    // Xóa các phân công cũ liên quan đến ca SOS-74144 để đảm bảo sạch sẽ và duy nhất 1 nhiệm vụ
+    // Xóa các phân công cũ của đội teamLC và rescuer leCuuNan để đảm bảo quy tắc 1 nhóm chỉ làm 1 nhiệm vụ
     await SosAssignment.deleteMany({
       $or: [
         { sosRequestId: sos1._id },
         { sosId: sos1._id },
+        { rescueTeamId: teamLC._id },
+        { teamId: teamLC._id },
+        { rescuerId: leCuuNan._id },
       ],
     });
 

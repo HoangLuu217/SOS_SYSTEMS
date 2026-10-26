@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -82,12 +82,14 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
         const activeList = res.data.filter(
           (m) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(m.status)
         );
-        const activeCount = activeList.length;
+        // Quy tắc tác chiến: 1 nhóm chỉ được phép làm 1 nhiệm vụ tại một thời điểm
+        const activeCount = Math.min(activeList.length, 1);
         onMissionsCountChange?.(activeCount);
 
-        // TỰ ĐỘNG BAY VÔ TRANG TÁC CHIẾN KHI CÓ NHIỆM VỤ ĐIỀU PHỐI
+        // TỰ ĐỘNG BAY VÔ TRANG TÁC CHIẾN KHI CÓ NHIỆM VỤ ĐIỀU PHỐI (Chỉ mở nhiệm vụ đang thực hiện)
         if (activeList.length > 0 && !workspaceVisible) {
-          const targetMission = activeList[0];
+          const ongoingStatuses = ['RESCUING', 'ARRIVED', 'EN_ROUTE', 'IN_PROGRESS', 'ACCEPTED'];
+          const targetMission = activeList.find((m) => ongoingStatuses.includes(m.status)) || activeList[0];
           if (!dismissedMissionsRef.current.has(targetMission._id)) {
             setActiveWorkspaceMission(targetMission);
             setWorkspaceVisible(true);
@@ -179,14 +181,37 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     };
   }, [user?._id]);
 
-  // Lọc nhiệm vụ theo Tab
-  const activeMissions = missions.filter(
-    (m) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(m.status)
-  );
-  const historyMissions = missions.filter((m) =>
-    ['COMPLETED', 'CANCELLED', 'REJECTED'].includes(m.status)
-  );
-  const displayedMissions = activeSegment === 'active' ? activeMissions : historyMissions;
+  // Lọc nhiệm vụ theo Tab & Áp dụng nguyên tắc: 1 nhóm chỉ được phép làm 1 nhiệm vụ tại một thời điểm
+  const allActiveMissions = useMemo<SosAssignmentData[]>(() => {
+    return missions.filter(
+      (m: SosAssignmentData) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(m.status)
+    );
+  }, [missions]);
+
+  // Sắp xếp: Ưu tiên các nhiệm vụ đã tiếp nhận/đang thực hiện lên trước, sau đó mới tới PENDING
+  const sortedActiveMissions = useMemo<SosAssignmentData[]>(() => {
+    const ongoingStatuses = ['RESCUING', 'ARRIVED', 'EN_ROUTE', 'IN_PROGRESS', 'ACCEPTED'];
+    return [...allActiveMissions].sort((a: SosAssignmentData, b: SosAssignmentData) => {
+      const aIsOngoing = ongoingStatuses.includes(a.status);
+      const bIsOngoing = ongoingStatuses.includes(b.status);
+      if (aIsOngoing && !bIsOngoing) return -1;
+      if (!aIsOngoing && bIsOngoing) return 1;
+      return new Date(a.createdAt || a.assignedAt || 0).getTime() - new Date(b.createdAt || b.assignedAt || 0).getTime();
+    });
+  }, [allActiveMissions]);
+
+  // Duy nhất 1 nhiệm vụ đang thực hiện (xong nhiệm vụ này mới tới nhiệm vụ khác)
+  const currentActiveMission: SosAssignmentData | null = sortedActiveMissions[0] || null;
+  const queuedMissions = useMemo<SosAssignmentData[]>(() => sortedActiveMissions.slice(1), [sortedActiveMissions]);
+  const activeMissions = useMemo<SosAssignmentData[]>(() => (currentActiveMission ? [currentActiveMission] : []), [currentActiveMission]);
+
+  const historyMissions = useMemo<SosAssignmentData[]>(() => {
+    return missions.filter((m: SosAssignmentData) =>
+      ['COMPLETED', 'CANCELLED', 'REJECTED'].includes(m.status)
+    );
+  }, [missions]);
+
+  const displayedMissions: SosAssignmentData[] = activeSegment === 'active' ? activeMissions : historyMissions;
 
   // Xử lý gọi điện thoại cho nạn nhân
   const handleCallVictim = (phone?: string) => {
@@ -682,6 +707,36 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
               </View>
             );
           })
+        )}
+
+        {/* Hàng đợi nhiệm vụ tiếp theo (nếu có) - Đảm bảo quy tắc 1 nhóm chỉ làm 1 nhiệm vụ */}
+        {activeSegment === 'active' && queuedMissions.length > 0 && (
+          <View style={styles.queueNoticeCard}>
+            <View style={styles.queueNoticeHeader}>
+              <MaterialCommunityIcons name="clock-fast" size={18} color="#D97706" />
+              <Text style={styles.queueNoticeTitle}>
+                HÀNG ĐỢI NHIỆM VỤ TIẾP THEO ({queuedMissions.length})
+              </Text>
+            </View>
+            <Text style={styles.queueNoticeDesc}>
+              Đội đang ưu tiên xử lý ca {currentActiveMission?.sosRequestId?.sosCode || 'hiện tại'}. Theo quy tắc tác chiến, nhiệm vụ kế tiếp sẽ tự động kích hoạt ngay sau khi hoàn thành ca này.
+            </Text>
+            {queuedMissions.map((qm: SosAssignmentData) => (
+              <View key={qm._id} style={styles.queuedItemRow}>
+                <View style={styles.queuedBullet} />
+                <Text style={styles.queuedCode}>
+                  {qm.sosRequestId?.sosCode || 'SOS-KHẨN'}
+                </Text>
+                <Text style={styles.queuedAddr} numberOfLines={1}>
+                  • {qm.sosRequestId?.address || 'Điểm cứu hộ kế tiếp'}
+                </Text>
+                <View style={styles.queuedLockTag}>
+                  <Feather name="lock" size={10} color="#64748B" />
+                  <Text style={styles.queuedLockText}>Chờ tới lượt</Text>
+                </View>
+              </View>
+            ))}
+          </View>
         )}
       </ScrollView>
 
@@ -1489,5 +1544,73 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     color: '#64748B',
     marginTop: 1,
+  },
+  queueNoticeCard: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+    padding: 14,
+    marginTop: 10,
+    marginBottom: 20,
+    gap: 8,
+  },
+  queueNoticeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  queueNoticeTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#B45309',
+    letterSpacing: 0.5,
+  },
+  queueNoticeDesc: {
+    fontSize: 12,
+    color: '#92400E',
+    lineHeight: 18,
+  },
+  queuedItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FEF3C7',
+    gap: 6,
+    marginTop: 4,
+  },
+  queuedBullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#D97706',
+  },
+  queuedCode: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  queuedAddr: {
+    flex: 1,
+    fontSize: 11,
+    color: '#64748B',
+  },
+  queuedLockTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  queuedLockText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
   },
 });

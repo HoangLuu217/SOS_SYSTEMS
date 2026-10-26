@@ -281,6 +281,22 @@ class DomainDService {
     return found || null;
   }
 
+  /**
+   * Kiểm tra một đội cứu hộ có đang bận thực hiện nhiệm vụ khác hay không
+   * Quy tắc tác chiến: 1 nhóm chỉ được phép làm 1 nhiệm vụ tại một thời điểm
+   */
+  getActiveAssignmentForTeam(teamId: string, currentSosId?: string): SosAssignment | null {
+    if (!teamId) return null;
+    const busyStatuses = ['PENDING', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'RESCUING', 'IN_PROGRESS', 'ASSIGNED'];
+    const activeAssign = Object.values(this.assignments).find((a) => {
+      if (!busyStatuses.includes(a.status)) return false;
+      if (currentSosId && a.sosRequestId === currentSosId) return false;
+      const teamIds = a.rescueTeamId ? a.rescueTeamId.split(',').map((id) => id.trim()) : [];
+      return teamIds.includes(teamId) || a.rescueTeamId === teamId;
+    });
+    return activeAssign || null;
+  }
+
   updateSosStatus(sosId: string, nextStatus: any): void {
     const sosIdx = this.sosRequests.findIndex((s) => s.id === sosId);
     if (sosIdx !== -1) {

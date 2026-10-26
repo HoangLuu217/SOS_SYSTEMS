@@ -9,6 +9,8 @@ interface Props {
   vehicleSpec: string;
   etaText: string;
   teamDisplayName: string;
+  isBusy?: boolean;
+  busyMissionCode?: string;
   onToggle: () => void;
   onViewMembers: () => void;
 }
@@ -20,6 +22,8 @@ export const TeamSelectorCard: React.FC<Props> = ({
   vehicleSpec,
   etaText,
   teamDisplayName,
+  isBusy,
+  busyMissionCode,
   onToggle,
   onViewMembers,
 }) => {
@@ -35,16 +39,30 @@ export const TeamSelectorCard: React.FC<Props> = ({
     return { title: teamDisplayName, codeTag: (team as any).code || '' };
   })();
 
+  const handleClick = () => {
+    if (isBusy) {
+      alert(`Đội cứu hộ "${cleanTeamName}" đang thực hiện nhiệm vụ khác${busyMissionCode ? ` (${busyMissionCode})` : ''}. Theo quy định tác chiến, mỗi đội chỉ được phép làm 1 nhiệm vụ tại một thời điểm!`);
+      return;
+    }
+    onToggle();
+  };
+
   return (
     <div
-      onClick={onToggle}
+      onClick={handleClick}
+      title={isBusy ? `Đội đang thực hiện nhiệm vụ${busyMissionCode ? ` (${busyMissionCode})` : ''}. Vui lòng chờ hoàn thành.` : undefined}
       style={{
         padding: '9px 12px',
         borderRadius: 9,
-        border: isSelected ? '2px solid #0284c7' : '1.5px solid #e2e8f0',
-        background: isSelected ? '#f0f9ff' : '#ffffff',
-        boxShadow: isSelected ? '0 3px 12px -2px rgba(2, 132, 199, 0.2)' : '0 1px 3px rgba(0,0,0,0.04)',
-        cursor: 'pointer',
+        border: isBusy
+          ? '1.5px dashed #cbd5e1'
+          : isSelected
+          ? '2px solid #0284c7'
+          : '1.5px solid #e2e8f0',
+        background: isBusy ? '#f8fafc' : isSelected ? '#f0f9ff' : '#ffffff',
+        opacity: isBusy ? 0.65 : 1,
+        boxShadow: isSelected && !isBusy ? '0 3px 12px -2px rgba(2, 132, 199, 0.2)' : '0 1px 3px rgba(0,0,0,0.04)',
+        cursor: isBusy ? 'not-allowed' : 'pointer',
         transition: 'all 0.15s ease',
         display: 'flex',
         flexDirection: 'column',
@@ -60,17 +78,17 @@ export const TeamSelectorCard: React.FC<Props> = ({
               width: 18,
               height: 18,
               borderRadius: 4,
-              border: `2px solid ${isSelected ? '#0284c7' : '#94a3b8'}`,
+              border: `2px solid ${isBusy ? '#cbd5e1' : isSelected ? '#0284c7' : '#94a3b8'}`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
-              background: isSelected ? '#0284c7' : '#ffffff',
+              background: isBusy ? '#e2e8f0' : isSelected ? '#0284c7' : '#ffffff',
               color: '#ffffff',
               transition: 'all 0.12s ease',
             }}
           >
-            {isSelected && <Check size={12} strokeWidth={3} />}
+            {isSelected && !isBusy && <Check size={12} strokeWidth={3} />}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, flexWrap: 'wrap' }}>
@@ -113,23 +131,42 @@ export const TeamSelectorCard: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Trạng thái sẵn sàng */}
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 800,
-            background: '#dcfce7',
-            color: '#15803d',
-            border: '1px solid #86efac',
-            padding: '2px 6px',
-            borderRadius: 4,
-            letterSpacing: '0.2px',
-            whiteSpace: 'nowrap',
-            flexShrink: 0,
-          }}
-        >
-          SẴN SÀNG
-        </span>
+        {/* Trạng thái sẵn sàng hoặc đang bận nhiệm vụ */}
+        {isBusy ? (
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 800,
+              background: '#fee2e2',
+              color: '#dc2626',
+              border: '1px solid #fca5a5',
+              padding: '2px 6px',
+              borderRadius: 4,
+              letterSpacing: '0.2px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            {busyMissionCode ? `BẬN (${busyMissionCode})` : 'BẬN NHIỆM VỤ'}
+          </span>
+        ) : (
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 800,
+              background: '#dcfce7',
+              color: '#15803d',
+              border: '1px solid #86efac',
+              padding: '2px 6px',
+              borderRadius: 4,
+              letterSpacing: '0.2px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            SẴN SÀNG
+          </span>
+        )}
       </div>
 
       {/* HÀNG 2: THÔNG SỐ TÁC CHIẾN - KHOẢNG CÁCH (ETA) & PHƯƠNG TIỆN */}
