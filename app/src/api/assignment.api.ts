@@ -27,6 +27,9 @@ export interface RescuerAssignmentItem {
   startedAt?: string;
   completedAt?: string;
   note?: string;
+  missionType?: string;
+  recipientName?: string;
+  destination?: string;
 }
 
 export class AssignmentApi {
@@ -51,9 +54,14 @@ export class AssignmentApi {
   async updateAssignmentStatus(
     id: string,
     status: string,
-    note?: string
+    note?: string,
+    extraData?: { proofImages?: string[]; actualRecipient?: string }
   ): Promise<ApiResponse<RescuerAssignmentItem>> {
-    return apiClient.patch<RescuerAssignmentItem>(`/assignments/${id}/status`, { status, note });
+    return apiClient.patch<RescuerAssignmentItem>(`/assignments/${id}/status`, {
+      status,
+      note,
+      ...(extraData || {}),
+    });
   }
 
   /**
@@ -62,9 +70,14 @@ export class AssignmentApi {
   async updateSosMissionStatus(
     sosId: string,
     status: string,
-    note?: string
+    note?: string,
+    extraData?: { proofImages?: string[]; actualRecipient?: string }
   ): Promise<ApiResponse<any>> {
-    return apiClient.patch<any>(`/sos/${sosId}/mission-status`, { status, note });
+    return apiClient.patch<any>(`/sos/${sosId}/mission-status`, {
+      status,
+      note,
+      ...(extraData || {}),
+    });
   }
 
   /**

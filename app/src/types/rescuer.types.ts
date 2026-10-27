@@ -194,12 +194,17 @@ export interface SosAssignmentData {
   cancelledAt?: string;
   cancelReason?: string;
   note?: string;
+  missionType?: 'SOS_RESCUE' | 'RELIEF_DISPATCH';
+  destination?: string;
+  recipientName?: string;
   supplies?: Array<{
     supplyId?: string;
     name: string;
     quantity: number;
     unit?: string;
   }>;
+  proofImages?: string[];
+  actualRecipient?: string;
   createdAt?: string;
   updatedAt?: string;
 }

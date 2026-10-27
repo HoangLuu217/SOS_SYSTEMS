@@ -369,7 +369,7 @@ class SosAssignmentService {
    * PATCH /assignments/:id/status
    * Cập nhật trạng thái tiến trình cứu hộ của Rescuer
    */
-  async updateStatus(id, newStatus, currentUser = null, note = '') {
+  async updateStatus(id, newStatus, currentUser = null, note = '', extraData = {}) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new ApiError(400, 'ID phân công không phải là ObjectId hợp lệ');
     }
@@ -410,17 +410,17 @@ class SosAssignmentService {
     // Định nghĩa các luồng chuyển trạng thái hợp lệ
     const VALID_TRANSITIONS = {
       PENDING: ['ACCEPTED', 'REJECTED', 'CANCELLED'],
-      ACCEPTED: ['DISPATCHED', 'EN_ROUTE', 'ON_THE_WAY', 'CANCELLED'],
-      DISPATCHED: ['EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'CANCELLED'],
-      EN_ROUTE: ['ARRIVED', 'CANCELLED'],
-      ON_THE_WAY: ['ARRIVED', 'CANCELLED'],
-      ARRIVED: ['IN_PROGRESS', 'RESCUING', 'CANCELLED'],
+      ACCEPTED: ['DISPATCHED', 'EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'CANCELLED'],
+      DISPATCHED: ['EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'CANCELLED'],
+      EN_ROUTE: ['ARRIVED', 'IN_PROGRESS', 'RESCUING', 'COMPLETED', 'CANCELLED'],
+      ON_THE_WAY: ['ARRIVED', 'IN_PROGRESS', 'RESCUING', 'COMPLETED', 'CANCELLED'],
+      ARRIVED: ['IN_PROGRESS', 'RESCUING', 'COMPLETED', 'CANCELLED'],
       IN_PROGRESS: ['COMPLETED', 'CANCELLED'],
       RESCUING: ['COMPLETED', 'CANCELLED'],
       COMPLETED: [],
       REJECTED: [],
       CANCELLED: [],
-      ASSIGNED: ['ACCEPTED', 'DISPATCHED', 'EN_ROUTE', 'ON_THE_WAY', 'CANCELLED'],
+      ASSIGNED: ['ACCEPTED', 'DISPATCHED', 'EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'CANCELLED'],
     };
 
     if (currentStatus === targetStatus) {
@@ -435,6 +435,27 @@ class SosAssignmentService {
       );
     }
 
+    // Bắt buộc minh bạch: Nhiệm vụ xuất cấp cứu trợ phải có ít nhất 1 ảnh bằng chứng bàn giao
+    if (targetStatus === 'COMPLETED') {
+      const isRelief =
+        assignment.missionType === 'RELIEF_DISPATCH' ||
+        (Array.isArray(assignment.supplies) && assignment.supplies.length > 0) ||
+        (typeof assignment.note === 'string' && assignment.note.includes('xuất cấp cứu trợ'));
+
+      if (isRelief) {
+        const hasProof =
+          (Array.isArray(extraData?.proofImages) && extraData.proofImages.length > 0) ||
+          (Array.isArray(assignment.proofImages) && assignment.proofImages.length > 0);
+
+        if (!hasProof) {
+          throw new ApiError(
+            400,
+            'Để đảm bảo tính minh bạch khi xuất cấp cứu trợ, bạn bắt buộc phải cung cấp ít nhất 1 ảnh chụp bằng chứng bàn giao thực tế (ảnh trao hàng tận tay, kiện hàng hoặc biên bản ký nhận) trước khi hoàn tất nhiệm vụ!'
+          );
+        }
+      }
+    }
+
     assignment.status = targetStatus;
 
     // Cập nhật timestamp tương ứng
@@ -442,7 +463,7 @@ class SosAssignmentService {
     if (targetStatus === 'ACCEPTED' && !assignment.acceptedAt) {
       assignment.acceptedAt = now;
     }
-    if (['IN_PROGRESS', 'RESCUING'].includes(targetStatus) && !assignment.startedAt) {
+    if (['IN_PROGRESS', 'RESCUING', 'ARRIVED'].includes(targetStatus) && !assignment.startedAt) {
       assignment.startedAt = now;
     }
     if (targetStatus === 'COMPLETED' && !assignment.completedAt) {
@@ -450,6 +471,19 @@ class SosAssignmentService {
     }
     if (targetStatus === 'CANCELLED' && !assignment.cancelledAt) {
       assignment.cancelledAt = now;
+    }
+
+    // Lưu các thông tin minh bạch bàn giao vật tư / hiện trường nếu có
+    if (extraData?.proofImages && Array.isArray(extraData.proofImages) && extraData.proofImages.length > 0) {
+      assignment.proofImages = [
+        ...new Set([...(assignment.proofImages || []), ...extraData.proofImages]),
+      ];
+    }
+    if (extraData?.actualRecipient) {
+      assignment.actualRecipient = String(extraData.actualRecipient).trim();
+    }
+    if (note) {
+      assignment.note = assignment.note ? `${assignment.note} | ${note}` : note;
     }
 
     await assignment.save();
@@ -481,6 +515,11 @@ class SosAssignmentService {
         if (targetSosStatus === 'COMPLETED' || targetSosStatus === 'RESOLVED') {
           sos.resolvedAt = now;
         }
+        if (extraData?.proofImages && Array.isArray(extraData.proofImages) && extraData.proofImages.length > 0) {
+          sos.images = [
+            ...new Set([...(sos.images || []), ...extraData.proofImages]),
+          ];
+        }
         await sos.save();
 
         try {
@@ -490,6 +529,7 @@ class SosAssignmentService {
             newStatus: targetSosStatus,
             changedBy: currentUser?._id || assignment.rescuerId,
             note: note || `Cứu hộ viên cập nhật tiến trình: ${targetStatus}`,
+            images: extraData?.proofImages || [],
           });
         } catch (err) {}
 
@@ -681,7 +721,7 @@ class SosAssignmentService {
   /**
    * Cập nhật tiến trình tác chiến trực tiếp thông qua mã SOS
    */
-  async updateStatusBySosId(sosId, newStatus, currentUser = null, note = '') {
+  async updateStatusBySosId(sosId, newStatus, currentUser = null, note = '', extraData = {}) {
     if (!mongoose.Types.ObjectId.isValid(sosId)) {
       throw new ApiError(400, 'ID SOS không hợp lệ');
     }
@@ -693,7 +733,7 @@ class SosAssignmentService {
     }).sort({ createdAt: -1 });
 
     if (assignment) {
-      assignment = await this.updateStatus(assignment._id, newStatus, currentUser, note);
+      assignment = await this.updateStatus(assignment._id, newStatus, currentUser, note, extraData);
     } else {
       const sos = await SosRequest.findById(sosId)
         .populate('citizenId', 'fullName phone avatarUrl email address')
@@ -721,6 +761,11 @@ class SosAssignmentService {
       if (targetSosStatus === 'COMPLETED') {
         sos.resolvedAt = new Date();
       }
+      if (extraData?.proofImages && Array.isArray(extraData.proofImages) && extraData.proofImages.length > 0) {
+        sos.images = [
+          ...new Set([...(sos.images || []), ...extraData.proofImages]),
+        ];
+      }
       await sos.save();
 
       try {
@@ -731,6 +776,7 @@ class SosAssignmentService {
             newStatus: targetSosStatus,
             changedBy: currentUser._id,
             note: note || `Cập nhật tiến trình: ${newStatus}`,
+            images: extraData?.proofImages || [],
           });
         }
       } catch (err) {}

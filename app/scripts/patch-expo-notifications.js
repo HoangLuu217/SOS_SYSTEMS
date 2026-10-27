@@ -86,3 +86,48 @@ expoAssetFiles.forEach((file) => {
     console.log(`✅ [patch-expo-notifications] Successfully patched ${path.basename(file)} for Expo Go.`);
   }
 });
+
+// 4. Patch react-native-webview types for React 19 compatibility
+const webviewDts = path.join(__dirname, '../node_modules/react-native-webview/index.d.ts');
+if (fs.existsSync(webviewDts)) {
+  let content = fs.readFileSync(webviewDts, 'utf-8');
+  if (content.includes('declare class WebView<P = undefined>')) {
+    content = content.replace('declare class WebView<P = undefined>', 'declare class WebView<P = {}>');
+    fs.writeFileSync(webviewDts, content, 'utf-8');
+    console.log('✅ [patch-expo-notifications] Successfully patched react-native-webview index.d.ts for React 19.');
+  }
+}
+
+// 5. Patch react-native StatusBar types for Android props compatibility
+const statusBarDts = path.join(__dirname, '../node_modules/react-native/types_generated/Libraries/Components/StatusBar/StatusBar.d.ts');
+if (fs.existsSync(statusBarDts)) {
+  let content = fs.readFileSync(statusBarDts, 'utf-8');
+  if (!content.includes('StatusBarPropsAndroid')) {
+    content = content.replace(
+      'export type StatusBarProps = Readonly<Omit<StatusBarPropsIOS, keyof StatusBarBaseProps | keyof {}> & Omit<StatusBarBaseProps, keyof {}> & {}>;',
+      `export type StatusBarPropsAndroid = Readonly<{
+  backgroundColor?: string | null | undefined;
+  translucent?: boolean | undefined;
+  networkActivityIndicatorVisible?: boolean | undefined;
+}>;
+export type StatusBarProps = Readonly<
+  Omit<StatusBarPropsIOS, keyof StatusBarBaseProps | keyof {}> &
+  Omit<StatusBarBaseProps, keyof {}> &
+  StatusBarPropsAndroid
+>;`
+    );
+    fs.writeFileSync(statusBarDts, content, 'utf-8');
+    console.log('✅ [patch-expo-notifications] Successfully patched react-native StatusBar.d.ts for Android props.');
+  }
+}
+
+// 6. Patch react-native TextInput types for useRef<TextInput> instance methods (.focus, .blur)
+const textInputDts = path.join(__dirname, '../node_modules/react-native/types_generated/Libraries/Components/TextInput/TextInput.d.ts');
+if (fs.existsSync(textInputDts)) {
+  let content = fs.readFileSync(textInputDts, 'utf-8');
+  if (content.includes('declare type $$TextInput = typeof $$TextInput;')) {
+    content = content.replace('declare type $$TextInput = typeof $$TextInput;', 'declare type $$TextInput = TextInputInstance;');
+    fs.writeFileSync(textInputDts, content, 'utf-8');
+    console.log('✅ [patch-expo-notifications] Successfully patched react-native TextInput.d.ts for instance ref compatibility.');
+  }
+}
