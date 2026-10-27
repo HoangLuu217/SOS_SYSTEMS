@@ -72,10 +72,10 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   // Operational State Machine
   const [missionState, setMissionState] = useState<RescuerMissionState>('ASSIGNED_PENDING_ACCEPTANCE');
 
-  // Team GPS Location & Telemetry (Mặc định Trạm Cứu hộ Phường Liên Chiểu)
+  // Team GPS Location & Telemetry (Mặc định Trạm Cứu hộ Quận Ngũ Hành Sơn)
   const [teamLocation, setTeamLocation] = useState<{ lat: number; lng: number; heading: number }>({
-    lat: 16.0795,
-    lng: 108.1485,
+    lat: 16.0315,
+    lng: 108.2435,
     heading: 45,
   });
   const locationSubRef = useRef<Location.LocationSubscription | null>(null);

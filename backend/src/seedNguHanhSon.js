@@ -211,6 +211,8 @@ async function seedNguHanhSon() {
           vehicleType: 'BOAT',
           verificationStatus: 'VERIFIED',
           availabilityStatus: 'AVAILABLE',
+          areaId: districtNHS._id,
+          areaName: 'Quận Ngũ Hành Sơn',
         },
       });
       console.log('➕ Đã tạo Cứu hộ viên Lê Cứu Nạn (Đội trưởng):', leCuuNan.fullName, '| SĐT: 0903000003');
@@ -229,6 +231,8 @@ async function seedNguHanhSon() {
         vehicleType: 'BOAT',
         verificationStatus: 'VERIFIED',
         availabilityStatus: 'AVAILABLE',
+        areaId: districtNHS._id,
+        areaName: 'Quận Ngũ Hành Sơn',
       };
       await leCuuNan.save();
       console.log('✔ Đã cập nhật Cứu hộ viên Lê Cứu Nạn (0903000003) - Đội trưởng Ngũ Hành Sơn');
