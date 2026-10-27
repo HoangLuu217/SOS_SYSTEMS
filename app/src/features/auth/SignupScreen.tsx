@@ -198,7 +198,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar barStyle="light-content" />
 
       {/* Vùng hiển thị form đăng ký với nền trong suốt (nền ảnh duy trì tại cấp cha) */}
       <View style={styles.backgroundImage}>
@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
   },
   centerContainer: {
     width: '100%',
-    maxWidth: 310,
+    maxWidth: 345,
     alignItems: 'center',
   },
   /* Bóng đổ mềm cho khung */
