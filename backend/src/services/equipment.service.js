@@ -346,7 +346,15 @@ class EquipmentService {
    * Xuat cap cuu tro / Tieu hao vat tu (giam so luong kho)
    */
   async consumeEquipment(id, { quantity, destination, note }) {
-    const equipment = await Equipment.findById(id);
+    let equipment = null;
+    if (id && mongoose.Types.ObjectId.isValid(id)) {
+      equipment = await Equipment.findById(id);
+    }
+    if (!equipment && id) {
+      equipment = await Equipment.findOne({
+        $or: [{ serialNumber: String(id).trim().toUpperCase() }, { name: new RegExp(String(id).trim(), 'i') }],
+      });
+    }
     if (!equipment) throw new ApiError(404, 'Không tìm thấy vật tư cần xuất cấp');
 
     const consumeQty = parseInt(quantity, 10);
@@ -415,16 +423,34 @@ class EquipmentService {
     for (const item of items) {
       const eqId = item.equipmentId || item._id;
       const qty = parseInt(item.quantity, 10);
-      if (!eqId) {
+      if (!eqId && !item.name) {
         throw new ApiError(400, 'Thiếu thông tin vật tư cần xuất');
       }
       if (!qty || qty <= 0) {
         throw new ApiError(400, 'Số lượng xuất của mỗi mặt hàng phải lớn hơn 0');
       }
 
-      const eq = await Equipment.findById(eqId);
+      let eq = null;
+      if (eqId && mongoose.Types.ObjectId.isValid(eqId)) {
+        eq = await Equipment.findById(eqId);
+      }
+      // Fallback: nếu không tìm thấy theo ID (do db vừa được re-seed và client giữ ID cũ), tìm theo tên hoặc serialNumber
+      if (!eq && item.name) {
+        eq = await Equipment.findOne({
+          name: new RegExp(`^${item.name.trim()}$`, 'i'),
+        });
+      }
+      if (!eq && eqId) {
+        eq = await Equipment.findOne({
+          $or: [
+            { serialNumber: String(eqId).trim().toUpperCase() },
+            { name: new RegExp(String(eqId).trim(), 'i') },
+          ],
+        });
+      }
+
       if (!eq) {
-        throw new ApiError(404, `Không tìm thấy vật tư có mã: ${eqId}`);
+        throw new ApiError(404, `Không tìm thấy vật tư có mã hoặc tên: ${eqId || item.name}`);
       }
       if (qty > eq.quantity) {
         throw new ApiError(400, `Vật tư "${eq.name}" chỉ còn tồn kho ${eq.quantity} ${eq.unit}, không đủ để xuất ${qty} ${eq.unit}`);

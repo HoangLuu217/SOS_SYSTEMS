@@ -707,6 +707,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
   // Mở modal Phiếu xuất cứu trợ tổng hợp (nhiều mặt hàng)
   const handleOpenBatchConsumeModal = () => {
+    refreshData();
     const available = consumableEquipments.filter((e) => e.quantity > 0);
     if (available.length === 0) {
       toast.warning('Hiện không có mặt hàng cứu trợ nào còn tồn kho để xuất cấp');
@@ -802,7 +803,14 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         note: batchNote.trim() || undefined,
         teamId: batchDispatchMode === 'ASSIGN_TEAM' ? batchTeamId : undefined,
         priority: batchDispatchMode === 'ASSIGN_TEAM' ? batchPriority : undefined,
-        items: batchItems.map((bi) => ({ equipmentId: bi.equipmentId, quantity: Number(bi.quantity) })),
+        items: batchItems.map((bi) => {
+          const eqDoc = consumableEquipments.find((e) => e._id === bi.equipmentId);
+          return {
+            equipmentId: bi.equipmentId,
+            name: eqDoc?.name,
+            quantity: Number(bi.quantity),
+          };
+        }),
       });
 
       const updatedList: EquipmentItem[] = Array.isArray(res.data)
@@ -831,9 +839,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         setBatchRecipientName('');
         setBatchNote('');
       } else {
+        refreshData();
         toast.error(res.message || 'Không thể tạo phiếu xuất cấp cứu trợ tổng hợp');
       }
     } catch (err: any) {
+      refreshData();
       toast.error(err?.message || 'Có lỗi xảy ra khi xuất cấp cứu trợ tổng hợp');
     } finally {
       setIsSubmittingBatchConsume(false);
