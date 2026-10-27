@@ -61,6 +61,12 @@ const sosStatusHistorySchema = new mongoose.Schema(
       default: null,
       immutable: true,
     },
+    images: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
     createdAt: {
       type: Date,
       default: Date.now,

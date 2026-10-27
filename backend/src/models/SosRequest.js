@@ -85,6 +85,7 @@ const sosRequestSchema = new mongoose.Schema(
           'ACCIDENT',
           'MISSING_PERSON',
           'OTHER',
+          'RELIEF',
         ],
         message: 'Loại khẩn cấp {VALUE} không hợp lệ',
       },

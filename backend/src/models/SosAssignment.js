@@ -128,6 +128,19 @@ const sosAssignmentSchema = new mongoose.Schema(
         unit: { type: String, trim: true, default: 'món' },
       },
     ],
+    // Ảnh chụp bằng chứng bàn giao vật tư / hiện trường cứu hộ (Minh bạch phân phối)
+    proofImages: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
+    // Người ký nhận / đại diện tiếp nhận thực tế tại hiện trường
+    actualRecipient: {
+      type: String,
+      trim: true,
+      default: null,
+    },
   },
   {
     timestamps: true,

@@ -842,12 +842,24 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   };
 
   // Dữ liệu hiển thị chi tiết (Động theo dữ liệu API thực tế)
+  const isReliefMission =
+    assignment?.missionType === 'RELIEF_DISPATCH' ||
+    sos?.emergencyType === 'RELIEF' ||
+    (typeof sos?.description === 'string' && sos.description.includes('xuất cấp cứu trợ')) ||
+    (typeof assignment?.note === 'string' && assignment.note.includes('xuất cấp cứu trợ'));
+
   const sosCode = sos?.sosCode || 'SOS';
-  const citizenName = sos?.citizenId?.fullName || sos?.reporterName || 'Người dân';
+  const recipientName =
+    assignment?.recipientName ||
+    (typeof assignment?.note === 'string' && assignment.note.match(/Người nhận:\s*([^.)\]]+)/)?.[1]?.trim()) ||
+    (typeof sos?.description === 'string' && sos.description.match(/Người nhận:\s*([^.)\]]+)/)?.[1]?.trim());
+  const citizenName = isReliefMission
+    ? (recipientName || sos?.citizenId?.fullName || 'Đầu mối tiếp nhận cứu trợ')
+    : (sos?.citizenId?.fullName || sos?.reporterName || 'Người dân');
   const citizenPhone = sos?.citizenId?.phone || sos?.contactPhone || '';
-  const incidentAddress = sos?.address ?? '';
+  const incidentAddress = assignment?.destination || sos?.address || '';
   const victimHeadcount = sos?.people ?? 0;
-  const rawDescription = sos?.description ?? '';
+  const rawDescription = assignment?.note || sos?.description || '';
   const teamName = assignment?.rescueTeamId?.name || assignment?.teamName || assignment?.rescueTeamName || '';
   const vehiclePlate = assignment?.vehicleId?.plateNumber || assignment?.vehicleName || '';
   const vehicleName = vehiclePlate ? `Phương tiện: ${vehiclePlate}` : '';
@@ -1591,7 +1603,16 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             >
               <View style={{ flex: 1 }}>
                 <Text style={styles.collapsedCitizenName} numberOfLines={1}>
-                  {citizenName} <Text style={styles.collapsedVictimCount}>({victimHeadcount} người cần cứu)</Text>
+                  {citizenName}{' '}
+                  {isReliefMission ? (
+                    <Text style={[styles.collapsedVictimCount, { color: '#059669' }]}>
+                      (Điểm tiếp nhận cứu trợ)
+                    </Text>
+                  ) : (
+                    <Text style={styles.collapsedVictimCount}>
+                      ({victimHeadcount} người cần cứu)
+                    </Text>
+                  )}
                 </Text>
                 <Text style={styles.collapsedAddressText} numberOfLines={1}>
                   {incidentAddress}
@@ -1611,15 +1632,26 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               {/* Địa chỉ hiện trường - Hiển thị đầy đủ, không ẩn bớt, không cắt '...' */}
               <Text style={styles.grabAddressText}>{incidentAddress}</Text>
 
-              {/* Số người & Đối tượng cần cứu */}
-              <Text style={styles.grabVictimMeta}>
-                {victimHeadcount} người cần cứu • 1 người già, 1 trẻ nhỏ
-              </Text>
+              {/* Số người & Đối tượng cần cứu / Thông tin cứu trợ */}
+              {isReliefMission ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <MaterialCommunityIcons name="package-variant-closed" size={15} color="#059669" />
+                  <Text style={[styles.grabVictimMeta, { color: '#059669', fontWeight: '800', marginTop: 0 }]}>
+                    Điểm tiếp nhận cứu trợ • Tiếp tế nhu yếu phẩm khẩn cấp
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.grabVictimMeta}>
+                  {victimHeadcount} người cần cứu • 1 người già, 1 trẻ nhỏ
+                </Text>
+              )}
 
               {/* Hộp ghi chú hiện trường (Note box xám giống hệt Grab) */}
               {rawDescription ? (
                 <View style={styles.grabNoteBox}>
-                  <Text style={styles.grabNoteLabel}>Ghi chú từ hiện trường:</Text>
+                  <Text style={styles.grabNoteLabel}>
+                    {isReliefMission ? 'Lệnh xuất cấp & Ghi chú điều phối:' : 'Ghi chú từ hiện trường:'}
+                  </Text>
                   <Text style={styles.grabNoteText}>{rawDescription}</Text>
                 </View>
               ) : null}
@@ -1630,11 +1662,13 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   assignment?.supplies ||
                   (assignment as any)?.reliefItems ||
                   sos?.supplies ||
-                  [
-                    { name: 'Áo phao cứu sinh tiêu chuẩn SOLAS', quantity: Math.max(2, victimHeadcount), unit: 'Chiếc' },
-                    { name: 'Túi thuốc & Sơ cấp cứu dã chiến', quantity: 1, unit: 'Bộ' },
-                    { name: 'Nước uống đóng chai tiệt trùng (Thùng 24 chai)', quantity: Math.ceil(Math.max(1, victimHeadcount) / 2), unit: 'Thùng' },
-                  ];
+                  (isReliefMission
+                    ? []
+                    : [
+                        { name: 'Áo phao cứu sinh tiêu chuẩn SOLAS', quantity: Math.max(2, victimHeadcount), unit: 'Chiếc' },
+                        { name: 'Túi thuốc & Sơ cấp cứu dã chiến', quantity: 1, unit: 'Bộ' },
+                        { name: 'Nước uống đóng chai tiệt trùng (Thùng 24 chai)', quantity: Math.ceil(Math.max(1, victimHeadcount) / 2), unit: 'Thùng' },
+                      ]);
 
                 return (
                   <View style={styles.grabSuppliesBox}>
@@ -1643,7 +1677,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                       <View style={styles.suppliesHeaderTitleWrap}>
                         <MaterialCommunityIcons name="package-variant-closed" size={17} color="#15803D" />
                         <Text style={styles.grabSuppliesLabel}>
-                          Vật tư theo xe
+                          {isReliefMission ? 'Danh mục vật tư xuất kho' : 'Vật tư theo xe'}
                         </Text>
                         <View style={styles.suppliesCountBadge}>
                           <Text style={styles.suppliesCountBadgeText}>
@@ -1801,12 +1835,14 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               <>
                 {missionState === 'ASSIGNED_PENDING_ACCEPTANCE' && (
                   <TouchableOpacity
-                    style={styles.grabBigGreenBtn}
+                    style={[styles.grabBigGreenBtn, isReliefMission && { backgroundColor: '#059669' }]}
                     onPress={handleAcceptMission}
                     activeOpacity={0.88}
                   >
                     <Ionicons name="flash" size={20} color="#FFFFFF" />
-                    <Text style={styles.grabBigBtnText}>⚡ NHẬN LỆNH & XUẤT KÍCH</Text>
+                    <Text style={styles.grabBigBtnText}>
+                      {isReliefMission ? '⚡ NHẬN LỆNH & XUẤT KHO TIẾP TẾ' : '⚡ NHẬN LỆNH & XUẤT KÍCH'}
+                    </Text>
                   </TouchableOpacity>
                 )}
 
@@ -1817,14 +1853,16 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                     activeOpacity={0.88}
                   >
                     <Ionicons name="location-sharp" size={22} color="#FFFFFF" />
-                    <Text style={styles.grabBigBtnText}>ĐÃ ĐẾN HIỆN TRƯỜNG (ARRIVED)</Text>
+                    <Text style={styles.grabBigBtnText}>
+                      {isReliefMission ? '📍 ĐÃ ĐẾN ĐIỂM GIAO CỨU TRỢ' : 'ĐÃ ĐẾN HIỆN TRƯỜNG (ARRIVED)'}
+                    </Text>
                   </TouchableOpacity>
                 )}
 
                 {missionState === 'ON_SCENE_RESCUING' && (
                   <View style={{ gap: 10, width: '100%' }}>
                     {/* Banner hiển thị khi đã yêu cầu xe đón bờ */}
-                    {shoreHandoffData && shoreHandoffData.status === 'ASSIGNED' && (
+                    {!isReliefMission && shoreHandoffData && shoreHandoffData.status === 'ASSIGNED' && (
                       <View
                         style={{
                           backgroundColor: '#ECFDF5',
@@ -1899,7 +1937,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                       </View>
                     )}
 
-                    {shoreHandoffData && shoreHandoffData.status === 'REQUESTED' && (
+                    {!isReliefMission && shoreHandoffData && shoreHandoffData.status === 'REQUESTED' && (
                       <View
                         style={{
                           backgroundColor: '#FFFBEB',
@@ -1948,7 +1986,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                     )}
 
                     {/* Yêu cầu xe đón tại bờ (Nút nhỏ phụ ở trên dành cho ca cần xe chuyển tiếp) */}
-                    {(!shoreHandoffData || shoreHandoffData.status === 'NONE') && (
+                    {!isReliefMission && (!shoreHandoffData || shoreHandoffData.status === 'NONE') && (
                       <TouchableOpacity
                         style={{
                           flexDirection: 'row',
@@ -1998,7 +2036,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                       activeOpacity={0.88}
                     >
                       <Ionicons name="checkmark-done-circle" size={24} color="#FFFFFF" />
-                      <Text style={styles.grabBigBtnText}>HOÀN TẤT CỨU HỘ & BÁO CÁO</Text>
+                      <Text style={styles.grabBigBtnText}>
+                        {isReliefMission ? '✅ BÀN GIAO XONG & HOÀN TẤT' : 'HOÀN TẤT CỨU HỘ & BÁO CÁO'}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -2106,14 +2146,16 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   <Ionicons name="location-sharp" size={30} color="#0284C7" />
                 </View>
                 <Text style={styles.centeredModalTitle}>
-                  Xác nhận đến hiện trường
+                  {isReliefMission ? 'Xác nhận đến điểm giao cứu trợ' : 'Xác nhận đến hiện trường'}
                 </Text>
                 <Text style={styles.centeredModalDesc}>
-                  Đội đã tiếp cận chính xác vị trí người dân gặp nạn và bắt đầu phương án cứu nạn?
+                  {isReliefMission
+                    ? 'Đội đã có mặt tại điểm tiếp nhận để tiến hành bàn giao nhu yếu phẩm cứu trợ?'
+                    : 'Đội đã tiếp cận chính xác vị trí người dân gặp nạn và bắt đầu phương án cứu nạn?'}
                 </Text>
               </View>
 
-              {/* Tóm tắt địa điểm & số người */}
+              {/* Tóm tắt địa điểm & số người / hàng cứu trợ */}
               <View
                 style={{
                   backgroundColor: '#F8FAFC',
@@ -2132,10 +2174,21 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   </Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Feather name="users" size={14} color="#DC2626" />
-                  <Text style={{ fontSize: 13, color: '#DC2626', fontWeight: '800' }}>
-                    {victimHeadcount} người cần cứu ({citizenName})
-                  </Text>
+                  {isReliefMission ? (
+                    <>
+                      <MaterialCommunityIcons name="package-variant-closed" size={15} color="#059669" />
+                      <Text style={{ fontSize: 13, color: '#059669', fontWeight: '800' }}>
+                        Điểm tiếp nhận cứu trợ ({citizenName})
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Feather name="users" size={14} color="#DC2626" />
+                      <Text style={{ fontSize: 13, color: '#DC2626', fontWeight: '800' }}>
+                        {victimHeadcount} người cần cứu ({citizenName})
+                      </Text>
+                    </>
+                  )}
                 </View>
               </View>
 
@@ -2144,8 +2197,8 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   style={[
                     styles.modalPrimaryFullBtn,
                     {
-                      backgroundColor: '#2563EB',
-                      shadowColor: '#2563EB',
+                      backgroundColor: isReliefMission ? '#059669' : '#2563EB',
+                      shadowColor: isReliefMission ? '#059669' : '#2563EB',
                       shadowOffset: { width: 0, height: 4 },
                       shadowOpacity: 0.3,
                       shadowRadius: 8,
@@ -2159,7 +2212,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 >
                   <Ionicons name="checkmark-done" size={20} color="#FFFFFF" />
                   <Text style={styles.modalPrimaryFullBtnText}>
-                    Đã Đến Hiện Trường
+                    {isReliefMission ? 'Đã Đến Điểm Giao Hàng' : 'Đã Đến Hiện Trường'}
                   </Text>
                 </TouchableOpacity>
 
@@ -2790,20 +2843,30 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             <View style={styles.modalCard}>
               <View style={styles.modalHeaderRow}>
                 <Ionicons name="checkmark-circle" size={24} color="#16A34A" />
-                <Text style={styles.modalTitle}>Báo Cáo Hoàn Tất Cứu Hộ</Text>
+                <Text style={styles.modalTitle}>
+                  {isReliefMission ? 'Biên Bản Bàn Giao Hàng Cứu Trợ' : 'Báo Cáo Hoàn Tất Cứu Hộ'}
+                </Text>
                 <TouchableOpacity onPress={() => setCompletionModalVisible(false)}>
                   <Feather name="x" size={20} color="#64748B" />
                 </TouchableOpacity>
               </View>
 
               <Text style={styles.modalDesc}>
-                Ghi nhận kết quả tác chiến để lưu hồ sơ cứu trợ và đồng bộ báo cáo cho Ban Chỉ Huy:
+                {isReliefMission
+                  ? 'Ghi nhận kết quả bàn giao nhu yếu phẩm cứu trợ để lưu hồ sơ và đồng bộ báo cáo cho Ban Chỉ Huy:'
+                  : 'Ghi nhận kết quả tác chiến để lưu hồ sơ cứu trợ và đồng bộ báo cáo cho Ban Chỉ Huy:'}
               </Text>
 
               <View style={styles.completionStatsRow}>
                 <View style={styles.statBox}>
-                  <Text style={styles.statLabel}>Số người đã cứu</Text>
-                  <Text style={styles.statValue}>{rescuedHeadcount} người</Text>
+                  <Text style={styles.statLabel}>
+                    {isReliefMission ? 'Tổng số mặt hàng cấp' : 'Số người đã cứu'}
+                  </Text>
+                  <Text style={styles.statValue}>
+                    {isReliefMission
+                      ? `${(assignment?.supplies || sos?.supplies || []).reduce((sum: number, s: any) => sum + (Number(s.quantity) || 0), 0)} món/kiện`
+                      : `${rescuedHeadcount} người`}
+                  </Text>
                 </View>
                 <View style={styles.statBox}>
                   <Text style={styles.statLabel}>Thời gian tiếp cận</Text>
@@ -2811,7 +2874,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 </View>
               </View>
 
-              <Text style={styles.inputSectionLabel}>Biên bản tóm tắt tình hình hiện trường:</Text>
+              <Text style={styles.inputSectionLabel}>
+                {isReliefMission
+                  ? 'Biên bản tóm tắt bàn giao hàng cứu trợ:'
+                  : 'Biên bản tóm tắt tình hình hiện trường:'}
+              </Text>
               <TextInput
                 style={[styles.modalTextInput, { height: 70 }]}
                 value={fieldReportNotes}
@@ -2819,7 +2886,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 multiline
               />
 
-              {/* Chụp ảnh nghiệm thu hiện trường */}
+              {/* Chụp ảnh nghiệm thu hiện trường / bàn giao hàng */}
               <View style={styles.photoUploadRow}>
                 {capturedPhotoUri ? (
                   <View style={styles.capturedPhotoWrap}>
@@ -2831,7 +2898,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 ) : (
                   <TouchableOpacity style={styles.takePhotoBtn} onPress={handleCaptureFieldPhoto}>
                     <Ionicons name="camera-outline" size={20} color="#0284C7" />
-                    <Text style={styles.takePhotoBtnText}>Chụp ảnh xác nhận hiện trường</Text>
+                    <Text style={styles.takePhotoBtnText}>
+                      {isReliefMission ? 'Chụp ảnh biên bản / bàn giao hàng' : 'Chụp ảnh xác nhận hiện trường'}
+                    </Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -2849,7 +2918,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   onPress={handleFinalSubmitCompletion}
                   disabled={actionLoading}
                 >
-                  <Text style={styles.modalRejectConfirmBtnText}>Lưu & Hoàn Thành</Text>
+                  <Text style={styles.modalRejectConfirmBtnText}>
+                    {isReliefMission ? 'Xác Nhận Đã Bàn Giao' : 'Lưu & Hoàn Thành'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
