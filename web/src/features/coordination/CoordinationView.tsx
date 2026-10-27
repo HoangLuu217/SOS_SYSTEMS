@@ -12,6 +12,9 @@ import {
   Compass,
   LifeBuoy,
   XCircle,
+  Camera,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import type { SosRequestItem } from '@/types/dashboard';
 import { fetchSosRequests, completeSosRequest } from '@/api';
@@ -37,6 +40,11 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'CRITICAL' | 'EN_ROUTE' | 'ON_SCENE' | 'COMPLETED'>('ALL');
   const [completingId, setCompletingId] = useState<string | null>(null);
+  const [previewPhotos, setPreviewPhotos] = useState<{
+    images: string[];
+    activeIndex: number;
+    title: string;
+  } | null>(null);
 
   const refreshData = () => setRefreshIndex((p) => p + 1);
 
@@ -509,7 +517,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                         </div>
                       </td>
 
-                      {/* Cột 2: Hiện trường / Địa chỉ */}
+                      {/* Cột 2: Hiện trường / Địa chỉ & Ảnh chụp từ người dân */}
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
@@ -523,6 +531,89 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                               {sos.description}
                             </span>
                           )}
+
+                          {/* Ảnh hiện trường người dân gửi lên */}
+                          {(() => {
+                            const citizenImages: string[] = Array.isArray(sos.images) && sos.images.length > 0
+                              ? sos.images
+                              : (sos.imageUrl ? [sos.imageUrl] : []);
+
+                            if (citizenImages.length === 0) return null;
+
+                            return (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 21, marginTop: 4 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  {citizenImages.slice(0, 3).map((imgUrl, imgIdx) => (
+                                    <div
+                                      key={imgIdx}
+                                      style={{
+                                        position: 'relative',
+                                        width: 38,
+                                        height: 38,
+                                        borderRadius: 6,
+                                        overflow: 'hidden',
+                                        border: '1.5px solid #CBD5E1',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                                        flexShrink: 0,
+                                        transition: 'transform 0.15s ease',
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setPreviewPhotos({
+                                          images: citizenImages,
+                                          activeIndex: imgIdx,
+                                          title: `${sos.sosCode || 'SOS'} • ${sos.address || 'Hiện trường'}`,
+                                        });
+                                      }}
+                                      title="Bấm để phóng to xem ảnh hiện trường"
+                                    >
+                                      <img
+                                        src={imgUrl}
+                                        alt={`Hiện trường ${imgIdx + 1}`}
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                      />
+                                      {imgIdx === 2 && citizenImages.length > 3 && (
+                                        <div
+                                          style={{
+                                            position: 'absolute',
+                                            inset: 0,
+                                            background: 'rgba(15, 23, 42, 0.65)',
+                                            color: '#ffffff',
+                                            fontSize: 10,
+                                            fontWeight: 800,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                          }}
+                                        >
+                                          +{citizenImages.length - 2}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+
+                                <button
+                                  type="button"
+                                  className="photo-preview-chip"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPreviewPhotos({
+                                      images: citizenImages,
+                                      activeIndex: 0,
+                                      title: `${sos.sosCode || 'SOS'} • ${sos.address || 'Hiện trường'}`,
+                                    });
+                                  }}
+                                  title="Xem toàn bộ ảnh chụp hiện trường từ người dân"
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, height: 26 }}
+                                >
+                                  <Camera size={12} color="#0284C7" />
+                                  <span>{citizenImages.length} ảnh hiện trường</span>
+                                </button>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </td>
 
@@ -599,6 +690,209 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Lightbox Modal: Phóng to ảnh chụp hiện trường từ người dân */}
+      {previewPhotos && previewPhotos.images.length > 0 && (
+        <div
+          className="executive-photo-lightbox-backdrop"
+          onClick={() => setPreviewPhotos(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.82)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: 20,
+          }}
+        >
+          <div
+            className="executive-photo-lightbox-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 750,
+              width: '100%',
+              background: '#FFFFFF',
+              borderRadius: 16,
+              overflow: 'hidden',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <div
+              className="executive-photo-lightbox-header"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 18px',
+                borderBottom: '1px solid #E2E8F0',
+                background: '#F8FAFC',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Camera size={18} color="#0284C7" />
+                <span style={{ fontWeight: 800, fontSize: 13.5, color: '#0F172A' }}>
+                  ẢNH HIỆN TRƯỜNG TỪ NGƯỜI DÂN
+                </span>
+                <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>
+                  ({previewPhotos.activeIndex + 1}/{previewPhotos.images.length})
+                </span>
+                <span style={{ fontSize: 12, color: '#0284C7', fontWeight: 600, marginLeft: 6 }}>
+                  • {previewPhotos.title}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="executive-photo-lightbox-close"
+                onClick={() => setPreviewPhotos(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 4,
+                  borderRadius: 6,
+                  color: '#64748B',
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div
+              style={{
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#0F172A',
+                height: 440,
+                overflow: 'hidden',
+              }}
+            >
+              <img
+                src={previewPhotos.images[previewPhotos.activeIndex]}
+                alt="Hiện trường cứu nạn"
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  objectFit: 'contain',
+                }}
+              />
+
+              {/* Nút lùi ảnh */}
+              {previewPhotos.images.length > 1 && previewPhotos.activeIndex > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPreviewPhotos((prev) =>
+                      prev ? { ...prev, activeIndex: prev.activeIndex - 1 } : null
+                    )
+                  }
+                  style={{
+                    position: 'absolute',
+                    left: 14,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'rgba(255, 255, 255, 0.3)',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: 38,
+                    height: 38,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: '#FFFFFF',
+                  }}
+                  title="Ảnh trước"
+                >
+                  <ChevronLeft size={24} />
+                </button>
+              )}
+
+              {/* Nút tiến ảnh */}
+              {previewPhotos.images.length > 1 &&
+                previewPhotos.activeIndex < previewPhotos.images.length - 1 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewPhotos((prev) =>
+                        prev ? { ...prev, activeIndex: prev.activeIndex + 1 } : null
+                      )
+                    }
+                    style={{
+                      position: 'absolute',
+                      right: 14,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'rgba(255, 255, 255, 0.3)',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: 38,
+                      height: 38,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      color: '#FFFFFF',
+                    }}
+                    title="Ảnh tiếp theo"
+                  >
+                    <ChevronRight size={24} />
+                  </button>
+                )}
+            </div>
+
+            {/* Dải thumbnail xem nhanh bên dưới nếu nhiều ảnh */}
+            {previewPhotos.images.length > 1 && (
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 8,
+                  padding: '10px 16px',
+                  background: '#F1F5F9',
+                  borderTop: '1px solid #E2E8F0',
+                  overflowX: 'auto',
+                }}
+              >
+                {previewPhotos.images.map((img, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() =>
+                      setPreviewPhotos((prev) => (prev ? { ...prev, activeIndex: i } : null))
+                    }
+                    style={{
+                      width: 50,
+                      height: 50,
+                      borderRadius: 6,
+                      overflow: 'hidden',
+                      padding: 0,
+                      border:
+                        i === previewPhotos.activeIndex
+                          ? '2.5px solid #0284C7'
+                          : '1px solid #CBD5E1',
+                      opacity: i === previewPhotos.activeIndex ? 1 : 0.6,
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <img
+                      src={img}
+                      alt={`Thumb ${i + 1}`}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -520,6 +520,10 @@ async function seedNguHanhSon() {
         people: 4,
         description: 'Nước lũ sông Cổ Cò dâng cao ngang ngực 1.2m chảy xiết, trong nhà có 1 cụ già 82 tuổi liệt giường và 1 em bé 3 tuổi, cần ca-nô tiếp cận khẩn cấp!',
         contactPhone: '0905538065',
+        images: [
+          'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=800&q=80',
+          'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?auto=format&fit=crop&w=800&q=80',
+        ],
         status: 'ASSIGNED',
       });
       console.log('➕ Đã tạo yêu cầu SOS:', sos1.sosCode, '| Địa chỉ:', sos1.address);
@@ -532,6 +536,10 @@ async function seedNguHanhSon() {
       sos1.people = 4;
       sos1.status = 'ASSIGNED';
       sos1.priority = 'CRITICAL';
+      sos1.images = [
+        'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?auto=format&fit=crop&w=800&q=80',
+      ];
       sos1.location = {
         type: 'Point',
         coordinates: [108.2435, 16.0315],
@@ -557,6 +565,10 @@ async function seedNguHanhSon() {
         people: 2,
         description: 'Dãy trọ sinh viên và người lao động bị nước ngập cô lập kiệt vào, cần cung cấp áo phao và di tản người già sang điểm an toàn.',
         contactPhone: '0905123987',
+        images: [
+          'https://images.unsplash.com/photo-1534274988757-a28bf1a57c17?auto=format&fit=crop&w=800&q=80',
+          'https://images.unsplash.com/photo-1527482797697-8795b05a13fe?auto=format&fit=crop&w=800&q=80',
+        ],
         status: 'VERIFIED',
       });
       console.log('➕ Đã tạo yêu cầu SOS:', sos2.sosCode, '| Địa chỉ:', sos2.address);
@@ -566,6 +578,10 @@ async function seedNguHanhSon() {
       sos2.address = '125 Châu Thị Vĩnh Tế, Phường Mỹ An, Quận Ngũ Hành Sơn, TP Đà Nẵng';
       sos2.description = 'Dãy trọ sinh viên và người lao động bị nước ngập cô lập kiệt vào, cần cung cấp áo phao và di tản người già sang điểm an toàn.';
       sos2.contactPhone = '0905123987';
+      sos2.images = [
+        'https://images.unsplash.com/photo-1534274988757-a28bf1a57c17?auto=format&fit=crop&w=800&q=80',
+        'https://images.unsplash.com/photo-1527482797697-8795b05a13fe?auto=format&fit=crop&w=800&q=80',
+      ];
       sos2.location = {
         type: 'Point',
         coordinates: [108.2410, 16.0460],
