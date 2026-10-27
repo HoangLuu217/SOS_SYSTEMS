@@ -166,11 +166,23 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
   // TRƯỜNG HỢP 1: CÓ NHIỆM VỤ ĐANG TÁC CHIẾN
   if (activeAssignment && activeAssignment.status !== 'COMPLETED') {
     const sos = activeAssignment.sosRequestId || activeAssignment.sosId || {};
+    const isReliefMission =
+      activeAssignment.missionType === 'RELIEF_DISPATCH' ||
+      sos.emergencyType === 'RELIEF' ||
+      (typeof sos.description === 'string' && sos.description.includes('xuất cấp cứu trợ')) ||
+      (typeof activeAssignment.note === 'string' && activeAssignment.note.includes('xuất cấp cứu trợ'));
+
     const citizen = sos.citizenId || {};
-    const citizenName = citizen.fullName || 'Người dân gặp nạn';
+    const recipientName =
+      activeAssignment.recipientName ||
+      (typeof activeAssignment.note === 'string' && activeAssignment.note.match(/Người nhận:\s*([^.)\]]+)/)?.[1]?.trim()) ||
+      (typeof sos.description === 'string' && sos.description.match(/Người nhận:\s*([^.)\]]+)/)?.[1]?.trim());
+    const citizenName = isReliefMission
+      ? (recipientName || citizen.fullName || 'Đầu mối tiếp nhận cứu trợ')
+      : (citizen.fullName || 'Người dân gặp nạn');
     const citizenPhone = citizen.phone || sos.contactPhone || '';
-    const address = sos.address || 'Hiện trường cứu hộ';
-    const description = sos.description || 'Cần hỗ trợ khẩn cấp tại hiện trường';
+    const address = activeAssignment.destination || sos.address || 'Hiện trường cứu hộ';
+    const description = activeAssignment.note || sos.description || 'Cần hỗ trợ khẩn cấp tại hiện trường';
     const peopleCount = sos.people || 1;
     const sosCode = sos.sosCode || 'SOS';
     const currentStatus = activeAssignment.status;
@@ -185,12 +197,18 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
         {/* Header nhiệm vụ */}
         <View style={styles.cardHeader}>
           <View style={styles.badgeRow}>
-            <View style={styles.sosCodeBadge}>
-              <MaterialCommunityIcons name="shield-alert" size={14} color="#DC2626" />
-              <Text style={styles.sosCodeText}>{sosCode}</Text>
+            <View style={[styles.sosCodeBadge, isReliefMission && { backgroundColor: '#ECFDF5', borderColor: '#BBF7D0' }]}>
+              <MaterialCommunityIcons
+                name={isReliefMission ? 'package-variant-closed' : 'shield-alert'}
+                size={14}
+                color={isReliefMission ? '#059669' : '#DC2626'}
+              />
+              <Text style={[styles.sosCodeText, isReliefMission && { color: '#059669' }]}>
+                {isReliefMission ? 'CỨU TRỢ • ' + sosCode : sosCode}
+              </Text>
             </View>
-            <View style={styles.priorityBadge}>
-              <Text style={styles.priorityBadgeText}>
+            <View style={[styles.priorityBadge, isReliefMission && { backgroundColor: '#FEF3C7' }]}>
+              <Text style={[styles.priorityBadgeText, isReliefMission && { color: '#B45309' }]}>
                 {sos.priority === 'CRITICAL' ? 'NGUY CẤP' : 'KHẨN CẤP'}
               </Text>
             </View>
@@ -211,7 +229,9 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
             <View style={[styles.stepDot, isAccepted && styles.stepDotCompleted]}>
               <Feather name={isAccepted ? 'check' : 'clock'} size={10} color="#FFFFFF" />
             </View>
-            <Text style={[styles.stepLabel, isAccepted && styles.stepLabelActive]}>Xuất kích</Text>
+            <Text style={[styles.stepLabel, isAccepted && styles.stepLabelActive]}>
+              {isReliefMission ? 'Xuất kho' : 'Xuất kích'}
+            </Text>
           </View>
 
           <View style={[styles.stepLine, isEnRoute && styles.stepLineActive]} />
@@ -220,7 +240,9 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
             <View style={[styles.stepDot, isEnRoute && styles.stepDotCompleted]}>
               <Feather name="navigation" size={10} color="#FFFFFF" />
             </View>
-            <Text style={[styles.stepLabel, isEnRoute && styles.stepLabelActive]}>Di chuyển</Text>
+            <Text style={[styles.stepLabel, isEnRoute && styles.stepLabelActive]}>
+              {isReliefMission ? 'Vận chuyển' : 'Di chuyển'}
+            </Text>
           </View>
 
           <View style={[styles.stepLine, isOnScene && styles.stepLineActive]} />
@@ -229,14 +251,21 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
             <View style={[styles.stepDot, isOnScene && styles.stepDotCompleted]}>
               <Feather name="map-pin" size={10} color="#FFFFFF" />
             </View>
-            <Text style={[styles.stepLabel, isOnScene && styles.stepLabelActive]}>Hiện trường</Text>
+            <Text style={[styles.stepLabel, isOnScene && styles.stepLabelActive]}>
+              {isReliefMission ? 'Điểm giao' : 'Hiện trường'}
+            </Text>
           </View>
         </View>
 
-        {/* Thông tin hiện trường & người dân */}
+        {/* Thông tin hiện trường & người dân / tiếp nhận */}
         <View style={styles.detailBox}>
           <View style={styles.detailRow}>
-            <Feather name="map-pin" size={15} color="#0284C7" style={styles.detailIcon} />
+            <Feather
+              name={isReliefMission ? 'navigation' : 'map-pin'}
+              size={15}
+              color={isReliefMission ? '#059669' : '#0284C7'}
+              style={styles.detailIcon}
+            />
             <Text style={styles.addressText} numberOfLines={2}>
               {address}
             </Text>
@@ -246,7 +275,9 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
 
           <View style={styles.peopleRow}>
             <View style={styles.citizenCol}>
-              <Text style={styles.citizenLabel}>Người gặp nạn:</Text>
+              <Text style={styles.citizenLabel}>
+                {isReliefMission ? 'Người nhận / Cán bộ đầu mối:' : 'Người gặp nạn:'}
+              </Text>
               <Text style={styles.citizenName}>{citizenName}</Text>
               {citizenPhone ? (
                 <Text style={styles.citizenPhone}>{citizenPhone}</Text>
@@ -255,7 +286,7 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
 
             {citizenPhone ? (
               <TouchableOpacity
-                style={styles.callBtn}
+                style={[styles.callBtn, isReliefMission && { backgroundColor: '#059669' }]}
                 onPress={() => Linking.openURL(`tel:${citizenPhone}`)}
                 activeOpacity={0.8}
               >
@@ -266,9 +297,15 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
           </View>
 
           <View style={styles.infoPillsRow}>
-            <View style={styles.infoPill}>
-              <Feather name="users" size={12} color="#DC2626" />
-              <Text style={styles.infoPillText}>{peopleCount} người cần trợ giúp</Text>
+            <View style={[styles.infoPill, isReliefMission && { backgroundColor: '#ECFDF5' }]}>
+              {isReliefMission ? (
+                <MaterialCommunityIcons name="cube-send" size={13} color="#059669" />
+              ) : (
+                <Feather name="users" size={12} color="#DC2626" />
+              )}
+              <Text style={[styles.infoPillText, isReliefMission && { color: '#059669', fontWeight: '700' }]}>
+                {isReliefMission ? 'Nhiệm vụ tiếp tế nhu yếu phẩm' : `${peopleCount} người cần trợ giúp`}
+              </Text>
             </View>
 
             {description ? (
@@ -293,12 +330,14 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
             <>
               {currentStatus === 'PENDING' && (
                 <TouchableOpacity
-                  style={[styles.primaryActionBtn, { backgroundColor: '#0284C7' }]}
+                  style={[styles.primaryActionBtn, { backgroundColor: isReliefMission ? '#059669' : '#0284C7' }]}
                   onPress={() => handleAdvanceStatus('ACCEPTED')}
                   activeOpacity={0.85}
                 >
                   <Feather name="check-circle" size={17} color="#FFFFFF" />
-                  <Text style={styles.primaryActionBtnText}>Tiếp Nhận Nhiệm Vụ Này</Text>
+                  <Text style={styles.primaryActionBtnText}>
+                    {isReliefMission ? 'Tiếp Nhận Lệnh Tiếp Tế' : 'Tiếp Nhận Nhiệm Vụ Này'}
+                  </Text>
                 </TouchableOpacity>
               )}
 
@@ -309,7 +348,9 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
                   activeOpacity={0.85}
                 >
                   <MaterialCommunityIcons name="truck-fast" size={19} color="#FFFFFF" />
-                  <Text style={styles.primaryActionBtnText}>Xuất Phát / Đang Di Chuyển</Text>
+                  <Text style={styles.primaryActionBtnText}>
+                    {isReliefMission ? 'Xuất Kho / Đang Vận Chuyển' : 'Xuất Phát / Đang Di Chuyển'}
+                  </Text>
                 </TouchableOpacity>
               )}
 
@@ -320,7 +361,9 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
                   activeOpacity={0.85}
                 >
                   <Ionicons name="location" size={18} color="#FFFFFF" />
-                  <Text style={styles.primaryActionBtnText}>Đã Tới Hiện Trường Cứu Trợ</Text>
+                  <Text style={styles.primaryActionBtnText}>
+                    {isReliefMission ? 'Đã Đến Điểm Giao Cứu Trợ' : 'Đã Tới Hiện Trường Cứu Trợ'}
+                  </Text>
                 </TouchableOpacity>
               )}
 
@@ -330,8 +373,14 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
                   onPress={() => handleAdvanceStatus('IN_PROGRESS')}
                   activeOpacity={0.85}
                 >
-                  <MaterialCommunityIcons name="lifebuoy" size={19} color="#FFFFFF" />
-                  <Text style={styles.primaryActionBtnText}>Bắt Đầu Tác Chiến Cứu Nạn</Text>
+                  <MaterialCommunityIcons
+                    name={isReliefMission ? 'package-variant-closed' : 'lifebuoy'}
+                    size={19}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.primaryActionBtnText}>
+                    {isReliefMission ? 'Bắt Đầu Bàn Giao Hàng' : 'Bắt Đầu Tác Chiến Cứu Nạn'}
+                  </Text>
                 </TouchableOpacity>
               )}
 
@@ -341,13 +390,17 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
                   onPress={() =>
                     handleAdvanceStatus(
                       'COMPLETED',
-                      'Xác nhận bạn đã hoàn thành xuất sắc ca cứu nạn này?'
+                      isReliefMission
+                        ? 'Xác nhận bạn đã bàn giao đầy đủ hàng cứu trợ theo lệnh?'
+                        : 'Xác nhận bạn đã hoàn thành xuất sắc ca cứu nạn này?'
                     )
                   }
                   activeOpacity={0.85}
                 >
                   <Feather name="check-circle" size={18} color="#FFFFFF" />
-                  <Text style={styles.primaryActionBtnText}>Xác Nhận Hoàn Thành Nhiệm Vụ</Text>
+                  <Text style={styles.primaryActionBtnText}>
+                    {isReliefMission ? 'Xác Nhận Đã Bàn Giao Xong' : 'Xác Nhận Hoàn Thành Nhiệm Vụ'}
+                  </Text>
                 </TouchableOpacity>
               )}
             </>

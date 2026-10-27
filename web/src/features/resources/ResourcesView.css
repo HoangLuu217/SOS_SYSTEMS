@@ -41,9 +41,26 @@
   overflow-x: auto !important;
 }
 
+/* Row interactive click & hover */
+.resources-executive-container .executive-table tbody tr.executive-table-row {
+  cursor: pointer !important;
+  transition: background-color 0.15s ease;
+}
+
+.resources-executive-container .executive-table tbody tr.executive-table-row:hover td {
+  background-color: #f0f7ff !important;
+}
+
+.resources-executive-container,
+.resources-executive-container .executive-table,
+.resources-executive-container .executive-table th,
+.resources-executive-container .executive-table td {
+  font-family: var(--font-sans, 'Be Vietnam Pro', 'Outfit', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+}
+
 /* Typography & highlight details */
 .code-mono-bold {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
   font-size: 14px;
   font-weight: 800;
   color: #0f172a;
@@ -73,7 +90,7 @@
   color: #0284c7;
   font-weight: 700;
   font-size: 12px;
-  font-family: monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
   text-decoration: none;
   width: fit-content;
   transition: all 0.15s ease;
@@ -84,40 +101,30 @@
   color: #0369a1;
 }
 
-/* Badges for vehicle types */
-.resource-type-badge {
+/* Hiển thị loại phương tiện: Chuẩn typography thanh thoát, cân đối và sắc nét */
+.resource-type-badge,
+.vehicle-type-title {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 9999px;
-  font-size: 11.5px;
-  font-weight: 700;
-  border: 1px solid transparent;
-}
-
-.resource-type-badge.boat {
-  background: #e0f2fe;
-  color: #0369a1;
-  border-color: #bae6fd;
-}
-
-.resource-type-badge.ambulance {
-  background: #ffe4e6;
-  color: #be123c;
-  border-color: #fecdd3;
-}
-
-.resource-type-badge.truck {
-  background: #ede9fe;
-  color: #6d28d9;
-  border-color: #ddd6fe;
-}
-
-.resource-type-badge.generic {
-  background: #f1f5f9;
+  gap: 7px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  font-family: var(--font-sans, 'Be Vietnam Pro', 'Outfit', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  font-size: 13px;
+  font-weight: 600;
   color: #334155;
-  border-color: #e2e8f0;
+  letter-spacing: -0.15px;
+  white-space: nowrap;
+}
+
+.resource-type-badge svg,
+.vehicle-type-title svg,
+.vehicle-type-title .vehicle-type-icon {
+  color: #0284c7;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
 }
 
 .resource-status-badge {
@@ -207,73 +214,291 @@
   color: #7e22ce;
 }
 
-/* Deployed team supplies list cards */
-.team-supply-cards-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+/* Deployed team supplies list cards (Mỗi dòng 1 hàng theo phong cách Kho Khí Tài) */
+.team-inventory-rows-list {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
-  padding: 4px 2px;
+  width: 100%;
 }
 
-.team-supply-card {
+.team-inventory-row-card {
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
-  padding: 14px;
+  padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
-.team-supply-card:hover {
-  border-color: #0284c7;
-  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.08);
+.team-inventory-row-card:hover {
+  border-color: #93c5fd;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.07);
 }
 
-.team-supply-header {
+.team-row-top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.team-identity-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.team-badge-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.team-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.team-title-main {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+}
+
+.team-type-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+}
+
+.team-type-chip.flood_rescue {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #bae6fd;
+}
+
+.team-type-chip.medical_rescue {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.team-type-chip.fire_rescue {
+  background: #ffedd5;
+  color: #c2410c;
+  border-color: #fed7aa;
+}
+
+.team-type-chip.search_rescue {
+  background: #f3e8ff;
+  color: #7e22ce;
+  border-color: #e9d5ff;
+}
+
+.team-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #64748b;
+  flex-wrap: wrap;
+}
+
+.leader-label {
+  color: #94a3b8;
+  font-size: 11.5px;
+}
+
+.leader-name-text {
+  color: #1e293b;
+  font-weight: 700;
+}
+
+.meta-dot {
+  color: #cbd5e1;
+}
+
+.team-area-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.team-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Equipment bar below header (Phong cách Kho Khí Tài & Dự Trữ) */
+.team-row-equipment-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.equipment-bar-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.equipment-count-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: #0284c7;
+  background: #f0f9ff;
+  padding: 1px 8px;
+  border-radius: 4px;
+  border: 1px solid #e0f2fe;
+}
+
+.team-equipment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 8px;
 }
 
-.team-supply-items-wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.team-supply-item-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+.team-equipment-cell {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 3px 8px;
-  font-size: 12px;
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.15s ease;
+}
+
+.team-equipment-cell:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.cell-icon {
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.cell-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.cell-name {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #475569;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell-qty {
+  font-size: 13.5px;
+  font-weight: 800;
   color: #0f172a;
 }
 
-.team-supply-item-tag.highlight {
-  background: #f0fdf4;
-  border-color: #bbf7d0;
-  color: #166534;
+.cell-qty strong {
+  color: #0284c7;
+  font-size: 14px;
+}
+
+.equipment-empty-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+/* ==========================================================================
+   VẬT TƯ TIÊU HAO & CỨU TRỢ (CONSUMABLE RELIEF SUPPLIES)
+   ========================================================================== */
+.stock-meter-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 130px;
+}
+
+.stock-meter-track {
+  width: 100%;
+  height: 6px;
+  background: #f1f5f9;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.stock-meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.stock-meter-fill.safe { background: #10b981; }
+.stock-meter-fill.warning { background: #f59e0b; }
+.stock-meter-fill.danger { background: #ef4444; }
+
+.stock-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10.5px;
   font-weight: 700;
 }
 
-.team-supply-item-tag.medical {
-  background: #fef2f2;
-  border-color: #fecaca;
-  color: #991b1b;
-  font-weight: 700;
+.stock-status-pill.safe { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+.stock-status-pill.warning { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+.stock-status-pill.danger { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+
+.expiry-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
 }
 
-.team-supply-item-tag.equipment {
-  background: #eff6ff;
-  border-color: #bfdbfe;
-  color: #1e40af;
-  font-weight: 700;
-}
+.expiry-badge.good { background: #f8fafc; color: #334155; border: 1px solid #e2e8f0; }
+.expiry-badge.warn { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+.expiry-badge.expired { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+
+
+

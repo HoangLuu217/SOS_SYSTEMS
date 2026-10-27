@@ -2,6 +2,31 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 /**
+ * Sub-schema: GeoJSON Point for User Current Location
+ */
+const userPointSchema = new mongoose.Schema(
+  {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point',
+    },
+    coordinates: {
+      type: [Number],
+      default: undefined,
+      validate: {
+        validator: function (v) {
+          if (!v || v.length === 0) return true;
+          return Array.isArray(v) && v.length === 2 && !isNaN(v[0]) && !isNaN(v[1]);
+        },
+        message: 'Tọa độ GPS phải có dạng [longitude, latitude].',
+      },
+    },
+  },
+  { _id: false }
+);
+
+/**
  * Sub-schema: Citizen Profile (Embedded)
  */
 const citizenSchema = new mongoose.Schema(
@@ -51,6 +76,14 @@ const citizenSchema = new mongoose.Schema(
     pushToken: {
       type: String,
       trim: true,
+      default: null,
+    },
+    currentLocation: {
+      type: userPointSchema,
+      default: undefined,
+    },
+    currentLocationUpdatedAt: {
+      type: Date,
       default: null,
     },
   },
@@ -369,6 +402,14 @@ const userSchema = new mongoose.Schema(
       ref: 'AdministrativeArea',
       default: null,
     },
+    currentLocation: {
+      type: userPointSchema,
+      default: undefined,
+    },
+    currentLocationUpdatedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -388,6 +429,7 @@ userSchema.index({
 });
 userSchema.index({ 'authority.organizationId': 1 });
 userSchema.index({ 'authority.areaId': 1 });
+userSchema.index({ currentLocation: '2dsphere' }, { sparse: true });
 userSchema.index({ 'rescuer.areaId': 1, 'rescuer.verificationStatus': 1 });
 
 /**
@@ -395,6 +437,14 @@ userSchema.index({ 'rescuer.areaId': 1, 'rescuer.verificationStatus': 1 });
  * - Khi user có role LOCAL_AUTHORITY, bắt buộc phải có authority.organizationId và authority.areaId
  */
 userSchema.pre('validate', function () {
+  // Dọn dẹp tọa độ rỗng nếu có
+  if (this.citizen?.currentLocation?.coordinates && this.citizen.currentLocation.coordinates.length === 0) {
+    this.citizen.currentLocation = undefined;
+  }
+  if (this.currentLocation?.coordinates && this.currentLocation.coordinates.length === 0) {
+    this.currentLocation = undefined;
+  }
+
   if (this.roles && this.roles.includes('LOCAL_AUTHORITY')) {
     if (!this.authority?.organizationId) {
       this.invalidate('authority.organizationId', 'Tài khoản LOCAL_AUTHORITY bắt buộc phải có organizationId');

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Sidebar, type NavItemKey } from './Sidebar';
+import { MapPin } from 'lucide-react';
 import { AuthorPortal, AdminPortal } from '@/features/map-operation';
 import { NAV_TITLES } from '@/constants/navConfig';
 import type { User } from '@/types/auth';
@@ -30,6 +31,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       Boolean(user.roles?.includes('AUTHORITY'))) &&
     !user.roles?.includes('ADMIN');
 
+  const userAreaName =
+    user.authority?.areaName ||
+    (user.authority as any)?.jurisdictionAreaName ||
+    '';
+
   return (
     <div className="sos-dashboard-container">
       {/* 1. THANH SIDEBAR BÊN TRÁI PHÂN BIỆT THEO ROLE */}
@@ -46,7 +52,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       <main
         className="sos-main-content"
         style={{
-          overflow: 'hidden',
+          overflow:
+            (activeNavKey === 'map' && isAuthority) ||
+            activeNavKey === 'hazard_reports' ||
+            activeNavKey === 'shelters' ||
+            activeNavKey === 'notifications' ||
+            activeNavKey === 'alerts'
+              ? 'hidden'
+              : 'auto',
           height: '100vh',
           display: 'flex',
           flexDirection: 'column',
@@ -76,6 +89,29 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   {currentMeta.desc && <p className="sos-page-desc">{currentMeta.desc}</p>}
                 </div>
               </div>
+
+              {/* Huy hiệu khu vực địa bàn phụ trách ở góc phải header */}
+              {isAuthority && userAreaName && (
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: '#eff6ff',
+                    border: '1px solid #bfdbfe',
+                    borderRadius: 8,
+                    padding: '6px 14px',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: '#1d4ed8',
+                    boxShadow: '0 1px 2px rgba(37, 99, 235, 0.05)',
+                  }}
+                  title="Địa bàn bạn đang phụ trách quản lý"
+                >
+                  <MapPin size={14} style={{ color: '#2563eb' }} />
+                  <span>Khu vực: {userAreaName}</span>
+                </div>
+              )}
             </header>
 
             <div
@@ -85,11 +121,23 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
                 minHeight: 0,
-                overflow: 'hidden',
-                padding: '12px 18px 14px',
+                overflow:
+                  activeNavKey === 'hazard_reports' ||
+                  activeNavKey === 'shelters' ||
+                  activeNavKey === 'notifications' ||
+                  activeNavKey === 'alerts'
+                    ? 'hidden'
+                    : 'auto',
+                padding:
+                  activeNavKey === 'hazard_reports' ||
+                  activeNavKey === 'shelters' ||
+                  activeNavKey === 'notifications' ||
+                  activeNavKey === 'alerts'
+                    ? '14px 20px 16px'
+                    : '12px 18px 14px',
               }}
             >
-              <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+              <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                 {children}
               </div>
             </div>
