@@ -733,8 +733,19 @@ class SosAssignmentService {
     if (assignment.status === 'COMPLETED') {
       throw new ApiError(
         400,
-        `Không thể hủy phân công đã ở trạng thái '${assignment.status}'`
+        'Nhiệm vụ cứu hộ đã hoàn tất thành công, không thể hủy điều động!'
       );
+    }
+
+    const targetSosIdCheck = assignment.sosRequestId || assignment.sosId;
+    if (targetSosIdCheck) {
+      const sosCheck = await SosRequest.findById(targetSosIdCheck);
+      if (sosCheck && sosCheck.status === 'COMPLETED') {
+        throw new ApiError(
+          400,
+          'Sự cố cứu nạn đã hoàn tất thành công, không thể hủy điều động!'
+        );
+      }
     }
 
     assignment.status = 'CANCELLED';

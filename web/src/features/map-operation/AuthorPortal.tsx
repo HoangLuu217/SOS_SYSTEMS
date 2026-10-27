@@ -883,6 +883,17 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
   };
 
   const handleCancelAssignment = async (assignmentId: string, reason: string) => {
+    // 0. Kiểm tra an toàn: Tuyệt đối không hủy ca đã hoàn tất
+    const targetSos = domainDService.getSosRequests().find((r) => r.assignmentId === assignmentId || r.id === assignmentId);
+    const targetAssignment = domainDService.getAssignments().find((a) => a.id === assignmentId);
+    if (
+      String(targetSos?.status || '').toUpperCase() === 'COMPLETED' ||
+      String(targetAssignment?.status || '').toUpperCase() === 'COMPLETED'
+    ) {
+      showToast('Nhiệm vụ đã hoàn tất thành công, không thể hủy điều động!', 'error');
+      return;
+    }
+
     // 1. Cập nhật lạc quan (optimistic) trên UI ngay lập tức
     domainDService.cancelAssignment(assignmentId, reason);
     setSosRequests([...domainDService.getSosRequests()]);

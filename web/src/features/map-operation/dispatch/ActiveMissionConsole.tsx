@@ -1367,37 +1367,65 @@ export const ActiveMissionConsole: React.FC<Props> = ({
         </div>
       )}
 
-      {/* 3. TACTICAL ACTION BUTTON (Hủy điều động) - CỐ ĐỊNH Ở ĐÁY CHUẨN YÊU CẦU */}
-      <div style={{ flexShrink: 0, paddingTop: 4 }}>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenCancel();
-          }}
-          style={{
-            width: '100%',
-            height: 44,
-            padding: '0 16px',
-            background: '#fef2f2',
-            border: '1.5px solid #fecaca',
-            borderRadius: 10,
-            color: '#dc2626',
-            fontSize: 13.5,
-            fontWeight: 800,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            boxShadow: '0 2px 4px rgba(220,38,38,0.08)',
-            transition: 'all 0.15s ease',
-          }}
-        >
-          <XCircle size={16} />
-          <span>Hủy điều động</span>
-        </button>
-      </div>
+      {/* 3. TACTICAL ACTION BUTTON (Hủy điều động) - CHỈ HIỂN THỊ KHI CHƯA HOÀN TẤT */}
+      {!statusInfo.isCompleted &&
+      !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(String(assignment?.status || '').toUpperCase()) &&
+      !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(String(selectedSos?.status || '').toUpperCase()) ? (
+        <div style={{ flexShrink: 0, paddingTop: 4 }}>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenCancel();
+            }}
+            style={{
+              width: '100%',
+              height: 44,
+              padding: '0 16px',
+              background: '#fef2f2',
+              border: '1.5px solid #fecaca',
+              borderRadius: 10,
+              color: '#dc2626',
+              fontSize: 13.5,
+              fontWeight: 800,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              boxShadow: '0 2px 4px rgba(220,38,38,0.08)',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <XCircle size={16} />
+            <span>Hủy điều động</span>
+          </button>
+        </div>
+      ) : statusInfo.isCompleted ? (
+        <div style={{ flexShrink: 0, paddingTop: 4 }}>
+          <div
+            style={{
+              width: '100%',
+              height: 44,
+              padding: '0 16px',
+              background: '#f0fdf4',
+              border: '1.5px solid #86efac',
+              borderRadius: 10,
+              color: '#15803d',
+              fontSize: 13.5,
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              boxShadow: '0 2px 4px rgba(22,163,74,0.06)',
+            }}
+          >
+            <CheckCircle2 size={18} color="#16a34a" />
+            <span>Đã hoàn tất cứu hộ</span>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };
