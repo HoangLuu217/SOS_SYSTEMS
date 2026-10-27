@@ -76,6 +76,10 @@ export function AuthenticatedApp() {
     }
   }, []);
 
+  const handleNavigateToHome = React.useCallback(() => {
+    setActiveTab('home');
+  }, []);
+
   React.useEffect(() => {
     setNavigateHandler((tab) => handleNavigateToTab(tab as TabName));
   }, [setNavigateHandler, handleNavigateToTab]);
@@ -110,11 +114,11 @@ export function AuthenticatedApp() {
           {isRescuer ? (
             <RescuerMissionScreen
               onNavigateToTab={handleNavigateToTab}
-              onNavigateToHome={() => setActiveTab('home')}
+              onNavigateToHome={handleNavigateToHome}
               onMissionsCountChange={setActiveMissionsCount}
             />
           ) : (
-            <SosScreen onNavigateToHome={() => setActiveTab('home')} />
+            <SosScreen onNavigateToHome={handleNavigateToHome} />
           )}
         </View>
 

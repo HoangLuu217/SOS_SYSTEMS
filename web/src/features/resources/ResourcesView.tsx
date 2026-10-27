@@ -1449,8 +1449,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
             <table className="executive-table">
               <thead>
                 <tr>
-                  <th style={{ width: '18%' }}>Biển Số &amp; Định Danh</th>
-                  <th style={{ width: '15%' }}>Loại Phương Tiện</th>
+                  <th style={{ width: '16%' }}>Biển Số &amp; Định Danh</th>
+                  <th style={{ width: '17%' }}>Loại Phương Tiện</th>
                   <th style={{ width: '28%' }}>Đội Cứu Hộ Tiếp Nhận &amp; Chỉ Huy</th>
                   <th style={{ width: '14%' }}>Sức Chở &amp; Tải Trọng</th>
                   <th style={{ width: '13%' }}>Trạng Thái</th>
@@ -1505,16 +1505,16 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
                         {/* Cột 2: Loại phương tiện */}
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#1e293b', fontSize: 13, fontWeight: 500 }}>
-                            <span style={{ color: '#64748b', display: 'flex', alignItems: 'center' }}>
+                          <div className="vehicle-type-title">
+                            <span className="vehicle-type-icon">
                               {v.type === 'BOAT' ? (
-                                <LifeBuoy size={14} />
+                                <LifeBuoy size={15} />
                               ) : v.type === 'MOTORBIKE' ? (
-                                <Bike size={14} />
+                                <Bike size={15} />
                               ) : v.type === 'OTHER' ? (
-                                <Wrench size={14} />
+                                <Wrench size={15} />
                               ) : (
-                                <Truck size={14} />
+                                <Truck size={15} />
                               )}
                             </span>
                             <span>{typeLabel}</span>
@@ -1699,31 +1699,15 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           </div>
                         </td>
                         <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                            <button
-                              type="button"
-                              className="coordination-action-btn primary"
-                              style={{ padding: '4px 8px', fontSize: 11.5 }}
-                              onClick={() => {
-                                setConsumeTarget(item);
-                                setConsumeQuantity(Math.min(10, Math.max(1, item.quantity)));
-                                setConsumeDestination('');
-                                setConsumeNote('');
-                              }}
-                              disabled={item.quantity <= 0}
-                              title="Xuất cấp cứu trợ trực tiếp cho người dân hoặc hiện trường"
-                            >
-                              <Send size={11} />
-                              <span>Xuất cấp</span>
-                            </button>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <button
                               type="button"
                               className="coordination-action-btn outline"
-                              style={{ padding: '4px 8px', fontSize: 11.5 }}
                               onClick={() => setSelectedEquipment(item)}
                               title="Xem chi tiết hồ sơ vật tư"
                             >
-                              <Eye size={11} />
+                              <Eye size={12} />
+                              <span>Hồ sơ</span>
                             </button>
                           </div>
                         </td>
@@ -2191,71 +2175,6 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
             <form onSubmit={handleCreateEquipment}>
               <div className="executive-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {/* Bộ chọn phân loại: Khí tài vs Vật tư tiêu hao */}
-                <div style={{
-                  display: 'flex',
-                  gap: 8,
-                  padding: 4,
-                  background: '#f1f5f9',
-                  borderRadius: 10,
-                  border: '1px solid #e2e8f0'
-                }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEqSupplyType('DURABLE');
-                      setEqName(STANDARD_EQUIPMENT_CATALOG[0].name);
-                      setEqCategory(STANDARD_EQUIPMENT_CATALOG[0].category);
-                      setEqUnit(STANDARD_EQUIPMENT_CATALOG[0].unit);
-                      setEqQuantity(1);
-                      setEqSerialNumber(generateRandomEquipmentSerial(STANDARD_EQUIPMENT_CATALOG[0].category));
-                    }}
-                    style={{
-                      flex: 1,
-                      padding: '8px 12px',
-                      borderRadius: 8,
-                      border: 'none',
-                      fontSize: 12.5,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      background: eqSupplyType === 'DURABLE' ? '#ffffff' : 'transparent',
-                      color: eqSupplyType === 'DURABLE' ? '#0284c7' : '#64748b',
-                      boxShadow: eqSupplyType === 'DURABLE' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    🛡️ Trang Thiết Bị Dùng Lâu Dài
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEqSupplyType('CONSUMABLE');
-                      setEqName(STANDARD_CONSUMABLE_CATALOG[0].name);
-                      setEqCategory(STANDARD_CONSUMABLE_CATALOG[0].category);
-                      setEqUnit(STANDARD_CONSUMABLE_CATALOG[0].unit);
-                      setEqMinThreshold(STANDARD_CONSUMABLE_CATALOG[0].minThreshold);
-                      setEqQuantity(50);
-                      setEqSerialNumber(`LÔ-VT-${Date.now().toString().slice(-4)}`);
-                    }}
-                    style={{
-                      flex: 1,
-                      padding: '8px 12px',
-                      borderRadius: 8,
-                      border: 'none',
-                      fontSize: 12.5,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      background: eqSupplyType === 'CONSUMABLE' ? '#ffffff' : 'transparent',
-                      color: eqSupplyType === 'CONSUMABLE' ? '#0284c7' : '#64748b',
-                      boxShadow: eqSupplyType === 'CONSUMABLE' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    📦 Vật Tư Cứu Trợ
-                  </button>
-                </div>
-
                 {/* 1. Chọn đội tiếp nhận hoặc Kho tổng */}
                 <div className="executive-modal-field">
                   <label className="executive-modal-label">
@@ -2308,7 +2227,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     >
                       {STANDARD_CONSUMABLE_CATALOG.map((item) => (
                         <option key={item.name} value={item.name}>
-                          {item.name} (ĐVT: {item.unit} | Ngưỡng an toàn: ≥ {item.minThreshold})
+                          {item.name}
                         </option>
                       ))}
                       <option value="CUSTOM">➕ Khác (Nhập mặt hàng cứu trợ khác)...</option>
@@ -2885,25 +2804,6 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
             <div className="executive-modal-footer" style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {selectedEquipment.supplyType === 'CONSUMABLE' && selectedEquipment.quantity > 0 && (
-                  <button
-                    type="button"
-                    className="coordination-action-btn primary"
-                    onClick={() => {
-                      const currentEq = selectedEquipment;
-                      setSelectedEquipment(null);
-                      setConsumeTarget(currentEq);
-                      setConsumeQuantity(Math.min(currentEq.quantity, 10));
-                      setConsumeDestination('');
-                      setConsumeNote('');
-                    }}
-                    title="Xuất cấp trực tiếp cho người dân hoặc điểm ngập"
-                  >
-                    <Send size={13} />
-                    <span>Xuất Cấp Cứu Trợ</span>
-                  </button>
-                )}
-
                 {selectedEquipment.supplyType !== 'CONSUMABLE' && (
                   <button
                     type="button"

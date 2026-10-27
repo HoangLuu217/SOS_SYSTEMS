@@ -51,9 +51,16 @@
   background-color: #f0f7ff !important;
 }
 
+.resources-executive-container,
+.resources-executive-container .executive-table,
+.resources-executive-container .executive-table th,
+.resources-executive-container .executive-table td {
+  font-family: var(--font-sans, 'Be Vietnam Pro', 'Outfit', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+}
+
 /* Typography & highlight details */
 .code-mono-bold {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
   font-size: 14px;
   font-weight: 800;
   color: #0f172a;
@@ -83,7 +90,7 @@
   color: #0284c7;
   font-weight: 700;
   font-size: 12px;
-  font-family: monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
   text-decoration: none;
   width: fit-content;
   transition: all 0.15s ease;
@@ -94,22 +101,30 @@
   color: #0369a1;
 }
 
-/* Hiển thị loại phương tiện: Văn bản thông thường, không border, không nền */
-.resource-type-badge {
+/* Hiển thị loại phương tiện: Chuẩn typography thanh thoát, cân đối và sắc nét */
+.resource-type-badge,
+.vehicle-type-title {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   padding: 0;
   background: transparent;
   border: none;
+  font-family: var(--font-sans, 'Be Vietnam Pro', 'Outfit', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
   font-size: 13px;
-  font-weight: 500;
-  color: #1e293b;
+  font-weight: 600;
+  color: #334155;
+  letter-spacing: -0.15px;
+  white-space: nowrap;
 }
 
-.resource-type-badge svg {
-  color: #64748b;
+.resource-type-badge svg,
+.vehicle-type-title svg,
+.vehicle-type-title .vehicle-type-icon {
+  color: #0284c7;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
 }
 
 .resource-status-badge {
