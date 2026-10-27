@@ -232,11 +232,19 @@ class BackendApiService {
 
   acceptAssignment = (id: string) => assignmentApi.acceptAssignment(id);
 
-  updateAssignmentStatus = (id: string, status: string, note?: string) =>
-    assignmentApi.updateAssignmentStatus(id, status, note);
+  updateAssignmentStatus = (
+    id: string,
+    status: string,
+    note?: string,
+    extraData?: { proofImages?: string[]; actualRecipient?: string }
+  ) => assignmentApi.updateAssignmentStatus(id, status, note, extraData);
 
-  updateSosMissionStatus = (sosId: string, status: string, note?: string) =>
-    assignmentApi.updateSosMissionStatus(sosId, status, note);
+  updateSosMissionStatus = (
+    sosId: string,
+    status: string,
+    note?: string,
+    extraData?: { proofImages?: string[]; actualRecipient?: string }
+  ) => assignmentApi.updateSosMissionStatus(sosId, status, note, extraData);
 
   cancelAssignment = (id: string, cancelReason?: string) =>
     apiClient.patch<import('../types').SosAssignmentData>(`/assignments/${id}/cancel`, {

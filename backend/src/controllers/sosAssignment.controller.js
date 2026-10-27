@@ -108,8 +108,25 @@ class SosAssignmentController {
    */
   async updateStatus(req, res, next) {
     try {
-      const { status, note } = req.body;
-      const assignment = await sosAssignmentService.updateStatus(req.params.id, status, req.user, note);
+      const { status, note, proofImages, images, actualRecipient } = req.body;
+      const finalProofImages = Array.isArray(proofImages)
+        ? proofImages
+        : Array.isArray(images)
+        ? images
+        : proofImages
+        ? [proofImages]
+        : [];
+
+      const assignment = await sosAssignmentService.updateStatus(
+        req.params.id,
+        status,
+        req.user,
+        note,
+        {
+          proofImages: finalProofImages,
+          actualRecipient,
+        }
+      );
 
       const actorRole = req.user?.roles?.includes('RESCUER') ? 'RESCUER' : (req.user?.roles?.[0] || 'RESCUER');
       await auditService.log({
@@ -122,6 +139,8 @@ class SosAssignmentController {
           sosId: assignment.sosId,
           status,
           note,
+          proofImagesCount: finalProofImages.length,
+          actualRecipient,
         },
       });
 
@@ -152,12 +171,24 @@ class SosAssignmentController {
    */
   async updateStatusBySosId(req, res, next) {
     try {
-      const { status, note } = req.body;
+      const { status, note, proofImages, images, actualRecipient } = req.body;
+      const finalProofImages = Array.isArray(proofImages)
+        ? proofImages
+        : Array.isArray(images)
+        ? images
+        : proofImages
+        ? [proofImages]
+        : [];
+
       const result = await sosAssignmentService.updateStatusBySosId(
         req.params.sosId || req.params.id,
         status,
         req.user,
-        note
+        note,
+        {
+          proofImages: finalProofImages,
+          actualRecipient,
+        }
       );
 
       const actorRole = req.user?.roles?.includes('RESCUER') ? 'RESCUER' : (req.user?.roles?.[0] || 'RESCUER');
@@ -170,6 +201,8 @@ class SosAssignmentController {
         metadata: {
           status,
           note,
+          proofImagesCount: finalProofImages.length,
+          actualRecipient,
         },
       });
 
