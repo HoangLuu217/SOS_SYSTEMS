@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const { User, AdministrativeArea, Notification } = require('../models');
 const ApiError = require('../utils/apiError');
 
@@ -81,8 +82,9 @@ class RescuerService {
 
     // Cập nhật địa bàn đăng ký cứu hộ
     if (data.areaId !== undefined) {
-      user.rescuer.areaId = data.areaId || null;
-      if (data.areaId) {
+      const isValidAreaId = data.areaId && mongoose.Types.ObjectId.isValid(data.areaId);
+      user.rescuer.areaId = isValidAreaId ? data.areaId : null;
+      if (isValidAreaId) {
         if (!user.areaId) user.areaId = data.areaId;
         if (!user.citizen) user.citizen = {};
         if (!user.citizen.areaId) user.citizen.areaId = data.areaId;

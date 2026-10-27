@@ -36,3 +36,50 @@ export async function fetchRescueTeams(query?: Record<string, any>): Promise<{ s
   const qs = params.toString() ? `?${params.toString()}` : '';
   return fetchWithAuth(`/rescue-teams${qs}`, { method: 'GET' });
 }
+
+export async function createVehicle(payload: {
+  teamId?: string | null;
+  type: string;
+  plateNumber: string;
+  capacity?: number;
+  status?: string;
+  description?: string;
+}): Promise<{ success: boolean; data: VehicleItem; message?: string }> {
+  return fetchWithAuth('/vehicles', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateVehicle(
+  id: string,
+  payload: Partial<{
+    teamId: string | null;
+    type: string;
+    plateNumber: string;
+    capacity: number;
+    status: string;
+    description: string;
+  }>
+): Promise<{ success: boolean; data: VehicleItem; message?: string }> {
+  return fetchWithAuth(`/vehicles/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateVehicleStatus(
+  id: string,
+  status: string
+): Promise<{ success: boolean; data: VehicleItem; message?: string }> {
+  return fetchWithAuth(`/vehicles/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function deleteVehicle(
+  id: string
+): Promise<{ success: boolean; message?: string }> {
+  return fetchWithAuth(`/vehicles/${id}`, { method: 'DELETE' });
+}
