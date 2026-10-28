@@ -175,16 +175,16 @@ class AdminController {
    */
   async verifyRescuer(req, res, next) {
     try {
-      const { verificationStatus } = req.body;
-      const user = await adminService.verifyRescuer(req.params.id, verificationStatus);
+      const { verificationStatus, reason } = req.body;
+      const user = await adminService.verifyRescuer(req.params.id, verificationStatus, reason);
 
       await auditService.log({
         actorId: req.user._id,
         actorRole: req.user.roles?.includes('ADMIN') ? 'ADMIN' : 'LOCAL_AUTHORITY',
-        action: 'VERIFY_RESCUER',
+        action: verificationStatus === 'VERIFIED' ? 'VERIFY_RESCUER' : 'REVOKE_RESCUER',
         entityType: 'User',
         entityId: req.params.id,
-        metadata: { verificationStatus },
+        metadata: { verificationStatus, reason },
       });
 
       return sendSuccess(res, 200, 'Cập nhật trạng thái xác minh cứu hộ viên thành công', user);
