@@ -82,7 +82,7 @@ const formatDateDisplay = (val?: any): string => {
       const year = d.getFullYear();
       return `${day}/${month}/${year}`;
     }
-  } catch {}
+  } catch { }
   return str.split('T')[0] || str;
 };
 
@@ -109,7 +109,7 @@ const parseDateString = (str?: string): Date => {
   try {
     const d = new Date(clean);
     if (!isNaN(d.getTime())) return d;
-  } catch {}
+  } catch { }
 
   const fallback = new Date();
   fallback.setFullYear(fallback.getFullYear() - 20);

@@ -6,6 +6,9 @@ export interface EmergencyContact {
   name: string;
   phone: string;
   relation: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 /**

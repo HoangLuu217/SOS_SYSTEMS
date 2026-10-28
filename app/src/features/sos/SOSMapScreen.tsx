@@ -19,10 +19,27 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather, MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { backendApi } from '@/api';
 import { useAuth } from '@/context/AuthContext';
+import { EmergencyContact } from '@/types';
 import { CitizenSosTrackingModal } from '../profile/CitizenSosTrackingModal';
+import { styles } from './SOSMapScreen.styles';
+
+// Helper icon đại diện cho người thân
+const getRelationEmoji = (relation?: string) => {
+  if (!relation) return '👤';
+  const r = relation.toLowerCase();
+  if (r.includes('mẹ') || r.includes('me')) return '👩';
+  if (r.includes('ba') || r.includes('bố') || r.includes('cha')) return '👨';
+  if (r.includes('vợ') || r.includes('chồng')) return '💍';
+  if (r.includes('yêu') || r.includes('bồ')) return '❤️';
+  if (r.includes('bạn')) return '👥';
+  if (r.includes('anh') || r.includes('em') || r.includes('chị')) return '🧑';
+  if (r.includes('con')) return '👶';
+  return '👤';
+};
 
 // Danh sách các loại yêu cầu cứu trợ
 const REQUEST_TYPES = [
@@ -96,6 +113,7 @@ export interface SOSMapScreenProps {
 
 export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
   onClose,
+  initialEmergencyType,
   isTab = false,
   editingSosId,
   editingSosData,
@@ -105,8 +123,9 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
   const profilePhone = user?.phone || (user as any)?.phoneNumber || '';
   const hasProfilePhone = Boolean(profilePhone);
 
-  // Loại yêu cầu
-  const [requestType, setRequestType] = useState<string>('FLOOD');
+  // Loại yêu cầu (chọn được nhiều loại)
+  const [requestTypes, setRequestTypes] = useState<string[]>([initialEmergencyType || 'FLOOD']);
+  const requestType = requestTypes[0] || 'FLOOD';
   const [showTypeModal, setShowTypeModal] = useState<boolean>(false);
 
   // Số người cần cứu (người dùng có thể tự gõ số hoặc bấm nút +/-)
@@ -117,11 +136,9 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
   const [phone, setPhone] = useState<string>(profilePhone);
   const [secondaryPhone, setSecondaryPhone] = useState<string>('');
   const [showSecondaryPhone, setShowSecondaryPhone] = useState<boolean>(false);
-  const [savedEmergencyContact, setSavedEmergencyContact] = useState<{
-    name?: string;
-    phone?: string;
-    relation?: string;
-  } | null>(null);
+  const [savedEmergencyContact, setSavedEmergencyContact] = useState<EmergencyContact | null>(null);
+  const [savedEmergencyContacts, setSavedEmergencyContacts] = useState<EmergencyContact[]>([]);
+  const [showSavePinModal, setShowSavePinModal] = useState<boolean>(false);
 
   // Nội dung mô tả (0/500 ký tự)
   const [description, setDescription] = useState<string>('');
@@ -141,10 +158,10 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
   const mapPickerWebViewRef = useRef<WebView>(null);
   const peopleInputRef = useRef<any>(null);
 
-  // Đối tượng ưu tiên (Nhập tìm kiếm keyword + Gợi ý dropdown)
+  // Đối tượng ưu tiên (Popup Modal chọn nhanh)
   const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
   const [prioritySearchText, setPrioritySearchText] = useState<string>('');
-  const [isPriorityDropdownOpen, setIsPriorityDropdownOpen] = useState<boolean>(false);
+  const [showPriorityModal, setShowPriorityModal] = useState<boolean>(false);
 
   // Ảnh hiện trường (Không bắt buộc)
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -235,19 +252,97 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
     }
   };
 
+  // Tải danh bạ người thân đã lưu (bao gồm cả địa chỉ/tọa độ)
+  const loadSavedContacts = async () => {
+    try {
+      let foundList: EmergencyContact[] = [];
+
+      // 1. Đọc từ danh sách nhiều người thân trong AsyncStorage
+      const stored = await AsyncStorage.getItem('@sos_emergency_contacts');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            foundList = parsed;
+          }
+        } catch { }
+      }
+
+      // 2. Dự phòng: Đọc từ liên hệ đơn lẻ cũ nếu danh sách trống
+      if (foundList.length === 0) {
+        const single = await AsyncStorage.getItem('@sos_emergency_contact');
+        if (single) {
+          try {
+            const parsedSingle = JSON.parse(single);
+            if (parsedSingle && (parsedSingle.name || parsedSingle.phone)) {
+              foundList = [{ ...parsedSingle, id: parsedSingle.id || Date.now().toString() }];
+            }
+          } catch { }
+        }
+      }
+
+      // 3. Dự phòng từ user profile context nếu đã có
+      if (foundList.length === 0 && user?.citizen) {
+        const c = user.citizen as any;
+        if (Array.isArray(c.emergencyContacts) && c.emergencyContacts.length > 0) {
+          foundList = c.emergencyContacts;
+        } else if (c.emergencyContact?.name) {
+          foundList = [c.emergencyContact];
+        }
+      }
+
+      // Cập nhật ngay vào State nếu tìm thấy
+      if (foundList.length > 0) {
+        setSavedEmergencyContacts(foundList);
+        setSavedEmergencyContact(foundList[0]);
+      }
+
+      // 4. Đồng bộ từ backend ngầm
+      try {
+        const res: any = await backendApi.getCitizenProfile();
+        if (res?.success && res?.data?.citizen) {
+          const citizen = res.data.citizen;
+          let list: EmergencyContact[] = [];
+          if (Array.isArray(citizen.emergencyContacts) && citizen.emergencyContacts.length > 0) {
+            list = citizen.emergencyContacts;
+          } else if (citizen.emergencyContact?.name) {
+            list = [citizen.emergencyContact];
+          }
+          if (list.length > 0) {
+            setSavedEmergencyContacts(list);
+            setSavedEmergencyContact(list[0]);
+            AsyncStorage.setItem('@sos_emergency_contacts', JSON.stringify(list)).catch(() => { });
+          }
+        }
+      } catch { }
+    } catch { }
+  };
+
   useEffect(() => {
     if (!editingSosData && !editingSosId) {
       fetchLocation();
     } else {
       setLocating(false);
     }
-    // Tự động kiểm tra SĐT người thân đã lưu trong hồ sơ để gợi ý điền nhanh
-    backendApi.getCitizenProfile().then((res: any) => {
-      if (res?.success && res?.data?.citizen?.emergencyContact?.phone) {
-        setSavedEmergencyContact(res.data.citizen.emergencyContact);
-      }
-    }).catch(() => {});
+    loadSavedContacts();
   }, [editingSosData, editingSosId]);
+
+  // Lắng nghe sự kiện cập nhật danh bạ khẩn cấp từ trang Liên hệ khẩn cấp
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('EMERGENCY_CONTACTS_UPDATED', () => {
+      loadSavedContacts();
+    });
+    return () => {
+      sub.remove();
+    };
+  }, []);
+
+  // Tự động tải lại danh bạ khi mở Modal Bản đồ
+  useEffect(() => {
+    if (showMapPickerModal) {
+      loadSavedContacts();
+    }
+  }, [showMapPickerModal]);
 
   // Tự động điền số điện thoại từ hồ sơ cá nhân nếu chưa có
   useEffect(() => {
@@ -260,7 +355,11 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
   // Tự động điền đầy đủ dữ liệu khi mở ở chế độ CẬP NHẬT
   useEffect(() => {
     if (editingSosData) {
-      if (editingSosData.emergencyType) setRequestType(editingSosData.emergencyType);
+      if (editingSosData.emergencyTypes && Array.isArray(editingSosData.emergencyTypes) && editingSosData.emergencyTypes.length > 0) {
+        setRequestTypes(editingSosData.emergencyTypes);
+      } else if (editingSosData.emergencyType) {
+        setRequestTypes([editingSosData.emergencyType]);
+      }
       if (editingSosData.people) {
         const count = Number(editingSosData.people);
         setPeopleCount(count);
@@ -310,6 +409,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
 
   // Mở modal bản đồ chọn vị trí
   const openMapPicker = () => {
+    loadSavedContacts();
     const currentLat = location?.coords?.latitude || 15.96836;
     const currentLng = location?.coords?.longitude || 108.26054;
     setPickerCoords({ lat: currentLat, lng: currentLng });
@@ -377,6 +477,72 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
     } finally {
       setIsReverseGeocoding(false);
     }
+  };
+
+  // Ghim nhanh vị trí của người thân trên bản đồ
+  const handleSelectRelativeLocation = async (contact: EmergencyContact) => {
+    // 1. Nếu người thân đã có toạ độ latitude & longitude
+    if (typeof contact.latitude === 'number' && typeof contact.longitude === 'number') {
+      const lat = contact.latitude;
+      const lng = contact.longitude;
+      setPickerCoords({ lat, lng });
+      const addr = contact.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      setPickerAddress(addr);
+      mapPickerWebViewRef.current?.injectJavaScript(`window.setMapLocation(${lat}, ${lng}); true;`);
+      if (contact.phone) {
+        setSecondaryPhone(contact.phone);
+        setShowSecondaryPhone(true);
+      }
+      return;
+    }
+
+    // 2. Nếu người thân có địa chỉ chữ nhưng chưa có toạ độ GPS
+    if (contact.address && contact.address.trim()) {
+      setIsReverseGeocoding(true);
+      try {
+        const geoResults = await Location.geocodeAsync(contact.address.trim());
+        if (geoResults && geoResults.length > 0) {
+          const lat = geoResults[0].latitude;
+          const lng = geoResults[0].longitude;
+          setPickerCoords({ lat, lng });
+          setPickerAddress(contact.address.trim());
+          mapPickerWebViewRef.current?.injectJavaScript(`window.setMapLocation(${lat}, ${lng}); true;`);
+          if (contact.phone) {
+            setSecondaryPhone(contact.phone);
+            setShowSecondaryPhone(true);
+          }
+          // Tự động lưu lại toạ độ vào contact để các lần sau bay tới ngay lập tức
+          const updated = savedEmergencyContacts.map((c) =>
+            (c.id === contact.id || c.phone === contact.phone) ? { ...c, latitude: lat, longitude: lng } : c
+          );
+          setSavedEmergencyContacts(updated);
+          AsyncStorage.setItem('@sos_emergency_contacts', JSON.stringify(updated)).catch(() => { });
+          backendApi.updateEmergencyContact(updated).catch(() => { });
+          return;
+        }
+      } catch (err) {
+        console.warn('Geocoding error:', err);
+      } finally {
+        setIsReverseGeocoding(false);
+      }
+      // Nếu geocode không trả kết quả toạ độ, vẫn đặt địa chỉ chữ
+      setPickerAddress(contact.address.trim());
+      if (contact.phone) {
+        setSecondaryPhone(contact.phone);
+        setShowSecondaryPhone(true);
+      }
+      Alert.alert(
+        'Đã nhận địa chỉ người thân',
+        `Đã nhận địa chỉ "${contact.address}". Bạn có thể kéo thả ghim trên bản đồ để chỉ định vị trí chính xác nhất.`
+      );
+      return;
+    }
+
+    // 3. Nếu người thân chưa có địa chỉ đã lưu
+    Alert.alert(
+      'Chưa có địa chỉ người thân',
+      `"${contact.name} (${contact.relation || 'Người thân'})" chưa có địa chỉ/vị trí được lưu. Bạn có thể cập nhật trong mục Hồ sơ ➔ Liên hệ khẩn cấp.`
+    );
   };
 
   // Xác nhận vị trí đã chọn trên bản đồ
@@ -530,6 +696,20 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
     </html>
   `;
 
+  // Xử lý bật/tắt chọn loại yêu cầu (chọn được nhiều loại)
+  const handleToggleRequestType = (typeId: string) => {
+    if (requestTypes.includes(typeId)) {
+      if (requestTypes.length > 1) {
+        setRequestTypes((prev) => prev.filter((t) => t !== typeId));
+      } else {
+        setValidationMessage('Vui lòng chọn ít nhất 1 loại yêu cầu cứu trợ');
+        setValidationModalVisible(true);
+      }
+    } else {
+      setRequestTypes((prev) => [...prev, typeId]);
+    }
+  };
+
   // Xử lý đối tượng ưu tiên
   const handleAddCustomPriority = (text: string) => {
     const trimmed = text.trim();
@@ -538,7 +718,6 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
       setSelectedPriorities((prev) => [...prev, trimmed]);
     }
     setPrioritySearchText('');
-    setIsPriorityDropdownOpen(false);
   };
 
   const handleTogglePriority = (label: string) => {
@@ -678,6 +857,9 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
         textForAnalysis.includes('nguy kịch') ||
         textForAnalysis.includes('ngang ngực');
 
+      const selectedTypeObjs = REQUEST_TYPES.filter((t) => requestTypes.includes(t.id));
+      const requestTypeLabels = selectedTypeObjs.map((t) => t.label).join(', ');
+
       const payload = {
         location: {
           type: 'Point',
@@ -687,7 +869,8 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
         },
         address: finalAddress,
         priority: isCritical ? 'CRITICAL' : 'HIGH',
-        emergencyType: requestType || 'FLOOD',
+        emergencyType: requestTypes[0] || 'FLOOD',
+        emergencyTypes: requestTypes,
         description: description.trim() || null,
         people: peopleCount,
         contactPhone: phone.trim() || null,
@@ -699,7 +882,8 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
       // NẾU ĐANG Ở CHẾ ĐỘ CHỈNH SỬA / CẬP NHẬT: GỌI PATCH /sos/:id
       if (editingSosId) {
         const updatePayload: any = {
-          emergencyType: requestType || 'FLOOD',
+          emergencyType: requestTypes[0] || 'FLOOD',
+          emergencyTypes: requestTypes,
           people: peopleCount,
           contactPhone: phone.trim() || undefined,
           secondaryPhone: secondaryPhone.trim() || undefined,
@@ -752,7 +936,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
           sosId,
           rawSosData: response.data,
           sosCode: code,
-          requestTypeLabel: selectedTypeObj?.label || 'Cứu hộ khẩn cấp',
+          requestTypeLabel: requestTypeLabels || 'Cứu hộ khẩn cấp',
           people: peopleCount,
           address: finalAddress,
           phone: phone.trim(),
@@ -836,7 +1020,13 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
     }
   };
 
-  const selectedTypeObj = REQUEST_TYPES.find((t) => t.id === requestType);
+  const selectedTypeObjs = REQUEST_TYPES.filter((t) => requestTypes.includes(t.id));
+  const selectedTypeObj = selectedTypeObjs[0] || REQUEST_TYPES[0];
+  const typeDisplayText = selectedTypeObjs.length === 0
+    ? 'Vui lòng chọn'
+    : selectedTypeObjs.length === 1
+      ? `${selectedTypeObjs[0].emoji} ${selectedTypeObjs[0].label}`
+      : `${selectedTypeObjs.map(t => t.emoji).join(' ')} ${selectedTypeObjs[0].label} (+${selectedTypeObjs.length - 1})`;
 
   // MÀN HÌNH BÁO THÀNH CÔNG
   if (successData) {
@@ -965,13 +1155,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
           </Text>
         </View>
 
-        <TouchableOpacity
-          style={styles.reloadGpsBtn}
-          onPress={fetchLocation}
-          activeOpacity={0.7}
-        >
-          <Feather name="refresh-cw" size={17} color="#0284C7" />
-        </TouchableOpacity>
+        <View style={{ width: 36 }} />
       </View>
 
       <KeyboardAvoidingView
@@ -991,7 +1175,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
                 <View style={styles.fieldBadgeIcon}>
                   <Ionicons name="alert-circle" size={16} color="#0284C7" />
                 </View>
-                <Text style={styles.fieldTitle}>Loại yêu cầu</Text>
+                <Text style={styles.fieldTitle}>Loại yêu cầu:</Text>
               </View>
 
               <TouchableOpacity
@@ -1000,7 +1184,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
                 activeOpacity={0.8}
               >
                 <Text style={styles.dropdownSelectedTextInline} numberOfLines={1}>
-                  {selectedTypeObj ? `${selectedTypeObj.emoji}  ${selectedTypeObj.label}` : 'Vui lòng chọn'}
+                  {typeDisplayText}
                 </Text>
                 <Feather name="chevron-down" size={16} color="#64748B" style={{ marginLeft: 6 }} />
               </TouchableOpacity>
@@ -1014,7 +1198,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
                 <View style={styles.fieldBadgeIcon}>
                   <MaterialCommunityIcons name="account-group" size={16} color="#0284C7" />
                 </View>
-                <Text style={styles.fieldTitle}>Số người</Text>
+                <Text style={styles.fieldTitle}>Số người:</Text>
               </View>
 
               {/* Stepper có thể tự gõ số hoặc bấm nút +/- */}
@@ -1080,7 +1264,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
                   <View style={styles.fieldBadgeIcon}>
                     <Ionicons name="call" size={14} color="#0284C7" />
                   </View>
-                  <Text style={styles.fieldTitle}>Số điện thoại</Text>
+                  <Text style={styles.fieldTitle}>Số điện thoại:</Text>
                 </View>
 
                 {!showSecondaryPhone && (
@@ -1094,23 +1278,6 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
                   </TouchableOpacity>
                 )}
               </View>
-
-              {/* Thông báo tình trạng số điện thoại trong hồ sơ */}
-              {!hasProfilePhone ? (
-                <View style={styles.phoneMissingContainer}>
-                  <View style={styles.profilePhoneMissingTag}>
-                    <Feather name="alert-circle" size={12} color="#DC2626" style={{ marginRight: 4 }} />
-                    <Text style={styles.profilePhoneMissingTagText}>Chưa có trong hồ sơ</Text>
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.phoneProfileAutoFilledRow}>
-                  <Ionicons name="checkmark-circle" size={13} color="#0284C7" />
-                  <Text style={styles.phoneProfileAutoFilledText}>
-                    Đã tự động điền từ hồ sơ cá nhân
-                  </Text>
-                </View>
-              )}
 
               {/* Ô nhập SĐT chính */}
               <View style={[
@@ -1203,7 +1370,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
                 <View style={styles.fieldBadgeIcon}>
                   <MaterialCommunityIcons name="square-edit-outline" size={16} color="#0284C7" />
                 </View>
-                <Text style={styles.fieldTitle}>Nội dung</Text>
+                <Text style={styles.fieldTitle}>Nội dung:</Text>
               </View>
 
               <View style={[styles.textareaContainer, { marginTop: 8 }]}>
@@ -1228,27 +1395,24 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
               <View style={styles.fieldBadgeIcon}>
                 <Ionicons name="location" size={16} color="#0284C7" />
               </View>
-              <Text style={styles.fieldTitle}>Địa điểm</Text>
+              <Text style={styles.fieldTitle}>Địa điểm:</Text>
             </View>
-
             {/* Thẻ hiển thị địa chỉ đã định vị (chạm vào để đổi vị trí trên bản đồ) */}
             <TouchableOpacity
               style={[styles.locationAddressCard, isCustomMapLocation && styles.locationAddressCardCustom]}
               onPress={openMapPicker}
               activeOpacity={0.8}
             >
-              <Ionicons
-                name={isCustomMapLocation ? "pin" : "location-sharp"}
-                size={17}
-                color="#0284C7"
-                style={{ marginRight: 8 }}
-              />
+              <View style={[styles.mapPinActionBtn, { marginRight: 10 }]}>
+                <Ionicons
+                  name={isCustomMapLocation ? "pin" : "location-sharp"}
+                  size={17}
+                  color="#0284C7"
+                />
+              </View>
               <Text style={styles.locationAddressText} numberOfLines={2}>
                 {locating ? 'Đang xác định vị trí...' : gpsAddress ? gpsAddress : 'Chạm để chọn vị trí trên bản đồ'}
               </Text>
-              <View style={styles.mapPinActionBtn}>
-                <Feather name="map-pin" size={14} color="#0284C7" />
-              </View>
             </TouchableOpacity>
 
             {/* Nút quay lại GPS của thiết bị nếu đang dùng vị trí ghim */}
@@ -1277,125 +1441,42 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
 
             <View style={styles.formDivider} />
 
-            {/* 6. ĐỐI TƯỢNG CẦN ƯU TIÊN */}
-            <View style={styles.fieldHeaderRowCompact}>
-              <View style={styles.fieldBadgeIcon}>
-                <Ionicons name="heart" size={15} color="#0284C7" />
-              </View>
-              <Text style={styles.fieldTitle}>Đối tượng cần ưu tiên</Text>
-              <Feather name="info" size={14} color="#94A3B8" style={{ marginLeft: 4 }} />
-            </View>
-
-            {/* Ô input tìm kiếm & nhập tự do */}
-            <View style={[styles.priorityInputWrap, { marginTop: 8 }]}>
-              <Feather name="search" size={16} color="#94A3B8" style={styles.inputLeadingIcon} />
-              <TextInput
-                style={styles.priorityTextInput}
-                placeholder="Tìm hoặc gõ đối tượng ưu tiên..."
-                placeholderTextColor="#94A3B8"
-                value={prioritySearchText}
-                onChangeText={(text) => {
-                  setPrioritySearchText(text);
-                  setIsPriorityDropdownOpen(true);
-                }}
-                onFocus={() => setIsPriorityDropdownOpen(true)}
-              />
-              {prioritySearchText.trim().length > 0 ? (
-                <TouchableOpacity
-                  style={styles.addPriorityBtnInline}
-                  onPress={() => handleAddCustomPriority(prioritySearchText)}
-                  activeOpacity={0.8}
-                >
-                  <Feather name="plus" size={14} color="#FFFFFF" />
-                  <Text style={styles.addPriorityBtnInlineText}>Thêm</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  onPress={() => setIsPriorityDropdownOpen(!isPriorityDropdownOpen)}
-                  style={{ padding: 4 }}
-                >
-                  <Feather name={isPriorityDropdownOpen ? "chevron-up" : "chevron-down"} size={18} color="#64748B" />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Menu Dropdown gợi ý sổ ra theo từ khóa */}
-            {isPriorityDropdownOpen && (
-              <View style={styles.priorityDropdownCard}>
-                <View style={styles.priorityDropdownHeader}>
-                  <Text style={styles.priorityDropdownTitle}>
-                    {prioritySearchText ? `Kết quả tìm kiếm cho "${prioritySearchText}":` : 'Danh mục đối tượng ưu tiên gợi ý:'}
-                  </Text>
-                  <TouchableOpacity onPress={() => setIsPriorityDropdownOpen(false)} style={{ padding: 2 }}>
-                    <Feather name="x" size={16} color="#94A3B8" />
-                  </TouchableOpacity>
+            {/* 6. ĐỐI TƯỢNG CẦN ƯU TIÊN (Dạng chọn Dropdown mở Popup tiện lợi, không phải vuốt nhiều) */}
+            <View style={styles.inlineFieldRow}>
+              <View style={styles.fieldHeaderRowCompact}>
+                <View style={styles.fieldBadgeIcon}>
+                  <Ionicons name="heart" size={15} color="#0284C7" />
                 </View>
-
-                <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-                  {/* Nút thêm đối tượng tự do nếu không trùng mẫu */}
-                  {prioritySearchText.trim().length > 0 && !PRIORITY_SUGGESTIONS.some(s => s.label.toLowerCase() === prioritySearchText.trim().toLowerCase()) && (
-                    <TouchableOpacity
-                      style={styles.customAddSuggestionRow}
-                      onPress={() => handleAddCustomPriority(prioritySearchText)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.customAddIconWrap}>
-                        <Feather name="plus" size={14} color="#0284C7" />
-                      </View>
-                      <Text style={styles.customAddText}>
-                        Thêm: <Text style={{ fontWeight: '800', color: '#0284C7' }}>"{prioritySearchText.trim()}"</Text>
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-
-                  {filteredPrioritySuggestions.length > 0 ? (
-                    filteredPrioritySuggestions.map((item) => {
-                      const isSelected = selectedPriorities.includes(item.label);
-                      return (
-                        <TouchableOpacity
-                          key={item.id}
-                          style={[styles.prioritySuggestionRow, isSelected && styles.prioritySuggestionRowSelected]}
-                          onPress={() => {
-                            handleTogglePriority(item.label);
-                            setPrioritySearchText('');
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <FontAwesome5 name={item.icon} size={14} color={isSelected ? '#0284C7' : item.color} style={{ width: 22 }} />
-                          <Text style={[styles.prioritySuggestionText, isSelected && styles.prioritySuggestionTextSelected]}>
-                            {item.label}
-                          </Text>
-                          {isSelected ? (
-                            <Ionicons name="checkmark-circle" size={18} color="#0284C7" />
-                          ) : (
-                            <Feather name="plus" size={16} color="#94A3B8" />
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })
-                  ) : (
-                    <View style={{ paddingVertical: 10, alignItems: 'center' }}>
-                      <Text style={{ fontSize: 13, color: '#64748B' }}>Bấm nút "Thêm" ở trên để lưu đối tượng này.</Text>
-                    </View>
-                  )}
-                </ScrollView>
+                <Text style={styles.fieldTitle}>Đối tượng ưu tiên:</Text>
               </View>
-            )}
 
-            {/* Các tag đối tượng đã chọn */}
+              <TouchableOpacity
+                style={styles.dropdownBoxInline}
+                onPress={() => setShowPriorityModal(true)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.dropdownSelectedTextInline} numberOfLines={1}>
+                  {selectedPriorities.length === 0
+                    ? 'Chọn đối tượng'
+                    : selectedPriorities.length === 1
+                      ? selectedPriorities[0]
+                      : `${selectedPriorities[0]} (+${selectedPriorities.length - 1})`}
+                </Text>
+                <Feather name="chevron-down" size={16} color="#64748B" style={{ marginLeft: 6 }} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Các tag đối tượng đã chọn hiển thị gọn gàng bên dưới */}
             {selectedPriorities.length > 0 && (
-              <View style={styles.selectedPrioritiesContainer}>
-                <Text style={styles.selectedPrioritiesTitle}>Đối tượng đã chọn ({selectedPriorities.length}):</Text>
-                <View style={styles.selectedPrioritiesChipsWrap}>
-                  {selectedPriorities.map((item, idx) => (
-                    <View key={idx} style={styles.selectedPriorityChip}>
-                      <Text style={styles.selectedPriorityChipText}>{item}</Text>
-                      <TouchableOpacity onPress={() => handleRemovePriority(item)} style={styles.removePriorityChipBtn}>
-                        <Feather name="x" size={13} color="#0284C7" />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
+              <View style={styles.selectedPrioritiesChipsWrapInline}>
+                {selectedPriorities.map((item, idx) => (
+                  <View key={idx} style={styles.selectedPriorityChip}>
+                    <Text style={styles.selectedPriorityChipText}>{item}</Text>
+                    <TouchableOpacity onPress={() => handleRemovePriority(item)} style={styles.removePriorityChipBtn}>
+                      <Feather name="x" size={13} color="#0284C7" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
               </View>
             )}
 
@@ -1406,7 +1487,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
               <View style={styles.fieldBadgeIcon}>
                 <Ionicons name="camera" size={15} color="#0284C7" />
               </View>
-              <Text style={styles.fieldTitle}>Ảnh hiện trường (Không bắt buộc)</Text>
+              <Text style={styles.fieldTitle}>Ảnh hiện trường (Không bắt buộc):</Text>
             </View>
 
             <View style={styles.photoActionsRow}>
@@ -1462,7 +1543,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* MODAL 1: CHỌN LOẠI YÊU CẦU */}
+      {/* MODAL 1: CHỌN LOẠI YÊU CẦU (CHỌN ĐƯỢC NHIỀU LOẠI) */}
       <Modal
         visible={showTypeModal}
         transparent
@@ -1479,41 +1560,155 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
             onStartShouldSetResponder={() => true}
           >
             <View style={styles.modalSheetHeader}>
-              <Text style={styles.modalSheetTitle}>Chọn loại yêu cầu cứu trợ</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalSheetTitle}>Chọn loại yêu cầu cứu trợ</Text>
+                <Text style={styles.modalSheetSubtitle}>Có thể chọn nhiều loại khác nhau theo tình hình thực tế</Text>
+              </View>
               <TouchableOpacity onPress={() => setShowTypeModal(false)} style={{ padding: 4 }}>
                 <Feather name="x" size={20} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 360 }}>
-              {REQUEST_TYPES.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[
-                    styles.typeOptionItem,
-                    requestType === item.id && styles.typeOptionItemSelected,
-                  ]}
-                  onPress={() => {
-                    setRequestType(item.id);
-                    setShowTypeModal(false);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.typeOptionEmoji}>{item.emoji}</Text>
-                  <Text
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              {REQUEST_TYPES.map((item) => {
+                const isSelected = requestTypes.includes(item.id);
+                return (
+                  <TouchableOpacity
+                    key={item.id}
                     style={[
-                      styles.typeOptionLabel,
-                      requestType === item.id && styles.typeOptionLabelSelected,
+                      styles.typeOptionItem,
+                      isSelected && styles.typeOptionItemSelected,
                     ]}
+                    onPress={() => handleToggleRequestType(item.id)}
+                    activeOpacity={0.7}
                   >
-                    {item.label}
-                  </Text>
-                  {requestType === item.id && (
-                    <Ionicons name="checkmark-circle" size={20} color="#0284C7" />
-                  )}
-                </TouchableOpacity>
-              ))}
+                    <Text style={styles.typeOptionEmoji}>{item.emoji}</Text>
+                    <Text
+                      style={[
+                        styles.typeOptionLabel,
+                        isSelected && styles.typeOptionLabelSelected,
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                    {isSelected ? (
+                      <Ionicons name="checkmark-circle" size={22} color="#0284C7" />
+                    ) : (
+                      <Ionicons name="ellipse-outline" size={22} color="#CBD5E1" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
+
+            <TouchableOpacity
+              style={styles.modalDoneBtn}
+              onPress={() => setShowTypeModal(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalDoneBtnText}>
+                XÁC NHẬN ({requestTypes.length} LOẠI ĐÃ CHỌN)
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* MODAL MỚI: CHỌN ĐỐI TƯỢNG ƯU TIÊN (DẠNG POPUP TIỆN LỢI, KHÔNG CẦN VUỐT NHIỀU) */}
+      <Modal
+        visible={showPriorityModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPriorityModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowPriorityModal(false)}
+        >
+          <View
+            style={[styles.modalSheetCard, { maxHeight: '82%' }]}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.modalSheetHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalSheetTitle}>Chọn đối tượng ưu tiên</Text>
+                <Text style={styles.modalSheetSubtitle}>Chọn các đối tượng gặp nạn cần hỗ trợ khẩn cấp</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowPriorityModal(false)} style={{ padding: 4 }}>
+                <Feather name="x" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Ô nhập thêm đối tượng tùy chỉnh nhanh */}
+            <View style={styles.modalPriorityInputWrap}>
+              <Feather name="plus-circle" size={16} color="#0284C7" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.modalPriorityTextInput}
+                placeholder="Nhập đối tượng khác nếu không có trong danh sách..."
+                placeholderTextColor="#94A3B8"
+                value={prioritySearchText}
+                onChangeText={setPrioritySearchText}
+              />
+              {prioritySearchText.trim().length > 0 && (
+                <TouchableOpacity
+                  style={styles.modalPriorityAddBtn}
+                  onPress={() => {
+                    handleAddCustomPriority(prioritySearchText);
+                    setPrioritySearchText('');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.modalPriorityAddBtnText}>Thêm</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+              {PRIORITY_SUGGESTIONS.map((item) => {
+                const isSelected = selectedPriorities.includes(item.label);
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      styles.typeOptionItem,
+                      isSelected && styles.typeOptionItemSelected,
+                    ]}
+                    onPress={() => handleTogglePriority(item.label)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={{ width: 26, alignItems: 'center', marginRight: 10 }}>
+                      <FontAwesome5 name={item.icon} size={15} color={isSelected ? '#0284C7' : item.color} />
+                    </View>
+                    <Text
+                      style={[
+                        styles.typeOptionLabel,
+                        isSelected && styles.typeOptionLabelSelected,
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                    {isSelected ? (
+                      <Ionicons name="checkmark-circle" size={22} color="#0284C7" />
+                    ) : (
+                      <Ionicons name="ellipse-outline" size={22} color="#CBD5E1" />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.modalDoneBtn}
+              onPress={() => setShowPriorityModal(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalDoneBtnText}>
+                {selectedPriorities.length > 0
+                  ? `XÁC NHẬN (${selectedPriorities.length} ĐỐI TƯỢNG ĐÃ CHỌN)`
+                  : 'XONG'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -1584,8 +1779,19 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
             )}
           </View>
 
-          {/* Footer Xác nhận */}
+          {/* Footer Xác nhận & Nút chọn vị trí người thân */}
           <View style={styles.mapModalFooter}>
+            {savedEmergencyContacts.length > 0 && (
+              <TouchableOpacity
+                style={styles.savePinForRelativeBtn}
+                onPress={() => setShowSavePinModal(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="location-outline" size={16} color="#0284C7" style={{ marginRight: 6 }} />
+                <Text style={styles.savePinForRelativeBtnText}>Chọn vị trí người thân đã được ghim</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={styles.confirmMapLocationBtn}
               onPress={handleConfirmMapLocation}
@@ -1596,6 +1802,72 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
             </TouchableOpacity>
           </View>
         </SafeAreaView>
+      </Modal>
+
+      {/* MODAL CHỌN VỊ TRÍ NGƯỜI THÂN ĐÃ GHIM */}
+      <Modal
+        visible={showSavePinModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSavePinModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowSavePinModal(false)}
+        >
+          <View
+            style={styles.modalSheetCard}
+            onStartShouldSetResponder={() => true}
+          >
+            <View style={styles.modalSheetHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="people" size={19} color="#0284C7" style={{ marginRight: 8 }} />
+                <Text style={styles.modalSheetTitle}>Vị trí người thân đã lưu</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowSavePinModal(false)} style={{ padding: 4 }}>
+                <Feather name="x" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 12 }}>
+              Chạm vào người thân để tự động ghim vị trí cứu nạn:
+            </Text>
+
+            <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+              {savedEmergencyContacts.map((contact, idx) => {
+                const hasLocation = Boolean(contact.address || (typeof contact.latitude === 'number' && typeof contact.longitude === 'number'));
+                return (
+                  <TouchableOpacity
+                    key={contact.id || idx}
+                    style={styles.saveRelativeContactItem}
+                    onPress={() => {
+                      setShowSavePinModal(false);
+                      handleSelectRelativeLocation(contact);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontSize: 22, marginRight: 10 }}>{getRelationEmoji(contact.relation)}</Text>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                        <Text style={styles.saveRelativeContactName}>{contact.name} ({contact.relation || 'Người thân'})</Text>
+                        {hasLocation && (
+                          <View style={styles.relativeLocationBadge}>
+                            <Text style={styles.relativeLocationBadgeText}>Đã ghim 📍</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.saveRelativeContactSub} numberOfLines={1}>
+                        {contact.address ? contact.address : 'Chưa có địa chỉ đã lưu'}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
       </Modal>
 
       {/* MODAL 3: THÔNG BÁO XÁC THỰC THIẾU THÔNG TIN */}
@@ -1741,7 +2013,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
                     try {
                       const res = await backendApi.get('/sos');
                       if (res?.data && res.data[0]) targetId = res.data[0]._id;
-                    } catch {}
+                    } catch { }
                   }
                   if (targetId) {
                     setTrackingSosId(targetId);
@@ -1817,1256 +2089,4 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 42 : 54,
-    paddingBottom: 14,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
-  },
-  headerTitleWrap: {
-    flex: 1,
-    alignItems: 'center',
-    marginHorizontal: 8,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-    letterSpacing: 0.1,
-  },
-  headerSubTitle: {
-    fontSize: 11.5,
-    color: '#64748B',
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  reloadGpsBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#EFF6FF',
-  },
-  keyboardContainer: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 20, // Thu gọn khoảng trống thừa phía dưới cho vừa vặn sát thanh điều hướng
-  },
-
-  // THẺ FORM CHUNG
-  formCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 1,
-  },
-  inlineFieldRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  fieldHeaderRowCompact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  dropdownBoxInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: '#F8FAFC',
-    flex: 1,
-    maxWidth: '58%',
-  },
-  dropdownSelectedTextInline: {
-    fontSize: 13.5,
-    color: '#0F172A',
-    fontWeight: '600',
-    flex: 1,
-  },
-  formDivider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 14,
-  },
-  fieldSection: {
-    gap: 8,
-  },
-  fieldHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  betweenHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  fieldBadgeIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: '#E0F2FE',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  fieldTitle: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  fieldSubHelp: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 8,
-    lineHeight: 16,
-  },
-  requiredStar: {
-    color: '#EF4444',
-    fontWeight: '800',
-  },
-
-  // 1. DROPDOWN BOX
-  dropdownBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    backgroundColor: '#F8FAFC',
-  },
-  dropdownSelectedText: {
-    fontSize: 14,
-    color: '#0F172A',
-    fontWeight: '600',
-  },
-
-  // 2. STEPPER SỐ NGƯỜI (CÓ THỂ GÕ SỐ BÀN PHÍM VÀ BẤM NÚT +/-)
-  stepperContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  stepperActionBtn: {
-    width: 38,
-    height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
-  },
-  stepperValueBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-    backgroundColor: '#EFF6FF',
-    minWidth: 84,
-    height: 38,
-  },
-  stepperInput: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0284C7',
-    textAlign: 'center',
-    minWidth: 28,
-    padding: 0,
-  },
-  stepperUnitText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0284C7',
-    marginLeft: 4,
-  },
-
-  // 3. SỐ ĐIỆN THOẠI
-  phoneMissingContainer: {
-    marginTop: 6,
-    marginBottom: 8,
-    alignItems: 'flex-start',
-  },
-  phoneProfileAutoFilledRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: 4,
-    marginBottom: 8,
-  },
-  phoneProfileAutoFilledText: {
-    fontSize: 12,
-    color: '#0284C7',
-    fontWeight: '600',
-  },
-  profilePhoneTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#F0F9FF',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    paddingVertical: 2,
-    paddingHorizontal: 7,
-    borderRadius: 6,
-  },
-  profilePhoneTagText: {
-    fontSize: 11,
-    color: '#0284C7',
-    fontWeight: '700',
-  },
-  profilePhoneMissingTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-  },
-  profilePhoneMissingTagText: {
-    fontSize: 11,
-    color: '#DC2626',
-    fontWeight: '700',
-  },
-  addPhoneBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#EFF6FF',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-  },
-  addPhoneBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-  inputWrapWithIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    backgroundColor: '#F8FAFC',
-    height: 48,
-  },
-  inputLeadingIcon: {
-    marginRight: 8,
-  },
-  textInputInside: {
-    flex: 1,
-    fontSize: 14,
-    color: '#0F172A',
-    fontWeight: '500',
-  },
-
-  // 4. TEXTAREA NỘI DUNG
-  textareaContainer: {
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    padding: 12,
-    backgroundColor: '#F8FAFC',
-    minHeight: 105,
-    justifyContent: 'space-between',
-  },
-  textareaInside: {
-    fontSize: 14,
-    color: '#0F172A',
-    minHeight: 70,
-    textAlignVertical: 'top',
-    lineHeight: 20,
-  },
-  charCounterText: {
-    fontSize: 12,
-    color: '#94A3B8',
-    textAlign: 'right',
-    marginTop: 4,
-  },
-
-  // 5. ĐỊA ĐIỂM
-  openMapBtnHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#EFF6FF',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-  },
-  openMapBtnHeaderText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-  headerGpsActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F0F9FF',
-    borderWidth: 1.2,
-    borderColor: '#BAE6FD',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-  },
-  headerGpsActionBtnCustom: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#93C5FD',
-  },
-  headerGpsActionText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#0284C7',
-    letterSpacing: 0.2,
-  },
-  headerGpsActionHint: {
-    fontSize: 10.5,
-    color: '#64748B',
-  },
-  locationAddressCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginTop: 8,
-  },
-  locationAddressCardCustom: {
-    borderColor: '#38BDF8',
-    backgroundColor: '#F0F9FF',
-  },
-  locationAddressText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#0F172A',
-    fontWeight: '500',
-    lineHeight: 18,
-  },
-  locationSelectorCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F0F9FF',
-    borderWidth: 1.5,
-    borderColor: '#BAE6FD',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-  },
-  locationSelectorCardCustom: {
-    borderColor: '#0284C7',
-    backgroundColor: '#F0F9FF',
-    borderWidth: 1.5,
-  },
-  locationSelectorLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    marginRight: 8,
-  },
-  locationModeBadge: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#0284C7',
-    backgroundColor: '#E0F2FE',
-    paddingVertical: 1,
-    paddingHorizontal: 6,
-    borderRadius: 4,
-  },
-  locationModeHint: {
-    fontSize: 11,
-    color: '#64748B',
-    fontStyle: 'italic',
-  },
-  locationSelectorText: {
-    fontSize: 13,
-    color: '#0369A1',
-    fontWeight: '600',
-    lineHeight: 18,
-  },
-  mapPinActionBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#E0F2FE',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  resetGpsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: 6,
-    paddingVertical: 3,
-    alignSelf: 'flex-start',
-  },
-  resetGpsText: {
-    fontSize: 11.5,
-    color: '#0284C7',
-    fontWeight: '600',
-    textDecorationLine: 'underline',
-  },
-
-  // 6. ĐỐI TƯỢNG CẦN ƯU TIÊN (SEARCH KEYWORD & GỢI Ý)
-  priorityInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    backgroundColor: '#F8FAFC',
-    height: 48,
-  },
-  priorityTextInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#0F172A',
-  },
-  addPriorityBtnInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#0284C7',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-  },
-  addPriorityBtnInlineText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  priorityDropdownCard: {
-    marginTop: 6,
-    borderWidth: 1.5,
-    borderColor: '#BAE6FD',
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    padding: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  priorityDropdownHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    marginBottom: 6,
-  },
-  priorityDropdownTitle: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-  customAddSuggestionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F9FF',
-    padding: 9,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    marginBottom: 6,
-  },
-  customAddIconWrap: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#E0F2FE',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  customAddText: {
-    fontSize: 13,
-    color: '#334155',
-    flex: 1,
-  },
-  prioritySuggestionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 9,
-    paddingHorizontal: 8,
-    borderRadius: 8,
-    marginBottom: 3,
-  },
-  prioritySuggestionRowSelected: {
-    backgroundColor: '#F0F9FF',
-  },
-  prioritySuggestionText: {
-    fontSize: 13,
-    color: '#334155',
-    flex: 1,
-    marginLeft: 8,
-  },
-  prioritySuggestionTextSelected: {
-    color: '#0284C7',
-    fontWeight: '700',
-  },
-  selectedPrioritiesContainer: {
-    marginTop: 10,
-  },
-  selectedPrioritiesTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
-    marginBottom: 6,
-  },
-  selectedPrioritiesChipsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  selectedPriorityChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E0F2FE',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    borderRadius: 20,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    gap: 6,
-  },
-  selectedPriorityChipText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#0369A1',
-  },
-  removePriorityChipBtn: {
-    padding: 2,
-  },
-  quickTagsSection: {
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  quickTagsHeading: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-    marginBottom: 8,
-  },
-  quickTagsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  quickTagBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  quickTagBtnSelected: {
-    backgroundColor: '#F0F9FF',
-    borderColor: '#0284C7',
-    borderWidth: 1.5,
-  },
-  quickTagBtnText: {
-    fontSize: 12,
-    color: '#475569',
-    fontWeight: '600',
-  },
-  quickTagBtnTextSelected: {
-    color: '#0284C7',
-    fontWeight: '700',
-  },
-
-  // 7. ĐÍNH KÈM ẢNH
-  photoActionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  photoBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F0F9FF',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    borderRadius: 10,
-    paddingVertical: 11,
-    gap: 6,
-  },
-  photoBtnText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#0284C7',
-  },
-  imagePreviewWrap: {
-    position: 'relative',
-    marginTop: 10,
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  previewImage: {
-    width: '100%',
-    height: 160,
-    borderRadius: 10,
-  },
-  removeImgBtn: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-  },
-
-  // 8. NÚT GỬI CỨU HỘ XANH DƯƠNG CHỦ ĐẠO
-  mainSendBtn: {
-    backgroundColor: '#0284C7',
-    borderRadius: 14,
-    paddingVertical: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-    marginBottom: 8,
-    shadowColor: '#0284C7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  sendingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  mainSendBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-
-  // MODAL BOTTOM SHEET CHO LOẠI YÊU CẦU
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
-    justifyContent: 'flex-end',
-  },
-  modalSheetCard: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
-  },
-  modalSheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  modalSheetTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  typeOptionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 13,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  typeOptionItemSelected: {
-    backgroundColor: '#F0F9FF',
-    borderColor: '#BAE6FD',
-  },
-  typeOptionEmoji: {
-    fontSize: 18,
-    marginRight: 10,
-  },
-  typeOptionLabel: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  typeOptionLabelSelected: {
-    color: '#0284C7',
-    fontWeight: '700',
-  },
-
-  // MODAL BẢN ĐỒ CHỌN VỊ TRÍ
-  mapModalContainer: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  mapModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-  },
-  mapModalCloseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mapModalTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  mapModalSubtitle: {
-    fontSize: 11.5,
-    color: '#64748B',
-    marginTop: 1,
-  },
-  mapModalMyGpsBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mapModalAddressBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  mapModalAddressIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#E0F2FE',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  mapModalAddressLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  mapModalAddressText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 1,
-  },
-  mapWebViewContainer: {
-    flex: 1,
-    position: 'relative',
-  },
-  mapLoadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mapModalFooter: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-  },
-  confirmMapLocationBtn: {
-    backgroundColor: '#0284C7',
-    borderRadius: 14,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#0284C7',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  confirmMapLocationBtnText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-
-  // MODAL XÁC THỰC
-  valAlertCard: {
-    margin: 24,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 20,
-    alignItems: 'center',
-    alignSelf: 'center',
-    width: '88%',
-    maxWidth: 340,
-  },
-  valAlertBadge: {
-    marginBottom: 8,
-  },
-  valAlertTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 6,
-  },
-  valAlertMessage: {
-    fontSize: 13,
-    color: '#475569',
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 16,
-  },
-  valAlertBtn: {
-    backgroundColor: '#0284C7',
-    borderRadius: 10,
-    paddingVertical: 11,
-    paddingHorizontal: 24,
-    width: '100%',
-    alignItems: 'center',
-  },
-  valAlertBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  // THÀNH CÔNG
-  successContainer: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  successCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 22,
-    width: '100%',
-    maxWidth: 420,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  successIconOuter: {
-    marginBottom: 10,
-  },
-  successTitle: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: '#0284C7',
-    textAlign: 'center',
-    marginBottom: 6,
-  },
-  successSub: {
-    fontSize: 12.5,
-    color: '#64748B',
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 16,
-  },
-  successDetailsBox: {
-    width: '100%',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: 8,
-  },
-  successDetailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  successDetailLabel: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  successDetailCode: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0284C7',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  successDetailValue: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#0F172A',
-    flex: 1,
-    textAlign: 'right',
-  },
-  doneBtn: {
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  doneBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  nearbyModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  nearbyModalCard: {
-    width: '100%',
-    maxWidth: 330,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 18,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  nearbyModalIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#E0F2FE',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  nearbyModalTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-    textAlign: 'center',
-    marginBottom: 8,
-    letterSpacing: 0.2,
-  },
-  nearbyCodeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#F0F9FF',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    marginBottom: 10,
-  },
-  nearbyCodeBadgeLabel: {
-    fontSize: 11.5,
-    color: '#0369A1',
-    fontWeight: '500',
-  },
-  nearbyCodeBadgeValue: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    color: '#0284C7',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  nearbyModalDesc: {
-    fontSize: 13,
-    color: '#475569',
-    textAlign: 'center',
-    lineHeight: 18.5,
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-  nearbyModalButtons: {
-    width: '100%',
-    gap: 8,
-  },
-  nearbyGoUpdateBtn: {
-    width: '100%',
-    backgroundColor: '#0284C7',
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nearbyGoUpdateBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
-  },
-  nearbyBackBtn: {
-    width: '100%',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nearbyBackBtnText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  limitModalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  limitModalCard: {
-    width: '100%',
-    maxWidth: 360,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 22,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 18,
-    elevation: 10,
-  },
-  limitModalIconWrap: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#EFF6FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 14,
-    borderWidth: 1.5,
-    borderColor: '#BAE6FD',
-  },
-  limitModalTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-    textAlign: 'center',
-    letterSpacing: 0.3,
-    marginBottom: 10,
-  },
-  limitModalDesc: {
-    fontSize: 13,
-    color: '#334155',
-    textAlign: 'center',
-    lineHeight: 19,
-    marginBottom: 12,
-  },
-  limitActiveListBox: {
-    width: '100%',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 10,
-    marginBottom: 12,
-    gap: 6,
-  },
-  limitActiveListTitle: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#64748B',
-    marginBottom: 2,
-  },
-  limitActiveItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  limitActiveCodeText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#0284C7',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  limitActiveAddressText: {
-    flex: 1,
-    fontSize: 11.5,
-    color: '#475569',
-  },
-  limitModalSubDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    textAlign: 'center',
-    lineHeight: 17,
-    marginBottom: 16,
-  },
-  limitModalButtons: {
-    width: '100%',
-    gap: 8,
-  },
-  limitManageBtn: {
-    width: '100%',
-    backgroundColor: '#0284C7',
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  limitManageBtnText: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
-  },
-  limitCloseBtn: {
-    width: '100%',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  limitCloseBtnText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  updateSuccessModalCard: {
-    width: '100%',
-    maxWidth: 350,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 18,
-    elevation: 10,
-  },
-  updateSuccessIconWrap: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: '#DCFCE7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 14,
-    borderWidth: 1.5,
-    borderColor: '#86EFAC',
-  },
-  updateSuccessTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#16A34A',
-    textAlign: 'center',
-    letterSpacing: 0.3,
-    marginBottom: 8,
-  },
-  updateSuccessDesc: {
-    fontSize: 13,
-    color: '#334155',
-    textAlign: 'center',
-    lineHeight: 19,
-    marginBottom: 18,
-    paddingHorizontal: 4,
-  },
-  updateSuccessDoneBtn: {
-    width: '100%',
-    backgroundColor: '#0284C7',
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  updateSuccessDoneBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
-  },
-});
 

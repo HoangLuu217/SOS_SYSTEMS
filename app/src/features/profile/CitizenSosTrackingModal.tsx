@@ -276,6 +276,9 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
   const currentStatus = sos?.status || 'PENDING';
   const statusCfg = STATUS_CONFIG[currentStatus] || STATUS_CONFIG['PENDING'];
   const typeCfg = TYPE_CONFIG[sos?.emergencyType] || TYPE_CONFIG['FLOOD'];
+  const typeLabelText = Array.isArray(sos?.emergencyTypes) && sos.emergencyTypes.length > 0
+    ? sos.emergencyTypes.map((t: string) => TYPE_CONFIG[t]?.label || t).join(', ')
+    : typeCfg.label;
 
   // Tọa độ người dân
   const victimLng = sos?.location?.coordinates?.[0] || 108.26054;
@@ -722,7 +725,7 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                 </View>
                 <View style={styles.requestMiniBox}>
                   <Text style={styles.requestMiniLabel}>Loại yêu cầu</Text>
-                  <Text style={styles.requestMiniValue} numberOfLines={1}>{typeCfg.label}</Text>
+                  <Text style={styles.requestMiniValue} numberOfLines={2}>{typeLabelText}</Text>
                 </View>
               </View>
 
