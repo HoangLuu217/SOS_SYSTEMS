@@ -174,8 +174,55 @@ export const Sidebar: React.FC<SidebarProps> = ({
     try {
       const rescuerRes = await fetchAdminUsers({ role: 'RESCUER', limit: '100' });
       if (rescuerRes.success && Array.isArray(rescuerRes.data?.users)) {
-        const pendingCount = rescuerRes.data.users.filter(
-          (u: any) => u.rescuer?.verificationStatus === 'PENDING'
+        let rescuers = rescuerRes.data.users;
+
+        const isAuthority = Boolean(
+          user?.roles?.includes('LOCAL_AUTHORITY') ||
+          user?.roles?.includes('AUTHORITY') ||
+          Boolean(user?.authority?.areaId || user?.authority?.areaName)
+        );
+        const isAdminUser = Boolean(user?.roles?.includes('ADMIN') || (user as any)?.role === 'ADMIN') && !isAuthority;
+
+        if (!isAdminUser) {
+          const activeOfficer = domainDService.getActiveOfficer();
+          const userAreaId =
+            user?.authority?.areaId ||
+            (user?.authority as any)?.administrativeAreaId ||
+            (user?.authority as any)?.jurisdictionAreaId ||
+            activeOfficer?.jurisdictionAreaId;
+
+          const userAreaName =
+            user?.authority?.areaName ||
+            (user?.authority as any)?.jurisdictionAreaName ||
+            activeOfficer?.jurisdictionAreaName ||
+            '';
+
+          const localCommuneName = (userAreaName || '').split(',')[0].trim();
+          const cleanLocalCommune = localCommuneName
+            .replace(/^(phường|xã|thị trấn|quận|huyện)s+/i, '')
+            .trim()
+            .toLowerCase();
+
+          if (cleanLocalCommune || userAreaId) {
+            const normalizeStr = (s: string) =>
+              s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+            const normCommune = normalizeStr(cleanLocalCommune);
+
+            rescuers = rescuers.filter((u: any) => {
+              if (userAreaId && (u.authority?.areaId === userAreaId || u.rescuer?.preferredAreaId === userAreaId)) {
+                return true;
+              }
+              const addrStr = typeof u.address === 'string'
+                ? u.address
+                : `${u.address?.street || ''} ${u.address?.communeName || u.address?.ward || ''} ${u.address?.province || ''}`;
+              const target = `${u.rescuer?.targetCommune || ''} ${addrStr}`.toLowerCase();
+              return (cleanLocalCommune && target.includes(cleanLocalCommune)) || (normCommune && normalizeStr(target).includes(normCommune));
+            });
+          }
+        }
+
+        const pendingCount = rescuers.filter(
+          (u: any) => (u.rescuer?.verificationStatus || u.verificationStatus || 'PENDING') === 'PENDING'
         ).length;
         setPendingRescuersCount(pendingCount);
       }
@@ -193,7 +240,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     } catch {
       // ignore
     }
-  }, []);
+  }, [user, isAdmin]);
 
   useEffect(() => {
     fetchRealCounts();

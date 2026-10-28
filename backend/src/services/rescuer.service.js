@@ -342,6 +342,15 @@ class RescuerService {
       if (!user.roles.includes('RESCUER')) {
         user.roles.push('RESCUER');
       }
+    } else if (verificationStatus === 'REJECTED') {
+      user.rescuer.availabilityStatus = 'OFFLINE';
+      user.roles = (user.roles || []).filter((r) => r !== 'RESCUER');
+      if (user.roles.length === 0) {
+        user.roles = ['CITIZEN'];
+      }
+      if (user.role === 'RESCUER') {
+        user.role = 'CITIZEN';
+      }
     }
     await user.save();
 

@@ -225,6 +225,45 @@ class RescueTeamService {
 
     await team.save();
 
+    // Thông báo & realtime socket khi cập nhật đội
+    try {
+      const { Notification } = require('../models');
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (io) {
+        io.emit('rescue_teams_updated', {
+          teamId: team._id.toString(),
+          action: 'TEAM_UPDATED',
+          status: team.status,
+        });
+      }
+
+      if (updateData.status && team.leaderId) {
+        const leaderUserId = team.leaderId._id || team.leaderId;
+        await Notification.create({
+          userId: leaderUserId,
+          type: 'SYSTEM',
+          title: team.status === 'ACTIVE'
+            ? '🎉 Đội cứu hộ của bạn đã được phê duyệt!'
+            : team.status === 'INACTIVE' || team.status === 'SUSPENDED'
+            ? `Thông báo: Đội cứu hộ đã chuyển trạng thái ${team.status}`
+            : `Cập nhật trạng thái Đội cứu hộ: ${team.status}`,
+          content: team.status === 'ACTIVE'
+            ? `Ban chỉ huy địa phương đã phê duyệt Đội cứu hộ "${team.name}". Đội hiện đã sẵn sàng nhận lệnh điều phối.`
+            : `Đội cứu hộ "${team.name}" đã được chuyển sang trạng thái ${team.status}.`,
+          priority: 'HIGH',
+          isRead: false,
+          data: {
+            type: 'TEAM_STATUS_UPDATE',
+            teamId: team._id.toString(),
+            status: team.status,
+          },
+        });
+      }
+    } catch (notifErr) {
+      console.warn('Notification/Socket error in updateTeam:', notifErr.message);
+    }
+
     return team.populate([
       { path: 'leaderId', select: 'fullName phone email' },
       { path: 'authorityId', select: 'name code' },
@@ -322,6 +361,39 @@ class RescueTeamService {
 
     await team.save();
 
+    // Thông báo & realtime socket
+    try {
+      const { Notification } = require('../models');
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (io) {
+        io.to(`user_${rescuerId}`).emit('team:membership_updated', {
+          teamId: team._id.toString(),
+          teamName: team.name,
+          status: finalStatus,
+        });
+        io.emit('rescue_teams_updated', { teamId: team._id.toString(), action: 'MEMBER_STATUS_CHANGED', rescuerId, status: finalStatus });
+      }
+
+      await Notification.create({
+        userId: rescuerId,
+        type: 'SYSTEM',
+        title: finalStatus === 'APPROVED' ? '🎉 Đơn gia nhập Đội cứu hộ đã được duyệt!' : 'Đã ghi nhận đơn ứng tuyển Đội cứu hộ ⏳',
+        content: finalStatus === 'APPROVED'
+          ? `Chúc mừng bạn! Bạn đã được Ban chỉ huy địa phương phê duyệt gia nhập "${team.name}".`
+          : `Đơn ứng tuyển tham gia "${team.name}" của bạn đã được gửi thành công. Vui lòng chờ Ban chỉ huy địa phương xem xét phê duyệt.`,
+        priority: 'HIGH',
+        isRead: false,
+        data: {
+          type: 'TEAM_MEMBERSHIP',
+          teamId: team._id.toString(),
+          status: finalStatus,
+        },
+      });
+    } catch (notifErr) {
+      console.warn('Notification/Socket error in updateMemberStatus:', notifErr.message);
+    }
+
     return team.populate({
       path: 'members.rescuerId',
       select: 'fullName phone email avatarUrl rescuer status isVerified',
@@ -339,7 +411,7 @@ class RescueTeamService {
 
     // Phải là Leader của đội, hoặc LOCAL_AUTHORITY, hoặc ADMIN
     const actorRoles = actor?.roles || [];
-    const isAuthorityOrAdmin = actorRoles.includes('ADMIN') || actorRoles.includes('LOCAL_AUTHORITY');
+    const isAuthorityOrAdmin = actorRoles.includes('ADMIN') || actorRoles.includes('LOCAL_AUTHORITY') || actorRoles.includes('AUTHORITY') || Boolean(actor?.authority);
     const isTeamLeader = team.leaderId && actor && team.leaderId.toString() === actor._id.toString();
 
     if (!isAuthorityOrAdmin && !isTeamLeader) {
@@ -347,7 +419,8 @@ class RescueTeamService {
     }
 
     const member = team.members.find(
-      m => (m.rescuerId?._id || m.rescuerId).toString() === rescuerId.toString()
+      m => (m.rescuerId?._id || m.rescuerId || '').toString() === rescuerId.toString() ||
+           (m._id || '').toString() === rescuerId.toString()
     );
 
     if (!member) {
@@ -361,13 +434,47 @@ class RescueTeamService {
     } else if (status === 'REJECTED') {
       // Xóa khỏi danh sách thành viên
       team.members = team.members.filter(
-        m => (m.rescuerId?._id || m.rescuerId).toString() !== rescuerId.toString()
+        m => (m.rescuerId?._id || m.rescuerId || '').toString() !== rescuerId.toString() &&
+             (m._id || '').toString() !== rescuerId.toString()
       );
     } else {
       throw new ApiError(400, 'Trạng thái xét duyệt không hợp lệ');
     }
 
     await team.save();
+
+    // Thông báo & realtime socket khi duyệt/từ chối thành viên
+    try {
+      const { Notification } = require('../models');
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (io) {
+        io.to(`user_${rescuerId}`).emit('team:membership_updated', {
+          teamId: team._id.toString(),
+          teamName: team.name,
+          status,
+        });
+        io.emit('rescue_teams_updated', { teamId: team._id.toString(), action: 'MEMBER_STATUS_CHANGED', rescuerId, status });
+      }
+
+      await Notification.create({
+        userId: rescuerId,
+        type: 'SYSTEM',
+        title: status === 'APPROVED' ? '🎉 Đơn gia nhập Đội cứu hộ đã được duyệt!' : 'Thông báo kết quả ứng tuyển Đội cứu hộ',
+        content: status === 'APPROVED'
+          ? `Chúc mừng bạn! Bạn đã được Ban chỉ huy địa phương phê duyệt gia nhập "${team.name}".`
+          : `Đơn ứng tuyển tham gia "${team.name}" của bạn đã không được chấp thuận.`,
+        priority: 'HIGH',
+        isRead: false,
+        data: {
+          type: 'TEAM_MEMBERSHIP',
+          teamId: team._id.toString(),
+          status,
+        },
+      });
+    } catch (notifErr) {
+      console.warn('Notification/Socket error in updateMemberStatus:', notifErr.message);
+    }
 
     return team.populate({
       path: 'members.rescuerId',
