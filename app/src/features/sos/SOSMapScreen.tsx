@@ -255,29 +255,66 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
   // Tải danh bạ người thân đã lưu (bao gồm cả địa chỉ/tọa độ)
   const loadSavedContacts = async () => {
     try {
+      let foundList: EmergencyContact[] = [];
+
+      // 1. Đọc từ danh sách nhiều người thân trong AsyncStorage
       const stored = await AsyncStorage.getItem('@sos_emergency_contacts');
       if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setSavedEmergencyContacts(parsed);
-          setSavedEmergencyContact(parsed[0]);
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            foundList = parsed;
+          }
+        } catch { }
+      }
+
+      // 2. Dự phòng: Đọc từ liên hệ đơn lẻ cũ nếu danh sách trống
+      if (foundList.length === 0) {
+        const single = await AsyncStorage.getItem('@sos_emergency_contact');
+        if (single) {
+          try {
+            const parsedSingle = JSON.parse(single);
+            if (parsedSingle && (parsedSingle.name || parsedSingle.phone)) {
+              foundList = [{ ...parsedSingle, id: parsedSingle.id || Date.now().toString() }];
+            }
+          } catch { }
         }
       }
-      const res: any = await backendApi.getCitizenProfile();
-      if (res?.success && res?.data?.citizen) {
-        const citizen = res.data.citizen;
-        let list: EmergencyContact[] = [];
-        if (Array.isArray(citizen.emergencyContacts) && citizen.emergencyContacts.length > 0) {
-          list = citizen.emergencyContacts;
-        } else if (citizen.emergencyContact?.name) {
-          list = [citizen.emergencyContact];
-        }
-        if (list.length > 0) {
-          setSavedEmergencyContacts(list);
-          setSavedEmergencyContact(list[0]);
-          AsyncStorage.setItem('@sos_emergency_contacts', JSON.stringify(list)).catch(() => { });
+
+      // 3. Dự phòng từ user profile context nếu đã có
+      if (foundList.length === 0 && user?.citizen) {
+        const c = user.citizen as any;
+        if (Array.isArray(c.emergencyContacts) && c.emergencyContacts.length > 0) {
+          foundList = c.emergencyContacts;
+        } else if (c.emergencyContact?.name) {
+          foundList = [c.emergencyContact];
         }
       }
+
+      // Cập nhật ngay vào State nếu tìm thấy
+      if (foundList.length > 0) {
+        setSavedEmergencyContacts(foundList);
+        setSavedEmergencyContact(foundList[0]);
+      }
+
+      // 4. Đồng bộ từ backend ngầm
+      try {
+        const res: any = await backendApi.getCitizenProfile();
+        if (res?.success && res?.data?.citizen) {
+          const citizen = res.data.citizen;
+          let list: EmergencyContact[] = [];
+          if (Array.isArray(citizen.emergencyContacts) && citizen.emergencyContacts.length > 0) {
+            list = citizen.emergencyContacts;
+          } else if (citizen.emergencyContact?.name) {
+            list = [citizen.emergencyContact];
+          }
+          if (list.length > 0) {
+            setSavedEmergencyContacts(list);
+            setSavedEmergencyContact(list[0]);
+            AsyncStorage.setItem('@sos_emergency_contacts', JSON.stringify(list)).catch(() => { });
+          }
+        }
+      } catch { }
     } catch { }
   };
 
@@ -289,6 +326,23 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
     }
     loadSavedContacts();
   }, [editingSosData, editingSosId]);
+
+  // Lắng nghe sự kiện cập nhật danh bạ khẩn cấp từ trang Liên hệ khẩn cấp
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('EMERGENCY_CONTACTS_UPDATED', () => {
+      loadSavedContacts();
+    });
+    return () => {
+      sub.remove();
+    };
+  }, []);
+
+  // Tự động tải lại danh bạ khi mở Modal Bản đồ
+  useEffect(() => {
+    if (showMapPickerModal) {
+      loadSavedContacts();
+    }
+  }, [showMapPickerModal]);
 
   // Tự động điền số điện thoại từ hồ sơ cá nhân nếu chưa có
   useEffect(() => {
@@ -355,6 +409,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
 
   // Mở modal bản đồ chọn vị trí
   const openMapPicker = () => {
+    loadSavedContacts();
     const currentLat = location?.coords?.latitude || 15.96836;
     const currentLng = location?.coords?.longitude || 108.26054;
     setPickerCoords({ lat: currentLat, lng: currentLng });
@@ -484,37 +539,10 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
     }
 
     // 3. Nếu người thân chưa có địa chỉ đã lưu
-    if (pickerCoords) {
-      Alert.alert(
-        'Chưa có địa chỉ người thân',
-        `"${contact.name} (${contact.relation || 'Người thân'})" chưa có địa chỉ đã lưu. Bạn có muốn lưu vị trí đang ghim trên bản đồ này làm địa chỉ của ${contact.relation || contact.name} không?`,
-        [
-          { text: 'Huỷ', style: 'cancel' },
-          {
-            text: 'Lưu vị trí này',
-            onPress: () => {
-              handleSaveCurrentPinToContact(contact);
-            },
-          },
-        ]
-      );
-    }
-  };
-
-  // Lưu vị trí đang ghim trên bản đồ cho một người thân
-  const handleSaveCurrentPinToContact = async (contact: EmergencyContact) => {
-    if (!pickerCoords) return;
-    const finalAddr = pickerAddress || `${pickerCoords.lat.toFixed(5)}, ${pickerCoords.lng.toFixed(5)}`;
-    const updated = savedEmergencyContacts.map((c) =>
-      (c.id === contact.id || c.phone === contact.phone)
-        ? { ...c, address: finalAddr, latitude: pickerCoords.lat, longitude: pickerCoords.lng }
-        : c
+    Alert.alert(
+      'Chưa có địa chỉ người thân',
+      `"${contact.name} (${contact.relation || 'Người thân'})" chưa có địa chỉ/vị trí được lưu. Bạn có thể cập nhật trong mục Hồ sơ ➔ Liên hệ khẩn cấp.`
     );
-    setSavedEmergencyContacts(updated);
-    await AsyncStorage.setItem('@sos_emergency_contacts', JSON.stringify(updated));
-    backendApi.updateEmergencyContact(updated).catch(() => { });
-    setShowSavePinModal(false);
-    Alert.alert('Đã lưu thành công', `Đã lưu vị trí ghim này cho ${contact.name} (${contact.relation || 'Người thân'}). Lần sau bạn có thể bấm nhanh để ghim ngay!`);
   };
 
   // Xác nhận vị trí đã chọn trên bản đồ
@@ -1369,99 +1397,6 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
               </View>
               <Text style={styles.fieldTitle}>Địa điểm:</Text>
             </View>
-
-            {/* Thanh gợi ý chọn nhanh địa chỉ người thân (Mẹ, Người yêu, Bạn thân...) */}
-            {savedEmergencyContacts.length > 0 && (
-              <View style={styles.relativesQuickSelectSection}>
-                <View style={styles.relativesQuickSelectHeader}>
-                  <Ionicons name="heart" size={12} color="#EF4444" style={{ marginRight: 4 }} />
-                  <Text style={styles.relativesQuickSelectTitle}>
-                    Cứu hộ người thân? Chọn nhanh địa chỉ:
-                  </Text>
-                </View>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.relativesQuickSelectScroll}
-                >
-                  {savedEmergencyContacts.map((contact, idx) => {
-                    const hasAddr = Boolean(contact.address || (typeof contact.latitude === 'number' && typeof contact.longitude === 'number'));
-                    return (
-                      <TouchableOpacity
-                        key={contact.id || idx}
-                        style={[
-                          styles.relativeQuickSelectChip,
-                          hasAddr && styles.relativeQuickSelectChipHasAddr,
-                        ]}
-                        onPress={async () => {
-                          if (contact.phone) {
-                            setSecondaryPhone(contact.phone);
-                            setShowSecondaryPhone(true);
-                          }
-                          if (contact.address) {
-                            setDetailedAddress(contact.address);
-                            if (typeof contact.latitude === 'number' && typeof contact.longitude === 'number') {
-                              setLocation({
-                                coords: {
-                                  latitude: contact.latitude,
-                                  longitude: contact.longitude,
-                                  altitude: null,
-                                  accuracy: null,
-                                  altitudeAccuracy: null,
-                                  heading: null,
-                                  speed: null,
-                                },
-                                timestamp: Date.now(),
-                              });
-                              setGpsAddress(contact.address);
-                              setIsCustomMapLocation(true);
-                            } else {
-                              try {
-                                const geo = await Location.geocodeAsync(contact.address);
-                                if (geo && geo.length > 0) {
-                                  setLocation({
-                                    coords: {
-                                      latitude: geo[0].latitude,
-                                      longitude: geo[0].longitude,
-                                      altitude: null,
-                                      accuracy: null,
-                                      altitudeAccuracy: null,
-                                      heading: null,
-                                      speed: null,
-                                    },
-                                    timestamp: Date.now(),
-                                  });
-                                  setGpsAddress(contact.address);
-                                  setIsCustomMapLocation(true);
-                                }
-                              } catch { }
-                            }
-                            Alert.alert(
-                              'Đã điền địa chỉ người thân',
-                              `Đã áp dụng địa chỉ của ${contact.relation || contact.name}: ${contact.address}`
-                            );
-                          } else {
-                            openMapPicker();
-                            Alert.alert(
-                              'Chưa có địa chỉ người thân',
-                              `"${contact.name}" chưa có địa chỉ. Vui lòng di chuyển ghim trên bản đồ rồi chọn "Lưu vị trí này cho người thân" để lưu lại.`
-                            );
-                          }
-                        }}
-                        activeOpacity={0.75}
-                      >
-                        <Text style={styles.relativeChipEmoji}>{getRelationEmoji(contact.relation)}</Text>
-                        <Text style={styles.relativeChipText} numberOfLines={1}>
-                          {contact.relation || contact.name}
-                          {hasAddr ? ' 📍' : ''}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            )}
-
             {/* Thẻ hiển thị địa chỉ đã định vị (chạm vào để đổi vị trí trên bản đồ) */}
             <TouchableOpacity
               style={[styles.locationAddressCard, isCustomMapLocation && styles.locationAddressCardCustom]}
@@ -1823,46 +1758,6 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
             {isReverseGeocoding && <ActivityIndicator size="small" color="#0284C7" style={{ marginLeft: 6 }} />}
           </View>
 
-          {/* Thanh ghim nhanh địa chỉ người thân trong Modal Bản đồ */}
-          {savedEmergencyContacts.length > 0 && (
-            <View style={styles.mapModalRelativesBar}>
-              <View style={styles.mapModalRelativesHeader}>
-                <Ionicons name="heart" size={13} color="#EF4444" style={{ marginRight: 5 }} />
-                <Text style={styles.mapModalRelativesTitle}>Cứu hộ người thân - Ghim nhanh:</Text>
-              </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.mapModalRelativesScroll}
-              >
-                {savedEmergencyContacts.map((contact, idx) => {
-                  const hasLocation = Boolean(contact.address || (typeof contact.latitude === 'number' && typeof contact.longitude === 'number'));
-                  return (
-                    <TouchableOpacity
-                      key={contact.id || idx}
-                      style={[
-                        styles.mapModalRelativeChip,
-                        hasLocation && styles.mapModalRelativeChipHasAddr,
-                      ]}
-                      onPress={() => handleSelectRelativeLocation(contact)}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={styles.mapModalRelativeEmoji}>{getRelationEmoji(contact.relation)}</Text>
-                      <View style={{ marginLeft: 6, maxWidth: 140 }}>
-                        <Text style={styles.mapModalRelativeName} numberOfLines={1}>
-                          {contact.relation || contact.name}
-                        </Text>
-                        <Text style={styles.mapModalRelativeAddr} numberOfLines={1}>
-                          {contact.address ? contact.address : 'Chạm để ghim'}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          )}
-
           {/* Bản đồ WebView Leaflet */}
           <View style={styles.mapWebViewContainer}>
             {pickerCoords && (
@@ -1884,7 +1779,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
             )}
           </View>
 
-          {/* Footer Xác nhận & Nút lưu vị trí ghim */}
+          {/* Footer Xác nhận & Nút chọn vị trí người thân */}
           <View style={styles.mapModalFooter}>
             {savedEmergencyContacts.length > 0 && (
               <TouchableOpacity
@@ -1892,8 +1787,8 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
                 onPress={() => setShowSavePinModal(true)}
                 activeOpacity={0.8}
               >
-                <Ionicons name="bookmark-outline" size={15} color="#0284C7" style={{ marginRight: 6 }} />
-                <Text style={styles.savePinForRelativeBtnText}>Lưu vị trí ghim này cho người thân</Text>
+                <Ionicons name="location-outline" size={16} color="#0284C7" style={{ marginRight: 6 }} />
+                <Text style={styles.savePinForRelativeBtnText}>Chọn vị trí người thân đã được ghim</Text>
               </TouchableOpacity>
             )}
 
@@ -1909,7 +1804,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
         </SafeAreaView>
       </Modal>
 
-      {/* MODAL LƯU VỊ TRÍ GHIM CHO NGƯỜI THÂN */}
+      {/* MODAL CHỌN VỊ TRÍ NGƯỜI THÂN ĐÃ GHIM */}
       <Modal
         visible={showSavePinModal}
         transparent
@@ -1927,8 +1822,8 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
           >
             <View style={styles.modalSheetHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="bookmark" size={18} color="#0284C7" style={{ marginRight: 8 }} />
-                <Text style={styles.modalSheetTitle}>Lưu vị trí này cho ai?</Text>
+                <Ionicons name="people" size={19} color="#0284C7" style={{ marginRight: 8 }} />
+                <Text style={styles.modalSheetTitle}>Vị trí người thân đã lưu</Text>
               </View>
               <TouchableOpacity onPress={() => setShowSavePinModal(false)} style={{ padding: 4 }}>
                 <Feather name="x" size={20} color="#64748B" />
@@ -1936,27 +1831,40 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
             </View>
 
             <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 12 }}>
-              Vị trí ghim: {pickerAddress || (pickerCoords ? `${pickerCoords.lat.toFixed(5)}, ${pickerCoords.lng.toFixed(5)}` : '')}
+              Chạm vào người thân để tự động ghim vị trí cứu nạn:
             </Text>
 
             <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
-              {savedEmergencyContacts.map((contact, idx) => (
-                <TouchableOpacity
-                  key={contact.id || idx}
-                  style={styles.saveRelativeContactItem}
-                  onPress={() => handleSaveCurrentPinToContact(contact)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={{ fontSize: 20, marginRight: 10 }}>{getRelationEmoji(contact.relation)}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.saveRelativeContactName}>{contact.name} ({contact.relation || 'Người thân'})</Text>
-                    <Text style={styles.saveRelativeContactSub} numberOfLines={1}>
-                      {contact.address ? `Địa chỉ hiện tại: ${contact.address}` : 'Chưa lưu địa chỉ'}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-                </TouchableOpacity>
-              ))}
+              {savedEmergencyContacts.map((contact, idx) => {
+                const hasLocation = Boolean(contact.address || (typeof contact.latitude === 'number' && typeof contact.longitude === 'number'));
+                return (
+                  <TouchableOpacity
+                    key={contact.id || idx}
+                    style={styles.saveRelativeContactItem}
+                    onPress={() => {
+                      setShowSavePinModal(false);
+                      handleSelectRelativeLocation(contact);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontSize: 22, marginRight: 10 }}>{getRelationEmoji(contact.relation)}</Text>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                        <Text style={styles.saveRelativeContactName}>{contact.name} ({contact.relation || 'Người thân'})</Text>
+                        {hasLocation && (
+                          <View style={styles.relativeLocationBadge}>
+                            <Text style={styles.relativeLocationBadgeText}>Đã ghim 📍</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.saveRelativeContactSub} numberOfLines={1}>
+                        {contact.address ? contact.address : 'Chưa có địa chỉ đã lưu'}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           </View>
         </TouchableOpacity>

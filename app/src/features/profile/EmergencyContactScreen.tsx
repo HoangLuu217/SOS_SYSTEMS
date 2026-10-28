@@ -15,6 +15,7 @@ import {
   PanResponder,
   Alert,
   Modal,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -690,6 +691,7 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
     if (updatedContacts.length > 0) {
       AsyncStorage.setItem('@sos_emergency_contact', JSON.stringify(updatedContacts[0])).catch(() => {});
     }
+    DeviceEventEmitter.emit('EMERGENCY_CONTACTS_UPDATED');
 
     if (onContactSaved && updatedContacts.length > 0) {
       onContactSaved(updatedContacts[0]);
@@ -746,6 +748,7 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
     } else {
       AsyncStorage.removeItem('@sos_emergency_contact').catch(() => {});
     }
+    DeviceEventEmitter.emit('EMERGENCY_CONTACTS_UPDATED');
 
     // 3. Gọi xoá ngầm trên backend
     if (updatedContacts.length === 0) {

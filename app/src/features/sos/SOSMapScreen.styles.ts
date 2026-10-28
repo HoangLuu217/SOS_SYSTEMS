@@ -953,6 +953,20 @@ export const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
+  relativeLocationBadge: {
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  relativeLocationBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
 
   // THANH CHỌN NHANH ĐỊA CHỈ NGƯỜI THÂN TRÊN FORM CHÍNH
   relativesQuickSelectSection: {
