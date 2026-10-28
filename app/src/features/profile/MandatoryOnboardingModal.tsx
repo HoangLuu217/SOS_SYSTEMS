@@ -164,7 +164,7 @@ export const MandatoryOnboardingModal: React.FC = () => {
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [phoneSuccess, setPhoneSuccess] = useState<string | null>(null);
   const { seconds: countdown, start: startCountdown } = useCountdown({ initialSeconds: 60 });
-  const otpInputRef = useRef<TextInput>(null);
+  const otpInputRef = useRef<any>(null);
 
   // ===================== STATE: HOÀN THIỆN THÔNG TIN CÁ NHÂN =====================
   const initialAddr = useMemo(() => parseAddressComponents(user?.address), [user?.address]);
@@ -304,12 +304,12 @@ export const MandatoryOnboardingModal: React.FC = () => {
     }
   };
 
-  const handleVerifyPhoneOtp = async () => {
+  const handleVerifyPhoneOtp = async (codeToVerify?: string) => {
     setPhoneError(null);
     setPhoneSuccess(null);
 
     const cleanPhone = phoneInput.trim().replace(/\s+/g, '');
-    const cleanOtp = phoneOtpCode.trim();
+    const cleanOtp = (codeToVerify || phoneOtpCode).trim();
 
     if (!cleanOtp || cleanOtp.length < 6) {
       setPhoneError('Vui lòng nhập đủ 6 chữ số mã OTP.');
@@ -477,6 +477,9 @@ export const MandatoryOnboardingModal: React.FC = () => {
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            scrollEnabled={step !== 'PHONE'}
+            bounces={false}
+            overScrollMode="never"
           >
             {/* Logo SOS thương hiệu nổi bật */}
             <View style={styles.topLogoWrap}>
@@ -516,114 +519,173 @@ export const MandatoryOnboardingModal: React.FC = () => {
                ======================================================== */}
             {step === 'PHONE' && (
               <View style={styles.cardContainer}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.headerIconWrap}>
-                    <Feather name="phone-call" size={24} color="#0066FF" />
-                  </View>
-                  <Text style={styles.cardTitle}>Xác thực số điện thoại</Text>
-                  <Text style={styles.cardSubtitle}>
-                    Để bảo vệ an toàn của bạn và lực lượng cứu hộ có thể liên lạc khẩn cấp khi xảy ra thiên tai, vui lòng xác minh số điện thoại cá nhân.
-                  </Text>
-                </View>
-
-                {/* Nhập số điện thoại */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>
-                    Số điện thoại <Text style={styles.requiredStar}>*</Text>
-                  </Text>
-                  <View style={[styles.inputBox, phoneError ? styles.inputBoxError : null]}>
-                    <Feather name="phone" size={18} color="#0066FF" style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="Ví dụ: 0912 345 678"
-                      placeholderTextColor="#94A3B8"
-                      keyboardType="phone-pad"
-                      value={phoneInput}
-                      onChangeText={(t) => {
-                        setPhoneInput(t);
-                        if (phoneError) setPhoneError(null);
-                      }}
-                      editable={!isSendingOtp && !isVerifyingOtp}
-                    />
-                  </View>
-                </View>
-
-                {/* Nút gửi mã OTP */}
-                <TouchableOpacity
-                  style={[
-                    styles.primaryButton,
-                    (isSendingOtp || (otpSent && countdown > 0)) && styles.disabledButton,
-                  ]}
-                  onPress={handleSendPhoneOtp}
-                  disabled={isSendingOtp || (otpSent && countdown > 0)}
-                  activeOpacity={0.8}
-                >
-                  {isSendingOtp ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>
-                      {otpSent && countdown > 0
-                        ? `Gửi lại mã sau (${countdown}s)`
-                        : otpSent
-                        ? 'Gửi lại mã OTP'
-                        : 'Gửi mã OTP qua SMS'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-
-                {/* Vùng nhập mã OTP khi đã gửi */}
-                {otpSent && (
-                  <View style={styles.otpSection}>
-                    <Text style={styles.inputLabel}>
-                      Nhập mã OTP gồm 6 chữ số <Text style={styles.requiredStar}>*</Text>
-                    </Text>
-                    <View style={[styles.inputBox, phoneError ? styles.inputBoxError : null]}>
-                      <MaterialCommunityIcons
-                        name="numeric"
-                        size={22}
-                        color="#0066FF"
-                        style={styles.inputIcon}
-                      />
-                      <TextInput
-                        ref={otpInputRef}
-                        style={[styles.textInput, styles.otpInput]}
-                        placeholder="••••••"
-                        placeholderTextColor="#94A3B8"
-                        keyboardType="number-pad"
-                        maxLength={6}
-                        value={phoneOtpCode}
-                        onChangeText={(t) => {
-                          setPhoneOtpCode(t);
-                          if (phoneError) setPhoneError(null);
-                        }}
-                        editable={!isVerifyingOtp}
-                      />
+                {!otpSent ? (
+                  <>
+                    {/* GIAO DIỆN HÌNH 2: NHẬP SỐ ĐIỆN THOẠI */}
+                    <View style={styles.cardHeader}>
+                      <View style={styles.headerIconWrap}>
+                        <Feather name="phone-call" size={24} color="#0066FF" />
+                      </View>
+                      <Text style={styles.cardTitle}>Xác thực số điện thoại</Text>
+                      <Text style={styles.cardSubtitle}>
+                        Để bảo vệ an toàn của bạn và lực lượng cứu hộ có thể liên lạc khẩn cấp khi xảy ra thiên tai, vui lòng xác minh số điện thoại cá nhân.
+                      </Text>
                     </View>
+
+                    {/* Nhập số điện thoại */}
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>
+                        Số điện thoại <Text style={styles.requiredStar}>*</Text>
+                      </Text>
+                      <View style={[styles.inputBox, phoneError ? styles.inputBoxError : null]}>
+                        <Feather name="phone" size={18} color="#0066FF" style={styles.inputIcon} />
+                        <TextInput
+                          style={styles.textInput}
+                          placeholder="Ví dụ: 0912 345 678"
+                          placeholderTextColor="#94A3B8"
+                          keyboardType="phone-pad"
+                          value={phoneInput}
+                          onChangeText={(t) => {
+                            setPhoneInput(t);
+                            if (phoneError) setPhoneError(null);
+                          }}
+                          editable={!isSendingOtp}
+                        />
+                      </View>
+                    </View>
+
+                    {phoneError && (
+                      <Text style={[styles.errorMessage, { marginBottom: 10 }]}>{phoneError}</Text>
+                    )}
+
+                    {/* Nút gửi mã OTP */}
+                    <TouchableOpacity
+                      style={[
+                        styles.primaryButton,
+                        isSendingOtp && styles.disabledButton,
+                      ]}
+                      onPress={handleSendPhoneOtp}
+                      disabled={isSendingOtp}
+                      activeOpacity={0.8}
+                    >
+                      {isSendingOtp ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.primaryButtonText}>Gửi mã OTP qua SMS</Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    {/* CỬA SỔ THAY THẾ: NHẬP MÃ XÁC THỰC OTP 6 SỐ */}
+                    <View style={styles.cardHeader}>
+                      <View style={[styles.headerIconWrap, { backgroundColor: '#EFF6FF' }]}>
+                        <MaterialCommunityIcons name="shield-check-outline" size={26} color="#0066FF" />
+                      </View>
+                      <Text style={styles.cardTitle}>Xác thực mã OTP</Text>
+                      <Text style={styles.cardSubtitle}>
+                        Vui lòng nhập mã OTP vừa gửi đến số điện thoại{' '}
+                        <Text style={{ fontWeight: '700', color: '#0F172A' }}>{phoneInput.trim()}</Text>
+                      </Text>
+                    </View>
+
+                    {/* Khung 6 ô hiển thị mã OTP */}
+                    <TouchableOpacity
+                      activeOpacity={1}
+                      onPress={() => otpInputRef.current?.focus()}
+                      style={styles.otpBoxesContainer}
+                    >
+                      {[0, 1, 2, 3, 4, 5].map((index) => {
+                        const digit = phoneOtpCode[index] || '';
+                        const isCurrent = phoneOtpCode.length === index;
+                        return (
+                          <View
+                            key={index}
+                            style={[
+                              styles.otpBox,
+                              digit ? styles.otpBoxFilled : null,
+                              isCurrent ? styles.otpBoxActive : null,
+                            ]}
+                          >
+                            <Text style={styles.otpDigit}>{digit}</Text>
+                          </View>
+                        );
+                      })}
+                    </TouchableOpacity>
+
+                    {/* Input ẩn hứng bàn phím */}
+                    <TextInput
+                      ref={otpInputRef}
+                      value={phoneOtpCode}
+                      onChangeText={(t) => {
+                        const clean = t.replace(/[^0-9]/g, '').slice(0, 6);
+                        setPhoneOtpCode(clean);
+                        if (phoneError) setPhoneError(null);
+                        if (clean.length === 6) {
+                          handleVerifyPhoneOtp(clean);
+                        }
+                      }}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      autoFocus={true}
+                      style={styles.hiddenInput}
+                    />
 
                     {phoneSuccess && <Text style={styles.successMessage}>{phoneSuccess}</Text>}
                     {phoneError && <Text style={styles.errorMessage}>{phoneError}</Text>}
 
+                    {/* Nút xác nhận mã OTP */}
                     <TouchableOpacity
                       style={[
-                        styles.verifyButton,
+                        styles.primaryButton,
+                        { backgroundColor: '#0066FF', marginTop: 12 },
                         (phoneOtpCode.trim().length !== 6 || isVerifyingOtp) && styles.disabledButton,
                       ]}
-                      onPress={handleVerifyPhoneOtp}
+                      onPress={() => handleVerifyPhoneOtp()}
                       disabled={phoneOtpCode.trim().length !== 6 || isVerifyingOtp}
                       activeOpacity={0.8}
                     >
                       {isVerifyingOtp ? (
                         <ActivityIndicator size="small" color="#FFFFFF" />
                       ) : (
-                        <Text style={styles.verifyButtonText}>Xác nhận & Tiếp tục</Text>
+                        <Text style={styles.primaryButtonText}>Xác nhận & Tiếp tục</Text>
                       )}
                     </TouchableOpacity>
-                  </View>
-                )}
 
-                {/* Thông báo lỗi khi chưa gửi OTP */}
-                {!otpSent && phoneError && (
-                  <Text style={[styles.errorMessage, { marginTop: 12 }]}>{phoneError}</Text>
+                    {/* Row chức năng: Gửi lại mã & Đổi SĐT */}
+                    <View style={styles.otpActionRow}>
+                      <TouchableOpacity
+                        onPress={handleSendPhoneOtp}
+                        disabled={countdown > 0 || isSendingOtp}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.resendOtpText,
+                            countdown > 0 && styles.resendOtpTextDisabled,
+                          ]}
+                        >
+                          {isSendingOtp
+                            ? 'Đang gửi...'
+                            : countdown > 0
+                            ? `Gửi lại mã (${countdown}s)`
+                            : 'Gửi lại mã OTP'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => {
+                          setOtpSent(false);
+                          setPhoneOtpCode('');
+                          setPhoneError(null);
+                          setPhoneSuccess(null);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.changePhoneText}>Đổi số điện thoại</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
                 )}
               </View>
             )}
@@ -1196,17 +1258,40 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.6,
   },
-  otpSection: {
-    marginTop: 20,
-    paddingTop: 18,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+  otpBoxesContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 16,
   },
-  otpInput: {
-    fontSize: 20,
+  otpBox: {
+    width: 44,
+    height: 54,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  otpBoxFilled: {
+    borderColor: '#0066FF',
+    backgroundColor: '#EFF6FF',
+  },
+  otpBoxActive: {
+    borderColor: '#0066FF',
+    borderWidth: 2,
+    backgroundColor: '#FFFFFF',
+  },
+  otpDigit: {
+    fontSize: 22,
     fontWeight: '800',
-    letterSpacing: 6,
-    textAlign: 'center',
+    color: '#0F172A',
+  },
+  hiddenInput: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    opacity: 0.01,
   },
   verifyButton: {
     backgroundColor: '#16A34A',
@@ -1232,6 +1317,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
+  },
+  otpActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    paddingHorizontal: 4,
+  },
+  resendOtpText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0066FF',
+  },
+  resendOtpTextDisabled: {
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  changePhoneText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+    textDecorationLine: 'underline',
   },
   genderRow: {
     flexDirection: 'row',

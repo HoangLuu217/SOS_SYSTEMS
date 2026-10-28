@@ -131,3 +131,81 @@ if (fs.existsSync(textInputDts)) {
     console.log('✅ [patch-expo-notifications] Successfully patched react-native TextInput.d.ts for instance ref compatibility.');
   }
 }
+
+// 7. Patch expo-crypto to prevent runtime crash when ExpoCrypto native module is missing in Expo Go
+const expoCryptoFiles = [
+  path.join(__dirname, '../node_modules/expo-crypto/build/ExpoCrypto.js'),
+  path.join(__dirname, '../node_modules/expo-crypto/src/ExpoCrypto.ts'),
+];
+
+const cryptoPatchContent = `import { requireOptionalNativeModule } from 'expo';
+
+let nativeModule = null;
+try {
+  if (typeof requireOptionalNativeModule === 'function') {
+    nativeModule = requireOptionalNativeModule('ExpoCrypto');
+  }
+} catch (e) {}
+
+const fallbackModule = {
+  getRandomValues(typedArray) {
+    if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
+      return globalThis.crypto.getRandomValues(typedArray);
+    }
+    for (let i = 0; i < typedArray.length; i++) {
+      typedArray[i] = Math.floor(Math.random() * 256);
+    }
+    return typedArray;
+  },
+  randomUUID() {
+    if (typeof globalThis !== 'undefined' && globalThis.crypto?.randomUUID) {
+      return globalThis.crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  },
+  digestStringAsync: async () => '',
+  digest: () => {},
+};
+
+export default nativeModule || fallbackModule;
+`;
+
+expoCryptoFiles.forEach((file) => {
+  if (fs.existsSync(file)) {
+    fs.writeFileSync(file, cryptoPatchContent, 'utf-8');
+    console.log(`✅ [patch-expo-notifications] Successfully patched ${path.basename(file)} for Expo Go.`);
+  }
+});
+
+// Patch ExpoCryptoAES
+const expoCryptoAesFiles = [
+  path.join(__dirname, '../node_modules/expo-crypto/build/aes/ExpoCryptoAES.js'),
+  path.join(__dirname, '../node_modules/expo-crypto/src/aes/ExpoCryptoAES.ts'),
+];
+
+const cryptoAesPatchContent = `import { requireOptionalNativeModule } from 'expo';
+
+let nativeModule = null;
+try {
+  if (typeof requireOptionalNativeModule === 'function') {
+    nativeModule = requireOptionalNativeModule('ExpoCryptoAES');
+  }
+} catch (e) {}
+
+const fallbackAesModule = {
+  encrypt: () => '',
+  decrypt: () => '',
+};
+
+export default nativeModule || fallbackAesModule;
+`;
+
+expoCryptoAesFiles.forEach((file) => {
+  if (fs.existsSync(file)) {
+    fs.writeFileSync(file, cryptoAesPatchContent, 'utf-8');
+    console.log(`✅ [patch-expo-notifications] Successfully patched ${path.basename(file)} for Expo Go.`);
+  }
+});

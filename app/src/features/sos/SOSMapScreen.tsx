@@ -139,7 +139,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
   const [pickerAddress, setPickerAddress] = useState<string>('');
   const [isReverseGeocoding, setIsReverseGeocoding] = useState<boolean>(false);
   const mapPickerWebViewRef = useRef<WebView>(null);
-  const peopleInputRef = useRef<TextInput>(null);
+  const peopleInputRef = useRef<any>(null);
 
   // Đối tượng ưu tiên (Nhập tìm kiếm keyword + Gợi ý dropdown)
   const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
