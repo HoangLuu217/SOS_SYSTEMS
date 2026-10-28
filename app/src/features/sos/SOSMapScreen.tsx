@@ -156,7 +156,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
   const [pickerAddress, setPickerAddress] = useState<string>('');
   const [isReverseGeocoding, setIsReverseGeocoding] = useState<boolean>(false);
   const mapPickerWebViewRef = useRef<WebView>(null);
-  const peopleInputRef = useRef<TextInput>(null);
+  const peopleInputRef = useRef<any>(null);
 
   // Đối tượng ưu tiên (Popup Modal chọn nhanh)
   const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
@@ -275,10 +275,10 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
         if (list.length > 0) {
           setSavedEmergencyContacts(list);
           setSavedEmergencyContact(list[0]);
-          AsyncStorage.setItem('@sos_emergency_contacts', JSON.stringify(list)).catch(() => {});
+          AsyncStorage.setItem('@sos_emergency_contacts', JSON.stringify(list)).catch(() => { });
         }
       }
-    } catch {}
+    } catch { }
   };
 
   useEffect(() => {
@@ -461,8 +461,8 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
             (c.id === contact.id || c.phone === contact.phone) ? { ...c, latitude: lat, longitude: lng } : c
           );
           setSavedEmergencyContacts(updated);
-          AsyncStorage.setItem('@sos_emergency_contacts', JSON.stringify(updated)).catch(() => {});
-          backendApi.updateEmergencyContact(updated).catch(() => {});
+          AsyncStorage.setItem('@sos_emergency_contacts', JSON.stringify(updated)).catch(() => { });
+          backendApi.updateEmergencyContact(updated).catch(() => { });
           return;
         }
       } catch (err) {
@@ -512,7 +512,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
     );
     setSavedEmergencyContacts(updated);
     await AsyncStorage.setItem('@sos_emergency_contacts', JSON.stringify(updated));
-    backendApi.updateEmergencyContact(updated).catch(() => {});
+    backendApi.updateEmergencyContact(updated).catch(() => { });
     setShowSavePinModal(false);
     Alert.alert('Đã lưu thành công', `Đã lưu vị trí ghim này cho ${contact.name} (${contact.relation || 'Người thân'}). Lần sau bạn có thể bấm nhanh để ghim ngay!`);
   };
@@ -997,8 +997,8 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
   const typeDisplayText = selectedTypeObjs.length === 0
     ? 'Vui lòng chọn'
     : selectedTypeObjs.length === 1
-    ? `${selectedTypeObjs[0].emoji} ${selectedTypeObjs[0].label}`
-    : `${selectedTypeObjs.map(t => t.emoji).join(' ')} ${selectedTypeObjs[0].label} (+${selectedTypeObjs.length - 1})`;
+      ? `${selectedTypeObjs[0].emoji} ${selectedTypeObjs[0].label}`
+      : `${selectedTypeObjs.map(t => t.emoji).join(' ')} ${selectedTypeObjs[0].label} (+${selectedTypeObjs.length - 1})`;
 
   // MÀN HÌNH BÁO THÀNH CÔNG
   if (successData) {
@@ -1434,7 +1434,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
                                   setGpsAddress(contact.address);
                                   setIsCustomMapLocation(true);
                                 }
-                              } catch {}
+                              } catch { }
                             }
                             Alert.alert(
                               'Đã điền địa chỉ người thân',
@@ -1524,8 +1524,8 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
                   {selectedPriorities.length === 0
                     ? 'Chọn đối tượng'
                     : selectedPriorities.length === 1
-                    ? selectedPriorities[0]
-                    : `${selectedPriorities[0]} (+${selectedPriorities.length - 1})`}
+                      ? selectedPriorities[0]
+                      : `${selectedPriorities[0]} (+${selectedPriorities.length - 1})`}
                 </Text>
                 <Feather name="chevron-down" size={16} color="#64748B" style={{ marginLeft: 6 }} />
               </TouchableOpacity>
@@ -2105,7 +2105,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
                     try {
                       const res = await backendApi.get('/sos');
                       if (res?.data && res.data[0]) targetId = res.data[0]._id;
-                    } catch {}
+                    } catch { }
                   }
                   if (targetId) {
                     setTrackingSosId(targetId);

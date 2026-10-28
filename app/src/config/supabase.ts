@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { ENV } from './env';
 
 // Hỗ trợ đóng browser sau khi OAuth redirect hoàn tất
@@ -72,13 +73,15 @@ export const signInWithGoogleOAuth = async () => {
 
     const client = getSupabaseClient();
 
-    // 1. Tạo Redirect URI tương thích cả Web, Expo Go và Bản cài đặt độc lập
+    // 1. Tạo Redirect URI tương thích cả Web, Expo Go và Bản cài đặt độc lập (APK/IPA)
     let redirectUri: string;
     if (Platform.OS === 'web') {
       redirectUri = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8081';
     } else {
+      // Tự động nhận diện Expo Go vs APK:
+      // - Trên Expo Go: tự tạo deep link exp://.../--/auth/callback (giúp Android tự chuyển về Expo Go khi xong)
+      // - Trên bản APK: tự dùng scheme 'sosapp' khai báo trong app.json
       redirectUri = AuthSession.makeRedirectUri({
-        scheme: ENV.AUTH_REDIRECT_SCHEME,
         path: 'auth/callback',
       });
     }
@@ -108,7 +111,9 @@ export const signInWithGoogleOAuth = async () => {
     if (!data?.url) throw new Error('Không nhận được đường dẫn xác thực OAuth từ Supabase.');
 
     // 3. Mở trình duyệt in-app trên Mobile (Android/iOS)
+    console.log('[Supabase OAuth] Đang mở trình duyệt xác thực Google...');
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
+    console.log('[Supabase OAuth] WebBrowser result:', JSON.stringify(result));
 
     if (result.type === 'success' && result.url) {
       // Phân tích tokens từ URL redirect
@@ -134,7 +139,11 @@ export const signInWithGoogleOAuth = async () => {
           user: sessionData.user,
           providerToken: params.get('provider_token') || accessToken,
         };
+      } else {
+        console.warn('[Supabase OAuth] Không tìm thấy access_token hoặc refresh_token trong URL redirect:', url);
       }
+    } else {
+      console.warn('[Supabase OAuth] Trình duyệt đóng với type:', result.type);
     }
 
     return null;

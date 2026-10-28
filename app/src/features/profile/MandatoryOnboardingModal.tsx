@@ -82,7 +82,7 @@ const formatDateDisplay = (val?: any): string => {
       const year = d.getFullYear();
       return `${day}/${month}/${year}`;
     }
-  } catch {}
+  } catch { }
   return str.split('T')[0] || str;
 };
 
@@ -109,7 +109,7 @@ const parseDateString = (str?: string): Date => {
   try {
     const d = new Date(clean);
     if (!isNaN(d.getTime())) return d;
-  } catch {}
+  } catch { }
 
   const fallback = new Date();
   fallback.setFullYear(fallback.getFullYear() - 20);
@@ -164,7 +164,7 @@ export const MandatoryOnboardingModal: React.FC = () => {
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [phoneSuccess, setPhoneSuccess] = useState<string | null>(null);
   const { seconds: countdown, start: startCountdown } = useCountdown({ initialSeconds: 60 });
-  const otpInputRef = useRef<TextInput>(null);
+  const otpInputRef = useRef<any>(null);
 
   // ===================== STATE: HOÀN THIỆN THÔNG TIN CÁ NHÂN =====================
   const initialAddr = useMemo(() => parseAddressComponents(user?.address), [user?.address]);
@@ -565,8 +565,8 @@ export const MandatoryOnboardingModal: React.FC = () => {
                       {otpSent && countdown > 0
                         ? `Gửi lại mã sau (${countdown}s)`
                         : otpSent
-                        ? 'Gửi lại mã OTP'
-                        : 'Gửi mã OTP qua SMS'}
+                          ? 'Gửi lại mã OTP'
+                          : 'Gửi mã OTP qua SMS'}
                     </Text>
                   )}
                 </TouchableOpacity>

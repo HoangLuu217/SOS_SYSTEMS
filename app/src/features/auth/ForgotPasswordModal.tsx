@@ -40,7 +40,7 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
   const [error, setError] = useState('');
   const { seconds: countdown, start: startCountdown } = useCountdown({ initialSeconds: 60 });
 
-  const otpInputRef = useRef<TextInput>(null);
+  const otpInputRef = useRef<any>(null);
 
   useEffect(() => {
     if (visible) {
