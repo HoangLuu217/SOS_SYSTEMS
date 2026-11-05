@@ -475,18 +475,43 @@ class AdminService {
 
         const apiKey = process.env.RESEND_API_KEY;
         if (apiKey) {
-          const transporter = nodemailer.createTransport({
-            host: 'smtp.resend.com',
-            port: 465,
-            secure: true,
-            auth: {
-              user: 'resend',
-              pass: apiKey,
-            },
-          });
-          await transporter.sendMail(mailOptions);
-          emailSent = true;
-          console.log(`[Admin Create User] Đã gửi thông tin tài khoản và mật khẩu tới ${email}`);
+          try {
+            const transporter = nodemailer.createTransport({
+              host: 'smtp.resend.com',
+              port: 465,
+              secure: true,
+              auth: {
+                user: 'resend',
+                pass: apiKey,
+              },
+            });
+            await transporter.sendMail(mailOptions);
+            emailSent = true;
+            console.log(`[Admin Create User] Đã gửi thông tin tài khoản và mật khẩu tới ${email} qua Resend SMTP`);
+          } catch (smtpErr) {
+            console.warn(`[Admin Create User Resend SMTP fallback to REST API]: ${smtpErr.message}`);
+            const resp = await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                from: fromAddress,
+                to: [email.trim().toLowerCase()],
+                subject: mailOptions.subject,
+                html: mailOptions.html,
+                text: mailOptions.text,
+              }),
+            });
+            if (resp.ok) {
+              emailSent = true;
+              console.log(`[Admin Create User] Đã gửi thông tin tài khoản tới ${email} qua Resend REST API`);
+            } else {
+              const errBody = await resp.text();
+              throw new Error(`Resend API error: ${errBody}`);
+            }
+          }
         }
       } catch (err) {
         console.error('[Admin Create User Email Error]:', err.message);

@@ -52,6 +52,53 @@ export async function logoutApi(): Promise<void> {
   }
 }
 
+/**
+ * Yêu cầu gửi mã OTP đặt lại mật khẩu qua Gmail (Resend) hoặc SMS
+ */
+export async function sendForgotPasswordOtpApi(target: string): Promise<{
+  success: boolean;
+  message: string;
+  channel?: string;
+  email?: string;
+  phone?: string;
+}> {
+  const isEmail = target.includes('@');
+  const payload = isEmail ? { email: target.trim().toLowerCase() } : { phone: target.trim() };
+  const res = await fetch(`${API_BASE}/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const data = await safeParseResponse(res);
+  if (!res.ok) {
+    throw new Error(data.message || 'Không thể gửi mã OTP.');
+  }
+  return data;
+}
+
+/**
+ * Xác thực mã OTP đặt lại mật khẩu trước khi lưu mật khẩu mới
+ */
+export async function verifyResetOtpApi(payload: {
+  email?: string;
+  phone?: string;
+  account?: string;
+  token: string;
+}): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE}/auth/verify-reset-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const data = await safeParseResponse(res);
+  if (!res.ok) {
+    throw new Error(data.message || 'Mã OTP xác thực không hợp lệ hoặc đã hết hạn.');
+  }
+  return data;
+}
+
 export async function resetPasswordApi(payload: {
   account?: string;
   email?: string;
