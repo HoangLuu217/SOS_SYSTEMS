@@ -181,14 +181,14 @@ export const ForgotPasswordModal: React.FC<ForgotPasswordModalProps> = ({
                   <View>
                     <Text style={styles.title}>Quên mật khẩu?</Text>
                     <Text style={styles.subtitle}>
-                      Nhập số điện thoại đăng ký tài khoản của bạn. Hệ thống SOS sẽ gửi mã xác thực OTP 6 số qua tin nhắn SMS để bạn đặt lại mật khẩu mới.
+                      Nhập số điện thoại để nhận mã OTP đặt lại mật khẩu.
                     </Text>
 
                     {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
                     <CustomInput
                       iconName="phone"
-                      placeholder="Nhập số điện thoại (ví dụ: 0903000003)"
+                      placeholder="Nhập số điện thoại"
                       value={phone}
                       onChangeText={text => {
                         setPhone(text.replace(/[^0-9]/g, ''));
