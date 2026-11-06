@@ -44,14 +44,24 @@ class HazardReportService {
       throw new ApiError(400, 'Địa chỉ cụ thể (address) là bắt buộc');
     }
 
-    // 1. Tự động xác định khu vực hành chính (areaId) chính xác thông qua tọa độ GPS
+    // 1. Nếu người tạo (Admin / Authority) chọn trực tiếp areaId hợp lệ từ DB, ưu tiên gán khu vực đó
     let targetAreaId = null;
-    const geoMatchedArea = await findAreaByCoordinates([lng, lat], AdministrativeArea);
-    if (geoMatchedArea) {
-      targetAreaId = geoMatchedArea._id;
+    if (areaId && mongoose.Types.ObjectId.isValid(areaId)) {
+      const explicitArea = await AdministrativeArea.findById(areaId).select('_id').lean();
+      if (explicitArea) {
+        targetAreaId = explicitArea._id;
+      }
     }
 
-    // 2. Nếu GPS chưa rơi vào ranh giới cụ thể, fallback qua areaId gửi lên hoặc từ khóa địa chỉ
+    // 2. Tự động xác định khu vực hành chính (areaId) thông qua tọa độ GPS nếu chưa có
+    if (!targetAreaId) {
+      const geoMatchedArea = await findAreaByCoordinates([lng, lat], AdministrativeArea);
+      if (geoMatchedArea) {
+        targetAreaId = geoMatchedArea._id;
+      }
+    }
+
+    // 3. Nếu GPS chưa rơi vào ranh giới cụ thể, fallback qua mã/tên areaId gửi lên hoặc từ khóa địa chỉ
     if (!targetAreaId && areaId) {
       targetAreaId = areaId;
       if (targetAreaId && !mongoose.Types.ObjectId.isValid(targetAreaId)) {
@@ -398,10 +408,17 @@ class HazardReportService {
         coordinates: newCoords,
       };
 
-      // Tự động đồng bộ lại areaId theo tọa độ GPS mới nếu tìm thấy
-      const newMatchedArea = await findAreaByCoordinates(newCoords, AdministrativeArea);
-      if (newMatchedArea) {
-        report.areaId = newMatchedArea._id;
+      // Nếu có truyền areaId hợp lệ trực tiếp từ DB thì ưu tiên, ngược lại đồng bộ theo tọa độ GPS
+      if (data.areaId && mongoose.Types.ObjectId.isValid(data.areaId)) {
+        const explicitArea = await AdministrativeArea.findById(data.areaId).select('_id').lean();
+        if (explicitArea) {
+          report.areaId = explicitArea._id;
+        }
+      } else {
+        const newMatchedArea = await findAreaByCoordinates(newCoords, AdministrativeArea);
+        if (newMatchedArea) {
+          report.areaId = newMatchedArea._id;
+        }
       }
     }
 

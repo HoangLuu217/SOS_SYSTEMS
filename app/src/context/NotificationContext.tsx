@@ -156,14 +156,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const verificationStatus =
       incoming.data?.verificationStatus || (incoming as any).verificationStatus || 'VERIFIED';
 
+    const safetyCheckId = incoming.data?.safetyCheckId || (incoming as any).safetyCheckId;
     const broadcastKey =
       incoming.data?.broadcastId ||
       `${incoming.title?.trim()}_${incoming.content?.trim()}_${incoming.createdAt?.slice(0, 16)}`;
+      (safetyCheckId ? `safety_${safetyCheckId}` : null) ||
+      `${incoming.title?.trim()}_${incoming.content?.trim()}`;
 
     // Bỏ qua nếu đã từng hiển thị thông báo này (Deduplicate)
     if (
       seenIdsRef.current.has(incoming._id) ||
       (incoming.data?.broadcastId && seenIdsRef.current.has(incoming.data.broadcastId)) ||
+      (safetyCheckId && seenIdsRef.current.has(`safety_${safetyCheckId}`)) ||
       seenIdsRef.current.has(broadcastKey) ||
       (isRescuerVerification && seenIdsRef.current.has(`rescuer_ver_${verificationStatus}`))
     ) {
@@ -173,6 +177,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     seenIdsRef.current.add(incoming._id);
     if (incoming.data?.broadcastId) {
       seenIdsRef.current.add(incoming.data.broadcastId);
+    }
+    if (safetyCheckId) {
+      seenIdsRef.current.add(`safety_${safetyCheckId}`);
     }
     seenIdsRef.current.add(broadcastKey);
     if (isRescuerVerification) {
@@ -321,9 +328,30 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       processIncomingAlert(item);
     });
 
-    const responseSub = Notifications.addNotificationResponseReceivedListener(() => {
+    const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
       syncNotifications();
-      navigateHandlerRef.current?.('news');
+      const notifData = response?.notification?.request?.content?.data as Record<string, any> | undefined;
+      if (
+        notifData?.type === 'SAFETY_CHECK' ||
+        notifData?.actionUrl === 'safety_check' ||
+        notifData?.isSafetyCheck
+      ) {
+        navigateHandlerRef.current?.('home');
+        setTimeout(() => {
+          DeviceEventEmitter.emit('open:safety_check', notifData);
+        }, 350);
+      } else if (
+        notifData?.type === 'BLOOD_DONATION' ||
+        notifData?.actionUrl === 'blood_donation' ||
+        notifData?.isBloodDonation
+      ) {
+        navigateHandlerRef.current?.('home');
+        setTimeout(() => {
+          DeviceEventEmitter.emit('open:blood_donation', notifData);
+        }, 350);
+      } else {
+        navigateHandlerRef.current?.('news');
+      }
     });
 
     AsyncStorage.getItem(SEEN_NOTIFICATIONS_STORAGE_KEY).then((raw) => {

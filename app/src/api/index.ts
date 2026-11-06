@@ -11,4 +11,6 @@ export * from './rescueTeam.api';
 export * from './vehicle.api';
 export * from './assignment.api';
 export * from './weather.api';
+export * from './safetyCheck.api';
+export * from './bloodDonation.api';
 export * from './backendApi';

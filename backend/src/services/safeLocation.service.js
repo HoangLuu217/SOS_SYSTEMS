@@ -30,12 +30,15 @@ class SafeLocationService {
       throw new ApiError(400, 'Tọa độ GPS kinh độ (-180..180) hoặc vĩ độ (-90..90) không hợp lệ');
     }
 
-    // 1. Tự động xác định khu vực hành chính (areaId) chính xác qua tọa độ GPS
-    let area = await findAreaByCoordinates([lng, lat], AdministrativeArea);
-
-    // 2. Fallback nếu GPS chưa trúng ranh giới polygon cụ thể
-    if (!area && areaId && mongoose.isValidObjectId(areaId)) {
+    // 1. Nếu có truyền areaId hợp lệ từ DB (ví dụ Admin hoặc Cán bộ chọn trực tiếp khu vực trong area), ưu tiên lấy area đó
+    let area = null;
+    if (areaId && mongoose.isValidObjectId(areaId)) {
       area = await AdministrativeArea.findById(areaId);
+    }
+
+    // 2. Nếu chưa có area hoặc chưa chọn cụ thể, tự động xác định qua tọa độ GPS
+    if (!area) {
+      area = await findAreaByCoordinates([lng, lat], AdministrativeArea);
     }
     if (!area && areaId) {
       const cleanAreaId = String(areaId).replace(/^PROV_/i, '').trim();

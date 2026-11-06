@@ -1261,13 +1261,13 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                             <div
                               style={{
                                 fontWeight: 700,
-                                color: '#0f172a',
+                                color: '#2563eb',
                                 fontSize: '13.5px',
                                 lineHeight: '1.4',
                                 cursor: 'pointer',
                               }}
                               onClick={() => setDetailBroadcast(item)}
-                              title="Nhấp để xem toàn bộ thông báo"
+                              title="Nhấp để mở chi tiết thông báo bên phải"
                             >
                               {item.title}
                             </div>
@@ -2623,26 +2623,27 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
           style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.7)',
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1100,
-            padding: '16px',
+            alignItems: 'stretch',
+            justifyContent: 'flex-end',
+            zIndex: 9999,
+            padding: 0,
           }}
           onClick={() => setDetailBroadcast(null)}
         >
           <div
             style={{
               backgroundColor: '#ffffff',
-              borderRadius: '12px',
-              width: '100%',
-              maxWidth: '640px',
-              maxHeight: '90vh',
+              borderRadius: 0,
+              width: '540px',
+              maxWidth: '94vw',
+              height: '100vh',
+              maxHeight: '100vh',
               display: 'flex',
               flexDirection: 'column',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-              border: '1px solid #cbd5e1',
+              boxShadow: '-8px 0 30px rgba(15, 23, 42, 0.18)',
+              borderLeft: '1px solid #cbd5e1',
               overflow: 'hidden',
             }}
             onClick={(e) => e.stopPropagation()}

@@ -23,9 +23,12 @@ class WeatherNotificationService {
    * Lấy danh sách thông báo thời tiết (có bộ lọc và phân trang)
    */
   async getWeatherNotifications(query = {}) {
+    const isAll = query.all === 'true' || query.all === true;
     const page = Math.max(1, parseInt(query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
-    const skip = (page - 1) * limit;
+    const limit = isAll
+      ? 1000
+      : Math.min(500, Math.max(1, parseInt(query.limit, 10) || 20));
+    const skip = isAll ? 0 : (page - 1) * limit;
 
     const filter = {};
 
@@ -37,6 +40,22 @@ class WeatherNotificationService {
         { broadcastId: { $exists: true, $ne: null } },
         { status: { $in: ['approved', 'APPROVED', 'ACTIVE', 'active'] } },
       ];
+    } else if (
+      query.status === 'approved' ||
+      query.status === 'APPROVED' ||
+      query.status === 'active' ||
+      query.status === 'ACTIVE'
+    ) {
+      filter.status = { $in: ['approved', 'APPROVED', 'ACTIVE', 'active'] };
+    } else if (query.status === 'pending' || query.status === 'PENDING') {
+      filter.status = { $in: ['pending', 'PENDING'] };
+    } else if (
+      query.status === 'archived' ||
+      query.status === 'ARCHIVED' ||
+      query.status === 'rejected' ||
+      query.status === 'REJECTED'
+    ) {
+      filter.status = { $in: ['ARCHIVED', 'archived', 'rejected', 'REJECTED'] };
     } else if (query.status && query.status !== 'ALL') {
       const statuses = String(query.status)
         .split(',')
@@ -44,7 +63,15 @@ class WeatherNotificationService {
         .filter(Boolean);
       const variations = [];
       for (const s of statuses) {
-        variations.push(s, s.toLowerCase(), s.toUpperCase());
+        if (s.toLowerCase() === 'approved' || s.toLowerCase() === 'active') {
+          variations.push('approved', 'APPROVED', 'ACTIVE', 'active');
+        } else if (s.toLowerCase() === 'pending') {
+          variations.push('pending', 'PENDING');
+        } else if (s.toLowerCase() === 'archived' || s.toLowerCase() === 'rejected') {
+          variations.push('ARCHIVED', 'archived', 'rejected', 'REJECTED');
+        } else {
+          variations.push(s, s.toLowerCase(), s.toUpperCase());
+        }
       }
       filter.status = { $in: Array.from(new Set(variations)) };
     }
@@ -79,26 +106,61 @@ class WeatherNotificationService {
       ];
     }
 
-    const [items, total] = await Promise.all([
+    // Tùy chọn sắp xếp
+    let sortOptions = { createdAt: -1 };
+    if (query.sortBy === 'score') {
+      sortOptions = { score: -1, relevance_score: -1, createdAt: -1 };
+    } else if (query.sortBy === 'publishedAt') {
+      sortOptions = { published_at: -1, createdAt: -1 };
+    }
+
+    const [items, total, statusAgg] = await Promise.all([
       WeatherNotification.find(filter)
         .populate('createdBy', 'fullName phone roles')
         .populate('areaId', 'name code type')
-        .sort({ createdAt: -1 })
+        .sort(sortOptions)
         .skip(skip)
         .limit(limit)
         .lean(),
       WeatherNotification.countDocuments(filter),
+      WeatherNotification.aggregate([
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 },
+          },
+        },
+      ]),
     ]);
 
-    const totalPages = Math.ceil(total / limit) || 1;
+    const counts = {
+      total: 0,
+      approved: 0,
+      pending: 0,
+      archived: 0,
+    };
+    statusAgg.forEach((item) => {
+      counts.total += item.count;
+      const s = (item._id || '').toLowerCase();
+      if (s === 'approved' || s === 'active') {
+        counts.approved += item.count;
+      } else if (s === 'pending') {
+        counts.pending += item.count;
+      } else if (s === 'archived' || s === 'rejected') {
+        counts.archived += item.count;
+      }
+    });
+
+    const totalPages = isAll ? 1 : (Math.ceil(total / limit) || 1);
 
     return {
       items,
       pagination: {
         total,
-        page,
-        limit,
+        page: isAll ? 1 : page,
+        limit: isAll ? total : limit,
         totalPages,
+        counts,
       },
     };
   }
@@ -236,6 +298,11 @@ class WeatherNotificationService {
     const publishedAt = parsePublishedAt(getPublishedAtInput(data));
     if (publishedAt !== undefined) item.published_at = publishedAt;
 
+    if (data.status === 'ACTIVE' || data.status === 'approved') {
+      item.reviewed_by = user?._id || user?.id || item.reviewed_by;
+      item.reviewed_at = new Date();
+    }
+
     await item.save();
     return item;
   }
@@ -259,6 +326,27 @@ class WeatherNotificationService {
     }
 
     return item;
+  }
+
+  /**
+   * Tự động xóa các bản tin chưa duyệt (pending) có ngày xuất bản quá số ngày quy định (mặc định 2 ngày)
+   * @param {number} daysThreshold - Số ngày quá hạn (mặc định: 2 ngày)
+   */
+  async cleanupExpiredPendingArticles(daysThreshold = 2) {
+    const thresholdDate = new Date(Date.now() - daysThreshold * 24 * 60 * 60 * 1000);
+    const filter = {
+      status: { $in: ['pending', 'PENDING'] },
+      $or: [
+        { published_at: { $lt: thresholdDate, $ne: null } },
+        { published_at: null, createdAt: { $lt: thresholdDate } },
+      ],
+    };
+
+    const result = await WeatherNotification.deleteMany(filter);
+    if (result.deletedCount > 0) {
+      console.log(`🧹 [Weather Auto-Cleanup] Đã tự động xóa ${result.deletedCount} bản tin pending cũ quá ${daysThreshold} ngày.`);
+    }
+    return result.deletedCount;
   }
 }
 

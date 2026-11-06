@@ -21,7 +21,7 @@ class NotificationService {
     } else {
       filter.$or = [
         { 'data.isBroadcast': true },
-        { type: { $in: ['INSTANT', 'SYSTEM', 'WEATHER', 'ALERT', 'RESCUE', 'SAFE_LOCATION', 'HAZARD', 'TIN_TUC_THOI'] } },
+        { type: { $in: ['INSTANT', 'SYSTEM', 'WEATHER', 'ALERT', 'RESCUE', 'SAFE_LOCATION', 'HAZARD', 'SAFETY_CHECK', 'TIN_TUC_THOI'] } },
       ];
     }
 
@@ -238,7 +238,7 @@ class NotificationService {
 
     // Chuẩn hóa loại thông báo: INSTANT hoặc SYSTEM
     const normalizedType = String(type).toUpperCase().trim();
-    const allowedTypes = ['INSTANT', 'SYSTEM', 'WEATHER', 'RESCUE', 'ALERT', 'SAFE_LOCATION', 'HAZARD'];
+    const allowedTypes = ['INSTANT', 'SYSTEM', 'WEATHER', 'RESCUE', 'ALERT', 'SAFE_LOCATION', 'HAZARD', 'SAFETY_CHECK'];
     if (!allowedTypes.includes(normalizedType)) {
       throw new ApiError(400, `Loại thông báo không hợp lệ. Cho phép: ${allowedTypes.join(', ')}.`);
     }
@@ -617,6 +617,7 @@ class NotificationService {
         WEATHER: '🌦️ [THỜI TIẾT] ',
         SAFE_LOCATION: '📍 [ĐIỂM AN TOÀN] ',
         HAZARD: '⚠️ [ĐIỂM NGUY HIỂM] ',
+        SAFETY_CHECK: '🛡️ [XÁC NHẬN AN TOÀN] ',
       };
       const typePrefix = typePrefixes[normalizedType] || '📢 ';
       pushResult = await sendExpoPushNotification({

@@ -32,6 +32,8 @@ export interface WeatherArticleItem {
     phone?: string;
     roles?: string[];
   } | null;
+  ai_reason?: string;
+  original_title?: string;
   createdAt?: string;
   created_at?: string;
   updatedAt?: string;
@@ -54,6 +56,21 @@ export interface CreateWeatherPayload {
   status?: string;
 }
 
+export interface WeatherPaginationCounts {
+  total: number;
+  approved: number;
+  pending: number;
+  archived: number;
+}
+
+export interface WeatherPaginationMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  counts?: WeatherPaginationCounts;
+}
+
 export interface WeatherFilterQuery {
   search?: string;
   category?: string;
@@ -62,6 +79,8 @@ export interface WeatherFilterQuery {
   status?: string;
   page?: number;
   limit?: number;
+  all?: boolean | string;
+  sortBy?: string;
 }
 
 export async function executeWeatherWorkflowApi(): Promise<{
@@ -102,7 +121,13 @@ export function subscribeWeatherArticleUpdates(onUpdated: () => void): () => voi
 
 export async function fetchWeatherArticlesApi(
   query: WeatherFilterQuery = {}
-): Promise<{ success: boolean; data: WeatherArticleItem[]; pagination?: any; message?: string }> {
+): Promise<{
+  success: boolean;
+  data: WeatherArticleItem[];
+  meta?: WeatherPaginationMeta;
+  pagination?: WeatherPaginationMeta;
+  message?: string;
+}> {
   const params = new URLSearchParams();
   if (query.search) params.append('search', query.search);
   if (query.category && query.category !== 'ALL') params.append('category', query.category);
@@ -111,6 +136,8 @@ export async function fetchWeatherArticlesApi(
   if (query.status && query.status !== 'ALL') params.append('status', query.status);
   if (query.page) params.append('page', String(query.page));
   if (query.limit) params.append('limit', String(query.limit));
+  if (query.all) params.append('all', String(query.all));
+  if (query.sortBy) params.append('sortBy', query.sortBy);
 
   const qs = params.toString() ? `?${params.toString()}` : '';
   return fetchWithAuth(`/weather-articles${qs}`, { method: 'GET' });
@@ -146,5 +173,14 @@ export async function deleteWeatherArticleApi(
 ): Promise<{ success: boolean; message?: string }> {
   return fetchWithAuth(`/weather-articles/${id}`, {
     method: 'DELETE',
+  });
+}
+
+export async function cleanupExpiredWeatherArticlesApi(
+  days = 2
+): Promise<{ success: boolean; message?: string; data?: { deletedCount: number } }> {
+  return fetchWithAuth('/weather-articles/cleanup-expired', {
+    method: 'POST',
+    body: JSON.stringify({ days }),
   });
 }

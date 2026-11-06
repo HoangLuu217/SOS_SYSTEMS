@@ -44,6 +44,8 @@ import {
   Camera,
   X,
   CloudSun,
+  ShieldCheck,
+  Droplet,
 } from 'lucide-react';
 
 import './Sidebar.css';
@@ -63,6 +65,8 @@ export type NavItemKey =
   | 'notifications'
   | 'alerts'
   | 'weather'
+  | 'safety_checks'
+  | 'blood_donations'
   | 'shelters'
   | 'hazard_reports'
   | 'reports'
@@ -238,7 +242,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           key: 'map',
-          label: 'Bản đồ cứu hộ SOS',
+          label: 'Bản đồ cứu hộ',
           icon: <Map size={18} className="sos-nav-icon" />,
         },
         {
@@ -250,7 +254,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           key: 'coordination',
-          label: 'Điều phối nhiệm vụ',
+          label: 'Điều phối',
           icon: <GitMerge size={18} className="sos-nav-icon" />,
           badge: sosCounts.active > 0 ? `${sosCounts.active} Vụ` : undefined,
           badgeType: 'danger',
@@ -278,12 +282,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           key: 'rescuers',
-          label: 'Đội cứu hộ địa phương',
+          label: 'Đội cứu hộ',
           icon: <LifeBuoy size={18} className="sos-nav-icon" />,
         },
         {
           key: 'rescuers_approval',
-          label: 'Duyệt hồ sơ cứu hộ',
+          label: 'Duyệt hồ sơ',
           icon: <UserCheck size={18} className="sos-nav-icon" />,
           badge: pendingRescuersCount > 0 ? `${pendingRescuersCount} duyệt` : undefined,
           badgeType: 'warning',
@@ -305,18 +309,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
           label: 'Gửi thông báo',
           icon: <Bell size={18} className="sos-nav-icon" />,
         },
+        {
+          key: 'safety_checks',
+          label: 'Kiểm tra an toàn',
+          icon: <ShieldCheck size={18} className="sos-nav-icon" />,
+        },
+        {
+          key: 'blood_donations',
+          label: 'Hiến máu',
+          icon: <Droplet size={18} className="sos-nav-icon" />,
+        },
         ...(isAdmin
           ? [
               {
                 key: 'weather' as NavItemKey,
-                label: 'Bản tin thời tiết',
+                label: 'Tin thời tiết',
                 icon: <CloudSun size={18} className="sos-nav-icon" />,
               },
             ]
           : []),
         {
           key: 'shelters',
-          label: 'Điểm trú ẩn & Trạm an toàn',
+          label: 'Điểm trú ẩn',
           useCase: 'UC-L12',
           icon: <Home size={18} className="sos-nav-icon" />,
           badge: shelterCount > 0 ? `${shelterCount}` : undefined,
@@ -324,7 +338,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           key: 'hazard_reports',
-          label: 'Quản lý điểm nguy hiểm',
+          label: 'Điểm nguy hiểm',
           useCase: 'UC-L15',
           icon: <AlertTriangle size={18} className="sos-nav-icon" />,
           badge: hazardCount > 0 ? `${hazardCount}` : undefined,
@@ -361,17 +375,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           key: 'admin_overview',
-          label: 'Tổng quan hệ thống',
+          label: 'Tổng quan',
           icon: <LayoutDashboard size={18} className="sos-nav-icon" />,
         },
         {
           key: 'citizens',
-          label: 'Quản lý Người dân',
+          label: 'Người dân',
           icon: <Users size={18} className="sos-nav-icon" />,
         },
         {
           key: 'rescuers_admin',
-          label: 'Xác minh Đội cứu nạn',
+          label: 'Xác minh cứu hộ',
           icon: <UserCheck size={18} className="sos-nav-icon" />,
           badge: pendingRescuersCount > 0 ? `${pendingRescuersCount}` : undefined,
           badgeType: 'warning',

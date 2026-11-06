@@ -70,13 +70,13 @@ router.get('/:id', optionalAuthenticate, hazardReportController.getHazardReportB
 
 /**
  * @route   POST /hazard-reports
- * @desc    Citizen / Rescuer gửi đóng góp điểm nguy hiểm hoặc Cán bộ chính quyền tạo
- * @access  CITIZEN, RESCUER, LOCAL_AUTHORITY, AUTHORITY
+ * @desc    Citizen / Rescuer gửi đóng góp điểm nguy hiểm hoặc Cán bộ chính quyền / Admin tạo
+ * @access  CITIZEN, RESCUER, LOCAL_AUTHORITY, AUTHORITY, ADMIN
  */
 router.post(
   '/',
   authenticate,
-  authorize('CITIZEN', 'RESCUER', 'LOCAL_AUTHORITY', 'AUTHORITY'),
+  authorize('CITIZEN', 'RESCUER', 'LOCAL_AUTHORITY', 'AUTHORITY', 'ADMIN'),
   hazardReportController.createHazardReport
 );
 
