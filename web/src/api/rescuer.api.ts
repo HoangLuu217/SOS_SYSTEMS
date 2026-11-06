@@ -85,6 +85,27 @@ export async function deleteVehicle(
   return fetchWithAuth(`/vehicles/${id}`, { method: 'DELETE' });
 }
 
+export async function createRescueTeam(payload: {
+  name: string;
+  type: string;
+  leaderId: string;
+  areaId?: string;
+  authorityId?: string;
+  description?: string;
+  members?: Array<{ rescuerId: string; role?: string }>;
+}): Promise<{ success: boolean; data: RescueTeamItem; message?: string }> {
+  return fetchWithAuth('/rescue-teams', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteRescueTeam(
+  id: string
+): Promise<{ success: boolean; message?: string }> {
+  return fetchWithAuth(`/rescue-teams/${id}`, { method: 'DELETE' });
+}
+
 export async function updateRescueTeamStatus(
   id: string,
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING'
@@ -112,5 +133,26 @@ export async function removeTeamMember(
 ): Promise<{ success: boolean; data?: any; message?: string }> {
   return fetchWithAuth(`/rescue-teams/${teamId}/members/${rescuerId}`, {
     method: 'DELETE',
+  });
+}
+
+export async function addTeamMember(
+  teamId: string,
+  rescuerId: string,
+  role: 'LEADER' | 'MEMBER' = 'MEMBER'
+): Promise<{ success: boolean; data?: any; message?: string }> {
+  return fetchWithAuth(`/rescue-teams/${teamId}/members`, {
+    method: 'POST',
+    body: JSON.stringify({ rescuerId, role }),
+  });
+}
+
+export async function changeTeamLeader(
+  teamId: string,
+  newLeaderId: string
+): Promise<{ success: boolean; data?: any; message?: string }> {
+  return fetchWithAuth(`/rescue-teams/${teamId}/leader`, {
+    method: 'PATCH',
+    body: JSON.stringify({ leaderId: newLeaderId, newLeaderId }),
   });
 }

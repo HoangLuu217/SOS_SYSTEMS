@@ -617,6 +617,12 @@
   border-color: #fed7aa;
 }
 
+.ra-skill-tag.search {
+  background: #fdf4ff;
+  color: #9333ea;
+  border-color: #f0abfc;
+}
+
 .ra-skill-tag-more {
   display: inline-flex;
   align-items: center;

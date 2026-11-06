@@ -14,13 +14,6 @@
   box-sizing: border-box;
 }
 
-.rescuers-executive-container .executive-overview-container {
-  margin-bottom: 0 !important;
-  padding: 12px 18px 10px !important;
-  flex-shrink: 0;
-  border-radius: 12px;
-}
-
 .rescuers-executive-container .executive-table-card {
   flex: 1;
   display: flex;
@@ -28,8 +21,10 @@
   min-height: 0;
   overflow: hidden;
   margin-bottom: 0 !important;
-  padding: 10px 14px 12px !important;
+  padding: 14px 18px 12px !important;
   border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
 }
 
 .rescuers-executive-container .executive-table-scroll {
@@ -901,8 +896,8 @@
 }
 
 .team-drawer-container {
-  width: 900px;
-  max-width: 95vw;
+  width: 950px;
+  max-width: 96vw;
   height: 100vh;
   background: #ffffff;
   display: flex;
@@ -926,6 +921,7 @@
     backdrop-filter: blur(0px);
     -webkit-backdrop-filter: blur(0px);
   }
+
   to {
     opacity: 1;
     backdrop-filter: blur(6px);
@@ -939,6 +935,7 @@
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
   }
+
   to {
     opacity: 0;
     backdrop-filter: blur(0px);
@@ -950,6 +947,7 @@
   from {
     transform: translate3d(100%, 0, 0);
   }
+
   to {
     transform: translate3d(0, 0, 0);
   }
@@ -959,6 +957,7 @@
   from {
     transform: translate3d(0, 0, 0);
   }
+
   to {
     transform: translate3d(100%, 0, 0);
   }
@@ -1016,6 +1015,12 @@
   gap: 4px;
   flex-shrink: 0;
   overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.team-drawer-tabs-bar::-webkit-scrollbar {
+  display: none;
 }
 
 .team-drawer-tab-btn {
@@ -1100,7 +1105,7 @@
 
 .drawer-stat-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 12px;
 }
 
@@ -1687,4 +1692,13 @@
   padding: 1px 6px;
   border-radius: 9999px;
   margin-left: 4px;
+}
+
+/* Đảm bảo toàn bộ Modal trong Quản lý Cứu hộ luôn nổi phía trước Drawer (z-index > 1050) */
+.executive-modal-backdrop {
+  z-index: 999999 !important;
+}
+
+.executive-modal-card {
+  z-index: 1000000 !important;
 }
