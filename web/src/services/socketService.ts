@@ -288,3 +288,14 @@ export const onRescuerLocationUpdate = (
     s.off('rescuer:location_update', callback);
   };
 };
+
+/**
+ * Lắng nghe cập nhật thông tin/trạng thái đội cứu hộ và thành viên
+ */
+export const onRescueTeamsUpdated = (callback: (data: any) => void): (() => void) => {
+  const s = getSocket();
+  s.on('rescue_teams_updated', callback);
+  return () => {
+    s.off('rescue_teams_updated', callback);
+  };
+};

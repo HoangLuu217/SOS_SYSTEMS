@@ -24,7 +24,7 @@ router.get('/statistics', authorize('ADMIN'), adminController.getStatistics);
  *          Query: role, status, isVerified, search, page, limit
  * @access  LOCAL_AUTHORITY, ADMIN
  */
-router.get('/users', authorize('LOCAL_AUTHORITY', 'ADMIN'), adminController.getUsers);
+router.get('/users', authorize('LOCAL_AUTHORITY', 'AUTHORITY', 'ADMIN'), adminController.getUsers);
 
 /**
  * @route   POST /admin/users
@@ -38,7 +38,7 @@ router.post('/users', authorize('ADMIN'), adminController.createUser);
  * @desc    Lấy chi tiết 1 người dùng
  * @access  LOCAL_AUTHORITY, ADMIN
  */
-router.get('/users/:id', authorize('LOCAL_AUTHORITY', 'ADMIN'), adminController.getUserById);
+router.get('/users/:id', authorize('LOCAL_AUTHORITY', 'AUTHORITY', 'ADMIN'), adminController.getUserById);
 
 /**
  * @route   PATCH /admin/users/:id
@@ -84,7 +84,7 @@ router.delete('/users/:id', authorize('ADMIN'), adminController.deleteUser);
  */
 router.patch(
   '/rescuers/:id/verify',
-  authorize('LOCAL_AUTHORITY', 'ADMIN'),
+  authorize('LOCAL_AUTHORITY', 'AUTHORITY', 'ADMIN'),
   adminController.verifyRescuer
 );
 
