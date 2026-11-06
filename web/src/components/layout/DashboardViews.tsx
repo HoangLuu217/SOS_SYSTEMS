@@ -19,10 +19,11 @@ import { SosRequestsView } from '@/features/sos';
 import { CoordinationView } from '@/features/coordination';
 import { RescuersView } from '@/features/rescuers';
 import { ResourcesView } from '@/features/resources';
-import { AlertsView } from '@/features/alerts';
+import { AlertsView, SafetyCheckView } from '@/features/alerts';
 import { WeatherView } from '@/features/weather';
 import { SheltersView } from '@/features/shelters';
 import { HazardReportsView } from '@/features/hazards';
+import { BloodDonationsView } from '@/features/blood-donations';
 import {
   ReportsView,
   AdminOverviewView,
@@ -75,6 +76,14 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     case 'notifications':
     case 'alerts':
       return <AlertsView user={user} />;
+
+    // 5.2. Kiểm tra an toàn (Safety Check)
+    case 'safety_checks':
+      return <SafetyCheckView user={user} />;
+
+    // 5.3. Đăng ký & Sự kiện hiến máu
+    case 'blood_donations':
+      return <BloodDonationsView user={user} />;
 
     // 5.1. Bản tin & Cảnh báo thời tiết (Chỉ dành riêng cho ADMIN)
     case 'weather': {

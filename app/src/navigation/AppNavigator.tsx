@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -19,6 +19,9 @@ import { ProfileScreen, MandatoryOnboardingModal } from '@/features/profile';
 import { RescuerMissionScreen } from '@/features/mission';
 import { backendApi } from '@/api';
 import { AlertModal, BottomNav, LogoSOS, InAppNotificationBanner } from '@/components';
+import { SafetyCheckModal } from '@/features/home/SafetyCheckModal';
+import { BloodDonationModal } from '@/features/home/BloodDonationModal';
+import { DeviceEventEmitter } from 'react-native';
 import { MapFilterType, TabName } from '@/types';
 import { BACKGROUND_APP_SOURCE } from '@/constants/backgroundBase64';
 
@@ -34,6 +37,28 @@ LogBox.ignoreLogs([
 export function AuthenticatedApp() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabName>('home');
+  const [safetyCheckModalVisible, setSafetyCheckModalVisible] = useState(false);
+  const [safetyCheckId, setSafetyCheckId] = useState<string | undefined>(undefined);
+  const [bloodDonationModalVisible, setBloodDonationModalVisible] = useState(false);
+  const [bloodDonationEventId, setBloodDonationEventId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('open:safety_check', (data: any) => {
+      const sid = data?.safetyCheckId || data?._id;
+      setSafetyCheckId(sid || undefined);
+      setSafetyCheckModalVisible(true);
+    });
+    const subBlood = DeviceEventEmitter.addListener('open:blood_donation', (data: any) => {
+      const eid = data?.eventId || data?.bloodDonationEventId || data?._id;
+      setActiveTab('home');
+      setBloodDonationEventId(eid || undefined);
+      setBloodDonationModalVisible(true);
+    });
+    return () => {
+      sub.remove();
+      subBlood.remove();
+    };
+  }, []);
   const [configVisible, setConfigVisible] = useState(false);
   const [mapFilter, setMapFilter] = useState<MapFilterType>('ALL');
   const [mapNavKey, setMapNavKey] = useState(0);
@@ -147,6 +172,26 @@ export function AuthenticatedApp() {
           activeMissionsCount={activeMissionsCount}
         />
       </View>
+
+      {/* Modal Kiểm tra & Xác nhận An toàn Toàn cục (Safety Check) */}
+      <SafetyCheckModal
+        visible={safetyCheckModalVisible}
+        safetyCheckId={safetyCheckId}
+        onClose={() => {
+          setSafetyCheckModalVisible(false);
+          setSafetyCheckId(undefined);
+        }}
+      />
+
+      {/* Modal Đăng ký & Sự kiện Hiến máu Toàn cục */}
+      <BloodDonationModal
+        visible={bloodDonationModalVisible}
+        initialEventId={bloodDonationEventId}
+        onClose={() => {
+          setBloodDonationModalVisible(false);
+          setBloodDonationEventId(undefined);
+        }}
+      />
 
       <ConfigModal
         visible={configVisible}
@@ -287,6 +332,8 @@ export function AppNavigator() {
         message={toast.message}
         onClose={() => setToast(prev => ({ ...prev, visible: false }))}
       />
+
+
 
       {/* Banner thông báo khẩn cấp khi người dùng chưa đăng nhập */}
       {!user && <InAppNotificationBanner onNavigateToNews={() => {}} />}

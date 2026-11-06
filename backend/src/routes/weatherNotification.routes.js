@@ -40,6 +40,17 @@ router.post(
 );
 
 /**
+ * @route   POST /weather-notifications/cleanup-expired
+ * @desc    Dọn dẹp bản tin pending cũ hơn 2 ngày
+ * @access  ADMIN
+ */
+router.post(
+  '/cleanup-expired',
+  authorize('ADMIN'),
+  weatherNotificationController.cleanupExpiredArticles
+);
+
+/**
  * @route   POST /weather-notifications
  * @desc    Tạo thông báo thời tiết mới
  * @access  LOCAL_AUTHORITY, ADMIN

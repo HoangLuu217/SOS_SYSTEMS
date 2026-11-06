@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Animated,
   Platform,
+  DeviceEventEmitter,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -76,7 +77,28 @@ export const InAppNotificationBanner: React.FC<Props> = ({ onNavigateToNews }) =
     if (latestEmergencyAlert) {
       markAsRead(latestEmergencyAlert._id);
     }
+    const isSafety =
+      latestEmergencyAlert?.type === 'SAFETY_CHECK' ||
+      latestEmergencyAlert?.actionUrl === 'safety_check' ||
+      latestEmergencyAlert?.data?.isSafetyCheck;
+
+    const isBloodDonation =
+      latestEmergencyAlert?.type === 'BLOOD_DONATION' ||
+      latestEmergencyAlert?.actionUrl === 'blood_donation' ||
+      latestEmergencyAlert?.data?.isBloodDonation;
+
     handleDismiss();
+
+    if (isSafety) {
+      DeviceEventEmitter.emit('open:safety_check', latestEmergencyAlert?.data || latestEmergencyAlert);
+      return;
+    }
+
+    if (isBloodDonation) {
+      DeviceEventEmitter.emit('open:blood_donation', latestEmergencyAlert?.data || latestEmergencyAlert);
+      return;
+    }
+
     if (onNavigateToNews) {
       onNavigateToNews();
     }
