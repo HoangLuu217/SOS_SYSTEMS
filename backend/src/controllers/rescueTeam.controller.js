@@ -8,7 +8,24 @@ class RescueTeamController {
    */
   async createTeam(req, res, next) {
     try {
-      const team = await rescueTeamService.createTeam(req.body);
+      const payload = { ...req.body };
+      if (!payload.authorityId && req.user?.authority?.organizationId) {
+        payload.authorityId = req.user.authority.organizationId;
+      }
+      if (!payload.areaId && req.user?.authority?.areaId) {
+        payload.areaId = req.user.authority.areaId;
+      }
+      if (!payload.authorityId) {
+        const { AuthorityOrganization } = require('../models');
+        const authOrg = (payload.areaId && (await AuthorityOrganization.findOne({ areaId: payload.areaId }))) || (await AuthorityOrganization.findOne());
+        if (authOrg) payload.authorityId = authOrg._id;
+      }
+      if (!payload.areaId) {
+        const { AdministrativeArea } = require('../models');
+        const area = (await AdministrativeArea.findOne({ name: /Xuân Phú/i })) || (await AdministrativeArea.findOne());
+        if (area) payload.areaId = area._id;
+      }
+      const team = await rescueTeamService.createTeam(payload);
 
       await auditService.log({
         actorId: req.user?._id || null,
@@ -181,7 +198,10 @@ class RescueTeamController {
    */
   async changeLeader(req, res, next) {
     try {
-      const { leaderId } = req.body;
+      const leaderId = req.body.leaderId || req.body.newLeaderId;
+      if (!leaderId) {
+        throw new ApiError(400, 'Thiếu thông tin Đội trưởng mới (leaderId)');
+      }
       const team = await rescueTeamService.changeLeader(req.params.id, leaderId);
 
       await auditService.log({

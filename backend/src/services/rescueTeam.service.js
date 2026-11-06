@@ -3,6 +3,43 @@ const ApiError = require('../utils/apiError');
 
 class RescueTeamService {
   /**
+   * Kiểm tra xem một người dùng (cứu hộ viên) đã thuộc biên chế chính thức của một Đội cứu hộ nào chưa
+   * (Đang là Leader hoặc là thành viên có status APPROVED)
+   * @param {string|ObjectId} userId - Mã người dùng (Cứu hộ viên)
+   * @param {string|ObjectId} [excludeTeamId] - Mã đội cần loại trừ (khi cập nhật trong chính đội đó)
+   * @returns {Promise<RescueTeam|null>} - Trả về Đội mà người này đang trực thuộc nếu có
+   */
+  async findActiveTeamOfUser(userId, excludeTeamId = null) {
+    if (!userId) return null;
+    const mongoose = require('mongoose');
+    const uid = typeof userId === 'object' && userId._id ? userId._id : userId;
+    const userObjId = mongoose.Types.ObjectId.isValid(uid) ? new mongoose.Types.ObjectId(uid) : uid;
+
+    const filter = {
+      $or: [
+        { leaderId: userObjId },
+        {
+          members: {
+            $elemMatch: {
+              rescuerId: userObjId,
+              status: { $in: ['APPROVED', undefined, null] },
+            },
+          },
+        },
+      ],
+    };
+
+    if (excludeTeamId) {
+      const excludeObjId = mongoose.Types.ObjectId.isValid(excludeTeamId)
+        ? new mongoose.Types.ObjectId(excludeTeamId)
+        : excludeTeamId;
+      filter._id = { $ne: excludeObjId };
+    }
+
+    return RescueTeam.findOne(filter).select('_id name leaderId members status');
+  }
+
+  /**
    * Tạo Đội Cứu Hộ mới
    */
   async createTeam(data) {
@@ -15,6 +52,15 @@ class RescueTeamService {
     }
     if (!leader.roles.includes('RESCUER')) {
       throw new ApiError(400, 'Người được chọn làm Đội trưởng phải có vai trò RESCUER');
+    }
+
+    // Kiểm tra Đội trưởng đã thuộc đội khác hay chưa (Quy tắc: 1 User - 1 Đội)
+    const existingLeaderTeam = await this.findActiveTeamOfUser(leaderId);
+    if (existingLeaderTeam) {
+      throw new ApiError(
+        400,
+        `Cứu hộ viên "${leader.fullName || leader.phone}" hiện đã thuộc biên chế của đội "${existingLeaderTeam.name}". Mỗi người chỉ được tham gia 1 đội cứu hộ duy nhất.`
+      );
     }
 
     // Kiểm tra Cơ quan quản lý
@@ -34,6 +80,7 @@ class RescueTeamService {
     memberMap.set(leaderId.toString(), {
       rescuerId: leaderId,
       role: 'LEADER',
+      status: 'APPROVED',
       joinedAt: new Date(),
     });
 
@@ -43,9 +90,17 @@ class RescueTeamService {
         if (rId !== leaderId.toString() && !memberMap.has(rId)) {
           const rescuerUser = await User.findById(rId);
           if (rescuerUser && rescuerUser.roles.includes('RESCUER')) {
+            const memberExistingTeam = await this.findActiveTeamOfUser(rId);
+            if (memberExistingTeam) {
+              throw new ApiError(
+                400,
+                `Thành viên "${rescuerUser.fullName || rescuerUser.phone}" hiện đã thuộc biên chế của đội "${memberExistingTeam.name}". Mỗi người chỉ được thuộc 1 đội duy nhất.`
+              );
+            }
             memberMap.set(rId, {
               rescuerId: rId,
               role: m.role || 'MEMBER',
+              status: m.status || 'APPROVED',
               joinedAt: m.joinedAt || new Date(),
             });
           }
@@ -144,9 +199,14 @@ class RescueTeamService {
       RescueTeam.countDocuments(filter),
     ]);
 
-    // Đính kèm các phương tiện do từng đội trực tiếp quản lý
+    // Đính kèm các phương tiện & trang thiết bị do từng đội trực tiếp quản lý từ DB MongoDB
     const teamIds = teams.map((t) => t._id);
-    const vehicles = await Vehicle.find({ teamId: { $in: teamIds } });
+    const { Equipment } = require('../models');
+    const [vehicles, equipments] = await Promise.all([
+      Vehicle.find({ teamId: { $in: teamIds } }),
+      Equipment.find({ teamId: { $in: teamIds } }),
+    ]);
+
     const vehicleMap = {};
     vehicles.forEach((v) => {
       const tId = v.teamId.toString();
@@ -154,9 +214,19 @@ class RescueTeamService {
       vehicleMap[tId].push(v);
     });
 
+    const equipmentMap = {};
+    equipments.forEach((e) => {
+      if (e.teamId) {
+        const tId = e.teamId.toString();
+        if (!equipmentMap[tId]) equipmentMap[tId] = [];
+        equipmentMap[tId].push(e);
+      }
+    });
+
     const enrichedTeams = teams.map((team) => {
       const obj = team.toObject ? team.toObject() : { ...team };
       obj.vehicles = vehicleMap[team._id.toString()] || [];
+      obj.equipments = equipmentMap[team._id.toString()] || [];
       return obj;
     });
 
@@ -188,12 +258,17 @@ class RescueTeamService {
       throw new ApiError(404, 'Không tìm thấy Đội cứu hộ này');
     }
 
-    // Lấy danh sách phương tiện trực thuộc đội
-    const vehicles = await Vehicle.find({ teamId: id });
+    // Lấy danh sách phương tiện & trang thiết bị trực thuộc đội từ DB MongoDB
+    const { Equipment } = require('../models');
+    const [vehicles, equipments] = await Promise.all([
+      Vehicle.find({ teamId: id }),
+      Equipment.find({ teamId: id }),
+    ]);
 
     return {
       ...team.toObject(),
       vehicles,
+      equipments,
     };
   }
 
@@ -280,14 +355,8 @@ class RescueTeamService {
       throw new ApiError(404, 'Không tìm thấy Đội cứu hộ cần xóa');
     }
 
-    // Kiểm tra ràng buộc phương tiện
-    const activeVehicles = await Vehicle.countDocuments({ teamId: id });
-    if (activeVehicles > 0) {
-      throw new ApiError(
-        400,
-        `Không thể xóa đội cứu hộ này vì đang có ${activeVehicles} phương tiện được gán trực thuộc!`
-      );
-    }
+    // Tự động thu hồi phương tiện của đội về kho dự trữ chung (teamId: null)
+    await Vehicle.updateMany({ teamId: id }, { $set: { teamId: null } });
 
     await RescueTeam.findByIdAndDelete(id);
 
@@ -313,6 +382,28 @@ class RescueTeamService {
     }
     if (!rescuer.roles.includes('RESCUER')) {
       throw new ApiError(400, 'Tài khoản này không có vai trò RESCUER');
+    }
+
+    // Kiểm tra xem Cứu hộ viên đã thuộc biên chế chính thức của một Đội khác hay chưa (Quy tắc: 1 User - 1 Đội)
+    const existingActiveTeam = await this.findActiveTeamOfUser(rescuerId, teamId);
+    if (existingActiveTeam) {
+      const isLeader = existingActiveTeam.leaderId && existingActiveTeam.leaderId.toString() === rescuerId.toString();
+      throw new ApiError(
+        400,
+        `Cứu hộ viên "${rescuer.fullName || rescuer.phone}" hiện đã là ${isLeader ? 'Đội trưởng' : 'thành viên chính thức'} của "${existingActiveTeam.name}". Mỗi người chỉ được tham gia 1 đội cứu hộ duy nhất.`
+      );
+    }
+
+    // Kiểm tra xem đã có đơn PENDING ở đội khác chưa (chỉ cho phép 1 đơn ứng tuyển cùng thời điểm)
+    const existingPendingTeam = await RescueTeam.findOne({
+      _id: { $ne: teamId },
+      members: { $elemMatch: { rescuerId, status: 'PENDING' } },
+    });
+    if (existingPendingTeam) {
+      throw new ApiError(
+        400,
+        `Bạn đang có một đơn ứng tuyển chờ xét duyệt tại "${existingPendingTeam.name}". Vui lòng chờ phản hồi hoặc hủy đơn cũ trước khi ứng tuyển đội mới.`
+      );
     }
 
     // Kiểm tra xem đã có trong danh sách thành viên hay chưa
@@ -350,9 +441,15 @@ class RescueTeamService {
     const isDirectApproval = isAuthorityOrAdmin || isTeamLeader;
     const finalStatus = isDirectApproval ? 'APPROVED' : 'PENDING';
 
+    // Nếu đội đã có Đội trưởng, thành viên mới kết nạp luôn mặc định là MEMBER
+    const effectiveRole = team.leaderId ? 'MEMBER' : (role === 'LEADER' ? 'LEADER' : 'MEMBER');
+    if (!team.leaderId && role === 'LEADER') {
+      team.leaderId = rescuerId;
+    }
+
     team.members.push({
       rescuerId,
-      role: role === 'LEADER' ? 'LEADER' : 'MEMBER',
+      role: effectiveRole,
       status: finalStatus,
       joinedAt: new Date(),
       approvedAt: finalStatus === 'APPROVED' ? new Date() : null,
@@ -428,9 +525,25 @@ class RescueTeamService {
     }
 
     if (status === 'APPROVED') {
+      // Kiểm tra xem cứu hộ viên này có đang thuộc đội nào khác hay không
+      const targetRescuerId = (member.rescuerId?._id || member.rescuerId).toString();
+      const existingTeam = await this.findActiveTeamOfUser(targetRescuerId, teamId);
+      if (existingTeam) {
+        throw new ApiError(
+          400,
+          `Không thể phê duyệt: Cứu hộ viên này hiện đã thuộc biên chế chính thức của đội "${existingTeam.name}". Mỗi người chỉ được thuộc 1 đội duy nhất.`
+        );
+      }
+
       member.status = 'APPROVED';
       member.approvedAt = new Date();
       member.approvedBy = actor?._id || null;
+
+      // Tự động dọn dẹp các đơn PENDING ở các đội khác nếu có
+      await RescueTeam.updateMany(
+        { _id: { $ne: team._id } },
+        { $pull: { members: { rescuerId: targetRescuerId, status: 'PENDING' } } }
+      );
     } else if (status === 'REJECTED') {
       // Xóa khỏi danh sách thành viên
       team.members = team.members.filter(
@@ -472,6 +585,23 @@ class RescueTeamService {
           status,
         },
       });
+
+      try {
+        const eventBus = require('./eventBus');
+        eventBus.emit('notification_event', {
+          action: 'USER',
+          userId: rescuerId.toString(),
+          data: {
+            type: 'TEAM_MEMBERSHIP_CHANGED',
+            teamId: team._id.toString(),
+            teamName: team.name,
+            status,
+            timestamp: Date.now(),
+          },
+        });
+      } catch (busErr) {
+        console.warn('eventBus emit error in updateMemberStatus:', busErr.message);
+      }
     } catch (notifErr) {
       console.warn('Notification/Socket error in updateMemberStatus:', notifErr.message);
     }
@@ -491,20 +621,21 @@ class RescueTeamService {
       throw new ApiError(404, 'Không tìm thấy Đội cứu hộ');
     }
 
-    const isCurrentLeader =
-      team.leaderId && team.leaderId.toString() === rescuerId.toString();
+    const currentLeaderId = team.leaderId ? (team.leaderId._id || team.leaderId).toString() : null;
+    const targetRescuerId = rescuerId.toString();
+    const isCurrentLeader = currentLeaderId && currentLeaderId === targetRescuerId;
 
     if (isCurrentLeader) {
       // Lấy danh sách các thành viên khác ngoài Đội trưởng
       const otherMembers = team.members.filter(
-        m => m.rescuerId.toString() !== rescuerId.toString()
+        m => (m.rescuerId?._id || m.rescuerId || '').toString() !== targetRescuerId
       );
 
       // Trường hợp đội còn thành viên khác thì bắt buộc chuyển giao
       if (otherMembers.length > 0) {
         throw new ApiError(
           400,
-          'Bạn hiện đang là Đội trưởng của đội. Để rời đội, bạn cần chuyển giao chức vụ Đội trưởng cho một thành viên khác.'
+          'Cán bộ này hiện đang là Đội trưởng. Để xóa khỏi đội, vui lòng bổ nhiệm một thành viên khác làm Đội trưởng trước.'
         );
       }
 
@@ -520,7 +651,7 @@ class RescueTeamService {
 
     const initialLength = team.members.length;
     team.members = team.members.filter(
-      m => m.rescuerId.toString() !== rescuerId.toString()
+      m => (m.rescuerId?._id || m.rescuerId || '').toString() !== targetRescuerId
     );
 
     if (team.members.length === initialLength) {
@@ -528,6 +659,31 @@ class RescueTeamService {
     }
 
     await team.save();
+
+    try {
+      const { getIO } = require('../socket');
+      const eventBus = require('./eventBus');
+      const io = getIO();
+      if (io) {
+        io.to(`user_${rescuerId}`).emit('team:membership_updated', {
+          teamId: team._id.toString(),
+          teamName: team.name,
+          status: 'REMOVED',
+        });
+        io.emit('rescue_teams_updated', { teamId: team._id.toString(), action: 'MEMBER_REMOVED', rescuerId });
+      }
+      eventBus.emit('notification_event', {
+        action: 'USER',
+        userId: rescuerId.toString(),
+        data: {
+          type: 'TEAM_MEMBERSHIP_CHANGED',
+          teamId: team._id.toString(),
+          teamName: team.name,
+          status: 'REMOVED',
+          timestamp: Date.now(),
+        },
+      });
+    } catch (_) {}
 
     return team.populate({
       path: 'members.rescuerId',
@@ -554,14 +710,23 @@ class RescueTeamService {
       throw new ApiError(400, 'Đội trưởng mới bắt buộc phải có vai trò RESCUER');
     }
 
-    const oldLeaderId = team.leaderId.toString();
+    // Kiểm tra xem Đội trưởng mới có đang thuộc đội nào khác hay không
+    const existingTeam = await this.findActiveTeamOfUser(newLeaderId, teamId);
+    if (existingTeam) {
+      throw new ApiError(
+        400,
+        `Cứu hộ viên "${newLeader.fullName || newLeader.phone}" hiện đã thuộc biên chế của "${existingTeam.name}". Mỗi người chỉ được làm chỉ huy hoặc thành viên của 1 đội duy nhất.`
+      );
+    }
+
+    const oldLeaderId = team.leaderId ? (team.leaderId._id || team.leaderId).toString() : null;
     team.leaderId = newLeaderId;
 
     // Cập nhật vai trò trong danh sách members
     let newLeaderFoundInMembers = false;
     team.members.forEach(m => {
-      const currentRescuerId = m.rescuerId.toString();
-      if (currentRescuerId === oldLeaderId) {
+      const currentRescuerId = (m.rescuerId?._id || m.rescuerId || '').toString();
+      if (oldLeaderId && currentRescuerId === oldLeaderId) {
         m.role = 'MEMBER'; // Hạ role leader cũ xuống member
       }
       if (currentRescuerId === newLeaderId.toString()) {
