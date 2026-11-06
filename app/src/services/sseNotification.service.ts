@@ -77,7 +77,7 @@ class SSENotificationService {
               const jsonStr = trimmed.replace(/^data:\s*/, '');
               const payload = JSON.parse(jsonStr);
 
-              if (payload?.data?.type === 'SOS_SYNC') {
+              if (payload?.data?.type === 'SOS_SYNC' || payload?.data?.type === 'RELIEF_MISSION') {
                 console.log('⚡ [SSE_NOTIFICATION] Đồng bộ SOS realtime:', payload.data);
                 DeviceEventEmitter.emit('sos:sync', payload.data);
               }
@@ -89,6 +89,16 @@ class SSENotificationService {
               ) {
                 console.log('⚡ [SSE_NOTIFICATION] Đồng bộ Cứu hộ viên realtime:', payload.data);
                 DeviceEventEmitter.emit('rescuer:verification_status_changed', payload.data);
+                DeviceEventEmitter.emit('user:profile_updated', payload.data);
+              }
+
+              if (
+                payload?.data?.type === 'TEAM_MEMBERSHIP_CHANGED' ||
+                payload?.data?.type === 'TEAM_MEMBERSHIP' ||
+                payload?.type === 'TEAM_MEMBERSHIP'
+              ) {
+                console.log('⚡ [SSE_NOTIFICATION] Đồng bộ Đội cứu hộ realtime:', payload.data);
+                DeviceEventEmitter.emit('team:membership_updated', payload.data);
                 DeviceEventEmitter.emit('user:profile_updated', payload.data);
               }
 
