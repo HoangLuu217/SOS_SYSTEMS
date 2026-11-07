@@ -61,4 +61,24 @@ router.patch('/assignments/:id/reassign', sosAssignmentController.reassignAssign
  */
 router.patch('/assignments/:id/cancel', sosAssignmentController.cancelAssignment);
 
+/**
+ * @route   POST /supplies/request
+ * @route   POST /assignments/:id/supplies/request
+ * @desc    Cứu hộ viên gửi yêu cầu chi viện vật tư từ hiện trường
+ */
+router.post('/supplies/request', authenticate, sosAssignmentController.requestSupplies);
+router.post('/assignments/:id/supplies/request', authenticate, sosAssignmentController.requestSupplies);
+
+/**
+ * @route   POST /assignments/:id/supplies/approve
+ * @desc    Ban chỉ huy phê duyệt & xuất cấp vật tư chi viện
+ */
+router.post('/assignments/:id/supplies/approve', authenticate, sosAssignmentController.approveSupplies);
+
+/**
+ * @route   POST /assignments/:id/supplies/reject
+ * @desc    Ban chỉ huy từ chối yêu cầu chi viện vật tư
+ */
+router.post('/assignments/:id/supplies/reject', authenticate, sosAssignmentController.rejectSupplies);
+
 module.exports = router;

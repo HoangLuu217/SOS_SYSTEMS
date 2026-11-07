@@ -104,3 +104,17 @@ export async function cancelShoreHandoffApi(sosId: string): Promise<{ success: b
     method: 'POST',
   });
 }
+
+export async function approveSuppliesApi(assignmentId: string, note?: string): Promise<{ success: boolean; data: any }> {
+  return fetchWithAuth(`/assignments/${assignmentId}/supplies/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+}
+
+export async function rejectSuppliesApi(assignmentId: string, note?: string): Promise<{ success: boolean; data: any }> {
+  return fetchWithAuth(`/assignments/${assignmentId}/supplies/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+}

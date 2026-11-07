@@ -891,6 +891,163 @@ class SosAssignmentService {
 
     return { assignment, sos: updatedSos };
   }
+
+  /**
+   * Đội cứu hộ gửi yêu cầu chi viện vật tư từ hiện trường
+   */
+  async requestSupplies(userId, { assignmentId, sosId, items, urgency, note }) {
+    let assignment = null;
+    if (assignmentId && mongoose.Types.ObjectId.isValid(assignmentId)) {
+      assignment = await SosAssignment.findById(assignmentId);
+    }
+    if (!assignment && sosId && mongoose.Types.ObjectId.isValid(sosId)) {
+      assignment = await SosAssignment.findOne({
+        $or: [{ sosRequestId: sosId }, { sosId: sosId }],
+        status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+      });
+    }
+    if (!assignment) {
+      throw new ApiError(404, 'Không tìm thấy phiên phân công tác chiến hợp lệ');
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new ApiError(400, 'Danh sách vật tư yêu cầu không được rỗng');
+    }
+
+    const newRequests = items.map((it) => ({
+      name: it.name,
+      quantity: Number(it.quantity) || 1,
+      unit: it.unit || 'món',
+      urgency: urgency || 'HIGH',
+      note: note || null,
+      status: 'PENDING',
+      requestedAt: new Date(),
+    }));
+
+    if (!assignment.requestedSupplies) {
+      assignment.requestedSupplies = [];
+    }
+    assignment.requestedSupplies.push(...newRequests);
+    await assignment.save();
+
+    const populated = await SosAssignment.findById(assignment._id)
+      .populate('sosRequestId', 'sosCode priority emergencyType address description')
+      .populate('rescueTeamId', 'name phone')
+      .populate('rescuerId', 'fullName phone');
+
+    // Realtime notification
+    try {
+      const io = require('../socket').getIO();
+      if (io) {
+        io.emit('assignment:supply_requested', {
+          assignmentId: assignment._id,
+          sosId: assignment.sosRequestId,
+          sosCode: populated?.sosRequestId?.sosCode,
+          teamName: populated?.rescueTeamId?.name,
+          requestedSupplies: assignment.requestedSupplies,
+        });
+        io.emit('notification:new', {
+          title: `CHI VIỆN VẬT TƯ: ${populated?.rescueTeamId?.name || 'Đội Cứu Hộ'}`,
+          message: `Đội cứu hộ yêu cầu cấp thêm: ${newRequests.map((r) => `${r.name} (${r.quantity} ${r.unit})`).join(', ')}`,
+          type: 'WARNING',
+        });
+        io.emit('sos:sync');
+      }
+    } catch (e) {}
+
+    return populated || assignment;
+  }
+
+  /**
+   * Ban chỉ huy phê duyệt & xuất cấp vật tư chi viện cho đội
+   */
+  async approveSupplies(assignmentId, { note, officerId } = {}) {
+    const assignment = await SosAssignment.findById(assignmentId);
+    if (!assignment) {
+      throw new ApiError(404, 'Không tìm thấy phân công cứu hộ');
+    }
+
+    const pendingRequests = (assignment.requestedSupplies || []).filter((s) => s.status === 'PENDING');
+    if (pendingRequests.length === 0) {
+      throw new ApiError(400, 'Không có yêu cầu chi viện vật tư nào đang chờ duyệt');
+    }
+
+    const now = new Date();
+    pendingRequests.forEach((req) => {
+      req.status = 'APPROVED';
+      req.respondedAt = now;
+      req.responseNote = note || 'Ban chỉ huy đã phê duyệt xuất kho tiếp tế';
+
+      // Hợp nhất vào danh sách supplies được giao theo xe
+      const existing = (assignment.supplies || []).find((s) => s.name?.toLowerCase() === req.name?.toLowerCase());
+      if (existing) {
+        existing.quantity = (existing.quantity || 0) + req.quantity;
+      } else {
+        if (!assignment.supplies) assignment.supplies = [];
+        assignment.supplies.push({
+          name: req.name,
+          quantity: req.quantity,
+          unit: req.unit || 'món',
+        });
+      }
+    });
+
+    await assignment.save();
+
+    const populated = await SosAssignment.findById(assignment._id)
+      .populate('sosRequestId', 'sosCode priority emergencyType address description')
+      .populate('rescueTeamId', 'name phone')
+      .populate('rescuerId', 'fullName phone');
+
+    try {
+      const io = require('../socket').getIO();
+      if (io) {
+        io.emit('assignment:supply_approved', {
+          assignmentId: assignment._id,
+          sosId: assignment.sosRequestId,
+          supplies: assignment.supplies,
+          requestedSupplies: assignment.requestedSupplies,
+        });
+        io.emit('sos:sync');
+      }
+    } catch (e) {}
+
+    return populated || assignment;
+  }
+
+  /**
+   * Ban chỉ huy từ chối yêu cầu chi viện vật tư
+   */
+  async rejectSupplies(assignmentId, { note, officerId } = {}) {
+    const assignment = await SosAssignment.findById(assignmentId);
+    if (!assignment) {
+      throw new ApiError(404, 'Không tìm thấy phân công cứu hộ');
+    }
+
+    const pendingRequests = (assignment.requestedSupplies || []).filter((s) => s.status === 'PENDING');
+    const now = new Date();
+    pendingRequests.forEach((req) => {
+      req.status = 'REJECTED';
+      req.respondedAt = now;
+      req.responseNote = note || 'Kho địa phương chưa thể đáp ứng';
+    });
+
+    await assignment.save();
+
+    try {
+      const io = require('../socket').getIO();
+      if (io) {
+        io.emit('assignment:supply_rejected', {
+          assignmentId: assignment._id,
+          sosId: assignment.sosRequestId,
+          requestedSupplies: assignment.requestedSupplies,
+        });
+        io.emit('sos:sync');
+      }
+    } catch (e) {}
+
+    return assignment;
+  }
 }
 
 module.exports = new SosAssignmentService();

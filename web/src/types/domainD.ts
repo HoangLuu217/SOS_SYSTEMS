@@ -232,6 +232,17 @@ export interface SosAssignment {
   distanceRemainingKm?: number;
   etaMinutes?: number;
   supplies?: AssignedSupplyItem[];
+  requestedSupplies?: {
+    name: string;
+    quantity: number;
+    unit?: string;
+    urgency?: string;
+    note?: string;
+    status: 'PENDING' | 'APPROVED' | 'REJECTED';
+    requestedAt?: string;
+    respondedAt?: string;
+    responseNote?: string;
+  }[];
 }
 
 export interface AssignedSupplyItem {

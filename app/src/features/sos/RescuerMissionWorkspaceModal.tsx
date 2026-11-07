@@ -230,6 +230,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       if (targetAssign) {
         setAssignment(targetAssign);
         syncStateFromStatus(targetAssign.status);
+        if (Array.isArray(targetAssign.requestedSupplies)) {
+          setRequestedSuppliesList(targetAssign.requestedSupplies);
+        }
 
         if (targetAssign.rescuerLocation?.lat && targetAssign.rescuerLocation?.lng) {
           setTeamLocation({
@@ -1869,8 +1872,15 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               </View>
             </TouchableOpacity>
           ) : (
-            /* Khi mở rộng: Hiển thị đầy đủ thông tin */
-            <View style={styles.grabCitizenSection}>
+            <ScrollView
+              style={styles.sheetScrollArea}
+              contentContainerStyle={styles.sheetScrollContent}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              bounces={false}
+            >
+              {/* Khi mở rộng: Hiển thị đầy đủ thông tin */}
+              <View style={styles.grabCitizenSection}>
               {/* Tên người dân - To, đậm, nổi bật */}
               <Text style={styles.grabCitizenName}>{citizenName}</Text>
 
@@ -1984,22 +1994,32 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
                     {/* Danh sách vật tư đã yêu cầu bổ sung nếu có */}
                     {requestedSuppliesList.length > 0 && (
-                      <View style={styles.requestedSuppliesNotice}>
-                        <Ionicons name="information-circle" size={15} color="#D97706" />
-                        <Text style={styles.requestedSuppliesNoticeText}>
-                          Đã yêu cầu chi viện: {requestedSuppliesList.map((item) => `${item.name} (${item.quantity})`).join(', ')} (Chờ địa phương cấp)
-                        </Text>
+                      <View style={{ gap: 6, marginTop: 6 }}>
+                        {requestedSuppliesList.some((s: any) => s.status === 'APPROVED') && (
+                          <View style={[styles.requestedSuppliesNotice, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
+                            <Ionicons name="checkmark-circle" size={15} color="#16A34A" />
+                            <Text style={[styles.requestedSuppliesNoticeText, { color: '#166534' }]}>
+                              ✓ Địa phương đã xuất cấp: {requestedSuppliesList.filter((s: any) => s.status === 'APPROVED').map((item: any) => `${item.name} (${item.quantity})`).join(', ')}
+                            </Text>
+                          </View>
+                        )}
+                        {requestedSuppliesList.some((s: any) => s.status !== 'APPROVED') && (
+                          <View style={styles.requestedSuppliesNotice}>
+                            <Ionicons name="information-circle" size={15} color="#D97706" />
+                            <Text style={styles.requestedSuppliesNoticeText}>
+                              ⏳ Đã yêu cầu chi viện: {requestedSuppliesList.filter((s: any) => s.status !== 'APPROVED').map((item: any) => `${item.name} (${item.quantity})`).join(', ')} (Chờ địa phương duyệt)
+                            </Text>
+                          </View>
+                        )}
                       </View>
                     )}
                   </View>
                 );
               })()}
             </View>
-          )}
 
-          {/* Hàng 4 nút thao tác nhanh (Chỉ đường in-app, Gọi điện, Từ chối, Trú ẩn) */}
-          {!isSheetCollapsed && (
-            <View style={styles.grabActionRow}>
+              {/* Hàng 4 nút thao tác nhanh (Chỉ đường in-app, Gọi điện, Từ chối, Trú ẩn) */}
+              <View style={styles.grabActionRow}>
               {/* Nút 1: Ghim lại vị trí mình (thay cho nút Chỉ đường) */}
               <TouchableOpacity
                 style={styles.grabActionCol}
@@ -2067,6 +2087,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 <Text style={styles.grabActionLabel}>Trạm trú ẩn</Text>
               </TouchableOpacity>
             </View>
+          </ScrollView>
           )}
 
           {/* Primary Action Button to, rõ, full width giống Grab */}
@@ -4031,7 +4052,13 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 10,
     zIndex: 100,
-    maxHeight: SCREEN_HEIGHT * 0.62,
+    maxHeight: SCREEN_HEIGHT * 0.78,
+  },
+  sheetScrollArea: {
+    maxHeight: SCREEN_HEIGHT * 0.46,
+  },
+  sheetScrollContent: {
+    paddingBottom: 8,
   },
   deckHandleBarWrap: {
     alignItems: 'center',

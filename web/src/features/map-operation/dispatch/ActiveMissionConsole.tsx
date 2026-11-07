@@ -10,7 +10,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import type { SosRequest, SosAssignment, RescueTeam, Vehicle, AuthorityOfficer, AdministrativeArea } from '@/types/domainD';
-import { assignShoreHandoffApi, cancelShoreHandoffApi } from '@/api';
+import { assignShoreHandoffApi, cancelShoreHandoffApi, approveSuppliesApi, rejectSuppliesApi } from '@/api';
 import { isTeamInOfficerJurisdiction } from '@/services/mapGeoService';
 
 interface Props {
@@ -38,6 +38,34 @@ export const ActiveMissionConsole: React.FC<Props> = ({
   const [selectedRoadVehId, setSelectedRoadVehId] = useState<string>('');
   const [isSubmittingRoad, setIsSubmittingRoad] = useState(false);
   const [isCancellingRoad, setIsCancellingRoad] = useState(false);
+  const [isProcessingSupplies, setIsProcessingSupplies] = useState(false);
+
+  const handleApproveSupplies = async () => {
+    if (!assignment?.id) return;
+    setIsProcessingSupplies(true);
+    try {
+      await approveSuppliesApi(assignment.id);
+      window.dispatchEvent(new CustomEvent('sos_data_updated'));
+    } catch (err) {
+      console.warn('Lỗi duyệt vật tư:', err);
+    } finally {
+      setIsProcessingSupplies(false);
+    }
+  };
+
+  const handleRejectSupplies = async () => {
+    if (!assignment?.id) return;
+    if (!window.confirm('Bạn có chắc chắn muốn từ chối yêu cầu chi viện vật tư này?')) return;
+    setIsProcessingSupplies(true);
+    try {
+      await rejectSuppliesApi(assignment.id);
+      window.dispatchEvent(new CustomEvent('sos_data_updated'));
+    } catch (err) {
+      console.warn('Lỗi từ chối vật tư:', err);
+    } finally {
+      setIsProcessingSupplies(false);
+    }
+  };
   const [vehicleSearchQuery, setVehicleSearchQuery] = useState('');
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState<'ALL' | 'AMBULANCE' | 'TRUCK'>('ALL');
   const [showOutsideArea, setShowOutsideArea] = useState(false);
@@ -603,6 +631,142 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               {vehiclePlate}
             </div>
           </div>
+
+          {/* Divider */}
+          <div style={{ height: 1, background: '#e2e8f0' }} />
+
+          {/* Yêu Cầu Chi Viện Vật Tư Khẩn Cấp từ Đội Cứu Hộ Hiện Trường */}
+          {assignment?.requestedSupplies && assignment.requestedSupplies.length > 0 && (
+            <div
+              style={{
+                margin: '10px 14px',
+                borderRadius: 10,
+                border: assignment.requestedSupplies.some((s: any) => s.status === 'PENDING')
+                  ? '1.5px solid #f59e0b'
+                  : '1.5px solid #86efac',
+                background: assignment.requestedSupplies.some((s: any) => s.status === 'PENDING')
+                  ? '#fffbeb'
+                  : '#f0fdf4',
+                padding: '12px 14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 16 }}>📦</span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 900,
+                      color: assignment.requestedSupplies.some((s: any) => s.status === 'PENDING')
+                        ? '#b45309'
+                        : '#15803d',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {assignment.requestedSupplies.some((s: any) => s.status === 'PENDING')
+                      ? 'Yêu Cầu Chi Viện Vật Tư Khẩn Cấp'
+                      : 'Đã Cấp Chi Viện Vật Tư'}
+                  </span>
+                </div>
+                <span
+                  style={{
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    padding: '2px 7px',
+                    borderRadius: 5,
+                    background: assignment.requestedSupplies.some((s: any) => s.status === 'PENDING')
+                      ? '#fef3c7'
+                      : '#dcfce7',
+                    color: assignment.requestedSupplies.some((s: any) => s.status === 'PENDING')
+                      ? '#92400e'
+                      : '#166534',
+                  }}
+                >
+                  {assignment.requestedSupplies.some((s: any) => s.status === 'PENDING')
+                    ? 'CHỜ DUYỆT'
+                    : 'ĐÃ XUẤT CẤP'}
+                </span>
+              </div>
+
+              {/* Danh sách vật tư yêu cầu */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {assignment.requestedSupplies.map((req: any, rIdx: number) => (
+                  <div
+                    key={rIdx}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontSize: 12.5,
+                      color: '#1e293b',
+                      padding: '5px 9px',
+                      background: '#ffffff',
+                      borderRadius: 6,
+                      border: '1px solid #e2e8f0',
+                    }}
+                  >
+                    <span style={{ fontWeight: 700 }}>
+                      • {req.name}
+                    </span>
+                    <span style={{ fontWeight: 800, color: '#0284c7' }}>
+                      {req.quantity} {req.unit || 'món'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Nút hành động phê duyệt */}
+              {assignment.requestedSupplies.some((s: any) => s.status === 'PENDING') && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                  <button
+                    type="button"
+                    onClick={handleApproveSupplies}
+                    disabled={isProcessingSupplies}
+                    style={{
+                      flex: 1,
+                      height: 34,
+                      background: '#16a34a',
+                      border: 'none',
+                      borderRadius: 6,
+                      color: '#ffffff',
+                      fontSize: 12,
+                      fontWeight: 900,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      boxShadow: '0 1px 3px rgba(22, 163, 74, 0.3)',
+                    }}
+                  >
+                    <Check size={14} />
+                    <span>{isProcessingSupplies ? 'Đang duyệt...' : 'Phê Duyệt & Xuất Cấp'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRejectSupplies}
+                    disabled={isProcessingSupplies}
+                    style={{
+                      padding: '0 12px',
+                      height: 34,
+                      background: '#fef2f2',
+                      border: '1px solid #fca5a5',
+                      borderRadius: 6,
+                      color: '#dc2626',
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Từ chối
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Divider */}
           <div style={{ height: 1, background: '#e2e8f0' }} />
