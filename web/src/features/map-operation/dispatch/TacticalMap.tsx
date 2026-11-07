@@ -192,7 +192,7 @@ const RescueRoadRoute = ({
   startLng,
   endLat,
   endLng,
-  routeColor = '#2563eb',
+  routeColor = '#38bdf8',
 }: {
   startLat: number;
   startLng: number;
@@ -212,51 +212,15 @@ const RescueRoadRoute = ({
     };
   }, [startLat, startLng, endLat, endLng]);
 
-  const fallbackLine: [number, number][] = [
-    [startLat, startLng],
-    [endLat, endLng],
-  ];
-
-  // Nếu chưa tải xong hoặc mạng lỗi: Vẽ đường đứt nét tạm thời
+  // Nếu chưa có lộ trình đường bộ: Tuyệt đối không vẽ đường nối thẳng chim bay cắt xuyên biển
   if (!roadPath || roadPath.length < 2) {
-    return (
-      <Polyline
-        positions={fallbackLine}
-        pathOptions={{
-          color: routeColor,
-          weight: 3,
-          dashArray: '6, 8',
-          opacity: 0.7,
-        }}
-      />
-    );
+    return null;
   }
 
-  // Tuyến đường uốn lượn chính xác theo mạng lưới giao thông (Dual-layer Grab style)
-  const startConnector: [number, number][] = [
-    [startLat, startLng],
-    roadPath[0],
-  ];
-  const endConnector: [number, number][] = [
-    roadPath[roadPath.length - 1],
-    [endLat, endLng],
-  ];
-
+  // Chỉ vẽ lộ trình thực bám sát mạng lưới đường bộ (Dual-layer Grab style), loại bỏ hoàn toàn các vạch nối thẳng đứt nét
   return (
     <>
-      {/* 1. Đường chấm chấm nối điểm đầu (Vị trí xuất phát -> Điểm đầu đường bộ OSRM) */}
-      <Polyline
-        positions={startConnector}
-        pathOptions={{
-          color: '#0284c7',
-          weight: 2,
-          dashArray: '3, 5',
-          lineCap: 'round',
-          opacity: 0.85,
-        }}
-      />
-
-      {/* 2. Outer border/casing: 8px, #1e40af */}
+      {/* 1. Outer border/casing: 8px, #1e40af */}
       <Polyline
         positions={roadPath}
         pathOptions={{
@@ -267,27 +231,15 @@ const RescueRoadRoute = ({
           opacity: 0.9,
         }}
       />
-      {/* 3. Inner core line: 4px, #38bdf8 */}
+      {/* 2. Inner core line: 4px, #38bdf8 */}
       <Polyline
         positions={roadPath}
         pathOptions={{
-          color: '#38bdf8',
+          color: routeColor,
           weight: 4,
           lineCap: 'round',
           lineJoin: 'round',
           opacity: 1,
-        }}
-      />
-
-      {/* 4. Đường chấm chấm nối điểm cuối (Điểm cuối đường bộ OSRM -> Vị trí Nạn nhân) */}
-      <Polyline
-        positions={endConnector}
-        pathOptions={{
-          color: '#dc2626',
-          weight: 2,
-          dashArray: '3, 5',
-          lineCap: 'round',
-          opacity: 0.85,
         }}
       />
     </>
@@ -1256,25 +1208,12 @@ export const TacticalMap = ({
                 </Popup>
               </Marker>
 
-              {/* Tự động hiển thị GPS từng thành viên trong đội khi bấm chọn đội */}
+              {/* Tự động hiển thị GPS từng thành viên trong đội khi bấm chọn đội (Không vẽ đường nối thẳng cắt qua bản đồ) */}
               {isTeamExpanded &&
                 team.rescuers.map((rescuer, rIdx) => {
                   const rCoord = getRescuerLiveCoord(rescuer, teamBase, rIdx, team.rescuers.length);
                   return (
                     <Fragment key={`rescuer-${team.id}-${rescuer.id}`}>
-                      {/* Đường nối liên lạc từ xe chỉ huy tới vị trí chiến sĩ */}
-                      <Polyline
-                        positions={[
-                          [teamBase.lat, teamBase.lng],
-                          [rCoord.lat, rCoord.lng],
-                        ]}
-                        pathOptions={{
-                          color: '#0284c7',
-                          weight: 1.5,
-                          dashArray: '3, 4',
-                          opacity: 0.65,
-                        }}
-                      />
                       <Marker
                         position={[rCoord.lat, rCoord.lng]}
                         icon={createRescuerDivIcon(rescuer, rIdx, rCoord)}
