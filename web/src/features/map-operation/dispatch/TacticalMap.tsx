@@ -376,40 +376,58 @@ export const TacticalMap = ({
     return { lat: defaultRescuerLat, lng: defaultRescuerLng };
   };
 
-  // Tọa độ GPS thành viên: Lấy chính xác theo từng user trong team (ưu tiên Socket Telemetry -> GPS Profile -> Fallback phân bổ quanh xe/căn cứ)
+  // Tọa độ GPS thành viên: Lấy chính xác theo từng user trong team (ưu tiên Socket Telemetry -> GPS Profile -> Tự động tỏa đều để KHÔNG BAO GIỜ bị đè lên nhau)
   const getRescuerLiveCoord = (
     rescuer: RescuerProfile,
     teamBase: { lat: number; lng: number },
     rescuerIdx: number,
     totalRescuers?: number
   ): { lat: number; lng: number } => {
+    let rawCoord: { lat: number; lng: number } | null = null;
+
     // 1. Tọa độ Telemetry Live nhận từ thiết bị Mobile App của cứu hộ viên qua Socket
     if (liveRescuerLocations[rescuer.id]) {
-      return liveRescuerLocations[rescuer.id];
-    }
-    const cleanPhone = rescuer.phone ? rescuer.phone.replace(/[^0-9]/g, '') : '';
-    if (cleanPhone && liveRescuerLocations[cleanPhone]) {
-      return liveRescuerLocations[cleanPhone];
-    }
-
-    // 2. Tọa độ GPS cá nhân thực tế của chính user trong team (nếu có cấu hình)
-    if (
-      rescuer.coordinates &&
-      typeof rescuer.coordinates.lat === 'number' &&
-      typeof rescuer.coordinates.lng === 'number'
-    ) {
-      return { lat: rescuer.coordinates.lat, lng: rescuer.coordinates.lng };
+      rawCoord = liveRescuerLocations[rescuer.id];
+    } else {
+      const cleanPhone = rescuer.phone ? rescuer.phone.replace(/[^0-9]/g, '') : '';
+      if (cleanPhone && liveRescuerLocations[cleanPhone]) {
+        rawCoord = liveRescuerLocations[cleanPhone];
+      } else if (
+        rescuer.coordinates &&
+        typeof rescuer.coordinates.lat === 'number' &&
+        typeof rescuer.coordinates.lng === 'number'
+      ) {
+        rawCoord = { lat: rescuer.coordinates.lat, lng: rescuer.coordinates.lng };
+      }
     }
 
-    // 3. Phân bổ đội hình chiến sĩ trực chiến xung quanh phương tiện / căn cứ (bán kính ~35-70m fanned out)
-    // đảm bảo 100% quân số đều có định vị GPS rõ ràng trên bản đồ tác chiến
+    // Góc và bán kính tỏa đội hình tối ưu (~75m - 95m)
+    // Phân bổ đều theo 4 góc phần tư xung quanh phương tiện trung tâm
     const count = totalRescuers && totalRescuers > 0 ? totalRescuers : 4;
-    const angle = (rescuerIdx * (2 * Math.PI)) / count + 0.35;
-    const radius = 0.00042 + (rescuerIdx % 2) * 0.00018; // ~45m - 65m
-    return {
-      lat: Number((teamBase.lat + Math.sin(angle) * radius).toFixed(6)),
-      lng: Number((teamBase.lng + Math.cos(angle) * radius * 1.05).toFixed(6)),
-    };
+    const angle = (rescuerIdx * (2 * Math.PI)) / count + 0.45;
+    const offsetRadius = 0.00075 + (rescuerIdx % 2) * 0.00018;
+
+    // Nếu không có tọa độ, HOẶC tọa độ trùng/quá gần xe (dưới 40m làm đè marker lên xe):
+    // Tự động phân bổ ra góc riêng biệt xung quanh xe để thông tin tách bạch rõ ràng!
+    if (!rawCoord) {
+      return {
+        lat: Number((teamBase.lat + Math.sin(angle) * offsetRadius).toFixed(6)),
+        lng: Number((teamBase.lng + Math.cos(angle) * offsetRadius * 1.05).toFixed(6)),
+      };
+    }
+
+    const dLat = Math.abs(rawCoord.lat - teamBase.lat);
+    const dLng = Math.abs(rawCoord.lng - teamBase.lng);
+    const isTooCloseToVehicle = dLat < 0.0004 && dLng < 0.0004;
+
+    if (isTooCloseToVehicle) {
+      return {
+        lat: Number((teamBase.lat + Math.sin(angle) * offsetRadius).toFixed(6)),
+        lng: Number((teamBase.lng + Math.cos(angle) * offsetRadius * 1.05).toFixed(6)),
+      };
+    }
+
+    return rawCoord;
   };
 
   // Tổng hợp tọa độ của toàn bộ đội và thành viên được chọn để tự động zoom bao quát
@@ -428,11 +446,11 @@ export const TacticalMap = ({
     return coords;
   }, [activePreviewTeams, rescueTeams, vehicles, liveRescuerLocations]);
 
-  // Marker Gộp Trung Tâm Đội & Phương Tiện Cứu Hộ (Mặc định hiển thị gọn gàng, bấm để bung GPS)
+  // Marker Gộp Trung Tâm Đội & Phương Tiện Cứu Hộ (Gọn gàng, thoáng đãng, không bị đè chữ)
   const createUnifiedTeamDivIcon = (
     team: RescueTeam,
     vehicle?: Vehicle,
-    isExpanded: boolean = false,
+    _isExpanded: boolean = false,
     teamBase?: { lat: number; lng: number }
   ) => {
     const plate = vehicle?.plate || '43B-098.21';
@@ -446,7 +464,7 @@ export const TacticalMap = ({
       className: 'tactical-unified-team-beacon',
       html: `
         <div style="display: flex; flex-direction: column; align-items: center; cursor: pointer; user-select: none;">
-          <!-- Header Badge: Biển số & Tên Đội Cứu Hộ -->
+          <!-- 1. Header Badge: Biển số & Tên Đội Cứu Hộ -->
           <div style="
             background: #0f172a;
             color: #ffffff;
@@ -455,84 +473,65 @@ export const TacticalMap = ({
             padding: 3px 8px;
             border-radius: 6px;
             border: 1.5px solid #38bdf8;
-            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.45);
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.45);
             white-space: nowrap;
             display: flex;
             align-items: center;
             gap: 5px;
-            letter-spacing: 0.2px;
-            margin-bottom: 2px;
+            margin-bottom: 3px;
           ">
             <span style="font-size: 11px;">${vIcon}</span>
             <span style="color: #38bdf8; font-weight: 900;">${plate}</span>
             <span style="color: #64748b;">•</span>
-            <span style="max-width: 145px; overflow: hidden; text-overflow: ellipsis;">${team.name}</span>
+            <span style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${team.name}</span>
           </div>
 
-          <!-- Sub Badge: Số lượng chiến sĩ & Trạng thái mở rộng -->
+          <!-- 2. Status & GPS Info Pill (Gộp 1 dòng gọn gàng, tuyệt đối không đè nhau) -->
           <div style="
-            background: ${isExpanded ? '#fef3c7' : '#ffffff'};
-            color: ${isExpanded ? '#92400e' : '#0284c7'};
-            font-size: 9px;
+            background: #ffffff;
+            color: #0f172a;
+            font-size: 9.5px;
             font-weight: 700;
-            padding: 1.5px 7px;
+            padding: 2px 7px;
             border-radius: 9999px;
-            border: 1px solid ${isExpanded ? '#f59e0b' : '#bae6fd'};
-            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            border: 1px solid #cbd5e1;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.12);
             white-space: nowrap;
             display: flex;
             align-items: center;
-            gap: 4px;
-            margin-bottom: 2px;
+            gap: 5px;
+            margin-bottom: 4px;
           ">
-            <span>👥 ${team.rescuers.length} chiến sĩ</span>
-            <span style="font-size: 8px; color: ${isExpanded ? '#b45309' : '#0369a1'};">
-              ${isExpanded ? '(Bấm để thu gọn)' : '(Bấm để bung GPS)'}
-            </span>
+            <span style="color: #0284c7;">👥 ${team.rescuers.length} chiến sĩ</span>
+            ${teamBase ? `
+              <span style="color: #cbd5e1;">•</span>
+              <span style="color: #16a34a; font-family: monospace; font-weight: 800;">📍 ${teamBase.lat.toFixed(4)}, ${teamBase.lng.toFixed(4)}</span>
+            ` : ''}
           </div>
 
-          <!-- GPS Coordinates Badge của Đội -->
-          ${teamBase ? `
-            <div style="
-              background: #f0fdf4;
-              color: #15803d;
-              font-size: 9px;
-              font-weight: 800;
-              padding: 1.5px 7px;
-              border-radius: 5px;
-              border: 1px solid #bbf7d0;
-              font-family: monospace;
-              box-shadow: 0 2px 5px rgba(0,0,0,0.12);
-              margin-bottom: 3px;
-              white-space: nowrap;
-            ">
-              📍 GPS: ${teamBase.lat.toFixed(4)}, ${teamBase.lng.toFixed(4)}
-            </div>
-          ` : ''}
-
-          <!-- Biểu tượng phương tiện trung tâm với hiệu ứng lan toả -->
-          <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;">
+          <!-- 3. Biểu tượng phương tiện trung tâm với hiệu ứng radar -->
+          <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 34px; height: 34px;">
             <div style="
               position: absolute;
-              width: 30px;
-              height: 30px;
-              border-radius: 8px;
+              width: 32px;
+              height: 32px;
+              border-radius: 9px;
               background: rgba(2, 132, 199, 0.25);
               border: 1.5px solid #0284c7;
               animation: pulse-beacon 1.6s infinite ease-out;
             "></div>
             <div style="
               position: relative;
-              width: 26px;
-              height: 26px;
+              width: 28px;
+              height: 28px;
               background: #0284c7;
-              border-radius: 7px;
+              border-radius: 8px;
               border: 2px solid #ffffff;
               box-shadow: 0 3px 10px rgba(2, 132, 199, 0.6);
               display: flex;
               align-items: center;
               justify-content: center;
-              font-size: 13.5px;
+              font-size: 14px;
               z-index: 5;
             ">
               ${vIcon}
@@ -540,8 +539,8 @@ export const TacticalMap = ({
           </div>
         </div>
       `,
-      iconSize: [200, 68],
-      iconAnchor: [100, 58],
+      iconSize: [220, 84],
+      iconAnchor: [110, 68],
     });
   };
 
@@ -630,8 +629,8 @@ export const TacticalMap = ({
           </div>
         </div>
       `,
-      iconSize: [110, 48],
-      iconAnchor: [55, 38],
+      iconSize: [125, 58],
+      iconAnchor: [62, 46],
     });
   };
 
