@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Truck,
   LifeBuoy,
-  RefreshCw,
   Search,
   X,
   AlertTriangle,
@@ -1103,16 +1102,6 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
           </div>
 
           <div className="executive-header-right">
-            <button
-              type="button"
-              className="coordination-action-btn outline"
-              onClick={refreshData}
-              title="Cập nhật dữ liệu mới nhất"
-            >
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              <span>Làm mới</span>
-            </button>
-
             {resourceTab === 'VEHICLES' ? (
               <button
                 type="button"
@@ -1468,7 +1457,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {filteredVehicles.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: '50px 20px' }}>
+                      <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: '#64748b' }}>Đang tải dữ liệu phương tiện...</p>
+                    </td>
+                  </tr>
+                ) : filteredVehicles.length === 0 ? (
                   <tr>
                     <td colSpan={6} style={{ textAlign: 'center', padding: '50px 20px' }}>
                       <AlertTriangle size={32} style={{ color: '#94a3b8', margin: '0 auto 8px', display: 'block' }} />

@@ -1172,7 +1172,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           map.createPane('routePane');
           map.getPane('routePane').style.zIndex = '440';
 
-          // Tile Layer: Google Maps Streets (Đầy đủ tên đường, ngõ hẻm tiếng Việt, tải nhanh, không bị watermark Carto)
+          // Tile Layer: CartoDB Voyager chuẩn OpenStreetMap (Đồng bộ 100% hình học tuyến đường OSRM, hiển thị đầy đủ tên đường tiếng Việt, retina siêu nét)
           var currentTileLayer = null;
           function setTileLayer(type) {
             if (currentTileLayer) map.removeLayer(currentTileLayer);
@@ -1182,9 +1182,10 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 maxZoom: 20
               }).addTo(map);
             } else {
-              currentTileLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&apistyle=s.t:33|p.v:off%2Cs.t:21|s.e:l|p.v:off&x={x}&y={y}&z={z}', {
-                subdomains: ['0', '1', '2', '3'],
-                maxZoom: 20
+              currentTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                subdomains: 'abcd',
+                maxZoom: 20,
+                detectRetina: true
               }).addTo(map);
             }
           }
@@ -1306,6 +1307,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             if (remaining.length >= 2) {
               if (roadCasingPolyline) roadCasingPolyline.setLatLngs(remaining);
               if (roadCorePolyline) roadCorePolyline.setLatLngs(remaining);
+            }
+
+            // Snap vị trí xe vào tim đường lộ trình khi đang dẫn đường (Chuẩn Google Maps & Grab)
+            if (inAppNavActive && minDistance < 0.0001) {
+              rescuerMarker.setLatLng(bestProj);
             }
           }
 
