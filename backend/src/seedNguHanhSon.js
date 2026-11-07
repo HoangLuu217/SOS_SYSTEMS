@@ -532,6 +532,24 @@ async function seedNguHanhSon() {
           'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?auto=format&fit=crop&w=800&q=80',
         ],
         status: 'ASSIGNED',
+        shoreHandoff: {
+          status: 'REQUESTED',
+          vehicleTypeNeeded: 'AMBULANCE',
+          peopleCount: 2,
+          landingPoint: {
+            name: 'Bến đón Chùa Bà Đa (Mép sông)',
+            address: 'K244 Lê Văn Hiến, Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng',
+            coordinates: [108.2440, 16.0320],
+          },
+          notes: 'Có 1 cụ già liệt giường và 1 cháu bé cần xe cấp cứu dã chiến chuyên dụng',
+          requestedAt: new Date(),
+          assignedVehicleId: null,
+          assignedVehicleName: null,
+          assignedVehiclePlate: null,
+          assignedRoadTeamName: null,
+          assignedDriverName: null,
+          assignedDriverPhone: null,
+        },
       });
       console.log('➕ Đã tạo yêu cầu SOS:', sos1.sosCode, '| Địa chỉ:', sos1.address);
     } else {
@@ -550,6 +568,24 @@ async function seedNguHanhSon() {
       sos1.location = {
         type: 'Point',
         coordinates: [108.2435, 16.0315],
+      };
+      sos1.shoreHandoff = {
+        status: 'REQUESTED',
+        vehicleTypeNeeded: 'AMBULANCE',
+        peopleCount: 2,
+        landingPoint: {
+          name: 'Bến đón Chùa Bà Đa (Mép sông)',
+          address: 'K244 Lê Văn Hiến, Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng',
+          coordinates: [108.2440, 16.0320],
+        },
+        notes: 'Có 1 cụ già liệt giường và 1 cháu bé cần xe cấp cứu dã chiến chuyên dụng',
+        requestedAt: new Date(),
+        assignedVehicleId: null,
+        assignedVehicleName: null,
+        assignedVehiclePlate: null,
+        assignedRoadTeamName: null,
+        assignedDriverName: null,
+        assignedDriverPhone: null,
       };
       await sos1.save();
       console.log('✔ Đã cập nhật yêu cầu SOS:', sos1.sosCode, '| Địa chỉ:', sos1.address);

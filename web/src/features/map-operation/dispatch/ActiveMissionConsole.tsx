@@ -10,7 +10,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import type { SosRequest, SosAssignment, RescueTeam, Vehicle, AuthorityOfficer, AdministrativeArea } from '@/types/domainD';
-import { assignShoreHandoffApi } from '@/api';
+import { assignShoreHandoffApi, cancelShoreHandoffApi } from '@/api';
 import { isTeamInOfficerJurisdiction } from '@/services/mapGeoService';
 
 interface Props {
@@ -37,6 +37,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
   const [isRoadModalOpen, setIsRoadModalOpen] = useState(false);
   const [selectedRoadVehId, setSelectedRoadVehId] = useState<string>('');
   const [isSubmittingRoad, setIsSubmittingRoad] = useState(false);
+  const [isCancellingRoad, setIsCancellingRoad] = useState(false);
   const [vehicleSearchQuery, setVehicleSearchQuery] = useState('');
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState<'ALL' | 'AMBULANCE' | 'TRUCK'>('ALL');
   const [showOutsideArea, setShowOutsideArea] = useState(false);
@@ -181,6 +182,38 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     }
   }, [isRoadModalOpen, filteredRoadVehicles, selectedRoadVehId]);
 
+
+  const cleanVehicleName = (name?: string) => {
+    if (!name) return 'Xe Cứu Thương 115';
+    const lower = name.toLowerCase();
+    if (lower.includes('cứu thương') || lower.includes('115') || lower.includes('ambulance')) {
+      return 'Xe Cứu Thương Dã Chiến 115';
+    }
+    if (lower.includes('tải') || lower.includes('bán tải') || lower.includes('truck')) {
+      return 'Xe Tải Cứu Hộ Dã Chiến';
+    }
+    if (lower.includes('canô') || lower.includes('ca-nô') || lower.includes('xuồng') || lower.includes('boat')) {
+      return 'Ca-nô Cứu Sinh';
+    }
+    if (name.length > 32) return name.slice(0, 30) + '...';
+    return name;
+  };
+
+  const handleCancelRoadVehicle = async () => {
+    if (!selectedSos?.id) return;
+    if (!window.confirm('Bạn có chắc chắn muốn hủy phân công phương tiện đón bờ này để chọn lại phương tiện khác?')) {
+      return;
+    }
+    setIsCancellingRoad(true);
+    try {
+      await cancelShoreHandoffApi(selectedSos.id);
+      window.dispatchEvent(new CustomEvent('sos_data_updated'));
+    } catch (err) {
+      console.warn('Lỗi hủy phân xe đón bờ:', err);
+    } finally {
+      setIsCancellingRoad(false);
+    }
+  };
   const handleAssignRoadVehicle = async () => {
     const veh = filteredRoadVehicles.find((v) => v.id === selectedRoadVehId) || filteredRoadVehicles[0];
     if (!veh) return;
@@ -674,7 +707,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     borderRadius: 10,
                     border: selectedSos.shoreHandoff.status === 'ASSIGNED' ? '1.5px solid #86efac' : '1.5px solid #fdba74',
                     background: selectedSos.shoreHandoff.status === 'ASSIGNED' ? '#f0fdf4' : '#fff7ed',
-                    padding: '11px 13px',
+                    padding: '10px 12px',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 8,
@@ -692,7 +725,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                         }}
                       >
                         {selectedSos.shoreHandoff.status === 'ASSIGNED'
-                          ? 'Đã Điều Động Xe Đón Bờ'
+                          ? 'Xe Đón Bờ Đang Tiếp Cận'
                           : 'Yêu Cầu Xe Đón Nạn Nhân'}
                       </span>
                     </div>
@@ -706,19 +739,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                         color: selectedSos.shoreHandoff.status === 'ASSIGNED' ? '#166534' : '#9a3412',
                       }}
                     >
-                      {selectedSos.shoreHandoff.status === 'ASSIGNED' ? 'ĐANG TIẾP CẬN BẾN' : 'CHỜ ĐIỀU XE'}
+                      {selectedSos.shoreHandoff.status === 'ASSIGNED' ? 'ĐÃ ĐIỀU ĐỘNG' : 'CHỜ ĐIỀU XE'}
                     </span>
-                  </div>
-
-                  <div style={{ fontSize: 12, color: '#334155', lineHeight: 1.45 }}>
-                    <div>
-                      • <strong>Cần xe:</strong> {selectedSos.shoreHandoff.vehicleTypeNeeded === 'AMBULANCE' ? '01 Xe Cứu Thương Dã Chiến' : '01 Xe Tải / Bán Tải'} ({selectedSos.shoreHandoff.peopleCount} người)
-                    </div>
-                    {selectedSos.shoreHandoff.notes && (
-                      <div style={{ marginTop: 2, fontStyle: 'italic', color: '#475569' }}>
-                        • <strong>Ghi chú:</strong> "{selectedSos.shoreHandoff.notes}"
-                      </div>
-                    )}
                   </div>
 
                   {selectedSos.shoreHandoff.status === 'ASSIGNED' ? (
@@ -731,60 +753,135 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        gap: 8,
+                        gap: 10,
                       }}
                     >
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 900, color: '#0f172a' }}>
-                          {selectedSos.shoreHandoff.assignedVehicleName} ({selectedSos.shoreHandoff.assignedVehiclePlate})
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 13, fontWeight: 900, color: '#0f172a' }}>
+                            {cleanVehicleName(selectedSos.shoreHandoff.assignedVehicleName)}
+                          </span>
+                          {selectedSos.shoreHandoff.assignedVehiclePlate && (
+                            <span
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 800,
+                                padding: '1px 6px',
+                                borderRadius: 4,
+                                background: '#f1f5f9',
+                                border: '1px solid #cbd5e1',
+                                color: '#1e293b',
+                                letterSpacing: '0.3px',
+                              }}
+                            >
+                              {selectedSos.shoreHandoff.assignedVehiclePlate}
+                            </span>
+                          )}
                         </div>
-                        <div style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600 }}>
-                          Tài xế: {selectedSos.shoreHandoff.assignedDriverName || 'Đang cập nhật'}
+                        <div style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600, marginTop: 2 }}>
+                          👤 {selectedSos.shoreHandoff.assignedDriverName || 'Tài xế'}
                           {selectedSos.shoreHandoff.assignedDriverPhone ? ` • ${selectedSos.shoreHandoff.assignedDriverPhone}` : ''}
                         </div>
                       </div>
-                      {selectedSos.shoreHandoff.assignedDriverPhone && (
-                        <a
-                          href={`tel:${selectedSos.shoreHandoff.assignedDriverPhone}`}
+
+                      {/* Nút thao tác: Gọi, Đổi xe, Hủy */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                        {selectedSos.shoreHandoff.assignedDriverPhone && (
+                          <a
+                            href={`tel:${selectedSos.shoreHandoff.assignedDriverPhone}`}
+                            title="Gọi tài xế"
+                            style={{
+                              padding: '5px 8px',
+                              background: '#f0fdf4',
+                              border: '1px solid #86efac',
+                              borderRadius: 6,
+                              color: '#15803d',
+                              fontWeight: 800,
+                              fontSize: 11,
+                              textDecoration: 'none',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 3,
+                            }}
+                          >
+                            <Phone size={11} />
+                            <span>Gọi</span>
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          title="Đổi sang phương tiện khác"
+                          onClick={() => setIsRoadModalOpen(true)}
                           style={{
-                            padding: '5px 9px',
-                            background: '#f0fdf4',
-                            border: '1px solid #86efac',
+                            padding: '5px 8px',
+                            background: '#eff6ff',
+                            border: '1px solid #93c5fd',
                             borderRadius: 6,
-                            color: '#15803d',
+                            color: '#1d4ed8',
                             fontWeight: 800,
-                            fontSize: 11.5,
-                            textDecoration: 'none',
+                            fontSize: 11,
+                            cursor: 'pointer',
                           }}
                         >
-                          Gọi Tài Xế
-                        </a>
-                      )}
+                          Đổi xe
+                        </button>
+                        <button
+                          type="button"
+                          title="Hủy điều xe này"
+                          onClick={handleCancelRoadVehicle}
+                          disabled={isCancellingRoad}
+                          style={{
+                            padding: '5px 8px',
+                            background: '#fef2f2',
+                            border: '1px solid #fca5a5',
+                            borderRadius: 6,
+                            color: '#b91c1c',
+                            fontWeight: 800,
+                            fontSize: 11,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {isCancellingRoad ? '...' : 'Hủy'}
+                        </button>
+                      </div>
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => setIsRoadModalOpen(true)}
-                      style={{
-                        width: '100%',
-                        height: 38,
-                        background: '#ea580c',
-                        border: 'none',
-                        borderRadius: 8,
-                        color: '#ffffff',
-                        fontSize: 12.5,
-                        fontWeight: 900,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 6,
-                        boxShadow: '0 2px 4px rgba(234, 88, 12, 0.25)',
-                      }}
-                    >
-                      <Ambulance size={16} />
-                      <span>ĐIỀU XE CỨU THƯƠNG / TẢI ĐẾN BẾN ĐÓN</span>
-                    </button>
+                    <>
+                      <div style={{ fontSize: 12, color: '#334155', lineHeight: 1.45 }}>
+                        <div>
+                          • <strong>Cần xe:</strong> {selectedSos.shoreHandoff.vehicleTypeNeeded === 'AMBULANCE' ? '01 Xe Cứu Thương Dã Chiến' : '01 Xe Tải / Bán Tải'} ({selectedSos.shoreHandoff.peopleCount} người)
+                        </div>
+                        {selectedSos.shoreHandoff.notes && (
+                          <div style={{ marginTop: 2, fontStyle: 'italic', color: '#475569' }}>
+                            • <strong>Ghi chú:</strong> "{selectedSos.shoreHandoff.notes}"
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsRoadModalOpen(true)}
+                        style={{
+                          width: '100%',
+                          height: 38,
+                          background: '#ea580c',
+                          border: 'none',
+                          borderRadius: 8,
+                          color: '#ffffff',
+                          fontSize: 12.5,
+                          fontWeight: 900,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          boxShadow: '0 2px 4px rgba(234, 88, 12, 0.25)',
+                        }}
+                      >
+                        <Ambulance size={16} />
+                        <span>ĐIỀU XE CỨU THƯƠNG / TẢI ĐẾN BẾN ĐÓN</span>
+                      </button>
+                    </>
                   )}
                 </div>
               </>

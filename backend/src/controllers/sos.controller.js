@@ -226,6 +226,24 @@ const assignShoreHandoff = async (req, res, next) => {
   }
 };
 
+const cancelShoreHandoff = async (req, res, next) => {
+  try {
+    const updatedSos = await sosService.cancelShoreHandoff(req.params.id, req.user);
+    emitSosUpdated(updatedSos);
+    const io = require('../socket').getIO();
+    if (io) {
+      io.emit('sos:shore_handoff_cancelled', {
+        sosId: updatedSos._id,
+        sosCode: updatedSos.sosCode,
+        shoreHandoff: updatedSos.shoreHandoff,
+      });
+    }
+    res.status(200).json({ success: true, data: updatedSos });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const completeShoreHandoff = async (req, res, next) => {
   try {
     const updatedSos = await sosService.completeShoreHandoff(req.params.id, req.user);
@@ -256,5 +274,6 @@ module.exports = {
   getSosFiles,
   requestShoreHandoff,
   assignShoreHandoff,
+  cancelShoreHandoff,
   completeShoreHandoff,
 };

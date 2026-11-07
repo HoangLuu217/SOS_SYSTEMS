@@ -40,6 +40,9 @@ router.post('/:id/shore-handoff/request', authorize('RESCUER', 'LOCAL_AUTHORITY'
 // POST /api/sos/:id/shore-handoff/assign - Ban chỉ huy điều xe cứu thương/xe tải đón bờ
 router.post('/:id/shore-handoff/assign', authorize('LOCAL_AUTHORITY', 'ADMIN', 'RESCUER'), sosController.assignShoreHandoff);
 
+// POST /api/sos/:id/shore-handoff/cancel - Hủy điều xe đón bờ, đưa về trạng thái chờ
+router.post('/:id/shore-handoff/cancel', authorize('LOCAL_AUTHORITY', 'ADMIN', 'RESCUER'), sosController.cancelShoreHandoff);
+
 // POST /api/sos/:id/shore-handoff/complete - Xác nhận hoàn thành tiếp vận tại bờ
 router.post('/:id/shore-handoff/complete', authorize('RESCUER', 'LOCAL_AUTHORITY', 'ADMIN'), sosController.completeShoreHandoff);
 

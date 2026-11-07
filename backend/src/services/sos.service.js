@@ -451,9 +451,17 @@ const assignShoreHandoff = async (id, data, _user) => {
     });
   }
 
+  const typeLabel = vehicle
+    ? (vehicle.type === 'AMBULANCE' ? 'Xe Cứu Thương Dã Chiến 115'
+      : vehicle.type === 'TRUCK' ? 'Xe Tải Cứu Hộ Dã Chiến'
+      : vehicle.type === 'BOAT' ? 'Ca-nô Cứu Sinh'
+      : vehicle.type === 'MOTORBIKE' ? 'Mô-tô Cứu Hộ'
+      : 'Xe Cứu Hộ')
+    : (data.vehicleName ? (data.vehicleName.length > 40 ? data.vehicleName.substring(0, 40) + '...' : data.vehicleName) : 'Xe Cứu Thương 115');
+
   sos.shoreHandoff.status = 'ASSIGNED';
   sos.shoreHandoff.assignedVehicleId = vehicle?._id || data.vehicleId || null;
-  sos.shoreHandoff.assignedVehicleName = vehicle ? (vehicle.description || `${vehicle.type} (${vehicle.plateNumber})`) : (data.vehicleName || null);
+  sos.shoreHandoff.assignedVehicleName = typeLabel;
   sos.shoreHandoff.assignedVehiclePlate = vehicle?.plateNumber || data.vehiclePlate || null;
   sos.shoreHandoff.assignedRoadTeamName = vehicle?.teamId?.name || data.roadTeamName || null;
   sos.shoreHandoff.assignedDriverName = vehicle?.teamId?.leaderId?.fullName || data.driverName || null;
@@ -461,6 +469,33 @@ const assignShoreHandoff = async (id, data, _user) => {
   sos.shoreHandoff.assignedAt = new Date();
 
   await sos.save();
+
+  const populated = await SosRequest.findById(sos._id)
+    .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
+    .populate('areaId', 'name code');
+
+  return populated || sos;
+};
+
+/**
+ * Hủy điều xe đón bờ, đưa trạng thái về REQUESTED để trực ban chọn/phân công lại
+ */
+const cancelShoreHandoff = async (id, _user) => {
+  const sos = await SosRequest.findById(id);
+  if (!sos) throw new ApiError(404, 'Không tìm thấy yêu cầu SOS');
+
+  if (sos.shoreHandoff) {
+    sos.shoreHandoff.status = 'REQUESTED';
+    sos.shoreHandoff.assignedVehicleId = null;
+    sos.shoreHandoff.assignedVehicleName = null;
+    sos.shoreHandoff.assignedVehiclePlate = null;
+    sos.shoreHandoff.assignedRoadTeamName = null;
+    sos.shoreHandoff.assignedDriverName = null;
+    sos.shoreHandoff.assignedDriverPhone = null;
+    sos.shoreHandoff.assignedAt = null;
+    sos.shoreHandoff.completedAt = null;
+    await sos.save();
+  }
 
   const populated = await SosRequest.findById(sos._id)
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
@@ -499,5 +534,6 @@ module.exports = {
   verifyAndClassifySos,
   requestShoreHandoff,
   assignShoreHandoff,
+  cancelShoreHandoff,
   completeShoreHandoff,
 };

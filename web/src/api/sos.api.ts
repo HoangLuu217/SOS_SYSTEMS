@@ -98,3 +98,9 @@ export async function assignShoreHandoffApi(sosId: string, payload: {
     body: JSON.stringify(payload),
   });
 }
+
+export async function cancelShoreHandoffApi(sosId: string): Promise<{ success: boolean; data: any }> {
+  return fetchWithAuth(`/sos/${sosId}/shore-handoff/cancel`, {
+    method: 'POST',
+  });
+}
