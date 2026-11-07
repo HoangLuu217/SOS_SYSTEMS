@@ -329,7 +329,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   const [navigationSteps, setNavigationSteps] = useState<NavigationManeuverStep[]>([]);
   const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
   const [stepDistRemainingMeters, setStepDistRemainingMeters] = useState<number | null>(null);
-  const [showItinerarySheet, setShowItinerarySheet] = useState<boolean>(false);
+
   const navigationStepsRef = useRef<NavigationManeuverStep[]>([]);
   const activeStepIndexRef = useRef<number>(0);
 
@@ -1273,9 +1273,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       };
     }
 
-    // Khi sắp tiếp cận ngã rẽ (<= 120m): Hiển thị chính xác ngã rẽ gần nhất sắp tới (Rẽ trái, Rẽ phải, Bùng binh...)
+    // Khi sắp tiếp cận ngã rẽ (<= 120m): Hiển thị ngã rẽ gần nhất sắp tới (Tới khúc nào hiện khúc đó)
     const distStr = `Sau ${Math.round(distVal)} m`;
-    const secStr = distVal <= 35 ? '• Chuẩn bị rẽ ngay' : '• Sắp tới ngã rẽ';
+    const secStr = distVal <= 35 ? '• Rẽ ngay' : (curStep.targetStreet ? `• ${curStep.targetStreet}` : '');
     return {
       iconName: curStep.iconName,
       distanceText: distStr,
@@ -2095,97 +2095,41 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 <View style={[styles.grabTurnIconBox, isNavigating && { backgroundColor: '#10B981' }]}>
                   <MaterialCommunityIcons
                     name={currentHudManeuver.iconName as any}
-                    size={20}
+                    size={22}
                     color="#FFFFFF"
                   />
                 </View>
 
-                {/* Khoảng cách đến ngã rẽ gần nhất & Thao tác rẽ (Bấm để xem toàn bộ lộ trình) */}
-                <TouchableOpacity
-                  style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}
-                  onPress={() => setShowItinerarySheet((p) => !p)}
-                  activeOpacity={0.7}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.grabDistanceText}>{currentHudManeuver.distanceText}</Text>
-                    <Text style={styles.grabDurationText}>{currentHudManeuver.secondaryText}</Text>
+                {/* Khoảng cách đến ngã rẽ gần nhất & Thao tác rẽ (Tới khúc nào hiện khúc đó lên, không bị tốc độ tối đa che) */}
+                <View style={{ flex: 1, minWidth: 0, justifyContent: 'center', paddingRight: 4 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 }}>
+                    <Text style={styles.grabDistanceText} numberOfLines={1}>
+                      {currentHudManeuver.distanceText}
+                    </Text>
+                    {Boolean(currentHudManeuver.secondaryText) && (
+                      <Text
+                        style={[styles.grabDurationText, { flexShrink: 1 }]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {currentHudManeuver.secondaryText}
+                      </Text>
+                    )}
                   </View>
-                  <Text style={styles.grabRoadText} numberOfLines={1}>
+                  <Text
+                    style={[styles.grabRoadText, { flexShrink: 1 }]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
                     {currentHudManeuver.instruction}
                   </Text>
-                </TouchableOpacity>
+                </View>
 
-                {/* Tốc độ giới hạn chuẩn Grab */}
-                <View style={styles.grabSpeedLimitBadge}>
+                {/* Tốc độ giới hạn chuẩn Grab (50 km/h) - Cố định bên phải không che chữ */}
+                <View style={[styles.grabSpeedLimitBadge, { flexShrink: 0 }]}>
                   <Text style={styles.grabSpeedLimitText}>50</Text>
                 </View>
-
-                {/* Nút xem danh sách ngã rẽ / thu gọn */}
-                <TouchableOpacity
-                  style={styles.grabHideHudBtn}
-                  onPress={() => setShowItinerarySheet((p) => !p)}
-                  activeOpacity={0.7}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityLabel="Xem toàn bộ lộ trình"
-                >
-                  <Feather name={showItinerarySheet ? 'chevron-up' : 'list'} size={16} color="#64748B" />
-                </TouchableOpacity>
               </View>
-
-              {/* BẢNG LỘ TRÌNH TỪNG NGÃ RẼ CHI TIẾT (KHI BẤM XEM) */}
-              {showItinerarySheet && navigationSteps.length > 0 && (
-                <View style={styles.itineraryDropdownCard}>
-                  <View style={styles.itineraryHeaderRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <MaterialCommunityIcons name="routes" size={16} color="#0084FF" />
-                      <Text style={styles.itineraryTitle}>Lộ trình chi tiết ({navigationSteps.length} ngã rẽ)</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => setShowItinerarySheet(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Feather name="x" size={16} color="#64748B" />
-                    </TouchableOpacity>
-                  </View>
-
-                  <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={true} nestedScrollEnabled={true}>
-                    {navigationSteps.map((st, i) => {
-                      const isPassed = i < activeStepIndex;
-                      const isActive = i === activeStepIndex;
-                      const distStr = st.distanceMeters < 1000 ? `${Math.round(st.distanceMeters)} m` : `${(st.distanceMeters / 1000).toFixed(1)} km`;
-
-                      return (
-                        <View
-                          key={`step-${i}`}
-                          style={[
-                            styles.itineraryStepRow,
-                            isActive && styles.itineraryStepRowActive,
-                            isPassed && { opacity: 0.55 },
-                          ]}
-                        >
-                          <View style={[styles.itineraryStepIconBox, isActive && { backgroundColor: '#0084FF' }]}>
-                            <MaterialCommunityIcons
-                              name={st.iconName as any}
-                              size={15}
-                              color={isActive ? '#FFFFFF' : '#475569'}
-                            />
-                          </View>
-                          <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text style={[styles.itineraryStepText, isActive && { color: '#0084FF', fontWeight: '800' }]} numberOfLines={1}>
-                              {st.instruction}
-                            </Text>
-                            <Text style={styles.itineraryStepSubText}>
-                              {st.streetName ? `${st.streetName} • ` : ''}${distStr}
-                            </Text>
-                          </View>
-                          {isActive && (
-                            <View style={styles.itineraryActiveBadge}>
-                              <Text style={styles.itineraryActiveBadgeText}>HIỆN TẠI</Text>
-                            </View>
-                          )}
-                        </View>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-              )}
             </View>
           ) : (
             <TouchableOpacity
