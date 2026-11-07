@@ -2357,8 +2357,8 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                     <View style={styles.suppliesHeaderRow}>
                       <View style={styles.suppliesHeaderTitleWrap}>
                         <MaterialCommunityIcons name="package-variant-closed" size={17} color="#15803D" />
-                        <Text style={styles.grabSuppliesLabel}>
-                          {isReliefMission ? 'Danh mục vật tư xuất kho' : 'Vật tư theo xe'}
+                        <Text style={styles.grabSuppliesLabel} numberOfLines={1}>
+                          {isReliefMission ? 'Vật tư xuất kho' : 'Vật tư theo xe'}
                         </Text>
                         <View style={styles.suppliesCountBadge}>
                           <Text style={styles.suppliesCountBadgeText}>
@@ -3997,6 +3997,7 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '800',
     color: '#166534',
+    flexShrink: 1,
   },
   suppliesCountBadge: {
     backgroundColor: '#DCFCE7',
@@ -4005,6 +4006,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#BBF7D0',
+    flexShrink: 0,
   },
   suppliesCountBadgeText: {
     fontSize: 10.5,
