@@ -95,18 +95,26 @@ const LeafletMapController = ({
     }
   }, [selectedSosId, center, map]);
 
-  // Khi người dùng click chọn đội cứu hộ (previewCoords thay đổi), tự động fitBounds bao quát ca SOS + các thành viên đội
+  // Khi người dùng click chọn đội cứu hộ (previewCoords thay đổi):
+  // Ghim lại gần đội đó (focus cận cảnh mức zoom 16.5-17 để thấy rõ vị trí GPS từng thành viên và xe)
   useEffect(() => {
     if (!previewCoords || previewCoords.length === 0) {
-      prevPreviewKeyRef.current = '';
+      if (prevPreviewKeyRef.current !== '') {
+        prevPreviewKeyRef.current = '';
+        map.flyTo(center, Math.max(map.getZoom(), 15), { duration: 0.8 });
+      }
       return;
     }
-    const key = previewCoords.map((c) => `${c[0].toFixed(3)},${c[1].toFixed(3)}`).join(';');
+    const key = previewCoords.map((c) => `${c[0].toFixed(4)},${c[1].toFixed(4)}`).join(';');
     if (key !== prevPreviewKeyRef.current) {
       prevPreviewKeyRef.current = key;
-      const allPoints: [number, number][] = [center, ...previewCoords];
-      const bounds = L.latLngBounds(allPoints);
-      map.fitBounds(bounds, { padding: [65, 65], maxZoom: 16, duration: 0.8 });
+      // Ghim sát lại gần đội cứu hộ được chọn (không zoom xa theo ca SOS)
+      if (previewCoords.length === 1) {
+        map.flyTo(previewCoords[0], 16.5, { duration: 0.8 });
+      } else {
+        const teamBounds = L.latLngBounds(previewCoords);
+        map.fitBounds(teamBounds, { padding: [75, 75], maxZoom: 17, duration: 0.8 });
+      }
     }
   }, [previewCoords, center, map]);
 
@@ -424,7 +432,8 @@ export const TacticalMap = ({
   const createUnifiedTeamDivIcon = (
     team: RescueTeam,
     vehicle?: Vehicle,
-    isExpanded: boolean = false
+    isExpanded: boolean = false,
+    teamBase?: { lat: number; lng: number }
   ) => {
     const plate = vehicle?.plate || '43B-098.21';
     const isBoat =
@@ -482,6 +491,25 @@ export const TacticalMap = ({
             </span>
           </div>
 
+          <!-- GPS Coordinates Badge của Đội -->
+          ${teamBase ? `
+            <div style="
+              background: #f0fdf4;
+              color: #15803d;
+              font-size: 9px;
+              font-weight: 800;
+              padding: 1.5px 7px;
+              border-radius: 5px;
+              border: 1px solid #bbf7d0;
+              font-family: monospace;
+              box-shadow: 0 2px 5px rgba(0,0,0,0.12);
+              margin-bottom: 3px;
+              white-space: nowrap;
+            ">
+              📍 GPS: ${teamBase.lat.toFixed(4)}, ${teamBase.lng.toFixed(4)}
+            </div>
+          ` : ''}
+
           <!-- Biểu tượng phương tiện trung tâm với hiệu ứng lan toả -->
           <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;">
             <div style="
@@ -518,7 +546,7 @@ export const TacticalMap = ({
   };
 
   // Rescuer Marker Icon generator
-  const createRescuerDivIcon = (rescuer: RescuerProfile, index: number) => {
+  const createRescuerDivIcon = (rescuer: RescuerProfile, index: number, coord?: { lat: number; lng: number }) => {
     const isLeader =
       rescuer.role.toLowerCase().includes('trưởng') ||
       rescuer.role.toLowerCase().includes('chỉ huy') ||
@@ -542,25 +570,33 @@ export const TacticalMap = ({
       className: 'tactical-rescuer-member-beacon',
       html: `
         <div style="display: flex; flex-direction: column; align-items: center; cursor: pointer; user-select: none;">
-          <!-- Rescuer Name Badge with GPS LIVE Indicator -->
+          <!-- Rescuer Name Badge with GPS LIVE Indicator & Coordinates -->
           <div style="
             background: #ffffff;
             color: #0f172a;
             font-size: 10px;
             font-weight: 700;
-            padding: 2px 6px;
-            border-radius: 5px;
+            padding: 2.5px 7px;
+            border-radius: 6px;
             border: 1.5px solid ${badgeColor};
-            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.22);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
             white-space: nowrap;
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 4px;
+            gap: 1.5px;
             margin-bottom: 2px;
           ">
-            <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #16a34a; box-shadow: 0 0 6px #22c55e;"></span>
-            <span>${rescuer.name}</span>
-            <span style="font-size: 8.5px; color: ${badgeColor}; font-weight: 800;">[${rescuer.role.split(' ')[0]}]</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #16a34a; box-shadow: 0 0 6px #22c55e;"></span>
+              <span style="font-weight: 800;">${rescuer.name}</span>
+              <span style="font-size: 8.5px; color: ${badgeColor}; font-weight: 800;">[${rescuer.role.split(' ')[0]}]</span>
+            </div>
+            ${coord ? `
+              <div style="font-size: 8.5px; color: #15803d; font-weight: 700; font-family: monospace;">
+                📍 ${coord.lat.toFixed(4)}, ${coord.lng.toFixed(4)}
+              </div>
+            ` : ''}
           </div>
 
           <!-- Pulsing GPS Marker -->
@@ -1077,7 +1113,7 @@ export const TacticalMap = ({
               {/* Marker Trung tâm Đội & Phương tiện Cứu hộ (Gộp chung mặc định gọn gàng, bấm để bung GPS) */}
               <Marker
                 position={[teamBase.lat, teamBase.lng]}
-                icon={createUnifiedTeamDivIcon(team, teamVeh, isTeamExpanded)}
+                icon={createUnifiedTeamDivIcon(team, teamVeh, isTeamExpanded, teamBase)}
                 eventHandlers={{
                   click: (e) => {
                     L.DomEvent.stopPropagation(e as any);
@@ -1242,7 +1278,7 @@ export const TacticalMap = ({
                       />
                       <Marker
                         position={[rCoord.lat, rCoord.lng]}
-                        icon={createRescuerDivIcon(rescuer, rIdx)}
+                        icon={createRescuerDivIcon(rescuer, rIdx, rCoord)}
                         zIndexOffset={1200 + rIdx}
                       >
                         <Popup>
