@@ -1281,10 +1281,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
             // Cập nhật lớp đường đã đi qua
             if (passed.length >= 2) {
+              var curW = getRouteWeights();
               if (!passedPolyline) {
                 passedPolyline = L.polyline(passed, {
-                  color: '#BDBDBD',
-                  weight: 6,
+                  color: '#94A3B8',
+                  weight: curW.passed,
                   opacity: 0.75,
                   lineCap: 'round',
                   lineJoin: 'round',
@@ -1304,6 +1305,29 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               if (roadCorePolyline) roadCorePolyline.setLatLngs(remaining);
             }
           }
+
+          // Tự động điều chỉnh độ dày đường dẫn theo zoom level (Chuẩn Google Maps & Grab)
+          function getRouteWeights(zoom) {
+            var z = (typeof zoom === 'number') ? zoom : map.getZoom();
+            if (z >= 17) {
+              return { casing: 8.0, core: 5.0, passed: 4.0 };
+            } else if (z >= 15) {
+              return { casing: 7.0, core: 4.2, passed: 3.5 };
+            } else if (z >= 13) {
+              return { casing: 5.8, core: 3.4, passed: 2.8 };
+            } else {
+              return { casing: 4.8, core: 2.8, passed: 2.2 };
+            }
+          }
+
+          function updateRouteStyles() {
+            var w = getRouteWeights();
+            if (roadCasingPolyline) roadCasingPolyline.setStyle({ weight: w.casing });
+            if (roadCorePolyline) roadCorePolyline.setStyle({ weight: w.core });
+            if (passedPolyline) passedPolyline.setStyle({ weight: w.passed });
+          }
+
+          map.on('zoomend', updateRouteStyles);
 
           function renderRoadSnappedRoute(coords) {
             if (roadCasingPolyline) map.removeLayer(roadCasingPolyline);
@@ -1328,20 +1352,22 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               }
             }
 
-            // 2. Lớp viền dưới (Outer Casing): Xanh đậm #185ABC, độ dày 12px, opacity 0.95, bo tròn
+            var initW = getRouteWeights();
+
+            // 2. Lớp viền dưới (Outer Casing): Xanh đậm #185ABC, bo tròn, độ dày thanh thoát chuẩn Grab
             roadCasingPolyline = L.polyline(latLngs, {
               color: '#185ABC',
-              weight: 12,
+              weight: initW.casing,
               opacity: 0.95,
               lineCap: 'round',
               lineJoin: 'round',
               pane: 'routePane'
             }).addTo(map);
 
-            // 3. Lớp lõi trên (Inner Core): Xanh sáng #4285F4, độ dày 7.5px, opacity 1.0, bo tròn
+            // 3. Lớp lõi trên (Inner Core): Xanh sáng #4285F4, bo tròn, độ dày cân đối
             roadCorePolyline = L.polyline(latLngs, {
               color: '#4285F4',
-              weight: 7.5,
+              weight: initW.core,
               opacity: 1.0,
               lineCap: 'round',
               lineJoin: 'round',
@@ -1492,11 +1518,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 trackingLocked = true;
                 var mapEl = document.getElementById('map');
                 if (mapEl) mapEl.classList.add('nav-3d-active');
-                var offsetTarget = getOffsetLatLng(rescuerMarker.getLatLng(), 18);
-                map.flyTo(offsetTarget, 18, { animate: true, duration: 1.0 });
-                if (roadCorePolyline) {
-                  roadCorePolyline.setStyle({ color: '#4285F4', weight: 7.5, opacity: 1.0 });
-                }
+                var offsetTarget = getOffsetLatLng(rescuerMarker.getLatLng(), 17.5);
+                map.flyTo(offsetTarget, 17.5, { animate: true, duration: 1.0 });
+                updateRouteStyles();
                 updateRouteProgress(rescuerMarker.getLatLng());
               } else if (msg.type === 'STOP_INAPP_NAVIGATION') {
                 inAppNavActive = false;
@@ -1531,13 +1555,14 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               } else if (msg.type === 'RECENTER_TEAM') {
                 trackingLocked = true;
                 triggerRecenterRipple();
-                var targetZoom = inAppNavActive ? 18 : 17.2;
+                var targetZoom = inAppNavActive ? 17.5 : 16.8;
                 var offsetTarget = getOffsetLatLng(rescuerMarker.getLatLng(), targetZoom);
                 map.flyTo(offsetTarget, targetZoom, {
                   animate: true,
                   duration: 0.8,
                   easeLinearity: 0.25
                 });
+                updateRouteStyles();
               } else if (msg.type === 'FIT_ROUTE') {
                 trackingLocked = false;
                 fitRouteOverview(true);
