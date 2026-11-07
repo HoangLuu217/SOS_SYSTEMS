@@ -252,7 +252,7 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
               <Feather name="map-pin" size={10} color="#FFFFFF" />
             </View>
             <Text style={[styles.stepLabel, isOnScene && styles.stepLabelActive]}>
-              {isReliefMission ? 'Điểm giao' : 'Hiện trường'}
+              {isReliefMission ? 'Điểm cứu trợ' : 'Hiện trường'}
             </Text>
           </View>
         </View>
@@ -362,7 +362,7 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
                 >
                   <Ionicons name="location" size={18} color="#FFFFFF" />
                   <Text style={styles.primaryActionBtnText}>
-                    {isReliefMission ? 'Đã Đến Điểm Giao Cứu Trợ' : 'Đã Tới Hiện Trường Cứu Trợ'}
+                    {isReliefMission ? 'Đã Đến Điểm Cứu Trợ' : 'Đã Tới Hiện Trường Cứu Trợ'}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -379,7 +379,7 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
                     color="#FFFFFF"
                   />
                   <Text style={styles.primaryActionBtnText}>
-                    {isReliefMission ? 'Bắt Đầu Bàn Giao Hàng' : 'Bắt Đầu Tác Chiến Cứu Nạn'}
+                    {isReliefMission ? 'Bắt Đầu Cấp Phát Cứu Trợ' : 'Bắt Đầu Tác Chiến Cứu Nạn'}
                   </Text>
                 </TouchableOpacity>
               )}

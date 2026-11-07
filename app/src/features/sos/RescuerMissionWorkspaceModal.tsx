@@ -2536,7 +2536,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   >
                     <Ionicons name="location-sharp" size={22} color="#FFFFFF" />
                     <Text style={styles.grabBigBtnText}>
-                      {isReliefMission ? '📍 ĐÃ ĐẾN ĐIỂM GIAO CỨU TRỢ' : 'ĐÃ ĐẾN HIỆN TRƯỜNG (ARRIVED)'}
+                      {isReliefMission ? '📍 ĐÃ ĐẾN ĐIỂM CỨU TRỢ' : 'ĐÃ ĐẾN HIỆN TRƯỜNG (ARRIVED)'}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -2828,11 +2828,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   <Ionicons name="location-sharp" size={30} color="#0284C7" />
                 </View>
                 <Text style={styles.centeredModalTitle}>
-                  {isReliefMission ? 'Xác nhận đến điểm giao cứu trợ' : 'Xác nhận đến hiện trường'}
+                  {isReliefMission ? 'Xác nhận đến điểm cứu trợ' : 'Xác nhận đến hiện trường'}
                 </Text>
                 <Text style={styles.centeredModalDesc}>
                   {isReliefMission
-                    ? 'Đội đã có mặt tại điểm tiếp nhận để tiến hành bàn giao nhu yếu phẩm cứu trợ?'
+                    ? 'Đội đã có mặt tại điểm tiếp nhận để tiến hành cấp phát nhu yếu phẩm cứu trợ?'
                     : 'Đội đã tiếp cận chính xác vị trí người dân gặp nạn và bắt đầu phương án cứu nạn?'}
                 </Text>
               </View>
@@ -2894,7 +2894,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 >
                   <Ionicons name="checkmark-done" size={20} color="#FFFFFF" />
                   <Text style={styles.modalPrimaryFullBtnText}>
-                    {isReliefMission ? 'Đã Đến Điểm Giao Hàng' : 'Đã Đến Hiện Trường'}
+                    {isReliefMission ? 'Đã Đến Điểm Cứu Trợ' : 'Đã Đến Hiện Trường'}
                   </Text>
                 </TouchableOpacity>
 
@@ -3543,7 +3543,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               <View style={styles.modalHeaderRow}>
                 <Ionicons name="checkmark-circle" size={24} color="#16A34A" />
                 <Text style={styles.modalTitle}>
-                  {isReliefMission ? 'Biên Bản Bàn Giao Hàng Cứu Trợ' : 'Báo Cáo Hoàn Tất Cứu Hộ'}
+                  {isReliefMission ? 'Biên Bản Bàn Giao Cứu Trợ' : 'Báo Cáo Hoàn Tất Cứu Hộ'}
                 </Text>
                 <TouchableOpacity onPress={() => setCompletionModalVisible(false)}>
                   <Feather name="x" size={20} color="#64748B" />
@@ -3575,7 +3575,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
               <Text style={styles.inputSectionLabel}>
                 {isReliefMission
-                  ? 'Biên bản tóm tắt bàn giao hàng cứu trợ:'
+                  ? 'Biên bản tóm tắt cấp phát cứu trợ:'
                   : 'Biên bản tóm tắt tình hình hiện trường:'}
               </Text>
               <TextInput
@@ -3598,7 +3598,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   <TouchableOpacity style={styles.takePhotoBtn} onPress={handleCaptureFieldPhoto}>
                     <Ionicons name="camera-outline" size={20} color="#0284C7" />
                     <Text style={styles.takePhotoBtnText}>
-                      {isReliefMission ? 'Chụp ảnh biên bản / bàn giao hàng' : 'Chụp ảnh xác nhận hiện trường'}
+                      {isReliefMission ? 'Chụp ảnh biên bản / cấp phát cứu trợ' : 'Chụp ảnh xác nhận hiện trường'}
                     </Text>
                   </TouchableOpacity>
                 )}

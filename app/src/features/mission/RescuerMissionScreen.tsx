@@ -392,7 +392,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Quyền máy ảnh', 'Vui lòng cấp quyền truy cập máy ảnh để chụp bằng chứng bàn giao hàng.');
+        Alert.alert('Quyền máy ảnh', 'Vui lòng cấp quyền truy cập máy ảnh để chụp bằng chứng cấp phát cứu trợ.');
         return;
       }
       const res = await ImagePicker.launchCameraAsync({
@@ -914,7 +914,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
 
                 {/* Chi tiết tiếp tế / cứu hộ & Hiện trường */}
                 <View style={styles.detailsBox}>
-                  {/* Địa chỉ / Điểm giao */}
+                  {/* Địa chỉ / Điểm cứu trợ */}
                   <View style={styles.detailRow}>
                     <Feather
                       name={isReliefMission ? 'navigation' : 'map-pin'}
@@ -1123,7 +1123,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                           >
                             <Ionicons name="location" size={16} color="#FFFFFF" />
                             <Text style={styles.primaryActionText}>
-                              {isReliefMission ? 'Đã Đến Điểm Giao' : 'Đã Đến Hiện Trường'}
+                              {isReliefMission ? 'Đã Đến Điểm Cứu Trợ' : 'Đã Đến Hiện Trường'}
                             </Text>
                           </LinearGradient>
                         </TouchableOpacity>
@@ -1266,7 +1266,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                       </Text>
                       <Text style={styles.modalSubtitle}>
                         {isSelectedRelief
-                          ? 'Xác nhận và lưu vết minh bạch bàn giao hàng cho ca '
+                          ? 'Xác nhận và lưu vết minh bạch cấp phát cứu trợ cho ca '
                           : 'Xác nhận đã hoàn tất cứu hộ cho ca '}
                         <Text style={{ fontWeight: '700' }}>
                           {selectedMission?.sosRequestId?.sosCode}
@@ -1333,7 +1333,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                         </Text>
                       </View>
                       <Text style={styles.proofDesc}>
-                        Chụp ảnh trao hàng tận tay, kiện hàng tại điểm giao hoặc biên bản ký nhận để lưu vết minh bạch vào hệ thống.
+                        Chụp ảnh trao nhu yếu phẩm tận tay tại điểm cứu trợ hoặc biên bản ký nhận để lưu vết minh bạch vào hệ thống.
                       </Text>
 
                       {isSelectedRelief && proofPhotos.length === 0 && (
