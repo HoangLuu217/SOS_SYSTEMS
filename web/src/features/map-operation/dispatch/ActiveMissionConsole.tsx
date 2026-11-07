@@ -407,26 +407,26 @@ export const ActiveMissionConsole: React.FC<Props> = ({
           flexDirection: 'column',
         }}
       >
-        {/* Header Dòng 1: Lực Lượng Tác Chiến Tiếp Cận + Trạng thái chính + ETA (Sticky ở đỉnh card) */}
+        {/* Header Trạng thái tác chiến Realtime (Gộp 1 dòng duy nhất) */}
         <div
           style={{
             position: 'sticky',
             top: 0,
             zIndex: 10,
             padding: '10px 14px',
-            background: '#f0f9ff',
+            background: statusInfo.bg,
             borderBottom: '1px solid #e2e8f0',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 10,
+            gap: 12,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, flex: 1, minWidth: 0 }}>
             <span
               style={{
-                width: 8,
-                height: 8,
+                width: 9,
+                height: 9,
                 borderRadius: '50%',
                 background: statusInfo.dotColor,
                 boxShadow: `0 0 0 2.5px ${statusInfo.dotColor}33`,
@@ -434,12 +434,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               }}
             />
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', lineHeight: 1.2 }}>
-                Lực Lượng Tác Chiến Tiếp Cận
-              </div>
               <div
                 style={{
-                  fontSize: 13,
+                  fontSize: 12.5,
                   fontWeight: 900,
                   color: statusInfo.textColor,
                   textTransform: 'uppercase',
@@ -447,10 +444,23 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  marginTop: 1,
                 }}
               >
-                {statusInfo.statusHeading}
+                {statusInfo.badgeText}
+              </div>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: statusInfo.textColor,
+                  marginTop: 1,
+                  lineHeight: 1.3,
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {statusInfo.subText}
               </div>
             </div>
           </div>
@@ -491,48 +501,6 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 </span>
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Header Dòng 2: Trạng thái chấp nhận nhiệm vụ Realtime */}
-        <div
-          style={{
-            padding: '9px 14px',
-            background: statusInfo.bg,
-            borderBottom: '1px solid #e2e8f0',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 10,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-            <span
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: statusInfo.dotColor,
-                boxShadow: `0 0 0 2.5px ${statusInfo.dotColor}33`,
-                flexShrink: 0,
-              }}
-            />
-            <div style={{ minWidth: 0 }}>
-              <div
-                style={{
-                  fontSize: 11.5,
-                  fontWeight: 900,
-                  color: statusInfo.textColor,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.3px',
-                }}
-              >
-                {statusInfo.badgeText}
-              </div>
-              <div style={{ fontSize: 11, color: statusInfo.textColor, marginTop: 1, lineHeight: 1.3, fontWeight: 600 }}>
-                {statusInfo.subText}
-              </div>
-            </div>
           </div>
         </div>
 
