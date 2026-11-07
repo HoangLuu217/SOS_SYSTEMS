@@ -2434,75 +2434,51 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               })()}
             </View>
 
-              {/* Hàng 4 nút thao tác nhanh (Chỉ đường in-app, Gọi điện, Từ chối, Trú ẩn) */}
+              {/* Hàng 3 nút thao tác nhanh (Gọi điện, Từ chối, Trú ẩn - Đã bỏ nút Ghim vị trí bị trùng với nút nổi trên map) */}
               <View style={styles.grabActionRow}>
-              {/* Nút 1: Ghim lại vị trí mình (thay cho nút Chỉ đường) */}
-              <TouchableOpacity
-                style={styles.grabActionCol}
-                onPress={() => {
-                  setIsHeadingLocked(true);
-                  Vibration.vibrate(30);
-                  if (webViewRef.current) {
-                    webViewRef.current.postMessage(JSON.stringify({ type: 'RECENTER_TEAM' }));
-                  }
-                }}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.grabActionIconWrap, isHeadingLocked && { backgroundColor: '#E0F2FE', borderColor: '#0284C7' }]}>
-                  <MaterialCommunityIcons
-                    name={isHeadingLocked ? 'crosshairs-gps' : 'crosshairs'}
-                    size={20}
-                    color="#0284C7"
-                  />
-                </View>
-                <Text style={[styles.grabActionLabel, isHeadingLocked && { color: '#0284C7', fontWeight: '800' }]}>
-                  {isHeadingLocked ? 'Đang ghim' : 'Ghim vị trí'}
-                </Text>
-              </TouchableOpacity>
+                {/* Nút 1: Gọi điện */}
+                <TouchableOpacity
+                  style={styles.grabActionCol}
+                  onPress={() => Linking.openURL(`tel:${citizenPhone}`)}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.grabActionIconWrap}>
+                    <Feather name="phone" size={20} color="#059669" />
+                  </View>
+                  <Text style={styles.grabActionLabel}>Gọi điện</Text>
+                </TouchableOpacity>
 
-              {/* Nút 2: Gọi điện */}
-              <TouchableOpacity
-                style={styles.grabActionCol}
-                onPress={() => Linking.openURL(`tel:${citizenPhone}`)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.grabActionIconWrap}>
-                  <Feather name="phone" size={20} color="#059669" />
-                </View>
-                <Text style={styles.grabActionLabel}>Gọi điện</Text>
-              </TouchableOpacity>
+                {/* Nút 2: Từ chối */}
+                <TouchableOpacity
+                  style={styles.grabActionCol}
+                  onPress={() => setRejectModalVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.grabActionIconWrap, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                    <Feather name="x-circle" size={20} color="#DC2626" />
+                  </View>
+                  <Text style={[styles.grabActionLabel, { color: '#DC2626', fontWeight: '800' }]}>Từ chối</Text>
+                </TouchableOpacity>
 
-              {/* Nút 3: Từ chối (Đổi từ Báo sự cố sang Từ chối) */}
-              <TouchableOpacity
-                style={styles.grabActionCol}
-                onPress={() => setRejectModalVisible(true)}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.grabActionIconWrap, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
-                  <Feather name="x-circle" size={20} color="#DC2626" />
-                </View>
-                <Text style={[styles.grabActionLabel, { color: '#DC2626', fontWeight: '800' }]}>Từ chối</Text>
-              </TouchableOpacity>
-
-              {/* Nút 4: Trạm trú ẩn */}
-              <TouchableOpacity
-                style={styles.grabActionCol}
-                onPress={() => {
-                  setShowSafeShelters((prev) => !prev);
-                  if (webViewRef.current) {
-                    webViewRef.current.postMessage(
-                      JSON.stringify({ type: 'TOGGLE_SHELTERS', show: !showSafeShelters })
-                    );
-                  }
-                }}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.grabActionIconWrap, showSafeShelters && { backgroundColor: '#E0F2FE' }]}>
-                  <Feather name="shield" size={20} color={showSafeShelters ? '#0284C7' : '#475569'} />
-                </View>
-                <Text style={styles.grabActionLabel}>Trạm trú ẩn</Text>
-              </TouchableOpacity>
-            </View>
+                {/* Nút 3: Trạm trú ẩn */}
+                <TouchableOpacity
+                  style={styles.grabActionCol}
+                  onPress={() => {
+                    setShowSafeShelters((prev) => !prev);
+                    if (webViewRef.current) {
+                      webViewRef.current.postMessage(
+                        JSON.stringify({ type: 'TOGGLE_SHELTERS', show: !showSafeShelters })
+                      );
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.grabActionIconWrap, showSafeShelters && { backgroundColor: '#E0F2FE' }]}>
+                    <Feather name="shield" size={20} color={showSafeShelters ? '#0284C7' : '#475569'} />
+                  </View>
+                  <Text style={styles.grabActionLabel}>Trạm trú ẩn</Text>
+                </TouchableOpacity>
+              </View>
           </ScrollView>
           )}
 
