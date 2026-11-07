@@ -2434,6 +2434,181 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               })()}
             </View>
 
+            {/* KHỐI YÊU CẦU XE ĐẾN CỨU HỘ / XE ĐÓN BỜ (RELAY HANDOFF) - LUÔN HIỂN THỊ RÕ RÀNG */}
+            {shoreHandoffData && shoreHandoffData.status === 'ASSIGNED' ? (
+              <View
+                style={{
+                  marginTop: 8,
+                  marginBottom: 6,
+                  backgroundColor: '#ECFDF5',
+                  borderWidth: 1.5,
+                  borderColor: '#10B981',
+                  borderRadius: 12,
+                  padding: 12,
+                  gap: 6,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="medical" size={18} color="#059669" />
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#065F46', textTransform: 'uppercase' }}>
+                      Xe cứu hộ / đón nạn nhân đang đến!
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669', backgroundColor: '#D1FAE5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                    ĐÃ ĐIỀU XE
+                  </Text>
+                </View>
+
+                <Text style={{ fontSize: 12.5, color: '#1F2937', fontWeight: '600' }}>
+                  Xe: <Text style={{ fontWeight: '800' }}>{shoreHandoffData.assignedVehicleName} ({shoreHandoffData.assignedVehiclePlate})</Text>
+                </Text>
+                <Text style={{ fontSize: 12, color: '#4B5563' }}>
+                  Tài xế: {shoreHandoffData.assignedDriverName} • {shoreHandoffData.assignedDriverPhone}
+                </Text>
+                <Text style={{ fontSize: 12, color: '#4B5563' }}>
+                  Bến đón / Hiện trường: <Text style={{ fontWeight: '700', color: '#B45309' }}>{shoreHandoffData.landingPoint?.name}</Text>
+                </Text>
+
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                  {shoreHandoffData.assignedDriverPhone && (
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        backgroundColor: '#FFFFFF',
+                        borderWidth: 1,
+                        borderColor: '#10B981',
+                        paddingVertical: 8,
+                        borderRadius: 8,
+                      }}
+                      onPress={() => Linking.openURL(`tel:${shoreHandoffData.assignedDriverPhone}`)}
+                    >
+                      <Ionicons name="call" size={14} color="#059669" />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#059669' }}>Gọi Tài Xế</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  <TouchableOpacity
+                    style={{
+                      flex: 1.4,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      backgroundColor: '#059669',
+                      paddingVertical: 8,
+                      borderRadius: 8,
+                    }}
+                    onPress={handleCompleteShoreHandoff}
+                  >
+                    <Ionicons name="checkmark-done" size={16} color="#FFFFFF" />
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>Đã Lên Xe Đón</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : shoreHandoffData && shoreHandoffData.status === 'REQUESTED' ? (
+              <View
+                style={{
+                  marginTop: 8,
+                  marginBottom: 6,
+                  backgroundColor: '#FFFBEB',
+                  borderWidth: 1.5,
+                  borderColor: '#F59E0B',
+                  borderRadius: 12,
+                  padding: 12,
+                  gap: 6,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="flash" size={18} color="#D97706" />
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#92400E', textTransform: 'uppercase' }}>
+                      Đang Chờ Xe Đến Cứu Hộ
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#B45309', backgroundColor: '#FDE68A', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                    ĐÃ BÁO BAN CHỈ HUY
+                  </Text>
+                </View>
+
+                <Text style={{ fontSize: 12.5, color: '#374151' }}>
+                  Cần: <Text style={{ fontWeight: '700' }}>{shoreHandoffData.vehicleTypeNeeded === 'AMBULANCE' ? '01 Xe Cứu Thương 115' : '01 Xe Tải Cứu Hộ'}</Text> cho {shoreHandoffData.peopleCount} nạn nhân
+                </Text>
+                <Text style={{ fontSize: 12, color: '#4B5563' }}>
+                  Bến đón / Điểm hẹn: <Text style={{ fontWeight: '700', color: '#B45309' }}>{shoreHandoffData.landingPoint?.name}</Text>
+                </Text>
+
+                <TouchableOpacity
+                  style={{
+                    alignSelf: 'flex-start',
+                    marginTop: 4,
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    backgroundColor: '#FFFFFF',
+                    borderWidth: 1,
+                    borderColor: '#F59E0B',
+                    borderRadius: 6,
+                  }}
+                  onPress={() => setShoreHandoffModalVisible(true)}
+                >
+                  <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#D97706' }}>Chỉnh Sửa / Gửi Lại</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  backgroundColor: '#FFF7ED',
+                  borderWidth: 1.5,
+                  borderColor: '#FDBA74',
+                  borderRadius: 12,
+                  paddingVertical: 11,
+                  paddingHorizontal: 12,
+                  marginTop: 8,
+                  marginBottom: 6,
+                  shadowColor: '#EA580C',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.12,
+                  shadowRadius: 4,
+                  elevation: 2,
+                }}
+                onPress={() => setShoreHandoffModalVisible(true)}
+                activeOpacity={0.85}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1 }}>
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 18,
+                      backgroundColor: '#FFEDD5',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderWidth: 1,
+                      borderColor: '#FED7AA',
+                    }}
+                  >
+                    <MaterialCommunityIcons name="car-emergency" size={20} color="#EA580C" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#9A3412' }}>
+                      Yêu Cầu Xe Đến Cứu Hộ / Đón Bờ
+                    </Text>
+                    <Text style={{ fontSize: 11.5, color: '#C2410C', marginTop: 1 }}>
+                      Điều xe cấp cứu 115 / xe tải chi viện đón nạn nhân
+                    </Text>
+                  </View>
+                </View>
+                <Feather name="chevron-right" size={18} color="#EA580C" />
+              </TouchableOpacity>
+            )}
+
               {/* Hàng 3 nút thao tác nhanh (Gọi điện, Từ chối, Trú ẩn - Đã bỏ nút Ghim vị trí bị trùng với nút nổi trên map) */}
               <View style={styles.grabActionRow}>
                 {/* Nút 1: Gọi điện */}
@@ -2519,174 +2694,6 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
                 {missionState === 'ON_SCENE_RESCUING' && (
                   <View style={{ gap: 10, width: '100%' }}>
-                    {/* Banner hiển thị khi đã yêu cầu xe đón bờ */}
-                    {!isReliefMission && shoreHandoffData && shoreHandoffData.status === 'ASSIGNED' && (
-                      <View
-                        style={{
-                          backgroundColor: '#ECFDF5',
-                          borderWidth: 1.5,
-                          borderColor: '#10B981',
-                          borderRadius: 12,
-                          padding: 12,
-                          gap: 6,
-                        }}
-                      >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Ionicons name="medical" size={18} color="#059669" />
-                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#065F46', textTransform: 'uppercase' }}>
-                              Xe đón bờ đang đến!
-                            </Text>
-                          </View>
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669', backgroundColor: '#D1FAE5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                            ĐÃ ĐIỀU XE
-                          </Text>
-                        </View>
-
-                        <Text style={{ fontSize: 12.5, color: '#1F2937', fontWeight: '600' }}>
-                          Xe: <Text style={{ fontWeight: '800' }}>{shoreHandoffData.assignedVehicleName} ({shoreHandoffData.assignedVehiclePlate})</Text>
-                        </Text>
-                        <Text style={{ fontSize: 12, color: '#4B5563' }}>
-                          Tài xế: {shoreHandoffData.assignedDriverName} • {shoreHandoffData.assignedDriverPhone}
-                        </Text>
-                        <Text style={{ fontSize: 12, color: '#4B5563' }}>
-                          Bến đón: <Text style={{ fontWeight: '700', color: '#B45309' }}>{shoreHandoffData.landingPoint?.name}</Text>
-                        </Text>
-
-                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                          {shoreHandoffData.assignedDriverPhone && (
-                            <TouchableOpacity
-                              style={{
-                                flex: 1,
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: 6,
-                                backgroundColor: '#FFFFFF',
-                                borderWidth: 1,
-                                borderColor: '#10B981',
-                                paddingVertical: 8,
-                                borderRadius: 8,
-                              }}
-                              onPress={() => Linking.openURL(`tel:${shoreHandoffData.assignedDriverPhone}`)}
-                            >
-                              <Ionicons name="call" size={14} color="#059669" />
-                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#059669' }}>Gọi Tài Xế</Text>
-                            </TouchableOpacity>
-                          )}
-
-                          <TouchableOpacity
-                            style={{
-                              flex: 1.4,
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: 6,
-                              backgroundColor: '#059669',
-                              paddingVertical: 8,
-                              borderRadius: 8,
-                            }}
-                            onPress={handleCompleteShoreHandoff}
-                          >
-                            <Ionicons name="checkmark-done" size={16} color="#FFFFFF" />
-                            <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>Đã Lên Xe Đón</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    )}
-
-                    {!isReliefMission && shoreHandoffData && shoreHandoffData.status === 'REQUESTED' && (
-                      <View
-                        style={{
-                          backgroundColor: '#FFFBEB',
-                          borderWidth: 1.5,
-                          borderColor: '#F59E0B',
-                          borderRadius: 12,
-                          padding: 12,
-                          gap: 6,
-                        }}
-                      >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Ionicons name="flash" size={18} color="#D97706" />
-                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#92400E', textTransform: 'uppercase' }}>
-                              Đang Chờ Xe Đón Bờ
-                            </Text>
-                          </View>
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#B45309', backgroundColor: '#FDE68A', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                            ĐÃ BÁO BAN CHỈ HUY
-                          </Text>
-                        </View>
-
-                        <Text style={{ fontSize: 12.5, color: '#374151' }}>
-                          Cần: <Text style={{ fontWeight: '700' }}>{shoreHandoffData.vehicleTypeNeeded === 'AMBULANCE' ? '01 Xe Cứu Thương' : '01 Xe Tải'}</Text> cho {shoreHandoffData.peopleCount} nạn nhân
-                        </Text>
-                        <Text style={{ fontSize: 12, color: '#4B5563' }}>
-                          Bến đón: <Text style={{ fontWeight: '700', color: '#B45309' }}>{shoreHandoffData.landingPoint?.name}</Text>
-                        </Text>
-
-                        <TouchableOpacity
-                          style={{
-                            alignSelf: 'flex-start',
-                            marginTop: 4,
-                            paddingVertical: 6,
-                            paddingHorizontal: 10,
-                            backgroundColor: '#FFFFFF',
-                            borderWidth: 1,
-                            borderColor: '#F59E0B',
-                            borderRadius: 6,
-                          }}
-                          onPress={() => setShoreHandoffModalVisible(true)}
-                        >
-                          <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#D97706' }}>Chỉnh Sửa / Gửi Lại</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-
-                    {/* Yêu cầu xe đón tại bờ (Nút nhỏ phụ ở trên dành cho ca cần xe chuyển tiếp) */}
-                    {!isReliefMission && (!shoreHandoffData || shoreHandoffData.status === 'NONE') && (
-                      <TouchableOpacity
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          backgroundColor: '#FFF7ED',
-                          borderWidth: 1.5,
-                          borderColor: '#FDBA74',
-                          borderRadius: 12,
-                          paddingVertical: 10,
-                          paddingHorizontal: 12,
-                          marginBottom: 8,
-                        }}
-                        onPress={() => setShoreHandoffModalVisible(true)}
-                        activeOpacity={0.85}
-                      >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                          <View
-                            style={{
-                              width: 32,
-                              height: 32,
-                              borderRadius: 16,
-                              backgroundColor: '#FFEDD5',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            <MaterialCommunityIcons name="car-emergency" size={18} color="#EA580C" />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#9A3412' }}>
-                              Yêu Cầu Xe Đón Nạn Nhân Tại Bờ
-                            </Text>
-                            <Text style={{ fontSize: 11, color: '#C2410C' }}>
-                              Điều xe cấp cứu / xe tải đón tại mép nước (Tùy chọn)
-                            </Text>
-                          </View>
-                        </View>
-                        <Feather name="chevron-right" size={18} color="#EA580C" />
-                      </TouchableOpacity>
-                    )}
-
                     {/* NÚT CHÍNH TO BẢN: HOÀN TẤT CỨU HỘ & BÁO CÁO (LUÔN GIỮ NGUYÊN) */}
                     <TouchableOpacity
                       style={[styles.grabBigGreenBtn, { backgroundColor: '#059669' }]}
