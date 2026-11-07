@@ -93,6 +93,8 @@ async function seedNguHanhSon() {
 
     const wardMyAn = wardDocs['DAD-NHS-01'];
     const wardKhueMy = wardDocs['DAD-NHS-02'];
+    const wardHoaQuy = wardDocs['DAD-NHS-03'];
+    const wardHoaHai = wardDocs['DAD-NHS-04'];
 
     // ========================================================
     // 2. TẠO CƠ QUAN QUẢN LÝ / BAN CHỈ HUY QUẬN NGŨ HÀNH SƠN
@@ -382,6 +384,114 @@ async function seedNguHanhSon() {
       await citizen2.save();
     }
 
+    // 3.8. Người dân gặp nạn Nguyễn Văn Thái (Mai Đăng Chơn, Hòa Quý)
+    let citizen3 = await User.findOne({ phone: '0905662199' });
+    if (!citizen3) {
+      citizen3 = await User.create({
+        fullName: 'Nguyễn Văn Thái',
+        phone: '0905662199',
+        email: 'vanthai.hoaquy.nhs@gmail.com',
+        passwordHash: defaultPasswordHash,
+        roles: ['CITIZEN'],
+        status: 'ACTIVE',
+        isPhoneVerified: true,
+        address: 'K82/14 Mai Đăng Chơn, Phường Hòa Quý, Quận Ngũ Hành Sơn, TP Đà Nẵng',
+        citizen: {
+          areaId: wardHoaQuy._id,
+          areaName: wardHoaQuy.name,
+        },
+      });
+      console.log('➕ Đã tạo Người dân gặp nạn:', citizen3.fullName, '| SĐT: 0905662199');
+    } else {
+      citizen3.address = 'K82/14 Mai Đăng Chơn, Phường Hòa Quý, Quận Ngũ Hành Sơn, TP Đà Nẵng';
+      citizen3.citizen = {
+        areaId: wardHoaQuy._id,
+        areaName: wardHoaQuy.name,
+      };
+      await citizen3.save();
+    }
+
+    // 3.9. Người dân gặp nạn Trần Thị Mai Lan (Nam Kỳ Khởi Nghĩa, Hòa Hải)
+    let citizen4 = await User.findOne({ phone: '0905884332' });
+    if (!citizen4) {
+      citizen4 = await User.create({
+        fullName: 'Trần Thị Mai Lan',
+        phone: '0905884332',
+        email: 'mailan.hoahai.nhs@gmail.com',
+        passwordHash: defaultPasswordHash,
+        roles: ['CITIZEN'],
+        status: 'ACTIVE',
+        isPhoneVerified: true,
+        address: 'K290 Nam Kỳ Khởi Nghĩa, Phường Hòa Hải, Quận Ngũ Hành Sơn, TP Đà Nẵng',
+        citizen: {
+          areaId: wardHoaHai._id,
+          areaName: wardHoaHai.name,
+        },
+      });
+      console.log('➕ Đã tạo Người dân gặp nạn:', citizen4.fullName, '| SĐT: 0905884332');
+    } else {
+      citizen4.address = 'K290 Nam Kỳ Khởi Nghĩa, Phường Hòa Hải, Quận Ngũ Hành Sơn, TP Đà Nẵng';
+      citizen4.citizen = {
+        areaId: wardHoaHai._id,
+        areaName: wardHoaHai.name,
+      };
+      await citizen4.save();
+    }
+
+    // 3.10. Người dân gặp nạn Phạm Đình Hùng (Hồ Xuân Hương, Mỹ An)
+    let citizen5 = await User.findOne({ phone: '0905331188' });
+    if (!citizen5) {
+      citizen5 = await User.create({
+        fullName: 'Phạm Đình Hùng',
+        phone: '0905331188',
+        email: 'dinhhung.myan.nhs@gmail.com',
+        passwordHash: defaultPasswordHash,
+        roles: ['CITIZEN'],
+        status: 'ACTIVE',
+        isPhoneVerified: true,
+        address: '72 Hồ Xuân Hương, Phường Mỹ An, Quận Ngũ Hành Sơn, TP Đà Nẵng',
+        citizen: {
+          areaId: wardMyAn._id,
+          areaName: wardMyAn.name,
+        },
+      });
+      console.log('➕ Đã tạo Người dân gặp nạn:', citizen5.fullName, '| SĐT: 0905331188');
+    } else {
+      citizen5.address = '72 Hồ Xuân Hương, Phường Mỹ An, Quận Ngũ Hành Sơn, TP Đà Nẵng';
+      citizen5.citizen = {
+        areaId: wardMyAn._id,
+        areaName: wardMyAn.name,
+      };
+      await citizen5.save();
+    }
+
+    // 3.11. Người dân gặp nạn Hoàng Thị Thu (K115 Lê Văn Hiến, Khuê Mỹ)
+    let citizen6 = await User.findOne({ phone: '0905449922' });
+    if (!citizen6) {
+      citizen6 = await User.create({
+        fullName: 'Hoàng Thị Thu',
+        phone: '0905449922',
+        email: 'thithu.khuemy.nhs@gmail.com',
+        passwordHash: defaultPasswordHash,
+        roles: ['CITIZEN'],
+        status: 'ACTIVE',
+        isPhoneVerified: true,
+        address: 'K115 Lê Văn Hiến, Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng',
+        citizen: {
+          areaId: wardKhueMy._id,
+          areaName: wardKhueMy.name,
+        },
+      });
+      console.log('➕ Đã tạo Người dân gặp nạn:', citizen6.fullName, '| SĐT: 0905449922');
+    } else {
+      citizen6.address = 'K115 Lê Văn Hiến, Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng';
+      citizen6.citizen = {
+        areaId: wardKhueMy._id,
+        areaName: wardKhueMy.name,
+      };
+      await citizen6.save();
+    }
+
     // ========================================================
     // 4. TẠO ĐỘI CỨU HỘ NGŨ HÀNH SƠN (43-NHS-01) - LÊ CỨU NẠN LÀ ĐỘI TRƯỞNG
     // ========================================================
@@ -501,13 +611,15 @@ async function seedNguHanhSon() {
     }
 
     // ========================================================
-    // 6. TẠO YÊU CẦU CỨU NẠN SOS TẠI NGŨ HÀNH SƠN
+    // 6. TẠO CÁC YÊU CẦU CỨU NẠN SOS TẠI NGŨ HÀNH SƠN
     // ========================================================
     console.log('\n--- 6. Tạo Yêu Cầu Cứu Nạn SOS Tại Ngũ Hành Sơn ---');
 
-    // Xóa các ca SOS rác cũ ngoài SOS-74144 và SOS-8924 để đảm bảo bảng điều phối chỉ hiển thị đúng 2 ca thực tế
+    const seededSosCodes = ['SOS-74144', 'SOS-8924', 'SOS-5219', 'SOS-3382', 'SOS-6175', 'SOS-9401'];
+
+    // Xóa các ca SOS rác cũ ngoài các mã chuẩn để bảng điều phối hiển thị đúng danh mục thực tế
     await SosRequest.deleteMany({
-      sosCode: { $nin: ['SOS-74144', 'SOS-8924'] },
+      sosCode: { $nin: seededSosCodes },
     });
 
     // 6.1. Ca SOS-74144: Ngập sâu ven sông K48/12 Lê Văn Hiến, Khuê Mỹ (CRITICAL, ĐÃ PHÂN CÔNG ĐỘI 43-NHS-01)
@@ -520,11 +632,12 @@ async function seedNguHanhSon() {
         address: 'K48/12 Lê Văn Hiến, Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng',
         location: {
           type: 'Point',
-          coordinates: [108.2435, 16.0315], // Tọa độ bên trong Phường Khuê Mỹ, Ngũ Hành Sơn
+          coordinates: [108.2435, 16.0315],
         },
         emergencyType: 'FLOOD',
         priority: 'CRITICAL',
         people: 4,
+        priorityGroups: ['Người già', 'Trẻ em'],
         description: 'Nước lũ sông Cổ Cò dâng cao ngang ngực 1.2m chảy xiết, trong nhà có 1 cụ già 82 tuổi liệt giường và 1 em bé 3 tuổi, cần ca-nô tiếp cận khẩn cấp!',
         contactPhone: '0905538065',
         images: [
@@ -559,6 +672,7 @@ async function seedNguHanhSon() {
       sos1.description = 'Nước lũ sông Cổ Cò dâng cao ngang ngực 1.2m chảy xiết, trong nhà có 1 cụ già 82 tuổi liệt giường và 1 em bé 3 tuổi, cần ca-nô tiếp cận khẩn cấp!';
       sos1.contactPhone = '0905538065';
       sos1.people = 4;
+      sos1.priorityGroups = ['Người già', 'Trẻ em'];
       sos1.status = 'ASSIGNED';
       sos1.priority = 'CRITICAL';
       sos1.images = [
@@ -601,11 +715,12 @@ async function seedNguHanhSon() {
         address: '125 Châu Thị Vĩnh Tế, Phường Mỹ An, Quận Ngũ Hành Sơn, TP Đà Nẵng',
         location: {
           type: 'Point',
-          coordinates: [108.2410, 16.0460], // Tọa độ Phường Mỹ An, Ngũ Hành Sơn
+          coordinates: [108.2410, 16.0460],
         },
         emergencyType: 'RESCUE',
         priority: 'HIGH',
         people: 2,
+        priorityGroups: ['Học sinh - Sinh viên', 'Người lao động'],
         description: 'Dãy trọ sinh viên và người lao động bị nước ngập cô lập kiệt vào, cần cung cấp áo phao và di tản người già sang điểm an toàn.',
         contactPhone: '0905123987',
         images: [
@@ -621,6 +736,7 @@ async function seedNguHanhSon() {
       sos2.address = '125 Châu Thị Vĩnh Tế, Phường Mỹ An, Quận Ngũ Hành Sơn, TP Đà Nẵng';
       sos2.description = 'Dãy trọ sinh viên và người lao động bị nước ngập cô lập kiệt vào, cần cung cấp áo phao và di tản người già sang điểm an toàn.';
       sos2.contactPhone = '0905123987';
+      sos2.priorityGroups = ['Học sinh - Sinh viên', 'Người lao động'];
       sos2.images = [
         'https://images.unsplash.com/photo-1534274988757-a28bf1a57c17?auto=format&fit=crop&w=800&q=80',
         'https://images.unsplash.com/photo-1527482797697-8795b05a13fe?auto=format&fit=crop&w=800&q=80',
@@ -634,6 +750,179 @@ async function seedNguHanhSon() {
       console.log('✔ Đã cập nhật yêu cầu SOS:', sos2.sosCode);
     }
 
+    // 6.3. Ca SOS-5219: Cấp cứu y tế sản phụ chuyển dạ, Hòa Quý (CRITICAL, CHỜ ĐIỀU PHỐI)
+    let sos3 = await SosRequest.findOne({ sosCode: 'SOS-5219' });
+    if (!sos3) {
+      sos3 = await SosRequest.create({
+        sosCode: 'SOS-5219',
+        citizenId: citizen3._id,
+        areaId: wardHoaQuy._id,
+        address: 'K82/14 Mai Đăng Chơn, Phường Hòa Quý, Quận Ngũ Hành Sơn, TP Đà Nẵng',
+        location: {
+          type: 'Point',
+          coordinates: [108.2320, 16.0125],
+        },
+        emergencyType: 'MEDICAL',
+        priority: 'CRITICAL',
+        people: 2,
+        priorityGroups: ['Phụ nữ mang thai', 'Trẻ sơ sinh'],
+        description: 'Đường Mai Đăng Chơn ngập sâu 0.8m xe thường không vào được. Sản phụ mang thai tuần 39 có dấu hiệu chuyển dạ cấp, cần ca-nô tiếp cận đưa đến Bệnh viện Phụ Sản - Nhi Đà Nẵng khẩn cấp!',
+        contactPhone: '0905662199',
+        images: [
+          'https://images.unsplash.com/photo-1516574187841-cb9cc2ca948b?auto=format&fit=crop&w=800&q=80',
+          'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=800&q=80',
+        ],
+        status: 'VERIFIED',
+      });
+      console.log('➕ Đã tạo yêu cầu SOS:', sos3.sosCode, '| Địa chỉ:', sos3.address);
+    } else {
+      sos3.citizenId = citizen3._id;
+      sos3.areaId = wardHoaQuy._id;
+      sos3.address = 'K82/14 Mai Đăng Chơn, Phường Hòa Quý, Quận Ngũ Hành Sơn, TP Đà Nẵng';
+      sos3.description = 'Đường Mai Đăng Chơn ngập sâu 0.8m xe thường không vào được. Sản phụ mang thai tuần 39 có dấu hiệu chuyển dạ cấp, cần ca-nô tiếp cận đưa đến Bệnh viện Phụ Sản - Nhi Đà Nẵng khẩn cấp!';
+      sos3.contactPhone = '0905662199';
+      sos3.people = 2;
+      sos3.priorityGroups = ['Phụ nữ mang thai', 'Trẻ sơ sinh'];
+      sos3.emergencyType = 'MEDICAL';
+      sos3.priority = 'CRITICAL';
+      sos3.location = {
+        type: 'Point',
+        coordinates: [108.2320, 16.0125],
+      };
+      sos3.status = 'VERIFIED';
+      await sos3.save();
+      console.log('✔ Đã cập nhật yêu cầu SOS:', sos3.sosCode);
+    }
+
+    // 6.4. Ca SOS-3382: Tiếp tế khẩn cấp lương thực nước sạch, Hòa Hải (MEDIUM, CHỜ ĐIỀU PHỐI)
+    let sos4 = await SosRequest.findOne({ sosCode: 'SOS-3382' });
+    if (!sos4) {
+      sos4 = await SosRequest.create({
+        sosCode: 'SOS-3382',
+        citizenId: citizen4._id,
+        areaId: wardHoaHai._id,
+        address: 'K290 Nam Kỳ Khởi Nghĩa, Phường Hòa Hải, Quận Ngũ Hành Sơn, TP Đà Nẵng',
+        location: {
+          type: 'Point',
+          coordinates: [108.2560, 16.0020],
+        },
+        emergencyType: 'RELIEF',
+        priority: 'MEDIUM',
+        people: 5,
+        priorityGroups: ['Trẻ em', 'Hộ gia đình khó khăn'],
+        description: 'Khu vực trũng thấp ngập 3 ngày liên tục, nước sạch và lương thực dự trữ đã cạn kiệt, gia đình có 2 trẻ nhỏ cần tiếp tế khẩn cấp 2 thùng nước khoáng và 1 thùng lương khô dã chiến.',
+        contactPhone: '0905884332',
+        images: [
+          'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?auto=format&fit=crop&w=800&q=80',
+          'https://images.unsplash.com/photo-1593113598332-cd288d649433?auto=format&fit=crop&w=800&q=80',
+        ],
+        status: 'VERIFIED',
+      });
+      console.log('➕ Đã tạo yêu cầu SOS:', sos4.sosCode, '| Địa chỉ:', sos4.address);
+    } else {
+      sos4.citizenId = citizen4._id;
+      sos4.areaId = wardHoaHai._id;
+      sos4.address = 'K290 Nam Kỳ Khởi Nghĩa, Phường Hòa Hải, Quận Ngũ Hành Sơn, TP Đà Nẵng';
+      sos4.description = 'Khu vực trũng thấp ngập 3 ngày liên tục, nước sạch và lương thực dự trữ đã cạn kiệt, gia đình có 2 trẻ nhỏ cần tiếp tế khẩn cấp 2 thùng nước khoáng và 1 thùng lương khô dã chiến.';
+      sos4.contactPhone = '0905884332';
+      sos4.people = 5;
+      sos4.priorityGroups = ['Trẻ em', 'Hộ gia đình khó khăn'];
+      sos4.emergencyType = 'RELIEF';
+      sos4.priority = 'MEDIUM';
+      sos4.location = {
+        type: 'Point',
+        coordinates: [108.2560, 16.0020],
+      };
+      sos4.status = 'VERIFIED';
+      await sos4.save();
+      console.log('✔ Đã cập nhật yêu cầu SOS:', sos4.sosCode);
+    }
+
+    // 6.5. Ca SOS-6175: Cây ngã đè sập hiên nhà, cứu nạn mắc kẹt, Mỹ An (HIGH, CHỜ ĐIỀU PHỐI)
+    let sos5 = await SosRequest.findOne({ sosCode: 'SOS-6175' });
+    if (!sos5) {
+      sos5 = await SosRequest.create({
+        sosCode: 'SOS-6175',
+        citizenId: citizen5._id,
+        areaId: wardMyAn._id,
+        address: '72 Hồ Xuân Hương, Phường Mỹ An, Quận Ngũ Hành Sơn, TP Đà Nẵng',
+        location: {
+          type: 'Point',
+          coordinates: [108.2465, 16.0485],
+        },
+        emergencyType: 'STORM',
+        priority: 'HIGH',
+        people: 3,
+        priorityGroups: ['Người bị thương nhẹ'],
+        description: 'Gió bão giật mạnh làm cây xà cừ cổ thụ bật gốc đè sập hiên tôn nhà cấp 4, có 1 người bị thương ở chân đang mắc kẹt trong góc sân, cần cưa máy giải phóng hiện trường và sơ cứu nẹp cố định chân.',
+        contactPhone: '0905331188',
+        images: [
+          'https://images.unsplash.com/photo-1527482797697-8795b05a13fe?auto=format&fit=crop&w=800&q=80',
+        ],
+        status: 'VERIFIED',
+      });
+      console.log('➕ Đã tạo yêu cầu SOS:', sos5.sosCode, '| Địa chỉ:', sos5.address);
+    } else {
+      sos5.citizenId = citizen5._id;
+      sos5.areaId = wardMyAn._id;
+      sos5.address = '72 Hồ Xuân Hương, Phường Mỹ An, Quận Ngũ Hành Sơn, TP Đà Nẵng';
+      sos5.description = 'Gió bão giật mạnh làm cây xà cừ cổ thụ bật gốc đè sập hiên tôn nhà cấp 4, có 1 người bị thương ở chân đang mắc kẹt trong góc sân, cần cưa máy giải phóng hiện trường và sơ cứu nẹp cố định chân.';
+      sos5.contactPhone = '0905331188';
+      sos5.people = 3;
+      sos5.priorityGroups = ['Người bị thương nhẹ'];
+      sos5.emergencyType = 'STORM';
+      sos5.priority = 'HIGH';
+      sos5.location = {
+        type: 'Point',
+        coordinates: [108.2465, 16.0485],
+      };
+      sos5.status = 'VERIFIED';
+      await sos5.save();
+      console.log('✔ Đã cập nhật yêu cầu SOS:', sos5.sosCode);
+    }
+
+    // 6.6. Ca SOS-9401: Nước lũ tràn vào nền nhà, hỗ trợ sơ tán người cao tuổi, Khuê Mỹ (HIGH, CHỜ ĐIỀU PHỐI)
+    let sos6 = await SosRequest.findOne({ sosCode: 'SOS-9401' });
+    if (!sos6) {
+      sos6 = await SosRequest.create({
+        sosCode: 'SOS-9401',
+        citizenId: citizen6._id,
+        areaId: wardKhueMy._id,
+        address: 'K115 Lê Văn Hiến, Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng',
+        location: {
+          type: 'Point',
+          coordinates: [108.2450, 16.0280],
+        },
+        emergencyType: 'FLOOD',
+        priority: 'HIGH',
+        people: 3,
+        priorityGroups: ['Người cao tuổi'],
+        description: 'Nước sông tràn vào nền nhà sâu 0.5m đang tiếp tục dâng nhanh, trong nhà có 2 cụ già 78 tuổi có tiền sử cao huyết áp, cần hỗ trợ xuồng máy di chuyển đến Trụ sở UBND Phường Khuê Mỹ tránh trú an toàn.',
+        contactPhone: '0905449922',
+        images: [
+          'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=800&q=80',
+        ],
+        status: 'VERIFIED',
+      });
+      console.log('➕ Đã tạo yêu cầu SOS:', sos6.sosCode, '| Địa chỉ:', sos6.address);
+    } else {
+      sos6.citizenId = citizen6._id;
+      sos6.areaId = wardKhueMy._id;
+      sos6.address = 'K115 Lê Văn Hiến, Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng';
+      sos6.description = 'Nước sông tràn vào nền nhà sâu 0.5m đang tiếp tục dâng nhanh, trong nhà có 2 cụ già 78 tuổi có tiền sử cao huyết áp, cần hỗ trợ xuồng máy di chuyển đến Trụ sở UBND Phường Khuê Mỹ tránh trú an toàn.';
+      sos6.contactPhone = '0905449922';
+      sos6.people = 3;
+      sos6.priorityGroups = ['Người cao tuổi'];
+      sos6.emergencyType = 'FLOOD';
+      sos6.priority = 'HIGH';
+      sos6.location = {
+        type: 'Point',
+        coordinates: [108.2450, 16.0280],
+      };
+      sos6.status = 'VERIFIED';
+      await sos6.save();
+      console.log('✔ Đã cập nhật yêu cầu SOS:', sos6.sosCode);
+    }
     // ========================================================
     // 7. TẠO PHÂN CÔNG TÁC CHIẾN SOS ASSIGNMENT (GrabDriver Flow)
     // ========================================================
