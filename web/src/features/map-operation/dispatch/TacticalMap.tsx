@@ -8,6 +8,7 @@ import {
   Polygon,
   Polyline,
   useMap,
+  useMapEvents,
 } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -41,7 +42,7 @@ interface Props {
   activeOfficer?: AuthorityOfficer;
   areas?: AdministrativeArea[];
   sosRequests?: SosRequest[];
-  onSelectSos?: (sos: SosRequest) => void;
+  onSelectSos?: (sos: SosRequest | null) => void;
   previewTeamIds?: string[];
   rescueTeams?: RescueTeam[];
   vehicles?: Vehicle[];
@@ -92,6 +93,16 @@ const LeafletMapController = ({
     }
   }, [selectedSosId, center, map]);
 
+  return null;
+};
+
+// Lắng nghe sự kiện click vào nền bản đồ (click ra ngoài khoảng trống) để bỏ chọn ca SOS
+const MapClickDeselectHandler = ({ onDeselect }: { onDeselect?: () => void }) => {
+  useMapEvents({
+    click: () => {
+      onDeselect?.();
+    },
+  });
   return null;
 };
 
@@ -562,10 +573,14 @@ export const TacticalMap = ({
   // Kiểm tra SOS có thuộc phạm vi quản lý của cán bộ không
   const isSelectedInJurisdiction = selectedSos ? isSosInOfficerJurisdiction(selectedSos, activeOfficer, managedWard) : false;
 
-  // Lọc các ca SOS khác thuộc khu vực được phân công của cán bộ
+  // Lọc các ca SOS khác thuộc khu vực được phân công của cán bộ (chỉ hiện các ca CHƯA HOÀN TẤT)
   const otherSosList = useMemo(() => {
     return sosRequests.filter(
-      (s) => s.id !== selectedSos?.id && isSosInOfficerJurisdiction(s, activeOfficer, managedWard)
+      (s) =>
+        s.id !== selectedSos?.id &&
+        String(s.status || '').toUpperCase() !== 'COMPLETED' &&
+        String(s.status || '').toUpperCase() !== 'RESOLVED' &&
+        isSosInOfficerJurisdiction(s, activeOfficer, managedWard)
     );
   }, [sosRequests, selectedSos?.id, activeOfficer, managedWard]);
 
@@ -634,38 +649,37 @@ export const TacticalMap = ({
     return L.divIcon({
       className: 'tactical-landing-handoff-beacon',
       html: `
-        <div style="position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+        <div style="position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
           <div style="
             position: absolute;
-            width: 44px;
-            height: 44px;
+            width: 26px;
+            height: 26px;
             border-radius: 50%;
-            background: rgba(245, 158, 11, 0.28);
-            border: 2px solid #f59e0b;
-            box-shadow: 0 0 14px rgba(245, 158, 11, 0.6);
-            animation: radar-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+            background: rgba(234, 88, 12, 0.25);
+            border: 1.5px solid #ea580c;
+            animation: pulse-beacon 1.8s infinite ease-out;
           "></div>
           <div style="
             position: relative;
-            width: 32px;
-            height: 32px;
+            width: 22px;
+            height: 22px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-            border: 2.5px solid #ffffff;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+            background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
+            border: 2px solid #ffffff;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 16px;
-            color: #ffffff;
+            font-size: 11px;
+            line-height: 1;
             z-index: 10;
           ">
-            ⚓
+            🚗
           </div>
         </div>
       `,
-      iconSize: [44, 44],
-      iconAnchor: [22, 22],
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
     });
   }, []);
 
@@ -837,7 +851,7 @@ export const TacticalMap = ({
           70% { transform: scale(1.6); opacity: 0; }
           100% { transform: scale(1.8); opacity: 0; }
         }
-        .tactical-main-sos-beacon, .tactical-other-sos-beacon, .tactical-rescuer-beacon, .tactical-rescuer-member-beacon, .tactical-vehicle-beacon {
+        .tactical-main-sos-beacon, .tactical-other-sos-beacon, .tactical-rescuer-beacon, .tactical-rescuer-member-beacon, .tactical-vehicle-beacon, .tactical-landing-handoff-beacon {
           background: transparent !important;
           border: none !important;
         }
@@ -865,6 +879,12 @@ export const TacticalMap = ({
           maxZoom={20}
         />
 
+        <MapClickDeselectHandler
+          onDeselect={() => {
+            if (onSelectSos) onSelectSos(null);
+          }}
+        />
+
         <LeafletMapController
           center={[sosLat, sosLng]}
           zoom={15}
@@ -880,6 +900,7 @@ export const TacticalMap = ({
           <Polygon
             key={`ward-poly-${w.id}-google-dots`}
             positions={w.positions}
+            interactive={false}
             pathOptions={{
               color: '#dc2626',
               fillColor: '#ef4444',
@@ -895,8 +916,20 @@ export const TacticalMap = ({
         {/* 2. Tuyến đường di chuyển cứu hộ thực tế được vẽ bởi RescueRoadRoute (bám đường giao thông OSRM, loại bỏ đường thẳng chim bay cắt chéo nhà dân) */}
 
         {/* 3. Marker Điểm SOS Chính Đang Chọn (Kèm Radar & Popup chi tiết) */}
-        {selectedSos && isSelectedInJurisdiction && (
-          <Marker position={[sosLat, sosLng]} icon={mainSosIcon}>
+        {selectedSos &&
+          isSelectedInJurisdiction &&
+          String(selectedSos.status || '').toUpperCase() !== 'COMPLETED' &&
+          String(selectedSos.status || '').toUpperCase() !== 'RESOLVED' &&
+          String(assignment?.status || '').toUpperCase() !== 'COMPLETED' && (
+          <Marker
+            position={[sosLat, sosLng]}
+            icon={mainSosIcon}
+            eventHandlers={{
+              click: (e) => {
+                L.DomEvent.stopPropagation(e as any);
+              },
+            }}
+          >
             <Popup autoPan={false}>
               <div style={{ fontFamily: 'inherit', padding: '2px', minWidth: '200px' }}>
                 <div style={{ fontWeight: 800, fontSize: '13px', color: '#dc2626', marginBottom: '2px' }}>
@@ -941,7 +974,7 @@ export const TacticalMap = ({
               <Popup>
                 <div style={{ minWidth: 220, padding: '4px 2px' }}>
                   <div style={{ fontSize: 13, fontWeight: 900, color: '#b45309', marginBottom: 3 }}>
-                    ⚓ {selectedSos.shoreHandoff.landingPoint.name || 'Bến Cập Bờ Tiếp Vận'}
+                    🚗 {selectedSos.shoreHandoff.landingPoint.name || 'Điểm Hẹn Đón Tiếp Vận'}
                   </div>
                   <div style={{ fontSize: 11.5, color: '#475569', marginBottom: 6 }}>
                     {selectedSos.shoreHandoff.landingPoint.address || 'Mép nước chuyển tiếp nạn nhân lên xe đường bộ'}
@@ -954,9 +987,9 @@ export const TacticalMap = ({
                   </div>
                 </div>
               </Popup>
-              <Tooltip direction="top" offset={[0, -22]} opacity={0.95} permanent>
+              <Tooltip direction="top" offset={[0, -14]} opacity={0.95} permanent>
                 <span style={{ fontWeight: 800, fontSize: '11px', color: '#b45309', background: '#fffbeb', padding: '2px 6px', borderRadius: 4, border: '1px solid #fcd34d' }}>
-                  ⚓ {selectedSos.shoreHandoff.landingPoint.name}
+                  🚗 {selectedSos.shoreHandoff.landingPoint.name}
                 </span>
               </Tooltip>
             </Marker>
@@ -972,7 +1005,8 @@ export const TacticalMap = ({
               position={[lat, lng]}
               icon={otherSosIcon}
               eventHandlers={{
-                click: () => {
+                click: (e) => {
+                  L.DomEvent.stopPropagation(e as any);
                   if (onSelectSos) onSelectSos(sos);
                 },
               }}
@@ -1008,7 +1042,8 @@ export const TacticalMap = ({
                 position={[teamBase.lat, teamBase.lng]}
                 icon={createUnifiedTeamDivIcon(team, teamVeh, isTeamExpanded)}
                 eventHandlers={{
-                  click: () => {
+                  click: (e) => {
+                    L.DomEvent.stopPropagation(e as any);
                     setExpandedTeamIds((prev) => ({
                       ...prev,
                       [team.id]: !prev[team.id],
@@ -1199,7 +1234,12 @@ export const TacticalMap = ({
         })}
 
         {/* 6. Tuyến đường và Marker Đội Cứu Hộ Đang Xuất Kích (khi không có preview cụ thể) */}
-        {isSelectedInJurisdiction && assignment && assignment.status !== 'CANCELLED' && activePreviewTeams.length === 0 && (
+        {isSelectedInJurisdiction &&
+          assignment &&
+          assignment.status !== 'CANCELLED' &&
+          assignment.status !== 'COMPLETED' &&
+          String(selectedSos?.status || '').toUpperCase() !== 'COMPLETED' &&
+          activePreviewTeams.length === 0 && (
           <>
             <RescueRoadRoute
               startLat={assignment.rescuerLocation?.lat ?? defaultRescuerLat}
@@ -1304,25 +1344,7 @@ export const TacticalMap = ({
         </button>
       </div>
 
-      {/* Watermark Biển đảo Việt Nam (Đảm bảo chủ quyền Hoàng Sa & Trường Sa) */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 6,
-          left: 10,
-          zIndex: 1000,
-          fontSize: '11px',
-          fontWeight: 600,
-          color: '#475569',
-          background: 'rgba(255, 255, 255, 0.85)',
-          padding: '2px 8px',
-          borderRadius: 4,
-          backdropFilter: 'blur(4px)',
-          border: '1px solid rgba(226, 232, 240, 0.8)',
-        }}
-      >
-        🇻🇳 Bản đồ Google Maps • Toàn vẹn chủ quyền lãnh thổ Việt Nam
-      </div>
+
     </div>
   );
 };

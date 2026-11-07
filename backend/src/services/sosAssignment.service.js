@@ -549,8 +549,8 @@ class SosAssignmentService {
           sos.resolvedAt = now;
         }
         if (extraData?.proofImages && Array.isArray(extraData.proofImages) && extraData.proofImages.length > 0) {
-          sos.images = [
-            ...new Set([...(sos.images || []), ...extraData.proofImages]),
+          sos.proofImages = [
+            ...new Set([...(sos.proofImages || []), ...extraData.proofImages]),
           ];
         }
         await sos.save();

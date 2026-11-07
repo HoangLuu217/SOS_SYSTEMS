@@ -78,32 +78,47 @@ class EquipmentService {
       filter.name = { $regex: query.name.trim(), $options: 'i' };
     }
 
-    // Loc theo khu vuc (areaId) -> tim cac doi trong khu vuc do
+    // Loc theo khu vuc (areaId) -> tim tat ca cac doi va vat tu trong dia ban
     if (query.areaId && query.areaId !== 'ALL') {
-      let targetArea = null;
+      const areaMatches = [];
       if (mongoose.Types.ObjectId.isValid(query.areaId)) {
-        targetArea = await AdministrativeArea.findById(query.areaId);
+        const byId = await AdministrativeArea.findById(query.areaId);
+        if (byId) areaMatches.push(byId);
       }
-      if (!targetArea) {
-        targetArea = await AdministrativeArea.findOne({
-          $or: [{ code: query.areaId }, { name: new RegExp(query.areaId, 'i') }],
-        });
-      }
+      const byOther = await AdministrativeArea.find({
+        $or: [{ code: query.areaId }, { name: new RegExp(String(query.areaId).trim(), 'i') }],
+      });
+      byOther.forEach((a) => {
+        if (!areaMatches.some((m) => String(m._id) === String(a._id))) areaMatches.push(a);
+      });
 
-      if (targetArea) {
-        const relevantAreaIds = [targetArea._id];
-        const childWards = await AdministrativeArea.find({ parentId: targetArea._id }).select('_id');
-        childWards.forEach((w) => relevantAreaIds.push(w._id));
-        if (targetArea.parentId) relevantAreaIds.push(targetArea.parentId);
+      if (areaMatches.length > 0) {
+        const relevantAreaIds = new Set();
+        const cleanNames = [];
 
-        const cleanName = (targetArea.name || '')
-          .replace(/^(phường|xã|quận|huyện|thành phố|thị xã)\s+/i, '')
-          .trim();
+        for (const a of areaMatches) {
+          relevantAreaIds.add(String(a._id));
+          if (a.parentId) {
+            relevantAreaIds.add(String(a.parentId));
+            const parent = await AdministrativeArea.findById(a.parentId);
+            if (parent?.name) {
+              const pName = parent.name.replace(/^(phường|xã|quận|huyện|thành phố|thị xã)\s+/i, '').trim();
+              if (pName.length >= 3) cleanNames.push(pName);
+            }
+          }
+          const children = await AdministrativeArea.find({ parentId: a._id }).select('_id name');
+          children.forEach((c) => relevantAreaIds.add(String(c._id)));
 
-        const areaConditions = [{ areaId: { $in: relevantAreaIds } }];
-        if (cleanName.length >= 3) {
-          areaConditions.push({ name: new RegExp(cleanName, 'i') });
+          const cName = (a.name || '').replace(/^(phường|xã|quận|huyện|thành phố|thị xã)\s+/i, '').trim();
+          if (cName.length >= 3) cleanNames.push(cName);
         }
+
+        const areaConditions = [
+          { areaId: { $in: Array.from(relevantAreaIds).map((id) => new mongoose.Types.ObjectId(id)) } },
+        ];
+        cleanNames.forEach((cn) => {
+          if (cn.length >= 3) areaConditions.push({ name: new RegExp(cn, 'i') });
+        });
 
         const teamsInArea = await RescueTeam.find({ $or: areaConditions }).select('_id');
         const teamIds = teamsInArea.map((t) => t._id);

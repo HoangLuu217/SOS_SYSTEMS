@@ -42,21 +42,6 @@ interface ToastState {
   type: 'success' | 'error';
 }
 
-const SOS_STATUS_VIETNAMESE: Record<string, string> = {
-  PENDING: 'Chờ xử lý',
-  VERIFIED: 'Đã xác minh (Sẵn sàng điều phối)',
-  DISPATCHED: 'Đang điều động cứu nạn',
-  ON_THE_WAY: 'Đội cứu hộ đang di chuyển',
-  EN_ROUTE: 'Đội cứu hộ đang trên đường tới',
-  ARRIVED: 'Đã tiếp cận hiện trường',
-  IN_PROGRESS: 'Đang triển khai cứu nạn',
-  RESCUING: 'Đang giải cứu nạn nhân',
-  COMPLETED: 'Đã hoàn thành cứu hộ',
-  RESOLVED: 'Đã xử lý xong',
-  CANCELLED: 'Đã hủy điều động',
-  REJECTED: 'Đội từ chối nhận lệnh',
-};
-
 import type { User } from '@/types/auth';
 
 interface Props {
@@ -377,10 +362,13 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         domainDService.syncRealSosRequests(realMapped);
         setSosRequests(domainDService.getSosRequests());
 
-        // Nếu URL chưa chỉ định SOS cụ thể hoặc URL trỏ vào ca mock cũ, ưu tiên chọn ca SOS thật từ app
+        // Nếu URL có chỉ định SOS cụ thể, kiểm tra và giữ ca đó nếu còn hợp lệ
         const currentUrlId = getCurrentSosIdFromUrl();
-        if ((!currentUrlId || currentUrlId.startsWith('sos-89') || currentUrlId.startsWith('sos-dn-')) && realMapped.length > 0) {
-          setSelectedSosId(realMapped[0].id);
+        if (currentUrlId) {
+          const match = realMapped.find((s: any) => s.id === currentUrlId);
+          if (match && String(match.status || '').toUpperCase() !== 'COMPLETED' && String(match.status || '').toUpperCase() !== 'RESOLVED') {
+            setSelectedSosId(match.id);
+          }
         }
       }
 
@@ -468,11 +456,6 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         setSosRequests([...domainDService.getSosRequests()]);
       }
       syncRealSosFromApi(activeOfficer);
-      if (updatedSos?._id) {
-        const rawStatus = String(updatedSos.status || '').toUpperCase();
-        const statusText = SOS_STATUS_VIETNAMESE[rawStatus] || updatedSos.status;
-        showToast(`ℹ️ Cập nhật trạng thái SOS: ${statusText}`, 'success');
-      }
     });
 
     // Lắng nghe các sự kiện phân công & cứu hộ viên đổi trạng thái Realtime
@@ -660,15 +643,6 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
 
     if (urlSosId && loadedSos.some((s) => s.id === urlSosId)) {
       setSelectedSosId(urlSosId);
-    } else {
-      // Find local SOS for this officer
-      const matchSos = loadedSos.find(
-        (s) => s.wardId === activeOfficer.jurisdictionAreaId || s.districtId === activeOfficer.jurisdictionAreaId
-      );
-      if (matchSos) {
-        setSelectedSosId(matchSos.id);
-        navigateTo('map', user ?? null, matchSos.id, true);
-      }
     }
   };
 
@@ -685,8 +659,8 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
 
   const lastToastRef = useRef<{ message: string; timestamp: number }>({ message: '', timestamp: 0 });
 
-  const dismissToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+  const dismissToast = useCallback((_id?: string) => {
+    setToasts([]);
   }, []);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
@@ -698,7 +672,8 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     lastToastRef.current = { message, timestamp: now };
 
     const id = `${now}-${Math.random().toString(36).slice(2, 7)}`;
-    setToasts((prev) => [...prev, { id, message, type }]);
+    // Luôn chỉ giữ đúng 1 modal thông báo mới nhất, tránh chồng chéo nhiều modal liên tiếp
+    setToasts([{ id, message, type }]);
 
     // Tự động ẩn dứt khoát sau 3 giây (3000ms)
     setTimeout(() => {
@@ -742,6 +717,17 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     return areas.length > 0 ? [areas[0]] : [];
   }, [areas, activeOfficer, selectedSosId, sosRequests]);
 
+  // Hàm kiểm tra ca SOS đã hoàn thành cứu hộ hay chưa
+  const isSosCompleted = (s: SosRequest | null | undefined): boolean => {
+    if (!s || !s.id) return false;
+    const st = String(s.status || '').toUpperCase();
+    if (st === 'COMPLETED' || st === 'RESOLVED') return true;
+    const assign = domainDService.getAssignmentBySosId(s.id);
+    const assignSt = String(assign?.status || '').toUpperCase();
+    if (assignSt === 'COMPLETED') return true;
+    return false;
+  };
+
   // Strictly filter SOS requests: For Admin show all citywide SOS, for Author filter strictly to managed area
   const authorScopedSosRequests = useMemo(() => {
     if (activeOfficer.role === 'ADMIN') {
@@ -753,13 +739,18 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     });
   }, [sosRequests, activeOfficer, authorScopedAreas]);
 
+  // Lọc strictly các ca SOS CHƯA HOÀN TẤT cho Màn hình Tác chiến & Điều phối (Không hiển thị nhiệm vụ đã hoàn thành)
+  const authorActiveSosRequests = useMemo(() => {
+    return authorScopedSosRequests.filter((s) => !isSosCompleted(s));
+  }, [authorScopedSosRequests]);
+
   const selectedSos = useMemo(() => {
-    return (
-      authorScopedSosRequests.find((s) => s.id === selectedSosId) ||
-      authorScopedSosRequests[0] ||
-      ({} as SosRequest)
-    );
-  }, [authorScopedSosRequests, selectedSosId]);
+    if (selectedSosId) {
+      const found = authorActiveSosRequests.find((s) => s.id === selectedSosId);
+      if (found) return found;
+    }
+    return null; // Khi không chọn ca nào (hoặc click ra ngoài), không tự động ép chọn ca đầu tiên
+  }, [authorActiveSosRequests, selectedSosId]);
 
   const currentAssignment = useMemo(() => {
     if (!selectedSos || !selectedSos.id) return null;
@@ -840,6 +831,14 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
 
   const handleUpdateAssignmentStatus = async (assignmentId: string, nextStatus: AssignmentStatus) => {
     domainDService.updateAssignmentStatus(assignmentId, nextStatus);
+    if (nextStatus === 'COMPLETED') {
+      const targetSos = domainDService.getSosRequests().find((r) => r.assignmentId === assignmentId);
+      if (targetSos) {
+        domainDService.updateSosStatus(targetSos.id, 'COMPLETED');
+      }
+      setSelectedSosId('');
+      showToast('Nhiệm vụ đã hoàn tất thành công! Ca cứu nạn đã chuyển lưu trữ vào Theo dõi SOS.', 'success');
+    }
     setSosRequests(domainDService.getSosRequests());
 
     try {
@@ -1057,11 +1056,16 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       {/* Mission Dispatch for AUTHOR (Scoped to Local Sector) */}
       <main style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
         <MissionDispatch
-          sosRequests={authorScopedSosRequests}
+          sosRequests={authorActiveSosRequests}
           selectedSos={selectedSos}
           onSelectSos={(sos) => {
-            setSelectedSosId(sos.id);
-            navigateTo('map', user ?? null, sos.id);
+            if (sos && sos.id) {
+              setSelectedSosId(sos.id);
+              navigateTo('map', user ?? null, sos.id);
+            } else {
+              setSelectedSosId('');
+              navigateTo('map', user ?? null);
+            }
           }}
           assignment={currentAssignment}
           authorities={authorities}

@@ -23,7 +23,6 @@ import {
 import {
   Map,
   Siren,
-  GitMerge,
   LifeBuoy,
   Package,
   Bell,
@@ -243,16 +242,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           key: 'sos_requests',
-          label: 'Theo dõi SOS',
+          label: 'Theo dõi & Điều phối SOS',
           icon: <Siren size={18} className="sos-nav-icon" />,
-          badge: sosCounts.pending > 0 ? `${sosCounts.pending} Mới` : undefined,
-          badgeType: 'danger',
-        },
-        {
-          key: 'coordination',
-          label: 'Điều phối nhiệm vụ',
-          icon: <GitMerge size={18} className="sos-nav-icon" />,
-          badge: sosCounts.active > 0 ? `${sosCounts.active} Vụ` : undefined,
+          badge: sosCounts.pending > 0 ? `${sosCounts.pending} Mới` : sosCounts.active > 0 ? `${sosCounts.active} Vụ` : undefined,
           badgeType: 'danger',
         },
       ],

@@ -1105,7 +1105,8 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                               item.sosRequestId?.citizenId?.fullName ||
                               '';
                             setActualRecipient(initialRecipient);
-                            setProofPhotos([]);
+                            const existingPhotos = (item.proofImages || []).map((url: string) => ({ uri: url }));
+                            setProofPhotos(existingPhotos);
                             setCompleteNote('');
                             setCompleteModalVisible(true);
                           }}
@@ -1474,17 +1475,24 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
           setActiveWorkspaceMission(null);
           fetchMissions({ isSilent: true });
         }}
-        onMissionCompleted={() => {
+        onMissionCompleted={(summary?: any) => {
           if (activeWorkspaceMission?._id) {
             dismissedMissionsRef.current.add(activeWorkspaceMission._id);
             setMissions((prev) =>
               prev.map((m) =>
-                m._id === activeWorkspaceMission._id ? { ...m, status: 'COMPLETED' } : m
+                m._id === activeWorkspaceMission._id
+                  ? {
+                      ...m,
+                      status: 'COMPLETED',
+                      proofImages: summary?.proofImages || m.proofImages,
+                    }
+                  : m
               )
             );
           }
           setWorkspaceVisible(false);
           setActiveWorkspaceMission(null);
+          setCompleteModalVisible(false);
           fetchMissions({ isSilent: true });
         }}
         onMissionUpdated={(updatedStatus, missionId) => {

@@ -13,7 +13,7 @@ import type {
 import { isTeamInOfficerJurisdiction } from '@/services/mapGeoService';
 import { domainDService } from '@/services/domainDService';
 import { useApp } from '@/context/AppContext';
-import { FALLBACK_SUPPLIES } from '@/constants';
+import { fetchEquipments, type EquipmentItem } from '@/api/equipment.api';
 import { CitizenDistressProfile } from './CitizenDistressProfile';
 import { TeamSelectorCard } from './TeamSelectorCard';
 import { TeamMembersModal } from './TeamMembersModal';
@@ -67,6 +67,55 @@ export const DispatchWorkflow = ({
 }: Props) => {
   const { lang: _lang } = useApp();
   const isAdmin = activeOfficer?.role === 'ADMIN';
+
+  // Kho vật tư & trang thiết bị PCTT theo khu vực thực tế từ Database
+  const [areaSupplies, setAreaSupplies] = useState<EquipmentItem[]>([]);
+  const [isLoadingSupplies, setIsLoadingSupplies] = useState<boolean>(false);
+
+  // Xác định khu vực tương ứng của ca SOS hoặc cán bộ phụ trách
+  const effectiveAreaId = useMemo(() => {
+    if (selectedSos?.wardId) return selectedSos.wardId;
+    if ((selectedSos as any)?.areaId) {
+      const a = (selectedSos as any).areaId;
+      return typeof a === 'object' && a !== null ? a._id || a.id || a.code : a;
+    }
+    if (selectedSos?.districtId) return selectedSos.districtId;
+    if (activeOfficer?.jurisdictionAreaId) return activeOfficer.jurisdictionAreaId;
+    if (areas?.[0]?.id) return areas[0].id;
+    if (areas?.[0]?.code) return areas[0].code;
+    return undefined;
+  }, [selectedSos?.wardId, (selectedSos as any)?.areaId, selectedSos?.districtId, activeOfficer?.jurisdictionAreaId, areas]);
+
+  // Tải danh mục vật tư thực tế từ Database theo khu vực
+  useEffect(() => {
+    let isMounted = true;
+    const loadSupplies = async () => {
+      setIsLoadingSupplies(true);
+      try {
+        const params: Record<string, string> = { limit: '100' };
+        if (effectiveAreaId) {
+          params.areaId = String(effectiveAreaId);
+        }
+        const res = await fetchEquipments(params);
+        if (isMounted) {
+          if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+            setAreaSupplies(res.data);
+          } else {
+            const allRes = await fetchEquipments({ limit: '100' });
+            if (allRes.success && Array.isArray(allRes.data)) {
+              setAreaSupplies(allRes.data);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Lỗi tải danh mục vật tư khu vực:', err);
+      } finally {
+        if (isMounted) setIsLoadingSupplies(false);
+      }
+    };
+    loadSupplies();
+    return () => { isMounted = false; };
+  }, [effectiveAreaId, selectedSos?.id]);
 
   // Explicit Dispatch Confirmation Modal state
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
@@ -141,28 +190,12 @@ export const DispatchWorkflow = ({
       setSelectedRescuerId('');
       setSelectedVehicleId('');
 
-      if (selectedSos) {
-        const count = Math.max(1, selectedSos.affectedPeople || (selectedSos as any)?.people || 1);
-        setAllocatedSupplies({
-          'sup-01': count,
-          'sup-03': 1,
-          'sup-04': Math.ceil(count / 2),
-        });
-      }
+      setAllocatedSupplies({});
     }
   }, [selectedSos?.id, assignment?.id]);
 
   // Quản lý vật tư cấp phát được chọn trong phiên phân công
-  const [allocatedSupplies, setAllocatedSupplies] = useState<Record<string, number>>(() => {
-    const count = Number(selectedSos?.affectedPeople ?? (selectedSos as any)?.people ?? 0);
-    const initial: Record<string, number> = {};
-    if (count > 0) {
-      initial['sup-01'] = count;
-      initial['sup-03'] = 1;
-      initial['sup-04'] = Math.ceil(count / 2);
-    }
-    return initial;
-  });
+  const [allocatedSupplies, setAllocatedSupplies] = useState<Record<string, number>>({});
 
   const handleToggleTeam = (teamId: string) => {
     let next: string[];
@@ -171,7 +204,6 @@ export const DispatchWorkflow = ({
     } else {
       const activeTask = domainDService.getActiveAssignmentForTeam(teamId, selectedSos?.id);
       if (activeTask) {
-        alert('Đội cứu hộ này đang thực hiện nhiệm vụ khác. Mỗi đội chỉ được phép làm 1 nhiệm vụ tại một thời điểm!');
         return;
       }
       next = [...activeSelectedTeamIds, teamId];
@@ -199,7 +231,7 @@ export const DispatchWorkflow = ({
     const supplyList = Object.entries(allocatedSupplies)
       .filter(([_, qty]) => qty > 0)
       .map(([id, qty]) => {
-        const item = FALLBACK_SUPPLIES.find((s) => s.id === id);
+        const item = areaSupplies.find((s) => s._id === id || (s as any).id === id);
         return {
           supplyId: id,
           name: item?.name || 'Vật tư',
@@ -290,7 +322,7 @@ export const DispatchWorkflow = ({
           </svg>
         </div>
         <h3 style={{ margin: '0 0 6px', fontSize: 14, fontWeight: 700, color: 'var(--sos-text-primary)' }}>
-          Chưa chọn yêu cầu cứu nạn
+          {selectedSos?.id ? 'Nhiệm vụ đã hoàn tất' : 'Chưa chọn yêu cầu cứu nạn'}
         </h3>
         <p style={{ margin: 0, fontSize: 12, color: 'var(--sos-text-muted)', lineHeight: 1.5, maxWidth: 260 }}>
           Vui lòng chọn một yêu cầu SOS từ danh sách hoặc bản đồ để xem chi tiết và điều phối đội cứu hộ.
@@ -301,19 +333,7 @@ export const DispatchWorkflow = ({
 
   const isAssigned = Boolean(assignment && assignment.status !== 'CANCELLED');
 
-  // Friendly district / ward name for display
-  const districtNameLabel = (() => {
-    const rawName = selectedSos.wardName || selectedSos.districtName || activeOfficer?.jurisdictionAreaName || '';
-    const clean = rawName.replace(/^(phường|xã|quận|huyện|thị xã|thành phố)\s+/i, '').trim();
-    if (clean) return clean;
-    if (selectedSos.districtId === 'area-nhs') return 'Ngũ Hành Sơn';
-    if (selectedSos.districtId === 'area-cl') return 'Cẩm Lệ';
-    if (selectedSos.districtId === 'area-st') return 'Sơn Trà';
-    if (selectedSos.districtId === 'area-tk') return 'Thanh Khê';
-    if (selectedSos.districtId === 'area-hv') return 'Hòa Vang';
-    if (selectedSos.districtId === 'area-lc' || selectedSos.wardId?.includes('lc')) return 'Liên Chiểu';
-    return clean || 'Khu vực phụ trách';
-  })();
+
 
   return (
     <aside
@@ -427,6 +447,8 @@ export const DispatchWorkflow = ({
             selectedSos={selectedSos}
             allocatedSupplies={allocatedSupplies}
             onAllocatedSuppliesChange={setAllocatedSupplies}
+            areaSupplies={areaSupplies}
+            isLoadingSupplies={isLoadingSupplies}
           />
         </div>
       </div>
@@ -447,46 +469,27 @@ export const DispatchWorkflow = ({
           <div
             style={{
               flexShrink: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
               paddingBottom: 7,
               borderBottom: '1px solid #f1f5f9',
             }}
           >
-            <div>
-              <div
-                style={{
-                  fontSize: 12.5,
-                  fontWeight: 900,
-                  color: '#0f172a',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  letterSpacing: '-0.1px',
-                }}
-              >
-                <span style={{ fontSize: 14 }}>🛟</span>
-                <span>PHÂN CÔNG ĐỘI CỨU HỘ {districtNameLabel.toUpperCase()}</span>
-              </div>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginTop: 1 }}>
-                ({availableTeams.length} đội trực chiến sẵn sàng xuất kích)
-              </div>
-            </div>
-
-            <span
+            <div
               style={{
-                fontSize: 10.5,
-                fontWeight: 800,
-                background: '#eff6ff',
-                color: '#0284c7',
-                padding: '2.5px 8px',
-                borderRadius: 10,
-                border: '1.5px solid #bfdbfe',
+                fontSize: 12.5,
+                fontWeight: 900,
+                color: '#0f172a',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                letterSpacing: '-0.1px',
               }}
             >
-              {districtNameLabel}
-            </span>
+              <span style={{ fontSize: 14 }}>🛟</span>
+              <span>PHÂN CÔNG ĐỘI CỨU HỘ</span>
+            </div>
+            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginTop: 1 }}>
+              ({availableTeams.length} đội trực chiến sẵn sàng xuất kích)
+            </div>
           </div>
 
           {/* DANH SÁCH THẺ ĐỘI CỨU HỘ: DUY NHẤT VÙNG NÀY ĐƯỢC PHÉP CUỘN (flex-1 min-h-0 overflow-y-auto) */}
@@ -616,13 +619,11 @@ export const DispatchWorkflow = ({
             <span>
               {activeSelectedTeamIds.length === 0
                 ? 'CHỌN ĐỘI CỨU HỘ'
-                : activeSelectedTeamIds.length === 1
-                ? '⚡ XÁC NHẬN PHÂN CÔNG & XUẤT KÍCH (1 ĐỘI)'
-                : `⚡ XÁC NHẬN PHÂN CÔNG & XUẤT KÍCH (${activeSelectedTeamIds.length} ĐỘI)`}
+                : '⚡ XÁC NHẬN PHÂN CÔNG'}
             </span>
           </button>
           <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--sos-text-muted)' }}>
-            Lệnh xuất kích sẽ truyền tức thời đến máy bộ đàm &amp; App cứu hộ viên
+            Lệnh phân công sẽ truyền tức thời đến máy bộ đàm &amp; App cứu hộ viên
           </div>
         </div>
       )}

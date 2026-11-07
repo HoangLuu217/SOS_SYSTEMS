@@ -1,34 +1,29 @@
 import React, { useState } from 'react';
 import { Phone, MapPin, Maximize2, X, ChevronDown, ChevronUp, MessageSquareText, Package, Plus, Minus } from 'lucide-react';
 import type { SosRequest } from '@/types/domainD';
-import { FALLBACK_SUPPLIES } from '@/constants';
+import type { EquipmentItem } from '@/api/equipment.api';
 
 interface Props {
   selectedSos: SosRequest;
   allocatedSupplies?: Record<string, number>;
   onAllocatedSuppliesChange?: (supplies: Record<string, number>) => void;
+  areaSupplies?: EquipmentItem[];
+  isLoadingSupplies?: boolean;
 }
 
 export const CitizenDistressProfile: React.FC<Props> = ({
   selectedSos,
   allocatedSupplies: propAllocatedSupplies,
   onAllocatedSuppliesChange,
+  areaSupplies = [],
+  isLoadingSupplies = false,
 }) => {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isDetailExpanded, setIsDetailExpanded] = useState(false);
   const [isSuppliesExpanded, setIsSuppliesExpanded] = useState(false);
 
-  // Danh sách vật tư đã cấp / phân bổ cho ca cứu nạn này (lấy từ kho vật tư qua)
-  const [internalSupplies, setInternalSupplies] = useState<Record<string, number>>(() => {
-    const count = Number(selectedSos.affectedPeople ?? (selectedSos as any)?.people ?? 0);
-    const initial: Record<string, number> = {};
-    if (count > 0) {
-      initial['sup-01'] = count;
-      initial['sup-03'] = 1;
-      initial['sup-04'] = Math.ceil(count / 2);
-    }
-    return initial;
-  });
+  // Danh sách vật tư đã cấp / phân bổ cho ca cứu nạn này
+  const [internalSupplies, setInternalSupplies] = useState<Record<string, number>>({});
 
   const allocatedSupplies = propAllocatedSupplies ?? internalSupplies;
 
@@ -66,19 +61,6 @@ export const CitizenDistressProfile: React.FC<Props> = ({
   };
 
   const hasExtraDetail = Boolean(selectedSos.description || selectedSos.imageUrl);
-  const totalSuppliesUnits = Object.values(allocatedSupplies).reduce((a, b) => a + b, 0);
-
-  // Chuỗi tóm tắt yêu cầu tiếp tế
-  const suppliesSummaryText = (() => {
-    const activeEntries = Object.entries(allocatedSupplies).filter(([_, qty]) => qty > 0);
-    if (activeEntries.length === 0) return 'Chưa yêu cầu thêm vật tư';
-    return activeEntries
-      .map(([id, qty]) => {
-        const item = FALLBACK_SUPPLIES.find((s) => s.id === id);
-        return `${item?.name.split(' ')[0] || 'Vật tư'} (${qty} ${item?.unit || 'món'})`;
-      })
-      .join(', ');
-  })();
 
   return (
     <>
@@ -175,24 +157,6 @@ export const CitizenDistressProfile: React.FC<Props> = ({
           )}
         </div>
 
-        {/* Section 4: Mục Yêu Cầu Tiếp Tế Lương Thực / Vật Tư (Nền xám nhạt trung tính) */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            background: '#f8fafc',
-            border: '1px solid #e2e8f0',
-            borderRadius: 6,
-            padding: '4px 8px',
-          }}
-        >
-          <Package size={13} style={{ color: '#64748b', flexShrink: 0 }} />
-          <div style={{ fontSize: 11.5, color: '#475569', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            <span style={{ fontWeight: 600 }}>Tiếp tế: </span>
-            <span style={{ color: '#334155', fontWeight: 700 }}>{suppliesSummaryText}</span>
-          </div>
-        </div>
 
         {/* Section 5: Buttons Action Bar - Nằm gọn trên 1 dòng duy nhất không rớt chữ */}
         <div style={{ display: 'flex', gap: 6 }}>
@@ -255,7 +219,7 @@ export const CitizenDistressProfile: React.FC<Props> = ({
           >
             <Package size={12.5} style={{ color: isSuppliesExpanded ? '#16a34a' : '#64748b', flexShrink: 0 }} />
             <span style={{ whiteSpace: 'nowrap' }}>
-              {isSuppliesExpanded ? 'Đóng kho vật tư' : `Vật tư cấp (${totalSuppliesUnits})`}
+              {isSuppliesExpanded ? 'Đóng kho vật tư' : 'Cấp vật tư'}
             </span>
             {isSuppliesExpanded ? <ChevronUp size={12} style={{ flexShrink: 0 }} /> : <ChevronDown size={12} style={{ flexShrink: 0 }} />}
           </button>
@@ -362,22 +326,32 @@ export const CitizenDistressProfile: React.FC<Props> = ({
               <span style={{ fontSize: 11, fontWeight: 800, color: '#334155', textTransform: 'uppercase' }}>
                 Kho vật tư cứu trợ &amp; PCTT:
               </span>
-              <span style={{ fontSize: 10.5, color: '#64748b' }}>Nhập số hoặc bấm +/-</span>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 160, overflowY: 'auto' }}>
-              {FALLBACK_SUPPLIES.slice(0, 5).map((supply) => {
-                const qty = allocatedSupplies[supply.id] || 0;
+              {isLoadingSupplies ? (
+              <div style={{ padding: '14px 0', textAlign: 'center', fontSize: 11.5, color: '#64748b' }}>
+                Đang kiểm tra kho vật tư khu vực...
+              </div>
+            ) : areaSupplies.length === 0 ? (
+              <div style={{ padding: '12px 0', textAlign: 'center', fontSize: 11.5, color: '#94a3b8', fontStyle: 'italic' }}>
+                Kho khu vực hiện chưa có trang thiết bị/vật tư khả dụng.
+              </div>
+            ) : (
+              areaSupplies.map((supply) => {
+                const sId = supply._id || (supply as any).id;
+                const qty = allocatedSupplies[sId] || 0;
+                const maxAvailable = supply.quantity || 0;
                 return (
                   <div
-                    key={supply.id}
+                    key={sId}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       background: qty > 0 ? '#f0f9ff' : '#ffffff',
                       border: qty > 0 ? '1px solid #bae6fd' : '1px solid #e2e8f0',
-                      padding: '4px 8px',
+                      padding: '5px 8px',
                       borderRadius: 6,
                       fontSize: 11.5,
                     }}
@@ -387,14 +361,14 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                         {supply.name}
                       </div>
                       <div style={{ fontSize: 10, color: '#64748b' }}>
-                        Kho còn: {supply.available} {supply.unit}
+                        Kho còn: {supply.quantity} {supply.unit} {supply.supplyType === 'CONSUMABLE' ? '• Tiêu hao' : '• Tái sử dụng'}
                       </div>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
                       <button
                         type="button"
-                        onClick={() => handleUpdateSupply(supply.id, -1, supply.available)}
+                        onClick={() => handleUpdateSupply(sId, -1, maxAvailable)}
                         disabled={qty <= 0}
                         title="Giảm số lượng"
                         style={{
@@ -420,8 +394,8 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                         pattern="[0-9]*"
                         value={qty === 0 ? '' : qty}
                         placeholder="0"
-                        title={`Tối đa trong kho: ${supply.available} ${supply.unit}`}
-                        onChange={(e) => handleSetSupplyQuantity(supply.id, e.target.value, supply.available)}
+                        title={`Tối đa trong kho: ${maxAvailable} ${supply.unit}`}
+                        onChange={(e) => handleSetSupplyQuantity(sId, e.target.value, maxAvailable)}
                         style={{
                           width: 44,
                           height: 24,
@@ -430,7 +404,7 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                           fontSize: 12,
                           color: qty > 0 ? '#0284c7' : '#64748b',
                           background: '#ffffff',
-                          border: qty >= supply.available && supply.available > 0
+                          border: qty >= maxAvailable && maxAvailable > 0
                             ? '1.5px solid #f59e0b'
                             : qty > 0
                             ? '1.5px solid #0284c7'
@@ -443,20 +417,20 @@ export const CitizenDistressProfile: React.FC<Props> = ({
 
                       <button
                         type="button"
-                        onClick={() => handleUpdateSupply(supply.id, 1, supply.available)}
-                        disabled={qty >= supply.available}
-                        title={qty >= supply.available ? `Kho chỉ còn tối đa ${supply.available} ${supply.unit}` : 'Tăng số lượng'}
+                        onClick={() => handleUpdateSupply(sId, 1, maxAvailable)}
+                        disabled={qty >= maxAvailable}
+                        title={qty >= maxAvailable ? `Kho chỉ còn tối đa ${maxAvailable} ${supply.unit}` : 'Tăng số lượng'}
                         style={{
                           width: 24,
                           height: 24,
                           borderRadius: 4,
-                          border: qty >= supply.available ? '1px solid #cbd5e1' : '1px solid #0284c7',
-                          background: qty >= supply.available ? '#f1f5f9' : '#0284c7',
-                          cursor: qty >= supply.available ? 'not-allowed' : 'pointer',
+                          border: qty >= maxAvailable ? '1px solid #cbd5e1' : '1px solid #0284c7',
+                          background: qty >= maxAvailable ? '#f1f5f9' : '#0284c7',
+                          cursor: qty >= maxAvailable ? 'not-allowed' : 'pointer',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          color: qty >= supply.available ? '#94a3b8' : '#ffffff',
+                          color: qty >= maxAvailable ? '#94a3b8' : '#ffffff',
                           transition: 'all 0.15s ease',
                         }}
                       >
@@ -465,8 +439,9 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                     </div>
                   </div>
                 );
-              })}
-            </div>
+              })
+            )}
+          </div>
           </div>
         )}
       </div>

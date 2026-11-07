@@ -1248,4 +1248,614 @@
 .sos-scope-tab.btn-dark-blue .sos-scope-badge {
   background: rgba(255, 255, 255, 0.25);
   color: #ffffff;
-}
+}
+
+/* ==========================================================================
+   SOS DETAIL 4/10 SIDE PANEL (DOCK BÊN PHẢI ~40% MÀN HÌNH THEO YÊU CẦU)
+   ========================================================================== */
+.sos-detail-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index: 9998;
+  animation: fadeIn 0.18s ease-out;
+}
+
+.sos-detail-side-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 40%;
+  min-width: 440px;
+  max-width: 650px;
+  background: #FFFFFF;
+  border-left: 1.5px solid #CBD5E1;
+  box-shadow: -8px 0 35px rgba(15, 23, 42, 0.18);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideInRight 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.sos-panel-header {
+  padding: 16px 20px;
+  background: #F8FAFC;
+  border-bottom: 1.5px solid #E2E8F0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.sos-panel-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 900;
+  font-size: 15px;
+  color: #0F172A;
+  background: #FFFFFF;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #CBD5E1;
+}
+
+.sos-panel-priority {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.3px;
+}
+
+.sos-panel-priority.critical {
+  background: #FEF2F2;
+  color: #DC2626;
+  border: 1px solid #FECACA;
+}
+
+.sos-panel-priority.high {
+  background: #FFF7ED;
+  color: #EA580C;
+  border: 1px solid #FED7AA;
+}
+
+.sos-panel-priority.medium,
+.sos-panel-priority.low {
+  background: #F0FDF4;
+  color: #15803D;
+  border: 1px solid #BBF7D0;
+}
+
+.sos-panel-type {
+  font-size: 11px;
+  font-weight: 800;
+  color: #0369A1;
+  background: #E0F2FE;
+  border: 1px solid #BAE6FD;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.sos-panel-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #CBD5E1;
+  background: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748B;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.sos-panel-close-btn:hover {
+  background: #F1F5F9;
+  color: #0F172A;
+  border-color: #94A3B8;
+}
+
+.sos-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sos-panel-card {
+  background: #FFFFFF;
+  border: 1.5px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.sos-panel-card.rescue-team-card {
+  background: #F0F9FF;
+  border-color: #BAE6FD;
+}
+
+.sos-panel-card.shore-handoff-card {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.sos-panel-card-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #0369A1;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.sos-team-status-badge {
+  font-size: 10.5px;
+  font-weight: 800;
+  padding: 2.5px 7px;
+  border-radius: 5px;
+  background: #E0F2FE;
+  color: #0369A1;
+  border: 1px solid #BAE6FD;
+  white-space: nowrap;
+}
+
+.btn-call-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #0284C7;
+  color: #FFFFFF;
+  text-decoration: none;
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 3.5px 9px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.btn-call-team:hover {
+  background: #0369A1;
+}
+
+.sos-supply-chip {
+  display: inline-flex;
+  align-items: center;
+  background: #FFFFFF;
+  border: 1px solid #BAE6FD;
+  color: #0F172A;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.sos-supply-chip strong {
+  color: #0284C7;
+  font-weight: 800;
+  margin: 0 2px;
+}
+
+.btn-dispatch-now {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #EA580C;
+  color: #FFFFFF;
+  border: none;
+  font-size: 12.5px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(234, 88, 12, 0.3);
+  transition: all 0.15s ease;
+}
+
+.btn-dispatch-now:hover {
+  background: #C2410C;
+}
+
+/* Stepper tác chiến */
+.sos-stepper-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  margin: 10px 4px 4px 4px;
+}
+
+.sos-stepper-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+  z-index: 2;
+}
+
+.sos-stepper-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #E2E8F0;
+  border: 2px solid #CBD5E1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748B;
+  transition: all 0.15s ease;
+}
+
+.sos-stepper-step.completed .sos-stepper-dot {
+  background: #10B981;
+  border-color: #059669;
+  color: #FFFFFF;
+}
+
+.sos-stepper-step.active .sos-stepper-dot {
+  background: #0284C7;
+  border-color: #0369A1;
+  color: #FFFFFF;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.25);
+}
+
+.sos-stepper-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #64748B;
+  white-space: nowrap;
+}
+
+.sos-stepper-step.active .sos-stepper-label {
+  color: #0284C7;
+  font-weight: 800;
+}
+
+.sos-stepper-step.completed .sos-stepper-label {
+  color: #059669;
+}
+
+.sos-stepper-line {
+  flex: 1;
+  height: 2px;
+  background: #E2E8F0;
+  margin: 0 -2px;
+  margin-bottom: 14px;
+  z-index: 1;
+}
+
+.sos-stepper-line.completed {
+  background: #10B981;
+}
+
+/* Panel Footer */
+.sos-panel-footer {
+  padding: 12px 20px;
+  background: #F8FAFC;
+  border-top: 1.5px solid #E2E8F0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.btn-panel-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.btn-panel-action.primary {
+  background: #0284C7;
+  color: #FFFFFF;
+  border-color: #0369A1;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
+}
+
+.btn-panel-action.primary:hover {
+  background: #0369A1;
+}
+
+.btn-panel-action.success {
+  background: #16A34A;
+  color: #FFFFFF;
+  border-color: #15803D;
+  box-shadow: 0 2px 6px rgba(22, 163, 74, 0.25);
+}
+
+.btn-panel-action.success:hover {
+  background: #15803D;
+}
+
+/* Active Row in Table */
+.executive-table-row.is-selected {
+  background: #F0F9FF !important;
+  box-shadow: inset 3.5px 0 0 #0284C7;
+}
+
+/* Progress Pill in Table */
+.table-progress-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2.5px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.table-progress-pill.pending {
+  background: #FEF3C7;
+  color: #B45309;
+  border: 1px solid #FDE68A;
+}
+.table-progress-pill.enroute {
+  background: #EFF6FF;
+  color: #1D4ED8;
+  border: 1px solid #BFDBFE;
+}
+.table-progress-pill.rescuing {
+  background: #FEF2F2;
+  color: #DC2626;
+  border: 1px solid #FECACA;
+}
+.table-progress-pill.completed {
+  background: #F0FDF4;
+  color: #15803D;
+  border: 1px solid #BBF7D0;
+}
+
+
+/* ==========================================================================
+   RESTORED FULL DETAIL STYLES FOR SOS CITIZEN & EMERGENCY CONTACTS
+   ========================================================================== */
+
+.sos-citizen-profile-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.sos-citizen-avatar-large {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 15px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1.5px solid #bae6fd;
+}
+
+.sos-citizen-profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.profile-name {
+  font-size: 14.5px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.profile-verified-badge {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #16a34a;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 9999px;
+}
+
+.profile-sub-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.profile-sub-item {
+  font-size: 11px;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sos-detail-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .sos-detail-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sos-info-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sos-info-box.highlight-phone {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+}
+
+.sos-info-box.relative-phone {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.sos-info-box .info-label {
+  font-size: 10.5px;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.sos-info-box .info-value {
+  font-size: 12.5px;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.sos-info-box .info-value.victims-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #b91c1c;
+  font-size: 13.5px;
+  font-weight: 800;
+}
+
+.phone-clickable {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #0284c7;
+  text-decoration: none;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.phone-clickable:hover {
+  text-decoration: underline;
+}
+
+.phone-clickable.emergency {
+  color: #dc2626;
+  font-size: 13px;
+}
+
+.badge-call {
+  background: #0284c7;
+  color: #ffffff;
+  font-size: 9.5px;
+  font-weight: 800;
+  border-radius: 9999px;
+  padding: 1px 7px;
+  margin-left: 4px;
+}
+
+.sos-priority-groups-wrap {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.priority-groups-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #dc2626;
+  text-transform: uppercase;
+}
+
+.priority-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.priority-chip-item {
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.source-pill.secondary-pill {
+  background-color: #faf5ff;
+  border-color: #e9d5ff;
+  color: #7e22ce;
+  font-weight: 700;
+}
+
+.source-pill.repeat-pill {
+  background-color: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
+  font-weight: 800;
+}
+
+.citizen-phone-link.secondary-phone {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.phone-tag-badge.secondary {
+  background-color: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}

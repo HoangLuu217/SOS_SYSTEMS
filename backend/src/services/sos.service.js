@@ -263,11 +263,28 @@ const getSosRequests = async (query = {}) => {
 const getSosRequestById = async (id) => {
   const sos = await SosRequest.findById(id)
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
-    .populate('areaId', 'name code');
+    .populate('areaId', 'name code')
+    .lean();
     
   if (!sos) {
     throw new ApiError(404, 'Không tìm thấy yêu cầu SOS');
   }
+
+  const assignment = await SosAssignment.findOne({
+    $or: [{ sosRequestId: id }, { sosId: id }],
+    status: { $nin: ['CANCELLED', 'REJECTED'] },
+  })
+    .populate('rescueTeamId', 'name type areaId status')
+    .populate('rescuerId', 'fullName phone roles')
+    .populate('vehicleId', 'plateNumber type capacity')
+    .populate('authorityOrganizationId', 'name code')
+    .lean();
+
+  if (assignment) {
+    sos.assignmentId = assignment._id;
+    sos.assignment = assignment;
+  }
+
   return sos;
 };
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
+  KeyboardAvoidingView,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
@@ -1035,28 +1036,64 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             box-shadow: 0 2px 6px rgba(0,0,0,0.5);
           }
 
-          /* Grab-style Navigation Indicator Puck (Heading Arrow & Attached ETA Pill) */
+          /* Grab / Google Maps Navigation Puck & Radar Beam */
           .grab-puck-wrap {
             position: relative;
-            width: 52px;
-            height: 52px;
+            width: 54px;
+            height: 54px;
             display: flex;
             align-items: center;
             justify-content: center;
+          }
+          .grab-puck-cone {
+            position: absolute;
+            top: -42px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 38px solid transparent;
+            border-right: 38px solid transparent;
+            border-top: 64px solid rgba(0, 132, 255, 0.22);
+            filter: blur(1.5px);
+            pointer-events: none;
+            transform-origin: 50% 64px;
+            z-index: 2;
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
           }
           .grab-puck-pulse {
             position: absolute;
             width: 52px;
             height: 52px;
             border-radius: 50%;
-            background: rgba(0, 132, 255, 0.25);
-            animation: grabPuckPulse 2s infinite ease-out;
+            background: rgba(0, 132, 255, 0.22);
+            animation: grabPuckPulse 2.2s infinite ease-out;
             pointer-events: none;
+            z-index: 3;
           }
           @keyframes grabPuckPulse {
             0% { transform: scale(0.9); opacity: 0.85; }
-            70% { transform: scale(1.6); opacity: 0; }
-            100% { transform: scale(1.6); opacity: 0; }
+            70% { transform: scale(1.65); opacity: 0; }
+            100% { transform: scale(1.65); opacity: 0; }
+          }
+          .grab-recenter-ripple {
+            position: absolute;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: rgba(0, 132, 255, 0.4);
+            border: 2px solid #0084FF;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 4;
+          }
+          .grab-recenter-ripple.animate {
+            animation: recenterRippleAnim 0.85s cubic-bezier(0.2, 0.8, 0.2, 1);
+          }
+          @keyframes recenterRippleAnim {
+            0% { transform: scale(0.8); opacity: 1; }
+            50% { transform: scale(2.8); opacity: 0.5; }
+            100% { transform: scale(4.2); opacity: 0; }
           }
           .grab-puck-circle {
             position: relative;
@@ -1065,12 +1102,12 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             border-radius: 50%;
             background: #ffffff;
             border: 3.5px solid #0084ff;
-            box-shadow: 0 4px 14px rgba(0, 132, 255, 0.42), 0 2px 6px rgba(0, 0, 0, 0.18);
+            box-shadow: 0 4px 14px rgba(0, 132, 255, 0.45), 0 2px 6px rgba(0, 0, 0, 0.2);
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 5;
-            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
           }
           .grab-puck-arrow {
             width: 24px;
@@ -1087,7 +1124,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             padding: 3px 9px;
             border-radius: 12px;
             border: 1px solid rgba(0, 0, 0, 0.12);
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
             white-space: nowrap;
             letter-spacing: -0.2px;
             z-index: 6;
@@ -1129,20 +1166,22 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           });
           var sosMarker = L.marker([${victimCoords.lat}, ${victimCoords.lng}], { icon: sosIcon }).addTo(map);
 
-          // 2. Grab-Style Driver Navigation Puck Marker (Ghim hướng xoay & Bong bóng khoảng cách)
+          // 2. Grab & Google Maps Driver Navigation Puck Marker (Ghim hướng xoay & Bong bóng khoảng cách)
           var rescuerIcon = L.divIcon({
             className: 'rescuer-marker-div',
             html: '<div class="grab-puck-wrap">' +
+                    '<div class="grab-recenter-ripple" id="rescuerRipple"></div>' +
                     '<div class="grab-puck-pulse"></div>' +
+                    '<div class="grab-puck-cone" id="rescuerCone" style="transform: translateX(-50%) rotate(' + (${teamLocation.heading} || 0) + 'deg);"></div>' +
                     '<div class="grab-puck-circle" id="rescuerPuck" style="transform: rotate(' + (${teamLocation.heading} || 0) + 'deg);">' +
                       '<svg class="grab-puck-arrow" viewBox="0 0 24 24" fill="none">' +
-                        '<path d="M12 2L4 21L12 17L20 21L12 2Z" fill="#0084FF" stroke="#0055CC" stroke-width="1.2" stroke-linejoin="round"/>' +
+                        '<path d="M12 2.5L4.5 20.5L12 16.5L19.5 20.5L12 2.5Z" fill="#0084FF" stroke="#0055CC" stroke-width="1.2" stroke-linejoin="round"/>' +
                       '</svg>' +
                     '</div>' +
                     '<div class="grab-puck-eta-badge" id="rescuerEtaPill">${roadMetrics.durationMin} • ${roadMetrics.distanceKm}</div>' +
                   '</div>',
-            iconSize: [52, 78],
-            iconAnchor: [26, 26]
+            iconSize: [54, 78],
+            iconAnchor: [27, 27]
           });
           var rescuerMarker = L.marker([${teamLocation.lat}, ${teamLocation.lng}], { icon: rescuerIcon }).addTo(map);
 
@@ -1214,13 +1253,55 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             }
 
             if (!inAppNavActive) {
-              var allBounds = L.featureGroup([sosMarker, rescuerMarker, roadCasingPolyline]).getBounds();
-              map.fitBounds(allBounds, {
-                paddingTopLeft: [40, 90],
-                paddingBottomRight: [50, 320],
-                maxZoom: 16
-              });
+              fitRouteOverview(false);
             }
+          }
+
+          var isSheetCollapsed = false;
+
+          // Tính toán tọa độ tâm lệch (Vertical Optical Offset) chuẩn Google Maps & Grab
+          // Đảm bảo con trỏ vị trí nằm đúng vùng nhìn thấy thoáng đãng giữa Top HUD và Bottom Sheet
+          function getOffsetLatLng(latlng, zoom) {
+            var z = zoom !== undefined ? zoom : map.getZoom();
+            var bottomH = isSheetCollapsed ? 140 : 340;
+            var topH = 100;
+            var pixelOffsetY = (bottomH - topH) / 2;
+            var pt = map.project(latlng, z).add([0, pixelOffsetY]);
+            return map.unproject(pt, z);
+          }
+
+          // Hiệu ứng sóng radar bung nở khi bấm nút Ghim Vị Trí (Chuẩn Google Maps & Grab)
+          function triggerRecenterRipple() {
+            var ripple = document.getElementById('rescuerRipple');
+            if (ripple) {
+              ripple.classList.remove('animate');
+              void ripple.offsetWidth;
+              ripple.classList.add('animate');
+            }
+          }
+
+          // Căn vừa toàn bộ lộ trình và điểm cứu nạn không bao giờ bị lệch ra khỏi màn hình
+          function fitRouteOverview(animate) {
+            map.invalidateSize();
+            var layers = [sosMarker, rescuerMarker];
+            if (roadCasingPolyline) layers.push(roadCasingPolyline);
+            if (directWaterwayLine) layers.push(directWaterwayLine);
+            if (footApproachLine) layers.push(footApproachLine);
+
+            var group = L.featureGroup(layers);
+            var bounds = group.getBounds();
+            if (!bounds.isValid()) return;
+
+            var topPad = 110;
+            var bottomPad = isSheetCollapsed ? 150 : 360;
+            var sidePad = 40;
+
+            map.fitBounds(bounds, {
+              paddingTopLeft: [sidePad, topPad],
+              paddingBottomRight: [sidePad, bottomPad],
+              maxZoom: 16.5,
+              animate: animate !== false
+            });
           }
 
           function renderDirectWaterwayMode() {
@@ -1240,12 +1321,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               opacity: 0.95
             }).addTo(map);
 
-            var allBounds = L.featureGroup([sosMarker, rescuerMarker, directWaterwayLine]).getBounds();
-            map.fitBounds(allBounds, {
-              paddingTopLeft: [40, 90],
-              paddingBottomRight: [50, 320],
-              maxZoom: 16
-            });
+            if (!inAppNavActive) {
+              fitRouteOverview(false);
+            }
           }
 
           // Safe Shelters Markers
@@ -1265,15 +1343,13 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           }
 
           // Initial Render
-          ${isWaterwayMode ? 'renderDirectWaterwayMode();' : (roadMetrics.roadCoordinates ? `renderRoadSnappedRoute(${JSON.stringify(roadMetrics.roadCoordinates)});` : 'renderDirectWaterwayMode();')}
+          ${isWaterwayMode ? 'renderDirectWaterwayMode();' : (roadMetrics.roadCoordinates ? `renderRoadSnappedRoute(${JSON.stringify(roadMetrics.roadCoordinates)});`: 'renderDirectWaterwayMode();')}
 
-          // Fit All Markers initially
-          var initialGroup = L.featureGroup([sosMarker, rescuerMarker]);
-          map.fitBounds(initialGroup.getBounds(), {
-            paddingTopLeft: [40, 90],
-            paddingBottomRight: [50, 320],
-            maxZoom: 16
-          });
+          // Tự động căn chỉnh toàn vẹn kích thước sau khi WebView hoàn tất mount
+          setTimeout(function() {
+            map.invalidateSize();
+            fitRouteOverview(false);
+          }, 350);
 
           var inAppNavActive = false;
           var trackingLocked = true;
@@ -1286,6 +1362,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             }
           });
 
+          // Lắng nghe thay đổi kích thước WebView
+          window.addEventListener('resize', function() {
+            map.invalidateSize();
+          });
+
           // Message Bridge từ React Native
           window.addEventListener('message', function(e) {
             try {
@@ -1293,30 +1374,30 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               if (msg.type === 'START_INAPP_NAVIGATION') {
                 inAppNavActive = true;
                 trackingLocked = true;
-                map.setView(rescuerMarker.getLatLng(), 17.5, { animate: true });
+                var offsetTarget = getOffsetLatLng(rescuerMarker.getLatLng(), 18);
+                map.flyTo(offsetTarget, 18, { animate: true, duration: 0.8 });
                 if (roadCorePolyline) {
                   roadCorePolyline.setStyle({ color: '#0084FF', weight: 6.5, opacity: 1 });
                 }
               } else if (msg.type === 'STOP_INAPP_NAVIGATION') {
                 inAppNavActive = false;
-                if (roadCasingPolyline) {
-                  map.fitBounds(roadCasingPolyline.getBounds(), {
-                    paddingTopLeft: [40, 90],
-                    paddingBottomRight: [50, 200],
-                  });
-                }
+                fitRouteOverview(true);
               } else if (msg.type === 'UPDATE_TEAM_GPS') {
-                rescuerMarker.setLatLng([msg.lat, msg.lng]);
+                var latLng = [msg.lat, msg.lng];
+                rescuerMarker.setLatLng(latLng);
                 var puck = document.getElementById('rescuerPuck');
-                if (puck && typeof msg.heading === 'number') {
-                  puck.style.transform = 'rotate(' + msg.heading + 'deg)';
+                var cone = document.getElementById('rescuerCone');
+                if (typeof msg.heading === 'number') {
+                  if (puck) puck.style.transform = 'rotate(' + msg.heading + 'deg)';
+                  if (cone) cone.style.transform = 'translateX(-50%) rotate(' + msg.heading + 'deg)';
                 }
                 var etaPill = document.getElementById('rescuerEtaPill');
                 if (etaPill && msg.etaText) {
                   etaPill.innerText = msg.etaText;
                 }
                 if (trackingLocked || inAppNavActive) {
-                  map.panTo([msg.lat, msg.lng], { animate: true, duration: 0.8 });
+                  var offsetTarget = getOffsetLatLng(latLng);
+                  map.panTo(offsetTarget, { animate: true, duration: 0.8 });
                 }
               } else if (msg.type === 'SET_ROAD_ROUTE') {
                 renderRoadSnappedRoute(msg.coordinates);
@@ -1326,19 +1407,24 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 }
               } else if (msg.type === 'RECENTER_TEAM') {
                 trackingLocked = true;
-                map.setView(rescuerMarker.getLatLng(), inAppNavActive ? 18 : 17.5, { animate: true });
+                triggerRecenterRipple();
+                var targetZoom = inAppNavActive ? 18 : 17.2;
+                var offsetTarget = getOffsetLatLng(rescuerMarker.getLatLng(), targetZoom);
+                map.flyTo(offsetTarget, targetZoom, {
+                  animate: true,
+                  duration: 0.8,
+                  easeLinearity: 0.25
+                });
               } else if (msg.type === 'FIT_ROUTE') {
                 trackingLocked = false;
-                if (roadCasingPolyline) {
-                  map.fitBounds(roadCasingPolyline.getBounds(), {
-                    paddingTopLeft: [40, 90],
-                    paddingBottomRight: [50, 320],
-                  });
+                fitRouteOverview(true);
+              } else if (msg.type === 'UPDATE_SHEET_STATE') {
+                isSheetCollapsed = Boolean(msg.isCollapsed);
+                if (trackingLocked) {
+                  var offsetTarget = getOffsetLatLng(rescuerMarker.getLatLng());
+                  map.panTo(offsetTarget, { animate: true, duration: 0.5 });
                 } else {
-                  map.fitBounds(initialGroup.getBounds(), {
-                    paddingTopLeft: [40, 90],
-                    paddingBottomRight: [50, 320],
-                  });
+                  fitRouteOverview(true);
                 }
               } else if (msg.type === 'CHANGE_MAP_LAYER') {
                 setTileLayer(msg.layer);
@@ -1346,15 +1432,15 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 var pLat = msg.lat || map.getCenter().lat;
                 var pLng = msg.lng || map.getCenter().lng;
                 if (!window.landingPickerMarker) {
-                  var landingPinHtml = '<div style="position:relative; width:46px; height:46px; display:flex; align-items:center; justify-content:center;">' +
-                    '<div style="width:38px; height:38px; border-radius:50%; background:#ea580c; border:3px solid #ffffff; box-shadow:0 4px 14px rgba(234,88,12,0.85); display:flex; align-items:center; justify-content:center; color:#ffffff; font-size:20px;">⚓</div>' +
-                    '<div style="position:absolute; bottom:-7px; left:17px; width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-top:8px solid #ea580c;"></div>' +
+                  var landingPinHtml = '<div style="position:relative; width:32px; height:36px; display:flex; flex-direction:column; align-items:center;">' +
+                    '<div style="width:26px; height:26px; border-radius:50%; background:#ea580c; border:2px solid #ffffff; box-shadow:0 3px 8px rgba(234,88,12,0.75); display:flex; align-items:center; justify-content:center; color:#ffffff; font-size:13px;">🚗</div>' +
+                    '<div style="width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent; border-top:6px solid #ea580c; margin-top:-1px;"></div>' +
                     '</div>';
                   var landingPinIcon = L.divIcon({
                     className: 'custom-landing-picker-icon',
                     html: landingPinHtml,
-                    iconSize: [46, 46],
-                    iconAnchor: [23, 46]
+                    iconSize: [32, 36],
+                    iconAnchor: [16, 36]
                   });
                   window.landingPickerMarker = L.marker([pLat, pLng], {
                     icon: landingPinIcon,
@@ -1564,7 +1650,13 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           {/* Thanh kéo gọn / Mở rộng để xem Map rõ hơn */}
           <TouchableOpacity
             style={styles.deckHandleBarWrap}
-            onPress={() => setIsSheetCollapsed((prev) => !prev)}
+            onPress={() => {
+              const next = !isSheetCollapsed;
+              setIsSheetCollapsed(next);
+              if (webViewRef.current) {
+                webViewRef.current.postMessage(JSON.stringify({ type: 'UPDATE_SHEET_STATE', isCollapsed: next }));
+              }
+            }}
             activeOpacity={0.7}
           >
             <View style={styles.deckHandleBar} />
@@ -1598,7 +1690,12 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           {isSheetCollapsed ? (
             <TouchableOpacity
               style={styles.collapsedSummaryRow}
-              onPress={() => setIsSheetCollapsed(false)}
+              onPress={() => {
+                setIsSheetCollapsed(false);
+                if (webViewRef.current) {
+                  webViewRef.current.postMessage(JSON.stringify({ type: 'UPDATE_SHEET_STATE', isCollapsed: false }));
+                }
+              }}
               activeOpacity={0.8}
             >
               <View style={{ flex: 1 }}>
@@ -2065,12 +2162,12 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             {/* ======================================================== */}
             <View style={[styles.pickLandingTopBanner, { top: safeTop }]}>
               <View style={styles.pickLandingTopIcon}>
-                <Text style={{ fontSize: 18 }}>⚓</Text>
+                <Text style={{ fontSize: 18 }}>🚗</Text>
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.pickLandingTopTitle}>CHỌN ĐIỂM HẸN XE ĐÓN BỜ</Text>
                 <Text style={styles.pickLandingTopSubtitle}>
-                  Chạm bản đồ hoặc kéo ghim ⚓ đến vị trí xe có thể tiếp cận đón
+                  Chạm bản đồ hoặc kéo ghim 🚗 đến vị trí xe có thể tiếp cận đón
                 </Text>
               </View>
             </View>
@@ -2612,22 +2709,39 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         {/* ======================================================== */}
         {/* MODAL: YÊU CẦU XE ĐÓN NẠN NHÂN TẠI BẾN CẬP BỜ (RELAY)     */}
         {/* ======================================================== */}
-        <Modal visible={shoreHandoffModalVisible} transparent animationType="slide">
-          <View style={styles.modalBackdrop}>
-            <View style={[styles.modalCard, { maxHeight: SCREEN_HEIGHT * 0.88 }]}>
+        <Modal
+          visible={shoreHandoffModalVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShoreHandoffModalVisible(false)}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.modalBackdrop}
+          >
+            <View style={[styles.modalCard, { maxHeight: Math.min(SCREEN_HEIGHT * 0.9, 720), display: 'flex', flexDirection: 'column' }]}>
               <View style={styles.modalHeaderRow}>
                 <MaterialCommunityIcons name="car-emergency" size={24} color="#EA580C" />
                 <Text style={styles.modalTitle}>Yêu Cầu Xe Đón Tại Bờ</Text>
-                <TouchableOpacity onPress={() => setShoreHandoffModalVisible(false)}>
+                <TouchableOpacity
+                  onPress={() => setShoreHandoffModalVisible(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
                   <Feather name="x" size={20} color="#64748B" />
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.modalDesc}>
+              <Text style={[styles.modalDesc, { marginBottom: 10 }]}>
                 Ca-nô đưa người ra mép ngập. Yêu cầu Ban Chỉ Huy điều động xe đường bộ đón nạn nhân đưa đến Bệnh viện hoặc Khu an toàn:
               </Text>
 
-              <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={{ flex: 1, minHeight: 180 }}
+                contentContainerStyle={{ paddingBottom: 28, flexGrow: 1 }}
+                showsVerticalScrollIndicator={true}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled={true}
+              >
                 {/* 1. Chọn / Nhập Bến Cập Bờ */}
                 <Text style={[styles.supplyInputLabel, { marginBottom: 6 }]}>1. Vị trí bến cập bờ đón nạn nhân (Mép ngập):</Text>
 
@@ -2721,7 +2835,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                       justifyContent: 'center',
                     }}
                   >
-                    <Text style={{ fontSize: 14 }}>⚓</Text>
+                    <Text style={{ fontSize: 14 }}>🚗</Text>
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 11.5, color: '#64748B' }}>Tọa độ GPS điểm hẹn xe đón:</Text>
@@ -2814,8 +2928,8 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 />
               </ScrollView>
 
-              {/* Action buttons */}
-              <View style={styles.modalActionButtons}>
+              {/* Action buttons (Cố định ở đáy, luôn hiển thị đầy đủ) */}
+              <View style={[styles.modalActionButtons, { marginTop: 10, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' }]}>
                 <TouchableOpacity
                   style={styles.modalCancelBtn}
                   onPress={() => setShoreHandoffModalVisible(false)}
@@ -2832,7 +2946,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
 
         {/* ======================================================== */}

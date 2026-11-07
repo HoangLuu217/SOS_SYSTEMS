@@ -144,6 +144,10 @@ const sosRequestSchema = new mongoose.Schema(
       type: String,
       trim: true,
     }],
+    proofImages: [{
+      type: String,
+      trim: true,
+    }],
     status: {
       type: String,
       required: [true, 'Trạng thái cứu hộ là bắt buộc'],

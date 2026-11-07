@@ -247,6 +247,10 @@ class DomainDService {
     return [...this.vehicles];
   }
 
+  getAssignments(): SosAssignment[] {
+    return Object.values(this.assignments);
+  }
+
   getAssignmentBySosId(sosId: string): SosAssignment | null {
     const req = this.sosRequests.find((s) => s.id === sosId);
     if (req?.assignmentId && this.assignments[req.assignmentId]) {

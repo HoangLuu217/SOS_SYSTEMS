@@ -20,7 +20,7 @@ import { CitizenSosModal } from './CitizenSosModal';
 interface Props {
   sosRequests: SosRequest[];
   selectedSos?: SosRequest | null;
-  onSelectSos: (sos: SosRequest) => void;
+  onSelectSos: (sos: SosRequest | null) => void;
   assignment: SosAssignment | null;
   authorities: AuthorityOrganization[];
   rescueTeams: RescueTeam[];

@@ -16,7 +16,7 @@ export {
 
 // Feature Views
 import { SosRequestsView } from '@/features/sos';
-import { CoordinationView } from '@/features/coordination';
+// Merged into SosRequestsView
 import { RescuersView } from '@/features/rescuers';
 import { ResourcesView } from '@/features/resources';
 import { AlertsView } from '@/features/alerts';
@@ -55,9 +55,9 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     case 'sos_requests':
       return <SosRequestsView onOpenMap={onOpenMap} user={user} />;
 
-    // 2. Điều phối & Phân công
+    // 2. Điều phối & Phân công (Đã gộp vào Theo dõi & Điều phối SOS)
     case 'coordination':
-      return <CoordinationView onOpenMap={onOpenMap} user={user} />;
+      return <SosRequestsView onOpenMap={onOpenMap} user={user} />;
 
     // 3. Đội cứu hộ địa phương
     case 'rescuers':
