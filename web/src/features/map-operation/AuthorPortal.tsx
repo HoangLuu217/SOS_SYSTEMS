@@ -111,12 +111,21 @@ function mapBackendTeamToDomain(t: any): RescueTeam {
   const leaderId = leaderObj?._id || (typeof t.leaderId === 'string' ? t.leaderId : 'rescuer-lead');
   const leaderName = leaderObj?.fullName || 'Đội Trưởng';
   const leaderPhone = leaderObj?.phone || '';
+  const leaderCoords =
+    leaderObj?.currentLocation?.coordinates && Array.isArray(leaderObj.currentLocation.coordinates) && leaderObj.currentLocation.coordinates.length === 2
+      ? { lat: leaderObj.currentLocation.coordinates[1], lng: leaderObj.currentLocation.coordinates[0] }
+      : leaderObj?.coordinates;
 
   const rescuers = (t.members || []).map((m: any, idx: number) => {
     const rescuerObj = typeof m.rescuerId === 'object' && m.rescuerId ? m.rescuerId : null;
     const rId = rescuerObj?._id || (typeof m.rescuerId === 'string' ? m.rescuerId : `rescuer-${t._id}-${idx}`);
     const rName = rescuerObj?.fullName || (m.role === 'LEADER' ? leaderName : `Cứu hộ viên ${idx + 1}`);
     const rPhone = rescuerObj?.phone || leaderPhone;
+    const rCoords =
+      rescuerObj?.currentLocation?.coordinates && Array.isArray(rescuerObj.currentLocation.coordinates) && rescuerObj.currentLocation.coordinates.length === 2
+        ? { lat: rescuerObj.currentLocation.coordinates[1], lng: rescuerObj.currentLocation.coordinates[0] }
+        : rescuerObj?.coordinates || (m.role === 'LEADER' ? leaderCoords : undefined);
+
     return {
       id: rId,
       name: rName,
@@ -124,6 +133,7 @@ function mapBackendTeamToDomain(t: any): RescueTeam {
       status: 'Online' as const,
       teamId: t._id,
       phone: rPhone,
+      coordinates: rCoords,
     };
   });
 
@@ -135,6 +145,7 @@ function mapBackendTeamToDomain(t: any): RescueTeam {
       status: 'Online' as const,
       teamId: t._id,
       phone: leaderPhone,
+      coordinates: leaderCoords,
     });
   }
 

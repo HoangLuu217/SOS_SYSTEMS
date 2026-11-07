@@ -205,6 +205,7 @@ async function seedNguHanhSon() {
         isVerified: true,
         gender: 'MALE',
         address: 'Phường Mỹ An, Quận Ngũ Hành Sơn, TP Đà Nẵng',
+        currentLocation: { type: 'Point', coordinates: [108.2440, 16.0345] },
         rescuer: {
           idNumber: '048092008899',
           skills: ['Chỉ huy ca-nô cứu nạn', 'Lái thuyền vượt lũ', 'Cứu hộ vùng ngập sâu'],
@@ -225,6 +226,7 @@ async function seedNguHanhSon() {
       leCuuNan.isPhoneVerified = true;
       leCuuNan.isVerified = true;
       leCuuNan.address = 'Phường Mỹ An, Quận Ngũ Hành Sơn, TP Đà Nẵng';
+      leCuuNan.currentLocation = { type: 'Point', coordinates: [108.2440, 16.0345] };
       leCuuNan.rescuer = {
         idNumber: '048092008899',
         skills: ['Chỉ huy ca-nô cứu nạn', 'Lái thuyền vượt lũ', 'Cứu hộ vùng ngập sâu'],
@@ -251,6 +253,7 @@ async function seedNguHanhSon() {
         status: 'ACTIVE',
         isPhoneVerified: true,
         address: 'Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng',
+        currentLocation: { type: 'Point', coordinates: [108.2455, 16.0335] },
         rescuer: {
           idNumber: '048092001122',
           skills: ['Lái ca-nô cao tốc', 'Lái xuồng máy vượt lũ', 'Cứu hộ vùng ngập sâu'],
@@ -265,6 +268,7 @@ async function seedNguHanhSon() {
       leaderUser.roles = ['RESCUER', 'CITIZEN'];
       leaderUser.passwordHash = defaultPasswordHash;
       leaderUser.address = 'Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng';
+      leaderUser.currentLocation = { type: 'Point', coordinates: [108.2455, 16.0335] };
       leaderUser.rescuer = {
         idNumber: '048092001122',
         skills: ['Lái ca-nô cao tốc', 'Lái xuồng máy vượt lũ', 'Cứu hộ vùng ngập sâu'],
@@ -289,6 +293,7 @@ async function seedNguHanhSon() {
         status: 'ACTIVE',
         isPhoneVerified: true,
         address: 'Phường Hòa Quý, Quận Ngũ Hành Sơn, TP Đà Nẵng',
+        currentLocation: { type: 'Point', coordinates: [108.2415, 16.0355] },
         rescuer: {
           idNumber: '048092003344',
           skills: ['Lặn cứu nạn', 'Bơi lội ngược dòng xoáy', 'Tiếp tế lương thực vượt lũ'],
@@ -312,6 +317,7 @@ async function seedNguHanhSon() {
         status: 'ACTIVE',
         isPhoneVerified: true,
         address: 'Phường Mỹ An, Quận Ngũ Hành Sơn, TP Đà Nẵng',
+        currentLocation: { type: 'Point', coordinates: [108.2425, 16.0295] },
         rescuer: {
           idNumber: '048092005566',
           skills: ['Bác sĩ hồi sức cấp cứu', 'Sơ cấp cứu dã chiến', 'Nẹp cố định xương gãy'],

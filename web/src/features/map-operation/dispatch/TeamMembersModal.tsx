@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Phone, X } from 'lucide-react';
+import { Users, Phone, X, MapPin } from 'lucide-react';
 import type { RescueTeam } from '@/types/domainD';
 
 interface Props {
@@ -150,6 +150,7 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
                     <th style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>Họ và tên</th>
                     <th style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>Nhiệm vụ / Vai trò</th>
                     <th style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>Điện thoại liên hệ</th>
+                    <th style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>Vị trí GPS / Tọa độ</th>
                     <th style={{ padding: '9px 12px', width: 115, textAlign: 'center', whiteSpace: 'nowrap' }}>Trạng thái</th>
                   </tr>
                 </thead>
@@ -216,6 +217,47 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
                               <span>{rescuer.phone}</span>
                             </a>
                           </td>
+                          <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                            {rescuer.coordinates ? (
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  background: '#f0fdf4',
+                                  border: '1px solid #bbf7d0',
+                                  padding: '2.5px 7px',
+                                  borderRadius: 5,
+                                  fontSize: 11,
+                                  color: '#15803d',
+                                  fontWeight: 700,
+                                  fontFamily: 'monospace',
+                                }}
+                                title={`Tọa độ GPS: ${rescuer.coordinates.lat.toFixed(5)}, ${rescuer.coordinates.lng.toFixed(5)}`}
+                              >
+                                <MapPin size={11} color="#16a34a" />
+                                <span>{rescuer.coordinates.lat.toFixed(4)}, {rescuer.coordinates.lng.toFixed(4)}</span>
+                              </div>
+                            ) : (
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  background: '#f8fafc',
+                                  border: '1px solid #e2e8f0',
+                                  padding: '2.5px 7px',
+                                  borderRadius: 5,
+                                  fontSize: 11,
+                                  color: '#64748b',
+                                  fontWeight: 600,
+                                }}
+                              >
+                                <MapPin size={11} color="#94a3b8" />
+                                <span>Trực chiến tại xe</span>
+                              </div>
+                            )}
+                          </td>
                           <td style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                             <span
                               style={{
@@ -241,7 +283,7 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={5} style={{ padding: 16, textAlign: 'center', color: '#94a3b8' }}>
+                      <td colSpan={6} style={{ padding: 16, textAlign: 'center', color: '#94a3b8' }}>
                         Chưa có danh sách thành viên chi tiết
                       </td>
                     </tr>
