@@ -52,6 +52,134 @@ const SAFE_SHELTERS = [
   { id: 'sh-2', name: 'Trung tâm VH-TT Phường Hòa Cường', address: '48 Phan Đăng Lưu', distance: '720m', capacity: '200 người', lat: 16.0428, lng: 108.2185 },
 ];
 
+export interface NavigationManeuverStep {
+  stepIndex: number;
+  instruction: string;
+  iconName: string;
+  actionType: string;
+  distanceMeters: number;
+  streetName: string;
+  targetStreet: string;
+  location: [number, number]; // [lat, lng]
+}
+
+function getHaversineDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function cleanStreetName(n?: string): string {
+  if (!n || n.trim() === '') return '';
+  const t = n.trim();
+  const lower = t.toLowerCase();
+  if (
+    lower.startsWith('đường') ||
+    lower.startsWith('phố') ||
+    lower.startsWith('cầu') ||
+    lower.startsWith('ngõ') ||
+    lower.startsWith('hẻm') ||
+    lower.startsWith('quốc lộ') ||
+    lower.startsWith('tỉnh lộ')
+  ) {
+    return t;
+  }
+  return `Đường ${t}`;
+}
+
+function parseOsrmSteps(rawSteps: any[], destinationAddress?: string): NavigationManeuverStep[] {
+  if (!Array.isArray(rawSteps) || rawSteps.length === 0) return [];
+
+  return rawSteps.map((s, idx) => {
+    const maneuver = s.maneuver || {};
+    const mType = maneuver.type || '';
+    const mMod = maneuver.modifier || '';
+    const nextStep = rawSteps[idx + 1];
+    const isLast = idx === rawSteps.length - 1;
+
+    const curName = cleanStreetName(s.name);
+    const nextName = nextStep ? cleanStreetName(nextStep.name) : '';
+
+    let instruction = '';
+    let iconName = 'arrow-up';
+    let actionType = 'STRAIGHT';
+
+    if (isLast || mType === 'arrive') {
+      instruction = destinationAddress ? `Đến điểm cứu hộ: ${destinationAddress}` : 'Bạn đã đến hiện trường cứu nạn';
+      iconName = 'flag-checkered';
+      actionType = 'ARRIVE';
+    } else if (mMod === 'left') {
+      instruction = nextName ? `Rẽ trái vào ${nextName}` : (curName ? `Rẽ trái vào ${curName}` : 'Rẽ trái');
+      iconName = 'arrow-top-left';
+      actionType = 'TURN_LEFT';
+    } else if (mMod === 'right') {
+      instruction = nextName ? `Rẽ phải vào ${nextName}` : (curName ? `Rẽ phải vào ${curName}` : 'Rẽ phải');
+      iconName = 'arrow-top-right';
+      actionType = 'TURN_RIGHT';
+    } else if (mMod === 'slight left') {
+      instruction = nextName ? `Chếch sang trái vào ${nextName}` : 'Chếch sang trái';
+      iconName = 'arrow-top-left';
+      actionType = 'SLIGHT_LEFT';
+    } else if (mMod === 'slight right') {
+      instruction = nextName ? `Chếch sang phải vào ${nextName}` : 'Chếch sang phải';
+      iconName = 'arrow-top-right';
+      actionType = 'SLIGHT_RIGHT';
+    } else if (mMod === 'sharp left') {
+      instruction = nextName ? `Ngoặt gấp sang trái vào ${nextName}` : 'Ngoặt gấp sang trái';
+      iconName = 'arrow-u-left-top';
+      actionType = 'SHARP_LEFT';
+    } else if (mMod === 'sharp right') {
+      instruction = nextName ? `Ngoặt gấp sang phải vào ${nextName}` : 'Ngoặt gấp sang phải';
+      iconName = 'arrow-u-right-top';
+      actionType = 'SHARP_RIGHT';
+    } else if (mMod === 'uturn') {
+      instruction = 'Quay đầu xe (U-turn)';
+      iconName = 'u-turn-left';
+      actionType = 'UTURN';
+    } else if (mType === 'roundabout' || mType === 'rotary') {
+      instruction = nextName ? `Vào bùng binh, rẽ vào ${nextName}` : 'Vào bùng binh';
+      iconName = 'rotate-left';
+      actionType = 'ROUNDABOUT';
+    } else if (mType === 'end of road') {
+      const dir = mMod === 'left' ? 'trái' : 'phải';
+      instruction = nextName ? `Cuối đường, rẽ ${dir} vào ${nextName}` : `Cuối đường, rẽ ${dir}`;
+      iconName = mMod === 'left' ? 'arrow-top-left' : 'arrow-top-right';
+      actionType = mMod === 'left' ? 'TURN_LEFT' : 'TURN_RIGHT';
+    } else if (mType === 'depart') {
+      instruction = curName ? `Xuất phát đi thẳng trên ${curName}` : 'Bắt đầu lộ trình cứu hộ';
+      iconName = 'arrow-up';
+      actionType = 'DEPART';
+    } else {
+      instruction = curName ? `Tiếp tục đi thẳng trên ${curName}` : 'Tiếp tục đi thẳng';
+      iconName = 'arrow-up';
+      actionType = 'STRAIGHT';
+    }
+
+    const loc: [number, number] = maneuver.location
+      ? [maneuver.location[1], maneuver.location[0]]
+      : [0, 0];
+
+    return {
+      stepIndex: idx,
+      instruction,
+      iconName,
+      actionType,
+      distanceMeters: s.distance || 0,
+      streetName: curName,
+      targetStreet: nextName,
+      location: loc,
+    };
+  });
+}
+
 export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModalProps> = ({
   visible,
   assignmentId,
@@ -87,6 +215,41 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     durationMin: '5 phút',
     roadCoordinates: null,
   });
+
+  // Turn-by-Turn Dynamic Navigation State (Chỉ dẫn từng ngã rẽ gần nhất chuẩn Google Maps / Grab)
+  const [navigationSteps, setNavigationSteps] = useState<NavigationManeuverStep[]>([]);
+  const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
+  const [stepDistRemainingMeters, setStepDistRemainingMeters] = useState<number | null>(null);
+  const [showItinerarySheet, setShowItinerarySheet] = useState<boolean>(false);
+  const navigationStepsRef = useRef<NavigationManeuverStep[]>([]);
+  const activeStepIndexRef = useRef<number>(0);
+
+  // Hàm tự động cập nhật ngã rẽ khi xe di chuyển tiếp cận
+  const updateTurnByTurnProgress = useCallback((vLat: number, vLng: number) => {
+    const steps = navigationStepsRef.current;
+    if (!steps || steps.length === 0) return;
+    const curIdx = activeStepIndexRef.current;
+
+    const upcomingStep = steps[curIdx + 1] || steps[curIdx];
+    const targetLoc = upcomingStep.location;
+    if (!targetLoc || (targetLoc[0] === 0 && targetLoc[1] === 0)) return;
+
+    const distToTurn = getHaversineDistanceMeters(vLat, vLng, targetLoc[0], targetLoc[1]);
+
+    // Khi xe tiến sát ngã rẽ <= 35m thì tự động chuyển sang ngã rẽ tiếp theo
+    if (distToTurn <= 35 && curIdx < steps.length - 1) {
+      const nextIdx = curIdx + 1;
+      activeStepIndexRef.current = nextIdx;
+      setActiveStepIndex(nextIdx);
+      Vibration.vibrate(100);
+
+      const nextUpcoming = steps[nextIdx + 1] || steps[nextIdx];
+      const newDist = getHaversineDistanceMeters(vLat, vLng, nextUpcoming.location[0], nextUpcoming.location[1]);
+      setStepDistRemainingMeters(newDist);
+    } else {
+      setStepDistRemainingMeters(distToTurn);
+    }
+  }, []);
 
   // UI Modes & Toggles
   const [isWaterwayMode, setIsWaterwayMode] = useState<boolean>(false);
@@ -326,6 +489,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   heading: loc.coords.heading || 45,
                 };
                 setTeamLocation(newLoc);
+                updateTurnByTurnProgress(newLoc.lat, newLoc.lng);
 
                 // Phát telemetry GPS thực tế lên Socket.IO
                 if (socketRef.current && socketRef.current.connected) {
@@ -518,6 +682,16 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           durationMin: durMin,
           roadCoordinates: coords,
         });
+
+        // Parse chi tiết từng ngã rẽ Turn-by-Turn chuẩn Google Maps
+        if (route.legs && route.legs[0] && Array.isArray(route.legs[0].steps)) {
+          const parsed = parseOsrmSteps(route.legs[0].steps, incidentAddress);
+          setNavigationSteps(parsed);
+          navigationStepsRef.current = parsed;
+          setActiveStepIndex(0);
+          activeStepIndexRef.current = 0;
+          setStepDistRemainingMeters(null);
+        }
 
         // Đẩy tuyến đường vào Leaflet WebView
         if (webViewRef.current) {
@@ -878,6 +1052,53 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     : (sos?.citizenId?.fullName || sos?.reporterName || 'Người dân');
   const citizenPhone = sos?.citizenId?.phone || sos?.contactPhone || '';
   const incidentAddress = assignment?.destination || sos?.address || '';
+
+  // Tính toán chỉ dẫn ngã rẽ gần nhất hiển thị trên Top HUD (Chuẩn Google Maps & Grab)
+  const currentHudManeuver = useMemo(() => {
+    if (!navigationSteps || navigationSteps.length === 0) {
+      return {
+        iconName: isNavigating ? 'navigation-variant' : 'arrow-up-right',
+        distanceText: roadMetrics.distanceKm,
+        secondaryText: `• ${roadMetrics.durationMin}`,
+        instruction: isNavigating ? `Dẫn đường: ${incidentAddress}` : `Đến: ${incidentAddress || 'Hiện trường cứu nạn'}`,
+      };
+    }
+
+    const curStep = navigationSteps[activeStepIndex] || navigationSteps[0];
+    const upcomingStep = navigationSteps[activeStepIndex + 1] || curStep;
+    const isArrival = activeStepIndex >= navigationSteps.length - 1 || upcomingStep.actionType === 'ARRIVE';
+
+    if (isArrival) {
+      return {
+        iconName: 'flag-checkered',
+        distanceText: 'ĐÃ ĐẾN NƠI',
+        secondaryText: '• Hiện trường cứu nạn',
+        instruction: `Điểm cứu hộ: ${incidentAddress || 'K48/12 Lê Văn Hiến'}`,
+      };
+    }
+
+    let distVal = stepDistRemainingMeters !== null ? stepDistRemainingMeters : curStep.distanceMeters;
+    let distText = '';
+    let secondary = '';
+
+    if (distVal <= 60) {
+      distText = `Sau ${Math.round(distVal)} m`;
+      secondary = '• Chuẩn bị rẽ';
+    } else if (distVal < 1000) {
+      distText = `Sau ${Math.round(distVal)} m`;
+      secondary = `• ${upcomingStep.actionType === 'STRAIGHT' ? 'Đi thẳng' : 'Sắp tới'}`;
+    } else {
+      distText = `Sau ${(distVal / 1000).toFixed(1)} km`;
+      secondary = `• ${upcomingStep.actionType === 'STRAIGHT' ? 'Đi thẳng' : 'Sắp tới'}`;
+    }
+
+    return {
+      iconName: upcomingStep.iconName,
+      distanceText: distText,
+      secondaryText: secondary,
+      instruction: upcomingStep.instruction,
+    };
+  }, [navigationSteps, activeStepIndex, stepDistRemainingMeters, roadMetrics, isNavigating, incidentAddress]);
   const victimHeadcount = sos?.people ?? 0;
   const rawDescription = assignment?.note || sos?.description || '';
   const teamName = assignment?.rescueTeamId?.name || assignment?.teamName || assignment?.rescueTeamName || '';
@@ -1693,41 +1914,104 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           </TouchableOpacity>
 
           {!isTopHudHidden ? (
-            <View style={[styles.grabManeuverCard, isNavigating && styles.grabManeuverCardNavigating]}>
-              {/* Maneuver Turn Icon */}
-              <View style={[styles.grabTurnIconBox, isNavigating && { backgroundColor: '#10B981' }]}>
-                <MaterialCommunityIcons
-                  name={isNavigating ? 'navigation-variant' : (missionState === 'ON_SCENE_RESCUING' ? 'target' : 'arrow-up-right')}
-                  size={20}
-                  color="#FFFFFF"
-                />
-              </View>
-
-              {/* Distance & Street Name */}
-              <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.grabDistanceText}>{roadMetrics.distanceKm}</Text>
-                  <Text style={styles.grabDurationText}>• {roadMetrics.durationMin}</Text>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={[styles.grabManeuverCard, isNavigating && styles.grabManeuverCardNavigating]}>
+                {/* Maneuver Turn Icon (Tự động cập nhật ngã rẽ gần nhất: Rẽ trái/phải, Đi thẳng, Về đích) */}
+                <View style={[styles.grabTurnIconBox, isNavigating && { backgroundColor: '#10B981' }]}>
+                  <MaterialCommunityIcons
+                    name={currentHudManeuver.iconName as any}
+                    size={20}
+                    color="#FFFFFF"
+                  />
                 </View>
-                <Text style={styles.grabRoadText} numberOfLines={1}>
-                  {isNavigating ? `Dẫn đường: ${incidentAddress}` : `Đến: ${incidentAddress || 'Hiện trường cứu nạn'}`}
-                </Text>
+
+                {/* Khoảng cách đến ngã rẽ gần nhất & Thao tác rẽ (Bấm để xem toàn bộ lộ trình) */}
+                <TouchableOpacity
+                  style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}
+                  onPress={() => setShowItinerarySheet((p) => !p)}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.grabDistanceText}>{currentHudManeuver.distanceText}</Text>
+                    <Text style={styles.grabDurationText}>{currentHudManeuver.secondaryText}</Text>
+                  </View>
+                  <Text style={styles.grabRoadText} numberOfLines={1}>
+                    {currentHudManeuver.instruction}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Tốc độ giới hạn chuẩn Grab */}
+                <View style={styles.grabSpeedLimitBadge}>
+                  <Text style={styles.grabSpeedLimitText}>50</Text>
+                </View>
+
+                {/* Nút xem danh sách ngã rẽ / thu gọn */}
+                <TouchableOpacity
+                  style={styles.grabHideHudBtn}
+                  onPress={() => setShowItinerarySheet((p) => !p)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Xem toàn bộ lộ trình"
+                >
+                  <Feather name={showItinerarySheet ? 'chevron-up' : 'list'} size={16} color="#64748B" />
+                </TouchableOpacity>
               </View>
 
-              {/* Tốc độ giới hạn chuẩn Grab */}
-              <View style={styles.grabSpeedLimitBadge}>
-                <Text style={styles.grabSpeedLimitText}>50</Text>
-              </View>
+              {/* BẢNG LỘ TRÌNH TỪNG NGÃ RẼ CHI TIẾT (KHI BẤM XEM) */}
+              {showItinerarySheet && navigationSteps.length > 0 && (
+                <View style={styles.itineraryDropdownCard}>
+                  <View style={styles.itineraryHeaderRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialCommunityIcons name="routes" size={16} color="#0084FF" />
+                      <Text style={styles.itineraryTitle}>Lộ trình chi tiết ({navigationSteps.length} ngã rẽ)</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setShowItinerarySheet(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Feather name="x" size={16} color="#64748B" />
+                    </TouchableOpacity>
+                  </View>
 
-              {/* Nút thu gọn HUD để thoáng bản đồ */}
-              <TouchableOpacity
-                style={styles.grabHideHudBtn}
-                onPress={() => setIsTopHudHidden(true)}
-                activeOpacity={0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Feather name="chevron-up" size={16} color="#64748B" />
-              </TouchableOpacity>
+                  <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={true} nestedScrollEnabled={true}>
+                    {navigationSteps.map((st, i) => {
+                      const isPassed = i < activeStepIndex;
+                      const isActive = i === activeStepIndex;
+                      const nextSt = navigationSteps[i + 1] || st;
+                      const distStr = st.distanceMeters < 1000 ? `${Math.round(st.distanceMeters)} m` : `${(st.distanceMeters / 1000).toFixed(1)} km`;
+
+                      return (
+                        <View
+                          key={`step-${i}`}
+                          style={[
+                            styles.itineraryStepRow,
+                            isActive && styles.itineraryStepRowActive,
+                            isPassed && { opacity: 0.55 },
+                          ]}
+                        >
+                          <View style={[styles.itineraryStepIconBox, isActive && { backgroundColor: '#0084FF' }]}>
+                            <MaterialCommunityIcons
+                              name={nextSt.iconName as any}
+                              size={15}
+                              color={isActive ? '#FFFFFF' : '#475569'}
+                            />
+                          </View>
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={[styles.itineraryStepText, isActive && { color: '#0084FF', fontWeight: '800' }]} numberOfLines={1}>
+                              {nextSt.instruction}
+                            </Text>
+                            <Text style={styles.itineraryStepSubText}>
+                              {st.streetName ? `${st.streetName} • ` : ''}${distStr}
+                            </Text>
+                          </View>
+                          {isActive && (
+                            <View style={styles.itineraryActiveBadge}>
+                              <Text style={styles.itineraryActiveBadgeText}>HIỆN TẠI</Text>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
             </View>
           ) : (
             <TouchableOpacity
@@ -3398,6 +3682,76 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '800',
     color: '#0F172A',
+  },
+  itineraryDropdownCard: {
+    marginTop: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 10,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  itineraryHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 6,
+  },
+  itineraryTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  itineraryStepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    gap: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  itineraryStepRowActive: {
+    backgroundColor: '#EFF6FF',
+    borderBottomColor: '#DBEAFE',
+  },
+  itineraryStepIconBox: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itineraryStepText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  itineraryStepSubText: {
+    fontSize: 10.5,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  itineraryActiveBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: '#0084FF',
+  },
+  itineraryActiveBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
 
   /* Grab-style Bottom Deck */
