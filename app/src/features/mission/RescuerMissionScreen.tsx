@@ -648,13 +648,6 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
 
           {/* Action buttons: Làm mới & Nút Báo nguy cấp SOS */}
           <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.headerIconBtn}
-              onPress={() => fetchMissions({ isUserPull: true })}
-              activeOpacity={0.7}
-            >
-              <Feather name="refresh-cw" size={17} color="#E2E8F0" />
-            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.headerIconBtn, styles.headerSosBtn]}
@@ -781,16 +774,6 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                 ? 'Hiện tại khu vực phụ trách chưa có lệnh điều phối mới. Hãy luôn duy trì trạng thái kết nối mạng và sẵn sàng nhận lệnh từ Ban chỉ huy!'
                 : 'Các nhiệm vụ cứu nạn bạn đã hoàn tất sẽ được lưu trữ và tổng hợp tại đây.'}
             </Text>
-            {activeSegment === 'active' && (
-              <TouchableOpacity
-                style={styles.emptyRefreshBtn}
-                onPress={() => fetchMissions({ isSilent: false })}
-                activeOpacity={0.8}
-              >
-                <Feather name="refresh-cw" size={16} color="#0066FF" />
-                <Text style={styles.emptyRefreshText}>Quét lại nhiệm vụ</Text>
-              </TouchableOpacity>
-            )}
           </View>
         ) : (
           displayedMissions.map((item) => {

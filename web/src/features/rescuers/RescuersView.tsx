@@ -4,7 +4,6 @@ import {
   Search,
   Users,
   Truck,
-  RefreshCw,
   MapPin,
   Phone,
   CheckCircle2,
@@ -170,7 +169,6 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>([]);
   const [selectedAreaId, setSelectedAreaId] = useState<string>('ALL');
   const [loading, setLoading] = useState(false);
-  const [refreshIndex, setRefreshIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'VERIFIED' | 'REJECTED'>('ALL');
@@ -232,8 +230,6 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
   const [newTeamArea, setNewTeamArea] = useState('Phường Hòa Cường');
   const [newTeamMembersCount, setNewTeamMembersCount] = useState(6);
 
-  const refreshData = () => setRefreshIndex((p) => p + 1);
-
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -269,7 +265,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
   useEffect(() => {
     loadData();
-  }, [loadData, refreshIndex]);
+  }, [loadData]);
 
   // Lắng nghe sự kiện hồ sơ cứu hộ mới & trạng thái duyệt thời gian thực qua Socket.IO
   useEffect(() => {
@@ -534,15 +530,6 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
             </div>
 
             <div className="executive-header-right">
-              <button
-                type="button"
-                className="coordination-action-btn outline"
-                onClick={refreshData}
-                title="Cập nhật danh sách mới nhất"
-              >
-                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-                <span>Làm mới</span>
-              </button>
 
               <button
                 type="button"
@@ -872,16 +859,6 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   </button>
                 )}
               </div>
-
-              <button
-                type="button"
-                className="coordination-action-btn outline"
-                onClick={refreshData}
-                title="Cập nhật danh sách mới nhất"
-              >
-                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-                <span>Làm mới</span>
-              </button>
             </div>
           </div>
 
