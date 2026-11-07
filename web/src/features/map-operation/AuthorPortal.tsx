@@ -333,6 +333,11 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
               return 'CITIZEN';
             })(),
             shoreHandoff: item.shoreHandoff || undefined,
+            requestedSupplies: Array.isArray(item.assignment?.requestedSupplies)
+              ? item.assignment.requestedSupplies
+              : Array.isArray(item.requestedSupplies)
+              ? item.requestedSupplies
+              : undefined,
           };
         });
 
@@ -360,6 +365,8 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
               rescuerLocation: assign.rescuerLocation || null,
               distanceRemainingKm: assign.distanceRemainingKm ?? 0,
               etaMinutes: assign.etaMinutes ?? 0,
+              supplies: Array.isArray(assign.supplies) ? assign.supplies : [],
+              requestedSupplies: Array.isArray(assign.requestedSupplies) ? assign.requestedSupplies : [],
             });
           } else {
             // Khi ca SOS trên server không còn assignment (đã hủy), đồng bộ hủy trong domainDService
@@ -485,6 +492,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         const rescuerName = (typeof rescuerObj === 'object' && rescuerObj ? rescuerObj.fullName : null) || 'Cứu Hộ Viên';
         const vehiclePlate = (typeof vehicleObj === 'object' && vehicleObj ? vehicleObj.plateNumber : null) || 'Phương tiện';
 
+        const existingAssign = domainDService.getAssignmentBySosId(targetSosId);
         domainDService.syncRealAssignment({
           id: assignId,
           sosRequestId: targetSosId,
@@ -504,6 +512,8 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
           rescuerLocation: assignmentData.rescuerLocation || null,
           distanceRemainingKm: assignmentData.distanceRemainingKm ?? (newStatus === 'ARRIVED' ? 0.1 : (newStatus === 'ON_THE_WAY' || newStatus === 'EN_ROUTE' ? 0.8 : 1.4)),
           etaMinutes: assignmentData.etaMinutes ?? (newStatus === 'ARRIVED' ? 0 : (newStatus === 'ON_THE_WAY' || newStatus === 'EN_ROUTE' ? 3 : 7)),
+          supplies: Array.isArray(assignmentData.supplies) ? assignmentData.supplies : existingAssign?.supplies || [],
+          requestedSupplies: Array.isArray(assignmentData.requestedSupplies) ? assignmentData.requestedSupplies : existingAssign?.requestedSupplies || [],
         });
 
         const mappedSosStatus =
@@ -587,6 +597,29 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     socket.on('sos:shore_handoff_requested', handleShoreHandoffRequested);
     socket.on('sos:shore_handoff_assigned', handleShoreHandoffAssigned);
 
+    const handleSupplyRequested = (data: any) => {
+      if (!data) return;
+      playShoreHandoffAlert();
+      const team = data.teamName || 'Đội cứu hộ';
+      const code = data.sosCode ? `#${data.sosCode}` : 'Hiện trường';
+      showToast(`📦 CHI VIỆN VẬT TƯ: ${team} (${code}) yêu cầu cấp thêm vật tư!`, 'error');
+      syncRealSosFromApi(activeOfficer);
+    };
+
+    const handleSupplyApproved = () => {
+      showToast('✓ Đã xuất cấp vật tư chi viện thành công!', 'success');
+      syncRealSosFromApi(activeOfficer);
+    };
+
+    const handleSupplyRejected = () => {
+      showToast('Đã từ chối yêu cầu chi viện vật tư.', 'error');
+      syncRealSosFromApi(activeOfficer);
+    };
+
+    socket.on('assignment:supply_requested', handleSupplyRequested);
+    socket.on('assignment:supply_approved', handleSupplyApproved);
+    socket.on('assignment:supply_rejected', handleSupplyRejected);
+
     // Định kỳ 3 giây dự phòng kiểm tra lại tín hiệu SOS từ server đảm bảo Realtime liên tục không cần reset thủ công
     const interval = setInterval(() => {
       syncRealSosFromApi(activeOfficer);
@@ -607,6 +640,9 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       socket.off('sos:assignment:status_changed', handleAssignmentRealtime);
       socket.off('sos:shore_handoff_requested', handleShoreHandoffRequested);
       socket.off('sos:shore_handoff_assigned', handleShoreHandoffAssigned);
+      socket.off('assignment:supply_requested', handleSupplyRequested);
+      socket.off('assignment:supply_approved', handleSupplyApproved);
+      socket.off('assignment:supply_rejected', handleSupplyRejected);
       clearInterval(interval);
       window.removeEventListener('sos_data_updated', handleUpdateEvent);
     };

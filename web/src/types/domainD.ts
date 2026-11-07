@@ -125,6 +125,17 @@ export interface SosRequest {
   isSecondaryRequest?: boolean;
   primarySosId?: string;
   shoreHandoff?: ShoreHandoffRequest;
+  requestedSupplies?: {
+    name: string;
+    quantity: number;
+    unit?: string;
+    urgency?: string;
+    note?: string;
+    status: 'PENDING' | 'APPROVED' | 'REJECTED';
+    requestedAt?: string;
+    respondedAt?: string;
+    responseNote?: string;
+  }[];
 }
 
 export interface ShoreHandoffRequest {

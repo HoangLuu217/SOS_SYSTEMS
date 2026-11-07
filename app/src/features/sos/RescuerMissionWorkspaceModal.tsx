@@ -704,6 +704,42 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         }
       });
 
+      // Lắng nghe phê duyệt chi viện vật tư từ Ban Chỉ Huy
+      socket.on('assignment:supply_approved', (data: any) => {
+        if (data && (String(data.assignmentId) === String(assignment?._id) || String(data.sosId) === String(sos?._id))) {
+          if (Array.isArray(data.requestedSupplies)) {
+            setRequestedSuppliesList(data.requestedSupplies);
+          }
+          if (Array.isArray(data.supplies)) {
+            setAssignment((prev: any) => ({ ...prev, supplies: data.supplies, requestedSupplies: data.requestedSupplies }));
+          }
+          Vibration.vibrate(60);
+          setCustomNotice({
+            visible: true,
+            type: 'success',
+            title: 'Địa phương đã xuất cấp vật tư',
+            message: 'Ban Chỉ Huy địa phương đã phê duyệt và xuất kho tiếp tế bổ sung cho đội cứu hộ!',
+          });
+        }
+      });
+
+      // Lắng nghe từ chối chi viện vật tư
+      socket.on('assignment:supply_rejected', (data: any) => {
+        if (data && (String(data.assignmentId) === String(assignment?._id) || String(data.sosId) === String(sos?._id))) {
+          if (Array.isArray(data.requestedSupplies)) {
+            setRequestedSuppliesList(data.requestedSupplies);
+            setAssignment((prev: any) => ({ ...prev, requestedSupplies: data.requestedSupplies }));
+          }
+          Vibration.vibrate(60);
+          setCustomNotice({
+            visible: true,
+            type: 'warning',
+            title: 'Từ chối cấp thêm vật tư',
+            message: 'Kho tiếp tế địa phương chưa thể đáp ứng yêu cầu vật tư lúc này.',
+          });
+        }
+      });
+
       // Lắng nghe thông báo khi Ban Chỉ Huy điều động xe cứu thương/xe tải đón tại bờ
       socket.on('sos:shore_handoff_assigned', (data: any) => {
         if (data?.shoreHandoff) {
@@ -719,6 +755,8 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       return () => {
         socket.off('assignment:cancelled', handleMissionCancelled);
         socket.off('sos:shore_handoff_assigned');
+        socket.off('assignment:supply_approved');
+        socket.off('assignment:supply_rejected');
         socket.disconnect();
         socketRef.current = null;
       };
@@ -2429,11 +2467,19 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                             </Text>
                           </View>
                         )}
-                        {requestedSuppliesList.some((s: any) => s.status !== 'APPROVED') && (
+                        {requestedSuppliesList.some((s: any) => s.status === 'PENDING' || !s.status) && (
                           <View style={styles.requestedSuppliesNotice}>
                             <Ionicons name="information-circle" size={15} color="#D97706" />
                             <Text style={styles.requestedSuppliesNoticeText}>
-                              ⏳ Đã yêu cầu chi viện: {requestedSuppliesList.filter((s: any) => s.status !== 'APPROVED').map((item: any) => `${item.name} (${item.quantity})`).join(', ')} (Chờ địa phương duyệt)
+                              ⏳ Đã yêu cầu chi viện: {requestedSuppliesList.filter((s: any) => s.status === 'PENDING' || !s.status).map((item: any) => `${item.name} (${item.quantity})`).join(', ')} (Chờ địa phương duyệt)
+                            </Text>
+                          </View>
+                        )}
+                        {requestedSuppliesList.some((s: any) => s.status === 'REJECTED') && (
+                          <View style={[styles.requestedSuppliesNotice, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                            <Ionicons name="close-circle" size={15} color="#DC2626" />
+                            <Text style={[styles.requestedSuppliesNoticeText, { color: '#991B1B' }]}>
+                              ✕ Địa phương từ chối cấp: {requestedSuppliesList.filter((s: any) => s.status === 'REJECTED').map((item: any) => `${item.name} (${item.quantity})`).join(', ')}
                             </Text>
                           </View>
                         )}

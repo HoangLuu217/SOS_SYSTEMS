@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react';
-import { Search, MapPin, ChevronLeft } from 'lucide-react';
+import { Search, MapPin, ChevronLeft, Check, X, Package } from 'lucide-react';
+import { domainDService } from '@/services/domainDService';
+import { approveSuppliesApi, rejectSuppliesApi } from '@/api';
 import type { SosRequest, AuthorityOfficer } from '@/types/domainD';
 import { useApp } from '@/context/AppContext';
 
@@ -26,6 +28,64 @@ export const IncidentFeed = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [adminDistrictFilter, setAdminDistrictFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'UNASSIGNED' | 'ACTIVE'>('ALL');
+  const [processingSupplyIds, setProcessingSupplyIds] = useState<Set<string>>(new Set());
+
+  const handleQuickApprove = async (assignmentId?: string | null, sosId?: string) => {
+    const targetAssignId = assignmentId || (sosId ? domainDService.getAssignmentBySosId(sosId)?.id : null);
+    if (!targetAssignId) {
+      alert('Không tìm thấy thông tin phân công của ca cứu hộ này');
+      return;
+    }
+    setProcessingSupplyIds((prev) => new Set(prev).add(targetAssignId));
+    try {
+      await approveSuppliesApi(targetAssignId);
+      const assign = domainDService.getAssignmentBySosId(sosId || '');
+      if (assign && assign.requestedSupplies) {
+        assign.requestedSupplies.forEach((s: any) => {
+          if (s.status === 'PENDING') s.status = 'APPROVED';
+        });
+        domainDService.syncRealAssignment(assign);
+      }
+      window.dispatchEvent(new CustomEvent('sos_data_updated'));
+    } catch (err: any) {
+      alert('Lỗi phê duyệt vật tư: ' + (err?.message || 'Vui lòng thử lại'));
+    } finally {
+      setProcessingSupplyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(targetAssignId);
+        return next;
+      });
+    }
+  };
+
+  const handleQuickReject = async (assignmentId?: string | null, sosId?: string) => {
+    const targetAssignId = assignmentId || (sosId ? domainDService.getAssignmentBySosId(sosId)?.id : null);
+    if (!targetAssignId) {
+      alert('Không tìm thấy thông tin phân công của ca cứu hộ này');
+      return;
+    }
+    if (!window.confirm('Bạn có chắc muốn từ chối yêu cầu chi viện vật tư này?')) return;
+    setProcessingSupplyIds((prev) => new Set(prev).add(targetAssignId));
+    try {
+      await rejectSuppliesApi(targetAssignId);
+      const assign = domainDService.getAssignmentBySosId(sosId || '');
+      if (assign && assign.requestedSupplies) {
+        assign.requestedSupplies.forEach((s: any) => {
+          if (s.status === 'PENDING') s.status = 'REJECTED';
+        });
+        domainDService.syncRealAssignment(assign);
+      }
+      window.dispatchEvent(new CustomEvent('sos_data_updated'));
+    } catch (err: any) {
+      alert('Lỗi từ chối vật tư: ' + (err?.message || 'Vui lòng thử lại'));
+    } finally {
+      setProcessingSupplyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(targetAssignId);
+        return next;
+      });
+    }
+  };
 
   // Baseline scoped incidents for this officer (before status/search filter)
   const scopedIncidents = useMemo(() => {
@@ -64,6 +124,16 @@ export const IncidentFeed = ({
       urgent,
       active,
     };
+  }, [scopedIncidents]);
+
+  const totalPendingSupplyRequests = useMemo(() => {
+    return scopedIncidents.filter((s) => {
+      const a = domainDService.getAssignmentBySosId(s.id);
+      const r = (Array.isArray(s.requestedSupplies) && s.requestedSupplies.length > 0)
+        ? s.requestedSupplies
+        : (a?.requestedSupplies || []);
+      return r.some((x: any) => x.status === 'PENDING');
+    }).length;
   }, [scopedIncidents]);
 
   // Filter incidents based on search query & selected status tab (chỉ hiển thị các ca đang diễn ra)
@@ -203,6 +273,39 @@ export const IncidentFeed = ({
           )}
         </div>
 
+        {/* Banner cảnh báo nhanh khi có yêu cầu chi viện vật tư đang chờ duyệt */}
+        {totalPendingSupplyRequests > 0 && (
+          <div
+            style={{
+              marginTop: 6,
+              padding: '6px 10px',
+              background: '#fffbeb',
+              border: '1.2px solid #f59e0b',
+              borderRadius: 8,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              cursor: 'pointer',
+              boxShadow: '0 2px 5px rgba(245, 158, 11, 0.15)',
+            }}
+            onClick={() => {
+              const target = scopedIncidents.find((s) => {
+                const a = domainDService.getAssignmentBySosId(s.id);
+                const r = (Array.isArray(s.requestedSupplies) && s.requestedSupplies.length > 0) ? s.requestedSupplies : (a?.requestedSupplies || []);
+                return r.some((x: any) => x.status === 'PENDING');
+              });
+              if (target) onSelectSos(target);
+            }}
+            title="Bấm để chuyển tới ca yêu cầu chi viện vật tư"
+          >
+            <span style={{ fontSize: 13 }}>📦</span>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#b45309', flex: 1 }}>
+              {totalPendingSupplyRequests} yêu cầu chi viện vật tư chờ duyệt
+            </span>
+            <span style={{ fontSize: 10.5, fontWeight: 800, color: '#d97706' }}>Xem →</span>
+          </div>
+        )}
+
         {/* 3. Horizontal Scrollable Filter Tabs */}
         <div className="feed-filter-tabs-pills">
           {[
@@ -325,6 +428,147 @@ export const IncidentFeed = ({
                   <span className="compact-time-ago">{sos.timeAgo}</span>
                 </div>
               </div>
+
+              {/* Cờ hiệu Yêu Cầu Chi Viện Vật Tư (Supply Request Banner) */}
+              {(() => {
+                const assign = domainDService.getAssignmentBySosId(sos.id);
+                const reqSupplies = (Array.isArray(sos.requestedSupplies) && sos.requestedSupplies.length > 0)
+                  ? sos.requestedSupplies
+                  : (assign?.requestedSupplies || []);
+                const pendingSupplies = reqSupplies.filter((s: any) => s.status === 'PENDING');
+                const approvedSupplies = reqSupplies.filter((s: any) => s.status === 'APPROVED');
+                const targetAssignId = assign?.id || sos.assignmentId;
+
+                if (pendingSupplies.length > 0) {
+                  const isProc = processingSupplyIds.has(targetAssignId || sos.id);
+                  return (
+                    <div
+                      style={{
+                        marginTop: 6,
+                        marginBottom: 4,
+                        padding: '7px 9px',
+                        background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+                        border: '1.5px solid #f59e0b',
+                        borderRadius: 8,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 5,
+                        boxShadow: '0 2px 6px rgba(245, 158, 11, 0.2)',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <Package size={13} color="#b45309" />
+                          <span style={{ fontSize: 11, fontWeight: 900, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                            YÊU CẦU CHI VIỆN VẬT TƯ
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: 9.5,
+                            fontWeight: 800,
+                            background: '#fef3c7',
+                            color: '#92400e',
+                            padding: '1px 6px',
+                            borderRadius: 4,
+                            border: '1px solid #fcd34d',
+                          }}
+                        >
+                          CHỜ DUYỆT
+                        </span>
+                      </div>
+
+                      <div style={{ fontSize: 11.5, fontWeight: 700, color: '#1e293b', lineHeight: 1.35 }}>
+                        {pendingSupplies.map((it: any) => `${it.name} (${it.quantity} ${it.unit || 'món'})`).join(', ')}
+                      </div>
+
+                      {/* Nút hành động trực tiếp: Duyệt hoặc Từ chối */}
+                      <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+                        <button
+                          type="button"
+                          disabled={isProc}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleQuickApprove(targetAssignId, sos.id);
+                          }}
+                          style={{
+                            flex: 1,
+                            height: 28,
+                            background: '#16a34a',
+                            border: 'none',
+                            borderRadius: 6,
+                            color: '#ffffff',
+                            fontSize: 11.5,
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4,
+                            boxShadow: '0 1px 3px rgba(22, 163, 74, 0.3)',
+                          }}
+                        >
+                          <Check size={13} />
+                          <span>{isProc ? 'Đang duyệt...' : 'Duyệt'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isProc}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleQuickReject(targetAssignId, sos.id);
+                          }}
+                          style={{
+                            flex: 1,
+                            height: 28,
+                            background: '#fef2f2',
+                            border: '1px solid #fca5a5',
+                            borderRadius: 6,
+                            color: '#dc2626',
+                            fontSize: 11.5,
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          <X size={13} />
+                          <span>Từ chối</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (approvedSupplies.length > 0) {
+                  return (
+                    <div
+                      style={{
+                        marginTop: 4,
+                        marginBottom: 3,
+                        padding: '4px 8px',
+                        background: '#f0fdf4',
+                        border: '1px solid #bbf7d0',
+                        borderRadius: 6,
+                        fontSize: 10.5,
+                        fontWeight: 700,
+                        color: '#15803d',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                      }}
+                    >
+                      <Check size={12} color="#16a34a" />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        Đã xuất cấp: {approvedSupplies.map((it: any) => `${it.name} (${it.quantity})`).join(', ')}
+                      </span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               {/* Cờ hiệu Bàn giao Tiếp vận Đón bờ (Shore Handoff Relay Banner) */}
               {sos.shoreHandoff && sos.shoreHandoff.status === 'REQUESTED' && (

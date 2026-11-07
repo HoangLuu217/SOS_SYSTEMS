@@ -17,7 +17,8 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import type { SosRequestItem } from '@/types/dashboard';
-import { fetchSosRequests, completeSosRequest } from '@/api';
+import { fetchSosRequests, completeSosRequest, approveSuppliesApi, rejectSuppliesApi } from '@/api';
+import { getSocket } from '@/services/socketService';
 import { onSosCreated, onSosUpdated, onAssignmentUpdated } from '@/services/socketService';
 import { toast } from '@/components/common/toast';
 import '@/features/sos/SosRequestsView.css';
@@ -157,6 +158,12 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
       loadData();
     });
 
+    const socket = getSocket();
+    const handleSupplyEvt = () => loadData();
+    socket.on('assignment:supply_requested', handleSupplyEvt);
+    socket.on('assignment:supply_approved', handleSupplyEvt);
+    socket.on('assignment:supply_rejected', handleSupplyEvt);
+
     // Polling heartbeat định kỳ 5s dự phòng rớt mạng/mất gói tin socket
     const heartbeat = setInterval(() => {
       loadData();
@@ -166,6 +173,9 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
       unsubCreated();
       unsubUpdatedSocket();
       unsubAssignment();
+      socket.off('assignment:supply_requested', handleSupplyEvt);
+      socket.off('assignment:supply_approved', handleSupplyEvt);
+      socket.off('assignment:supply_rejected', handleSupplyEvt);
       clearInterval(heartbeat);
     };
   }, [loadData]);
@@ -531,6 +541,91 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                               {sos.description}
                             </span>
                           )}
+
+                          {/* Yêu Cầu Chi Viện Vật Tư Khẩn Cấp - Thao tác trực tiếp */}
+                          {(() => {
+                            const reqs = (sos.assignment as any)?.requestedSupplies || [];
+                            const pending = reqs.filter((r: any) => r.status === 'PENDING');
+                            if (pending.length === 0) return null;
+                            const assignId = (sos.assignment as any)?._id || (sos as any).assignmentId;
+
+                            return (
+                              <div
+                                style={{
+                                  marginLeft: 21,
+                                  marginTop: 6,
+                                  padding: '6px 10px',
+                                  background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+                                  border: '1.2px solid #f59e0b',
+                                  borderRadius: 7,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  gap: 8,
+                                }}
+                              >
+                                <div style={{ fontSize: 11.5, fontWeight: 700, color: '#92400e', display: 'flex', alignItems: 'center', gap: 5 }}>
+                                  <span>📦</span>
+                                  <span>Cần chi viện: <strong>{pending.map((p: any) => `${p.name} (${p.quantity})`).join(', ')}</strong></span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                  <button
+                                    type="button"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (!assignId) return;
+                                      try {
+                                        await approveSuppliesApi(assignId);
+                                        refreshData();
+                                        window.dispatchEvent(new CustomEvent('sos_data_updated'));
+                                      } catch (err: any) {
+                                        alert('Lỗi duyệt: ' + (err?.message || 'Thử lại'));
+                                      }
+                                    }}
+                                    style={{
+                                      padding: '3px 9px',
+                                      background: '#16a34a',
+                                      border: 'none',
+                                      borderRadius: 4,
+                                      color: '#ffffff',
+                                      fontSize: 11,
+                                      fontWeight: 800,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    Duyệt
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (!assignId) return;
+                                      if (!window.confirm('Từ chối yêu cầu chi viện vật tư này?')) return;
+                                      try {
+                                        await rejectSuppliesApi(assignId);
+                                        refreshData();
+                                        window.dispatchEvent(new CustomEvent('sos_data_updated'));
+                                      } catch (err: any) {
+                                        alert('Lỗi từ chối: ' + (err?.message || 'Thử lại'));
+                                      }
+                                    }}
+                                    style={{
+                                      padding: '3px 8px',
+                                      background: '#fee2e2',
+                                      border: '1px solid #fca5a5',
+                                      borderRadius: 4,
+                                      color: '#dc2626',
+                                      fontSize: 11,
+                                      fontWeight: 800,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    Từ chối
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })()}
 
                           {/* Ảnh hiện trường người dân gửi lên */}
                           {(() => {
