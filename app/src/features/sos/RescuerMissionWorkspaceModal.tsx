@@ -486,7 +486,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       const endLat = victimCoords.lat;
 
       // OSRM Profile /driving/ = tính đường ô tô (Google Maps Car Driving)
-      const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson`;
+      const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson&steps=true`;
       const res = await fetch(url);
       if (!res.ok) throw new Error(`OSRM HTTP ${res.status}`);
       const data = await res.json();
@@ -575,6 +575,22 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       Vibration.vibrate([0, 150, 100, 150]);
       DeviceEventEmitter.emit('sos:sync');
       onMissionUpdated?.('EN_ROUTE', assignment?._id);
+
+      // Kích hoạt ngay chế độ điều hướng 3D Camera theo chuẩn Google Maps / Grab
+      setIsNavigating(true);
+      setIsHeadingLocked(true);
+      setIsSheetCollapsed(true);
+      if (webViewRef.current) {
+        webViewRef.current.postMessage(
+          JSON.stringify({
+            type: 'START_INAPP_NAVIGATION',
+            lat: teamLocation.lat,
+            lng: teamLocation.lng,
+            heading: teamLocation.heading,
+          })
+        );
+      }
+
       setLaunchSuccessModalVisible(true);
     } catch (err: any) {
       setCustomNotice({
@@ -981,8 +997,15 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>
-          html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+          html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #0f172a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+          #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #f8fafc; transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
           .leaflet-container { background-color: #f1f5f9; }
+          #map.nav-3d-active {
+            transform: perspective(850px) rotateX(46deg);
+            transform-origin: 50% 68%;
+            height: 124%;
+            margin-top: -7%;
+          }
           
           /* Pulsing Red SOS Radar Beacon */
           @keyframes sosRadar {
@@ -1139,6 +1162,13 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             attributionControl: false
           }).setView([${teamLocation.lat}, ${teamLocation.lng}], 16);
 
+          // Tạo các pane chuyên biệt để kiểm soát thứ tự đè lớp (Z-Index Hierarchy)
+          map.createPane('passedRoutePane');
+          map.getPane('passedRoutePane').style.zIndex = '430';
+
+          map.createPane('routePane');
+          map.getPane('routePane').style.zIndex = '440';
+
           // Tile Layer: Google Maps Streets (Đầy đủ tên đường, ngõ hẻm tiếng Việt, tải nhanh, không bị watermark Carto)
           var currentTileLayer = null;
           function setTileLayer(type) {
@@ -1164,7 +1194,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             iconSize: [50, 50],
             iconAnchor: [25, 25]
           });
-          var sosMarker = L.marker([${victimCoords.lat}, ${victimCoords.lng}], { icon: sosIcon }).addTo(map);
+          var sosMarker = L.marker([${victimCoords.lat}, ${victimCoords.lng}], { icon: sosIcon, zIndexOffset: 2000 }).addTo(map);
 
           // 2. Grab & Google Maps Driver Navigation Puck Marker (Ghim hướng xoay & Bong bóng khoảng cách)
           var rescuerIcon = L.divIcon({
@@ -1183,9 +1213,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             iconSize: [54, 78],
             iconAnchor: [27, 27]
           });
-          var rescuerMarker = L.marker([${teamLocation.lat}, ${teamLocation.lng}], { icon: rescuerIcon }).addTo(map);
+          var rescuerMarker = L.marker([${teamLocation.lat}, ${teamLocation.lng}], { icon: rescuerIcon, zIndexOffset: 2500 }).addTo(map);
 
-          // 3. Đường điều hướng mượt mà chuẩn Grab (Bám chặt tim đường, không cắt qua nhà dân)
+          // 3. Đường điều hướng 2 lớp nổi khối (Dual-Layer Polyline Casing) & Trimming tiến trình
+          var fullRouteLatLngs = [];
+          var passedPolyline = null;
           var roadCasingPolyline = null;
           var roadCorePolyline = null;
           var directWaterwayLine = null;
@@ -1199,16 +1231,92 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
           }
 
+          // Hàm chiếu điểm vuông góc lên đoạn thẳng để tìm tiến trình chính xác
+          function projectPointOnSegment(p, a, b) {
+            var x = p[0], y = p[1];
+            var x1 = a[0], y1 = a[1];
+            var x2 = b[0], y2 = b[1];
+            var dx = x2 - x1;
+            var dy = y2 - y1;
+            var lenSq = dx * dx + dy * dy;
+            if (lenSq === 0) return a;
+            var t = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / lenSq));
+            return [x1 + t * dx, y1 + t * dy];
+          }
+
+          function distSq(p1, p2) {
+            var dx = p1[0] - p2[0];
+            var dy = p1[1] - p2[1];
+            return dx * dx + dy * dy;
+          }
+
+          // Cắt ngắn & làm mờ phần đường đã đi qua (Route Progress Trimming)
+          function updateRouteProgress(currPoint) {
+            if (!fullRouteLatLngs || fullRouteLatLngs.length < 2) return;
+            var currLatLng = Array.isArray(currPoint) ? currPoint : [currPoint.lat, currPoint.lng];
+
+            var minDistance = Infinity;
+            var bestIdx = 0;
+            var bestProj = fullRouteLatLngs[0];
+
+            for (var i = 0; i < fullRouteLatLngs.length - 1; i++) {
+              var a = fullRouteLatLngs[i];
+              var b = fullRouteLatLngs[i + 1];
+              var proj = projectPointOnSegment(currLatLng, a, b);
+              var d = distSq(currLatLng, proj);
+              if (d < minDistance) {
+                minDistance = d;
+                bestIdx = i;
+                bestProj = proj;
+              }
+            }
+
+            // Tách lộ trình thành 2 phần:
+            // 1. Đã đi qua (Passed Route): làm mờ màu xám nhạt #BDBDBD, weight 6
+            var passed = fullRouteLatLngs.slice(0, bestIdx + 1);
+            passed.push(bestProj);
+
+            // 2. Phía trước (Remaining Route): giữ nguyên 2 lớp nổi khối màu xanh
+            var remaining = [bestProj].concat(fullRouteLatLngs.slice(bestIdx + 1));
+
+            // Cập nhật lớp đường đã đi qua
+            if (passed.length >= 2) {
+              if (!passedPolyline) {
+                passedPolyline = L.polyline(passed, {
+                  color: '#BDBDBD',
+                  weight: 6,
+                  opacity: 0.75,
+                  lineCap: 'round',
+                  lineJoin: 'round',
+                  pane: 'passedRoutePane'
+                }).addTo(map);
+              } else {
+                passedPolyline.setLatLngs(passed);
+              }
+            } else if (passedPolyline) {
+              map.removeLayer(passedPolyline);
+              passedPolyline = null;
+            }
+
+            // Cập nhật 2 lớp đường phía trước
+            if (remaining.length >= 2) {
+              if (roadCasingPolyline) roadCasingPolyline.setLatLngs(remaining);
+              if (roadCorePolyline) roadCorePolyline.setLatLngs(remaining);
+            }
+          }
+
           function renderRoadSnappedRoute(coords) {
             if (roadCasingPolyline) map.removeLayer(roadCasingPolyline);
             if (roadCorePolyline) map.removeLayer(roadCorePolyline);
+            if (passedPolyline) map.removeLayer(passedPolyline);
             if (directWaterwayLine) map.removeLayer(directWaterwayLine);
             if (footApproachLine) map.removeLayer(footApproachLine);
 
             var latLngs = coords.map(function(c) { return [c[1], c[0]]; });
             if (latLngs.length < 2) return;
+            fullRouteLatLngs = latLngs;
 
-            // 1. Ghim vị trí xe cứu hộ bám chặt vào ĐẦU ĐƯỜNG của lộ trình (Chuẩn Grab)
+            // 1. Ghim vị trí xe cứu hộ bám chặt vào ĐẦU ĐƯỜNG của lộ trình (Chuẩn Grab / Google Maps)
             rescuerMarker.setLatLng(latLngs[0]);
 
             // Tự động xoay mũi tên xe cứu hộ theo hướng xuất phát của con đường
@@ -1220,24 +1328,30 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               }
             }
 
-            // 2. Tuyến đường chạy 100% bám theo tim đường (Road-Snapped, không cắt xuyên qua nhà dân)
+            // 2. Lớp viền dưới (Outer Casing): Xanh đậm #185ABC, độ dày 12px, opacity 0.95, bo tròn
             roadCasingPolyline = L.polyline(latLngs, {
-              color: '#0055CC',
-              weight: 9,
-              opacity: 0.65,
+              color: '#185ABC',
+              weight: 12,
+              opacity: 0.95,
               lineCap: 'round',
-              lineJoin: 'round'
+              lineJoin: 'round',
+              pane: 'routePane'
             }).addTo(map);
 
+            // 3. Lớp lõi trên (Inner Core): Xanh sáng #4285F4, độ dày 7.5px, opacity 1.0, bo tròn
             roadCorePolyline = L.polyline(latLngs, {
-              color: '#0084FF',
-              weight: 6,
-              opacity: 1,
+              color: '#4285F4',
+              weight: 7.5,
+              opacity: 1.0,
               lineCap: 'round',
-              lineJoin: 'round'
+              lineJoin: 'round',
+              pane: 'routePane'
             }).addTo(map);
 
-            // 3. Đường nét đứt tiếp cận hiện trường nếu điểm SOS nằm sâu trong ngõ/nhà
+            // Cập nhật vị trí tiến trình hiện tại nếu xe đang ở giữa đường
+            updateRouteProgress(rescuerMarker.getLatLng());
+
+            // 4. Đường nét đứt tiếp cận hiện trường nếu điểm SOS nằm sâu trong ngõ/nhà
             var lastRoadPoint = latLngs[latLngs.length - 1];
             var sosLatLng = sosMarker.getLatLng();
             var dLat = Math.abs(lastRoadPoint[0] - sosLatLng.lat);
@@ -1248,7 +1362,8 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 weight: 3,
                 dashArray: '5, 5',
                 opacity: 0.85,
-                lineCap: 'round'
+                lineCap: 'round',
+                pane: 'routePane'
               }).addTo(map);
             }
 
@@ -1307,6 +1422,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           function renderDirectWaterwayMode() {
             if (roadCasingPolyline) map.removeLayer(roadCasingPolyline);
             if (roadCorePolyline) map.removeLayer(roadCorePolyline);
+            if (passedPolyline) map.removeLayer(passedPolyline);
             if (directWaterwayLine) map.removeLayer(directWaterwayLine);
 
             var directPoints = [
@@ -1374,13 +1490,18 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               if (msg.type === 'START_INAPP_NAVIGATION') {
                 inAppNavActive = true;
                 trackingLocked = true;
+                var mapEl = document.getElementById('map');
+                if (mapEl) mapEl.classList.add('nav-3d-active');
                 var offsetTarget = getOffsetLatLng(rescuerMarker.getLatLng(), 18);
-                map.flyTo(offsetTarget, 18, { animate: true, duration: 0.8 });
+                map.flyTo(offsetTarget, 18, { animate: true, duration: 1.0 });
                 if (roadCorePolyline) {
-                  roadCorePolyline.setStyle({ color: '#0084FF', weight: 6.5, opacity: 1 });
+                  roadCorePolyline.setStyle({ color: '#4285F4', weight: 7.5, opacity: 1.0 });
                 }
+                updateRouteProgress(rescuerMarker.getLatLng());
               } else if (msg.type === 'STOP_INAPP_NAVIGATION') {
                 inAppNavActive = false;
+                var mapEl = document.getElementById('map');
+                if (mapEl) mapEl.classList.remove('nav-3d-active');
                 fitRouteOverview(true);
               } else if (msg.type === 'UPDATE_TEAM_GPS') {
                 var latLng = [msg.lat, msg.lng];
@@ -1395,8 +1516,10 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 if (etaPill && msg.etaText) {
                   etaPill.innerText = msg.etaText;
                 }
+                // Tự động cắt ngắn lộ trình đã đi qua (Route Progress Trimming)
+                updateRouteProgress(latLng);
                 if (trackingLocked || inAppNavActive) {
-                  var offsetTarget = getOffsetLatLng(latLng);
+                  var offsetTarget = getOffsetLatLng(latLng, inAppNavActive ? 18 : undefined);
                   map.panTo(offsetTarget, { animate: true, duration: 0.8 });
                 }
               } else if (msg.type === 'SET_ROAD_ROUTE') {
