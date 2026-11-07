@@ -311,9 +311,17 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
   const activeMissions = useMemo<SosAssignmentData[]>(() => (currentActiveMission ? [currentActiveMission] : []), [currentActiveMission]);
 
   const historyMissions = useMemo<SosAssignmentData[]>(() => {
-    return missions.filter((m: SosAssignmentData) =>
-      ['COMPLETED', 'CANCELLED', 'REJECTED'].includes(m.status)
-    );
+    // Chỉ lưu trữ và tổng hợp các nhiệm vụ ĐÃ HOÀN THÀNH thực sự
+    const completedList = missions.filter((m: SosAssignmentData) => m.status === 'COMPLETED');
+    const map = new Map<string, SosAssignmentData>();
+    completedList.forEach((m) => {
+      const sosId = typeof m.sosRequestId === 'object' ? m.sosRequestId?._id : m.sosRequestId;
+      const key = sosId ? String(sosId) : String(m._id);
+      if (!map.has(key)) {
+        map.set(key, m);
+      }
+    });
+    return Array.from(map.values());
   }, [missions]);
 
   const displayedMissions: SosAssignmentData[] = activeSegment === 'active' ? activeMissions : historyMissions;
@@ -557,6 +565,32 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
 
   // Render trạng thái tiến trình (hỗ trợ phân biệt nhiệm vụ Cứu nạn và Tiếp tế cứu trợ)
   const renderProgressStep = (currentStatus: SosAssignmentStatus, isRelief = false) => {
+    if (['CANCELLED', 'REJECTED'].includes(currentStatus)) {
+      return (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            paddingVertical: 9,
+            paddingHorizontal: 12,
+            borderRadius: 8,
+            backgroundColor: '#FEF2F2',
+            borderWidth: 1,
+            borderColor: '#FCA5A5',
+            marginBottom: 12,
+          }}
+        >
+          <MaterialCommunityIcons name="close-circle-outline" size={16} color="#DC2626" />
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#DC2626', flex: 1 }}>
+            {currentStatus === 'REJECTED'
+              ? 'Nhiệm vụ đã được đội cứu hộ từ chối tiếp nhận'
+              : 'Lệnh điều động đã được Ban Chỉ Huy thu hồi / hủy bỏ'}
+          </Text>
+        </View>
+      );
+    }
+
     const steps: { key: SosAssignmentStatus; label: string }[] = isRelief
       ? [
           { key: 'PENDING', label: 'Lệnh điều phối' },
@@ -823,7 +857,20 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                     <Text style={styles.codePrefix}>MÃ SOS:</Text>
                     <Text style={styles.codeText}>{sos?.sosCode || 'SOS-KHẨN'}</Text>
                   </View>
-                  {renderPriorityBadge(item.priority || sos?.priority)}
+                  {['CANCELLED', 'REJECTED'].includes(item.status) ? (
+                    <View
+                      style={[
+                        styles.priorityBadge,
+                        { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
+                      ]}
+                    >
+                      <Text style={{ color: '#DC2626', fontWeight: '800', fontSize: 11 }}>
+                        {item.status === 'REJECTED' ? 'ĐÃ TỪ CHỐI' : 'ĐÃ HỦY LỆNH'}
+                      </Text>
+                    </View>
+                  ) : (
+                    renderPriorityBadge(item.priority || sos?.priority)
+                  )}
                 </View>
 
                 {/* Emergency Category Tag */}
@@ -1013,7 +1060,16 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
 
                 {/* Các nút hành động: Đầy đủ các bước tiến trình & Điều hướng bản đồ */}
                 <View style={styles.actionRow}>
-                  {item.status !== 'COMPLETED' ? (
+                  {['CANCELLED', 'REJECTED'].includes(item.status) ? (
+                    <View style={[styles.completedBadge, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' }]}>
+                      <MaterialCommunityIcons name="close-circle-outline" size={16} color="#DC2626" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.completedBadgeText, { color: '#DC2626' }]}>
+                          {item.status === 'REJECTED' ? 'Nhiệm vụ đã từ chối' : 'Lệnh điều động đã được thu hồi / hủy'}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : item.status !== 'COMPLETED' ? (
                     <>
                       {/* Nút chính chuyển đổi trạng thái tác chiến */}
                       {['PENDING', 'ASSIGNED'].includes(item.status) && (
