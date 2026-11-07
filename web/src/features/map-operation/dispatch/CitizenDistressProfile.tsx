@@ -21,6 +21,7 @@ export const CitizenDistressProfile: React.FC<Props> = ({
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isDetailExpanded, setIsDetailExpanded] = useState(false);
   const [isSuppliesExpanded, setIsSuppliesExpanded] = useState(false);
+  const [hoveredSupplyId, setHoveredSupplyId] = useState<string | null>(null);
 
   // Danh sách vật tư đã cấp / phân bổ cho ca cứu nạn này
   const [internalSupplies, setInternalSupplies] = useState<Record<string, number>>({});
@@ -328,7 +329,7 @@ export const CitizenDistressProfile: React.FC<Props> = ({
               </span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 160, overflowY: 'auto' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 220, overflowY: 'auto', paddingRight: 2 }}>
               {isLoadingSupplies ? (
               <div style={{ padding: '14px 0', textAlign: 'center', fontSize: 11.5, color: '#64748b' }}>
                 Đang kiểm tra kho vật tư khu vực...
@@ -342,30 +343,54 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                 const sId = supply._id || (supply as any).id;
                 const qty = allocatedSupplies[sId] || 0;
                 const maxAvailable = supply.quantity || 0;
+                const isHovered = hoveredSupplyId === sId;
                 return (
-                  <div
-                    key={sId}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      background: qty > 0 ? '#f0f9ff' : '#ffffff',
-                      border: qty > 0 ? '1px solid #bae6fd' : '1px solid #e2e8f0',
-                      padding: '5px 8px',
-                      borderRadius: 6,
-                      fontSize: 11.5,
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
-                      <div style={{ fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {supply.name}
+                    <div
+                      key={sId}
+                      onMouseEnter={() => setHoveredSupplyId(sId)}
+                      onMouseLeave={() => setHoveredSupplyId(null)}
+                      style={{
+                        display: 'flex',
+                        alignItems: isHovered ? 'flex-start' : 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                        background: isHovered ? (qty > 0 ? '#e0f2fe' : '#f8fafc') : qty > 0 ? '#f0f9ff' : '#ffffff',
+                        border: isHovered ? '1.5px solid #0284c7' : qty > 0 ? '1px solid #bae6fd' : '1px solid #e2e8f0',
+                        boxShadow: isHovered ? '0 4px 12px rgba(2, 132, 199, 0.12)' : '0 1px 2px rgba(0,0,0,0.03)',
+                        padding: '6px 9px',
+                        borderRadius: 7,
+                        fontSize: 11.5,
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          title={`${supply.name} • Tồn kho: ${supply.quantity} ${supply.unit} (${supply.supplyType === 'CONSUMABLE' ? 'Tiêu hao' : 'Tái sử dụng'})`}
+                          style={{
+                            fontWeight: 700,
+                            color: isHovered ? '#0284c7' : '#0f172a',
+                            fontSize: 12,
+                            lineHeight: 1.35,
+                            wordBreak: 'break-word',
+                            display: isHovered ? 'block' : '-webkit-box',
+                            WebkitLineClamp: isHovered ? 'unset' : 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: isHovered ? 'visible' : 'hidden',
+                            transition: 'color 0.15s ease',
+                          }}
+                        >
+                          {supply.name}
+                        </div>
+                        <div style={{ fontSize: 10.5, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span>Kho còn: <strong style={{ color: supply.quantity > 0 ? '#0f172a' : '#ef4444' }}>{supply.quantity} {supply.unit}</strong></span>
+                          <span>•</span>
+                          <span style={{ color: supply.supplyType === 'CONSUMABLE' ? '#ea580c' : '#0284c7', fontWeight: 600 }}>
+                            {supply.supplyType === 'CONSUMABLE' ? 'Tiêu hao' : 'Tái sử dụng'}
+                          </span>
+                        </div>
                       </div>
-                      <div style={{ fontSize: 10, color: '#64748b' }}>
-                        Kho còn: {supply.quantity} {supply.unit} {supply.supplyType === 'CONSUMABLE' ? '• Tiêu hao' : '• Tái sử dụng'}
-                      </div>
-                    </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0, marginTop: isHovered ? 2 : 0, transition: 'margin 0.15s ease' }}>
                       <button
                         type="button"
                         onClick={() => handleUpdateSupply(sId, -1, maxAvailable)}
