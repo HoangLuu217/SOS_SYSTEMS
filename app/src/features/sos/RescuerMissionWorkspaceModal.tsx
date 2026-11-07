@@ -1367,15 +1367,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>
-          html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #0f172a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
-          #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #f8fafc; transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+          html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+          #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #f8fafc; }
           .leaflet-container { background-color: #f1f5f9; }
-          #map.nav-3d-active {
-            transform: perspective(850px) rotateX(46deg);
-            transform-origin: 50% 68%;
-            height: 124%;
-            margin-top: -7%;
-          }
           
           /* Pulsing Red SOS Radar Beacon */
           @keyframes sosRadar {
@@ -1892,16 +1886,14 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               if (msg.type === 'START_INAPP_NAVIGATION') {
                 inAppNavActive = true;
                 trackingLocked = true;
-                var mapEl = document.getElementById('map');
-                if (mapEl) mapEl.classList.add('nav-3d-active');
+                map.invalidateSize();
                 var offsetTarget = getOffsetLatLng(rescuerMarker.getLatLng(), 17.5);
-                map.flyTo(offsetTarget, 17.5, { animate: true, duration: 1.0 });
+                map.flyTo(offsetTarget, 17.5, { animate: true, duration: 0.8 });
                 updateRouteStyles();
                 updateRouteProgress(rescuerMarker.getLatLng());
               } else if (msg.type === 'STOP_INAPP_NAVIGATION') {
                 inAppNavActive = false;
-                var mapEl = document.getElementById('map');
-                if (mapEl) mapEl.classList.remove('nav-3d-active');
+                map.invalidateSize();
                 fitRouteOverview(true);
               } else if (msg.type === 'UPDATE_TEAM_GPS') {
                 var latLng = [msg.lat, msg.lng];
