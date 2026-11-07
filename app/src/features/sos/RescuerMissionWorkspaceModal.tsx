@@ -1533,7 +1533,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           map.createPane('routePane');
           map.getPane('routePane').style.zIndex = '440';
 
-          // Tile Layer: CartoDB Voyager chuẩn OpenStreetMap (Đồng bộ 100% hình học tuyến đường OSRM, hiển thị đầy đủ tên đường tiếng Việt, retina siêu nét)
+          // Tile Layer: Google Maps chuẩn Streets & Satellite (Miễn phí 100%, không bị dính watermark 'API KEY REQUIRED', tải cực nhanh, tên đường tiếng Việt sắc nét)
           var currentTileLayer = null;
           function setTileLayer(type) {
             if (currentTileLayer) map.removeLayer(currentTileLayer);
@@ -1543,10 +1543,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 maxZoom: 20
               }).addTo(map);
             } else {
-              currentTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-                subdomains: 'abcd',
-                maxZoom: 20,
-                detectRetina: true
+              currentTileLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+                subdomains: ['0', '1', '2', '3'],
+                maxZoom: 20
               }).addTo(map);
             }
           }
