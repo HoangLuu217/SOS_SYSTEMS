@@ -214,21 +214,22 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return;
     }
 
-    // 3. Phản hồi thiết bị: Rung (nếu bật vibration)
+    // 3. Phản hồi thiết bị: Rung cảnh báo khẩn cấp dồn dập (nếu bật vibration)
     if (currentSettings.vibration) {
       try {
-        if (incoming.priority === 'CRITICAL' || incoming.type === 'INSTANT' || category === 'alert') {
-          Vibration.vibrate([0, 500, 200, 500]);
+        if (incoming.priority === 'CRITICAL' || incoming.type === 'INSTANT' || incoming.type === 'ALERT' || category === 'alert') {
+          // Nhịp rung chuông báo động cứu nạn dồn dập
+          Vibration.vibrate([0, 500, 150, 500, 150, 800, 200, 800]);
         } else {
           Vibration.vibrate(300);
         }
       } catch (_) {}
     }
 
-    // 4. Kích hoạt thông báo hệ thống ra ngoài màn hình máy (Status bar & Lock screen)
+    // 4. Kích hoạt thông báo hệ thống ra ngoài màn hình máy (Status bar & Lock screen) kèm âm thanh chuông
     triggerLocalNotification({
-      title: incoming.title,
-      body: incoming.content,
+      title: incoming.title || '🚨 LỆNH ĐIỀU ĐỘNG CỨU HỘ MỚI',
+      body: incoming.content || (incoming.data?.address ? `Vị trí ứng cứu: ${incoming.data.address}` : 'Có lệnh điều động khẩn cấp mới từ Ban chỉ huy!'),
       priority: incoming.priority,
       data: {
         notificationId: incoming._id,
@@ -236,6 +237,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         areaId: incoming.areaId,
         areaName: incoming.areaName,
         isLocalTrigger: true,
+        assignmentId: incoming.data?.assignmentId,
+        sosId: incoming.data?.sosId,
       },
     }).catch(() => {});
 
@@ -308,10 +311,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
       const item: NotificationItem = {
         _id: String(data.notificationId || data.broadcastId || notification.request.identifier),
-        title: content.title || 'Thông báo mới',
-        content: String(data.content || content.body || ''),
-        type: String(data.type || 'SYSTEM'),
-        priority: String(data.priority || 'NORMAL'),
+        title: content.title || data.title || '🚨 LỆNH ĐIỀU ĐỘNG CỨU HỘ MỚI',
+        content: String(content.body || data.content || data.body || ''),
+        type: String(data.type || 'ALERT'),
+        priority: String(data.priority || 'CRITICAL'),
         areaId: data.areaId,
         areaName: data.areaName,
         data,
@@ -321,9 +324,14 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       processIncomingAlert(item);
     });
 
-    const responseSub = Notifications.addNotificationResponseReceivedListener(() => {
+    const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
       syncNotifications();
-      navigateHandlerRef.current?.('news');
+      const notifData = response?.notification?.request?.content?.data as Record<string, any> | undefined;
+      if (notifData?.type === 'SOS_SYNC' || notifData?.action === 'ASSIGNED' || notifData?.assignmentId || notifData?.sosId) {
+        navigateHandlerRef.current?.('sos');
+      } else {
+        navigateHandlerRef.current?.('news');
+      }
     });
 
     AsyncStorage.getItem(SEEN_NOTIFICATIONS_STORAGE_KEY).then((raw) => {

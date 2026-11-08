@@ -8,6 +8,7 @@ const {
   User,
   Vehicle,
   Equipment,
+  Notification,
 } = require('../models');
 const { emitSosUpdated } = require('../socket');
 const ApiError = require('../utils/apiError');
@@ -244,6 +245,24 @@ class SosAssignmentService {
         io.to(`user_${rescuer._id}`).emit('assignment:assigned', assignment);
       }
 
+      // Tìm danh sách tất cả cán bộ, chiến sĩ và đội trưởng trong đội để gửi thông báo
+      const targetUserIds = new Set();
+      if (rescuer._id) targetUserIds.add(rescuer._id.toString());
+      try {
+        const teamDoc = await RescueTeam.findById(assignment.rescueTeamId).select('leaderId members');
+        if (teamDoc?.leaderId) targetUserIds.add(teamDoc.leaderId.toString());
+        (teamDoc?.members || []).forEach((m) => {
+          if (m.rescuerId) targetUserIds.add(m.rescuerId.toString());
+        });
+      } catch (_) {}
+
+      const sosCodeStr = sos.sosCode || (sos._id ? `#SOS-${sos._id.toString().slice(-4)}` : 'mới');
+      const victimsCount = sos.people || 1;
+      const addrStr = sos.address || 'Khu vực ngập lụt';
+      const notifTitle = `🚨 LỆNH ĐIỀU ĐỘNG CỨU HỘ: ${sosCodeStr}`;
+      const notifContent = `Ban chỉ huy điều động ứng cứu khẩn cấp ca ${sosCodeStr} tại ${addrStr} (${victimsCount} người cần cứu). Khẩn trương tiếp cận!`;
+
+      // 1. Gửi Realtime SSE & In-App Notification cho toàn bộ thành viên đội
       const eventBus = require('./eventBus');
       eventBus.emit('notification_event', {
         action: 'BROADCAST',
@@ -257,20 +276,91 @@ class SosAssignmentService {
           rescuerId: rescuer._id,
         },
       });
-      eventBus.emit('notification_event', {
-        action: 'USER',
-        userId: rescuer._id.toString(),
-        title: '🚨 LỆNH ĐIỀU ĐỘNG CỨU HỘ MỚI',
-        content: `Bạn vừa được Ban chỉ huy điều động ứng cứu khẩn cấp ca ${sos.sosCode || sos._id}!`,
-        data: {
-          type: 'SOS_SYNC',
-          action: 'ASSIGNED',
-          sosId: sos._id,
-          sosCode: sos.sosCode,
-          status: 'ASSIGNED',
-          assignmentId: assignment._id,
-        },
-      });
+
+      for (const uid of targetUserIds) {
+        eventBus.emit('notification_event', {
+          action: 'USER',
+          userId: uid,
+          title: notifTitle,
+          content: notifContent,
+          data: {
+            title: notifTitle,
+            content: notifContent,
+            type: 'ALERT',
+            action: 'ASSIGNED',
+            priority: 'CRITICAL',
+            sosId: sos._id,
+            sosCode: sos.sosCode,
+            status: 'ASSIGNED',
+            assignmentId: assignment._id,
+            address: addrStr,
+            people: victimsCount,
+          },
+        });
+
+        // Lưu vào CSDL bảng Notifications để lưu vết lịch sử
+        try {
+          await Notification.create({
+            userId: uid,
+            createdBy: assignerId || null,
+            areaId: sos.areaId || null,
+            areaName: sos.areaName || null,
+            sosId: sos._id,
+            type: 'ALERT',
+            title: notifTitle,
+            content: notifContent,
+            priority: 'CRITICAL',
+            data: {
+              type: 'SOS_SYNC',
+              action: 'ASSIGNED',
+              sosId: sos._id,
+              assignmentId: assignment._id,
+            },
+          });
+        } catch (_) {}
+      }
+
+      // 2. Gửi Push Notification ra màn hình khóa điện thoại (Expo Push Service)
+      try {
+        const targetUsers = await User.find({
+          _id: { $in: Array.from(targetUserIds) },
+          $or: [
+            { pushToken: { $exists: true, $ne: null } },
+            { 'citizen.pushToken': { $exists: true, $ne: null } },
+          ],
+        }).select('pushToken citizen.pushToken');
+
+        const pushTokens = [];
+        targetUsers.forEach((u) => {
+          if (u.pushToken && typeof u.pushToken === 'string' && u.pushToken.trim()) {
+            pushTokens.push(u.pushToken.trim());
+          }
+          if (u.citizen?.pushToken && typeof u.citizen.pushToken === 'string' && u.citizen.pushToken.trim()) {
+            pushTokens.push(u.citizen.pushToken.trim());
+          }
+        });
+
+        const uniqueTokens = [...new Set(pushTokens)];
+        if (uniqueTokens.length > 0) {
+          const { sendExpoPushNotification } = require('../utils/expoPush');
+          await sendExpoPushNotification({
+            tokens: uniqueTokens,
+            title: notifTitle,
+            body: notifContent,
+            priority: 'CRITICAL',
+            sound: 'default',
+            channelId: 'emergency-alerts',
+            data: {
+              type: 'SOS_SYNC',
+              action: 'ASSIGNED',
+              sosId: sos._id.toString(),
+              assignmentId: assignment._id.toString(),
+            },
+          });
+        }
+      } catch (pushErr) {
+        console.warn('Lỗi gửi push notification cho đội cứu hộ:', pushErr);
+      }
     } catch (err) {
       console.warn('Lỗi phát socket/SSE cho nhiệm vụ mới:', err);
     }
@@ -884,14 +974,19 @@ class SosAssignmentService {
 
       const eventBus = require('./eventBus');
       if (assignment.rescuerId) {
+        const cancelTitle = `⚠️ LỆNH ĐIỀU ĐỘNG ĐÃ BỊ HỦY`;
+        const cancelContent = `Ban chỉ huy đã thu hồi / hủy lệnh điều động cho ca cứu nạn.`;
         eventBus.emit('notification_event', {
           action: 'USER',
           userId: assignment.rescuerId.toString(),
-          title: '⚠️ LỆNH ĐIỀU ĐỘNG ĐÃ BỊ HỦY',
-          content: `Ban chỉ huy đã thu hồi / hủy lệnh điều động cho ca cứu nạn.`,
+          title: cancelTitle,
+          content: cancelContent,
           data: {
-            type: 'SOS_SYNC',
+            title: cancelTitle,
+            content: cancelContent,
+            type: 'ALERT',
             action: 'CANCELLED',
+            priority: 'HIGH',
             assignmentId: assignment._id.toString(),
             status: 'CANCELLED',
           },
