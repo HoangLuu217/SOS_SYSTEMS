@@ -274,6 +274,10 @@ export const TacticalMap = ({
   const sosLng = selectedSos?.coordinates?.lng ?? areaCentroid[0];
   const sosLat = selectedSos?.coordinates?.lat ?? areaCentroid[1];
 
+  // Rescuer location fallback (hướng tiếp cận dã chiến mặc định gần ca SOS)
+  const defaultRescuerLat = sosLat + 0.0045;
+  const defaultRescuerLng = sosLng + 0.0035;
+
   // Active selected teams for live GPS member visualization & dispatch (Tự động hiển thị khi cán bộ click chọn đội)
   const activePreviewTeams = useMemo(() => {
     if (!previewTeamIds || previewTeamIds.length === 0) return [];
@@ -325,7 +329,10 @@ export const TacticalMap = ({
       }
     }
 
-    return { lat: defaultRescuerLat, lng: defaultRescuerLng };
+    return {
+      lat: typeof defaultRescuerLat === 'number' && !isNaN(defaultRescuerLat) ? defaultRescuerLat : 16.035,
+      lng: typeof defaultRescuerLng === 'number' && !isNaN(defaultRescuerLng) ? defaultRescuerLng : 108.245,
+    };
   };
 
   // Tọa độ GPS thành viên: Lấy chính xác theo từng user trong team (ưu tiên Socket Telemetry -> GPS Profile -> Tự động tỏa đều để KHÔNG BAO GIỜ bị đè lên nhau)
@@ -817,9 +824,7 @@ export const TacticalMap = ({
     return list;
   }, [areas]);
 
-  // Rescuer location fallback (hướng Nguyễn Lương Bằng nằm gọn bên trong Phường Liên Chiểu)
-  const defaultRescuerLat = sosLat + 0.0045;
-  const defaultRescuerLng = sosLng + 0.0035;
+// Fallback coordinates already initialized above
 
   const typeIconMap: Record<string, string> = {
     MEDICAL: '🚑 Y Tế',

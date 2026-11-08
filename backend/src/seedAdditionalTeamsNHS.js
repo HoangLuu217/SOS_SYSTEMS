@@ -44,9 +44,27 @@ async function seedAdditionalTeamsNHS() {
   const dangVanLong = await User.findOne({ phone: '0905999881' });
   const leVanHai = await User.findOne({ phone: '0905999882' });
   const nguyenDucNam = await User.findOne({ phone: '0905999883' });
-  const bsNghia = await User.findOne({ phone: '0905555666' }) || nguyenDucNam;
-  const dsTrang = await User.findOne({ phone: '0905555667' }) || leVanHai;
-  const ddToan = await User.findOne({ phone: '0905555668' }) || dangVanLong;
+  const bsNghia = (await User.findOne({ phone: '0905555666' })) || nguyenDucNam;
+  const dsTrang = (await User.findOne({ phone: '0905555667' })) || leVanHai;
+  const ddToan = (await User.findOne({ phone: '0905555668' })) || dangVanLong;
+
+  // Cập nhật vị trí GPS thực tế cho các bác sĩ & nhân viên y tế tại TTYT Ngũ Hành Sơn (Lê Văn Hiến)
+  if (nguyenDucNam) {
+    nguyenDucNam.currentLocation = { type: 'Point', coordinates: [108.2492, 16.0125] };
+    await nguyenDucNam.save();
+  }
+  if (bsNghia && bsNghia._id.toString() !== nguyenDucNam?._id.toString()) {
+    bsNghia.currentLocation = { type: 'Point', coordinates: [108.2498, 16.0130] };
+    await bsNghia.save();
+  }
+  if (dsTrang && dsTrang._id.toString() !== leVanHai?._id.toString()) {
+    dsTrang.currentLocation = { type: 'Point', coordinates: [108.2485, 16.0120] };
+    await dsTrang.save();
+  }
+  if (ddToan && ddToan._id.toString() !== dangVanLong?._id.toString()) {
+    ddToan.currentLocation = { type: 'Point', coordinates: [108.2501, 16.0118] };
+    await ddToan.save();
+  }
 
   // ========================================================
   // ĐỘI 1: ĐỘI XE CỨU THƯƠNG 115 NGŨ HÀNH SƠN (43-MED-NHS)
