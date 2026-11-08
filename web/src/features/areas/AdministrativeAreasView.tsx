@@ -3,7 +3,6 @@ import {
   Building2,
   Search,
   CheckCircle2,
-  RefreshCw,
   Globe2,
   ChevronRight,
   ArrowLeft,
@@ -37,7 +36,6 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
   areas: propAreas = [],
 }) => {
   const [, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
-  const [refreshIndex, setRefreshIndex] = useState(0);
   const [provincesLoading, setProvincesLoading] = useState(false);
 
   const [vietnamProvinces, setVietnamProvinces] = useState<VietnamProvinceItem[]>(() => {
@@ -100,7 +98,7 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
     return () => {
       isMounted = false;
     };
-  }, [refreshIndex]);
+  }, []);
 
     const getSubUnitManager = (u: ProvinceSubUnitItem): AreaManagerInfo | null => {
       if (!areaManagers || Object.keys(areaManagers).length === 0) return null;
@@ -553,22 +551,7 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
                 />
               </div>
 
-              <button
-                onClick={() => {
-                  try {
-                    localStorage.removeItem('rescuesos_vietnam_34_provinces_v2');
-                    localStorage.removeItem('rescuesos_vietnam_provinces_cache_v4');
-                    localStorage.removeItem('rescuesos_vietnam_provinces_cache_v3');
-                    localStorage.removeItem('rescuesos_vietnam_provinces_cache_v2');
-                    localStorage.removeItem('rescuesos_vietnam_provinces_cache_v1');
-                  } catch {}
-                  setRefreshIndex((p) => p + 1);
-                }}
-                className="sos-btn-refresh"
-              >
-                <RefreshCw size={14} className={provincesLoading ? 'animate-spin' : ''} />
-                <span>Làm mới</span>
-              </button>
+
             </div>
           </div>
 
