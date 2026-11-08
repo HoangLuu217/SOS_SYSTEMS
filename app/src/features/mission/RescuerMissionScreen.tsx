@@ -699,8 +699,22 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
         <View style={styles.headerTopRow}>
           <View style={styles.headerTitleBox}>
             <View style={styles.badgeLiveRow}>
-              <View style={styles.livePulseDot} />
-              <Text style={styles.headerOverline}>TRỰC BAN 24/7 • SẴN SÀNG ỨNG CỨU</Text>
+              <View
+                style={[
+                  styles.livePulseDot,
+                  activeMissions.length > 0 && { backgroundColor: '#EF4444' },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.headerOverline,
+                  activeMissions.length > 0 && { color: '#FCA5A5' },
+                ]}
+              >
+                {activeMissions.length > 0
+                  ? 'ĐANG TÁC CHIẾN • CÓ 1 CA CẦN XỬ LÝ'
+                  : 'TRỰC BAN 24/7 • SẴN SÀNG NHẬN LỆNH'}
+              </Text>
             </View>
             <Text style={styles.headerTitle}>Nhiệm vụ tác chiến</Text>
           </View>
