@@ -242,7 +242,9 @@ class SosAssignmentService {
       if (io) {
         io.emit('assignment:created', assignment);
         io.emit('assignment:new', assignment);
+        io.emit('sos:sync');
         io.to(`user_${rescuer._id}`).emit('assignment:assigned', assignment);
+        io.to(`user_${rescuer._id}`).emit('sos:sync');
       }
 
       // Tìm danh sách tất cả cán bộ, chiến sĩ và đội trưởng trong đội để gửi thông báo
@@ -991,9 +993,12 @@ class SosAssignmentService {
           status: 'CANCELLED',
         };
         io.emit('assignment:cancelled', payload);
+        io.emit('assignment:deleted', payload);
         io.emit('assignment:updated', payload);
+        io.emit('sos:sync');
         if (assignment.rescuerId) {
           io.to(`user_${assignment.rescuerId}`).emit('assignment:cancelled', payload);
+          io.to(`user_${assignment.rescuerId}`).emit('sos:sync');
         }
       }
 

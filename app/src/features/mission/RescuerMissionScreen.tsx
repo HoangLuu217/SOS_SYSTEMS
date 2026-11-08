@@ -75,6 +75,10 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
   // Modal Điều hướng Tác chiến Thực địa GrabDriver
   const [workspaceVisible, setWorkspaceVisible] = useState(false);
   const [activeWorkspaceMission, setActiveWorkspaceMission] = useState<SosAssignmentData | null>(null);
+  const activeWorkspaceMissionRef = useRef<SosAssignmentData | null>(null);
+  useEffect(() => {
+    activeWorkspaceMissionRef.current = activeWorkspaceMission;
+  }, [activeWorkspaceMission]);
   const dismissedMissionsRef = React.useRef<Set<string>>(new Set());
 
   const isFetchingRef = useRef(false);
@@ -238,39 +242,88 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     };
   }, [user?._id]);
 
-  // Phát telemetry GPS thời gian thực của cứu hộ viên lên Socket.IO
+  // Kết nối Socket.IO realtime để nhận lệnh điều động & hủy điều động tức thời 100%
   useEffect(() => {
     let locSub: Location.LocationSubscription | null = null;
     let s: any = null;
     let isMounted = true;
 
+    const socketUrl = ENV.API_BASE_URL.replace(/\/api\/?$/, '');
+    s = io(socketUrl, { transports: ['websocket', 'polling'] });
+
+    s.on('connect', () => {
+      console.log('✔ [RescuerMissionScreen] Socket connected realtime');
+      if (user?._id) s.emit('register_user', user._id);
+    });
+
+    // Lắng nghe khi có lệnh điều động mới từ Web
+    const handleNewMission = () => {
+      console.log('🚨 [RescuerMissionScreen] Có lệnh điều động mới từ Ban chỉ huy!');
+      playDispatchAlertSound().catch(() => {});
+      fetchMissions({ isSilent: true });
+      DeviceEventEmitter.emit('sos:sync');
+    };
+
+    // Lắng nghe khi Ban chỉ huy trên Web HỦY LỆNH điều động -> Mất lệnh ngay lập tức!
+    const handleCancelledMission = (payload?: any) => {
+      console.log('⚠️ [RescuerMissionScreen] Lệnh điều động đã bị hủy:', payload);
+      // Nếu đang mở workspace của ca bị hủy, tự động đóng ngay lập tức
+      if (activeWorkspaceMissionRef.current) {
+        const curAssignId = activeWorkspaceMissionRef.current._id;
+        const curSosId = activeWorkspaceMissionRef.current.sosRequestId?._id;
+        if (
+          !payload ||
+          !payload.assignmentId ||
+          String(payload.assignmentId) === String(curAssignId) ||
+          String(payload.sosId) === String(curSosId)
+        ) {
+          setWorkspaceVisible(false);
+          setActiveWorkspaceMission(null);
+          Alert.alert(
+            '⚠️ ĐIỀU ĐỘNG ĐÃ HỦY',
+            payload?.reason
+              ? `Ban chỉ huy đã thu hồi / hủy lệnh điều động ca này.\nLý do: ${payload.reason}`
+              : 'Ban chỉ huy đã thu hồi hoặc hủy bỏ lệnh điều động.',
+            [{ text: 'Đã hiểu' }]
+          );
+        }
+      }
+      fetchMissions({ isSilent: true });
+      DeviceEventEmitter.emit('sos:sync');
+    };
+
+    const handleSync = () => {
+      fetchMissions({ isSilent: true });
+      DeviceEventEmitter.emit('sos:sync');
+    };
+
+    s.on('assignment:new', handleNewMission);
+    s.on('assignment:created', handleNewMission);
+    s.on('assignment:assigned', handleNewMission);
+
+    s.on('assignment:cancelled', handleCancelledMission);
+    s.on('assignment:deleted', handleCancelledMission);
+    s.on('assignment:updated', handleSync);
+    s.on('assignment:status_updated', handleSync);
+    s.on('assignment:completed', handleSync);
+
+    s.on('sos:updated', handleSync);
+    s.on('sos:status_changed', handleSync);
+    s.on('sos:sync', handleSync);
+
+    // Kích hoạt GPS telemetry nếu được cấp quyền
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === 'granted' && isMounted) {
-          const socketUrl = ENV.API_BASE_URL.replace(/\/api\/?$/, '');
-          s = io(socketUrl, { transports: ['websocket', 'polling'] });
-          s.on('connect', () => {
-            if (user?._id) s.emit('register_user', user._id);
-          });
-          s.on('assignment:new', () => {
-            playDispatchAlertSound().catch(() => {});
-            fetchMissions({ isSilent: true });
-          });
-          s.on('assignment:assigned', () => {
-            playDispatchAlertSound().catch(() => {});
-            fetchMissions({ isSilent: true });
-          });
-
           const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-          if (isMounted && pos?.coords) {
-            const locData = {
+          if (isMounted && pos?.coords && s?.connected) {
+            s.emit('rescuer:location_update', {
               rescuerId: user?._id,
               phone: user?.phone,
               location: { lat: pos.coords.latitude, lng: pos.coords.longitude },
               coords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
-            };
-            if (s?.connected) s.emit('rescuer:location_update', locData);
+            });
           }
 
           locSub = await Location.watchPositionAsync(
@@ -295,9 +348,22 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     return () => {
       isMounted = false;
       if (locSub) locSub.remove();
-      if (s) s.disconnect();
+      if (s) {
+        s.off('assignment:new', handleNewMission);
+        s.off('assignment:created', handleNewMission);
+        s.off('assignment:assigned', handleNewMission);
+        s.off('assignment:cancelled', handleCancelledMission);
+        s.off('assignment:deleted', handleCancelledMission);
+        s.off('assignment:updated', handleSync);
+        s.off('assignment:status_updated', handleSync);
+        s.off('assignment:completed', handleSync);
+        s.off('sos:updated', handleSync);
+        s.off('sos:status_changed', handleSync);
+        s.off('sos:sync', handleSync);
+        s.disconnect();
+      }
     };
-  }, [user?._id, user?.phone]);
+  }, [user?._id, user?.phone, fetchMissions]);
 
   // Lọc nhiệm vụ theo Tab & Áp dụng nguyên tắc: 1 nhóm chỉ được phép làm 1 nhiệm vụ tại một thời điểm
   const allActiveMissions = useMemo<SosAssignmentData[]>(() => {

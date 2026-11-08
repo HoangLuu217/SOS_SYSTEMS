@@ -599,7 +599,13 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
 
     socket.on('connect', handleRealtimeSync);
     socket.on('assignment:created', handleRealtimeSync);
+    socket.on('assignment:new', handleRealtimeSync);
+    socket.on('assignment:cancelled', handleRealtimeSync);
+    socket.on('assignment:deleted', handleRealtimeSync);
     socket.on('assignment:updated', handleAssignmentRealtime);
+    socket.on('sos:sync', handleRealtimeSync);
+    socket.on('sos:updated', handleRealtimeSync);
+    socket.on('sos:status_changed', handleRealtimeSync);
     socket.on('assignment:status_updated', handleAssignmentRealtime);
     socket.on('assignment:status_changed', handleAssignmentRealtime);
     socket.on('sos:assignment:status_changed', handleAssignmentRealtime);
@@ -643,7 +649,13 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       unsubAssignment();
       socket.off('connect', handleRealtimeSync);
       socket.off('assignment:created', handleRealtimeSync);
+      socket.off('assignment:new', handleRealtimeSync);
+      socket.off('assignment:cancelled', handleRealtimeSync);
+      socket.off('assignment:deleted', handleRealtimeSync);
       socket.off('assignment:updated', handleAssignmentRealtime);
+      socket.off('sos:sync', handleRealtimeSync);
+      socket.off('sos:updated', handleRealtimeSync);
+      socket.off('sos:status_changed', handleRealtimeSync);
       socket.off('assignment:status_updated', handleAssignmentRealtime);
       socket.off('assignment:status_changed', handleAssignmentRealtime);
       socket.off('sos:assignment:status_changed', handleAssignmentRealtime);

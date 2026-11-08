@@ -20,6 +20,8 @@ import { ProfileScreen, MandatoryOnboardingModal } from '@/features/profile';
 import { RescuerMissionScreen } from '@/features/mission';
 import { backendApi } from '@/api';
 import { AlertModal, BottomNav, LogoSOS, InAppNotificationBanner } from '@/components';
+import { io } from 'socket.io-client';
+import { ENV } from '@/config/env';
 import { MapFilterType, TabName } from '@/types';
 import { BACKGROUND_APP_SOURCE } from '@/constants/backgroundBase64';
 
@@ -73,10 +75,33 @@ export function AuthenticatedApp() {
     const sub = DeviceEventEmitter.addListener('sos:sync', () => {
       loadMissionsCount();
     });
+
+    const socketUrl = ENV.API_BASE_URL.replace(/\/api\/?$/, '');
+    const s = io(socketUrl, { transports: ['websocket', 'polling'] });
+    if (user?._id) {
+      s.on('connect', () => {
+        s.emit('register_user', user._id);
+      });
+    }
+
+    const onSignal = () => {
+      loadMissionsCount();
+    };
+
+    s.on('assignment:new', onSignal);
+    s.on('assignment:created', onSignal);
+    s.on('assignment:assigned', onSignal);
+    s.on('assignment:cancelled', onSignal);
+    s.on('assignment:deleted', onSignal);
+    s.on('assignment:updated', onSignal);
+    s.on('sos:updated', onSignal);
+    s.on('sos:sync', onSignal);
+
     return () => {
       sub.remove();
+      s.disconnect();
     };
-  }, [isRescuer]);
+  }, [isRescuer, user?._id]);
 
   const handleNavigateToTab = React.useCallback((tab: TabName, options?: { filter?: MapFilterType; areaId?: string }) => {
     setActiveTab(tab);

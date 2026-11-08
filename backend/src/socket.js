@@ -111,6 +111,7 @@ const emitSosCreated = (sosData) => {
     const areaKey = typeof sosData.areaId === 'object' ? sosData.areaId._id : sosData.areaId;
     io.to(`area:${areaKey}`).emit('sos:area:created', sosData);
   }
+  io.emit('sos:sync');
   console.log(`📢 [Socket.IO] Đã phát sự kiện SOS mới: ${sosData.sosCode || sosData._id}`);
 
   try {
@@ -140,6 +141,7 @@ const emitSosUpdated = (sosData) => {
   if (!io) return;
   io.emit('sos:updated', sosData);
   io.emit('sos:status_changed', sosData);
+  io.emit('sos:sync');
   console.log(`📢 [Socket.IO] Đã phát sự kiện cập nhật SOS: ${sosData.sosCode || sosData._id} -> Trạng thái: ${sosData.status}`);
 
   try {
@@ -168,6 +170,7 @@ const emitSosUpdated = (sosData) => {
 const emitSosDeleted = (sosId) => {
   if (!io) return;
   io.emit('sos:deleted', { sosId });
+  io.emit('sos:sync');
   console.log(`📢 [Socket.IO] Đã phát sự kiện xóa SOS: ${sosId}`);
 
   try {
