@@ -1,6 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import {
-  Phone,
   XCircle,
   Ambulance,
   CheckCircle2,
@@ -829,31 +828,14 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   <span style={{ color: '#0284c7' }}>{assignment?.rescuerRole || 'CỨU HỘ VIÊN'}</span>
                   <span> • </span>
                   <span>{assignment?.rescueTeamName || 'Đội Cứu Hộ'}</span>
+                  {rescuerPhone && rescuerPhone !== 'Chưa cập nhật' && (
+                    <span style={{ color: '#475569', fontWeight: 600 }}> • SĐT: <strong>{rescuerPhone}</strong></span>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Hotline Call Button */}
-            <a
-              href={`tel:${rescuerPhone}`}
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 8,
-                background: '#f0f9ff',
-                border: '1.5px solid #bae6fd',
-                color: '#0284c7',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                textDecoration: 'none',
-                flexShrink: 0,
-                transition: 'all 0.15s ease',
-              }}
-              title={`Gọi cho đội cứu hộ: ${rescuerPhone}`}
-            >
-              <Phone size={17} />
-            </a>
+
           </div>
 
           {/* Divider */}
@@ -1054,28 +1036,6 @@ export const ActiveMissionConsole: React.FC<Props> = ({
 
                         {/* Các nút thao tác nhỏ gọn */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                          {selectedSos.shoreHandoff.assignedDriverPhone && (
-                            <a
-                              href={`tel:${selectedSos.shoreHandoff.assignedDriverPhone}`}
-                              title="Gọi tài xế"
-                              style={{
-                                padding: '2px 6px',
-                                background: '#ffffff',
-                                border: '1px solid #86efac',
-                                borderRadius: 4,
-                                color: '#15803d',
-                                fontWeight: 800,
-                                fontSize: 10.5,
-                                textDecoration: 'none',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 2,
-                              }}
-                            >
-                              <Phone size={10} />
-                              <span>Gọi</span>
-                            </a>
-                          )}
                           <button
                             type="button"
                             title="Đổi sang phương tiện khác"
