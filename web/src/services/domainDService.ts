@@ -265,6 +265,13 @@ class DomainDService {
     const activeAssign = Object.values(this.assignments).find((a) => {
       if (!busyStatuses.includes(a.status)) return false;
       if (currentSosId && a.sosRequestId === currentSosId) return false;
+
+      // Nếu ca SOS tương ứng đã HOÀN THÀNH hoặc ĐÃ HỦY thì đội không còn bận nữa!
+      const relatedSos = this.sosRequests.find((s) => s.id === a.sosRequestId);
+      if (relatedSos && ['COMPLETED', 'CANCELLED', 'REJECTED', 'RESOLVED'].includes(relatedSos.status)) {
+        return false;
+      }
+
       const teamIds = a.rescueTeamId ? a.rescueTeamId.split(',').map((id) => id.trim()) : [];
       return teamIds.includes(teamId) || a.rescueTeamId === teamId;
     });

@@ -309,6 +309,25 @@ const changeStatus = async (id, newStatus, changedBy, note = '') => {
     if (sos.shoreHandoff?.assignedVehicleId && mongoose.isValidObjectId(sos.shoreHandoff.assignedVehicleId)) {
       await Vehicle.findByIdAndUpdate(sos.shoreHandoff.assignedVehicleId, { status: 'AVAILABLE' });
     }
+
+    // Tự động đóng tất cả các phân công của ca SOS này để giải phóng trạng thái bận cho các đội
+    try {
+      const targetAssignStatus = newStatus === 'COMPLETED' ? 'COMPLETED' : 'CANCELLED';
+      await SosAssignment.updateMany(
+        {
+          $or: [{ sosRequestId: id }, { sosId: id }],
+          status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+        },
+        {
+          $set: {
+            status: targetAssignStatus,
+            ...(newStatus === 'COMPLETED' ? { completedAt: new Date() } : { cancelledAt: new Date() }),
+          },
+        }
+      );
+    } catch (assignSyncErr) {
+      console.warn('Sync assign status on SOS status change error:', assignSyncErr);
+    }
   }
   // Cập nhật trạng thái không re-validate các trường dữ liệu test cũ (tránh lỗi 0123456789)
   await SosRequest.updateOne({ _id: id }, { $set: updateFields });
