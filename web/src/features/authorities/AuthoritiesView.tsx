@@ -445,15 +445,6 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
     return { withOfficers, others };
   }, [authorities, getOfficerProvince, vietnamProvinces]);
 
-  // Danh sách các địa bàn (xã/phường) đã có cán bộ quản lý trong tỉnh đang chọn
-  const managedWardsInSelectedProvince = useMemo(() => {
-    if (selectedProvinceFilter === 'ALL') return [];
-    const found = provincesSummary.withOfficers.find(
-      (p) => p.name.toLowerCase() === selectedProvinceFilter.toLowerCase()
-    );
-    return found ? found.wardDetails : [];
-  }, [selectedProvinceFilter, provincesSummary]);
-
   const provinceAuthorities = useMemo(() => {
     if (selectedProvinceFilter === 'ALL') return authorities;
     return authorities.filter((a) => getOfficerProvince(a).toLowerCase() === selectedProvinceFilter.toLowerCase());
@@ -592,50 +583,6 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
             </button>
           </div>
         </div>
-
-        {/* Thanh giám sát các phường/xã đã có cán bộ quản lý theo Tỉnh/Thành phố */}
-        {selectedProvinceFilter !== 'ALL' && (
-          <div className="executive-managed-areas-bar">
-            <div className="managed-areas-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                <ShieldCheck size={16} color="#0284c7" />
-                <span className="managed-areas-title">
-                  Địa bàn đã phân công cán bộ quản lý tại <strong>{selectedProvinceFilter}</strong>:
-                </span>
-                <span className="managed-areas-count-badge">
-                  {managedWardsInSelectedProvince.length} địa bàn
-                </span>
-              </div>
-              <button
-                type="button"
-                className="managed-areas-reset-btn"
-                onClick={() => setSelectedProvinceFilter('ALL')}
-              >
-                ✕ Xem toàn quốc
-              </button>
-            </div>
-            {managedWardsInSelectedProvince.length === 0 ? (
-              <div style={{ fontSize: '12.5px', color: '#64748b', fontStyle: 'italic', padding: '4px 0' }}>
-                Chưa có xã/phường nào tại {selectedProvinceFilter} được phân công cán bộ quản lý.
-              </div>
-            ) : (
-              <div className="managed-areas-pills">
-                {managedWardsInSelectedProvince.map((item) => (
-                  <div
-                    key={item.officerId + item.areaName}
-                    className="managed-area-pill"
-                    title={`Bấm để lọc cán bộ: ${item.officerName} (${item.phone || 'Chưa có SĐT'})`}
-                    onClick={() => setAuthSearchQuery(item.areaName)}
-                  >
-                    <MapPin size={12} color="#0284c7" />
-                    <span className="pill-name">{item.areaName}</span>
-                    <span className="pill-officer">• {item.officerName}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Content Table */}
         <div className="executive-table-wrapper">
