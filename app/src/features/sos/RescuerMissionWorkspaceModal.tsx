@@ -919,7 +919,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
       if (assignment?._id) {
         await backendApi.acceptAssignment(assignment._id);
-        await backendApi.updateAssignmentStatus(assignment._id, 'EN_ROUTE', 'Đội đã nhận lệnh và xuất phát tiếp cận');
+        await backendApi.updateAssignmentStatus(assignment._id, 'EN_ROUTE');
       } else if (sos?._id) {
         await backendApi.updateSosMissionStatus(sos._id, 'ON_THE_WAY', 'Đội đã tiếp nhận và đang trên đường tới');
       }
@@ -996,7 +996,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     try {
       setActionLoading(true);
       if (assignment?._id) {
-        await backendApi.updateAssignmentStatus(assignment._id, 'ARRIVED', 'Đội cứu hộ đã tiếp cận hiện trường');
+        await backendApi.updateAssignmentStatus(assignment._id, 'ARRIVED');
       } else if (sos?._id) {
         await backendApi.updateSosMissionStatus(sos._id, 'ARRIVED', 'Đã tiếp cận hiện trường');
       }
@@ -1289,6 +1289,28 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   }, [navigationSteps, activeStepIndex, stepDistRemainingMeters, roadMetrics, isNavigating, incidentAddress]);
   const victimHeadcount = sos?.people ?? 0;
   const rawDescription = assignment?.note || sos?.description || '';
+
+  // Rút gọn ghi chú điều phối / hiện trường: chỉ giữ nội dung cốt lõi, loại bỏ các log tiến trình tự động lặp lại
+  const displayNote = useMemo(() => {
+    if (!rawDescription) return '';
+    const parts = rawDescription
+      .split('|')
+      .map((p: string) => p.trim())
+      .filter((p: string) => {
+        if (!p) return false;
+        const lower = p.toLowerCase();
+        if (lower.includes('đội đã nhận lệnh') || lower.includes('xuất phát tiếp cận')) return false;
+        if (lower.includes('đã tiếp cận hiện trường') || lower.includes('tiếp cận hiện trường')) return false;
+        if (lower.includes('đang trên đường tới')) return false;
+        return true;
+      });
+
+    const clean = parts.join(' • ');
+    if (clean.length > 80) {
+      return clean.slice(0, 78) + '...';
+    }
+    return clean || (rawDescription.split('|')[0] || '').trim();
+  }, [rawDescription]);
   const teamName = assignment?.rescueTeamId?.name || assignment?.teamName || assignment?.rescueTeamName || '';
   const vehiclePlate = assignment?.vehicleId?.plateNumber || assignment?.vehicleName || '';
   const vehicleName = vehiclePlate ? `Phương tiện: ${vehiclePlate}` : '';
@@ -2406,27 +2428,33 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               {/* Địa chỉ hiện trường - Hiển thị đầy đủ, không ẩn bớt, không cắt '...' */}
               <Text style={styles.grabAddressText}>{incidentAddress}</Text>
 
-              {/* Số người & Đối tượng cần cứu / Thông tin cứu trợ */}
+              {/* Số người & Đối tượng cần cứu / Thông tin cứu trợ - Ngắn gọn không tràn viền */}
               {isReliefMission ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
                   <MaterialCommunityIcons name="package-variant-closed" size={15} color="#059669" />
-                  <Text style={[styles.grabVictimMeta, { color: '#059669', fontWeight: '800', marginTop: 0 }]}>
-                    Điểm tiếp nhận cứu trợ • Tiếp tế nhu yếu phẩm khẩn cấp
+                  <Text
+                    style={[styles.grabVictimMeta, { color: '#059669', fontWeight: '800', marginTop: 0, flex: 1 }]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    Tiếp tế nhu yếu phẩm cứu trợ
                   </Text>
                 </View>
               ) : (
-                <Text style={styles.grabVictimMeta}>
+                <Text style={styles.grabVictimMeta} numberOfLines={1} ellipsizeMode="tail">
                   {victimHeadcount} người cần cứu • 1 người già, 1 trẻ nhỏ
                 </Text>
               )}
 
-              {/* Hộp ghi chú hiện trường (Note box xám giống hệt Grab) */}
-              {rawDescription ? (
+              {/* Hộp ghi chú điều phối / hiện trường - Tinh gọn ít chữ */}
+              {displayNote ? (
                 <View style={styles.grabNoteBox}>
                   <Text style={styles.grabNoteLabel}>
-                    {isReliefMission ? 'Lệnh xuất cấp & Ghi chú điều phối:' : 'Ghi chú từ hiện trường:'}
+                    {isReliefMission ? 'Ghi chú điều phối:' : 'Ghi chú hiện trường:'}
                   </Text>
-                  <Text style={styles.grabNoteText}>{rawDescription}</Text>
+                  <Text style={styles.grabNoteText} numberOfLines={2} ellipsizeMode="tail">
+                    {displayNote}
+                  </Text>
                 </View>
               ) : null}
 
