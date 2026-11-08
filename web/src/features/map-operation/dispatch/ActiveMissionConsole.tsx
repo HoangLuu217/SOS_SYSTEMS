@@ -44,6 +44,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
   const [selectedRoadVehId, setSelectedRoadVehId] = useState<string>('');
   const [isSubmittingRoad, setIsSubmittingRoad] = useState(false);
   const [isCancellingRoad, setIsCancellingRoad] = useState(false);
+  const [isCancelRoadModalOpen, setIsCancelRoadModalOpen] = useState(false);
   const [isProcessingSupplies, setIsProcessingSupplies] = useState(false);
   const [isRejectSuppliesModalOpen, setIsRejectSuppliesModalOpen] = useState(false);
   const [rejectNote, setRejectNote] = useState('');
@@ -317,17 +318,17 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     return name;
   };
 
-  const handleCancelRoadVehicle = async () => {
+  const handleConfirmCancelRoadVehicle = async () => {
     if (!selectedSos?.id) return;
-    if (!window.confirm('Bạn có chắc chắn muốn hủy phân công phương tiện đón bờ này để chọn lại phương tiện khác?')) {
-      return;
-    }
     setIsCancellingRoad(true);
     try {
       await cancelShoreHandoffApi(selectedSos.id);
       window.dispatchEvent(new CustomEvent('sos_data_updated'));
-    } catch (err) {
+      setIsCancelRoadModalOpen(false);
+      toast.success('Đã hủy phân công xe đón bờ thành công');
+    } catch (err: any) {
       console.warn('Lỗi hủy phân xe đón bờ:', err);
+      toast.error(err?.message || 'Không thể hủy xe đón bờ');
     } finally {
       setIsCancellingRoad(false);
     }
@@ -1056,7 +1057,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                           <button
                             type="button"
                             title="Hủy điều xe này"
-                            onClick={handleCancelRoadVehicle}
+                            onClick={() => setIsCancelRoadModalOpen(true)}
                             disabled={isCancellingRoad}
                             style={{
                               padding: '2px 6px',
@@ -2035,6 +2036,215 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   <>
                     <X size={15} />
                     <span>Xác nhận từ chối</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Xác nhận hủy phân công phương tiện đón bờ */}
+      {isCancelRoadModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.72)',
+            backdropFilter: 'blur(5px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+          onClick={() => !isCancellingRoad && setIsCancelRoadModalOpen(false)}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 440,
+              background: '#ffffff',
+              borderRadius: 16,
+              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.35)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              border: '1px solid #e2e8f0',
+              animation: 'modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: '16px 20px',
+                background: '#fff7ed',
+                borderBottom: '1px solid #ffedd5',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: '50%',
+                  background: '#ffedd5',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#ea580c',
+                  flexShrink: 0,
+                }}
+              >
+                <AlertTriangle size={20} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#9a3412' }}>
+                  Hủy phân công xe đón bờ
+                </h3>
+                <p style={{ margin: 0, fontSize: 12, color: '#c2410c', marginTop: 2 }}>
+                  Xác nhận hủy điều động phương tiện tiếp nhận ven bờ
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => !isCancellingRoad && setIsCancelRoadModalOpen(false)}
+                disabled={isCancellingRoad}
+                style={{
+                  border: 'none',
+                  background: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  padding: 4,
+                  borderRadius: 6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <p style={{ margin: 0, fontSize: 13.5, color: '#334155', lineHeight: 1.55 }}>
+                Bạn có chắc chắn muốn hủy phân công phương tiện đón bờ này để chọn lại phương tiện khác?
+              </p>
+
+              {/* Thông tin phương tiện đang phân công */}
+              {selectedSos?.shoreHandoff?.assignedVehicleName && (
+                <div
+                  style={{
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 10,
+                    padding: '12px 14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Ambulance size={15} color="#0284c7" />
+                    <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>
+                      {cleanVehicleName(selectedSos.shoreHandoff.assignedVehicleName)}
+                    </span>
+                    {selectedSos.shoreHandoff.assignedVehiclePlate && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          color: '#0369a1',
+                          background: '#e0f2fe',
+                          padding: '1px 6px',
+                          borderRadius: 4,
+                          border: '1px solid #bae6fd',
+                        }}
+                      >
+                        {selectedSos.shoreHandoff.assignedVehiclePlate}
+                      </span>
+                    )}
+                  </div>
+                  {selectedSos.shoreHandoff.assignedDriverName && (
+                    <div style={{ fontSize: 12, color: '#64748b' }}>
+                      Tài xế: <strong>{selectedSos.shoreHandoff.assignedDriverName}</strong>
+                      {selectedSos.shoreHandoff.assignedDriverPhone ? ` • ${selectedSos.shoreHandoff.assignedDriverPhone}` : ''}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div
+                style={{
+                  fontSize: 12,
+                  color: '#64748b',
+                  background: '#f1f5f9',
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  lineHeight: 1.5,
+                }}
+              >
+                ℹ️ Sau khi hủy, phương tiện sẽ được giải phóng về trạng thái <strong>Sẵn sàng</strong> và bạn có thể điều động xe khác tiếp ứng.
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                padding: '14px 20px',
+                background: '#f8fafc',
+                borderTop: '1px solid #e2e8f0',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: 10,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setIsCancelRoadModalOpen(false)}
+                disabled={isCancellingRoad}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  color: '#475569',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Không, giữ lại
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCancelRoadVehicle}
+                disabled={isCancellingRoad}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: '#dc2626',
+                  color: '#ffffff',
+                  fontSize: 13,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  boxShadow: '0 2px 6px rgba(220, 38, 38, 0.35)',
+                }}
+              >
+                {isCancellingRoad ? (
+                  <span>Đang hủy...</span>
+                ) : (
+                  <>
+                    <X size={15} />
+                    <span>Xác nhận hủy xe</span>
                   </>
                 )}
               </button>
