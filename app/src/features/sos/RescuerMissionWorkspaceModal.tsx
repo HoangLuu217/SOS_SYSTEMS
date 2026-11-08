@@ -2549,14 +2549,29 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   gap: 6,
                 }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Ionicons name="medical" size={18} color="#059669" />
-                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#065F46', textTransform: 'uppercase' }}>
-                      Xe cứu hộ / đón nạn nhân đang đến!
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1, minWidth: 0 }}>
+                    <Ionicons name="medical" size={17} color="#059669" />
+                    <Text
+                      style={{ fontSize: 12.5, fontWeight: '800', color: '#065F46', textTransform: 'uppercase' }}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      Xe đón đang tiếp cận
                     </Text>
                   </View>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669', backgroundColor: '#D1FAE5', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                  <Text
+                    style={{
+                      fontSize: 10.5,
+                      fontWeight: '800',
+                      color: '#059669',
+                      backgroundColor: '#D1FAE5',
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      borderRadius: 4,
+                      flexShrink: 0,
+                    }}
+                  >
                     ĐÃ ĐIỀU XE
                   </Text>
                 </View>
@@ -2624,14 +2639,29 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   gap: 6,
                 }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Ionicons name="flash" size={18} color="#D97706" />
-                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#92400E', textTransform: 'uppercase' }}>
-                      Đang Chờ Xe Đến Cứu Hộ
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1, minWidth: 0 }}>
+                    <Ionicons name="flash" size={17} color="#D97706" />
+                    <Text
+                      style={{ fontSize: 12.5, fontWeight: '800', color: '#92400E', textTransform: 'uppercase' }}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      Chờ xe đón bờ
                     </Text>
                   </View>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#B45309', backgroundColor: '#FDE68A', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                  <Text
+                    style={{
+                      fontSize: 10.5,
+                      fontWeight: '800',
+                      color: '#B45309',
+                      backgroundColor: '#FDE68A',
+                      paddingHorizontal: 6,
+                      paddingVertical: 2,
+                      borderRadius: 4,
+                      flexShrink: 0,
+                    }}
+                  >
                     ĐÃ BÁO BAN CHỈ HUY
                   </Text>
                 </View>
