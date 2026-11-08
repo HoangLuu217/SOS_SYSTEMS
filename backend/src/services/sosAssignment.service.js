@@ -1014,20 +1014,6 @@ class SosAssignmentService {
     assignment.requestedSupplies.push(...newRequests);
     await assignment.save();
 
-    // Trừ trực tiếp số lượng vật tư trong kho (Collection Equipment)
-    try {
-      const approvedItemsToDeduct = pendingRequests.map((r) => ({
-        name: r.name,
-        quantity: r.quantity,
-        unit: r.unit || "món",
-      }));
-      await deductSuppliesFromEquipment(
-        approvedItemsToDeduct,
-        "Chi viện bổ sung ca " + (assignment.sosRequestId?.sosCode || assignment.sosRequestId || assignment._id)
-      );
-    } catch (e) {
-      console.warn("Lỗi trừ kho vật tư khi duyệt chi viện:", e);
-    }
 
     const populated = await SosAssignment.findById(assignment._id)
       .populate('sosRequestId', 'sosCode priority emergencyType address description')
@@ -1092,6 +1078,21 @@ class SosAssignmentService {
     });
 
     await assignment.save();
+
+    // Trừ trực tiếp số lượng vật tư trong kho (Collection Equipment) cho các món vừa duyệt
+    try {
+      const approvedItemsToDeduct = pendingRequests.map((r) => ({
+        name: r.name,
+        quantity: r.quantity,
+        unit: r.unit || "món",
+      }));
+      await deductSuppliesFromEquipment(
+        approvedItemsToDeduct,
+        "Chi viện bổ sung ca " + (assignment.sosRequestId?.sosCode || assignment.sosRequestId || assignment._id)
+      );
+    } catch (e) {
+      console.warn("Lỗi trừ kho vật tư khi duyệt chi viện:", e);
+    }
 
     const populated = await SosAssignment.findById(assignment._id)
       .populate('sosRequestId', 'sosCode priority emergencyType address description')

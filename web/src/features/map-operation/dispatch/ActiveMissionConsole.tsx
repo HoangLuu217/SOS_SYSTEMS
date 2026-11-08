@@ -51,6 +51,15 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     ? selectedSos.requestedSupplies
     : [];
 
+  const pendingSupplies = useMemo(() => {
+    return effectiveRequestedSupplies.filter((s: any) => s.status === 'PENDING');
+  }, [effectiveRequestedSupplies]);
+
+  const approvedSupplies = useMemo(() => {
+    return effectiveRequestedSupplies.filter((s: any) => s.status === 'APPROVED');
+  }, [effectiveRequestedSupplies]);
+
+
   const handleApproveSupplies = async () => {
     const targetAssignId = assignment?.id || selectedSos?.assignmentId;
     if (!targetAssignId) {
@@ -523,25 +532,19 @@ export const ActiveMissionConsole: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Hộp Yêu Cầu Chi Viện Vật Tư Khẩn Cấp - Đặt lên vị trí ĐẦU TIÊN để Ban Chỉ Huy xử lý ngay */}
-        {effectiveRequestedSupplies.length > 0 && (
+                {/* 1. Hộp Yêu Cầu Chi Viện Vật Tư Khẩn Cấp (CHỜ DUYỆT) */}
+        {pendingSupplies.length > 0 && (
           <div
             style={{
               margin: '8px 12px 6px 12px',
               borderRadius: 10,
-              border: effectiveRequestedSupplies.some((s: any) => s.status === 'PENDING')
-                ? '1.8px solid #f59e0b'
-                : '1.5px solid #86efac',
-              background: effectiveRequestedSupplies.some((s: any) => s.status === 'PENDING')
-                ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)'
-                : '#f0fdf4',
+              border: '1.8px solid #f59e0b',
+              background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
               padding: '10px 12px',
               display: 'flex',
               flexDirection: 'column',
               gap: 7,
-              boxShadow: effectiveRequestedSupplies.some((s: any) => s.status === 'PENDING')
-                ? '0 3px 10px rgba(245, 158, 11, 0.22)'
-                : 'none',
+              boxShadow: '0 3px 10px rgba(245, 158, 11, 0.22)',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -551,16 +554,12 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   style={{
                     fontSize: 11.5,
                     fontWeight: 900,
-                    color: effectiveRequestedSupplies.some((s: any) => s.status === 'PENDING')
-                      ? '#b45309'
-                      : '#15803d',
+                    color: '#b45309',
                     textTransform: 'uppercase',
                     letterSpacing: '0.2px',
                   }}
                 >
-                  {effectiveRequestedSupplies.some((s: any) => s.status === 'PENDING')
-                    ? 'Yêu Cầu Chi Viện Vật Tư'
-                    : 'Đã Cấp Chi Viện Vật Tư'}
+                  Yêu Cầu Chi Viện Vật Tư
                 </span>
               </div>
               <span
@@ -569,26 +568,18 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   fontWeight: 800,
                   padding: '2px 7px',
                   borderRadius: 4,
-                  background: effectiveRequestedSupplies.some((s: any) => s.status === 'PENDING')
-                    ? '#fef3c7'
-                    : '#dcfce7',
-                  color: effectiveRequestedSupplies.some((s: any) => s.status === 'PENDING')
-                    ? '#92400e'
-                    : '#166534',
-                  border: effectiveRequestedSupplies.some((s: any) => s.status === 'PENDING')
-                    ? '1px solid #fcd34d'
-                    : '1px solid #bbf7d0',
+                  background: '#fef3c7',
+                  color: '#92400e',
+                  border: '1px solid #fcd34d',
                 }}
               >
-                {effectiveRequestedSupplies.some((s: any) => s.status === 'PENDING')
-                  ? 'CHỜ DUYỆT'
-                  : 'ĐÃ XUẤT CẤP'}
+                CHỜ DUYỆT
               </span>
             </div>
 
-            {/* Danh sách vật tư yêu cầu */}
+            {/* Danh sách vật tư đang CHỜ DUYỆT */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {effectiveRequestedSupplies.map((req: any, rIdx: number) => (
+              {pendingSupplies.map((req: any, rIdx: number) => (
                 <div
                   key={rIdx}
                   style={{
@@ -600,11 +591,11 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     padding: '5px 8px',
                     background: '#ffffff',
                     borderRadius: 6,
-                    border: '1px solid #e2e8f0',
+                    border: '1px solid #fde68a',
                   }}
                 >
                   <span style={{ fontWeight: 700 }}>• {req.name}</span>
-                  <span style={{ fontWeight: 800, color: '#0284c7' }}>
+                  <span style={{ fontWeight: 800, color: '#b45309' }}>
                     {req.quantity} {req.unit || 'món'}
                   </span>
                 </div>
@@ -612,54 +603,123 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             </div>
 
             {/* Nút thao tác nhanh trực tiếp: Duyệt hoặc Từ chối */}
-            {effectiveRequestedSupplies.some((s: any) => s.status === 'PENDING') && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
-                <button
-                  type="button"
-                  onClick={handleApproveSupplies}
-                  disabled={isProcessingSupplies}
-                  style={{
-                    flex: 1,
-                    height: 32,
-                    background: '#16a34a',
-                    border: 'none',
-                    borderRadius: 6,
-                    color: '#ffffff',
-                    fontSize: 12,
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    boxShadow: '0 1px 3px rgba(22, 163, 74, 0.3)',
-                  }}
-                >
-                  <Check size={14} />
-                  <span>{isProcessingSupplies ? 'Đang duyệt...' : 'Duyệt'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRejectSupplies}
-                  disabled={isProcessingSupplies}
-                  style={{
-                    padding: '0 14px',
-                    height: 32,
-                    background: '#fef2f2',
-                    border: '1px solid #fca5a5',
-                    borderRadius: 6,
-                    color: '#dc2626',
-                    fontSize: 12,
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Từ chối
-                </button>
-              </div>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+              <button
+                type="button"
+                onClick={handleApproveSupplies}
+                disabled={isProcessingSupplies}
+                style={{
+                  flex: 1,
+                  height: 32,
+                  background: '#16a34a',
+                  border: 'none',
+                  borderRadius: 6,
+                  color: '#ffffff',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  boxShadow: '0 1px 3px rgba(22, 163, 74, 0.3)',
+                }}
+              >
+                <Check size={14} />
+                <span>{isProcessingSupplies ? 'Đang duyệt...' : 'Duyệt'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleRejectSupplies}
+                disabled={isProcessingSupplies}
+                style={{
+                  padding: '0 14px',
+                  height: 32,
+                  background: '#fef2f2',
+                  border: '1px solid #fca5a5',
+                  borderRadius: 6,
+                  color: '#dc2626',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                }}
+              >
+                Từ chối
+              </button>
+            </div>
           </div>
         )}
+
+        {/* 2. Hộp ĐÃ CẤP CHI VIỆN VẬT TƯ (Tách riêng biệt các món đã xuất cấp trước đó) */}
+        {approvedSupplies.length > 0 && (
+          <div
+            style={{
+              margin: '6px 12px 6px 12px',
+              borderRadius: 10,
+              border: '1.5px solid #86efac',
+              background: '#f0fdf4',
+              padding: '8px 12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 14 }}>📦</span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 900,
+                    color: '#15803d',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.2px',
+                  }}
+                >
+                  Đã Cấp Chi Viện Vật Tư
+                </span>
+              </div>
+              <span
+                style={{
+                  fontSize: 9.5,
+                  fontWeight: 800,
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                  background: '#dcfce7',
+                  color: '#166534',
+                  border: '1px solid #bbf7d0',
+                }}
+              >
+                ĐÃ XUẤT CẤP
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {approvedSupplies.map((req: any, rIdx: number) => (
+                <div
+                  key={rIdx}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: 11.5,
+                    color: '#1e293b',
+                    padding: '4px 8px',
+                    background: '#ffffff',
+                    borderRadius: 6,
+                    border: '1px solid #dcfce7',
+                  }}
+                >
+                  <span style={{ fontWeight: 600, color: '#166534' }}>• {req.name}</span>
+                  <span style={{ fontWeight: 800, color: '#0284c7' }}>
+                    {req.quantity} {req.unit || 'món'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
           {/* Thông tin Chỉ huy cứu hộ */}
           <div
             style={{
@@ -1727,7 +1787,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 Bạn có chắc chắn muốn <strong>từ chối</strong> yêu cầu chi viện vật tư từ đội cứu hộ?
               </p>
 
-              {effectiveRequestedSupplies.length > 0 && (
+              {pendingSupplies.length > 0 && (
                 <div
                   style={{
                     background: '#f8fafc',
@@ -1740,9 +1800,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   }}
                 >
                   <span style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
-                    Vật tư đội yêu cầu:
+                    Vật tư đội đang yêu cầu (chờ duyệt):
                   </span>
-                  {effectiveRequestedSupplies.map((req: any, idx: number) => (
+                  {pendingSupplies.map((req: any, idx: number) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: '#0f172a' }}>
                       <span style={{ fontWeight: 600 }}>• {req.name}</span>
                       <span style={{ fontWeight: 800, color: '#dc2626' }}>{req.quantity} {req.unit || 'món'}</span>
