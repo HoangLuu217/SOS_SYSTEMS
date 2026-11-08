@@ -1418,7 +1418,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                                 : isReliefMission
                                 ? 'Bàn Giao Cứu Trợ (Tại Hiện Trường)'
                                 : 'Báo Cáo Cứu Hộ (Tại Hiện Trường)'
-                              : 'Chỉ Đường & Tác Chiến'}
+                              : 'Tác Chiến'}
                           </Text>
                         </LinearGradient>
                       </TouchableOpacity>
