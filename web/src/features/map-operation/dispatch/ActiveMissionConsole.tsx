@@ -935,150 +935,176 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 {/* Khối Tác Chiến: Điều Phối Tiếp Vận Bờ */}
                 <div
                   style={{
-                    marginTop: 6,
-                    borderRadius: 10,
-                    border: selectedSos.shoreHandoff.status === 'ASSIGNED' ? '1.5px solid #86efac' : '1.5px solid #fdba74',
+                    marginTop: 4,
+                    borderRadius: 8,
+                    border: selectedSos.shoreHandoff.status === 'ASSIGNED' ? '1px solid #86efac' : '1.5px solid #fdba74',
                     background: selectedSos.shoreHandoff.status === 'ASSIGNED' ? '#f0fdf4' : '#fff7ed',
-                    padding: '10px 12px',
+                    padding: selectedSos.shoreHandoff.status === 'ASSIGNED' ? '6px 8px' : '10px 12px',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 8,
+                    gap: selectedSos.shoreHandoff.status === 'ASSIGNED' ? 4 : 8,
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 15 }}>{selectedSos.shoreHandoff.status === 'ASSIGNED' ? '🚑' : '⚡'}</span>
-                      <span
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 900,
-                          color: selectedSos.shoreHandoff.status === 'ASSIGNED' ? '#15803d' : '#c2410c',
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {selectedSos.shoreHandoff.status === 'ASSIGNED'
-                          ? 'Xe Đón Bờ Đang Tiếp Cận'
-                          : 'Yêu Cầu Xe Đón Nạn Nhân'}
-                      </span>
-                    </div>
-                    <span
-                      style={{
-                        fontSize: 10.5,
-                        fontWeight: 800,
-                        padding: '2px 7px',
-                        borderRadius: 5,
-                        background: selectedSos.shoreHandoff.status === 'ASSIGNED' ? '#dcfce7' : '#fed7aa',
-                        color: selectedSos.shoreHandoff.status === 'ASSIGNED' ? '#166534' : '#9a3412',
-                      }}
-                    >
-                      {selectedSos.shoreHandoff.status === 'ASSIGNED' ? 'ĐÃ ĐIỀU ĐỘNG' : 'CHỜ ĐIỀU XE'}
-                    </span>
-                  </div>
-
                   {selectedSos.shoreHandoff.status === 'ASSIGNED' ? (
-                    <div
-                      style={{
-                        padding: '8px 10px',
-                        background: '#ffffff',
-                        border: '1px solid #bbf7d0',
-                        borderRadius: 8,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 10,
-                      }}
-                    >
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 13, fontWeight: 900, color: '#0f172a' }}>
-                            {cleanVehicleName(selectedSos.shoreHandoff.assignedVehicleName)}
-                          </span>
-                          {selectedSos.shoreHandoff.assignedVehiclePlate && (
-                            <span
-                              style={{
-                                fontSize: 11,
-                                fontWeight: 800,
-                                padding: '1px 6px',
-                                borderRadius: 4,
-                                background: '#f1f5f9',
-                                border: '1px solid #cbd5e1',
-                                color: '#1e293b',
-                                letterSpacing: '0.3px',
-                              }}
-                            >
-                              {selectedSos.shoreHandoff.assignedVehiclePlate}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600, marginTop: 2 }}>
-                          👤 {selectedSos.shoreHandoff.assignedDriverName || 'Tài xế'}
-                          {selectedSos.shoreHandoff.assignedDriverPhone ? ` • ${selectedSos.shoreHandoff.assignedDriverPhone}` : ''}
-                        </div>
-                      </div>
-
-                      {/* Nút thao tác: Gọi, Đổi xe, Hủy */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-                        {selectedSos.shoreHandoff.assignedDriverPhone && (
-                          <a
-                            href={`tel:${selectedSos.shoreHandoff.assignedDriverPhone}`}
-                            title="Gọi tài xế"
+                    <>
+                      {/* Dòng 1: Tiêu đề + Huy hiệu + Nút thao tác (gộp 1 hàng ngang tối ưu diện tích) */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                          <span style={{ fontSize: 13 }}>🚑</span>
+                          <span
                             style={{
-                              padding: '5px 8px',
-                              background: '#f0fdf4',
-                              border: '1px solid #86efac',
-                              borderRadius: 6,
-                              color: '#15803d',
-                              fontWeight: 800,
                               fontSize: 11,
-                              textDecoration: 'none',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 3,
+                              fontWeight: 900,
+                              color: '#15803d',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.2px',
                             }}
                           >
-                            <Phone size={11} />
-                            <span>Gọi</span>
-                          </a>
-                        )}
-                        <button
-                          type="button"
-                          title="Đổi sang phương tiện khác"
-                          onClick={() => setIsRoadModalOpen(true)}
-                          style={{
-                            padding: '5px 8px',
-                            background: '#eff6ff',
-                            border: '1px solid #93c5fd',
-                            borderRadius: 6,
-                            color: '#1d4ed8',
-                            fontWeight: 800,
-                            fontSize: 11,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          Đổi xe
-                        </button>
-                        <button
-                          type="button"
-                          title="Hủy điều xe này"
-                          onClick={handleCancelRoadVehicle}
-                          disabled={isCancellingRoad}
-                          style={{
-                            padding: '5px 8px',
-                            background: '#fef2f2',
-                            border: '1px solid #fca5a5',
-                            borderRadius: 6,
-                            color: '#b91c1c',
-                            fontWeight: 800,
-                            fontSize: 11,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {isCancellingRoad ? '...' : 'Hủy'}
-                        </button>
+                            Xe Đón Bờ Tiếp Cận
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 9.5,
+                              fontWeight: 800,
+                              padding: '1px 5px',
+                              borderRadius: 4,
+                              background: '#dcfce7',
+                              color: '#166534',
+                            }}
+                          >
+                            ĐÃ ĐIỀU ĐỘNG
+                          </span>
+                        </div>
+
+                        {/* Các nút thao tác nhỏ gọn */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                          {selectedSos.shoreHandoff.assignedDriverPhone && (
+                            <a
+                              href={`tel:${selectedSos.shoreHandoff.assignedDriverPhone}`}
+                              title="Gọi tài xế"
+                              style={{
+                                padding: '2px 6px',
+                                background: '#ffffff',
+                                border: '1px solid #86efac',
+                                borderRadius: 4,
+                                color: '#15803d',
+                                fontWeight: 800,
+                                fontSize: 10.5,
+                                textDecoration: 'none',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 2,
+                              }}
+                            >
+                              <Phone size={10} />
+                              <span>Gọi</span>
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            title="Đổi sang phương tiện khác"
+                            onClick={() => setIsRoadModalOpen(true)}
+                            style={{
+                              padding: '2px 6px',
+                              background: '#ffffff',
+                              border: '1px solid #93c5fd',
+                              borderRadius: 4,
+                              color: '#1d4ed8',
+                              fontWeight: 800,
+                              fontSize: 10.5,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Đổi xe
+                          </button>
+                          <button
+                            type="button"
+                            title="Hủy điều xe này"
+                            onClick={handleCancelRoadVehicle}
+                            disabled={isCancellingRoad}
+                            style={{
+                              padding: '2px 6px',
+                              background: '#ffffff',
+                              border: '1px solid #fca5a5',
+                              borderRadius: 4,
+                              color: '#b91c1c',
+                              fontWeight: 800,
+                              fontSize: 10.5,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {isCancellingRoad ? '...' : 'Hủy'}
+                          </button>
+                        </div>
                       </div>
-                    </div>
+
+                      {/* Dòng 2: Chi tiết phương tiện & Tài xế */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          background: '#ffffff',
+                          border: '1px solid #bbf7d0',
+                          borderRadius: 6,
+                          padding: '3px 8px',
+                          fontSize: 11,
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <span style={{ fontWeight: 800, color: '#0f172a' }}>
+                          {cleanVehicleName(selectedSos.shoreHandoff.assignedVehicleName)}
+                        </span>
+                        {selectedSos.shoreHandoff.assignedVehiclePlate && (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 800,
+                              padding: '1px 4px',
+                              borderRadius: 3,
+                              background: '#f1f5f9',
+                              border: '1px solid #cbd5e1',
+                              color: '#1e293b',
+                            }}
+                          >
+                            {selectedSos.shoreHandoff.assignedVehiclePlate}
+                          </span>
+                        )}
+                        <span style={{ color: '#64748b', fontSize: 10.5, fontWeight: 600 }}>
+                          • 👤 {selectedSos.shoreHandoff.assignedDriverName || 'Tài xế'}
+                          {selectedSos.shoreHandoff.assignedDriverPhone ? ` (${selectedSos.shoreHandoff.assignedDriverPhone})` : ''}
+                        </span>
+                      </div>
+                    </>
                   ) : (
                     <>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 15 }}>⚡</span>
+                          <span
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 900,
+                              color: '#c2410c',
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            Yêu Cầu Xe Đón Nạn Nhân
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: 10.5,
+                            fontWeight: 800,
+                            padding: '2px 7px',
+                            borderRadius: 5,
+                            background: '#fed7aa',
+                            color: '#9a3412',
+                          }}
+                        >
+                          CHỜ ĐIỀU XE
+                        </span>
+                      </div>
                       <div style={{ fontSize: 12, color: '#334155', lineHeight: 1.45 }}>
                         <div>
                           • <strong>Cần xe:</strong> {selectedSos.shoreHandoff.vehicleTypeNeeded === 'AMBULANCE' ? '01 Xe Cứu Thương Dã Chiến' : '01 Xe Tải / Bán Tải'} ({selectedSos.shoreHandoff.peopleCount} người)
