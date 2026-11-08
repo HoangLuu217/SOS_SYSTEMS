@@ -53,6 +53,7 @@ import 'leaflet/dist/leaflet.css';
 import { fetchSafeLocations } from '@/api/shelter.api';
 import { getAreaCoordinates } from '@/features/authorities/AreaPreviewMap';
 import { domainDService } from '@/services/domainDService';
+import { getSocket } from '@/services/socketService';
 import { toast } from '@/components/common/toast';
 import '@/features/sos/SosRequestsView.css';
 import '@/features/rescuers/RescuerApprovalView.css';
@@ -743,6 +744,42 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
   useEffect(() => {
     loadData();
   }, [loadData, refreshIndex]);
+
+  // Lắng nghe cập nhật kho và duyệt vật tư theo thời gian thực
+  useEffect(() => {
+    let socket: any = null;
+    try {
+      socket = getSocket();
+      if (socket) {
+        socket.on('equipment:updated', loadData);
+        socket.on('equipment:change', loadData);
+        socket.on('assignment:supply_approved', loadData);
+        socket.on('sos:sync', loadData);
+      }
+    } catch (e) {
+      console.warn('Socket connect error in ResourcesView:', e);
+    }
+
+    const handleWindowUpdate = () => {
+      loadData();
+    };
+
+    window.addEventListener('equipment_updated', handleWindowUpdate);
+    window.addEventListener('equipment:updated', handleWindowUpdate);
+    window.addEventListener('sos_data_updated', handleWindowUpdate);
+
+    return () => {
+      if (socket) {
+        socket.off('equipment:updated', loadData);
+        socket.off('equipment:change', loadData);
+        socket.off('assignment:supply_approved', loadData);
+        socket.off('sos:sync', loadData);
+      }
+      window.removeEventListener('equipment_updated', handleWindowUpdate);
+      window.removeEventListener('equipment:updated', handleWindowUpdate);
+      window.removeEventListener('sos_data_updated', handleWindowUpdate);
+    };
+  }, [loadData]);
 
   const rawVehicles = vehicles;
 

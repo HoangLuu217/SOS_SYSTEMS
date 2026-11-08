@@ -2674,7 +2674,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   >
                     <Ionicons name="flash" size={20} color="#FFFFFF" />
                     <Text style={styles.grabBigBtnText}>
-                      {isReliefMission ? '⚡ NHẬN LỆNH & XUẤT KHO TIẾP TẾ' : '⚡ NHẬN LỆNH & XUẤT KÍCH'}
+                      {isReliefMission ? 'NHẬN LỆNH & XUẤT KHO TIẾP TẾ' : 'NHẬN LỆNH & XUẤT KÍCH'}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -2687,7 +2687,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   >
                     <Ionicons name="location-sharp" size={22} color="#FFFFFF" />
                     <Text style={styles.grabBigBtnText}>
-                      {isReliefMission ? '📍 ĐÃ ĐẾN ĐIỂM CỨU TRỢ' : 'ĐÃ ĐẾN HIỆN TRƯỜNG (ARRIVED)'}
+                      {isReliefMission ? 'ĐÃ ĐẾN ĐIỂM CỨU TRỢ' : 'ĐÃ ĐẾN HIỆN TRƯỜNG (ARRIVED)'}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -2702,7 +2702,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                     >
                       <Ionicons name="checkmark-done-circle" size={24} color="#FFFFFF" />
                       <Text style={styles.grabBigBtnText}>
-                        {isReliefMission ? '✅ BÀN GIAO XONG & HOÀN TẤT' : 'HOÀN TẤT CỨU HỘ & BÁO CÁO'}
+                        {isReliefMission ? 'BÀN GIAO XONG & HOÀN TẤT' : 'HOÀN TẤT CỨU HỘ & BÁO CÁO'}
                       </Text>
                     </TouchableOpacity>
                   </View>

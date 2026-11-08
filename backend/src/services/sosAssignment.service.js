@@ -7,9 +7,84 @@ const {
   RescueTeam,
   User,
   Vehicle,
+  Equipment,
 } = require('../models');
 const { emitSosUpdated } = require('../socket');
 const ApiError = require('../utils/apiError');
+
+/**
+ * Hàm trừ trực tiếp số lượng vật tư / trang thiết bị trong kho (Collection Equipment)
+ */
+async function deductSuppliesFromEquipment(suppliesList, contextNote = '') {
+  if (!Array.isArray(suppliesList) || suppliesList.length === 0) return;
+
+  for (const item of suppliesList) {
+    const rawQty = item.quantity || item.allocatedQuantity;
+    const qty = parseInt(rawQty, 10);
+    if (!qty || qty <= 0) continue;
+
+    const eqId = item.equipmentId || item.supplyId || item._id;
+    let eq = null;
+
+    // 1. Tìm theo ObjectId nếu hợp lệ
+    if (eqId && mongoose.Types.ObjectId.isValid(eqId)) {
+      eq = await Equipment.findById(eqId);
+    }
+
+    // 2. Tìm theo tên chính xác hoặc không phân biệt hoa thường
+    if (!eq && item.name) {
+      const cleanName = item.name.trim();
+      const escaped = cleanName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      eq = await Equipment.findOne({
+        name: new RegExp('^' + escaped + '$', 'i'),
+        quantity: { $gte: qty },
+      });
+      if (!eq) {
+        eq = await Equipment.findOne({
+          name: new RegExp('^' + escaped + '$', 'i'),
+        });
+      }
+      if (!eq) {
+        eq = await Equipment.findOne({
+          name: new RegExp(escaped, 'i'),
+        });
+      }
+    }
+
+    // 3. Tìm theo serialNumber hoặc mã vật tư
+    if (!eq && eqId) {
+      eq = await Equipment.findOne({
+        $or: [
+          { serialNumber: String(eqId).trim().toUpperCase() },
+          { name: new RegExp(String(eqId).trim(), 'i') },
+        ],
+      });
+    }
+
+    if (eq) {
+      const beforeQty = eq.quantity;
+      eq.quantity = Math.max(0, eq.quantity - qty);
+      const log = '[Xuất cấp: -' + qty + ' ' + (eq.unit || 'món') + (contextNote ? ' (' + contextNote + ')' : '') + ']';
+      eq.note = eq.note ? eq.note + ' | ' + log : log;
+      if (eq.quantity === 0 && eq.supplyType === 'CONSUMABLE') {
+        eq.status = 'DAMAGED'; // Hết tồn kho
+      }
+      await eq.save();
+      console.log('📦 [Equipment] Đã trừ kho vật tư "' + eq.name + '": ' + beforeQty + ' -> ' + eq.quantity + ' (-' + qty + ')');
+    } else {
+      console.warn('⚠️ [Equipment] Không tìm thấy vật tư trong kho để trừ:', item);
+    }
+  }
+
+  try {
+    const { getIO } = require('../socket');
+    const io = getIO();
+    if (io) {
+      io.emit('equipment:updated');
+      io.emit('equipment:change');
+    }
+  } catch (e) {}
+}
 
 class SosAssignmentService {
   /**
@@ -148,6 +223,15 @@ class SosAssignmentService {
       } catch (err) {}
 
       emitSosUpdated(sos);
+    }
+
+    // Trừ kho vật tư ban đầu nếu có cấp khi giao nhiệm vụ
+    if (Array.isArray(supplies) && supplies.length > 0) {
+      try {
+        await deductSuppliesFromEquipment(supplies, "Giao nhiệm vụ ca " + (sos.sosCode || sos._id));
+      } catch (e) {
+        console.warn("Lỗi trừ kho vật tư khi giao nhiệm vụ:", e);
+      }
     }
 
     // Phát sự kiện Realtime Socket.IO & SSE thông báo cho Cứu Hộ Viên (Nổ nhiệm vụ GrabDriver)
@@ -929,6 +1013,21 @@ class SosAssignmentService {
     }
     assignment.requestedSupplies.push(...newRequests);
     await assignment.save();
+
+    // Trừ trực tiếp số lượng vật tư trong kho (Collection Equipment)
+    try {
+      const approvedItemsToDeduct = pendingRequests.map((r) => ({
+        name: r.name,
+        quantity: r.quantity,
+        unit: r.unit || "món",
+      }));
+      await deductSuppliesFromEquipment(
+        approvedItemsToDeduct,
+        "Chi viện bổ sung ca " + (assignment.sosRequestId?.sosCode || assignment.sosRequestId || assignment._id)
+      );
+    } catch (e) {
+      console.warn("Lỗi trừ kho vật tư khi duyệt chi viện:", e);
+    }
 
     const populated = await SosAssignment.findById(assignment._id)
       .populate('sosRequestId', 'sosCode priority emergencyType address description')
