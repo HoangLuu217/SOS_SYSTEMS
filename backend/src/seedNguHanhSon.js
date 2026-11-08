@@ -760,7 +760,7 @@ async function seedNguHanhSon() {
         address: 'K82/14 Mai Đăng Chơn, Phường Hòa Quý, Quận Ngũ Hành Sơn, TP Đà Nẵng',
         location: {
           type: 'Point',
-          coordinates: [108.2320, 16.0125],
+          coordinates: [108.2465, 16.0055],
         },
         emergencyType: 'MEDICAL',
         priority: 'CRITICAL',

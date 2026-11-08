@@ -11,6 +11,17 @@ const resolveAdministrativeArea = async (address, location, inputAreaId) => {
     if (existing) return existing._id;
   }
 
+  // 0. Nếu có tọa độ GPS hợp lệ, đối chiếu ranh giới không gian (Point-in-Polygon)
+  if (location && Array.isArray(location.coordinates) && location.coordinates.length === 2) {
+    try {
+      const { findAreaByCoordinates } = require('../utils/geoUtils');
+      const geoArea = await findAreaByCoordinates(location.coordinates, AdministrativeArea);
+      if (geoArea) return geoArea._id;
+    } catch {
+      // Fallback xuống text matching nếu lỗi GeoJSON
+    }
+  }
+
   const addressStr = String(address || '').toLowerCase();
   const allAreas = await AdministrativeArea.find({ status: 'ACTIVE' });
 
