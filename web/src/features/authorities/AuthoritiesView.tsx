@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Map as MapIcon,
   Search,
@@ -69,7 +69,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
 }) => {
   const [authorities, setAuthorities] = useState<any[]>([]);
   const [, setOrgs] = useState<AuthorityOrgItem[]>([]);
-  const [, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
+  const [areas, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
   const [loading, setLoading] = useState(false);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const refreshData = () => setRefreshIndex((prev) => prev + 1);
@@ -361,25 +361,133 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
     }
   };
 
-  const activeOfficersCount = authorities.filter((a) => a.status === 'ACTIVE').length;
-  const inactiveOfficersCount = authorities.length - activeOfficersCount;
+  const [selectedProvinceFilter, setSelectedProvinceFilter] = useState<string>('ALL');
 
-
-  const filteredAuthorities = authorities.filter((a) => {
-    if (authStatusFilter === 'ACTIVE' && a.status !== 'ACTIVE') return false;
-    if (authStatusFilter === 'INACTIVE' && a.status === 'ACTIVE') return false;
-    if (authSearchQuery.trim()) {
-      const q = authSearchQuery.toLowerCase();
-      const matchName = (a.fullName || '').toLowerCase().includes(q);
-      const matchPhone = (a.phone || '').includes(q);
-      const matchEmail = (a.email || '').toLowerCase().includes(q);
-      const matchArea = (a.authority?.areaName || a.authority?.areaId || '').toLowerCase().includes(q);
-      const matchDept = (a.authority?.department || '').toLowerCase().includes(q);
-      const matchPos = (a.authority?.position || '').toLowerCase().includes(q);
-      return matchName || matchPhone || matchEmail || matchArea || matchDept || matchPos;
+  // Xác định chuẩn xác Tỉnh / Thành phố quản lý của từng cán bộ
+  const getOfficerProvince = useCallback((officer: any): string => {
+    if (officer.authority?.city) {
+      return officer.authority.city;
     }
-    return true;
-  });
+    const dept = officer.authority?.department || '';
+    if (dept.includes('(') && dept.includes(')')) {
+      const match = dept.match(/\((.*?)\)/);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+    }
+    const areaId = officer.authority?.areaId ? String(officer.authority.areaId) : null;
+    const areaName = officer.authority?.areaName;
+    if (areas && areas.length > 0) {
+      const areaMap = new Map<string, any>();
+      for (const ar of areas) {
+        if (ar._id) areaMap.set(String(ar._id), ar);
+        if ((ar as any).id) areaMap.set(String((ar as any).id), ar);
+      }
+      if (areaId && areaMap.has(areaId)) {
+        let curr = areaMap.get(areaId);
+        let steps = 0;
+        while (curr && curr.parentId && steps < 5) {
+          steps++;
+          const p = areaMap.get(String(curr.parentId));
+          if (!p) break;
+          curr = p;
+          if (curr.type === 'PROVINCE') return curr.name;
+        }
+        if (curr && curr.type === 'PROVINCE') return curr.name;
+        if (curr && (curr as any).parentName) return (curr as any).parentName;
+      }
+      if (areaName) {
+        const found = areas.find((ar) => ar.name === areaName);
+        if (found && (found as any).parentName) return (found as any).parentName;
+      }
+    }
+    return 'Thành phố Đà Nẵng';
+  }, [areas]);
+
+  // Thống kê danh sách Tỉnh/Thành phố và các xã/phường có cán bộ quản lý
+  const provincesSummary = useMemo(() => {
+    const map = new Map<string, { count: number; wards: Set<string>; wardDetails: Array<{ areaName: string; officerName: string; phone?: string; officerId: string }> }>();
+
+    for (const a of authorities) {
+      const prov = getOfficerProvince(a);
+      if (!map.has(prov)) {
+        map.set(prov, { count: 0, wards: new Set(), wardDetails: [] });
+      }
+      const item = map.get(prov)!;
+      item.count++;
+      const areaName = a.authority?.areaName || a.authority?.areaId || 'Chưa định danh';
+      item.wards.add(areaName);
+      item.wardDetails.push({
+        areaName,
+        officerName: a.fullName,
+        phone: a.phone,
+        officerId: a._id,
+      });
+    }
+
+    const withOfficers: Array<{ name: string; count: number; wardsCount: number; wardDetails: Array<{ areaName: string; officerName: string; phone?: string; officerId: string }> }> = [];
+    map.forEach((val, key) => {
+      withOfficers.push({
+        name: key,
+        count: val.count,
+        wardsCount: val.wards.size,
+        wardDetails: val.wardDetails,
+      });
+    });
+    withOfficers.sort((a, b) => b.count - a.count);
+
+    const existingNames = new Set(withOfficers.map((w) => w.name.toLowerCase()));
+    const others = (vietnamProvinces || VIETNAM_34_PROVINCES_STANDARD)
+      .filter((p) => !existingNames.has(p.name.toLowerCase()))
+      .map((p) => ({ name: p.name, count: 0, wardsCount: 0, wardDetails: [] }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+
+    return { withOfficers, others };
+  }, [authorities, getOfficerProvince, vietnamProvinces]);
+
+  // Danh sách các địa bàn (xã/phường) đã có cán bộ quản lý trong tỉnh đang chọn
+  const managedWardsInSelectedProvince = useMemo(() => {
+    if (selectedProvinceFilter === 'ALL') return [];
+    const found = provincesSummary.withOfficers.find(
+      (p) => p.name.toLowerCase() === selectedProvinceFilter.toLowerCase()
+    );
+    return found ? found.wardDetails : [];
+  }, [selectedProvinceFilter, provincesSummary]);
+
+  const provinceAuthorities = useMemo(() => {
+    if (selectedProvinceFilter === 'ALL') return authorities;
+    return authorities.filter((a) => getOfficerProvince(a).toLowerCase() === selectedProvinceFilter.toLowerCase());
+  }, [authorities, selectedProvinceFilter, getOfficerProvince]);
+
+  const activeOfficersCount = provinceAuthorities.filter((a) => a.status === 'ACTIVE').length;
+  const inactiveOfficersCount = provinceAuthorities.length - activeOfficersCount;
+
+  const filteredAuthorities = useMemo(() => {
+    return authorities.filter((a) => {
+      // 1. Lọc theo trạng thái
+      if (authStatusFilter === 'ACTIVE' && a.status !== 'ACTIVE') return false;
+      if (authStatusFilter === 'INACTIVE' && a.status === 'ACTIVE') return false;
+
+      // 2. Lọc theo Tỉnh / Thành phố
+      if (selectedProvinceFilter !== 'ALL') {
+        const prov = getOfficerProvince(a);
+        if (prov.toLowerCase() !== selectedProvinceFilter.toLowerCase()) return false;
+      }
+
+      // 3. Lọc theo ô tìm kiếm
+      if (authSearchQuery.trim()) {
+        const q = authSearchQuery.toLowerCase();
+        const matchName = (a.fullName || '').toLowerCase().includes(q);
+        const matchPhone = (a.phone || '').includes(q);
+        const matchEmail = (a.email || '').toLowerCase().includes(q);
+        const matchArea = (a.authority?.areaName || a.authority?.areaId || '').toLowerCase().includes(q);
+        const matchDept = (a.authority?.department || '').toLowerCase().includes(q);
+        const matchPos = (a.authority?.position || '').toLowerCase().includes(q);
+        return matchName || matchPhone || matchEmail || matchArea || matchDept || matchPos;
+      }
+      return true;
+    });
+  }, [authorities, authStatusFilter, selectedProvinceFilter, authSearchQuery, getOfficerProvince]);
 
   return (
     <div className="authorities-executive-container">
@@ -393,7 +501,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
               className={`triage-btn ${authStatusFilter === 'ALL' ? 'active' : ''}`}
               onClick={() => setAuthStatusFilter('ALL')}
             >
-              Tất cả ({authorities.length})
+              Tất cả ({provinceAuthorities.length})
             </button>
             <button
               type="button"
@@ -412,6 +520,35 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            {/* Bộ lọc Tỉnh / Thành phố */}
+            <div className="executive-province-filter-wrap">
+              <Building2 size={15} className="province-filter-icon" />
+              <select
+                className="executive-province-select"
+                value={selectedProvinceFilter}
+                onChange={(e) => setSelectedProvinceFilter(e.target.value)}
+                title="Lọc cán bộ theo Tỉnh / Thành phố"
+              >
+                <option value="ALL">Toàn quốc (Tất cả Tỉnh/Thành)</option>
+                <optgroup label="Tỉnh / Thành phố có cán bộ quản lý">
+                  {provincesSummary.withOfficers.map((p) => (
+                    <option key={p.name} value={p.name}>
+                      {p.name} ({p.count} cán bộ • {p.wardsCount} địa bàn)
+                    </option>
+                  ))}
+                </optgroup>
+                {provincesSummary.others.length > 0 && (
+                  <optgroup label="Các tỉnh / thành phố khác">
+                    {provincesSummary.others.map((p) => (
+                      <option key={p.name} value={p.name}>
+                        {p.name} (0 cán bộ)
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+
             <div className="executive-search-input-wrap">
               <Search size={16} className="search-icon" />
               <input
@@ -437,10 +574,13 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
               className="coordination-action-btn primary"
               onClick={() => {
                 setAuthSubmitError(null);
+                const defaultCity = selectedProvinceFilter !== 'ALL' ? selectedProvinceFilter : (createAuthForm.city || 'Thành phố Đà Nẵng');
                 setCreateAuthForm((prev) => ({
                   ...prev,
+                  city: defaultCity,
                   password: generateRandomPassword(10),
                 }));
+                loadSubUnitsForCity(defaultCity);
                 setShowCreateAuthModal(true);
                 if (modalProvinceSubUnits.length === 0) {
                   loadSubUnitsForCity(createAuthForm.city || 'Thành phố Đà Nẵng');
@@ -452,6 +592,50 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Thanh giám sát các phường/xã đã có cán bộ quản lý theo Tỉnh/Thành phố */}
+        {selectedProvinceFilter !== 'ALL' && (
+          <div className="executive-managed-areas-bar">
+            <div className="managed-areas-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                <ShieldCheck size={16} color="#0284c7" />
+                <span className="managed-areas-title">
+                  Địa bàn đã phân công cán bộ quản lý tại <strong>{selectedProvinceFilter}</strong>:
+                </span>
+                <span className="managed-areas-count-badge">
+                  {managedWardsInSelectedProvince.length} địa bàn
+                </span>
+              </div>
+              <button
+                type="button"
+                className="managed-areas-reset-btn"
+                onClick={() => setSelectedProvinceFilter('ALL')}
+              >
+                ✕ Xem toàn quốc
+              </button>
+            </div>
+            {managedWardsInSelectedProvince.length === 0 ? (
+              <div style={{ fontSize: '12.5px', color: '#64748b', fontStyle: 'italic', padding: '4px 0' }}>
+                Chưa có xã/phường nào tại {selectedProvinceFilter} được phân công cán bộ quản lý.
+              </div>
+            ) : (
+              <div className="managed-areas-pills">
+                {managedWardsInSelectedProvince.map((item) => (
+                  <div
+                    key={item.officerId + item.areaName}
+                    className="managed-area-pill"
+                    title={`Bấm để lọc cán bộ: ${item.officerName} (${item.phone || 'Chưa có SĐT'})`}
+                    onClick={() => setAuthSearchQuery(item.areaName)}
+                  >
+                    <MapPin size={12} color="#0284c7" />
+                    <span className="pill-name">{item.areaName}</span>
+                    <span className="pill-officer">• {item.officerName}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Content Table */}
         <div className="executive-table-wrapper">
