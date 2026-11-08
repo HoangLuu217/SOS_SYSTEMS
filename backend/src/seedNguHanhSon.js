@@ -83,6 +83,7 @@ async function seedNguHanhSon() {
         });
         console.log(`➕ Đã tạo ${w.name} (${w.code})`);
       } else {
+        ward.name = w.name;
         ward.parentId = districtNHS._id;
         ward.status = 'ACTIVE';
         await ward.save();
@@ -615,7 +616,7 @@ async function seedNguHanhSon() {
     // ========================================================
     console.log('\n--- 6. Tạo Yêu Cầu Cứu Nạn SOS Tại Ngũ Hành Sơn ---');
 
-    const seededSosCodes = ['SOS-74144', 'SOS-8924', 'SOS-5219', 'SOS-3382', 'SOS-6175', 'SOS-9401'];
+    const seededSosCodes = ['SOS-74144', 'SOS-8924', 'SOS-5219', 'SOS-3382', 'SOS-6175'];
 
     // Xóa các ca SOS rác cũ ngoài các mã chuẩn để bảng điều phối hiển thị đúng danh mục thực tế
     await SosRequest.deleteMany({
@@ -787,7 +788,7 @@ async function seedNguHanhSon() {
       sos3.priority = 'CRITICAL';
       sos3.location = {
         type: 'Point',
-        coordinates: [108.2320, 16.0125],
+        coordinates: [108.2465, 16.0055],
       };
       sos3.status = 'VERIFIED';
       await sos3.save();
@@ -877,52 +878,12 @@ async function seedNguHanhSon() {
         coordinates: [108.2465, 16.0485],
       };
       sos5.status = 'VERIFIED';
+      sos5.shoreHandoff = { status: 'NONE' };
       await sos5.save();
       console.log('✔ Đã cập nhật yêu cầu SOS:', sos5.sosCode);
     }
 
-    // 6.6. Ca SOS-9401: Nước lũ tràn vào nền nhà, hỗ trợ sơ tán người cao tuổi, Khuê Mỹ (HIGH, CHỜ ĐIỀU PHỐI)
-    let sos6 = await SosRequest.findOne({ sosCode: 'SOS-9401' });
-    if (!sos6) {
-      sos6 = await SosRequest.create({
-        sosCode: 'SOS-9401',
-        citizenId: citizen6._id,
-        areaId: districtNHS._id,
-        address: 'K115 Lê Văn Hiến, Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng',
-        location: {
-          type: 'Point',
-          coordinates: [108.2450, 16.0280],
-        },
-        emergencyType: 'FLOOD',
-        priority: 'HIGH',
-        people: 3,
-        priorityGroups: ['Người cao tuổi'],
-        description: 'Nước sông tràn vào nền nhà sâu 0.5m đang tiếp tục dâng nhanh, trong nhà có 2 cụ già 78 tuổi có tiền sử cao huyết áp, cần hỗ trợ xuồng máy di chuyển đến Trụ sở UBND Phường Khuê Mỹ tránh trú an toàn.',
-        contactPhone: '0905449922',
-        images: [
-          'https://images.unsplash.com/photo-1547683905-f686c993aae5?auto=format&fit=crop&w=800&q=80',
-        ],
-        status: 'VERIFIED',
-      });
-      console.log('➕ Đã tạo yêu cầu SOS:', sos6.sosCode, '| Địa chỉ:', sos6.address);
-    } else {
-      sos6.citizenId = citizen6._id;
-      sos6.areaId = wardKhueMy._id;
-      sos6.address = 'K115 Lê Văn Hiến, Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng';
-      sos6.description = 'Nước sông tràn vào nền nhà sâu 0.5m đang tiếp tục dâng nhanh, trong nhà có 2 cụ già 78 tuổi có tiền sử cao huyết áp, cần hỗ trợ xuồng máy di chuyển đến Trụ sở UBND Phường Khuê Mỹ tránh trú an toàn.';
-      sos6.contactPhone = '0905449922';
-      sos6.people = 3;
-      sos6.priorityGroups = ['Người cao tuổi'];
-      sos6.emergencyType = 'FLOOD';
-      sos6.priority = 'HIGH';
-      sos6.location = {
-        type: 'Point',
-        coordinates: [108.2450, 16.0280],
-      };
-      sos6.status = 'VERIFIED';
-      await sos6.save();
-      console.log('✔ Đã cập nhật yêu cầu SOS:', sos6.sosCode);
-    }
+
     // ========================================================
     // 7. TẠO PHÂN CÔNG TÁC CHIẾN SOS ASSIGNMENT (GrabDriver Flow)
     // ========================================================
