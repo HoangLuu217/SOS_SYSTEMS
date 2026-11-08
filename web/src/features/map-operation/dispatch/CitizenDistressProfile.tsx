@@ -61,6 +61,39 @@ export const CitizenDistressProfile: React.FC<Props> = ({
     commitSupplies(copy);
   };
 
+  // Xác định danh sách đối tượng ưu tiên từ dữ liệu thực tế của ca SOS
+  const priorityList = (() => {
+    if (Array.isArray(selectedSos.priorityGroups) && selectedSos.priorityGroups.length > 0) {
+      return selectedSos.priorityGroups;
+    }
+    const desc = (selectedSos.description || "") + " " + (selectedSos.title || "");
+    if (desc.includes("[Đối tượng ưu tiên:")) {
+      const match = desc.match(/\[Đối tượng ưu tiên:\s*([^\]]+)\]/);
+      if (match && match[1]) {
+        return match[1].split(",").map((s) => s.trim()).filter(Boolean);
+      }
+    }
+    const keywords: string[] = [];
+    if (/người già|người cao tuổi/i.test(desc)) keywords.push("Người già");
+    if (/trẻ nhỏ|trẻ em|em bé|sơ sinh/i.test(desc)) keywords.push("Trẻ em");
+    if (/mang thai|bầu|thai phụ/i.test(desc)) keywords.push("Phụ nữ có thai");
+    if (/khuyết tật|tàn tật|liệt/i.test(desc)) keywords.push("Người khuyết tật");
+    if (/bệnh nặng|thở oxy|tai biến/i.test(desc)) keywords.push("Bệnh nhân nặng");
+    if (/hộ nghèo|gia đình khó khăn|hộ khó khăn/i.test(desc)) keywords.push("Hộ gia đình khó khăn");
+    return keywords;
+  })();
+
+  const getPriorityEmoji = (group: string) => {
+    const g = group.toLowerCase();
+    if (g.includes("trẻ") || g.includes("em bé") || g.includes("sơ sinh")) return "👶";
+    if (g.includes("già") || g.includes("cao tuổi")) return "👴";
+    if (g.includes("thai") || g.includes("bầu")) return "🤰";
+    if (g.includes("khuyết tật") || g.includes("tàn tật")) return "♿";
+    if (g.includes("bệnh") || g.includes("thương") || g.includes("oxy")) return "🏥";
+    if (g.includes("khó khăn") || g.includes("nghèo") || g.includes("hộ")) return "🏡";
+    return "⭐";
+  };
+
   const hasExtraDetail = Boolean(selectedSos.description || selectedSos.imageUrl);
 
   return (
@@ -136,8 +169,27 @@ export const CitizenDistressProfile: React.FC<Props> = ({
             <span>{selectedSos.affectedPeople} người gặp nạn</span>
           </span>
 
-          {/* Huy hiệu phụ (Cam/Vàng) - Bỏ dấu ngoặc đơn thừa */}
-          {selectedSos.affectedPeople > 1 && (
+          {/* Huy hiệu đối tượng ưu tiên thực tế từ ca SOS */}
+          {priorityList.length > 0 ? (
+            <span
+              style={{
+                background: '#fefce8',
+                border: '1px solid #fde68a',
+                color: '#b45309',
+                fontSize: 11.5,
+                fontWeight: 800,
+                padding: '2.5px 8px',
+                borderRadius: 5,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+              title={`Đối tượng ưu tiên: ${priorityList.join(', ')}`}
+            >
+              <span>{priorityList.map(getPriorityEmoji).join('')}</span>
+              <span>{priorityList.join(', ')}</span>
+            </span>
+          ) : selectedSos.affectedPeople > 1 ? (
             <span
               style={{
                 background: '#fefce8',
@@ -152,10 +204,10 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                 gap: 4,
               }}
             >
-              <span>👴👶</span>
-              <span>Người cao tuổi, trẻ nhỏ</span>
+              <span>👥</span>
+              <span>Hộ gia đình</span>
             </span>
-          )}
+          ) : null}
         </div>
 
 
