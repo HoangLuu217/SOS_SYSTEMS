@@ -1019,27 +1019,31 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     <>
                       {/* Dòng 1: Tiêu đề + Huy hiệu + Nút thao tác (gộp 1 hàng ngang tối ưu diện tích) */}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-                          <span style={{ fontSize: 13 }}>🚑</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                          <span style={{ fontSize: 13, flexShrink: 0 }}>🚑</span>
                           <span
                             style={{
-                              fontSize: 11,
-                              fontWeight: 900,
+                              fontSize: 11.5,
+                              fontWeight: 800,
                               color: '#15803d',
                               textTransform: 'uppercase',
                               letterSpacing: '0.2px',
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0,
                             }}
                           >
-                            Xe Đón Bờ Tiếp Cận
+                            Xe đón
                           </span>
                           <span
                             style={{
                               fontSize: 9.5,
                               fontWeight: 800,
-                              padding: '1px 5px',
+                              padding: '1.5px 6px',
                               borderRadius: 4,
                               background: '#dcfce7',
                               color: '#166534',
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0,
                             }}
                           >
                             ĐÃ ĐIỀU ĐỘNG
