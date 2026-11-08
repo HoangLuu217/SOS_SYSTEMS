@@ -150,7 +150,7 @@ async function seedNguHanhSon() {
         isPhoneVerified: true,
         authority: {
           organizationId: authorityNHS._id,
-          areaId: wardKhueMy._id,
+          areaId: districtNHS._id,
           position: 'Trực ban Điều phối Tác chiến PCTT',
           department: 'Ban Chỉ Huy PCTT Quận Ngũ Hành Sơn',
           areaName: 'Quận Ngũ Hành Sơn',
@@ -163,7 +163,7 @@ async function seedNguHanhSon() {
       dispatcherUser.email = 'dispatcher.nguhanhson@sos.vn';
       dispatcherUser.authority = {
         organizationId: authorityNHS._id,
-        areaId: wardKhueMy._id,
+        areaId: districtNHS._id,
         position: 'Trực ban Điều phối Tác chiến PCTT',
         department: 'Ban Chỉ Huy PCTT Quận Ngũ Hành Sơn',
         areaName: 'Quận Ngũ Hành Sơn',
@@ -180,7 +180,7 @@ async function seedNguHanhSon() {
     if (currentScreenUser) {
       currentScreenUser.authority = {
         organizationId: authorityNHS._id,
-        areaId: wardKhueMy._id,
+        areaId: districtNHS._id,
         position: 'Chỉ Huy Trực Ban Tác Chiến',
         department: 'Ban Chỉ Huy PCTT Quận Ngũ Hành Sơn',
         areaName: 'Quận Ngũ Hành Sơn',
@@ -344,7 +344,7 @@ async function seedNguHanhSon() {
         isPhoneVerified: true,
         address: 'K48/12 Lê Văn Hiến, Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng',
         citizen: {
-          areaId: wardKhueMy._id,
+          areaId: districtNHS._id,
           areaName: wardKhueMy.name,
         },
       });
@@ -352,7 +352,7 @@ async function seedNguHanhSon() {
     } else {
       citizen1.address = 'K48/12 Lê Văn Hiến, Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng';
       citizen1.citizen = {
-        areaId: wardKhueMy._id,
+        areaId: districtNHS._id,
         areaName: wardKhueMy.name,
       };
       await citizen1.save();
@@ -478,7 +478,7 @@ async function seedNguHanhSon() {
         isPhoneVerified: true,
         address: 'K115 Lê Văn Hiến, Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng',
         citizen: {
-          areaId: wardKhueMy._id,
+          areaId: districtNHS._id,
           areaName: wardKhueMy.name,
         },
       });
@@ -486,7 +486,7 @@ async function seedNguHanhSon() {
     } else {
       citizen6.address = 'K115 Lê Văn Hiến, Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng';
       citizen6.citizen = {
-        areaId: wardKhueMy._id,
+        areaId: districtNHS._id,
         areaName: wardKhueMy.name,
       };
       await citizen6.save();
@@ -518,7 +518,7 @@ async function seedNguHanhSon() {
         type: 'FLOOD_RESCUE',
         leaderId: leCuuNan._id, // LÊ CỨU NẠN LÀ ĐỘI TRƯỞNG
         authorityId: authorityNHS._id,
-        areaId: wardKhueMy._id,
+        areaId: districtNHS._id,
         description: 'Đội chuyên trách ca-nô cao tốc & xuồng máy lội nước, tác chiến các điểm xung yếu ven sông Cổ Cò, trũng thấp Khuê Mỹ, Mỹ An và Quận Ngũ Hành Sơn.',
         status: 'ACTIVE',
         members: teamMembers,
@@ -628,7 +628,7 @@ async function seedNguHanhSon() {
       sos1 = await SosRequest.create({
         sosCode: 'SOS-74144',
         citizenId: citizen1._id,
-        areaId: wardKhueMy._id,
+        areaId: districtNHS._id,
         address: 'K48/12 Lê Văn Hiến, Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng',
         location: {
           type: 'Point',
@@ -887,7 +887,7 @@ async function seedNguHanhSon() {
       sos6 = await SosRequest.create({
         sosCode: 'SOS-9401',
         citizenId: citizen6._id,
-        areaId: wardKhueMy._id,
+        areaId: districtNHS._id,
         address: 'K115 Lê Văn Hiến, Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng',
         location: {
           type: 'Point',

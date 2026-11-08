@@ -335,28 +335,27 @@ export function isSosInOfficerJurisdiction(
     return true;
   }
 
-  // 1. Authoritative GIS spatial check: If boundary polygon is defined, coordinates MUST be inside it
+  // 1. Authoritative GIS spatial check: If boundary polygon is defined and point is inside, return true
   if (managedArea && managedArea.boundary && managedArea.boundary.coordinates) {
-    return isPointInAreaBoundary(sos.coordinates, managedArea);
+    if (isPointInAreaBoundary(sos.coordinates, managedArea)) {
+      return true;
+    }
   }
 
-  // 2. Fallback if polygon boundary is not yet loaded: check administrative ward ID and name
-  const wardKeyword = officer.jurisdictionAreaName
-    ? officer.jurisdictionAreaName
-        .toLowerCase()
-        .replace('phường ', '')
-        .replace('quận ', '')
-        .replace('huyện ', '')
-        .replace('xã ', '')
-        .trim()
-    : '';
+  // 2. Fallback / complementary check: check administrative area name and keywords in ward, district, address
+  const areaKeyword = (officer.jurisdictionAreaName || officer.districtName || managedArea?.name || '')
+    .toLowerCase()
+    .replace(/^(phường|quận|huyện|xã|thị xã|tp|thành phố)s+/i, '')
+    .trim();
 
-  const matchesWard =
-    sos.wardId === officerAreaId ||
-    sos.districtId === officerAreaId ||
-    (wardKeyword && sos.wardName && sos.wardName.toLowerCase().includes(wardKeyword));
+  if (areaKeyword) {
+    const fullText = `${sos.wardName || ''} ${sos.districtName || ''} ${sos.locationName || ''} ${sos.title || ''}`.toLowerCase();
+    if (fullText.includes(areaKeyword)) {
+      return true;
+    }
+  }
 
-  return !!matchesWard;
+  return false;
 }
 
 /**
