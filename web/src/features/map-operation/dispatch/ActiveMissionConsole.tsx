@@ -8,10 +8,13 @@ import {
   Shield,
   Check,
   AlertCircle,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 import type { SosRequest, SosAssignment, RescueTeam, Vehicle, AuthorityOfficer, AdministrativeArea } from '@/types/domainD';
 import { assignShoreHandoffApi, cancelShoreHandoffApi, approveSuppliesApi, rejectSuppliesApi } from '@/api';
 import { isTeamInOfficerJurisdiction } from '@/services/mapGeoService';
+import { toast } from '@/components/common/toast';
 
 interface Props {
   assignment: SosAssignment | null;
@@ -39,6 +42,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
   const [isSubmittingRoad, setIsSubmittingRoad] = useState(false);
   const [isCancellingRoad, setIsCancellingRoad] = useState(false);
   const [isProcessingSupplies, setIsProcessingSupplies] = useState(false);
+  const [isRejectSuppliesModalOpen, setIsRejectSuppliesModalOpen] = useState(false);
+  const [rejectNote, setRejectNote] = useState('');
 
   const effectiveRequestedSupplies = (assignment?.requestedSupplies && assignment.requestedSupplies.length > 0)
     ? assignment.requestedSupplies
@@ -49,33 +54,40 @@ export const ActiveMissionConsole: React.FC<Props> = ({
   const handleApproveSupplies = async () => {
     const targetAssignId = assignment?.id || selectedSos?.assignmentId;
     if (!targetAssignId) {
-      alert('Không tìm thấy thông tin phân công của nhiệm vụ');
+      toast.error('Không tìm thấy thông tin phân công của nhiệm vụ');
       return;
     }
     setIsProcessingSupplies(true);
     try {
       await approveSuppliesApi(targetAssignId);
+      toast.success('Đã duyệt cấp phát thêm vật tư thành công!');
       window.dispatchEvent(new CustomEvent('sos_data_updated'));
     } catch (err: any) {
-      alert('Lỗi phê duyệt vật tư: ' + (err?.message || 'Vui lòng thử lại'));
+      toast.error('Lỗi phê duyệt vật tư: ' + (err?.message || 'Vui lòng thử lại'));
     } finally {
       setIsProcessingSupplies(false);
     }
   };
 
-  const handleRejectSupplies = async () => {
+    const handleRejectSupplies = () => {
+    setIsRejectSuppliesModalOpen(true);
+  };
+
+  const confirmRejectSupplies = async () => {
     const targetAssignId = assignment?.id || selectedSos?.assignmentId;
     if (!targetAssignId) {
-      alert('Không tìm thấy thông tin phân công của nhiệm vụ');
+      toast.error('Không tìm thấy thông tin phân công của nhiệm vụ');
       return;
     }
-    if (!window.confirm('Bạn có chắc chắn muốn từ chối yêu cầu chi viện vật tư này?')) return;
     setIsProcessingSupplies(true);
     try {
-      await rejectSuppliesApi(targetAssignId);
+      await rejectSuppliesApi(targetAssignId, rejectNote.trim() || undefined);
+      setIsRejectSuppliesModalOpen(false);
+      setRejectNote('');
+      toast.success('Đã từ chối yêu cầu chi viện vật tư');
       window.dispatchEvent(new CustomEvent('sos_data_updated'));
     } catch (err: any) {
-      alert('Lỗi từ chối vật tư: ' + (err?.message || 'Vui lòng thử lại'));
+      toast.error('Lỗi từ chối vật tư: ' + (err?.message || 'Vui lòng thử lại'));
     } finally {
       setIsProcessingSupplies(false);
     }
@@ -1611,6 +1623,207 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 }}
               >
                 {isSubmittingRoad ? 'Đang điều xe...' : 'XÁC NHẬN ĐIỀU XE ĐẾN BẾN'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      
+      {/* Modal Xác nhận từ chối yêu cầu chi viện vật tư */}
+      {isRejectSuppliesModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.72)',
+            backdropFilter: 'blur(5px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+          onClick={() => !isProcessingSupplies && setIsRejectSuppliesModalOpen(false)}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 440,
+              background: '#ffffff',
+              borderRadius: 16,
+              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.35)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              border: '1px solid #e2e8f0',
+              animation: 'modalScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: '16px 20px',
+                background: '#fef2f2',
+                borderBottom: '1px solid #fee2e2',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: '50%',
+                  background: '#fee2e2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#dc2626',
+                  flexShrink: 0,
+                }}
+              >
+                <AlertTriangle size={22} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h4 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#991b1b' }}>
+                  Từ chối yêu cầu chi viện vật tư
+                </h4>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#b91c1c' }}>
+                  Xác nhận phản hồi đến đội cứu hộ tác chiến
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRejectSuppliesModalOpen(false)}
+                disabled={isProcessingSupplies}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  padding: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <p style={{ margin: 0, fontSize: 13.5, color: '#334155', lineHeight: 1.5 }}>
+                Bạn có chắc chắn muốn <strong>từ chối</strong> yêu cầu chi viện vật tư từ đội cứu hộ?
+              </p>
+
+              {effectiveRequestedSupplies.length > 0 && (
+                <div
+                  style={{
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 10,
+                    padding: '10px 14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
+                    Vật tư đội yêu cầu:
+                  </span>
+                  {effectiveRequestedSupplies.map((req: any, idx: number) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: '#0f172a' }}>
+                      <span style={{ fontWeight: 600 }}>• {req.name}</span>
+                      <span style={{ fontWeight: 800, color: '#dc2626' }}>{req.quantity} {req.unit || 'món'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Ghi chú lý do từ chối (tùy chọn) */}
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 5 }}>
+                  Lý do từ chối (tùy chọn):
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ví dụ: Kho trạm tạm hết / Đang điều động xe khác..."
+                  value={rejectNote}
+                  onChange={(e) => setRejectNote(e.target.value)}
+                  disabled={isProcessingSupplies}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    fontSize: 13,
+                    borderRadius: 8,
+                    border: '1px solid #cbd5e1',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Footer actions */}
+            <div
+              style={{
+                padding: '14px 20px',
+                background: '#f8fafc',
+                borderTop: '1px solid #e2e8f0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: 10,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setIsRejectSuppliesModalOpen(false)}
+                disabled={isProcessingSupplies}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  color: '#475569',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={confirmRejectSupplies}
+                disabled={isProcessingSupplies}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: '#dc2626',
+                  color: '#ffffff',
+                  fontSize: 13,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  boxShadow: '0 2px 6px rgba(220, 38, 38, 0.35)',
+                }}
+              >
+                {isProcessingSupplies ? (
+                  <span>Đang xử lý...</span>
+                ) : (
+                  <>
+                    <X size={15} />
+                    <span>Xác nhận từ chối</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
