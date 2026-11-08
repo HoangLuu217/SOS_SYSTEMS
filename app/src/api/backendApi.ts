@@ -211,6 +211,9 @@ class BackendApiService {
 
 
   // Chat with Local Authority API
+  getEmergencyDirectory = (params?: Parameters<typeof chatApi.getEmergencyDirectory>[0]) =>
+    chatApi.getEmergencyDirectory(params);
+
   getLocalAuthority = (params: Parameters<typeof chatApi.getLocalAuthority>[0]) =>
     chatApi.getLocalAuthority(params);
 

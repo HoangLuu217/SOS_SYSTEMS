@@ -1455,14 +1455,14 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
                 onPress={() => setShowPriorityModal(true)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.dropdownSelectedTextInline} numberOfLines={1}>
+                <Text style={styles.dropdownSelectedTextInline} numberOfLines={1} ellipsizeMode="tail">
                   {selectedPriorities.length === 0
                     ? 'Chọn đối tượng'
                     : selectedPriorities.length === 1
                       ? selectedPriorities[0]
                       : `${selectedPriorities[0]} (+${selectedPriorities.length - 1})`}
                 </Text>
-                <Feather name="chevron-down" size={16} color="#64748B" style={{ marginLeft: 6 }} />
+                <Feather name="chevron-down" size={16} color="#64748B" style={{ marginLeft: 6, flexShrink: 0 }} />
               </TouchableOpacity>
             </View>
 

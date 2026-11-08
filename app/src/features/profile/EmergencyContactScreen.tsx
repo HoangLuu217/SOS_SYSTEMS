@@ -253,6 +253,20 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
   const [selectedRelation, setSelectedRelation] = useState('Mẹ');
   const [customRelation, setCustomRelation] = useState('');
 
+  // Custom In-App Modal Dialog
+  const [inAppAlert, setInAppAlert] = useState<{
+    visible: boolean;
+    type: 'danger' | 'warning' | 'info' | 'success';
+    title: string;
+    message: string;
+    cancelText?: string;
+    confirmText?: string;
+    confirmStyle?: 'danger' | 'success' | 'primary';
+    onCancel?: () => void;
+    onConfirm?: () => Promise<void> | void;
+  } | null>(null);
+  const [inAppAlertLoading, setInAppAlertLoading] = useState(false);
+
   // Map Picker Modal states
   const [showMapModal, setShowMapModal] = useState(false);
   const [pickerCoords, setPickerCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -489,7 +503,15 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
         setPickerAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
       }
     } catch {
-      Alert.alert('Không thể lấy GPS', 'Vui lòng kiểm tra quyền truy cập vị trí của thiết bị.');
+      setInAppAlert({
+        visible: true,
+        type: 'warning',
+        title: 'Không thể lấy GPS',
+        message: 'Vui lòng kiểm tra quyền truy cập vị trí của thiết bị.',
+        confirmText: 'Đã hiểu',
+        confirmStyle: 'primary',
+        onConfirm: () => setInAppAlert(null),
+      });
     } finally {
       setIsReverseGeocoding(false);
     }
@@ -703,23 +725,22 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
     });
   };
 
-  // Xác nhận xoá người liên hệ
+  // Xác nhận xoá người liên hệ (Custom Modal Popup)
   const handleDeleteContact = (contact: EmergencyContact) => {
-    Alert.alert(
-      'Xoá người liên hệ?',
-      `Bạn có chắc chắn muốn xoá "${contact.name}" khỏi danh bạ khẩn cấp không?`,
-      [
-        {
-          text: 'Huỷ bỏ',
-          style: 'cancel',
-        },
-        {
-          text: 'Xoá ngay',
-          style: 'destructive',
-          onPress: () => executeDeleteContact(contact),
-        },
-      ]
-    );
+    setInAppAlert({
+      visible: true,
+      type: 'danger',
+      title: 'Xoá người liên hệ?',
+      message: `Bạn có chắc chắn muốn xoá "${contact.name}" khỏi danh bạ khẩn cấp không?`,
+      cancelText: 'Huỷ bỏ',
+      confirmText: 'Xoá ngay',
+      confirmStyle: 'danger',
+      onCancel: () => setInAppAlert(null),
+      onConfirm: () => {
+        executeDeleteContact(contact);
+        setInAppAlert(null);
+      },
+    });
   };
 
   // Thực hiện xoá: Cập nhật biến mất trên UI NGAY LẬP TỨC
@@ -759,7 +780,15 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
         console.warn('[Delete Contact Error]:', err);
         // Rollback nếu có lỗi mạng
         setContacts(previousContacts);
-        Alert.alert('Lỗi', 'Không thể xoá người liên hệ trên máy chủ.');
+        setInAppAlert({
+          visible: true,
+          type: 'danger',
+          title: 'Lỗi',
+          message: 'Không thể xoá người liên hệ trên máy chủ.',
+          confirmText: 'Đã hiểu',
+          confirmStyle: 'primary',
+          onConfirm: () => setInAppAlert(null),
+        });
       });
     }
   };
@@ -1181,6 +1210,106 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
           </View>
         </SafeAreaView>
       </Modal>
+
+      {/* DIALOG XÁC NHẬN / THÔNG BÁO TÙY BIẾN THEO PHONG CÁCH SOS SYSTEMS (CHUẨN TRUNG TÂM MÀN HÌNH) */}
+      {inAppAlert?.visible ? (
+        <Modal
+          visible={Boolean(inAppAlert.visible)}
+          transparent={true}
+          animationType="fade"
+          statusBarTranslucent={true}
+          onRequestClose={() => {
+            if (!inAppAlertLoading) {
+              if (inAppAlert.onCancel) inAppAlert.onCancel();
+              else setInAppAlert(null);
+            }
+          }}
+        >
+          <View style={styles.dialogModalRoot}>
+            <View style={styles.dialogCard}>
+              {/* Icon chỉ báo phân loại */}
+              <View
+                style={[
+                  styles.dialogIconWrap,
+                  inAppAlert.type === 'danger' && styles.dialogIconDanger,
+                  inAppAlert.type === 'warning' && styles.dialogIconWarning,
+                  inAppAlert.type === 'info' && styles.dialogIconInfo,
+                  inAppAlert.type === 'success' && styles.dialogIconSuccess,
+                ]}
+              >
+                {inAppAlert.type === 'danger' && (
+                  <Ionicons name="trash-outline" size={32} color="#DC2626" />
+                )}
+                {inAppAlert.type === 'warning' && (
+                  <Ionicons name="warning-outline" size={32} color="#D97706" />
+                )}
+                {inAppAlert.type === 'info' && (
+                  <Ionicons name="information-circle" size={34} color="#0066FF" />
+                )}
+                {inAppAlert.type === 'success' && (
+                  <Ionicons name="checkmark-circle" size={34} color="#16A34A" />
+                )}
+              </View>
+
+              {/* Tiêu đề & Nội dung */}
+              <Text style={styles.dialogTitle}>{inAppAlert.title}</Text>
+              <Text style={styles.dialogMessage}>{inAppAlert.message}</Text>
+
+              {/* Hàng nút bấm */}
+              <View style={styles.dialogButtonRow}>
+                {inAppAlert.cancelText ? (
+                  <TouchableOpacity
+                    style={styles.dialogCancelBtn}
+                    onPress={() => {
+                      if (inAppAlert.onCancel) {
+                        inAppAlert.onCancel();
+                      } else {
+                        setInAppAlert(null);
+                      }
+                    }}
+                    disabled={inAppAlertLoading}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.dialogCancelBtnText}>{inAppAlert.cancelText}</Text>
+                  </TouchableOpacity>
+                ) : null}
+
+                <TouchableOpacity
+                  style={[
+                    styles.dialogConfirmBtn,
+                    !inAppAlert.cancelText && { width: '100%', flex: 0 },
+                    inAppAlert.confirmStyle === 'danger' && styles.dialogConfirmDanger,
+                    inAppAlert.confirmStyle === 'success' && styles.dialogConfirmSuccess,
+                    (!inAppAlert.confirmStyle || inAppAlert.confirmStyle === 'primary') && styles.dialogConfirmPrimary,
+                  ]}
+                  onPress={async () => {
+                    if (inAppAlert.onConfirm) {
+                      setInAppAlertLoading(true);
+                      try {
+                        await inAppAlert.onConfirm();
+                      } finally {
+                        setInAppAlertLoading(false);
+                      }
+                    } else {
+                      setInAppAlert(null);
+                    }
+                  }}
+                  disabled={inAppAlertLoading}
+                  activeOpacity={0.85}
+                >
+                  {inAppAlertLoading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.dialogConfirmBtnText}>
+                      {inAppAlert.confirmText || 'Đồng ý'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </SafeAreaView>
   );
 };
@@ -1781,5 +1910,110 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
     letterSpacing: 0.5,
+  },
+  dialogModalRoot: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  dialogCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    paddingVertical: 24,
+    paddingHorizontal: 22,
+    width: '100%',
+    maxWidth: 340,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 28,
+    elevation: 20,
+  },
+  dialogIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+  },
+  dialogIconDanger: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FCA5A5',
+  },
+  dialogIconSuccess: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  dialogIconWarning: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FCD34D',
+  },
+  dialogIconInfo: {
+    backgroundColor: '#E0F2FE',
+    borderColor: '#BAE6FD',
+  },
+  dialogTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  dialogMessage: {
+    fontSize: 14,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 21,
+    marginBottom: 22,
+  },
+  dialogButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    width: '100%',
+  },
+  dialogCancelBtn: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 13,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  dialogCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  dialogConfirmBtn: {
+    flex: 1.15,
+    paddingVertical: 13,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dialogConfirmPrimary: {
+    backgroundColor: '#0066FF',
+  },
+  dialogConfirmSuccess: {
+    backgroundColor: '#16A34A',
+  },
+  dialogConfirmDanger: {
+    backgroundColor: '#DC2626',
+  },
+  dialogConfirmBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });

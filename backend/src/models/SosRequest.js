@@ -45,8 +45,6 @@ const sosRequestSchema = new mongoose.Schema(
       default: function () {
         return (
           'SOS-' +
-          Date.now().toString(36).toUpperCase() +
-          '-' +
           Math.random().toString(36).substring(2, 6).toUpperCase()
         );
       },
@@ -124,9 +122,9 @@ const sosRequestSchema = new mongoose.Schema(
         validator: function (v) {
           if (!v || !v.trim()) return true;
           const clean = v.replace(/[\s\.\-]+/g, '');
-          return /^(?:\+84|0)(?:3|5|7|8|9)\d{8}$/.test(clean);
+          return /^(\+?\d{7,15})$/.test(clean);
         },
-        message: 'Số điện thoại liên hệ khẩn cấp không hợp lệ (cần 10 chữ số chuẩn VN)',
+        message: 'Số điện thoại liên hệ khẩn cấp không hợp lệ',
       },
     },
     secondaryPhone: {
@@ -137,9 +135,9 @@ const sosRequestSchema = new mongoose.Schema(
         validator: function (v) {
           if (!v || !v.trim()) return true;
           const clean = v.replace(/[\s\.\-]+/g, '');
-          return /^(?:\+84|0)(?:3|5|7|8|9)\d{8}$/.test(clean);
+          return /^(\+?\d{7,15})$/.test(clean);
         },
-        message: 'Số điện thoại dự phòng không hợp lệ (cần 10 chữ số chuẩn VN)',
+        message: 'Số điện thoại dự phòng không hợp lệ',
       },
     },
     priorityGroups: [{

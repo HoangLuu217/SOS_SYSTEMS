@@ -111,6 +111,25 @@ export const onSosUpdated = (callback: (updatedSos: any) => void): (() => void) 
 };
 
 /**
+ * Đăng ký lắng nghe sự kiện xóa yêu cầu SOS
+ * @param callback Callback nhận dữ liệu { sosId: string }
+ * @returns Hàm hủy lắng nghe (cleanup)
+ */
+export const onSosDeleted = (callback: (data: { sosId: string }) => void): (() => void) => {
+  const s = getSocket();
+  const handler = (data: any) => {
+    console.log('🗑️ [Socket.IO Web] Nhận tín hiệu xóa SOS Realtime:', data);
+    callback(data);
+  };
+
+  s.on('sos:deleted', handler);
+
+  return () => {
+    s.off('sos:deleted', handler);
+  };
+};
+
+/**
  * Đăng ký lắng nghe sự kiện cập nhật phân công nhiệm vụ / cứu hộ viên đổi trạng thái tác chiến
  * @param callback Callback nhận dữ liệu phân công cập nhật
  * @returns Hàm hủy lắng nghe (cleanup)

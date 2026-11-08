@@ -286,6 +286,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
   const [unreadNotifCount, setUnreadNotifCount] = useState<number>(0);
 
+  // Thông tin chính quyền / Ban chỉ huy địa phương gần nhất
+  const [nearestAuthority, setNearestAuthority] = useState<{
+    name: string;
+    department: string;
+    phone: string;
+    areaName: string;
+  } | null>(null);
+
   // Lấy số lượng thông báo chưa đọc từ máy chủ
   useEffect(() => {
     let isMounted = true;
@@ -370,6 +378,84 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   }, []);
 
+  // Lấy thông tin Ban chỉ huy / UBND địa phương theo ĐỊA CHỈ của customer
+  const fetchNearestAuthority = useCallback(async (fallbackCity?: string) => {
+    try {
+      let queryArea = '';
+      let queryWard = '';
+      let queryProvince = '';
+      let queryLat: number | undefined = undefined;
+      let queryLng: number | undefined = undefined;
+
+      // 1. ƯU TIÊN SỐ 1 TUYỆT ĐỐI: Dựa theo ĐỊA CHỈ của Customer (user.address)
+      if (user?.address && user.address.trim()) {
+        const fullAddr = user.address.trim();
+        queryArea = fullAddr;
+        const parts = fullAddr.split(',').map((s) => s.trim()).filter(Boolean);
+        if (parts.length >= 3) {
+          queryProvince = parts[parts.length - 1];
+          queryWard = parts[parts.length - 2];
+        } else if (parts.length === 2) {
+          queryProvince = parts[1];
+          queryWard = parts[0];
+        } else {
+          queryProvince = fullAddr;
+        }
+
+        // Tự động geocode toạ độ địa chỉ của Customer
+        try {
+          const geoRes = await Location.geocodeAsync(fullAddr);
+          if (geoRes && geoRes.length > 0) {
+            queryLat = geoRes[0].latitude;
+            queryLng = geoRes[0].longitude;
+          }
+        } catch {}
+      } else {
+        // 2. CHỈ KHI CUSTOMER CHƯA CÓ ĐỊA CHỈ TRONG HỒ SƠ: Mới fallback sang GPS thiết bị
+        queryArea = fallbackCity || '';
+        try {
+          const { status } = await Location.getForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            queryLat = loc.coords.latitude;
+            queryLng = loc.coords.longitude;
+            const geoList = await Location.reverseGeocodeAsync({ latitude: queryLat, longitude: queryLng });
+            if (geoList && geoList.length > 0) {
+              const geo = geoList[0];
+              queryProvince = geo.region || geo.city || '';
+              queryWard = geo.district || geo.subregion || geo.street || geo.name || '';
+              queryArea = [queryWard, queryProvince].filter(Boolean).join(', ');
+            }
+          }
+        } catch {}
+      }
+
+      if (!queryArea) {
+        queryArea = 'Khu vực của bạn';
+      }
+
+      const res = await backendApi.getLocalAuthority({
+        areaName: queryArea !== 'Khu vực của bạn' ? queryArea : undefined,
+        province: queryProvince || undefined,
+        ward: queryWard || undefined,
+        lat: queryLat,
+        lng: queryLng,
+        userId: user?._id,
+      });
+
+      if (res.success && res.data?.authority) {
+        setNearestAuthority({
+          name: res.data.authority.name || 'Cán bộ trực ban',
+          department: res.data.authority.department || `UBND ${res.data.areaName || queryArea || 'Địa phương'}`,
+          phone: res.data.authority.phone || '',
+          areaName: res.data.areaName || queryArea || 'Địa chỉ của bạn',
+        });
+      }
+    } catch (err) {
+      console.log('[HomeScreen] Lỗi lấy thông tin chính quyền theo địa chỉ customer:', err);
+    }
+  }, [user?._id, user?.address]);
+
   // Tự động lấy tọa độ thực tế và gọi API thời tiết thật
   const fetchRealWeather = useCallback(async () => {
     try {
@@ -440,19 +526,40 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           icon: weatherInfo.icon,
           isDay,
         });
+
+        // Chỉ khi customer chưa lưu địa chỉ trong hồ sơ, mới cập nhật chính quyền theo GPS hiện tại
+        if (!user?.address || !user.address.trim()) {
+          void fetchNearestAuthority(detectedCity);
+        }
       }
     } catch (err) {
       console.log('Lỗi khi cập nhật thời tiết thực:', err);
     } finally {
       setIsWeatherLoading(false);
     }
-  }, []);
+  }, [fetchNearestAuthority, user?.address]);
 
-  // Nạp thời tiết và tin tức thực tế khi vào màn hình
+  // Gọi khẩn cấp đến chính quyền địa phương theo địa chỉ customer: Mở trực tiếp màn hình quay số điện thoại
+  const handleCallLocalAuthority = () => {
+    const hotline = nearestAuthority?.phone;
+    if (!hotline) {
+      Alert.alert('Chưa có số điện thoại', 'Hệ thống chưa tìm thấy số liên lạc của chính quyền địa phương này.');
+      return;
+    }
+    const clean = hotline.replace(/[^0-9+]/g, '');
+    if (clean) {
+      Linking.openURL(`tel:${clean}`).catch(() => {
+        Alert.alert('Lỗi', `Không thể mở ứng dụng quay số với số điện thoại: ${hotline}`);
+      });
+    }
+  };
+
+  // Nạp thời tiết, tin tức và chính quyền địa phương thực tế khi vào màn hình
   useEffect(() => {
     void fetchRealWeather();
     void fetchFeaturedWeatherNews();
-  }, [fetchRealWeather, fetchFeaturedWeatherNews]);
+    void fetchNearestAuthority();
+  }, [fetchRealWeather, fetchFeaturedWeatherNews, fetchNearestAuthority]);
 
   // Kéo xuống để làm mới (Pull-to-refresh)
   const handleRefresh = useCallback(async () => {
@@ -460,9 +567,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     await Promise.allSettled([
       fetchRealWeather(),
       fetchFeaturedWeatherNews(),
+      fetchNearestAuthority(),
     ]);
     setRefreshing(false);
-  }, [fetchRealWeather, fetchFeaturedWeatherNews]);
+  }, [fetchRealWeather, fetchFeaturedWeatherNews, fetchNearestAuthority]);
 
   // Cập nhật GPS khi người dùng quay lại app; không bật theo dõi vị trí nền.
   useEffect(() => {
@@ -633,9 +741,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 { paddingTop: Math.max(insets.top, Platform.OS === 'android' ? 36 : 20) },
               ]}
             >
-              {/* Thanh điều khiển trên cùng: Thông báo + Cài đặt (Phải) */}
+              {/* Thanh điều khiển trên cùng: Gọi khẩn cấp địa phương + Thông báo + Cài đặt */}
               <View style={styles.topBar}>
                 <View style={styles.topBarRight}>
+                  {/* Nút Gọi Cứu Hộ / Chính Quyền Địa Phương Khẩn Cấp (Nằm ngay cạnh chuông thông báo) */}
+                  <TouchableOpacity
+                    style={[styles.circleIconButton, styles.phoneCallButton]}
+                    onPress={handleCallLocalAuthority}
+                    activeOpacity={0.75}
+                    accessibilityLabel="Gọi khẩn cấp chính quyền địa phương"
+                  >
+                    <Ionicons name="call" size={17} color="#22C55E" />
+                  </TouchableOpacity>
+
                   <TouchableOpacity
                     style={styles.circleIconButton}
                     onPress={() => onNavigateToTab?.('news')}
@@ -1054,6 +1172,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.2)',
     position: 'relative',
+  },
+  phoneCallButton: {
+    backgroundColor: 'rgba(34, 197, 94, 0.22)',
+    borderColor: 'rgba(34, 197, 94, 0.45)',
   },
   bellBadge: {
     position: 'absolute',

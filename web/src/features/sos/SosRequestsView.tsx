@@ -14,11 +14,20 @@ import {
   AlertTriangle,
   PhoneCall,
   X,
+  XCircle,
+  Trash2,
 } from 'lucide-react';
 import type { User } from '@/types/auth';
 import type { SosRequestItem, AdministrativeAreaItem, VehicleItem } from '@/types';
-import { fetchSosRequests, createSosRequest, fetchAdministrativeAreas, fetchVehicles } from '@/api';
-import { onSosCreated, onSosUpdated } from '@/services/socketService';
+import {
+  fetchSosRequests,
+  createSosRequest,
+  fetchAdministrativeAreas,
+  fetchVehicles,
+  deleteSosRequestApi,
+  clearCancelledSosApi,
+} from '@/api';
+import { onSosCreated, onSosUpdated, onSosDeleted } from '@/services/socketService';
 import { FALLBACK_SOS_LIST, FALLBACK_VEHICLES } from '@/constants/dashboardFallbackData';
 import { EMERGENCY_TYPE_LABELS } from '@/features/hazards';
 import { toast } from '@/components/common/toast';
@@ -41,8 +50,8 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
   const [, setVehicles] = useState<VehicleItem[]>(() => memoryCachedVehicles || []);
   const [hasLoadedFromApi, setHasLoadedFromApi] = useState<boolean>(Boolean(memoryCachedSosList));
 
-  // State lọc Triage và tìm kiếm
-  const [triageFilter, setTriageFilter] = useState<'ALL' | 'CRITICAL' | 'HIGH' | 'PENDING' | 'ACTIVE'>('ALL');
+  // State lọc Triage: Mặc định là 'ALL' (Hiển thị đầy đủ tất cả)
+  const [triageFilter, setTriageFilter] = useState<'ALL' | 'CRITICAL' | 'HIGH' | 'PENDING' | 'RESCUING' | 'COMPLETED' | 'CANCELLED'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
   const [selectedSosDetail, setSelectedSosDetail] = useState<SosRequestItem | null>(null);
@@ -113,11 +122,52 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
       loadData();
     });
 
+    const unsubDeleted = onSosDeleted((deletedData) => {
+      console.log('🗑️ [SosRequestsView] Xóa SOS realtime:', deletedData);
+      loadData();
+    });
+
     return () => {
       unsubCreated();
       unsubUpdated();
+      unsubDeleted();
     };
   }, [loadData]);
+
+  // Hành động xóa 1 ca SOS đã đóng / đã hủy
+  const handleDeleteSingleSos = async (sosId: string, sosCode?: string) => {
+    const confirmed = window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn ca ${sosCode || 'này'} khỏi hệ thống?`);
+    if (!confirmed) return;
+    try {
+      setLoading(true);
+      await deleteSosRequestApi(sosId);
+      toast.success(`Đã xóa vĩnh viễn ca ${sosCode || 'cứu hộ'} thành công!`, 'Đã xóa');
+      loadData();
+    } catch (err: any) {
+      toast.error(err?.message || 'Không thể xóa ca cứu hộ', 'Lỗi');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Hành động dọn sạch tất cả các ca đã hủy (Clear Trash)
+  const handleClearAllCancelled = async () => {
+    const currentCancelled = sosList.filter((s) => s.status === 'CANCELLED').length;
+    const confirmed = window.confirm(
+      `Bạn có chắc chắn muốn dọn dẹp và xóa sạch toàn bộ ${currentCancelled} ca đã hủy khỏi hệ thống? Thao tác này sẽ làm sạch danh sách và không thể khôi phục.`
+    );
+    if (!confirmed) return;
+    try {
+      setLoading(true);
+      const res = await clearCancelledSosApi();
+      toast.success(res?.message || `Đã dọn dẹp sạch ${currentCancelled} ca đã hủy!`, 'Dọn dẹp thành công');
+      loadData();
+    } catch (err: any) {
+      toast.error(err?.message || 'Không thể dọn dẹp các ca đã hủy', 'Lỗi');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Hành động 3: Tiếp nhận SOS qua Hotline
   const handleHotlineSubmit = async (e: React.FormEvent) => {
@@ -162,20 +212,38 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     }
   };
 
-  const displaySosList = hasLoadedFromApi ? sosList : (sosList.length > 0 ? sosList : (loading ? [] : FALLBACK_SOS_LIST));
-  const totalCount = displaySosList.length;
-  const criticalCount = displaySosList.filter((s) => s.priority === 'CRITICAL').length;
-  const highCount = displaySosList.filter((s) => s.priority === 'HIGH').length;
+  const displaySosList = sosList;
+
+  // Phân tách ca đang diễn ra (Active) và ca đã đóng (Completed / Cancelled)
+  const activeSosList = displaySosList.filter((s) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status));
+  const activeCount = activeSosList.length;
+  const criticalCount = activeSosList.filter((s) => s.priority === 'CRITICAL').length;
+  const highCount = activeSosList.filter((s) => s.priority === 'HIGH').length;
   const pendingCount = displaySosList.filter((s) => s.status === 'PENDING').length;
-  const verifiedCount = displaySosList.filter((s) => ['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status)).length;
-  const totalVictims = displaySosList.reduce((sum, s) => sum + (s.people || 1), 0);
+  const inRescueCount = displaySosList.filter((s) => ['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status) && !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status)).length;
+  const completedCount = displaySosList.filter((s) => s.status === 'COMPLETED').length;
+  const cancelledCount = displaySosList.filter((s) => s.status === 'CANCELLED').length;
+  const totalCount = displaySosList.length;
+
+  // Tổng số người gặp nạn CẦN CỨU (chỉ tính trên các ca đang hoạt động, không cộng ca đã hủy)
+  const activeVictims = activeSosList.reduce((sum, s) => sum + (s.people || 1), 0);
 
   // Lọc theo thanh Triage và ô tìm kiếm
   const filteredSosList = displaySosList.filter((sos) => {
-    if (triageFilter === 'CRITICAL' && sos.priority !== 'CRITICAL') return false;
-    if (triageFilter === 'HIGH' && sos.priority !== 'HIGH') return false;
-    if (triageFilter === 'PENDING' && sos.status !== 'PENDING') return false;
-    if (triageFilter === 'ACTIVE' && !['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(sos.status)) return false;
+    if (triageFilter === 'CRITICAL') {
+      if (sos.priority !== 'CRITICAL') return false;
+    } else if (triageFilter === 'HIGH') {
+      if (sos.priority !== 'HIGH') return false;
+    } else if (triageFilter === 'PENDING') {
+      if (sos.status !== 'PENDING') return false;
+    } else if (triageFilter === 'RESCUING') {
+      if (!['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(sos.status)) return false;
+    } else if (triageFilter === 'COMPLETED') {
+      if (sos.status !== 'COMPLETED') return false;
+    } else if (triageFilter === 'CANCELLED') {
+      if (sos.status !== 'CANCELLED') return false;
+    }
+    // 'ALL' -> Hiển thị tất cả
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -235,17 +303,17 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
             title="Mở ngay Bản đồ Điều hành Tác chiến"
           >
             <span style={{ fontWeight: 700 }}>Bản đồ chi tiết</span>
-            <span className="sos-scope-badge">
-              {totalCount}
+            <span className="sos-scope-badge" title="Số lượng ca khẩn cấp đang diễn ra trên bản đồ">
+              {activeCount}
             </span>
           </button>
         </div>
 
-        {/* Duy nhất 1 trường số lượng người gặp nạn bên phải */}
+        {/* Duy nhất 1 trường số lượng người gặp nạn ĐANG CẦN CỨU bên phải */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
-          <strong style={{ color: '#0f172a', fontWeight: 700 }}>Tổng số người gặp nạn:</strong>
+          <strong style={{ color: '#0f172a', fontWeight: 700 }}>Tổng số người cần cứu:</strong>
           <strong style={{ color: '#0284c7', fontWeight: 800, fontSize: '15px' }}>
-            {totalVictims} người
+            {activeVictims} người
           </strong>
         </div>
       </div>
@@ -258,6 +326,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
         <div className="executive-table-toolbar">
           {/* Triage filter pills bên trái */}
           <div className="executive-triage-pills">
+            {/* 1. Tất cả */}
             <button
               type="button"
               className={`triage-btn btn-all ${triageFilter === 'ALL' ? 'active' : ''}`}
@@ -265,6 +334,8 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
             >
               Tất cả ({totalCount})
             </button>
+
+            {/* 2. Nguy cấp */}
             <button
               type="button"
               className={`triage-btn critical ${triageFilter === 'CRITICAL' ? 'active' : ''}`}
@@ -273,6 +344,8 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
               <span className="dot-mini red" />
               Nguy cấp ({criticalCount})
             </button>
+
+            {/* 3. Khẩn cấp */}
             <button
               type="button"
               className={`triage-btn high ${triageFilter === 'HIGH' ? 'active' : ''}`}
@@ -281,6 +354,8 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
               <span className="dot-mini orange" />
               Khẩn cấp ({highCount})
             </button>
+
+            {/* 4. Chờ điều phối */}
             <button
               type="button"
               className={`triage-btn pending ${triageFilter === 'PENDING' ? 'active' : ''}`}
@@ -289,34 +364,111 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
               <span className="dot-mini yellow" />
               Chờ điều phối ({pendingCount})
             </button>
+
+            {/* 5. Đang cứu */}
             <button
               type="button"
-              className={`triage-btn active-state ${triageFilter === 'ACTIVE' ? 'active' : ''}`}
-              onClick={() => setTriageFilter('ACTIVE')}
+              className={`triage-btn active-state ${triageFilter === 'RESCUING' ? 'active' : ''}`}
+              onClick={() => setTriageFilter('RESCUING')}
             >
               <span className="dot-mini blue" />
-              Đang cứu ({verifiedCount})
+              Đang cứu ({inRescueCount})
             </button>
+
+            {/* 6. Đã xong */}
+            {completedCount > 0 && (
+              <button
+                type="button"
+                className={`triage-btn ${triageFilter === 'COMPLETED' ? 'active' : ''}`}
+                onClick={() => setTriageFilter('COMPLETED')}
+              >
+                <span className="dot-mini" style={{ backgroundColor: '#16a34a' }} />
+                Đã xong ({completedCount})
+              </button>
+            )}
+
+            {/* 7. Đã hủy */}
+            {cancelledCount > 0 && (
+              <button
+                type="button"
+                className={`triage-btn ${triageFilter === 'CANCELLED' ? 'active' : ''}`}
+                onClick={() => setTriageFilter('CANCELLED')}
+              >
+                <span className="dot-mini" style={{ backgroundColor: '#94a3b8' }} />
+                Đã hủy ({cancelledCount})
+              </button>
+            )}
           </div>
 
           {/* Ô tìm kiếm bên phải */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div className="executive-search-input-wrap">
-              <Search size={14} className="search-icon" />
-              <input
-                type="text"
-                placeholder="Tìm theo tên, SĐT, địa chỉ, mã..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              {searchQuery && (
-                <button type="button" className="clear-search-btn" onClick={() => setSearchQuery('')}>
-                  <X size={12} />
-                </button>
-              )}
-            </div>
+          <div className="executive-search-input-wrap">
+            <Search size={14} className="search-icon" />
+            <input
+              type="text"
+              placeholder="Tìm theo tên, SĐT, địa chỉ, mã..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="executive-search-input"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                className="search-clear-btn"
+                onClick={() => setSearchQuery('')}
+                title="Xóa tìm kiếm"
+              >
+                <X size={12} />
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Banner tác vụ dọn dẹp khi đang xem các ca đã hủy */}
+        {triageFilter === 'CANCELLED' && cancelledCount > 0 && (
+          <div
+            style={{
+              margin: '0 0 14px 0',
+              padding: '10px 16px',
+              backgroundColor: '#FEF2F2',
+              border: '1px solid #FECACA',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontSize: '13px',
+              color: '#991B1B',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <AlertTriangle size={16} color="#DC2626" />
+              <span>
+                Đang hiển thị <strong>{cancelledCount} ca</strong> đã hủy/báo nhầm. Bạn có thể dọn dẹp để làm sạch danh sách.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleClearAllCancelled}
+              style={{
+                backgroundColor: '#DC2626',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '6px 14px',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 1px 2px rgba(220, 38, 38, 0.2)',
+              }}
+              title="Xóa vĩnh viễn toàn bộ các ca đã hủy để làm sạch danh sách"
+            >
+              <Trash2 size={13} color="#FFFFFF" />
+              Dọn sạch {cancelledCount} ca đã hủy
+            </button>
+          </div>
+        )}
 
         {/* Table */}
         <div className="executive-table-scroll">
@@ -341,14 +493,60 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 </tr>
               ) : filteredSosList.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '50px 20px' }}>
-                    <span style={{ fontSize: 32, display: 'block', marginBottom: 10 }}>🛡️</span>
-                    <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: '#0F172A' }}>
-                      Không có yêu cầu cứu hộ nào phù hợp với bộ lọc hiện tại
-                    </p>
-                    <p style={{ margin: '6px 0 0', fontSize: 13, color: '#64748B' }}>
-                      Thử chọn lại tab "Tất cả" hoặc xóa từ khóa tìm kiếm
-                    </p>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '45px 20px' }}>
+                    <div style={{ maxWidth: 460, margin: '0 auto' }}>
+                      <span style={{ fontSize: 36, display: 'block', marginBottom: 8 }}>
+                        {triageFilter === 'ACTIVE_ALL' && totalCount > 0 ? '✨' : '🛡️'}
+                      </span>
+                      <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: '#0F172A' }}>
+                        {triageFilter === 'ACTIVE_ALL' && totalCount > 0
+                          ? 'Hiện không có ca cứu nạn nào đang diễn ra'
+                          : 'Không có yêu cầu cứu hộ nào phù hợp với bộ lọc hiện tại'}
+                      </p>
+                      <p style={{ margin: '8px 0 16px', fontSize: 13, color: '#64748B', lineHeight: 1.5 }}>
+                        {triageFilter === 'ACTIVE_ALL' && totalCount > 0
+                          ? `Khu vực hiện tại an toàn. Đang có ${totalCount} ca được lưu trữ trong hệ thống (${completedCount} ca đã hoàn thành). Dữ liệu vẫn còn nguyên vẹn.`
+                          : 'Thử chuyển sang tab khác hoặc xóa từ khóa tìm kiếm.'}
+                      </p>
+                      {totalCount > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
+                          {completedCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setTriageFilter('COMPLETED')}
+                              style={{
+                                padding: '8px 16px',
+                                borderRadius: 8,
+                                backgroundColor: '#F0FDF4',
+                                color: '#16A34A',
+                                border: '1px solid #BBF7D0',
+                                fontWeight: 700,
+                                fontSize: 13,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Xem {completedCount} ca đã hoàn thành
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setTriageFilter('ALL')}
+                            style={{
+                              padding: '8px 16px',
+                              borderRadius: 8,
+                              backgroundColor: '#F8FAFC',
+                              color: '#334155',
+                              border: '1px solid #CBD5E1',
+                              fontWeight: 700,
+                              fontSize: 13,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Xem tất cả lịch sử ({totalCount} ca)
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -587,11 +785,76 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                             <CheckCircle2 size={11} />
                             Đã tiếp nhận
                           </span>
+                        ) : ['ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(sos.status) ? (
+                          <span className="status-tag active">
+                            <LifeBuoy size={11} />
+                            Đang cứu nạn
+                          </span>
                         ) : sos.status === 'COMPLETED' ? (
                           <span className="status-tag completed">
                             <FileCheck size={11} />
                             Đã hoàn thành
                           </span>
+                        ) : sos.status === 'CANCELLED' ? (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span className="status-tag cancelled" style={{ color: '#64748b', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1' }}>
+                              <XCircle size={11} />
+                              Đã hủy
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteSingleSos(sos._id, sos.sosCode);
+                              }}
+                              style={{
+                                border: 'none',
+                                background: 'transparent',
+                                color: '#94a3b8',
+                                padding: '3px 4px',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                borderRadius: 4,
+                                transition: 'color 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#dc2626'; }}
+                              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#94a3b8'; }}
+                              title="Xóa vĩnh viễn ca đã hủy này khỏi hệ thống"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        ) : sos.status === 'REJECTED' ? (
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span className="status-tag rejected" style={{ color: '#dc2626', backgroundColor: '#fee2e2', border: '1px solid #fca5a5' }}>
+                              <XCircle size={11} />
+                              Từ chối
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteSingleSos(sos._id, sos.sosCode);
+                              }}
+                              style={{
+                                border: 'none',
+                                background: 'transparent',
+                                color: '#94a3b8',
+                                padding: '3px 4px',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                borderRadius: 4,
+                                transition: 'color 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#dc2626'; }}
+                              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#94a3b8'; }}
+                              title="Xóa vĩnh viễn ca từ chối này khỏi hệ thống"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
                         ) : (
                           <span className="status-tag active">
                             <LifeBuoy size={11} />

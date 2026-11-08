@@ -30,8 +30,38 @@ export interface LocalAuthorityInfo {
   };
 }
 
+export interface EmergencyAuthorityContact {
+  id: string;
+  name: string;
+  department: string;
+  phone: string;
+  address?: string;
+  areaName: string;
+  type?: string;
+  lat?: number;
+  lng?: number;
+}
+
 export class ChatApi {
   constructor(private client: ApiClient = apiClient) {}
+
+  /**
+   * Lấy danh bạ đường dây nóng các cơ quan / ban chỉ huy cứu nạn công khai (không cần đăng nhập)
+   */
+  async getEmergencyDirectory(params?: {
+    search?: string;
+    lat?: number;
+    lng?: number;
+  }): Promise<ApiResponse<EmergencyAuthorityContact[]>> {
+    const query = new URLSearchParams();
+    if (params?.search) query.append('search', params.search);
+    if (params?.lat !== undefined) query.append('lat', String(params.lat));
+    if (params?.lng !== undefined) query.append('lng', String(params.lng));
+
+    const queryString = query.toString();
+    const endpoint = `/chat/emergency-directory${queryString ? `?${queryString}` : ''}`;
+    return this.client.get<EmergencyAuthorityContact[]>(endpoint);
+  }
 
   /**
    * Lấy thông tin cơ quan / cán bộ địa phương phụ trách địa bàn (theo GPS hoặc địa chỉ)

@@ -66,29 +66,19 @@ class DomainDService {
   constructor() {
     this.areas = this.load(STORAGE_AREAS, INITIAL_AREAS);
     this.authorities = this.load(STORAGE_AUTHORITIES, INITIAL_AUTHORITIES);
-    const loadedSos = this.load(STORAGE_SOS, INITIAL_SOS_REQUESTS);
-    // Sanitize any invalid/mock SOS requests (such as 8924, 8927, 8938)
-    this.sosRequests = loadedSos.filter(
+    const loadedSos = this.load(STORAGE_SOS, [] as SosRequest[]);
+    // Sanitize any invalid/mock SOS requests
+    this.sosRequests = (loadedSos.length > 0 ? loadedSos : INITIAL_SOS_REQUESTS).filter(
       (s) =>
-        !s.id?.includes('8924') &&
-        !s.id?.includes('8927') &&
+        !s.id?.startsWith('sos-88') &&
+        !s.id?.startsWith('sos-89') &&
+        !s.id?.startsWith('sos-dn-') &&
+        !s.sosCode?.includes('8898') &&
         !s.sosCode?.includes('8924') &&
         !s.sosCode?.includes('8927') &&
         !s.sosCode?.includes('8938') &&
         !s.locationName?.includes('Nam Kỳ Khởi Nghĩa')
     );
-    // Đảm bảo các ca SOS khởi tạo mới (như Phường Hòa Xuân) được merge vào nếu localStorage chưa có
-    const existingIds = new Set(this.sosRequests.map((s) => s.id));
-    let hasNew = false;
-    for (const initSos of INITIAL_SOS_REQUESTS) {
-      if (!existingIds.has(initSos.id)) {
-        this.sosRequests.push(initSos);
-        hasNew = true;
-      }
-    }
-    if (this.sosRequests.length !== loadedSos.length || hasNew) {
-      this.save(STORAGE_SOS, this.sosRequests);
-    }
     this.rescueTeams = INITIAL_RESCUE_TEAMS;
     this.vehicles = INITIAL_VEHICLES;
     this.assignments = this.load(STORAGE_ASSIGNMENTS, INITIAL_ASSIGNMENTS);
@@ -210,17 +200,9 @@ class DomainDService {
   }
 
   syncRealSosRequests(realRequests: SosRequest[]): SosRequest[] {
-    const realIds = new Set(realRequests.map((r) => r.id));
-    // Khi có dữ liệu thật từ MongoDB, loại bỏ hoàn toàn các ca mock cũ (sos-89..., 8924, 8927)
-    const nonColliding = this.sosRequests.filter(
-      (s) =>
-        !realIds.has(s.id) &&
-        !s.id.startsWith('sos-89') &&
-        !s.id.startsWith('sos-dn-') &&
-        !s.sosCode.includes('8924') &&
-        !s.sosCode.includes('8927')
-    );
-    this.sosRequests = [...realRequests, ...nonColliding];
+    // Khi có dữ liệu thật từ MongoDB / API, sử dụng toàn bộ danh sách thực tế
+    // và loại bỏ triệt để tất cả các ca mock / dữ liệu giả định cũ
+    this.sosRequests = [...realRequests];
     this.save(STORAGE_SOS, this.sosRequests);
     return [...this.sosRequests];
   }

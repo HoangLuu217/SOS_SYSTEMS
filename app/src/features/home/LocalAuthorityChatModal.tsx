@@ -76,26 +76,35 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
       let lat: number | undefined = undefined;
       let lng: number | undefined = undefined;
 
-      // 1. Ưu tiên: Địa chỉ thực tế mà tài khoản thuộc về (đã lưu trong hồ sơ cá nhân)
+      // 1. ƯU TIÊN SỐ 1 TUYỆT ĐỐI: Dựa trên ĐỊA CHỈ của Customer (user.address)
       if (user?.address && user.address.trim()) {
         const fullAddress = user.address.trim();
+        detectedArea = fullAddress;
+
         const parts = fullAddress.split(',').map((s) => s.trim()).filter(Boolean);
         if (parts.length >= 3) {
           detectedProvince = parts[parts.length - 1]; // Tỉnh / Thành phố
           detectedWard = parts[parts.length - 2];     // Phường / Xã / Thị trấn
-          detectedArea = `${detectedWard}, ${detectedProvince}`;
         } else if (parts.length === 2) {
           detectedProvince = parts[1];
           detectedWard = parts[0];
-          detectedArea = fullAddress;
         } else {
           detectedProvince = fullAddress;
-          detectedArea = fullAddress;
         }
-      }
 
-      // 2. Nếu tài khoản chưa cập nhật địa chỉ trong hồ sơ: Tự động lấy GPS thực tế
-      if (!detectedArea) {
+        // Tự động geocode toạ độ [lat, lng] của địa chỉ Customer để khớp đúng Ban chỉ huy / UBND địa bàn đó
+        try {
+          const geoList = await Location.geocodeAsync(fullAddress);
+          if (geoList && geoList.length > 0) {
+            lat = geoList[0].latitude;
+            lng = geoList[0].longitude;
+            if (isMounted) setCurrentCoords({ lat, lng });
+          }
+        } catch (err) {
+          console.log('[Geocode Customer Address Note]:', err);
+        }
+      } else {
+        // 2. CHỈ KHI CUSTOMER CHƯA LƯU ĐỊA CHỈ: Mới fallback lấy toạ độ GPS thiết bị
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
           if (status === 'granted') {
@@ -124,19 +133,6 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
         }
       }
 
-      // Cập nhật ngầm tọa độ GPS thiết bị (nếu đã cấp quyền) để sẵn sàng khi gửi vị trí khẩn cấp
-      Location.getForegroundPermissionsAsync()
-        .then(({ status }) => {
-          if (status === 'granted') {
-            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
-              .then((loc) => {
-                if (isMounted) setCurrentCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
-              })
-              .catch(() => {});
-          }
-        })
-        .catch(() => {});
-
       if (!detectedArea) {
         detectedArea = 'Khu vực của bạn';
       }
@@ -147,10 +143,10 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
         if (detectedWard) setWardName(detectedWard);
       }
 
-      // 3. Gọi Backend lấy thông tin Ban chỉ huy / Cán bộ địa phương quản lý theo từng tài khoản
+      // 3. Gọi Backend lấy thông tin Ban chỉ huy / Cán bộ địa phương quản lý đúng địa bàn
       try {
         const res = await backendApi.getLocalAuthority({
-          areaName: detectedArea !== 'Khu vực của bạn' ? detectedArea : undefined,
+          areaName: detectedArea !== 'Khu vực của bạn' ? detectedArea : (user?.address || undefined),
           province: detectedProvince || undefined,
           ward: detectedWard || undefined,
           lat,
@@ -339,20 +335,36 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
     }
   };
 
+  // Xử lý gọi điện trực tiếp tới chính quyền / cán bộ địa phương: Mở trực tiếp màn hình quay số điện thoại
+  const handleCallHotline = () => {
+    const hotline = localInfo?.authority?.phone;
+    if (!hotline) {
+      Alert.alert('Chưa có số điện thoại', 'Hệ thống chưa tìm thấy số liên lạc của chính quyền địa phương này.');
+      return;
+    }
+    const clean = hotline.replace(/[^0-9+]/g, '');
+    if (clean) {
+      Linking.openURL(`tel:${clean}`).catch(() => {
+        Alert.alert('Lỗi', `Không thể mở ứng dụng quay số với số điện thoại: ${hotline}`);
+      });
+    }
+  };
+
   // Menu tùy chọn ba chấm
   const handleOpenMenu = () => {
-    const hotline = localInfo?.authority?.phone || '112';
+    const hotline = localInfo?.authority?.phone;
     Alert.alert(
       headerDepartmentTitle,
-      `Địa bàn: ${userLocationName}\nĐường dây nóng: ${hotline}`,
+      `Địa bàn: ${userLocationName}\nĐơn vị: ${localInfo?.authority?.department || 'Trực ban PCTT'}${hotline ? `\nHotline: ${hotline}` : ''}`,
       [
-        {
-          text: 'Gọi trực ban (' + hotline + ')',
-          onPress: () => {
-            const clean = hotline.replace(/[^0-9+]/g, '');
-            Linking.openURL(`tel:${clean}`).catch(() => {});
-          },
-        },
+        ...(hotline
+          ? [
+              {
+                text: `Gọi trực ban (${hotline})`,
+                onPress: handleCallHotline,
+              },
+            ]
+          : []),
         {
           text: 'Tải lại tin nhắn',
           onPress: () => {
@@ -603,16 +615,13 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
             </View>
           </View>
 
-          {/* Nút gọi điện khẩn cấp */}
+          {/* Nút gọi điện khẩn cấp đến chính quyền địa phương */}
           <TouchableOpacity
             style={styles.headerActionBtn}
-            onPress={() => {
-              const hotline = localInfo?.authority?.phone || '112';
-              const clean = hotline.replace(/[^0-9+]/g, '');
-              Linking.openURL(`tel:${clean}`).catch(() => {});
-            }}
+            onPress={handleCallHotline}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             activeOpacity={0.7}
+            accessibilityLabel="Gọi trực ban cứu nạn địa phương"
           >
             <Feather name="phone-call" size={18} color="#16A34A" />
           </TouchableOpacity>
