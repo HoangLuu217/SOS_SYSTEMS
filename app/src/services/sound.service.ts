@@ -3,7 +3,8 @@ import { Platform, Vibration } from 'react-native';
 let activePlayer: any = null;
 
 /**
- * Trình phát âm thanh Web Audio API khi chạy trên môi trường Web / Browser
+ * Trình phát âm thanh Còi Hú Cứu Hộ / Cấp Cứu Dã Chiến bằng Web Audio API
+ * (Sử dụng 2 nhịp còi hú cứu thương Yelp Siren + chuông xác nhận tiếp nhận lệnh tác chiến)
  */
 function playWebFallbackDispatchSound() {
   try {
@@ -15,41 +16,61 @@ function playWebFallbackDispatchSound() {
     }
 
     const now = ctx.currentTime;
-    const playTone = (freq: number, startTime: number, duration: number) => {
+
+    // Hàm tạo 1 nhịp còi hú cứu hộ dã chiến
+    const playSirenBurst = (startTime: number, duration: number, baseFreq: number, peakFreq: number) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, startTime);
+      osc.type = 'sawtooth';
+
+      // Tần số quét hình sin từ trầm lên bổng rồi hạ xuống (tiếng còi hú cứu hộ đặc thù)
+      osc.frequency.setValueAtTime(baseFreq, startTime);
+      osc.frequency.linearRampToValueAtTime(peakFreq, startTime + duration * 0.5);
+      osc.frequency.linearRampToValueAtTime(baseFreq, startTime + duration);
+
+      // Envelope âm lượng
       gain.gain.setValueAtTime(0.001, startTime);
-      gain.gain.exponentialRampToValueAtTime(0.65, startTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+      gain.gain.linearRampToValueAtTime(0.35, startTime + 0.03);
+      gain.gain.linearRampToValueAtTime(0.35, startTime + duration - 0.03);
+      gain.gain.linearRampToValueAtTime(0.001, startTime + duration);
+
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(startTime);
       osc.stop(startTime + duration);
     };
 
-    // Đợt 1: 3 tông dồn dập (880Hz -> 1175Hz -> 1760Hz)
-    playTone(880, now, 0.14);
-    playTone(1175, now + 0.16, 0.14);
-    playTone(1760, now + 0.32, 0.28);
+    // Chuông ding ping báo chốt lệnh
+    const playDing = (startTime: number, freq: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, startTime);
+      gain.gain.setValueAtTime(0.4, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.18);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + 0.2);
+    };
 
-    // Đợt 2: lặp lại sau 120ms
-    const secondWave = now + 0.65;
-    playTone(880, secondWave, 0.14);
-    playTone(1175, secondWave + 0.16, 0.14);
-    playTone(1760, secondWave + 0.32, 0.32);
+    // 2 nhịp còi hú xe cứu hộ / cứu thương dã chiến
+    playSirenBurst(now, 0.42, 750, 1350);
+    playSirenBurst(now + 0.48, 0.42, 800, 1450);
+
+    // 2 tiếng ping xác nhận chốt lệnh điều động
+    playDing(now + 0.95, 1175);
+    playDing(now + 1.10, 1568);
   } catch (err) {
     console.warn('⚠️ [SoundService] Web Audio error:', err);
   }
 }
 
 /**
- * Phát chuông báo động điều động tác chiến cứu nạn (Dispatch Alert Sound)
- * Hoạt động an toàn 100% trên cả Expo Go, Development Build và Web
+ * Phát chuông báo động điều động tác chiến cứu nạn (Rescue Siren Yelp + Dispatch Ping)
  */
 export async function playDispatchAlertSound(): Promise<void> {
-  // Luôn phát nhịp rung báo động đặc thù của cứu hộ
+  // Luôn phát nhịp rung báo động dồn dập cứu nạn
   try {
     Vibration.vibrate([0, 500, 150, 500, 150, 800, 200, 800]);
   } catch (_) {}
@@ -73,7 +94,6 @@ export async function playDispatchAlertSound(): Promise<void> {
   }
 
   // 2. Nếu chạy trên thiết bị Native (iOS / Android)
-  // Sử dụng lazy require để không bao giờ làm sập Expo Go khi thiếu native module
   try {
     const ExpoAudio = require('expo-audio');
     if (ExpoAudio && typeof ExpoAudio.createAudioPlayer === 'function') {
@@ -96,7 +116,6 @@ export async function playDispatchAlertSound(): Promise<void> {
       return;
     }
   } catch (err) {
-    // Graceful fallback cho Expo Go: Hệ thống vẫn sẽ rung chuông dồn dập và phát thông báo hệ thống
     console.log('ℹ️ [SoundService] Chạy trên Expo Go: Kích hoạt nhịp rung khẩn cấp và thông báo hệ thống.');
   }
 }
