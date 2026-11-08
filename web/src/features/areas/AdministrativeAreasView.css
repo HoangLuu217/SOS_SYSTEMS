@@ -83,12 +83,13 @@
   position: sticky !important;
   top: 0 !important;
   z-index: 10 !important;
-  background: #f8fafc !important;
-  color: #475569 !important;
-  font-weight: 700 !important;
-  font-size: 12.5px !important;
-  border-bottom: 2px solid #e2e8f0 !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+  font-weight: 800 !important;
+  font-size: 13px !important;
+  letter-spacing: -0.1px !important;
+  border-bottom: 2px solid #cbd5e1 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
 }
 
 .administrative-areas-table-wrapper .sos-table tbody tr {
