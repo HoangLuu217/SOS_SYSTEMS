@@ -7,7 +7,8 @@ import {
   fetchHazardReports,
   fetchSafeLocations,
   fetchChatConversations,
-
+  fetchSafetyChecksApi,
+  fetchWithAuth,
   updateUserProfile,
   updateUserAvatar,
   sendPhoneOtp,
@@ -129,6 +130,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   });
   const [hazardCount, setHazardCount] = useState<number>(0);
   const [shelterCount, setShelterCount] = useState<number>(0);
+  const [safetyCheckCount, setSafetyCheckCount] = useState<number>(0);
+  const [bloodDonationCount, setBloodDonationCount] = useState<number>(0);
   const [pendingRescuersCount, setPendingRescuersCount] = useState<number>(0);
   const [chatUnreadCount, setChatUnreadCount] = useState<number>(0);
 
@@ -182,6 +185,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const shelterRes = await fetchSafeLocations();
       if (shelterRes.success && Array.isArray(shelterRes.data)) {
         setShelterCount(shelterRes.data.length);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const scRes = await fetchSafetyChecksApi({ status: 'ACTIVE', limit: 100 });
+      if (scRes?.success && scRes.data) {
+        const list = Array.isArray(scRes.data)
+          ? scRes.data
+          : Array.isArray((scRes.data as any).safetyChecks)
+            ? (scRes.data as any).safetyChecks
+            : Array.isArray((scRes.data as any).items)
+              ? (scRes.data as any).items
+              : [];
+        const activeItems = list.filter((i: any) => i.status === 'ACTIVE').length;
+        setSafetyCheckCount(activeItems);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const bdRes = await fetchWithAuth<any>('/blood-donations/events?status=ACTIVE&limit=100');
+      if (bdRes?.success && Array.isArray(bdRes.data)) {
+        const activeEvs = bdRes.data.filter((e: any) => e.status === 'ACTIVE').length;
+        setBloodDonationCount(activeEvs);
       }
     } catch {
       // ignore
@@ -449,20 +479,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: 'THÔNG BÁO & CỘNG ĐỒNG',
       items: [
-        {
-          key: 'notifications',
-          label: 'Gửi thông báo',
-          icon: <Bell size={18} className="sos-nav-icon" />,
-        },
+        ...(isAdmin
+          ? [
+              {
+                key: 'notifications' as NavItemKey,
+                label: 'Gửi thông báo',
+                icon: <Bell size={18} className="sos-nav-icon" />,
+              },
+            ]
+          : []),
         {
           key: 'safety_checks',
           label: 'Kiểm tra an toàn',
           icon: <ShieldCheck size={18} className="sos-nav-icon" />,
+          badge: safetyCheckCount > 0 ? `${safetyCheckCount}` : undefined,
+          badgeType: 'info',
         },
         {
           key: 'blood_donations',
           label: 'Hiến máu',
           icon: <Droplet size={18} className="sos-nav-icon" />,
+          badge: bloodDonationCount > 0 ? `${bloodDonationCount}` : undefined,
+          badgeType: 'info',
         },
         ...(isAdmin
           ? [

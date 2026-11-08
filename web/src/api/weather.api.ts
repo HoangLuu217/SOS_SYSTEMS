@@ -94,10 +94,14 @@ export async function executeWeatherWorkflowApi(): Promise<{
   }, { directFallback: false });
 }
 
-export function subscribeWeatherArticleUpdates(onUpdated: () => void): () => void {
+export function subscribeWeatherArticleUpdates(
+  onUpdated: () => void,
+  onConnected?: () => void
+): () => void {
   let eventSource: EventSource | null = null;
   try {
     eventSource = new EventSource(`${API_BASE}/weather-articles/events/stream`, { withCredentials: true });
+    eventSource.onopen = () => onConnected?.();
     eventSource.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);

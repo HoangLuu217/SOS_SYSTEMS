@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { User } from '@/types/auth';
+import type { AdministrativeAreaItem } from '@/types/dashboard';
 import {
   fetchWeatherArticlesApi,
   createWeatherArticleApi,
@@ -12,6 +13,8 @@ import {
   type CreateWeatherPayload,
   type WeatherPaginationCounts,
 } from '@/api/weather.api';
+import { broadcastNotificationApi } from '@/api/alert.api';
+import { fetchAdministrativeAreas } from '@/api/area.api';
 import { toast } from '@/components/common/toast';
 import { useGlobalModals } from '@/hooks/useGlobalModals';
 import {
@@ -43,6 +46,11 @@ import {
   Sparkles,
   CheckCheck,
   SlidersHorizontal,
+  Bell,
+  BellRing,
+  Send,
+  Smartphone,
+  Download,
 } from 'lucide-react';
 import './WeatherView.css';
 
@@ -154,6 +162,55 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [runningWorkflow, setRunningWorkflow] = useState<boolean>(false);
 
+  // Modal Duyệt & Đăng thông báo
+  const [broadcastModalItem, setBroadcastModalItem] = useState<WeatherArticleItem | null>(null);
+  const [broadcastForm, setBroadcastForm] = useState<{
+    title: string;
+    content: string;
+    priority: 'NORMAL' | 'HIGH' | 'CRITICAL';
+    areaId: string;
+  }>({
+    title: '',
+    content: '',
+    priority: 'HIGH',
+    areaId: 'ALL',
+  });
+  const [selectedProvinceId, setSelectedProvinceId] = useState<string>('ALL');
+  const [broadcasting, setBroadcasting] = useState<boolean>(false);
+  const [administrativeAreas, setAdministrativeAreas] = useState<AdministrativeAreaItem[]>([]);
+
+  const areaById = useMemo(
+    () => new Map(administrativeAreas.map((area) => [area._id, area])),
+    [administrativeAreas]
+  );
+
+  const getProvinceId = useCallback(
+    (area?: AdministrativeAreaItem): string | null => {
+      let current = area;
+      while (current) {
+        if (current.type === 'PROVINCE') return current._id;
+        const parentId =
+          typeof current.parentId === 'string' ? current.parentId : current.parentId?._id;
+        current = parentId ? areaById.get(parentId) : undefined;
+      }
+      return null;
+    },
+    [areaById]
+  );
+
+  const provinceAreas = useMemo(
+    () => administrativeAreas.filter((area) => area.type === 'PROVINCE'),
+    [administrativeAreas]
+  );
+
+  const wardAreas = useMemo(
+    () =>
+      administrativeAreas.filter(
+        (area) => area.type === 'WARD' && getProvinceId(area) === selectedProvinceId
+      ),
+    [administrativeAreas, getProvinceId, selectedProvinceId]
+  );
+
   // Form values
   const [formValues, setFormValues] = useState<CreateWeatherPayload>({
     title: '',
@@ -236,6 +293,23 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     fetchArticles();
   }, [fetchArticles]);
 
+  // Tải danh sách khu vực hành chính để cấu hình phạm vi thông báo
+  useEffect(() => {
+    let isMounted = true;
+    fetchAdministrativeAreas()
+      .then((res) => {
+        if (isMounted && res.success && Array.isArray(res.data)) {
+          setAdministrativeAreas(res.data);
+        }
+      })
+      .catch((err) => {
+        console.warn('Không thể tải danh sách khu vực hành chính cho thông báo thời tiết:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Reset page and selection when tab, search, or filters change
   const handleTabChange = (newTab: TabType) => {
     setActiveTab(newTab);
@@ -256,6 +330,9 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
           toast.success('Dữ liệu thời tiết vừa được cập nhật từ crawler!');
         }
       }
+    }, () => {
+      // Sync after the backend/SSE returns; missed events are not replayed.
+      if (document.visibilityState === 'visible') void fetchArticles({ silent: true });
     });
     const refreshWhenVisible = () => {
       if (document.visibilityState === 'visible') void fetchArticles({ silent: true });
@@ -266,27 +343,6 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
       document.removeEventListener('visibilitychange', refreshWhenVisible);
     };
   }, [fetchArticles, runningWorkflow]);
-
-  // Calculate local statistics for current list
-  const metrics = useMemo(() => {
-    const severeCount = articles.filter(
-      (a) =>
-        a.category === 'bao_ap_thap' ||
-        a.category === 'mua_lu' ||
-        (a.score != null && a.score >= 80) ||
-        (a.relevance_score != null && a.relevance_score >= 80)
-    ).length;
-
-    const avgScore =
-      articles.length > 0
-        ? Math.round(
-            articles.reduce((acc, cur) => acc + (cur.score ?? cur.relevance_score ?? 0), 0) /
-              articles.length
-          )
-        : 0;
-
-    return { severeCount, avgScore };
-  }, [articles]);
 
   const handleRunWorkflow = async () => {
     if (runningWorkflow) return;
@@ -379,17 +435,130 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     }
   };
 
-  // Duyệt bản tin (Kích hoạt lên ứng dụng di động)
-  const handleApprove = async (item: WeatherArticleItem) => {
+  // Mở modal Duyệt & Đăng thông báo
+  const handleOpenBroadcastModal = (item: WeatherArticleItem) => {
+    const score = item.relevance_score ?? item.score ?? 50;
+    const cat = item.category;
+    let initialPriority: 'NORMAL' | 'HIGH' | 'CRITICAL' = 'NORMAL';
+    if (cat === 'bao_ap_thap' || score >= 85) {
+      initialPriority = 'CRITICAL';
+    } else if (['mua_lu', 'canh_bao', 'nang_nong', 'ret_dam'].includes(cat) || score >= 60) {
+      initialPriority = 'HIGH';
+    }
+
+    const defaultAreaId =
+      typeof item.areaId === 'object' && item.areaId?._id
+        ? item.areaId._id
+        : typeof item.areaId === 'string' && item.areaId
+        ? item.areaId
+        : 'ALL';
+
+    if (defaultAreaId !== 'ALL') {
+      const matchedArea = areaById.get(defaultAreaId);
+      if (matchedArea?.type === 'WARD') {
+        setSelectedProvinceId(getProvinceId(matchedArea) || 'ALL');
+      } else if (matchedArea?.type === 'PROVINCE') {
+        setSelectedProvinceId(matchedArea._id);
+      } else {
+        setSelectedProvinceId('ALL');
+      }
+    } else {
+      setSelectedProvinceId('ALL');
+    }
+
+    setBroadcastForm({
+      title: item.title || '',
+      content: item.summary || item.content.slice(0, 300) || '',
+      priority: initialPriority,
+      areaId: defaultAreaId,
+    });
+    setBroadcastModalItem(item);
+  };
+
+  // Duyệt bản tin -> Mở modal để đăng thông báo luôn cho người dân
+  const handleApprove = (item: WeatherArticleItem) => {
+    handleOpenBroadcastModal(item);
+  };
+
+  // Xác nhận Duyệt & Phát thông báo ngay
+  const handleConfirmApproveAndBroadcast = async () => {
+    if (!broadcastModalItem) return;
+    if (!broadcastForm.title.trim()) {
+      toast.error('Vui lòng nhập tiêu đề thông báo');
+      return;
+    }
+    if (!broadcastForm.content.trim()) {
+      toast.error('Vui lòng nhập nội dung thông báo');
+      return;
+    }
+
     try {
-      await updateWeatherArticleApi(item._id, { status: 'ACTIVE' });
-      toast.success(`Đã phê duyệt & phát hành bản tin: "${item.title.slice(0, 40)}..."`);
-      if (detailItem?._id === item._id) {
+      setBroadcasting(true);
+      // 1. Phê duyệt bài viết trước (chuyển sang ACTIVE để đủ điều kiện phát thông báo)
+      if (broadcastModalItem.status !== 'ACTIVE' && broadcastModalItem.status !== 'approved') {
+        await updateWeatherArticleApi(broadcastModalItem._id, { status: 'ACTIVE' });
+      }
+
+      // 2. Gửi thông báo phát sóng tới người dân
+      const score = broadcastModalItem.relevance_score ?? broadcastModalItem.score ?? 50;
+      const imageUrl = broadcastModalItem.imageUrl || broadcastModalItem.image_url;
+      const articleUrl = broadcastModalItem.articleUrl || broadcastModalItem.source_url;
+      const sourceName = broadcastModalItem.sourceName || broadcastModalItem.source_name;
+      const targetAreaId = broadcastForm.areaId === 'ALL' ? undefined : broadcastForm.areaId;
+
+      await broadcastNotificationApi({
+        title: broadcastForm.title.trim(),
+        content: broadcastForm.content.trim(),
+        type: 'WEATHER',
+        areaId: targetAreaId,
+        priority: broadcastForm.priority,
+        imageUrl: imageUrl || undefined,
+        articleUrl: articleUrl || undefined,
+        sourceName: sourceName || undefined,
+        data: {
+          weatherArticleId: broadcastModalItem._id,
+          weatherType: broadcastModalItem.category,
+          score,
+          category: broadcastModalItem.category,
+          imageUrl: imageUrl || undefined,
+          articleUrl: articleUrl || undefined,
+          sourceName: sourceName || undefined,
+        },
+      });
+
+      toast.success(
+        broadcastModalItem.status === 'pending'
+          ? `Đã phê duyệt và phát thông báo bản tin: "${broadcastModalItem.title.slice(0, 35)}..." thành công!`
+          : `Đã phát thông báo bản tin: "${broadcastModalItem.title.slice(0, 35)}..." thành công!`
+      );
+      setBroadcastModalItem(null);
+      if (detailItem?._id === broadcastModalItem._id) {
+        setDetailItem(null);
+      }
+      fetchArticles({ silent: true });
+    } catch (err: any) {
+      toast.error(err.message || 'Lỗi khi duyệt và phát thông báo');
+    } finally {
+      setBroadcasting(false);
+    }
+  };
+
+  // Chỉ duyệt bản tin (Không phát thông báo đẩy ra điện thoại)
+  const handleConfirmApproveOnly = async () => {
+    if (!broadcastModalItem) return;
+    try {
+      setBroadcasting(true);
+      await updateWeatherArticleApi(broadcastModalItem._id, { status: 'ACTIVE' });
+      toast.success(`Đã phê duyệt & phát hành bản tin: "${broadcastModalItem.title.slice(0, 40)}..."`);
+      setBroadcastModalItem(null);
+      if (detailItem?._id === broadcastModalItem._id) {
         setDetailItem(null);
       }
       fetchArticles({ silent: true });
     } catch (err: any) {
       toast.error(err.message || 'Không thể phê duyệt bản tin');
+    } finally {
+      setBroadcasting(false);
     }
   };
 
@@ -505,6 +674,64 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     return <span className="weather-status-pill khac">{status || 'Khác'}</span>;
   };
 
+  // Xuất CSV danh sách bản tin thời tiết hiện tại
+  const handleExportWeatherCsv = () => {
+    const escapeCsvCell = (val: unknown): string => {
+      const str = val === null || val === undefined ? '' : String(val);
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    const getStatusText = (status?: string) => {
+      const s = (status || '').toUpperCase();
+      if (s === 'ACTIVE' || s === 'APPROVED') return 'Đã phát hành';
+      if (s === 'PENDING') return 'Chờ kiểm duyệt';
+      if (s === 'ARCHIVED' || s === 'REJECTED') return 'Lưu trữ';
+      return status || 'Khác';
+    };
+
+    const headers = [
+      'STT',
+      'Tiêu đề bản tin',
+      'Phân loại',
+      'Trạng thái',
+      'Điểm độ tin cậy',
+      'Khu vực',
+      'Nguồn tin',
+      'Tóm tắt nội dung',
+      'Thời gian xuất bản',
+      'Link bài viết gốc',
+    ];
+
+    const rows = articles.map((item, idx) => [
+      idx + 1,
+      item.title || '',
+      item.category || '',
+      getStatusText(item.status),
+      item.relevance_score ?? item.score ?? 50,
+      item.area || (typeof item.areaId === 'object' ? item.areaId?.name : '') || 'Toàn quốc',
+      item.sourceName || item.source_name || 'Hệ thống',
+      item.summary || (item.content ? item.content.slice(0, 200) : ''),
+      item.publishedAt || item.published_at || item.createdAt
+        ? new Date((item.publishedAt || item.published_at || item.createdAt) as string).toLocaleString('vi-VN')
+        : '',
+      item.articleUrl || item.source_url || '',
+    ]);
+
+    const csvContent =
+      '\uFEFF' +
+      [headers.map(escapeCsvCell).join(','), ...rows.map((r) => r.map(escapeCsvCell).join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Danh_sach_ban_tin_thoi_tiet_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(`Đã xuất ${articles.length} bản tin thời tiết ra file CSV.`);
+  };
+
   return (
     <div className="weather-view-container">
       {/* 1. Header Banner */}
@@ -544,6 +771,14 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
           )}
           <button
             className="btn-secondary-weather"
+            onClick={handleExportWeatherCsv}
+            title="Xuất danh sách bản tin thời tiết hiện tại ra file CSV"
+          >
+            <Download size={16} />
+            Xuất CSV
+          </button>
+          <button
+            className="btn-secondary-weather"
             onClick={() => fetchArticles()}
             disabled={loading}
             title="Làm mới danh sách từ cơ sở dữ liệu"
@@ -551,70 +786,6 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             Làm mới
           </button>
-        </div>
-      </div>
-
-      {/* 2. Overview Metrics Cards */}
-      <div className="weather-metrics-grid">
-        <div
-          className={`weather-metric-card clickable ${activeTab === 'all' ? 'active-metric' : ''}`}
-          onClick={() => handleTabChange('all')}
-          title="Xem tất cả bản tin trong cơ sở dữ liệu"
-        >
-          <div className="weather-metric-icon blue">
-            <CloudSun size={24} />
-          </div>
-          <div className="weather-metric-content">
-            <h4>Tổng số trong DB</h4>
-            <div className="weather-metric-number">{globalCounts.total || totalItems}</div>
-            <span className="weather-metric-hint">Nhấn xem tất cả</span>
-          </div>
-        </div>
-
-        <div
-          className={`weather-metric-card clickable ${activeTab === 'approved' ? 'active-metric' : ''}`}
-          onClick={() => handleTabChange('approved')}
-          title="Xem các bản tin đã phê duyệt"
-        >
-          <div className="weather-metric-icon emerald">
-            <CheckCircle2 size={24} />
-          </div>
-          <div className="weather-metric-content">
-            <h4>Đã duyệt &amp; Phát hành</h4>
-            <div className="weather-metric-number">{globalCounts.approved}</div>
-            <span className="weather-metric-hint">Đang phát hành app</span>
-          </div>
-        </div>
-
-        <div
-          className={`weather-metric-card clickable alert-card ${
-            activeTab === 'pending' ? 'active-metric' : ''
-          }`}
-          onClick={() => handleTabChange('pending')}
-          title="Xem các bản tin chờ Admin phê duyệt"
-        >
-          <div className="weather-metric-icon amber">
-            <Clock size={24} />
-          </div>
-          <div className="weather-metric-content">
-            <h4>Cần kiểm duyệt</h4>
-            <div className="weather-metric-number text-amber">
-              {globalCounts.pending}
-              {globalCounts.pending > 0 && <span className="weather-pulse-badge">Mới</span>}
-            </div>
-            <span className="weather-metric-hint text-amber">Nhấn xem bảng duyệt</span>
-          </div>
-        </div>
-
-        <div className="weather-metric-card">
-          <div className="weather-metric-icon red">
-            <AlertOctagon size={24} />
-          </div>
-          <div className="weather-metric-content">
-            <h4>Thiên tai khẩn cấp</h4>
-            <div className="weather-metric-number">{metrics.severeCount}</div>
-            <span className="weather-metric-hint">Điểm TB: {metrics.avgScore}/100</span>
-          </div>
         </div>
       </div>
 
@@ -949,13 +1120,24 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                           )}
 
                           {canManage && !isPending && item.status !== 'ARCHIVED' && (
-                            <button
-                              className="btn-tbl-action btn-revert"
-                              onClick={() => handleRevertToPending(item)}
-                              title="Thu hồi về trạng thái chờ duyệt"
-                            >
-                              <RotateCcw size={14} />
-                            </button>
+                            <>
+                              <button
+                                className="btn-tbl-action btn-broadcast"
+                                onClick={() => handleOpenBroadcastModal(item)}
+                                title="Đăng / Phát thông báo tới điện thoại người dân"
+                                style={{ color: '#0284c7', background: '#f0f9ff', borderColor: '#bae6fd' }}
+                              >
+                                <Bell size={13} />
+                                <span>Thông báo</span>
+                              </button>
+                              <button
+                                className="btn-tbl-action btn-revert"
+                                onClick={() => handleRevertToPending(item)}
+                                title="Thu hồi về trạng thái chờ duyệt"
+                              >
+                                <RotateCcw size={14} />
+                              </button>
+                            </>
                           )}
 
                           {canManage && (
@@ -1086,7 +1268,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
 
                   {canManage && (
                     <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
-                      {isPending && (
+                      {isPending ? (
                         <button
                           className="weather-btn-action"
                           style={{
@@ -1104,6 +1286,26 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                           <CheckCircle2 size={13} />
                           Duyệt
                         </button>
+                      ) : (
+                        item.status !== 'ARCHIVED' && (
+                          <button
+                            className="weather-btn-action"
+                            style={{
+                              color: '#0284c7',
+                              borderColor: '#bae6fd',
+                              background: '#f0f9ff',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontWeight: 600,
+                            }}
+                            onClick={() => handleOpenBroadcastModal(item)}
+                            title="Phát thông báo đẩy tới người dân"
+                          >
+                            <Bell size={13} />
+                            Thông báo
+                          </button>
+                        )
                       )}
                       <button
                         className="weather-btn-action"
@@ -1370,6 +1572,15 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                       <>
                         <button
                           className="btn-secondary-weather"
+                          onClick={() => handleOpenBroadcastModal(detailItem)}
+                          title="Gửi thông báo đẩy về bản tin này tới điện thoại người dân"
+                          style={{ color: '#0284c7', borderColor: '#bae6fd', background: '#f0f9ff' }}
+                        >
+                          <Bell size={15} />
+                          Đăng thông báo
+                        </button>
+                        <button
+                          className="btn-secondary-weather"
                           onClick={() => handleRevertToPending(detailItem)}
                           title="Thu hồi bản tin về trạng thái chờ duyệt"
                         >
@@ -1611,6 +1822,437 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 9. Modal: PHÊ DUYỆT & ĐĂNG THÔNG BÁO CHO NGƯỜI DÂN */}
+      {broadcastModalItem && (
+        <div
+          className="weather-modal-backdrop"
+          style={{ zIndex: 1200 }}
+          onClick={() => !broadcasting && setBroadcastModalItem(null)}
+        >
+          <div
+            className="weather-modal weather-broadcast-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '680px', width: '92%' }}
+          >
+            <div className="weather-modal-header" style={{ borderBottom: '1px solid #e2e8f0', paddingBottom: '14px' }}>
+              <div className="weather-modal-header-title">
+                <div
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '10px',
+                    background:
+                      broadcastForm.priority === 'CRITICAL'
+                        ? '#fee2e2'
+                        : broadcastForm.priority === 'HIGH'
+                        ? '#ffedd5'
+                        : '#e0f2fe',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color:
+                      broadcastForm.priority === 'CRITICAL'
+                        ? '#dc2626'
+                        : broadcastForm.priority === 'HIGH'
+                        ? '#ea580c'
+                        : '#0284c7',
+                    flexShrink: 0,
+                  }}
+                >
+                  <BellRing size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '15.5px', fontWeight: 700, color: '#0f172a' }}>
+                    {broadcastModalItem.status === 'pending'
+                      ? 'PHÊ DUYỆT & ĐĂNG THÔNG BÁO CHO NGƯỜI DÂN'
+                      : 'ĐĂNG THÔNG BÁO BẢN TIN THỜI TIẾT'}
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#64748b' }}>
+                    {broadcastModalItem.status === 'pending'
+                      ? 'Kích hoạt bản tin công khai và gửi thông báo đẩy (Push Notification) đến ứng dụng di động'
+                      : 'Gửi thông báo đẩy (Push Notification) về bản tin đã duyệt tới điện thoại người dân'}
+                  </p>
+                </div>
+              </div>
+              <button
+                className="weather-modal-close"
+                onClick={() => !broadcasting && setBroadcastModalItem(null)}
+                disabled={broadcasting}
+                title="Đóng cửa sổ"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div
+              className="weather-modal-body"
+              style={{
+                maxHeight: '72vh',
+                overflowY: 'auto',
+                padding: '16px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px',
+              }}
+            >
+              {/* Thẻ tóm tắt thông tin bài viết gốc */}
+              <div
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  display: 'flex',
+                  gap: '12px',
+                  alignItems: 'flex-start',
+                }}
+              >
+                {(broadcastModalItem.imageUrl || broadcastModalItem.image_url) && (
+                  <img
+                    src={broadcastModalItem.imageUrl || broadcastModalItem.image_url}
+                    alt="thumb"
+                    style={{
+                      width: '70px',
+                      height: '70px',
+                      borderRadius: '8px',
+                      objectFit: 'cover',
+                      border: '1px solid #cbd5e1',
+                      flexShrink: 0,
+                    }}
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
+                    <span
+                      className={`weather-badge-category ${
+                        CATEGORY_MAP[broadcastModalItem.category]?.colorClass || 'khac'
+                      }`}
+                      style={{ fontSize: '11px', padding: '2px 7px' }}
+                    >
+                      {CATEGORY_MAP[broadcastModalItem.category]?.label || 'Tin thời tiết'}
+                    </span>
+                    {(broadcastModalItem.sourceName || broadcastModalItem.source_name) && (
+                      <span style={{ fontSize: '11.5px', color: '#64748b' }}>
+                        Nguồn: <strong>{broadcastModalItem.sourceName || broadcastModalItem.source_name}</strong>
+                      </span>
+                    )}
+                    {broadcastModalItem.area && (
+                      <span style={{ fontSize: '11.5px', color: '#0284c7' }}>
+                        • {broadcastModalItem.area}
+                      </span>
+                    )}
+                  </div>
+                  <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: '#1e293b', lineHeight: 1.4 }}>
+                    {broadcastModalItem.title}
+                  </h4>
+                </div>
+              </div>
+
+              {/* Form soạn thông báo */}
+              <div className="weather-form-group" style={{ margin: 0 }}>
+                <label className="weather-form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>
+                    Tiêu đề thông báo đẩy <span style={{ color: '#dc2626' }}>*</span>
+                  </span>
+                  <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 400 }}>
+                    Hiển thị trên thanh thông báo điện thoại
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  className="weather-form-input"
+                  value={broadcastForm.title}
+                  onChange={(e) => setBroadcastForm({ ...broadcastForm, title: e.target.value })}
+                  placeholder="Nhập tiêu đề thông báo ngắn gọn, rõ ràng..."
+                  disabled={broadcasting}
+                  style={{ fontWeight: 600, color: '#0f172a' }}
+                />
+              </div>
+
+              <div className="weather-form-group" style={{ margin: 0 }}>
+                <label className="weather-form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>
+                    Nội dung thông báo chi tiết <span style={{ color: '#dc2626' }}>*</span>
+                  </span>
+                  <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 400 }}>
+                    Tóm tắt ngắn gọn để người dân nắm tình hình
+                  </span>
+                </label>
+                <textarea
+                  className="weather-form-input"
+                  rows={3}
+                  value={broadcastForm.content}
+                  onChange={(e) => setBroadcastForm({ ...broadcastForm, content: e.target.value })}
+                  placeholder="Nhập nội dung thông báo..."
+                  disabled={broadcasting}
+                  style={{ lineHeight: 1.5, resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Mức độ ưu tiên */}
+              <div className="weather-form-group" style={{ margin: 0 }}>
+                <label className="weather-form-label">Mức độ khẩn cấp &amp; Độ ưu tiên</label>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setBroadcastForm({ ...broadcastForm, priority: 'NORMAL' })}
+                    disabled={broadcasting}
+                    style={{
+                      padding: '10px 8px',
+                      borderRadius: '8px',
+                      border: broadcastForm.priority === 'NORMAL' ? '2px solid #0284c7' : '1px solid #e2e8f0',
+                      background: broadcastForm.priority === 'NORMAL' ? '#f0f9ff' : '#ffffff',
+                      color: broadcastForm.priority === 'NORMAL' ? '#0284c7' : '#64748b',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '4px',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <span style={{ fontSize: '12.5px', fontWeight: 700 }}>Bình thường</span>
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>Tin dự báo định kỳ</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setBroadcastForm({ ...broadcastForm, priority: 'HIGH' })}
+                    disabled={broadcasting}
+                    style={{
+                      padding: '10px 8px',
+                      borderRadius: '8px',
+                      border: broadcastForm.priority === 'HIGH' ? '2px solid #ea580c' : '1px solid #e2e8f0',
+                      background: broadcastForm.priority === 'HIGH' ? '#fff7ed' : '#ffffff',
+                      color: broadcastForm.priority === 'HIGH' ? '#ea580c' : '#64748b',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '4px',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <span style={{ fontSize: '12.5px', fontWeight: 700 }}>Quan trọng</span>
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>Mưa to, ngập úng</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setBroadcastForm({ ...broadcastForm, priority: 'CRITICAL' })}
+                    disabled={broadcasting}
+                    style={{
+                      padding: '10px 8px',
+                      borderRadius: '8px',
+                      border: broadcastForm.priority === 'CRITICAL' ? '2px solid #dc2626' : '1px solid #e2e8f0',
+                      background: broadcastForm.priority === 'CRITICAL' ? '#fef2f2' : '#ffffff',
+                      color: broadcastForm.priority === 'CRITICAL' ? '#dc2626' : '#64748b',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '4px',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <span style={{ fontSize: '12.5px', fontWeight: 700 }}>Khẩn cấp / Nguy hiểm</span>
+                    <span style={{ fontSize: '11px', color: '#64748b' }}>Bão lớn, lũ quét</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Phạm vi thông báo */}
+              <div className="weather-form-group" style={{ margin: 0 }}>
+                <label className="weather-form-label">Phạm vi phát thông báo (Khu vực nhận tin)</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <select
+                    className="weather-form-input"
+                    value={selectedProvinceId}
+                    onChange={(e) => {
+                      const provId = e.target.value || 'ALL';
+                      setSelectedProvinceId(provId);
+                      setBroadcastForm((prev) => ({ ...prev, areaId: provId }));
+                    }}
+                    disabled={broadcasting}
+                    aria-label="Chọn tỉnh thành"
+                  >
+                    <option value="ALL">Tất cả tỉnh/thành (Toàn quốc)</option>
+                    {provinceAreas.map((prov) => (
+                      <option key={prov._id} value={prov._id}>
+                        {prov.name} ({prov.code})
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    className="weather-form-input"
+                    value={areaById.get(broadcastForm.areaId)?.type === 'WARD' ? broadcastForm.areaId : ''}
+                    disabled={broadcasting || selectedProvinceId === 'ALL'}
+                    onChange={(e) => {
+                      const wardId = e.target.value;
+                      setBroadcastForm((prev) => ({
+                        ...prev,
+                        areaId: wardId || selectedProvinceId,
+                      }));
+                    }}
+                    aria-label="Chọn xã phường"
+                    style={{
+                      background: selectedProvinceId === 'ALL' ? '#f8fafc' : '#ffffff',
+                      color: selectedProvinceId === 'ALL' ? '#94a3b8' : '#0f172a',
+                    }}
+                  >
+                    <option value="">Tất cả xã/phường</option>
+                    {wardAreas.map((ward) => (
+                      <option key={ward._id} value={ward._id}>
+                        {ward.name} ({ward.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Live Preview trên điện thoại (Nền trắng đồng bộ) */}
+              <div
+                style={{
+                  background: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '10px',
+                  padding: '14px',
+                  boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#334155' }}>
+                    <Smartphone size={14} color="#0284c7" />
+                    <span>Xem trước thông báo trên điện thoại người dân</span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '10.5px',
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: '999px',
+                      background:
+                        broadcastForm.priority === 'CRITICAL'
+                          ? '#fef2f2'
+                          : broadcastForm.priority === 'HIGH'
+                          ? '#fff7ed'
+                          : '#f0f9ff',
+                      color:
+                        broadcastForm.priority === 'CRITICAL'
+                          ? '#dc2626'
+                          : broadcastForm.priority === 'HIGH'
+                          ? '#ea580c'
+                          : '#0284c7',
+                      border:
+                        broadcastForm.priority === 'CRITICAL'
+                          ? '1px solid #fecaca'
+                          : broadcastForm.priority === 'HIGH'
+                          ? '1px solid #fed7aa'
+                          : '1px solid #bae6fd',
+                    }}
+                  >
+                    {broadcastForm.priority}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    background: '#f8fafc',
+                    borderRadius: '8px',
+                    padding: '12px 14px',
+                    border: '1px solid #e2e8f0',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#0284c7' }}>SOS THỜI TIẾT</span>
+                      <span style={{ fontSize: '11px', color: '#64748b' }}>• Vừa xong</span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: '#475569', fontWeight: 600 }}>
+                      {broadcastForm.areaId === 'ALL'
+                        ? 'Toàn quốc'
+                        : areaById.get(broadcastForm.areaId)?.name || 'Toàn quốc'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0f172a', marginBottom: '4px', lineHeight: 1.4 }}>
+                    {broadcastForm.title || 'Tiêu đề thông báo...'}
+                  </div>
+                  <div style={{ fontSize: '12.5px', color: '#334155', lineHeight: 1.5 }}>
+                    {broadcastForm.content || 'Nội dung thông báo sẽ xuất hiện tại đây...'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className="weather-modal-footer"
+              style={{
+                borderTop: '1px solid #e2e8f0',
+                padding: '14px 20px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '10px',
+              }}
+            >
+              <div>
+                {broadcastModalItem.status === 'pending' && (
+                  <button
+                    type="button"
+                    className="btn-secondary-weather"
+                    onClick={handleConfirmApproveOnly}
+                    disabled={broadcasting}
+                    title="Chỉ duyệt bài viết lên web/app, không gửi push notification làm phiền người dân"
+                    style={{ fontSize: '12.5px', color: '#16a34a', borderColor: '#bbf7d0', background: '#f0fdf4' }}
+                  >
+                    <CheckCircle2 size={15} />
+                    <span>Chỉ duyệt bản tin (Không gửi thông báo)</span>
+                  </button>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn-secondary-weather"
+                  onClick={() => !broadcasting && setBroadcastModalItem(null)}
+                  disabled={broadcasting}
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary-weather"
+                  onClick={handleConfirmApproveAndBroadcast}
+                  disabled={broadcasting || !broadcastForm.title.trim() || !broadcastForm.content.trim()}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontWeight: 700,
+                    background: broadcastForm.priority === 'CRITICAL' ? '#dc2626' : '#2563eb',
+                    borderColor: broadcastForm.priority === 'CRITICAL' ? '#dc2626' : '#2563eb',
+                  }}
+                >
+                  <Send size={15} />
+                  <span>
+                    {broadcasting
+                      ? 'Đang xử lý...'
+                      : broadcastModalItem.status === 'pending'
+                      ? 'Duyệt & Đăng thông báo ngay'
+                      : 'Đăng thông báo ngay'}
+                  </span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

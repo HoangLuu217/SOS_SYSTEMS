@@ -71,10 +71,22 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     case 'resources':
       return <ResourcesView user={user} />;
 
-    // 5. Phát thông báo & Cảnh báo thiên tai
+    // 5. Phát thông báo & Cảnh báo thiên tai (Chỉ dành riêng cho ADMIN)
     case 'notifications':
-    case 'alerts':
+    case 'alerts': {
+      const isAdmin = Boolean(user?.roles?.includes('ADMIN'));
+      if (!isAdmin) {
+        return (
+          <div className="sos-views-container" style={{ padding: 24, textAlign: 'center' }}>
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 32 }}>
+              <h3 style={{ color: '#ef4444', marginBottom: 8, fontWeight: 700 }}>Không có quyền truy cập</h3>
+              <p style={{ color: '#64748b', margin: 0 }}>Chức năng Gửi thông báo chỉ dành riêng cho Quản trị viên hệ thống (Admin).</p>
+            </div>
+          </div>
+        );
+      }
       return <AlertsView user={user} />;
+    }
 
     // 5.2. Kiểm tra an toàn (Safety Check)
     case 'safety_checks':

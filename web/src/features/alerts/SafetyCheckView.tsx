@@ -13,17 +13,14 @@ import { fetchAdministrativeAreas } from '@/api/area.api';
 import { toast } from '@/components/common/toast';
 import {
   ShieldCheck,
-  AlertCircle,
   CheckCircle2,
   Plus,
   Search,
-  Eye,
   RefreshCw,
   X,
-  Users,
   MapPin,
-  Clock,
   Square,
+  Download,
 } from 'lucide-react';
 import './SafetyCheckView.css';
 
@@ -228,6 +225,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
         toast.success('✅ Đã phát động đợt kiểm tra an toàn & gửi thông báo ra điện thoại người dân!');
         setIsCreateOpen(false);
         loadSafetyChecks();
+        window.dispatchEvent(new CustomEvent('sos_data_updated'));
       } else {
         toast.error(res.message || 'Không thể tạo đợt kiểm tra an toàn.');
       }
@@ -249,6 +247,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
       if (res.success) {
         toast.success('Đã kết thúc đợt kiểm tra an toàn.');
         loadSafetyChecks();
+        window.dispatchEvent(new CustomEvent('sos_data_updated'));
         if (viewingCheck?._id === check._id) {
           setViewingCheck({ ...viewingCheck, status: 'CLOSED' });
         }
@@ -301,78 +300,110 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
     return parentProv ? `${found.name} - ${parentProv.name}` : found.name;
   }, [user, areas, provinceAreas, getProvinceId]);
 
+  const escapeCsvCell = (val: unknown): string => {
+    const str = val === null || val === undefined ? '' : String(val);
+    return `"${str.replace(/"/g, '""')}"`;
+  };
+
+  // Xuất CSV danh sách đợt kiểm tra an toàn
+  const handleExportChecksCsv = () => {
+    const headers = [
+      'STT',
+      'Tên đợt kiểm tra an toàn',
+      'Nội dung hướng dẫn',
+      'Phạm vi',
+      'Khu vực',
+      'Người phát động',
+      'Trạng thái',
+      'Số người An toàn',
+      'Số người Cần cứu hộ',
+      'Tổng phản hồi',
+      'Tổng người mục tiêu',
+      'Thời gian tạo',
+    ];
+    const rows = filteredChecks.map((c, idx) => [
+      idx + 1,
+      c.title || '',
+      c.description || '',
+      c.scope === 'WARD' ? 'Phường / Xã' : c.scope === 'PROVINCE' ? 'Tỉnh / TP' : 'Toàn hệ thống',
+      c.areaName || 'Toàn hệ thống',
+      c.createdBy?.fullName || 'Hệ thống',
+      c.status === 'ACTIVE' ? 'Đang mở' : 'Đã đóng',
+      c.stats?.safeCount || 0,
+      c.stats?.needHelpCount || 0,
+      c.stats?.totalResponses || 0,
+      c.stats?.totalTargeted || 0,
+      new Date(c.createdAt).toLocaleString('vi-VN'),
+    ]);
+    const csvContent =
+      '\uFEFF' +
+      [headers.map(escapeCsvCell).join(','), ...rows.map((r) => r.map(escapeCsvCell).join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Danh_sach_kiem_tra_an_toan_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(`Đã xuất ${filteredChecks.length} đợt kiểm tra an toàn ra file CSV.`);
+  };
+
+  // Xuất CSV danh sách phản hồi của từng đợt kiểm tra an toàn
+  const handleExportResponsesCsv = () => {
+    if (!viewingCheck) return;
+    const headers = [
+      'STT',
+      'Đợt kiểm tra an toàn',
+      'Địa bàn',
+      'Họ và tên người dân',
+      'Số điện thoại',
+      'Trạng thái an toàn',
+      'Số người',
+      'Tình hình / Lời nhắn',
+      'Vĩ độ (Lat)',
+      'Kinh độ (Lng)',
+      'Địa chỉ',
+      'Thời gian phản hồi',
+    ];
+    const rows = filteredResponses.map((item, idx) => [
+      idx + 1,
+      viewingCheck.title || '',
+      viewingCheck.areaName || '',
+      item.userFullName || item.userId?.fullName || 'Người dân',
+      item.userPhone || item.userId?.phone || '',
+      item.status === 'SAFE' ? 'An toàn' : 'Cần cứu hộ',
+      item.peopleCount || 1,
+      item.message || (item.status === 'SAFE' ? 'Đã an toàn' : 'Cần hỗ trợ'),
+      item.location?.coordinates ? item.location.coordinates[1] : '',
+      item.location?.coordinates ? item.location.coordinates[0] : '',
+      item.address || '',
+      new Date(item.respondedAt).toLocaleString('vi-VN'),
+    ]);
+    const csvContent =
+      '\uFEFF' +
+      [headers.map(escapeCsvCell).join(','), ...rows.map((r) => r.map(escapeCsvCell).join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const safeTitle = (viewingCheck.title || 'kiem_tra_an_toan')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9_-]+/g, '_')
+      .slice(0, 45);
+    link.href = url;
+    link.download = `Phan_hoi_an_toan_${safeTitle}_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success(`Đã xuất ${filteredResponses.length} phản hồi người dân ra file CSV.`);
+  };
+
   return (
     <div className="safety-check-container">
-      {/* 1. Header */}
-      <div className="safety-check-header">
-        <div className="safety-check-title-group">
-          <h2>
-            <ShieldCheck size={26} color="#16a34a" />
-            Kiểm Tra An Toàn (Safety Check)
-          </h2>
-          <p>
-            {isAdmin
-              ? 'Quản trị viên phát động kiểm tra an toàn theo Tỉnh/Thành phố hoặc từng Phường/Xã từ cơ sở dữ liệu.'
-              : `Cán bộ địa phương phát động kiểm tra an toàn tại ${authorityAreaName}.`}
-          </p>
-        </div>
-
-        <div className="safety-check-actions">
-          <button className="sc-btn sc-btn-secondary" onClick={loadSafetyChecks} disabled={loading}>
-            <RefreshCw size={15} className={loading ? 'fa-spin' : ''} />
-            Làm mới
-          </button>
-          <button className="sc-btn sc-btn-primary" onClick={handleOpenCreate}>
-            <Plus size={16} />
-            Tạo đợt kiểm tra an toàn
-          </button>
-        </div>
-      </div>
-
-      {/* 2. KPI Overview */}
-      <div className="sc-kpi-grid">
-        <div className="sc-kpi-card">
-          <div className="sc-kpi-icon blue">
-            <ShieldCheck size={24} />
-          </div>
-          <div className="sc-kpi-info">
-            <span className="sc-kpi-val">{kpis.total}</span>
-            <span className="sc-kpi-label">Tổng đợt phát động</span>
-          </div>
-        </div>
-
-        <div className="sc-kpi-card">
-          <div className="sc-kpi-icon amber">
-            <Clock size={24} />
-          </div>
-          <div className="sc-kpi-info">
-            <span className="sc-kpi-val">{kpis.active}</span>
-            <span className="sc-kpi-label">Đang mở (ACTIVE)</span>
-          </div>
-        </div>
-
-        <div className="sc-kpi-card">
-          <div className="sc-kpi-icon green">
-            <CheckCircle2 size={24} />
-          </div>
-          <div className="sc-kpi-info">
-            <span className="sc-kpi-val">{kpis.totalSafe}</span>
-            <span className="sc-kpi-label">Người dân báo AN TOÀN</span>
-          </div>
-        </div>
-
-        <div className="sc-kpi-card">
-          <div className="sc-kpi-icon red">
-            <AlertCircle size={24} />
-          </div>
-          <div className="sc-kpi-info">
-            <span className="sc-kpi-val">{kpis.totalNeedHelp}</span>
-            <span className="sc-kpi-label">Người dân CẦN CỨU HỘ</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Filter Bar */}
+      {/* Filter Bar & Actions (Thẳng 1 hàng gọn gàng) */}
       <div className="sc-filter-bar">
         <div className="sc-filter-tabs">
           <button
@@ -407,10 +438,10 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                   setAreaFilter(nextProvId);
                 }}
               >
-                <option value="ALL">Tất cả Tỉnh / Thành phố</option>
+                <option value="ALL">Tất cả Tỉnh / TP</option>
                 {provinceAreas.map((p) => (
                   <option key={p._id} value={p._id}>
-                    {p.name} ({p.code})
+                    {p.name}
                   </option>
                 ))}
               </select>
@@ -429,7 +460,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                 <option value="">Tất cả Phường / Xã</option>
                 {filterWardAreas.map((w) => (
                   <option key={w._id} value={w._id}>
-                    {w.name} ({w.code})
+                    {w.name}
                   </option>
                 ))}
               </select>
@@ -437,18 +468,33 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
           )}
 
           <div className="sc-search-box">
-            <Search size={15} className="sc-search-icon" />
+            <Search size={14} className="sc-search-icon" />
             <input
               type="text"
-              placeholder="Tìm theo tên đợt, khu vực..."
+              placeholder="Tìm tên đợt, khu vực..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
+
+          <button className="sc-btn sc-btn-secondary" onClick={handleExportChecksCsv}>
+            <Download size={14} />
+            Xuất CSV
+          </button>
+
+          <button className="sc-btn sc-btn-secondary" onClick={loadSafetyChecks} disabled={loading}>
+            <RefreshCw size={14} className={loading ? 'fa-spin' : ''} />
+            Làm mới
+          </button>
+
+          <button className="sc-btn sc-btn-primary" onClick={handleOpenCreate}>
+            <Plus size={15} />
+            Tạo đợt kiểm tra
+          </button>
         </div>
       </div>
 
-      {/* 4. Main Table */}
+      {/* 3. Main Table (Gọn gàng: Người phát động & Thao tác đưa vào Detail) */}
       <div className="sc-table-card">
         {loading ? (
           <div className="sc-empty-state">
@@ -471,11 +517,9 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
               <tr>
                 <th>Tên đợt kiểm tra an toàn</th>
                 <th>Phạm vi & Khu vực</th>
-                <th>Người phát động</th>
                 <th>Tiến độ phản hồi</th>
-                <th>Trạng thái</th>
                 <th>Thời gian</th>
-                <th style={{ textAlign: 'center' }}>Thao tác</th>
+                <th style={{ textAlign: 'center' }}>Trạng thái</th>
               </tr>
             </thead>
             <tbody>
@@ -485,117 +529,72 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                 const safeCount = check.stats?.safeCount || 0;
                 const needHelpCount = check.stats?.needHelpCount || 0;
 
-                const safePercent = totalResp > 0 ? Math.round((safeCount / totalResp) * 100) : 0;
-                const needHelpPercent = totalResp > 0 ? Math.round((needHelpCount / totalResp) * 100) : 0;
-
                 return (
                   <tr
                     key={check._id}
                     onClick={() => handleOpenResponses(check)}
-                    style={{ cursor: 'pointer' }}
+                    style={{
+                      cursor: 'pointer',
+                      backgroundColor: viewingCheck?._id === check._id ? '#eff6ff' : undefined,
+                    }}
+                    title="Nhấn để xem chi tiết & phản hồi"
                   >
                     <td>
-                      <div style={{ fontWeight: 600, color: '#2563eb', marginBottom: 2 }}>
+                      <div style={{ fontWeight: 600, color: '#0f172a', marginBottom: 2 }}>
                         {check.title}
                       </div>
                       <div style={{ fontSize: '12px', color: '#64748b' }}>
-                        {check.description.length > 70
-                          ? check.description.slice(0, 70) + '...'
+                        {check.description.length > 75
+                          ? check.description.slice(0, 75) + '...'
                           : check.description}
                       </div>
                     </td>
 
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                        <span
-                          className={`sc-badge ${
-                            check.scope === 'WARD'
-                              ? 'sc-badge-ward'
-                              : check.scope === 'PROVINCE'
-                              ? 'sc-badge-district'
-                              : 'sc-badge-all'
-                          }`}
-                        >
-                          {check.scope === 'WARD'
-                            ? 'PHƯỜNG / XÃ'
-                            : check.scope === 'PROVINCE'
-                            ? 'TỈNH / TP'
-                            : 'TOÀN HỆ THỐNG'}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 600, fontSize: '13px', color: '#334155' }}>
+                          {check.areaName}
                         </span>
-                        <strong style={{ fontSize: '13px' }}>{check.areaName}</strong>
+                        <span className="sc-badge sc-badge-ward">
+                          {check.scope === 'WARD'
+                            ? 'Phường / Xã'
+                            : check.scope === 'PROVINCE'
+                            ? 'Tỉnh / TP'
+                            : 'Toàn hệ thống'}
+                        </span>
                       </div>
                     </td>
 
                     <td>
-                      <div style={{ fontSize: '13px', fontWeight: 500, color: '#1e293b' }}>
-                        {check.createdBy?.fullName || 'Hệ thống'}
-                      </div>
-                      <div style={{ fontSize: '11.5px', color: '#64748b' }}>
-                        {check.creatorRole === 'ADMIN' ? 'Quản trị viên' : 'Cán bộ Xã'}
-                      </div>
-                    </td>
-
-                    <td>
-                      <div className="sc-progress-wrap">
-                        <div className="sc-progress-bar">
-                          <div
-                            className="sc-progress-safe"
-                            style={{ width: `${safePercent}%` }}
-                            title={`An toàn: ${safeCount} (${safePercent}%)`}
-                          />
-                          <div
-                            className="sc-progress-needhelp"
-                            style={{ width: `${needHelpPercent}%` }}
-                            title={`Cần cứu hộ: ${needHelpCount} (${needHelpPercent}%)`}
-                          />
-                        </div>
-                        <div className="sc-progress-text">
-                          <span style={{ color: '#15803d', fontWeight: 600 }}>
-                            🟢 {safeCount} An toàn
-                          </span>
-                          <span style={{ color: '#b91c1c', fontWeight: 600 }}>
-                            🔴 {needHelpCount} Cần cứu hộ
-                          </span>
-                          <span>({totalResp}/{totalTargeted})</span>
-                        </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '12.5px', color: '#475569' }}>
+                        <span>
+                          An toàn: <strong style={{ color: '#0f172a' }}>{safeCount}</strong>
+                        </span>
+                        <span style={{ color: '#cbd5e1' }}>•</span>
+                        <span>
+                          Cần cứu hộ:{' '}
+                          <strong style={{ color: needHelpCount > 0 ? '#dc2626' : '#0f172a' }}>
+                            {needHelpCount}
+                          </strong>
+                        </span>
+                        <span style={{ color: '#64748b' }}>
+                          ({totalResp}/{totalTargeted})
+                        </span>
                       </div>
                     </td>
 
-                    <td>
+                    <td style={{ fontSize: '12.5px', color: '#64748b', whiteSpace: 'nowrap' }}>
+                      {new Date(check.createdAt).toLocaleString('vi-VN')}
+                    </td>
+
+                    <td style={{ textAlign: 'center' }}>
                       <span
                         className={`sc-badge ${
                           check.status === 'ACTIVE' ? 'sc-badge-active' : 'sc-badge-closed'
                         }`}
                       >
-                        {check.status === 'ACTIVE' ? '⚡ ĐANG MỞ' : 'ĐÃ ĐÓNG'}
+                        {check.status === 'ACTIVE' ? 'Đang mở' : 'Đã đóng'}
                       </span>
-                    </td>
-
-                    <td style={{ fontSize: '12px', color: '#64748b' }}>
-                      {new Date(check.createdAt).toLocaleString('vi-VN')}
-                    </td>
-
-                    <td>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                        <button
-                          className="sc-action-btn view"
-                          onClick={() => handleOpenResponses(check)}
-                          title="Xem phản hồi của người dân"
-                        >
-                          <Eye size={14} />
-                          Xem phản hồi
-                        </button>
-                        {check.status === 'ACTIVE' && (
-                          <button
-                            className="sc-action-btn close-btn"
-                            onClick={() => handleCloseCheck(check)}
-                            title="Kết thúc đợt kiểm tra an toàn"
-                          >
-                            <Square size={13} />
-                            Đóng đợt
-                          </button>
-                        )}
-                      </div>
                     </td>
                   </tr>
                 );
@@ -804,29 +803,65 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
         </div>
       )}
 
-      {/* 6. Slide-over Drawer Bên Phải: Xem Phản Hồi Của Người Dân */}
+      {/* 6. Slide-over Drawer Bên Phải: Chi Tiết Đợt & Phản Hồi Của Người Dân */}
       {viewingCheck && (
         <div className="sc-modal-overlay sc-drawer-overlay" onClick={() => setViewingCheck(null)}>
           <div className="sc-modal-card sc-drawer-card" onClick={(e) => e.stopPropagation()}>
-            <div className="sc-modal-header">
-              <div>
-                <h3>
-                  <Users size={20} color="#0284c7" />
-                  Danh Sách Phản Hồi: {viewingCheck.title}
-                </h3>
+            <div className="sc-modal-header" style={{ alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <h3 style={{ margin: 0 }}>
+                    {viewingCheck.title}
+                  </h3>
+                  <span
+                    className={`sc-badge ${
+                      viewingCheck.status === 'ACTIVE' ? 'sc-badge-active' : 'sc-badge-closed'
+                    }`}
+                  >
+                    {viewingCheck.status === 'ACTIVE' ? 'Đang mở' : 'Đã đóng'}
+                  </span>
+                </div>
+                <p style={{ margin: '5px 0 0 0', fontSize: '12.5px', color: '#475569' }}>
+                  Địa bàn: <strong>{viewingCheck.areaName}</strong> • Người phát động:{' '}
+                  <strong>{viewingCheck.createdBy?.fullName || 'Hệ thống'}</strong> (
+                  {viewingCheck.creatorRole === 'ADMIN' ? 'Quản trị viên' : 'Cán bộ Xã'}) • Thời gian:{' '}
+                  <strong>{new Date(viewingCheck.createdAt).toLocaleString('vi-VN')}</strong>
+                </p>
                 <p style={{ margin: '3px 0 0 0', fontSize: '12.5px', color: '#64748b' }}>
-                  Địa bàn: <strong>{viewingCheck.areaName}</strong> | Tổng phản hồi:{' '}
-                  <strong>{viewingCheck.stats?.totalResponses || 0}</strong> | An toàn:{' '}
-                  <strong style={{ color: '#15803d' }}>{viewingCheck.stats?.safeCount || 0}</strong> | Cần cứu hộ:{' '}
-                  <strong style={{ color: '#b91c1c' }}>{viewingCheck.stats?.needHelpCount || 0}</strong>
+                  Tổng phản hồi: <strong>{viewingCheck.stats?.totalResponses || 0}</strong> /{' '}
+                  {viewingCheck.stats?.totalTargeted || 0} | An toàn:{' '}
+                  <strong>{viewingCheck.stats?.safeCount || 0}</strong> | Cần cứu hộ:{' '}
+                  <strong>{viewingCheck.stats?.needHelpCount || 0}</strong>
                 </p>
               </div>
-              <button className="sc-modal-close" onClick={() => setViewingCheck(null)}>
-                <X size={18} />
-              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  className="sc-btn sc-btn-secondary"
+                  onClick={handleExportResponsesCsv}
+                  title="Xuất danh sách người dân phản hồi đợt này ra file CSV"
+                  style={{ padding: '6px 12px', fontSize: 12.5 }}
+                >
+                  <Download size={14} />
+                  Xuất CSV phản hồi
+                </button>
+                {viewingCheck.status === 'ACTIVE' && (
+                  <button
+                    className="sc-action-btn close-btn"
+                    onClick={() => handleCloseCheck(viewingCheck)}
+                    title="Kết thúc đợt kiểm tra an toàn này"
+                  >
+                    <Square size={13} />
+                    Đóng đợt kiểm tra
+                  </button>
+                )}
+                <button className="sc-modal-close" onClick={() => setViewingCheck(null)}>
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
-            <div className="sc-modal-body" style={{ padding: '16px 22px' }}>
+            <div className="sc-modal-body" style={{ padding: '14px 16px' }}>
               {/* Filter bar trong modal phản hồi */}
               <div
                 style={{
@@ -848,28 +883,18 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                   <button
                     className={`sc-filter-tab ${responseStatusFilter === 'NEED_HELP' ? 'active' : ''}`}
                     onClick={() => setResponseStatusFilter('NEED_HELP')}
-                    style={
-                      responseStatusFilter === 'NEED_HELP'
-                        ? { backgroundColor: '#dc2626' }
-                        : { color: '#dc2626' }
-                    }
                   >
-                    🚨 Cần cứu hộ ({responses.filter((r) => r.status === 'NEED_HELP').length})
+                    Cần cứu hộ ({responses.filter((r) => r.status === 'NEED_HELP').length})
                   </button>
                   <button
                     className={`sc-filter-tab ${responseStatusFilter === 'SAFE' ? 'active' : ''}`}
                     onClick={() => setResponseStatusFilter('SAFE')}
-                    style={
-                      responseStatusFilter === 'SAFE'
-                        ? { backgroundColor: '#16a34a' }
-                        : { color: '#16a34a' }
-                    }
                   >
-                    🟢 An toàn ({responses.filter((r) => r.status === 'SAFE').length})
+                    An toàn ({responses.filter((r) => r.status === 'SAFE').length})
                   </button>
                 </div>
 
-                <div className="sc-search-box" style={{ minWidth: 220 }}>
+                <div className="sc-search-box" style={{ minWidth: 240 }}>
                   <Search size={14} className="sc-search-icon" />
                   <input
                     type="text"
@@ -899,10 +924,10 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                       <th>Người dân</th>
                       <th>Số điện thoại</th>
                       <th>Trạng thái</th>
-                      <th>Số người</th>
+                      <th style={{ textAlign: 'center' }}>Số người</th>
                       <th>Tình hình / Lời nhắn</th>
                       <th>Vị trí GPS / Địa chỉ</th>
-                      <th>Thời gian phản hồi</th>
+                      <th>Thời gian</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -915,25 +940,25 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                             : undefined
                         }
                       >
-                        <td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
                           <strong style={{ color: '#0f172a' }}>
                             {item.userFullName || item.userId?.fullName || 'Người dân'}
                           </strong>
                         </td>
 
-                        <td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
                           <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
                             {item.userPhone || item.userId?.phone || '—'}
                           </span>
                         </td>
 
-                        <td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
                           <span
                             className={`sc-badge ${
                               item.status === 'SAFE' ? 'sc-badge-safe' : 'sc-badge-needhelp'
                             }`}
                           >
-                            {item.status === 'SAFE' ? '🟢 AN TOÀN' : '🚨 CẦN CỨU HỘ'}
+                            {item.status === 'SAFE' ? 'An toàn' : 'Cần cứu hộ'}
                           </span>
                           {item.sosRequestId && (
                             <div style={{ marginTop: 4 }}>
@@ -953,12 +978,12 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                           )}
                         </td>
 
-                        <td>
+                        <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                           <span style={{ fontWeight: 600 }}>{item.peopleCount || 1} người</span>
                         </td>
 
                         <td>
-                          <span style={{ fontSize: '13px', color: '#334155' }}>
+                          <span style={{ fontSize: '12.5px', color: '#334155', wordBreak: 'break-word' }}>
                             {item.message || (item.status === 'SAFE' ? 'Đã an toàn' : 'Cần hỗ trợ')}
                           </span>
                         </td>
@@ -966,13 +991,15 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                         <td>
                           {item.location?.coordinates ? (
                             <div style={{ fontSize: '12px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#0284c7' }}>
-                                <MapPin size={13} />
-                                {item.location.coordinates[1].toFixed(4)},{' '}
-                                {item.location.coordinates[0].toFixed(4)}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#0284c7', fontWeight: 600 }}>
+                                <MapPin size={13} style={{ flexShrink: 0 }} />
+                                <span>
+                                  {item.location.coordinates[1].toFixed(4)},{' '}
+                                  {item.location.coordinates[0].toFixed(4)}
+                                </span>
                               </div>
                               {item.address && (
-                                <div style={{ color: '#64748b', fontSize: '11.5px', marginTop: 1 }}>
+                                <div style={{ color: '#475569', fontSize: '11.5px', marginTop: 2, lineHeight: 1.35 }}>
                                   {item.address}
                                 </div>
                               )}
@@ -982,7 +1009,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                           )}
                         </td>
 
-                        <td style={{ fontSize: '12px', color: '#64748b' }}>
+                        <td style={{ fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap' }}>
                           {new Date(item.respondedAt).toLocaleTimeString('vi-VN', {
                             hour: '2-digit',
                             minute: '2-digit',
@@ -997,6 +1024,15 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
             </div>
 
             <div className="sc-modal-footer">
+              {viewingCheck.status === 'ACTIVE' && (
+                <button
+                  className="sc-action-btn close-btn"
+                  onClick={() => handleCloseCheck(viewingCheck)}
+                >
+                  <Square size={13} />
+                  Đóng đợt kiểm tra
+                </button>
+              )}
               <button className="sc-btn sc-btn-secondary" onClick={() => setViewingCheck(null)}>
                 Đóng
               </button>

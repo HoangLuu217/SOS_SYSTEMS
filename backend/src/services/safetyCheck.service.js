@@ -103,11 +103,18 @@ class SafetyCheckService {
         // Cấp Phường/Xã: lọc người dân thuộc phường/xã đó
         const geoConditions = [];
         if (targetAreaDoc.boundary?.type && Array.isArray(targetAreaDoc.boundary.coordinates) && targetAreaDoc.boundary.coordinates.length > 0) {
-          geoConditions.push({
-            'citizen.currentLocation': {
-              $geoWithin: { $geometry: targetAreaDoc.boundary },
+          geoConditions.push(
+            {
+              currentLocation: {
+                $geoWithin: { $geometry: targetAreaDoc.boundary },
+              },
             },
-          });
+            {
+              'citizen.currentLocation': {
+                $geoWithin: { $geometry: targetAreaDoc.boundary },
+              },
+            }
+          );
         }
         geoConditions.push(
           { 'citizen.areaId': targetAreaDoc._id },
@@ -122,9 +129,9 @@ class SafetyCheckService {
           $or: geoConditions,
         };
       } else {
-        // Cấp Tỉnh/Thành phố (PROVINCE): Gom các Phường/Xã con trực thuộc trong DB
+        // Cấp Tỉnh/Thành phố (PROVINCE): Gom các Phường/Xã con trực thuộc trong DB và ranh giới GPS
         const childAreas = await AdministrativeArea.find({ status: 'ACTIVE' })
-          .select('_id parentId')
+          .select('_id parentId boundary')
           .lean();
         const selectedIds = new Set([targetAreaDoc._id.toString()]);
         let foundChild = true;
@@ -140,15 +147,54 @@ class SafetyCheckService {
         }
 
         const areaIds = [...selectedIds];
+        const provinceConditions = [
+          { 'authority.areaId': { $in: areaIds } },
+          { 'citizen.areaId': { $in: areaIds } },
+          { 'rescuer.areaId': { $in: areaIds } },
+          { areaId: { $in: areaIds } },
+          { address: { $regex: targetAreaDoc.name, $options: 'i' } },
+        ];
+
+        if (targetAreaDoc.boundary?.type && Array.isArray(targetAreaDoc.boundary.coordinates) && targetAreaDoc.boundary.coordinates.length > 0) {
+          provinceConditions.push(
+            {
+              currentLocation: {
+                $geoWithin: { $geometry: targetAreaDoc.boundary },
+              },
+            },
+            {
+              'citizen.currentLocation': {
+                $geoWithin: { $geometry: targetAreaDoc.boundary },
+              },
+            }
+          );
+        }
+
+        childAreas.forEach((area) => {
+          if (
+            selectedIds.has(area._id.toString()) &&
+            area.boundary?.type &&
+            Array.isArray(area.boundary.coordinates) &&
+            area.boundary.coordinates.length > 0
+          ) {
+            provinceConditions.push(
+              {
+                currentLocation: {
+                  $geoWithin: { $geometry: area.boundary },
+                },
+              },
+              {
+                'citizen.currentLocation': {
+                  $geoWithin: { $geometry: area.boundary },
+                },
+              }
+            );
+          }
+        });
+
         userFilter = {
           status: { $ne: 'SUSPENDED' },
-          $or: [
-            { 'authority.areaId': { $in: areaIds } },
-            { 'citizen.areaId': { $in: areaIds } },
-            { 'rescuer.areaId': { $in: areaIds } },
-            { areaId: { $in: areaIds } },
-            { address: { $regex: targetAreaDoc.name, $options: 'i' } },
-          ],
+          $or: provinceConditions,
         };
       }
     }
@@ -179,9 +225,10 @@ class SafetyCheckService {
       },
     });
 
-    // Tạo thông báo in-app Notification cho toàn bộ người nhận
+    // Tạo thông báo in-app Notification cho toàn bộ người nhận (hoặc ghi nhận lịch sử phát cho người tạo nếu chưa có người nhận)
     const now = new Date();
-    const notificationDocs = recipientUsers.map((user) => ({
+    const targetUsersForNotification = recipientUsers.length > 0 ? recipientUsers : [{ _id: senderUser._id }];
+    const notificationDocs = targetUsersForNotification.map((user) => ({
       userId: user._id,
       createdBy: senderUser._id,
       areaId: targetAreaId,
@@ -192,6 +239,8 @@ class SafetyCheckService {
       priority: 'CRITICAL',
       actionUrl: 'safety_check',
       data: {
+        isBroadcast: true,
+        broadcastId: safetyCheck._id.toString(),
         isSafetyCheck: true,
         safetyCheckId: safetyCheck._id.toString(),
         disasterType,
@@ -210,13 +259,16 @@ class SafetyCheckService {
       const savedNotifications = await Notification.insertMany(notificationDocs);
 
       // Phát sự kiện SSE realtime đến từng người dùng đích (không phát BROADCAST trùng lặp)
-      savedNotifications.forEach((notification) => {
-        eventBus.emit('notification_event', {
-          action: 'USER',
-          userId: notification.userId.toString(),
-          notification,
+      if (recipientUsers.length > 0) {
+        savedNotifications.forEach((notification) => {
+          eventBus.emit('notification_event', {
+            action: 'USER',
+            userId: notification.userId.toString(),
+            data: notification,
+            notification,
+          });
         });
-      });
+      }
     }
 
     // Gửi Push Notification qua Expo
@@ -527,10 +579,13 @@ class SafetyCheckService {
 
     // Cập nhật vị trí gần nhất của người dùng nếu có tọa độ
     if (pointData) {
+      const now = new Date();
       await User.findByIdAndUpdate(currentUser._id, {
         $set: {
+          currentLocation: pointData,
+          currentLocationUpdatedAt: now,
           'citizen.currentLocation': pointData,
-          'citizen.currentLocationUpdatedAt': new Date(),
+          'citizen.currentLocationUpdatedAt': now,
         },
       });
     }
@@ -716,11 +771,13 @@ class SafetyCheckService {
     const lat =
       parseFloat(query.latitude) ||
       parseFloat(query.lat) ||
-      currentUser?.citizen?.currentLocation?.coordinates?.[1];
+      currentUser?.citizen?.currentLocation?.coordinates?.[1] ||
+      currentUser?.currentLocation?.coordinates?.[1];
     const lng =
       parseFloat(query.longitude) ||
       parseFloat(query.lng) ||
-      currentUser?.citizen?.currentLocation?.coordinates?.[0];
+      currentUser?.citizen?.currentLocation?.coordinates?.[0] ||
+      currentUser?.currentLocation?.coordinates?.[0];
 
     if (
       typeof lng === 'number' &&

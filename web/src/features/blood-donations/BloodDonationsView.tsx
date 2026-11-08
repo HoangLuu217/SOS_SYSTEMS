@@ -4,11 +4,8 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Calendar,
   Clock,
   MapPin,
-  Users,
-  CheckCircle2,
   Eye,
   X,
   Phone,
@@ -16,6 +13,7 @@ import {
   Building2,
   User as UserIcon,
   Activity,
+  Download,
 } from 'lucide-react';
 import { fetchWithAuth } from '@/api/client';
 import { fetchAdministrativeAreas } from '@/api/area.api';
@@ -258,18 +256,6 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
     });
   }, [events, filterAreaId, searchQuery]);
 
-  const stats = useMemo(() => {
-    const pendingCount = registrations.filter((r) => r.status === 'PENDING').length;
-    const confirmedCount = registrations.filter((r) => r.status === 'CONFIRMED').length;
-    const activeEventsCount = events.filter((e) => e.status === 'ACTIVE').length;
-    return {
-      totalRegs: registrations.length,
-      pendingCount,
-      confirmedCount,
-      activeEventsCount,
-    };
-  }, [registrations, events]);
-
   const toggleBloodNeed = (bt: string) => {
     if (bt === 'ALL') {
       setFormNeededBlood(['ALL']);
@@ -316,11 +302,13 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
       }
 
       const createdEv = res?.data || res;
-      const notifiedCount = createdEv?.stats?.totalNotified ?? stats.pendingCount;
+      const notifiedCount =
+        createdEv?.stats?.totalNotified ?? registrations.filter((r) => r.status === 'PENDING').length;
       showToast('success', `Đã tạo đợt hiến máu và gửi thông báo tới ${notifiedCount} người đăng ký!`);
       setIsCreateOpen(false);
       setActiveTab('EVENTS');
       await fetchAllData();
+      window.dispatchEvent(new CustomEvent('sos_data_updated'));
     } catch (err: any) {
       showToast('error', err?.message || 'Không thể tạo đợt hiến máu.');
     } finally {
@@ -356,6 +344,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
       }
       showToast('success', nextStatus === 'CLOSED' ? 'Đã đóng đợt hiến máu.' : 'Đã mở lại đợt hiến máu.');
       await fetchAllData();
+      window.dispatchEvent(new CustomEvent('sos_data_updated'));
       if (selectedEventDetail?._id === ev._id) {
         setSelectedEventDetail({ ...ev, status: nextStatus });
       }
@@ -451,6 +440,192 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
     }
   };
 
+  const escapeCsvCell = (val: unknown): string => {
+    const str = val === null || val === undefined ? '' : String(val);
+    return `"${str.replace(/"/g, '""')}"`;
+  };
+
+  const getStatusLabelText = (status: string) => {
+    if (status === 'PENDING') return 'ĐK nhận thông báo đợt hiến';
+    if (status === 'CONFIRMED' || status === 'COMPLETED') return 'Xác nhận tham gia';
+    if (status === 'DECLINED') return 'Chưa tham gia';
+    return status || '';
+  };
+
+  // Xuất CSV danh sách người tham gia cho từng đợt hiến máu cụ thể
+  const handleExportEventParticipantsCsv = async (
+    ev: BloodDonationEvent,
+    preloadedResponses?: BloodDonationRegistration[]
+  ) => {
+    try {
+      let list: BloodDonationRegistration[] = preloadedResponses || [];
+      if (!preloadedResponses) {
+        const res = await fetchWithAuth<any>(`/blood-donations/events/${ev._id}`);
+        if (res?.success && res.data) {
+          list = Array.isArray(res.data.responses) ? res.data.responses : [];
+        } else {
+          // Fallback lọc từ danh sách registrations hiện có
+          list = registrations.filter((r) => r.eventId?._id === ev._id);
+        }
+      }
+
+      const headers = [
+        'STT',
+        'Đợt hiến máu',
+        'Địa điểm tổ chức',
+        'Ngày tổ chức',
+        'Khung giờ',
+        'Họ và tên người tham gia',
+        'Số điện thoại',
+        'Email',
+        'Nhóm máu',
+        'Cân nặng (kg)',
+        'Trạng thái tham gia',
+        'Khu vực / Tỉnh TP',
+        'Địa chỉ chi tiết',
+        'Tình trạng sức khỏe',
+        'Ghi chú thêm',
+        'Thời gian xác nhận',
+      ];
+
+      const rows = list.map((r, idx) => [
+        idx + 1,
+        ev.title || '',
+        ev.locationName || '',
+        formatDate(ev.eventDate),
+        `${ev.startTime || ''} - ${ev.endTime || ''}`,
+        r.fullName || r.userId?.fullName || '',
+        r.phone || r.userId?.phone || '',
+        r.userId?.email || '',
+        r.bloodType === 'UNKNOWN' ? 'Chưa rõ' : r.bloodType || '',
+        r.weightKg ?? '',
+        getStatusLabelText(r.status),
+        r.provinceName || r.areaName || ev.areaName || '',
+        r.address || r.userId?.address || '',
+        r.healthNote || 'Đủ điều kiện',
+        r.note || '',
+        formatDateTime(r.respondedAt || r.createdAt),
+      ]);
+
+      const csvContent =
+        '\uFEFF' +
+        [headers.map(escapeCsvCell).join(','), ...rows.map((row) => row.map(escapeCsvCell).join(','))].join('\r\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const safeTitle = (ev.title || 'dot_hien_mau')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9_-]+/g, '_')
+        .slice(0, 45);
+      link.href = url;
+      link.download = `Danh_sach_nguoi_tham_gia_${safeTitle}_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast('success', `Đã xuất file CSV danh sách người tham gia đợt "${ev.title}" (${list.length} người).`);
+    } catch (err: any) {
+      showToast('error', err.message || 'Không thể xuất file CSV cho đợt hiến máu này');
+    }
+  };
+
+  // Xuất CSV danh sách trên thanh công cụ (theo tab hiện tại)
+  const handleExportToolbarCsv = () => {
+    if (activeTab === 'REGISTRATIONS') {
+      const headers = [
+        'STT',
+        'Họ và tên',
+        'Số điện thoại',
+        'Email',
+        'Nhóm máu',
+        'Cân nặng (kg)',
+        'Loại đăng ký',
+        'Trạng thái',
+        'Đợt hiến máu phản hồi',
+        'Khu vực / Tỉnh TP',
+        'Địa chỉ',
+        'Sức khỏe',
+        'Ghi chú',
+        'Thời gian đăng ký',
+      ];
+      const rows = filteredRegistrations.map((r, idx) => [
+        idx + 1,
+        r.fullName || r.userId?.fullName || '',
+        r.phone || r.userId?.phone || '',
+        r.userId?.email || '',
+        r.bloodType === 'UNKNOWN' ? 'Chưa rõ' : r.bloodType || '',
+        r.weightKg ?? '',
+        r.registrationType === 'PRE_REGISTRATION' ? 'ĐK nhận thông báo đợt hiến' : 'Xác nhận theo đợt',
+        getStatusLabelText(r.status),
+        r.eventId?.title || '—',
+        r.provinceName || r.areaName || '',
+        r.address || r.userId?.address || '',
+        r.healthNote || 'Đủ điều kiện',
+        r.note || '',
+        formatDateTime(r.respondedAt || r.createdAt),
+      ]);
+      const csvContent =
+        '\uFEFF' +
+        [headers.map(escapeCsvCell).join(','), ...rows.map((row) => row.map(escapeCsvCell).join(','))].join('\r\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Danh_sach_dang_ky_hien_mau_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast('success', `Đã xuất ${filteredRegistrations.length} hồ sơ đăng ký hiến máu ra CSV.`);
+    } else {
+      const headers = [
+        'STT',
+        'Tên đợt hiến máu',
+        'Địa điểm',
+        'Địa chỉ',
+        'Khu vực',
+        'Ngày tổ chức',
+        'Khung giờ',
+        'Nhóm máu cần',
+        'Số người xác nhận',
+        'Chỉ tiêu dự kiến',
+        'Đơn vị tổ chức',
+        'SĐT liên hệ',
+        'Trạng thái',
+      ];
+      const rows = filteredEvents.map((ev, idx) => [
+        idx + 1,
+        ev.title || '',
+        ev.locationName || '',
+        ev.address || '',
+        ev.areaName || 'Toàn hệ thống',
+        formatDate(ev.eventDate),
+        `${ev.startTime || ''} - ${ev.endTime || ''}`,
+        !ev.neededBloodTypes || ev.neededBloodTypes.includes('ALL') ? 'Tất cả' : ev.neededBloodTypes.join(', '),
+        ev.stats?.confirmedCount || 0,
+        ev.targetDonors || 0,
+        ev.organizerName || '',
+        ev.contactPhone || '',
+        ev.status === 'ACTIVE' ? 'Đang mở' : 'Đã đóng',
+      ]);
+      const csvContent =
+        '\uFEFF' +
+        [headers.map(escapeCsvCell).join(','), ...rows.map((row) => row.map(escapeCsvCell).join(','))].join('\r\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Danh_sach_dot_hien_mau_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast('success', `Đã xuất ${filteredEvents.length} đợt hiến máu ra CSV.`);
+    }
+  };
+
   return (
     <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Toast */}
@@ -480,126 +655,19 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         </div>
       )}
 
-      {/* 3 Thẻ thống kê gọn */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: 12,
-        }}
-      >
-        <div
-          style={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
-            borderRadius: 10,
-            padding: '14px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-          }}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 10,
-              background: '#fef3c7',
-              color: '#d97706',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Users size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>ĐK nhận thông báo đợt hiến</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>
-              {stats.pendingCount}
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
-            borderRadius: 10,
-            padding: '14px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-          }}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 10,
-              background: '#e0f2fe',
-              color: '#0284c7',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Calendar size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Đợt đang mở</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#0f172a' }}>
-              {stats.activeEventsCount}
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
-            borderRadius: 10,
-            padding: '14px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-          }}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 10,
-              background: '#dcfce7',
-              color: '#16a34a',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <CheckCircle2 size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Xác nhận trên App</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#16a34a' }}>
-              {stats.confirmedCount}
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Thanh công cụ & Nút đồng bộ màu #2563eb */}
       <div
         style={{
           background: '#ffffff',
           border: '1px solid #e2e8f0',
           borderRadius: 10,
-          padding: '12px 16px',
+          padding: '10px 14px',
           display: 'flex',
-          flexWrap: 'wrap',
+          flexWrap: 'nowrap',
+          overflowX: 'auto',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 10,
+          gap: 8,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -743,6 +811,28 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               </select>
             </>
           )}
+
+          <button
+            type="button"
+            onClick={handleExportToolbarCsv}
+            style={{
+              padding: '7px 12px',
+              borderRadius: 8,
+              border: '1px solid #cbd5e1',
+              background: '#ffffff',
+              color: '#334155',
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+            title="Xuất danh sách hiện tại ra file CSV"
+          >
+            <Download size={14} />
+            <span>Xuất CSV</span>
+          </button>
 
           <button
             type="button"
@@ -1005,29 +1095,55 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                       </span>
                     </td>
                     <td style={{ padding: '11px 16px', textAlign: 'center' }}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleOpenEventDetail(ev);
-                        }}
-                        style={{
-                          padding: '5px 10px',
-                          borderRadius: 6,
-                          border: '1px solid #cbd5e1',
-                          background: '#ffffff',
-                          color: '#334155',
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                        }}
-                      >
-                        <Eye size={13} />
-                        <span>Xem</span>
-                      </button>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleExportEventParticipantsCsv(ev);
+                          }}
+                          title="Xuất file CSV danh sách tên & thông tin người tham gia đợt hiến máu này"
+                          style={{
+                            padding: '5px 10px',
+                            borderRadius: 6,
+                            border: '1px solid #cbd5e1',
+                            background: '#ffffff',
+                            color: '#334155',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          <Download size={13} />
+                          <span>Xuất CSV</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleOpenEventDetail(ev);
+                          }}
+                          style={{
+                            padding: '5px 10px',
+                            borderRadius: 6,
+                            border: '1px solid #cbd5e1',
+                            background: '#ffffff',
+                            color: '#334155',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          <Eye size={13} />
+                          <span>Xem</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -1387,26 +1503,49 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>
                   Người dân phản hồi từ App ({eventResponses.length})
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleEventStatus(selectedEventDetail)}
-                  style={{
-                    padding: '5px 12px',
-                    borderRadius: 6,
-                    border: '1px solid #cbd5e1',
-                    background: '#ffffff',
-                    color: '#334155',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {selectedEventDetail.status === 'ACTIVE' ? 'Đóng đợt này' : 'Mở lại đợt'}
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => handleExportEventParticipantsCsv(selectedEventDetail, eventResponses)}
+                    title="Xuất file CSV danh sách người tham gia của đợt hiến máu này"
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: 6,
+                      border: '1px solid #cbd5e1',
+                      background: '#ffffff',
+                      color: '#334155',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    <Download size={13} />
+                    <span>Xuất CSV người tham gia</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleEventStatus(selectedEventDetail)}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: 6,
+                      border: '1px solid #cbd5e1',
+                      background: '#ffffff',
+                      color: '#334155',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {selectedEventDetail.status === 'ACTIVE' ? 'Đóng đợt này' : 'Mở lại đợt'}
+                  </button>
+                </div>
               </div>
 
               {loadingDetail ? (

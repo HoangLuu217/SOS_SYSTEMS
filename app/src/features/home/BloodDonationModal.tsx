@@ -524,41 +524,6 @@ export function BloodDonationModal({
               {activeTab === 'PRE_REGISTER' ? (
                 /* ================= TAB 1: ĐK NHẬN THÔNG BÁO ĐỢT HIẾN MÁU ================= */
                 <View>
-                  {myPreRegistration && (
-                    <View style={styles.statusBannerCard}>
-                      <View style={styles.statusBannerTop}>
-                        <Text style={styles.statusDescText}>
-                          📍 Tỉnh/Thành phố nhận thông báo:{' '}
-                          <Text style={{ fontWeight: '700' }}>
-                            {myPreRegistration.provinceName ||
-                              provinceName ||
-                              myPreRegistration.areaName ||
-                              'Toàn hệ thống'}
-                          </Text>
-                        </Text>
-                        <Text style={styles.statusTimeText}>
-                          Nhóm máu:{' '}
-                          <Text style={{ fontWeight: '800', color: '#DC2626' }}>
-                            {myPreRegistration.bloodType === 'UNKNOWN'
-                              ? 'Chưa rõ'
-                              : myPreRegistration.bloodType}
-                          </Text>
-                        </Text>
-                      </View>
-                      {activeEvents.length > 0 && (
-                        <TouchableOpacity
-                          style={styles.switchToEventBtn}
-                          onPress={() => setActiveTab('EVENTS')}
-                        >
-                          <Ionicons name="notifications" size={15} color="#FFFFFF" />
-                          <Text style={styles.switchToEventBtnText}>
-                            Xem {activeEvents.length} đợt hiến máu đang mở tại Tỉnh/TP của bạn
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  )}
-
                   {/* 1. Chọn Tỉnh / Thành phố từ Area (Dropdown gọn) */}
                   <Text style={styles.inputLabel}>
                     Tỉnh / Thành phố nhận thông báo đợt hiến *
@@ -813,13 +778,13 @@ export function BloodDonationModal({
                         })}
                       </View>
 
-                      {/* Chi tiết sự kiện đang chọn */}
+                      {/* Chi tiết sự kiện đang chọn (Thiết kế gọn gàng) */}
                       {selectedEvent && (
                         <View style={styles.eventDetailCard}>
-                          <View style={styles.eventTagRow}>
-                            <View style={styles.urgentBadge}>
-                              <Text style={styles.urgentBadgeText}>ĐỢT HIẾN MÁU</Text>
-                            </View>
+                          <View style={styles.eventHeaderRow}>
+                            <Text style={styles.eventDetailTitle} numberOfLines={2}>
+                              {selectedEvent.title}
+                            </Text>
                             <View style={styles.areaBadge}>
                               <Text style={styles.areaBadgeText}>
                                 {selectedEvent.areaName || 'Toàn hệ thống'}
@@ -827,76 +792,74 @@ export function BloodDonationModal({
                             </View>
                           </View>
 
-                          <Text style={styles.eventDetailTitle}>{selectedEvent.title}</Text>
                           {Boolean(selectedEvent.description) && (
-                            <Text style={styles.eventDetailDesc}>
+                            <Text style={styles.eventDetailDesc} numberOfLines={2}>
                               {selectedEvent.description}
                             </Text>
                           )}
 
-                          {/* Khung Địa điểm & Ngày giờ */}
+                          {/* Khung Địa điểm & Ngày giờ gọn gàng */}
                           <View style={styles.infoGrid}>
                             <View style={styles.infoRow}>
-                              <Ionicons name="location" size={17} color="#DC2626" />
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.infoRowLabel}>Địa điểm tổ chức:</Text>
-                                <Text style={styles.infoRowValue}>
-                                  {selectedEvent.locationName}
-                                </Text>
-                                <Text style={styles.infoRowSub}>{selectedEvent.address}</Text>
-                              </View>
+                              <Ionicons name="location" size={15} color="#DC2626" style={{ marginTop: 1 }} />
+                              <Text style={styles.infoCompactText} numberOfLines={2}>
+                                <Text style={styles.infoRowLabel}>Địa điểm: </Text>
+                                <Text style={styles.infoRowValue}>{selectedEvent.locationName}</Text>
+                                {selectedEvent.address ? (
+                                  <Text style={styles.infoRowSub}> ({selectedEvent.address})</Text>
+                                ) : null}
+                              </Text>
                             </View>
 
                             <View style={styles.infoRow}>
-                              <Ionicons name="time" size={17} color="#0284C7" />
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.infoRowLabel}>Ngày & Giờ tiếp nhận:</Text>
+                              <Ionicons name="time" size={15} color="#0284C7" style={{ marginTop: 1 }} />
+                              <Text style={styles.infoCompactText}>
+                                <Text style={styles.infoRowLabel}>Thời gian: </Text>
                                 <Text style={styles.infoRowValue}>
-                                  Ngày {formatDate(selectedEvent.eventDate)} • Từ{' '}
-                                  {selectedEvent.startTime} đến {selectedEvent.endTime}
+                                  {formatDate(selectedEvent.eventDate)} • {selectedEvent.startTime} - {selectedEvent.endTime}
                                 </Text>
-                              </View>
+                              </Text>
                             </View>
 
                             <View style={styles.infoRow}>
-                              <Ionicons name="water" size={17} color="#E11D48" />
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.infoRowLabel}>Nhóm máu cần tiếp nhận:</Text>
+                              <Ionicons name="water" size={15} color="#E11D48" style={{ marginTop: 1 }} />
+                              <Text style={styles.infoCompactText}>
+                                <Text style={styles.infoRowLabel}>Nhóm máu: </Text>
                                 <Text style={styles.infoRowValue}>
                                   {!selectedEvent.neededBloodTypes ||
-                                    selectedEvent.neededBloodTypes.includes('ALL')
-                                    ? 'Tất cả các nhóm máu (O, A, B, AB)'
+                                  selectedEvent.neededBloodTypes.includes('ALL')
+                                    ? 'Tất cả (O, A, B, AB)'
                                     : selectedEvent.neededBloodTypes.join(', ')}
                                 </Text>
-                              </View>
+                              </Text>
                             </View>
 
                             <View style={styles.infoRow}>
-                              <Ionicons name="medkit" size={17} color="#16A34A" />
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.infoRowLabel}>Đơn vị tổ chức & Liên hệ:</Text>
+                              <Ionicons name="medkit" size={15} color="#16A34A" style={{ marginTop: 1 }} />
+                              <Text style={styles.infoCompactText} numberOfLines={2}>
+                                <Text style={styles.infoRowLabel}>Đơn vị: </Text>
                                 <Text style={styles.infoRowValue}>
                                   {selectedEvent.organizerName}
                                   {selectedEvent.contactPhone
                                     ? ` (${selectedEvent.contactPhone})`
                                     : ''}
                                 </Text>
-                              </View>
+                              </Text>
                             </View>
 
                             {Boolean(selectedEvent.requirements) && (
                               <View style={styles.reqBox}>
-                                <Text style={styles.reqTitle}>📋 Lưu ý khi đi hiến máu:</Text>
-                                <Text style={styles.reqText}>
+                                <Text style={styles.reqText} numberOfLines={2}>
+                                  <Text style={styles.reqTitle}>📋 Lưu ý: </Text>
                                   {selectedEvent.requirements}
                                 </Text>
                               </View>
                             )}
                           </View>
 
-                          {/* Khung xác nhận tham gia của người dân */}
-                          <Text style={[styles.sectionLabel, { marginTop: 14 }]}>
-                            Xác nhận đăng ký hiến máu tại điểm này:
+                          {/* Khung xác nhận tham gia của người dân (Gọn 1 hàng) */}
+                          <Text style={[styles.sectionLabel, { marginTop: 10, marginBottom: 6 }]}>
+                            Xác nhận đăng ký tham gia:
                           </Text>
 
                           <View style={styles.choiceRow}>
@@ -909,7 +872,7 @@ export function BloodDonationModal({
                             >
                               <Ionicons
                                 name="checkmark-circle"
-                                size={22}
+                                size={18}
                                 color={eventChoice === 'CONFIRMED' ? '#0284C7' : '#94A3B8'}
                               />
                               <Text
@@ -919,9 +882,6 @@ export function BloodDonationModal({
                                 ]}
                               >
                                 ĐĂNG KÝ THAM GIA
-                              </Text>
-                              <Text style={styles.choiceCardSub}>
-                                Tôi sẽ đến hiến máu tại địa điểm này
                               </Text>
                             </TouchableOpacity>
 
@@ -934,7 +894,7 @@ export function BloodDonationModal({
                             >
                               <Ionicons
                                 name="close-circle"
-                                size={22}
+                                size={18}
                                 color={eventChoice === 'DECLINED' ? '#475569' : '#94A3B8'}
                               />
                               <Text
@@ -944,9 +904,6 @@ export function BloodDonationModal({
                                 ]}
                               >
                                 CHƯA THỂ THAM GIA
-                              </Text>
-                              <Text style={styles.choiceCardSub}>
-                                Bận hoặc chưa đủ điều kiện đợt này
                               </Text>
                             </TouchableOpacity>
                           </View>
@@ -984,7 +941,7 @@ export function BloodDonationModal({
 
                           <Text style={styles.inputLabel}>Ghi chú thêm (tùy chọn):</Text>
                           <TextInput
-                            style={styles.input}
+                            style={[styles.input, { marginBottom: 6 }]}
                             value={eventNote}
                             onChangeText={setEventNote}
                             placeholder="VD: Tôi sẽ đến vào khoảng 8h30 sáng..."
@@ -1010,7 +967,7 @@ export function BloodDonationModal({
                                       ? 'heart-circle'
                                       : 'checkmark-done'
                                   }
-                                  size={19}
+                                  size={18}
                                   color="#FFFFFF"
                                 />
                                 <Text style={styles.submitBtnText}>
@@ -1030,7 +987,7 @@ export function BloodDonationModal({
                               onPress={handleCancelEventRegistration}
                               disabled={submitting}
                             >
-                              <Ionicons name="close-circle-outline" size={18} color="#DC2626" />
+                              <Ionicons name="close-circle-outline" size={17} color="#DC2626" />
                               <Text style={styles.cancelOutlineBtnText}>
                                 HỦY ĐĂNG KÝ ĐỢT HIẾN MÁU NÀY
                               </Text>
@@ -1271,21 +1228,21 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   sectionLabel: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#1E293B',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   bloodGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 7,
-    marginBottom: 14,
+    gap: 6,
+    marginBottom: 10,
   },
   bloodChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#CBD5E1',
     backgroundColor: '#F8FAFC',
@@ -1295,45 +1252,45 @@ const styles = StyleSheet.create({
     borderColor: '#0284C7',
   },
   bloodChipText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '700',
     color: '#334155',
   },
   bloodChipTextActive: {
-    color: '#0F172A',
+    color: '#FFFFFF',
   },
   rowInputs: {
     flexDirection: 'row',
     gap: 10,
   },
   inputLabel: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '600',
     color: '#334155',
-    marginBottom: 5,
+    marginBottom: 4,
   },
   input: {
     borderWidth: 1,
     borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 11,
-    paddingVertical: 8,
-    fontSize: 13,
+    borderRadius: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    fontSize: 12.5,
     color: '#0F172A',
     backgroundColor: '#F8FAFC',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   dropdownTrigger: {
     borderWidth: 1,
     borderColor: '#CBD5E1',
     borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 9,
     backgroundColor: '#F8FAFC',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   dropdownTriggerText: {
     fontSize: 13.5,
@@ -1373,26 +1330,26 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     backgroundColor: '#0284C7',
-    borderRadius: 12,
-    paddingVertical: 13,
+    borderRadius: 11,
+    paddingVertical: 11,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginTop: 6,
+    marginTop: 4,
   },
   submitBtnText: {
-    color: '#0F172A',
-    fontSize: 13.5,
+    color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '800',
   },
   cancelOutlineBtn: {
-    marginTop: 10,
+    marginTop: 8,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
     backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    paddingVertical: 12,
+    borderRadius: 11,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1400,7 +1357,7 @@ const styles = StyleSheet.create({
   },
   cancelOutlineBtnText: {
     color: '#334155',
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '800',
   },
   emptyBox: {
@@ -1423,15 +1380,16 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   eventListBox: {
-    gap: 8,
-    marginBottom: 14,
+    gap: 6,
+    marginBottom: 10,
   },
   eventSelectorItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 11,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     backgroundColor: '#F8FAFC',
@@ -1442,19 +1400,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F9FF',
   },
   eventSelectorTitle: {
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
   },
   eventSelectorMeta: {
-    fontSize: 11.5,
+    fontSize: 11,
     color: '#64748B',
-    marginTop: 2,
+    marginTop: 1,
   },
   eventRespBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   badgeConfirmed: {
     backgroundColor: '#DCFCE7',
@@ -1466,88 +1424,86 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF3C7',
   },
   eventRespBadgeText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
   },
   eventDetailCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    padding: 14,
+    padding: 11,
   },
-  eventTagRow: {
+  eventHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 8,
-    marginBottom: 8,
-  },
-  urgentBadge: {
-    backgroundColor: '#0284C7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  urgentBadgeText: {
-    color: '#0F172A',
-    fontSize: 10.5,
-    fontWeight: '800',
+    marginBottom: 6,
   },
   areaBadge: {
     backgroundColor: '#E0F2FE',
-    paddingHorizontal: 9,
-    paddingVertical: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
     borderRadius: 6,
   },
   areaBadgeText: {
     color: '#0369A1',
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
   },
   eventDetailTitle: {
-    fontSize: 15.5,
+    fontSize: 14.5,
     fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 4,
+    flex: 1,
   },
   eventDetailDesc: {
-    fontSize: 12.5,
+    fontSize: 12,
     color: '#475569',
-    lineHeight: 18,
-    marginBottom: 10,
+    lineHeight: 16,
+    marginBottom: 8,
   },
   infoGrid: {
     backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 11,
-    gap: 10,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 5,
     borderWidth: 1,
     borderColor: '#F1F5F9',
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 9,
+    gap: 6,
+  },
+  infoCompactText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#0F172A',
   },
   infoRowLabel: {
-    fontSize: 11.5,
+    fontSize: 12,
     color: '#64748B',
     fontWeight: '600',
   },
   infoRowValue: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#0F172A',
   },
   infoRowSub: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#475569',
-    marginTop: 1,
   },
   reqBox: {
     backgroundColor: '#FFFBEB',
-    borderRadius: 9,
-    padding: 9,
+    borderRadius: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginTop: 2,
     borderWidth: 1,
     borderColor: '#FEF3C7',
   },
@@ -1555,25 +1511,28 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '700',
     color: '#B45309',
-    marginBottom: 2,
   },
   reqText: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#92400E',
-    lineHeight: 17,
+    lineHeight: 16,
   },
   choiceRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
+    gap: 8,
+    marginBottom: 9,
   },
   choiceCard: {
     flex: 1,
+    flexDirection: 'row',
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 11,
+    borderRadius: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     backgroundColor: '#F8FAFC',
   },
   choiceCardConfirmActive: {
@@ -1585,17 +1544,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
   },
   choiceCardTitle: {
-    fontSize: 12.5,
+    fontSize: 11.5,
     fontWeight: '800',
     color: '#475569',
-    marginTop: 5,
-    textAlign: 'center',
-  },
-  choiceCardSub: {
-    fontSize: 11,
-    color: '#64748B',
-    textAlign: 'center',
-    marginTop: 2,
   },
 });
 

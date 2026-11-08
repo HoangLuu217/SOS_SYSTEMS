@@ -36,7 +36,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
 
   // Danh sách lịch sử các thông báo đã gửi
   const [broadcastHistory, setBroadcastHistory] = useState<BroadcastItem[]>([]);
-  const [broadcastFilterTab, setBroadcastFilterTab] = useState<'ALL' | 'INSTANT' | 'SYSTEM' | 'WEATHER' | 'SAFE_LOCATION' | 'HAZARD'>('ALL');
+  const [broadcastFilterTab, setBroadcastFilterTab] = useState<
+    'ALL' | 'INSTANT' | 'SYSTEM' | 'SAFETY_CHECK' | 'BLOOD_DONATION' | 'WEATHER' | 'SAFE_LOCATION' | 'HAZARD'
+  >('ALL');
   const [broadcastSearch, setBroadcastSearch] = useState('');
 
   // Phân trang & Sắp xếp bảng lịch sử
@@ -689,8 +691,11 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
         const t = String(item.type || '').toUpperCase();
         if (t !== 'SYSTEM' && t !== 'THONG_BAO_HE_THONG') return false;
       }
-      if (['WEATHER', 'SAFE_LOCATION', 'HAZARD'].includes(broadcastFilterTab) &&
-          String(item.type || '').toUpperCase() !== broadcastFilterTab) return false;
+      if (
+        ['SAFETY_CHECK', 'BLOOD_DONATION', 'WEATHER', 'SAFE_LOCATION', 'HAZARD'].includes(broadcastFilterTab) &&
+        String(item.type || '').toUpperCase() !== broadcastFilterTab
+      )
+        return false;
       if (broadcastSearch.trim()) {
         const q = broadcastSearch.trim().toLowerCase();
         const matchTitle = item.title?.toLowerCase().includes(q);
@@ -906,7 +911,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
             <span className="sos-scope-badge">{systemCount}</span>
           </button>
           {([
-            { key: 'SAFE_LOCATION', label: 'Điểm an toàn', icon: 'bi-shield-check' },
+            { key: 'SAFETY_CHECK', label: 'Kiểm tra an toàn', icon: 'bi-shield-check' },
+            { key: 'BLOOD_DONATION', label: 'Hiến máu', icon: 'bi-droplet-half' },
+            { key: 'SAFE_LOCATION', label: 'Điểm an toàn', icon: 'bi-house-heart' },
             { key: 'WEATHER', label: 'Thời tiết', icon: 'bi-cloud-sun' },
             { key: 'HAZARD', label: 'Điểm nguy hiểm', icon: 'bi-exclamation-triangle' },
           ] as const).map(({ key, label, icon }) => (
@@ -1199,6 +1206,8 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                     TIN_TUC_THOI: 'Khẩn cấp',
                     ALERT: 'Cảnh báo',
                     SYSTEM: 'Hệ thống',
+                    SAFETY_CHECK: 'Kiểm tra an toàn',
+                    BLOOD_DONATION: 'Hiến máu',
                     WEATHER: 'Thời tiết',
                     SAFE_LOCATION: 'Điểm an toàn',
                     HAZARD: 'Điểm nguy hiểm',
@@ -1247,10 +1256,14 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                           >
                             {isInstant ? (
                               <i className="bi bi-lightning-charge" style={{ fontSize: '15px', color: '#334155' }}></i>
+                            ) : item.type === 'SAFETY_CHECK' ? (
+                              <i className="bi bi-shield-check" style={{ fontSize: '15px', color: '#16a34a' }}></i>
+                            ) : item.type === 'BLOOD_DONATION' ? (
+                              <i className="bi bi-droplet-fill" style={{ fontSize: '15px', color: '#dc2626' }}></i>
                             ) : item.type === 'WEATHER' ? (
                               <i className="bi bi-cloud-sun" style={{ fontSize: '15px', color: '#334155' }}></i>
                             ) : item.type === 'SAFE_LOCATION' ? (
-                              <i className="bi bi-shield-check" style={{ fontSize: '15px', color: '#334155' }}></i>
+                              <i className="bi bi-house-heart" style={{ fontSize: '15px', color: '#334155' }}></i>
                             ) : item.type === 'HAZARD' ? (
                               <i className="bi bi-exclamation-triangle" style={{ fontSize: '15px', color: '#334155' }}></i>
                             ) : (
@@ -1707,13 +1720,13 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                 >
                   {/* CỘT TRÁI: PHÂN LOẠI & LỰA CHỌN DỮ LIỆU */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {/* Phân loại */}
+                    {/* Phân loại (Chỉ Tin khẩn cấp & Hệ thống) */}
                     <div>
                       <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
                         Phân loại <span style={{ color: '#dc2626' }}>*</span>
                       </label>
                       <select
-                        value={notificationCategory}
+                        value={notificationCategory === 'SYSTEM' ? 'SYSTEM' : 'INSTANT'}
                         onChange={(e) => handleSelectCategory(e.target.value as any)}
                         className="sos-form-select"
                         style={{
@@ -1730,12 +1743,12 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                           cursor: 'pointer',
                         }}
                       >
-                        <option value="INSTANT">Tin khẩn cấp (Soạn thủ công)</option>
-                        <option value="SYSTEM">Hệ thống (Soạn thủ công)</option>
-                        <option value="WEATHER">Thời tiết (Chọn từ CSDL)</option>
-                        <option value="SAFE_LOCATION">Điểm an toàn (Chọn từ CSDL)</option>
-                        <option value="HAZARD">Điểm nguy hiểm (Chọn từ CSDL)</option>
+                        <option value="INSTANT">Tin khẩn cấp</option>
+                        <option value="SYSTEM">Hệ thống</option>
                       </select>
+                      <div style={{ marginTop: '5px', fontSize: '11.5px', color: '#64748b', lineHeight: 1.4 }}>
+                        Các thông báo <strong>Thời tiết, Điểm an toàn, Điểm nguy hiểm</strong> tự động phát khi tạo/duyệt ở tab riêng và vẫn lưu tại danh sách thông báo.
+                      </div>
                     </div>
 
                     {/* NẾU LÀ DỮ LIỆU TỪ DB (WEATHER / SAFE_LOCATION / HAZARD) */}
@@ -1941,44 +1954,6 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                     ) : (
                       /* NẾU LÀ TẠO THỦ CÔNG (INSTANT / SYSTEM) */
                       <>
-                        {notificationCategory === 'INSTANT' && (
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            <div>
-                              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                Loại tình huống
-                              </label>
-                              <select
-                                value={alertForm.type}
-                                onChange={(e) => setAlertForm({ ...alertForm, type: e.target.value })}
-                                className="sos-form-select"
-                                style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', boxSizing: 'border-box' }}
-                              >
-                                <option value="FLOOD">Lũ lụt, ngập sâu</option>
-                                <option value="STORM">Bão lớn, lốc xoáy</option>
-                                <option value="LANDSLIDE">Sạt lở đất</option>
-                                <option value="EVACUATION">Sơ tán dân</option>
-                                <option value="GENERAL">Thiên tai chung</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
-                                Mức độ
-                              </label>
-                              <select
-                                value={alertForm.severity}
-                                onChange={(e) => setAlertForm({ ...alertForm, severity: e.target.value as any })}
-                                className="sos-form-select"
-                                style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', boxSizing: 'border-box' }}
-                              >
-                                <option value="CRITICAL">Nguy cấp (Còi hú &amp; Push)</option>
-                                <option value="HIGH">Cao</option>
-                                <option value="MEDIUM">Trung bình</option>
-                                <option value="LOW">Thông báo</option>
-                              </select>
-                            </div>
-                          </div>
-                        )}
-
                         {/* Địa bàn tiếp nhận thông báo */}
                         <div>
                           <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
@@ -2386,7 +2361,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                             Nội dung <span style={{ color: '#dc2626' }}>*</span>
                           </label>
                           <textarea
-                            rows={4}
+                            rows={5}
                             value={alertForm.content}
                             onChange={(e) => {
                               setAlertForm({ ...alertForm, content: e.target.value });
@@ -2406,7 +2381,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               boxSizing: 'border-box',
                               outline: 'none',
                               lineHeight: '1.45',
-                              minHeight: '80px',
+                              minHeight: '110px',
                             }}
                           />
                           {createErrors.content && (
@@ -2415,136 +2390,6 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                               <span>{createErrors.content}</span>
                             </div>
                           )}
-                        </div>
-
-                        {/* Ảnh & Tham chiếu */}
-                        <div
-                          style={{
-                            background: '#f8fafc',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '8px',
-                            padding: '10px 12px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '8px',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#334155' }}>
-                              <i className="bi bi-paperclip" style={{ fontSize: '14px', color: '#475569' }}></i>
-                              <span>Ảnh &amp; Tham chiếu (tùy chọn)</span>
-                            </div>
-                            {alertForm.imageUrl && (
-                              <span style={{ fontSize: '11px', color: '#2563eb', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                                <i className="bi bi-check2"></i> Đã có ảnh
-                              </span>
-                            )}
-                          </div>
-
-                          <div>
-                            <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
-                              Link ảnh
-                            </label>
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                              <input
-                                type="url"
-                                value={alertForm.imageUrl}
-                                onChange={(e) => setAlertForm({ ...alertForm, imageUrl: e.target.value })}
-                                placeholder="https://... link ảnh dự báo hoặc minh họa"
-                                style={{
-                                  flex: 1,
-                                  padding: '6px 10px',
-                                  borderRadius: '6px',
-                                  border: '1px solid #cbd5e1',
-                                  background: '#ffffff',
-                                  fontSize: '12px',
-                                  color: '#0f172a',
-                                  boxSizing: 'border-box',
-                                  outline: 'none',
-                                }}
-                              />
-                              {alertForm.imageUrl && (
-                                <img
-                                  src={alertForm.imageUrl}
-                                  alt="preview"
-                                  style={{ width: '28px', height: '28px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #cbd5e1', flexShrink: 0 }}
-                                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                                />
-                              )}
-                            </div>
-                          </div>
-
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            <div>
-                              <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
-                                Nguồn tin
-                              </label>
-                              <input
-                                type="text"
-                                value={alertForm.sourceName}
-                                onChange={(e) => setAlertForm({ ...alertForm, sourceName: e.target.value })}
-                                placeholder="VD: TT KTTV Quốc gia, Báo Tuổi Trẻ..."
-                                style={{
-                                  width: '100%',
-                                  padding: '6px 10px',
-                                  borderRadius: '6px',
-                                  border: '1px solid #cbd5e1',
-                                  background: '#ffffff',
-                                  fontSize: '12px',
-                                  color: '#0f172a',
-                                  boxSizing: 'border-box',
-                                  outline: 'none',
-                                }}
-                              />
-                            </div>
-
-                            <div>
-                              <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
-                                Link bài viết
-                              </label>
-                              <input
-                                type="url"
-                                value={alertForm.articleUrl}
-                                onChange={(e) => setAlertForm({ ...alertForm, articleUrl: e.target.value })}
-                                placeholder="https://nchmf.gov.vn/..."
-                                style={{
-                                  width: '100%',
-                                  padding: '6px 10px',
-                                  borderRadius: '6px',
-                                  border: '1px solid #cbd5e1',
-                                  background: '#ffffff',
-                                  fontSize: '12px',
-                                  color: '#0f172a',
-                                  boxSizing: 'border-box',
-                                  outline: 'none',
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Khối Expo Push Notification Preview */}
-                        <div
-                          style={{
-                            background: '#f8fafc',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '8px',
-                            padding: '8px 12px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '10px',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <i className="bi bi-phone" style={{ fontSize: '14px', color: '#475569' }}></i>
-                            <span style={{ fontSize: '11.5px', color: '#334155', fontWeight: 500 }}>
-                              Phát push notification tới điện thoại người dân.
-                            </span>
-                          </div>
-                          <span className="sos-badge" style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1', fontSize: '10.5px', whiteSpace: 'nowrap' }}>
-                            <i className="bi bi-broadcast me-1"></i>Sẵn sàng
-                          </span>
                         </div>
                       </>
                     )}
@@ -2725,9 +2570,17 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                   className="sos-badge"
                   style={{ fontSize: '12px', padding: '3px 8px', background: '#f8fafc', color: '#334155', border: '1px solid #cbd5e1' }}
                 >
-                  {String(detailBroadcast.type || '').toUpperCase() === 'INSTANT'
-                    ? 'Khẩn cấp'
-                    : 'Hệ thống'}
+                  {({
+                    INSTANT: 'Khẩn cấp',
+                    TIN_TUC_THOI: 'Khẩn cấp',
+                    ALERT: 'Cảnh báo',
+                    SYSTEM: 'Hệ thống',
+                    SAFETY_CHECK: 'Kiểm tra an toàn',
+                    BLOOD_DONATION: 'Hiến máu',
+                    WEATHER: 'Thời tiết',
+                    SAFE_LOCATION: 'Điểm an toàn',
+                    HAZARD: 'Điểm nguy hiểm',
+                  } as Record<string, string>)[String(detailBroadcast.type || '').toUpperCase()] || 'Hệ thống'}
                 </span>
 
                 <span

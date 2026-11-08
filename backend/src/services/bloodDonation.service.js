@@ -618,42 +618,45 @@ class BloodDonationService {
       },
     });
 
-    // Gửi thông báo đến tất cả người dùng đã đăng ký hiến máu trước đó
+    // Gửi thông báo đến tất cả người dùng đã đăng ký hiến máu trước đó (và lưu vào lịch sử thông báo)
     const now = new Date();
     const notifTitle = `🩸 [Đợt Hiến Máu] ${title.trim()}`;
     const notifContent = `📍 Địa điểm: ${locationName.trim()} (${address.trim()})\n🕒 Thời gian: ${startTime.trim()} - ${endTime.trim()} ngày ${formattedDate}. Nhấn vào để xác nhận đăng ký hiến máu tại điểm này!`;
 
-    if (recipientUsers.length > 0) {
-      const notificationDocs = recipientUsers.map((u) => ({
-        userId: u._id,
-        createdBy: senderUser._id,
-        areaId: targetAreaId,
+    const targetUsersForNotification = recipientUsers.length > 0 ? recipientUsers : [{ _id: senderUser._id }];
+    const notificationDocs = targetUsersForNotification.map((u) => ({
+      userId: u._id,
+      createdBy: senderUser._id,
+      areaId: targetAreaId,
+      areaName: targetAreaName,
+      type: 'BLOOD_DONATION',
+      title: notifTitle,
+      content: notifContent,
+      priority: 'CRITICAL',
+      actionUrl: 'blood_donation',
+      data: {
+        isBroadcast: true,
+        broadcastId: eventDoc._id.toString(),
+        isBloodDonation: true,
+        eventId: eventDoc._id.toString(),
+        title: eventDoc.title,
+        locationName: eventDoc.locationName,
+        address: eventDoc.address,
+        eventDate: eventDoc.eventDate,
+        startTime: eventDoc.startTime,
+        endTime: eventDoc.endTime,
+        neededBloodTypes: eventDoc.neededBloodTypes,
         areaName: targetAreaName,
-        type: 'BLOOD_DONATION',
-        title: notifTitle,
-        content: notifContent,
-        priority: 'CRITICAL',
         actionUrl: 'blood_donation',
-        data: {
-          isBloodDonation: true,
-          eventId: eventDoc._id.toString(),
-          title: eventDoc.title,
-          locationName: eventDoc.locationName,
-          address: eventDoc.address,
-          eventDate: eventDoc.eventDate,
-          startTime: eventDoc.startTime,
-          endTime: eventDoc.endTime,
-          neededBloodTypes: eventDoc.neededBloodTypes,
-          areaName: targetAreaName,
-          actionUrl: 'blood_donation',
-          screen: 'blood_donation',
-        },
-        isRead: false,
-        createdAt: now,
-      }));
+        screen: 'blood_donation',
+      },
+      isRead: false,
+      createdAt: now,
+    }));
 
-      const savedNotifications = await Notification.insertMany(notificationDocs);
+    const savedNotifications = await Notification.insertMany(notificationDocs);
 
+    if (recipientUsers.length > 0) {
       // Bắn sự kiện SSE realtime đến từng user đã đăng ký hiến máu
       savedNotifications.forEach((notification) => {
         eventBus.emit('notification_event', {

@@ -115,10 +115,37 @@ class SafeLocationService {
       createdBy: actorId,
     });
 
-    return safeLocation.populate([
+    const populated = await safeLocation.populate([
       { path: 'areaId', select: 'name code type' },
       { path: 'createdBy', select: 'fullName phone email' },
     ]);
+
+    // Tự động phát thông báo theo GPS trong khu vực mục tiêu khi tạo điểm trú ẩn an toàn
+    if (populated.status !== 'CLOSED' && creatorUser) {
+      try {
+        const notificationService = require('./notification.service');
+        const userRoles = creatorUser.roles || [];
+        const isLocalAuthOnly = userRoles.includes('LOCAL_AUTHORITY') && !userRoles.includes('ADMIN');
+        const notifyAreaId = isLocalAuthOnly
+          ? (creatorUser.authority?.areaId || area._id)
+          : (data.notifyAreaId || data.areaId || area._id);
+        const areaName = populated.areaId?.name || area?.name || 'khu vực quản lý';
+        await notificationService.broadcastNotification(creatorUser, {
+          title: `Điểm trú ẩn an toàn mới: ${populated.name}`,
+          content: `Điểm trú ẩn "${populated.name}" tại ${populated.address || areaName} đã sẵn sàng tiếp nhận người dân (Sức chứa: ${populated.capacity || 0} người).`,
+          type: 'SAFE_LOCATION',
+          priority: 'HIGH',
+          areaId: notifyAreaId ? notifyAreaId.toString() : undefined,
+          data: {
+            safeLocationId: populated._id.toString(),
+          },
+        });
+      } catch (notifyErr) {
+        console.error('[SafeLocationService] Auto broadcast notification failed on create:', notifyErr.message);
+      }
+    }
+
+    return populated;
   }
 
   /**

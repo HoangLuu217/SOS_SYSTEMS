@@ -3,7 +3,7 @@ const { Notification, User, AdministrativeArea, SafeLocation, HazardReport, Weat
 const ApiError = require('../utils/apiError');
 const { sendExpoPushNotification } = require('../utils/expoPush');
 const eventBus = require('./eventBus');
-const { checkPointInAuthorityJurisdiction } = require('../utils/geoUtils');
+const { checkPointInAuthorityJurisdiction, findAreaByCoordinates } = require('../utils/geoUtils');
 
 class NotificationService {
   /**
@@ -176,6 +176,20 @@ class NotificationService {
 
     const cleanToken = pushToken.trim();
 
+    // Xóa Push Token này khỏi các tài khoản khác (nếu thiết bị vừa đổi tài khoản đăng nhập)
+    await User.updateMany(
+      {
+        _id: { $ne: userId },
+        $or: [{ pushToken: cleanToken }, { 'citizen.pushToken': cleanToken }],
+      },
+      {
+        $set: {
+          pushToken: null,
+          'citizen.pushToken': null,
+        },
+      }
+    );
+
     await User.findByIdAndUpdate(userId, {
       $set: {
         pushToken: cleanToken,
@@ -197,14 +211,33 @@ class NotificationService {
       throw new ApiError(400, 'Tọa độ GPS không hợp lệ.');
     }
 
+    const now = new Date();
+    const point = { type: 'Point', coordinates: [longitude, latitude] };
+    const updateFields = {
+      currentLocation: point,
+      currentLocationUpdatedAt: now,
+      'citizen.currentLocation': point,
+      'citizen.currentLocationUpdatedAt': now,
+    };
+
+    try {
+      const matchedArea = await findAreaByCoordinates([longitude, latitude], AdministrativeArea);
+      if (matchedArea) {
+        updateFields.areaId = matchedArea._id;
+        updateFields['citizen.areaId'] = matchedArea._id;
+        updateFields['citizen.areaName'] = matchedArea.name;
+      } else {
+        updateFields.areaId = null;
+        updateFields['citizen.areaId'] = null;
+        updateFields['citizen.areaName'] = null;
+      }
+    } catch (_) {
+      // Giữ nguyên nếu lỗi truy vấn không gian
+    }
+
     const user = await User.findByIdAndUpdate(
       userId,
-      {
-        $set: {
-          currentLocation: { type: 'Point', coordinates: [longitude, latitude] },
-          currentLocationUpdatedAt: new Date(),
-        },
-      },
+      { $set: updateFields },
       { returnDocument: 'after', projection: '_id currentLocationUpdatedAt' }
     ).lean();
     if (!user) throw new ApiError(404, 'Không tìm thấy tài khoản.');
@@ -250,13 +283,27 @@ class NotificationService {
       throw new ApiError(403, 'Chỉ Quản trị viên (ADMIN) hoặc Cán bộ địa phương (LOCAL_AUTHORITY) mới có quyền phát thông báo.');
     }
 
-    // Xác định khu vực mục tiêu
-    let targetAreaId = data.areaId || null;
+    // Xác định khu vực mục tiêu (đồng bộ logic với SafetyCheckService)
+    let targetAreaId = null;
     let targetAreaDoc = null;
+    let scope = 'WARD';
 
     if (isLocalAuthority && !isAdmin) {
       // Cán bộ địa phương: Bắt buộc gửi tới địa bàn quản lý của mình
-      const authorityAreaId = senderUser.authority?.areaId;
+      let authorityAreaId = senderUser.authority?.areaId;
+      if (!authorityAreaId && senderUser.authority?.areaName) {
+        const cleanAuthName = String(senderUser.authority.areaName).split(',')[0].trim();
+        const foundArea = await AdministrativeArea.findOne({
+          name: { $regex: cleanAuthName, $options: 'i' },
+          status: 'ACTIVE',
+        }).select('_id');
+        if (foundArea) {
+          authorityAreaId = foundArea._id;
+        }
+      }
+      if (!authorityAreaId && data.areaId && mongoose.Types.ObjectId.isValid(data.areaId)) {
+        authorityAreaId = data.areaId;
+      }
       if (!authorityAreaId) {
         throw new ApiError(400, 'Tài khoản cán bộ địa phương chưa được phân công khu vực quản lý.');
       }
@@ -266,23 +313,28 @@ class NotificationService {
       if (!targetAreaDoc) {
         throw new ApiError(404, 'Không tìm thấy khu vực quản lý của cán bộ.');
       }
+      scope = targetAreaDoc.type === 'WARD' ? 'WARD' : 'PROVINCE';
     } else {
-      // Admin: Có thể chọn khu vực cụ thể hoặc ALL (toàn thành phố)
-      if (targetAreaId && targetAreaId !== 'ALL') {
-        if (!mongoose.Types.ObjectId.isValid(targetAreaId)) {
+      // Admin: Chọn từ Tỉnh/Thành phố (PROVINCE) -> Phường/Xã (WARD) hoặc Toàn hệ thống (ALL)
+      if (data.areaId && data.areaId !== 'ALL') {
+        if (!mongoose.Types.ObjectId.isValid(data.areaId)) {
           throw new ApiError(400, 'Mã khu vực không hợp lệ.');
         }
-        targetAreaDoc = await AdministrativeArea.findById(targetAreaId);
+        targetAreaDoc = await AdministrativeArea.findById(data.areaId);
         if (!targetAreaDoc) {
           throw new ApiError(404, 'Khu vực hành chính mục tiêu không tồn tại.');
         }
+        targetAreaId = targetAreaDoc._id;
+        scope = targetAreaDoc.type === 'WARD' ? 'WARD' : 'PROVINCE';
       } else {
-        // Gửi toàn thành phố (ALL)
-        targetAreaDoc = await AdministrativeArea.findOne({ type: 'PROVINCE' });
+        // Gửi toàn hệ thống (ALL)
+        targetAreaDoc = null;
+        targetAreaId = null;
+        scope = 'ALL';
       }
     }
 
-    const targetAreaName = targetAreaDoc ? targetAreaDoc.name : 'Toàn địa bàn quản lý';
+    const targetAreaName = targetAreaDoc ? targetAreaDoc.name : 'Toàn hệ thống';
     const effectivePriority = priority || (normalizedType === 'INSTANT' ? 'CRITICAL' : 'NORMAL');
     let pointDetails = {};
 
@@ -323,8 +375,6 @@ class NotificationService {
             `Bạn chỉ có quyền gửi thông báo phát sóng cho điểm an toàn có GPS thuộc khu vực quản lý của mình (${jurisdictionCheck.authAreaName || 'Địa bàn phân công'}). Điểm an toàn này nằm ngoài khu vực quản lý!`
           );
         }
-      } else if (targetAreaId !== 'ALL' && targetAreaDoc && point.areaId?.toString() !== targetAreaDoc._id.toString()) {
-        throw new ApiError(403, 'Điểm an toàn nằm ngoài địa bàn được chọn.');
       }
 
       pointDetails = {
@@ -377,8 +427,6 @@ class NotificationService {
             `Bạn chỉ có quyền gửi thông báo phát sóng cho điểm nguy hiểm có GPS thuộc khu vực quản lý của mình (${jurisdictionCheck.authAreaName || 'Địa bàn phân công'}). Điểm nguy hiểm này nằm ngoài khu vực quản lý!`
           );
         }
-      } else if (targetAreaId !== 'ALL' && targetAreaDoc && point.areaId?.toString() !== targetAreaDoc._id.toString()) {
-        throw new ApiError(403, 'Điểm nguy hiểm nằm ngoài địa bàn được chọn.');
       }
 
       pointDetails = {
@@ -419,96 +467,120 @@ class NotificationService {
       }
     }
 
-    // Tìm kiếm các tài khoản người dùng mục tiêu trong khu vực
+    // Xác định danh sách người nhận trong phạm vi khu vực (đồng bộ chuẩn GPS như SafetyCheckService)
     let userFilter = { status: { $ne: 'SUSPENDED' } };
 
-    const gpsScopedLocalBroadcast = isLocalAuthority && !isAdmin &&
-      ['SAFE_LOCATION', 'HAZARD'].includes(normalizedType);
+    if (targetAreaDoc && targetAreaId) {
+      if (scope === 'WARD') {
+        const geoConditions = [];
+        if (
+          targetAreaDoc.boundary?.type &&
+          Array.isArray(targetAreaDoc.boundary.coordinates) &&
+          targetAreaDoc.boundary.coordinates.length > 0
+        ) {
+          geoConditions.push(
+            {
+              currentLocation: {
+                $geoWithin: { $geometry: targetAreaDoc.boundary },
+              },
+            },
+            {
+              'citizen.currentLocation': {
+                $geoWithin: { $geometry: targetAreaDoc.boundary },
+              },
+            }
+          );
+        }
+        geoConditions.push(
+          { 'citizen.areaId': targetAreaDoc._id },
+          { 'authority.areaId': targetAreaDoc._id },
+          { 'rescuer.areaId': targetAreaDoc._id },
+          { areaId: targetAreaDoc._id },
+          { address: { $regex: targetAreaDoc.name, $options: 'i' } }
+        );
 
-    if (gpsScopedLocalBroadcast) {
-      const geoConditions = [];
-      if (targetAreaDoc?.boundary?.type && Array.isArray(targetAreaDoc.boundary.coordinates) && targetAreaDoc.boundary.coordinates.length > 0) {
-        geoConditions.push({
-          currentLocation: {
-            $geoWithin: { $geometry: targetAreaDoc.boundary },
-          },
-        });
-      }
-      geoConditions.push(
-        { 'authority.areaId': targetAreaDoc._id },
-        { 'citizen.areaId': targetAreaDoc._id },
-        { 'rescuer.areaId': targetAreaDoc._id },
-        { areaId: targetAreaDoc._id },
-        { address: { $regex: targetAreaDoc.name, $options: 'i' } }
-      );
+        userFilter = {
+          status: { $ne: 'SUSPENDED' },
+          $or: geoConditions,
+        };
+      } else {
+        // Cấp Tỉnh/Thành phố (PROVINCE): Gom các Phường/Xã con trực thuộc và kiểm tra cả ranh giới GPS
+        const childAreas = await AdministrativeArea.find({ status: 'ACTIVE' })
+          .select('_id parentId boundary')
+          .lean();
+        const selectedIds = new Set([targetAreaDoc._id.toString()]);
+        let foundChild = true;
+        while (foundChild) {
+          foundChild = false;
+          childAreas.forEach((area) => {
+            const parentId = area.parentId?.toString();
+            if (parentId && selectedIds.has(parentId) && !selectedIds.has(area._id.toString())) {
+              selectedIds.add(area._id.toString());
+              foundChild = true;
+            }
+          });
+        }
 
-      userFilter = {
-        status: { $ne: 'SUSPENDED' },
-        $or: geoConditions,
-      };
-    } else if (targetAreaDoc?.type === 'PROVINCE' && targetAreaId !== 'ALL') {
-      // Province is the first recipient selector; include its child districts/wards.
-      const childAreas = await AdministrativeArea.find({ status: 'ACTIVE' })
-        .select('_id parentId')
-        .lean();
-      const selectedIds = new Set([targetAreaDoc._id.toString()]);
-      let foundChild = true;
-      while (foundChild) {
-        foundChild = false;
-        childAreas.forEach((area) => {
-          const parentId = area.parentId?.toString();
-          if (parentId && selectedIds.has(parentId) && !selectedIds.has(area._id.toString())) {
-            selectedIds.add(area._id.toString());
-            foundChild = true;
-          }
-        });
-      }
-      const areaIds = [...selectedIds];
-      userFilter = {
-        status: { $ne: 'SUSPENDED' },
-        $or: [
+        const areaIds = [...selectedIds];
+        const provinceConditions = [
           { 'authority.areaId': { $in: areaIds } },
           { 'citizen.areaId': { $in: areaIds } },
           { 'rescuer.areaId': { $in: areaIds } },
           { areaId: { $in: areaIds } },
           { address: { $regex: targetAreaDoc.name, $options: 'i' } },
-        ],
-      };
-    } else if (targetAreaDoc && targetAreaDoc.type !== 'PROVINCE' && targetAreaId !== 'ALL') {
-      userFilter = {
-        status: { $ne: 'SUSPENDED' },
-        $or: [
-          { 'authority.areaId': targetAreaDoc._id },
-          { 'citizen.areaId': targetAreaDoc._id },
-          { 'rescuer.areaId': targetAreaDoc._id },
-          { areaId: targetAreaDoc._id },
-          // Tìm theo tên địa phương trong trường address của người dân
-          { address: { $regex: targetAreaDoc.name, $options: 'i' } },
-          // Người dân chưa gán khu vực cũng nhận để tránh sót cảnh báo khẩn cấp
-          { roles: 'CITIZEN', 'citizen.areaId': null, areaId: null },
-        ],
-      };
+        ];
+
+        if (
+          targetAreaDoc.boundary?.type &&
+          Array.isArray(targetAreaDoc.boundary.coordinates) &&
+          targetAreaDoc.boundary.coordinates.length > 0
+        ) {
+          provinceConditions.push(
+            {
+              currentLocation: {
+                $geoWithin: { $geometry: targetAreaDoc.boundary },
+              },
+            },
+            {
+              'citizen.currentLocation': {
+                $geoWithin: { $geometry: targetAreaDoc.boundary },
+              },
+            }
+          );
+        }
+
+        childAreas.forEach((area) => {
+          if (
+            selectedIds.has(area._id.toString()) &&
+            area.boundary?.type &&
+            Array.isArray(area.boundary.coordinates) &&
+            area.boundary.coordinates.length > 0
+          ) {
+            provinceConditions.push(
+              {
+                currentLocation: {
+                  $geoWithin: { $geometry: area.boundary },
+                },
+              },
+              {
+                'citizen.currentLocation': {
+                  $geoWithin: { $geometry: area.boundary },
+                },
+              }
+            );
+          }
+        });
+
+        userFilter = {
+          status: { $ne: 'SUSPENDED' },
+          $or: provinceConditions,
+        };
+      }
     }
 
-    const recipientUsers = await User.find(userFilter).select('_id fullName roles pushToken citizen.pushToken').lean();
-
-    // Luôn đảm bảo tài khoản người gửi nhận được bản sao lưu trong danh sách thông báo
-    const senderIncluded = recipientUsers.some((u) => u._id.toString() === senderUser._id.toString());
-    if (!senderIncluded) {
-      recipientUsers.push({
-        _id: senderUser._id,
-        fullName: senderUser.fullName,
-        roles: senderUser.roles,
-        pushToken: senderUser.pushToken,
-      });
-    }
-
-    if (recipientUsers.length === 0) {
-      throw new ApiError(
-        400,
-        'Không tìm thấy tài khoản người dùng nào thuộc phạm vi khu vực này để phát thông báo.'
-      );
-    }
+    const recipientUsers = await User.find(userFilter)
+      .select('_id fullName phone roles pushToken citizen.pushToken')
+      .lean();
 
     const now = new Date();
     const broadcastId = new mongoose.Types.ObjectId().toString();
@@ -516,10 +588,11 @@ class NotificationService {
     const resolvedArticleUrl = articleUrl || extraData.articleUrl || null;
     const resolvedSourceName = sourceName || extraData.sourceName || null;
 
-    const notificationDocs = recipientUsers.map((user) => ({
+    const targetUsersForNotification = recipientUsers.length > 0 ? recipientUsers : [{ _id: senderUser._id }];
+    const notificationDocs = targetUsersForNotification.map((user) => ({
       userId: user._id,
       createdBy: senderUser._id,
-      areaId: targetAreaDoc ? targetAreaDoc._id : null,
+      areaId: targetAreaId,
       areaName: targetAreaName,
       type: normalizedType,
       title: title.trim(),
@@ -535,49 +608,54 @@ class NotificationService {
         sourceName: resolvedSourceName,
         senderName: senderUser.fullName,
         senderRole: senderUser.roles?.[0] || 'AUTHORITY',
+        scope,
         areaName: targetAreaName,
         isBroadcast: true,
         broadcastId,
         ...pointDetails,
-        deliveryScope: gpsScopedLocalBroadcast ? 'GPS_IN_AREA' : 'ADMINISTRATIVE_AREA',
+        deliveryScope: scope === 'ALL' ? 'ALL' : 'GPS_IN_AREA',
       },
       isRead: false,
       createdAt: now,
     }));
 
-    // Ghi toàn bộ thông báo vào MongoDB
-    const savedNotifications = await Notification.insertMany(notificationDocs);
+    // Ghi toàn bộ thông báo vào MongoDB và phát SSE realtime đến từng người nhận đích
+    let savedNotifications = [];
+    if (notificationDocs.length > 0) {
+      savedNotifications = await Notification.insertMany(notificationDocs);
 
-    // Phát từng thông báo đã lưu tới đúng tài khoản đang kết nối SSE.
-    try {
-      savedNotifications.forEach((notification) =>
-        eventBus.emit('notification_event', {
-          action: 'USER',
-          userId: notification.userId.toString(),
-          data: {
-            _id: notification._id.toString(),
-            title: notification.title,
-            content: notification.content,
-            type: notification.type,
-            priority: notification.priority,
-            imageUrl: notification.imageUrl || notification.data?.imageUrl || null,
-            articleUrl: notification.articleUrl || notification.data?.articleUrl || null,
-            sourceName: notification.sourceName || notification.data?.sourceName || null,
-            areaId: notification.areaId?.toString() || null,
-            areaName: notification.areaName,
-            createdBy: {
-              _id: senderUser._id,
-              fullName: senderUser.fullName,
-              roles: senderUser.roles,
-            },
-            data: notification.data,
-            isRead: false,
-            createdAt: notification.createdAt.toISOString(),
-          },
-        })
-      );
-    } catch (sseErr) {
-      console.warn('⚠️ Lỗi emit SSE notification_event:', sseErr.message);
+      if (recipientUsers.length > 0) {
+        try {
+          savedNotifications.forEach((notification) =>
+            eventBus.emit('notification_event', {
+              action: 'USER',
+              userId: notification.userId.toString(),
+              data: {
+                _id: notification._id.toString(),
+                title: notification.title,
+                content: notification.content,
+                type: notification.type,
+              priority: notification.priority,
+              imageUrl: notification.imageUrl || notification.data?.imageUrl || null,
+              articleUrl: notification.articleUrl || notification.data?.articleUrl || null,
+              sourceName: notification.sourceName || notification.data?.sourceName || null,
+              areaId: notification.areaId?.toString() || null,
+              areaName: notification.areaName,
+              createdBy: {
+                _id: senderUser._id,
+                fullName: senderUser.fullName,
+                roles: senderUser.roles,
+              },
+              data: notification.data,
+              isRead: false,
+              createdAt: notification.createdAt.toISOString(),
+              },
+            })
+          );
+        } catch (sseErr) {
+          console.warn('⚠️ Lỗi emit SSE notification_event:', sseErr.message);
+        }
+      }
     }
 
     // Gửi Push Notification ra ngoài ứng dụng điện thoại (cho các thiết bị đã đăng ký Expo Push Token)
@@ -592,7 +670,8 @@ class NotificationService {
       tokens.forEach((token) => {
         pushDataByToken[token.trim()] = {
           type: normalizedType,
-          areaId: targetAreaDoc ? targetAreaDoc._id.toString() : '',
+          scope,
+          areaId: targetAreaId ? targetAreaId.toString() : '',
           areaName: targetAreaName,
           senderName: senderUser.fullName,
           priority: effectivePriority,
@@ -627,7 +706,8 @@ class NotificationService {
         priority: effectivePriority === 'CRITICAL' ? 'CRITICAL' : 'HIGH',
         data: {
           type: normalizedType,
-          areaId: targetAreaDoc ? targetAreaDoc._id.toString() : '',
+          scope,
+          areaId: targetAreaId ? targetAreaId.toString() : '',
           areaName: targetAreaName,
           senderName: senderUser.fullName,
           content: content.trim(),
@@ -648,6 +728,9 @@ class NotificationService {
           await WeatherNotification.findByIdAndUpdate(extraData.weatherArticleId, {
             $set: {
               broadcastId,
+              areaId: targetAreaId,
+              area: targetAreaName,
+              regions: targetAreaName ? [targetAreaName] : [],
               status: 'approved',
             },
           });
@@ -660,14 +743,14 @@ class NotificationService {
             relevance_score: typeof extraData.score === 'number' ? extraData.score : (effectivePriority === 'CRITICAL' ? 95 : effectivePriority === 'HIGH' ? 80 : 50),
             score: typeof extraData.score === 'number' ? extraData.score : (effectivePriority === 'CRITICAL' ? 95 : effectivePriority === 'HIGH' ? 80 : 50),
             regions: targetAreaName ? [targetAreaName] : (extraData.regions || []),
-            area: targetAreaName || extraData.area || 'Toàn thành phố',
+            area: targetAreaName || extraData.area || 'Toàn hệ thống',
             image_url: resolvedImageUrl,
             imageUrl: resolvedImageUrl,
             source_url: resolvedArticleUrl,
             articleUrl: resolvedArticleUrl,
             source_name: resolvedSourceName,
             articleTitle: extraData.articleTitle || resolvedSourceName || null,
-            areaId: targetAreaDoc ? targetAreaDoc._id : null,
+            areaId: targetAreaId,
             createdBy: senderUser._id,
             broadcastId,
             status: 'approved',
@@ -705,18 +788,121 @@ class NotificationService {
       throw new ApiError(403, 'Bạn không có quyền xem lịch sử phát thông báo.');
     }
 
-    const filter = {
-      'data.isBroadcast': true,
-    };
+    // Đồng bộ các đợt Kiểm tra an toàn & Hiến máu đã tạo trước đó (nếu chưa có bản ghi trong Notification)
+    try {
+      const SafetyCheck = require('../models/SafetyCheck');
+      const BloodDonationEvent = require('../models/BloodDonationEvent');
+
+      const [existingSafetyChecks, existingBloodEvents, existingNotifs] = await Promise.all([
+        SafetyCheck.find().sort({ createdAt: -1 }).limit(50).lean(),
+        BloodDonationEvent.find().sort({ createdAt: -1 }).limit(50).lean(),
+        Notification.find({ type: { $in: ['SAFETY_CHECK', 'BLOOD_DONATION'] } })
+          .select('type title data.safetyCheckId data.eventId createdAt')
+          .lean(),
+      ]);
+
+      const syncedSafetyIds = new Set(
+        existingNotifs
+          .filter((n) => n.type === 'SAFETY_CHECK')
+          .map((n) => n.data?.safetyCheckId?.toString() || n.title)
+      );
+      const syncedBloodIds = new Set(
+        existingNotifs
+          .filter((n) => n.type === 'BLOOD_DONATION')
+          .map((n) => n.data?.eventId?.toString() || n.title)
+      );
+
+      const missingDocs = [];
+      for (const sc of existingSafetyChecks) {
+        const scId = sc._id.toString();
+        const scTitle = `🛡️ [Xác nhận an toàn] ${sc.title}`;
+        if (!syncedSafetyIds.has(scId) && !syncedSafetyIds.has(scTitle)) {
+          missingDocs.push({
+            userId: sc.createdBy || user._id,
+            createdBy: sc.createdBy || user._id,
+            areaId: sc.areaId || null,
+            areaName: sc.areaName || 'Toàn hệ thống',
+            type: 'SAFETY_CHECK',
+            title: scTitle,
+            content: sc.description || sc.title,
+            priority: 'CRITICAL',
+            actionUrl: 'safety_check',
+            data: {
+              isBroadcast: true,
+              broadcastId: scId,
+              isSafetyCheck: true,
+              safetyCheckId: scId,
+              areaName: sc.areaName || 'Toàn hệ thống',
+            },
+            isRead: true,
+            createdAt: sc.createdAt || new Date(),
+          });
+        }
+      }
+
+      for (const ev of existingBloodEvents) {
+        const evId = ev._id.toString();
+        const evTitle = `🩸 [Đợt Hiến Máu] ${ev.title}`;
+        if (!syncedBloodIds.has(evId) && !syncedBloodIds.has(evTitle)) {
+          const formattedDate = ev.eventDate
+            ? new Date(ev.eventDate).toLocaleDateString('vi-VN', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+              })
+            : '';
+          missingDocs.push({
+            userId: ev.createdBy || user._id,
+            createdBy: ev.createdBy || user._id,
+            areaId: ev.areaId || null,
+            areaName: ev.areaName || ev.provinceName || 'Toàn hệ thống',
+            type: 'BLOOD_DONATION',
+            title: evTitle,
+            content: `📍 Địa điểm: ${ev.locationName || ''} (${ev.address || ''})\n🕒 Thời gian: ${ev.startTime || ''} - ${ev.endTime || ''} ngày ${formattedDate}.`,
+            priority: 'CRITICAL',
+            actionUrl: 'blood_donation',
+            data: {
+              isBroadcast: true,
+              broadcastId: evId,
+              isBloodDonation: true,
+              eventId: evId,
+              areaName: ev.areaName || ev.provinceName || 'Toàn hệ thống',
+            },
+            isRead: true,
+            createdAt: ev.createdAt || new Date(),
+          });
+        }
+      }
+
+      if (missingDocs.length > 0) {
+        await Notification.insertMany(missingDocs);
+      }
+    } catch (syncErr) {
+      console.warn('[NotificationService] Sync safetyCheck/bloodDonation to notifications skipped:', syncErr.message);
+    }
+
+    const andConditions = [
+      {
+        $or: [
+          { 'data.isBroadcast': true },
+          {
+            type: {
+              $in: ['SAFETY_CHECK', 'BLOOD_DONATION', 'WEATHER', 'SAFE_LOCATION', 'HAZARD'],
+            },
+          },
+        ],
+      },
+    ];
 
     if (isLocalAuthority && !isAdmin) {
       // Cán bộ địa phương chỉ xem bản tin trong địa bàn mình hoặc do mình tạo
       const authorityAreaId = user.authority?.areaId;
-      filter.$or = [
-        { createdBy: user._id },
-        { areaId: authorityAreaId },
-      ];
+      andConditions.push({
+        $or: [{ createdBy: user._id }, { areaId: authorityAreaId }],
+      });
     }
+
+    const filter = andConditions.length === 1 ? andConditions[0] : { $and: andConditions };
 
     if (query.type) {
       const typeStr = String(query.type).toUpperCase().trim();
