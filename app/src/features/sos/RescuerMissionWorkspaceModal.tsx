@@ -2360,14 +2360,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             activeOpacity={0.7}
           >
             <View style={styles.deckHandleBar} />
-            <View style={styles.sheetToggleHeader}>
-              <Text style={styles.sheetToggleHeaderText}>
-                {isSheetCollapsed ? 'Kéo lên để xem đầy đủ chi tiết' : 'Kéo gọn xuống để xem bản đồ'}
-              </Text>
+            <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 2, paddingBottom: 2 }}>
               <Feather
                 name={isSheetCollapsed ? 'chevron-up' : 'chevron-down'}
-                size={16}
-                color="#64748B"
+                size={18}
+                color="#94A3B8"
               />
             </View>
           </TouchableOpacity>
