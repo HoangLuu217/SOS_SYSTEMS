@@ -76,6 +76,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
   const [workspaceVisible, setWorkspaceVisible] = useState(false);
   const [activeWorkspaceMission, setActiveWorkspaceMission] = useState<SosAssignmentData | null>(null);
   const activeWorkspaceMissionRef = useRef<SosAssignmentData | null>(null);
+  const myTeamIdRef = useRef<string | null>(null);
   useEffect(() => {
     activeWorkspaceMissionRef.current = activeWorkspaceMission;
   }, [activeWorkspaceMission]);
@@ -113,10 +114,6 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
           // Quy tắc tác chiến: 1 nhóm chỉ được phép làm 1 nhiệm vụ tại một thời điểm
           const activeCount = Math.min(activeList.length, 1);
           if (prevCountRef.current !== activeCount) {
-            // Khi có nhiệm vụ mới xuất hiện, phát âm thanh chuông điều động tác chiến
-            if (activeCount > prevCountRef.current && hasLoadedRef.current) {
-              playDispatchAlertSound().catch(() => {});
-            }
             prevCountRef.current = activeCount;
             onMissionsCountChange?.(activeCount);
           }
@@ -206,6 +203,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
         });
 
         if (myTeam && isMounted) {
+          myTeamIdRef.current = (myTeam._id || myTeam.id)?.toString() || null;
           let vehiclePlate = 'Chưa phân bổ';
           let vehicleType = 'AMBULANCE';
 
@@ -256,10 +254,42 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
       if (user?._id) s.emit('register_user', user._id);
     });
 
-    // Lắng nghe khi có lệnh điều động mới từ Web
-    const handleNewMission = () => {
-      console.log('🚨 [RescuerMissionScreen] Có lệnh điều động mới từ Ban chỉ huy!');
-      playDispatchAlertSound().catch(() => {});
+    const isAssignedToCurrentTeam = (payload: any) => {
+      if (!payload) return false;
+      const myUserId = user?._id?.toString();
+      const myTeamId = myTeamIdRef.current?.toString();
+
+      const targetRescuerId = (payload.rescuerId?._id || payload.rescuerId)?.toString();
+      const targetTeamId = (
+        payload.rescueTeamId?._id ||
+        payload.rescueTeamId ||
+        payload.teamId?._id ||
+        payload.teamId
+      )?.toString();
+      const targetUserIds: string[] = Array.isArray(payload.targetUserIds)
+        ? payload.targetUserIds.map((u: any) => (u?._id || u)?.toString())
+        : [];
+
+      // 1. Khớp User ID người nhận lệnh
+      if (myUserId && (targetRescuerId === myUserId || targetUserIds.includes(myUserId))) {
+        return true;
+      }
+
+      // 2. Khớp Đội cứu hộ được phân công
+      if (myTeamId && targetTeamId && myTeamId === targetTeamId) {
+        return true;
+      }
+
+      return false;
+    };
+
+    // Lắng nghe khi có lệnh điều động mới từ Web - CHỈ PHÁT CHUÔNG CHO ĐÚNG ĐỘI ĐƯỢC PHÂN CÔNG
+    const handleNewMission = (payload?: any) => {
+      const isForMe = isAssignedToCurrentTeam(payload);
+      console.log('🚨 [RescuerMissionScreen] Lệnh điều động mới, isForMe =', isForMe);
+      if (isForMe) {
+        playDispatchAlertSound().catch(() => {});
+      }
       fetchMissions({ isSilent: true });
       DeviceEventEmitter.emit('sos:sync');
     };
@@ -929,9 +959,9 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
               (item.vehicleId?.type === 'AMBULANCE' && !!sos?.shoreHandoff);
 
             const emergencyInfo = isShoreHandoffMission
-              ? { label: 'Tiếp Vận & Đón Nạn Nhân Tại Bờ', icon: 'ambulance', color: '#0284C7' }
+              ? { label: 'Tiếp vận đón bờ', icon: 'ambulance', color: '#0284C7' }
               : isReliefMission
-              ? { label: 'Xuất cấp & Tiếp tế cứu trợ', icon: 'package-variant-closed', color: '#059669' }
+              ? { label: 'Tiếp tế cứu trợ', icon: 'package-variant-closed', color: '#059669' }
               : getEmergencyLabel(sos?.emergencyType);
 
             const contactPhone = sos?.contactPhone || sos?.secondaryPhone || item.assignedBy?.phone;
@@ -1025,13 +1055,14 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                         isReliefMission && { color: '#059669', fontWeight: '800' },
                         isShoreHandoffMission && { color: '#0284C7', fontWeight: '800' },
                       ]}
+                      numberOfLines={1}
                     >
                       {isShoreHandoffMission
-                        ? `${sos?.shoreHandoff?.peopleCount || sos?.people || 1} nạn nhân đón bờ`
+                        ? `${sos?.shoreHandoff?.peopleCount || sos?.people || 1} người`
                         : isReliefMission
                         ? totalSuppliesCount > 0
-                          ? `${totalSuppliesCount} kiện/thùng hàng`
-                          : 'Tiếp tế nhu yếu phẩm'
+                          ? `${totalSuppliesCount} kiện`
+                          : 'Tiếp tế'
                         : `${sos?.people || 1} người`}
                     </Text>
                   </View>
@@ -1080,7 +1111,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                     <View style={styles.detailContent}>
                       <Text style={styles.detailLabel}>
                         {isShoreHandoffMission
-                          ? 'Nạn nhân cần vận chuyển về bờ:'
+                          ? 'Nạn nhân cần đưa về nơi an toàn:'
                           : isReliefMission
                           ? 'Người nhận / Cán bộ đầu mối:'
                           : 'Nạn nhân / Người liên hệ:'}
@@ -1424,9 +1455,9 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                             <Feather name="check-circle" size={15} color="#FFFFFF" />
                             <Text style={styles.primaryActionText}>
                               {isShoreHandoffMission
-                                ? 'Nhận Lệnh Đón Bờ'
+                                ? 'Nhận Lệnh'
                                 : isReliefMission
-                                ? 'Nhận Lệnh Tiếp Tế'
+                                ? 'Nhận Lệnh'
                                 : 'Tiếp Nhận Nhiệm Vụ'}
                             </Text>
                           </LinearGradient>
@@ -2179,6 +2210,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
     marginBottom: 14,
   },
   categoryBadge: {
@@ -2188,6 +2220,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 8,
+    flexShrink: 1,
   },
   categoryText: {
     fontSize: 12,

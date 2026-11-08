@@ -643,6 +643,14 @@ const assignShoreHandoff = async (id, data, _user) => {
       });
     }
 
+    // Xác định danh sách cán bộ chiến sĩ đội xe tiếp vận nhận lệnh
+    const targetUserIds = new Set();
+    if (rescuerId) targetUserIds.add(rescuerId.toString());
+    (vehicle?.teamId?.members || []).forEach((m) => {
+      const uid = m.rescuerId?._id || m.rescuerId;
+      if (uid) targetUserIds.add(uid.toString());
+    });
+
     // Phát Realtime Socket.IO cho app của Đội xe cứu thương / Cứu hộ viên tiếp vận
     try {
       const { getIO } = require('../socket');
@@ -659,10 +667,15 @@ const assignShoreHandoff = async (id, data, _user) => {
           .populate('vehicleId', 'plateNumber type capacity status')
           .populate('rescueTeamId', 'name type leaderId phone');
 
-        io.emit('assignment:created', populatedAssignment || handoffAssignment);
-        io.emit('assignment:new', populatedAssignment || handoffAssignment);
-        if (rescuerId) {
-          io.to(`user_${rescuerId}`).emit('assignment:assigned', populatedAssignment || handoffAssignment);
+        const assignPayload = populatedAssignment ? populatedAssignment.toObject() : (handoffAssignment.toObject ? handoffAssignment.toObject() : { ...handoffAssignment });
+        assignPayload.targetUserIds = Array.from(targetUserIds);
+
+        io.emit('assignment:created', assignPayload);
+        io.emit('assignment:new', assignPayload);
+        io.emit('sos:sync');
+        for (const uid of targetUserIds) {
+          io.to(`user_${uid}`).emit('assignment:assigned', assignPayload);
+          io.to(`user_${uid}`).emit('sos:sync');
         }
       }
     } catch (socketErr) {
@@ -672,12 +685,6 @@ const assignShoreHandoff = async (id, data, _user) => {
     // Gửi thông báo Notification trong hệ thống
     try {
       const { Notification } = require('../models');
-      const targetUserIds = new Set();
-      if (rescuerId) targetUserIds.add(rescuerId.toString());
-      (vehicle?.teamId?.members || []).forEach((m) => {
-        const uid = m.rescuerId?._id || m.rescuerId;
-        if (uid) targetUserIds.add(uid.toString());
-      });
 
       for (const uid of targetUserIds) {
         await Notification.create({

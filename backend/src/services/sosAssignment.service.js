@@ -235,28 +235,33 @@ class SosAssignmentService {
       }
     }
 
+    // Tìm danh sách tất cả cán bộ, chiến sĩ và đội trưởng trong đội để gửi thông báo
+    const targetUserIds = new Set();
+    if (rescuer._id) targetUserIds.add(rescuer._id.toString());
+    try {
+      const teamDoc = await RescueTeam.findById(assignment.rescueTeamId).select('leaderId members');
+      if (teamDoc?.leaderId) targetUserIds.add(teamDoc.leaderId.toString());
+      (teamDoc?.members || []).forEach((m) => {
+        if (m.rescuerId) targetUserIds.add(m.rescuerId.toString());
+      });
+    } catch (_) {}
+
+    const assignPayload = assignment.toObject ? assignment.toObject() : { ...assignment };
+    assignPayload.targetUserIds = Array.from(targetUserIds);
+
     // Phát sự kiện Realtime Socket.IO & SSE thông báo cho Cứu Hộ Viên (Nổ nhiệm vụ GrabDriver)
     try {
       const { getIO } = require('../socket');
       const io = getIO();
       if (io) {
-        io.emit('assignment:created', assignment);
-        io.emit('assignment:new', assignment);
+        io.emit('assignment:created', assignPayload);
+        io.emit('assignment:new', assignPayload);
         io.emit('sos:sync');
-        io.to(`user_${rescuer._id}`).emit('assignment:assigned', assignment);
-        io.to(`user_${rescuer._id}`).emit('sos:sync');
+        for (const uid of targetUserIds) {
+          io.to(`user_${uid}`).emit('assignment:assigned', assignPayload);
+          io.to(`user_${uid}`).emit('sos:sync');
+        }
       }
-
-      // Tìm danh sách tất cả cán bộ, chiến sĩ và đội trưởng trong đội để gửi thông báo
-      const targetUserIds = new Set();
-      if (rescuer._id) targetUserIds.add(rescuer._id.toString());
-      try {
-        const teamDoc = await RescueTeam.findById(assignment.rescueTeamId).select('leaderId members');
-        if (teamDoc?.leaderId) targetUserIds.add(teamDoc.leaderId.toString());
-        (teamDoc?.members || []).forEach((m) => {
-          if (m.rescuerId) targetUserIds.add(m.rescuerId.toString());
-        });
-      } catch (_) {}
 
       const sosCodeStr = sos.sosCode || (sos._id ? `#SOS-${sos._id.toString().slice(-4)}` : 'mới');
       const victimsCount = sos.people || 1;
