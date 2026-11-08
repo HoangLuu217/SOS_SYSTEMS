@@ -1209,26 +1209,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     }
   };
 
-  const handleCompleteShoreHandoff = async () => {
-    try {
-      setActionLoading(true);
-      const targetSosId = sos?._id || assignment?.sosRequestId || assignment?.sosId;
-      if (targetSosId) {
-        try {
-          await backendApi.completeShoreHandoff(targetSosId);
-        } catch (err) {
-          console.warn('Backend completeShoreHandoff error:', err);
-        }
-      }
-      setShoreHandoffData((prev: any) => (prev ? { ...prev, status: 'COMPLETED' } : null));
-      Vibration.vibrate(200);
-      Alert.alert('✓ Bàn giao hoàn tất', 'Đã hoàn thành bàn giao nạn nhân lên xe đường bộ an toàn!');
-    } catch (err) {
-      console.warn('Lỗi hoàn tất bàn giao bờ:', err);
-    } finally {
-      setActionLoading(false);
-    }
-  };
+
 
   // Dữ liệu hiển thị chi tiết (Động theo dữ liệu API thực tế)
   const isReliefMission =
