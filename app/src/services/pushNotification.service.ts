@@ -25,7 +25,6 @@ Notifications.setNotificationHandler({
       // Nếu người dùng đã tắt nhóm thông báo này trong Cài đặt
       if (settings[category] === false) {
         return {
-          shouldShowAlert: false,
           shouldPlaySound: false,
           shouldSetBadge: false,
           shouldShowBanner: false,
@@ -34,7 +33,6 @@ Notifications.setNotificationHandler({
       }
 
       return {
-        shouldShowAlert: true,
         shouldPlaySound: settings.sound !== false,
         shouldSetBadge: true,
         shouldShowBanner: true,
@@ -42,7 +40,6 @@ Notifications.setNotificationHandler({
       };
     } catch {
       return {
-        shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
         shouldShowBanner: true,
