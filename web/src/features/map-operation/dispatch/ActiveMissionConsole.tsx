@@ -302,12 +302,13 @@ export const ActiveMissionConsole: React.FC<Props> = ({
       return {
         statusHeading: 'HOÀN TẤT CỨU HỘ',
         badgeText: '✓ ĐÃ HOÀN TẤT NHIỆM VỤ',
-        subText: 'Đã hoàn thành cứu nạn, toàn bộ người dân đã an toàn.',
+        subText: 'Cứu nạn thành công, an toàn.',
         bg: '#f0fdf4',
         border: '#86efac',
         textColor: '#15803d',
         dotColor: '#16a34a',
         isCompleted: true,
+        showEta: false,
       };
     }
 
@@ -316,12 +317,13 @@ export const ActiveMissionConsole: React.FC<Props> = ({
       return {
         statusHeading: 'ĐANG CỨU HỘ TẠI HIỆN TRƯỜNG',
         badgeText: '🛟 ĐANG CỨU HỘ TẠI CHỖ',
-        subText: 'Lực lượng đang hỗ trợ đưa người dân lên ca-nô an toàn.',
+        subText: 'Đang đưa người dân lên ca-nô.',
         bg: '#f0fdf4',
         border: '#86efac',
         textColor: '#15803d',
         dotColor: '#16a34a',
         isCompleted: false,
+        showEta: false,
       };
     }
 
@@ -330,12 +332,13 @@ export const ActiveMissionConsole: React.FC<Props> = ({
       return {
         statusHeading: 'ĐÃ TIẾP CẬN VỊ TRÍ NGẬP',
         badgeText: '📍 ĐÃ ĐẾN HIỆN TRƯỜNG',
-        subText: 'Đội đã có mặt tại hiện trường và bắt đầu tác chiến.',
+        subText: 'Đã có mặt tại hiện trường.',
         bg: '#eff6ff',
         border: '#93c5fd',
         textColor: '#1d4ed8',
         dotColor: '#2563eb',
         isCompleted: false,
+        showEta: false,
       };
     }
 
@@ -343,13 +346,14 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     if (['ON_THE_WAY', 'EN_ROUTE', 'ON_WAY'].includes(aStatus) || sStatus === 'ON_THE_WAY') {
       return {
         statusHeading: 'ĐÃ TIẾP CẬN VỊ TRÍ NGẬP',
-        badgeText: '✓ ĐỘI CỨU HỘ ĐÃ CHẤP NHẬN NHIỆM VỤ',
-        subText: 'Đội đã nhận lệnh và đang xuất phát tiếp cận vị trí ngập.',
+        badgeText: '✓ ĐỘI CỨU HỘ ĐÃ NHẬN NHIỆM VỤ',
+        subText: 'Đang xuất phát tiếp cận vị trí.',
         bg: '#f0fdf4',
         border: '#86efac',
         textColor: '#15803d',
         dotColor: '#16a34a',
         isCompleted: false,
+        showEta: true,
       };
     }
 
@@ -357,13 +361,14 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     if (aStatus === 'ACCEPTED') {
       return {
         statusHeading: 'ĐÃ TIẾP NHẬN LỆNH ĐIỀU ĐỘNG',
-        badgeText: '✓ ĐỘI CỨU HỘ ĐÃ CHẤP NHẬN NHIỆM VỤ',
-        subText: 'Đội đã nhận lệnh và đang xuất phát tiếp cận vị trí ngập.',
+        badgeText: '✓ ĐỘI CỨU HỘ ĐÃ NHẬN NHIỆM VỤ',
+        subText: 'Đã nhận lệnh, chuẩn bị xuất phát.',
         bg: '#f0fdf4',
         border: '#86efac',
         textColor: '#15803d',
         dotColor: '#16a34a',
         isCompleted: false,
+        showEta: true,
       };
     }
 
@@ -372,12 +377,13 @@ export const ActiveMissionConsole: React.FC<Props> = ({
       return {
         statusHeading: 'ĐỘI TỪ CHỐI TIẾP NHẬN',
         badgeText: '⚠️ TỪ CHỐI NHẬN LỆNH',
-        subText: 'Đội từ chối nhận lệnh • Vui lòng bấm đổi đội cứu hộ.',
+        subText: 'Đội từ chối • Vui lòng đổi đội.',
         bg: '#fef2f2',
         border: '#fca5a5',
         textColor: '#dc2626',
         dotColor: '#ef4444',
         isCompleted: false,
+        showEta: false,
       };
     }
 
@@ -385,12 +391,13 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     return {
       statusHeading: 'CHỜ ĐỘI XÁC NHẬN LỆNH',
       badgeText: '⏳ CHỜ ĐỘI NHẬN LỆNH',
-      subText: 'Đang truyền lệnh đến máy cứu hộ viên, chờ phản hồi.',
+      subText: 'Đang truyền lệnh đến cứu hộ viên.',
       bg: '#fffbeb',
       border: '#fde68a',
       textColor: '#b45309',
       dotColor: '#f59e0b',
       isCompleted: false,
+      showEta: true,
     };
   }, [assignment?.status, selectedSos?.status]);
 
@@ -492,7 +499,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               >
                 ✓ HOÀN TẤT
               </span>
-            ) : (
+            ) : statusInfo.showEta ? (
               <div
                 style={{
                   display: 'inline-flex',
@@ -512,7 +519,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   DỰ KIẾN
                 </span>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
 
