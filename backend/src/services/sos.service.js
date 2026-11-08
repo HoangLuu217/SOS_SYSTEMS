@@ -56,7 +56,12 @@ const calculateDistanceMeters = (coord1, coord2) => {
 
 const createSosRequest = async (citizenId, sosData) => {
   // Extract fields matching citizen mobile app form
-  const { location, areaId, address, emergencyType, priority, people, description, images, imageUrl, contactPhone, secondaryPhone, priorityGroups } = sosData;
+  const { location, areaId, address, emergencyType, emergencyTypes, priority, people, description, images, imageUrl, contactPhone, secondaryPhone, priorityGroups } = sosData;
+
+  const normalizedEmergencyTypes = Array.isArray(emergencyTypes) && emergencyTypes.length > 0
+    ? emergencyTypes
+    : (emergencyType ? [emergencyType] : ['FLOOD']);
+  const primaryEmergencyType = normalizedEmergencyTypes[0] || emergencyType || 'FLOOD';
 
   const normalizedImages = Array.isArray(images)
     ? images
@@ -134,7 +139,8 @@ const createSosRequest = async (citizenId, sosData) => {
     location,
     areaId: assignedAreaId,
     address: address || 'Khu vực cứu nạn (Định vị GPS)',
-    emergencyType: emergencyType || 'FLOOD',
+    emergencyType: primaryEmergencyType,
+    emergencyTypes: normalizedEmergencyTypes,
     priority: priority || 'HIGH',
     people: people ? Number(people) : 1,
     description: description ? description.replace(/⚡\s*/g, '').trim() : null,
@@ -265,8 +271,14 @@ const changeStatus = async (id, newStatus, changedBy, note = '') => {
   
   if (oldStatus === newStatus) return sos;
 
+  const updateFields = { status: newStatus };
+  if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(newStatus)) {
+    updateFields.resolvedAt = new Date();
+  }
+  // Cập nhật trạng thái không re-validate các trường dữ liệu test cũ (tránh lỗi 0123456789)
+  await SosRequest.updateOne({ _id: id }, { $set: updateFields });
   sos.status = newStatus;
-  await sos.save(); // resolvedAt auto updated via pre-save middleware in model
+  if (updateFields.resolvedAt) sos.resolvedAt = updateFields.resolvedAt;
 
   await SosStatusHistory.create({
     sosId: sos._id,
@@ -329,6 +341,7 @@ const updateSosRequest = async (id, updateData, userId) => {
     'people',
     'priorityGroups',
     'emergencyType',
+    'emergencyTypes',
     'contactPhone',
     'secondaryPhone',
     'images',
@@ -339,8 +352,13 @@ const updateSosRequest = async (id, updateData, userId) => {
     }
   }
 
+  // Nếu cập nhật danh sách emergencyTypes, đồng bộ luôn emergencyType chính
+  if (Array.isArray(updateData.emergencyTypes) && updateData.emergencyTypes.length > 0) {
+    sos.emergencyType = updateData.emergencyTypes[0];
+  }
+
   // Tự động làm sạch SĐT phụ nếu không hợp lệ
-  if (sos.secondaryPhone && !/^(?:\+84|0)(?:3|5|7|8|9)\d{8}$/.test(sos.secondaryPhone.replace(/[\s\.\-]+/g, ''))) {
+  if (sos.secondaryPhone && !/^(\+?\d{7,15})$/.test(sos.secondaryPhone.replace(/[\s\.\-]+/g, ''))) {
     sos.secondaryPhone = null;
   }
 
@@ -353,6 +371,64 @@ const updateSosRequest = async (id, updateData, userId) => {
   return populated || sos;
 };
 
+const deleteSos = async (id, user) => {
+  const sos = await SosRequest.findById(id);
+  if (!sos) throw new ApiError(404, 'Không tìm thấy yêu cầu SOS');
+
+  const isAdmin = user.roles?.includes('ADMIN');
+  const isAuthority = user.roles?.includes('LOCAL_AUTHORITY');
+  const isOwner = sos.citizenId && sos.citizenId.toString() === user._id.toString();
+
+  // Chỉ cho phép xóa nếu:
+  // 1. Quản trị viên (ADMIN)
+  // 2. Cán bộ địa phương (LOCAL_AUTHORITY)
+  // 3. Người dân là chủ sở hữu VÀ ca đã ở trạng thái CANCELLED hoặc COMPLETED
+  if (!isAdmin && !isAuthority) {
+    if (!isOwner) {
+      throw new ApiError(403, 'Bạn không có quyền xóa yêu cầu SOS này');
+    }
+    if (!['CANCELLED', 'COMPLETED', 'REJECTED'].includes(sos.status)) {
+      throw new ApiError(400, 'Chỉ có thể xóa các yêu cầu SOS đã hủy hoặc đã hoàn thành khỏi lịch sử');
+    }
+  }
+
+  // Xóa các phân công nhiệm vụ và lịch sử liên quan
+  await SosAssignment.deleteMany({
+    $or: [{ sosRequestId: id }, { sosId: id }],
+  });
+  await SosStatusHistory.deleteMany({ sosId: id });
+  await SosRequest.deleteOne({ _id: id });
+
+  return sos;
+};
+
+const clearCancelledSos = async (user) => {
+  const isAdmin = user.roles?.includes('ADMIN');
+  const isAuthority = user.roles?.includes('LOCAL_AUTHORITY');
+
+  if (!isAdmin && !isAuthority) {
+    throw new ApiError(403, 'Chỉ cán bộ hoặc quản trị viên mới có quyền dọn dẹp các ca đã hủy');
+  }
+
+  const query = { status: 'CANCELLED' };
+  if (isAuthority && !isAdmin && user.authority?.areaId) {
+    query.areaId = user.authority.areaId;
+  }
+
+  const cancelledList = await SosRequest.find(query).select('_id');
+  const ids = cancelledList.map((s) => s._id);
+
+  if (ids.length > 0) {
+    await SosAssignment.deleteMany({
+      $or: [{ sosRequestId: { $in: ids } }, { sosId: { $in: ids } }],
+    });
+    await SosStatusHistory.deleteMany({ sosId: { $in: ids } });
+    await SosRequest.deleteMany({ _id: { $in: ids } });
+  }
+
+  return { deletedCount: ids.length, deletedIds: ids };
+};
+
 module.exports = {
   createSosRequest,
   getSosRequests,
@@ -360,5 +436,7 @@ module.exports = {
   updateSosRequest,
   changeStatus,
   getSosHistory,
-  verifyAndClassifySos
+  verifyAndClassifySos,
+  deleteSos,
+  clearCancelledSos,
 };

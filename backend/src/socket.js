@@ -146,9 +146,32 @@ const emitSosUpdated = (sosData) => {
   } catch (err) {}
 };
 
+/**
+ * Helper: Phát sự kiện xóa yêu cầu SOS
+ * @param {string} sosId
+ */
+const emitSosDeleted = (sosId) => {
+  if (!io) return;
+  io.emit('sos:deleted', { sosId });
+  console.log(`📢 [Socket.IO] Đã phát sự kiện xóa SOS: ${sosId}`);
+
+  try {
+    const eventBus = require('./services/eventBus');
+    eventBus.emit('notification_event', {
+      action: 'BROADCAST',
+      data: {
+        type: 'SOS_SYNC',
+        action: 'DELETED',
+        sosId,
+      },
+    });
+  } catch (err) {}
+};
+
 module.exports = {
   initSocket,
   getIO,
   emitSosCreated,
   emitSosUpdated,
+  emitSosDeleted,
 };

@@ -2,7 +2,7 @@ const sosService = require('../services/sos.service');
 const fileService = require('../services/file.service');
 const auditService = require('../services/audit.service');
 const { SosAssignment, RescueTeam } = require('../models');
-const { emitSosCreated, emitSosUpdated } = require('../socket');
+const { emitSosCreated, emitSosUpdated, emitSosDeleted } = require('../socket');
 
 const createSos = async (req, res, next) => {
   try {
@@ -196,6 +196,50 @@ const getSosFiles = async (req, res, next) => {
   }
 };
 
+const deleteSos = async (req, res, next) => {
+  try {
+    const deletedSos = await sosService.deleteSos(req.params.id, req.user);
+
+    await auditService.log({
+      actorId: req.user._id,
+      actorRole: req.user.roles?.[0] || 'CITIZEN',
+      action: 'DELETE_SOS',
+      entityType: 'SosRequest',
+      entityId: req.params.id,
+      areaId: deletedSos?.areaId || null,
+      metadata: { sosCode: deletedSos?.sosCode, status: deletedSos?.status },
+    });
+
+    emitSosDeleted(req.params.id);
+    res.status(200).json({ success: true, message: 'Đã xóa yêu cầu SOS thành công', data: { id: req.params.id } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const clearCancelledSos = async (req, res, next) => {
+  try {
+    const result = await sosService.clearCancelledSos(req.user);
+
+    await auditService.log({
+      actorId: req.user._id,
+      actorRole: req.user.roles?.[0] || 'LOCAL_AUTHORITY',
+      action: 'CLEAR_CANCELLED_SOS',
+      entityType: 'SosRequest',
+      metadata: { deletedCount: result.deletedCount },
+    });
+
+    result.deletedIds.forEach((id) => emitSosDeleted(id.toString()));
+    res.status(200).json({
+      success: true,
+      message: `Đã dọn dẹp thành công ${result.deletedCount} ca đã hủy`,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createSos,
   getSosRequests,
@@ -205,5 +249,7 @@ module.exports = {
   completeSos,
   getSosHistory,
   verifySos,
-  getSosFiles
+  getSosFiles,
+  deleteSos,
+  clearCancelledSos,
 };

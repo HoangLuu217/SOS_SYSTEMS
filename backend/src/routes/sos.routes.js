@@ -34,4 +34,10 @@ router.patch('/:id/verify', authorize('LOCAL_AUTHORITY', 'ADMIN'), sosController
 // GET /api/sos/:id/files - Lấy toàn bộ file đính kèm của SOS để xác minh
 router.get('/:id/files', authorize('LOCAL_AUTHORITY', 'ADMIN', 'CITIZEN', 'RESCUER'), sosController.getSosFiles);
 
+// DELETE /api/sos/clear-cancelled - Dọn dẹp hàng loạt các ca đã hủy (Dành cho Authority & Admin)
+router.delete('/clear-cancelled', authorize('LOCAL_AUTHORITY', 'ADMIN'), sosController.clearCancelledSos);
+
+// DELETE /api/sos/:id - Xóa 1 yêu cầu SOS (Người dân xóa ca đã hủy của mình, hoặc Cán bộ/Admin)
+router.delete('/:id', authorize('CITIZEN', 'LOCAL_AUTHORITY', 'ADMIN', 'RESCUER'), sosController.deleteSos);
+
 module.exports = router;

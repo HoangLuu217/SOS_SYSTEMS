@@ -129,6 +129,24 @@ class ChatController {
       next(error);
     }
   }
+
+  /**
+   * GET /chat/emergency-directory
+   * Danh bạ khẩn cấp công khai cho người dân chọn gọi khi chưa đăng nhập
+   */
+  async getEmergencyDirectory(req, res, next) {
+    try {
+      const { search, lat, lng } = req.query;
+      const list = await chatService.getEmergencyDirectory({
+        search,
+        lat: lat ? parseFloat(lat) : undefined,
+        lng: lng ? parseFloat(lng) : undefined,
+      });
+      return sendSuccess(res, 200, 'Lấy danh bạ cứu nạn thành công', list);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new ChatController();

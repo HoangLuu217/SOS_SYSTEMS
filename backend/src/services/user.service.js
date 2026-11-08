@@ -315,6 +315,9 @@ class UserService {
             name: first.name,
             phone: first.phone,
             relation: first.relation,
+            address: first.address || null,
+            latitude: first.latitude || null,
+            longitude: first.longitude || null,
           };
         }
       }
@@ -350,6 +353,9 @@ class UserService {
         name: user.citizen.emergencyContact.name,
         phone: user.citizen.emergencyContact.phone,
         relation: user.citizen.emergencyContact.relation,
+        address: user.citizen.emergencyContact.address || null,
+        latitude: user.citizen.emergencyContact.latitude || null,
+        longitude: user.citizen.emergencyContact.longitude || null,
       });
     }
 
@@ -368,12 +374,15 @@ class UserService {
           name: item.name ? String(item.name).trim() : '',
           phone: cleanPhone,
           relation: item.relation ? String(item.relation).trim() : 'Người thân',
+          address: item.address ? String(item.address).trim() : null,
+          latitude: typeof item.latitude === 'number' ? item.latitude : null,
+          longitude: typeof item.longitude === 'number' ? item.longitude : null,
         });
       }
       user.citizen.emergencyContacts = validated;
     } else {
       // Trường hợp 2: Gửi 1 liên hệ cụ thể (thêm mới hoặc sửa theo id)
-      const { id, name, phone, relation } = payload || {};
+      const { id, name, phone, relation, address, latitude, longitude } = payload || {};
 
       if (!name && !phone) {
         throw new ApiError(400, 'Vui lòng cung cấp họ tên và số điện thoại người liên hệ.');
@@ -393,6 +402,9 @@ class UserService {
             name: name ? String(name).trim() : user.citizen.emergencyContacts[idx].name,
             phone: cleanPhone || user.citizen.emergencyContacts[idx].phone,
             relation: relation ? String(relation).trim() : user.citizen.emergencyContacts[idx].relation,
+            address: address !== undefined ? (address ? String(address).trim() : null) : user.citizen.emergencyContacts[idx].address,
+            latitude: typeof latitude === 'number' ? latitude : user.citizen.emergencyContacts[idx].latitude,
+            longitude: typeof longitude === 'number' ? longitude : user.citizen.emergencyContacts[idx].longitude,
           };
         } else {
           user.citizen.emergencyContacts.push({
@@ -400,6 +412,9 @@ class UserService {
             name: name ? String(name).trim() : '',
             phone: cleanPhone,
             relation: relation ? String(relation).trim() : 'Người thân',
+            address: address ? String(address).trim() : null,
+            latitude: typeof latitude === 'number' ? latitude : null,
+            longitude: typeof longitude === 'number' ? longitude : null,
           });
         }
       } else {
@@ -409,6 +424,9 @@ class UserService {
           name: name ? String(name).trim() : '',
           phone: cleanPhone,
           relation: relation ? String(relation).trim() : 'Người thân',
+          address: address ? String(address).trim() : null,
+          latitude: typeof latitude === 'number' ? latitude : null,
+          longitude: typeof longitude === 'number' ? longitude : null,
         });
       }
     }
@@ -416,8 +434,15 @@ class UserService {
     // Đồng bộ contact đầu tiên vào emergencyContact đơn để duy trì tương thích ngược
     const primary = user.citizen.emergencyContacts[0] || null;
     user.citizen.emergencyContact = primary
-      ? { name: primary.name, phone: primary.phone, relation: primary.relation }
-      : { name: null, phone: null, relation: null };
+      ? {
+          name: primary.name,
+          phone: primary.phone,
+          relation: primary.relation,
+          address: primary.address || null,
+          latitude: primary.latitude || null,
+          longitude: primary.longitude || null,
+        }
+      : { name: null, phone: null, relation: null, address: null, latitude: null, longitude: null };
 
     await user.save();
 

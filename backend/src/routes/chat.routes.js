@@ -15,6 +15,12 @@ router.get('/stream', optionalAuthenticate, chatController.streamChatEvents);
  */
 router.get('/local-authority', optionalAuthenticate, chatController.getLocalAuthority);
 
+/**
+ * @route   GET /chat/emergency-directory
+ * @desc    Lấy danh bạ đường dây nóng các cơ quan / Ban chỉ huy địa phương công khai
+ */
+router.get('/emergency-directory', optionalAuthenticate, chatController.getEmergencyDirectory);
+
 // Các routes còn lại yêu cầu đăng nhập
 router.use(authenticate);
 

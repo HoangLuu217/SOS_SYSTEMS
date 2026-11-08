@@ -146,6 +146,18 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [isCompleting, setIsCompleting] = useState<boolean>(false);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
+  const [inAppAlert, setInAppAlert] = useState<{
+    visible: boolean;
+    type: 'success' | 'danger' | 'warning' | 'info';
+    title: string;
+    message: string;
+    cancelText?: string;
+    confirmText?: string;
+    confirmStyle?: 'success' | 'danger' | 'primary';
+    onCancel?: () => void;
+    onConfirm?: () => Promise<void> | void;
+  } | null>(null);
+  const [inAppAlertLoading, setInAppAlertLoading] = useState<boolean>(false);
   const webViewRef = useRef<WebView>(null);
 
   // Tải chi tiết ca SOS và danh sách phân công đội cứu hộ
@@ -189,79 +201,175 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
     }
   }, [visible, sosId]);
 
-  // Xử lý khi người dân nhấn "Tôi đã được cứu an toàn"
+  // Xử lý khi người dân nhấn "Tôi đã được cứu an toàn" (Custom Alert Popup)
   const handleConfirmSafety = () => {
-    Alert.alert(
-      'Xác nhận an toàn',
-      'Bạn và gia đình đã được Đội cứu hộ tiếp cận và đưa đến nơi an toàn rồi đúng không?',
-      [
-        { text: 'Chưa, vẫn đang chờ', style: 'cancel' },
-        {
-          text: 'Đúng, tôi đã an toàn',
-          style: 'default',
-          onPress: async () => {
-            if (!sos?._id) return;
-            setIsCompleting(true);
-            try {
-              const res = await backendApi.post(`/sos/${sos._id}/complete`, {});
-              if (res.success) {
-                const updated = { ...sos, status: 'COMPLETED' };
-                setSos(updated);
-                DeviceEventEmitter.emit('sos:sync', updated);
-                onSosCompleted?.(updated);
-                Alert.alert(
-                  'Cứu hộ thành công! 🎉',
-                  'Hệ thống đã ghi nhận bạn an toàn. Chúc bạn và gia đình luôn bình an!'
-                );
-              } else {
-                Alert.alert('Không thể cập nhật', res.message || 'Vui lòng thử lại sau.');
-              }
-            } catch (err: any) {
-              Alert.alert('Lỗi kết nối', err.message || 'Không thể gửi xác nhận an toàn.');
-            } finally {
-              setIsCompleting(false);
-            }
-          },
-        },
-      ]
-    );
+    setInAppAlert({
+      visible: true,
+      type: 'success',
+      title: 'Xác nhận an toàn',
+      message: 'Bạn và gia đình đã được Đội cứu hộ tiếp cận và đưa đến nơi an toàn rồi đúng không?',
+      cancelText: 'Chưa, vẫn đang chờ',
+      confirmText: 'Đúng, tôi đã an toàn',
+      confirmStyle: 'success',
+      onCancel: () => setInAppAlert(null),
+      onConfirm: async () => {
+        if (!sos?._id) return;
+        setInAppAlertLoading(true);
+        setIsCompleting(true);
+        try {
+          const res = await backendApi.post(`/sos/${sos._id}/complete`, {});
+          if (res.success) {
+            const updated = { ...sos, status: 'COMPLETED' };
+            setSos(updated);
+            DeviceEventEmitter.emit('sos:sync', updated);
+            onSosCompleted?.(updated);
+            setInAppAlert({
+              visible: true,
+              type: 'success',
+              title: 'Cứu hộ thành công! 🎉',
+              message: 'Hệ thống đã ghi nhận bạn an toàn. Chúc bạn và gia đình luôn bình an!',
+              confirmText: 'Hoàn tất',
+              confirmStyle: 'success',
+              onConfirm: () => setInAppAlert(null),
+            });
+          } else {
+            setInAppAlert({
+              visible: true,
+              type: 'danger',
+              title: 'Không thể cập nhật',
+              message: res.message || 'Vui lòng thử lại sau.',
+              confirmText: 'Đã hiểu',
+              confirmStyle: 'primary',
+              onConfirm: () => setInAppAlert(null),
+            });
+          }
+        } catch (err: any) {
+          setInAppAlert({
+            visible: true,
+            type: 'danger',
+            title: 'Lỗi kết nối',
+            message: err.message || 'Không thể gửi xác nhận an toàn.',
+            confirmText: 'Đã hiểu',
+            confirmStyle: 'primary',
+            onConfirm: () => setInAppAlert(null),
+          });
+        } finally {
+          setIsCompleting(false);
+          setInAppAlertLoading(false);
+        }
+      },
+    });
   };
 
-  // Xử lý khi người dân muốn hủy yêu cầu cứu hộ
+  // Xử lý khi người dân muốn hủy yêu cầu cứu hộ (Custom Alert Popup)
   const handleCancelSos = () => {
-    Alert.alert(
-      'Hủy yêu cầu cứu nạn',
-      'Bạn có chắc chắn muốn hủy yêu cầu cứu hộ này? (Chỉ hủy khi bạn đã tự di chuyển an toàn)',
-      [
-        { text: 'Không hủy', style: 'cancel' },
-        {
-          text: 'Xác nhận hủy',
-          style: 'destructive',
-          onPress: async () => {
-            if (!sos?._id) return;
-            setIsCancelling(true);
-            try {
-              const res = await backendApi.post(`/sos/${sos._id}/cancel`, {
-                cancelReason: 'Người dân tự thoát hiểm an toàn',
-              });
-              if (res.success) {
-                const updated = { ...sos, status: 'CANCELLED' };
-                setSos(updated);
-                DeviceEventEmitter.emit('sos:sync', updated);
-                onSosCompleted?.(updated);
-                Alert.alert('Đã hủy', 'Yêu cầu cứu nạn đã được hủy thành công.');
-              } else {
-                Alert.alert('Lỗi', res.message || 'Không thể hủy yêu cầu.');
-              }
-            } catch (err: any) {
-              Alert.alert('Lỗi', err.message || 'Không thể gửi lệnh hủy.');
-            } finally {
-              setIsCancelling(false);
-            }
-          },
-        },
-      ]
-    );
+    setInAppAlert({
+      visible: true,
+      type: 'danger',
+      title: 'Hủy yêu cầu cứu nạn',
+      message: 'Bạn có chắc chắn muốn hủy yêu cầu cứu hộ này? (Chỉ hủy khi bạn đã tự di chuyển an toàn)',
+      cancelText: 'Không hủy',
+      confirmText: 'Xác nhận hủy',
+      confirmStyle: 'danger',
+      onCancel: () => setInAppAlert(null),
+      onConfirm: async () => {
+        if (!sos?._id) return;
+        setInAppAlertLoading(true);
+        setIsCancelling(true);
+        try {
+          const res = await backendApi.post(`/sos/${sos._id}/cancel`, {
+            cancelReason: 'Người dân tự thoát hiểm an toàn',
+          });
+          if (res.success) {
+            const updated = { ...sos, status: 'CANCELLED' };
+            setSos(updated);
+            DeviceEventEmitter.emit('sos:sync', updated);
+            onSosCompleted?.(updated);
+            setInAppAlert({
+              visible: true,
+              type: 'info',
+              title: 'Đã hủy yêu cầu',
+              message: 'Yêu cầu cứu nạn đã được hủy thành công.',
+              confirmText: 'Đóng',
+              confirmStyle: 'primary',
+              onConfirm: () => setInAppAlert(null),
+            });
+          } else {
+            setInAppAlert({
+              visible: true,
+              type: 'danger',
+              title: 'Không thể hủy yêu cầu',
+              message: res.message || 'Vui lòng thử lại sau.',
+              confirmText: 'Đã hiểu',
+              confirmStyle: 'primary',
+              onConfirm: () => setInAppAlert(null),
+            });
+          }
+        } catch (err: any) {
+          setInAppAlert({
+            visible: true,
+            type: 'danger',
+            title: 'Lỗi',
+            message: err.message || 'Không thể gửi lệnh hủy.',
+            confirmText: 'Đã hiểu',
+            confirmStyle: 'primary',
+            onConfirm: () => setInAppAlert(null),
+          });
+        } finally {
+          setIsCancelling(false);
+          setInAppAlertLoading(false);
+        }
+      },
+    });
+  };
+
+  // Xử lý khi người dân muốn xóa vĩnh viễn ca SOS đã đóng/đã hủy khỏi lịch sử
+  const handleDeleteSos = () => {
+    setInAppAlert({
+      visible: true,
+      type: 'danger',
+      title: 'Xóa khỏi lịch sử',
+      message: 'Bạn có chắc chắn muốn xóa ca SOS này khỏi lịch sử báo nạn để giao diện gọn gàng hơn?',
+      cancelText: 'Giữ lại',
+      confirmText: 'Xác nhận xóa',
+      confirmStyle: 'danger',
+      onCancel: () => setInAppAlert(null),
+      onConfirm: async () => {
+        if (!sos?._id) return;
+        setInAppAlertLoading(true);
+        try {
+          const res = await backendApi.delete(`/sos/${sos._id}`);
+          if (res.success) {
+            DeviceEventEmitter.emit('sos:deleted', sos._id);
+            DeviceEventEmitter.emit('sos:sync');
+            setInAppAlert(null);
+            onClose();
+          } else {
+            setInAppAlert({
+              visible: true,
+              type: 'danger',
+              title: 'Không thể xóa',
+              message: res.message || 'Vui lòng thử lại sau.',
+              confirmText: 'Đã hiểu',
+              confirmStyle: 'primary',
+              onConfirm: () => setInAppAlert(null),
+            });
+          }
+        } catch (err: any) {
+          setInAppAlert({
+            visible: true,
+            type: 'danger',
+            title: 'Lỗi',
+            message: err.message || 'Không thể xóa yêu cầu.',
+            confirmText: 'Đã hiểu',
+            confirmStyle: 'primary',
+            onConfirm: () => setInAppAlert(null),
+          });
+        } finally {
+          setInAppAlertLoading(false);
+        }
+      },
+    });
   };
 
   // State và hàm xử lý form chỉnh sửa ca cứu nạn toàn diện (đồng bộ 100% với SOSMapScreen)
@@ -276,6 +384,9 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
   const currentStatus = sos?.status || 'PENDING';
   const statusCfg = STATUS_CONFIG[currentStatus] || STATUS_CONFIG['PENDING'];
   const typeCfg = TYPE_CONFIG[sos?.emergencyType] || TYPE_CONFIG['FLOOD'];
+  const typeLabelText = Array.isArray(sos?.emergencyTypes) && sos.emergencyTypes.length > 0
+    ? sos.emergencyTypes.map((t: string) => TYPE_CONFIG[t]?.label || t).join(', ')
+    : typeCfg.label;
 
   // Tọa độ người dân
   const victimLng = sos?.location?.coordinates?.[0] || 108.26054;
@@ -722,7 +833,7 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                 </View>
                 <View style={styles.requestMiniBox}>
                   <Text style={styles.requestMiniLabel}>Loại yêu cầu</Text>
-                  <Text style={styles.requestMiniValue} numberOfLines={1}>{typeCfg.label}</Text>
+                  <Text style={styles.requestMiniValue} numberOfLines={2}>{typeLabelText}</Text>
                 </View>
               </View>
 
@@ -815,13 +926,41 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
               </View>
             ) : (
               <View style={styles.completedBadgeBox}>
-                <Ionicons name="checkmark-done-circle" size={40} color="#16A34A" />
-                <Text style={styles.completedBadgeTitle}>YÊU CẦU ĐÃ KẾT THÚC</Text>
+                <Ionicons
+                  name={currentStatus === 'CANCELLED' ? 'close-circle' : 'checkmark-done-circle'}
+                  size={42}
+                  color={currentStatus === 'CANCELLED' ? '#DC2626' : '#16A34A'}
+                />
+                <Text style={[styles.completedBadgeTitle, currentStatus === 'CANCELLED' && { color: '#DC2626' }]}>
+                  {currentStatus === 'CANCELLED' ? 'YÊU CẦU ĐÃ ĐƯỢC HỦY' : 'YÊU CẦU ĐÃ KẾT THÚC'}
+                </Text>
                 <Text style={styles.completedBadgeSub}>
                   {currentStatus === 'COMPLETED'
                     ? 'Bạn đã xác nhận an toàn. Chúc bạn và gia đình luôn khỏe mạnh và bình an!'
-                    : 'Ca cứu hộ này đã được kết thúc / hủy.'}
+                    : 'Yêu cầu cứu hộ này đã được hủy. Bạn có thể xóa ca này để danh sách không bị rối mắt.'}
                 </Text>
+
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    backgroundColor: '#FEF2F2',
+                    borderWidth: 1,
+                    borderColor: '#FEE2E2',
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    borderRadius: 12,
+                    marginTop: 14,
+                  }}
+                  onPress={handleDeleteSos}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="trash-outline" size={16} color="#DC2626" />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#DC2626' }}>
+                    Xóa ca này khỏi lịch sử báo nạn
+                  </Text>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -847,6 +986,106 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                 setShowEditSOSMap(false);
               },
             })}
+          </Modal>
+        ) : null}
+
+        {/* DIALOG XÁC NHẬN / THÔNG BÁO TÙY BIẾN THEO PHONG CÁCH SOS SYSTEMS (CHUẨN TRUNG TÂM MÀN HÌNH) */}
+        {inAppAlert?.visible ? (
+          <Modal
+            visible={Boolean(inAppAlert.visible)}
+            transparent={true}
+            animationType="fade"
+            statusBarTranslucent={true}
+            onRequestClose={() => {
+              if (!inAppAlertLoading) {
+                if (inAppAlert.onCancel) inAppAlert.onCancel();
+                else setInAppAlert(null);
+              }
+            }}
+          >
+            <View style={styles.dialogModalRoot}>
+              <View style={styles.dialogCard}>
+                {/* Icon chỉ báo phân loại */}
+                <View
+                  style={[
+                    styles.dialogIconWrap,
+                    inAppAlert.type === 'success' && styles.dialogIconSuccess,
+                    inAppAlert.type === 'danger' && styles.dialogIconDanger,
+                    inAppAlert.type === 'warning' && styles.dialogIconWarning,
+                    inAppAlert.type === 'info' && styles.dialogIconInfo,
+                  ]}
+                >
+                  {inAppAlert.type === 'success' && (
+                    <Ionicons name="checkmark-circle" size={36} color="#16A34A" />
+                  )}
+                  {inAppAlert.type === 'danger' && (
+                    <Ionicons name="alert-circle" size={36} color="#DC2626" />
+                  )}
+                  {inAppAlert.type === 'warning' && (
+                    <Ionicons name="warning" size={34} color="#D97706" />
+                  )}
+                  {inAppAlert.type === 'info' && (
+                    <Ionicons name="information-circle" size={36} color="#0066FF" />
+                  )}
+                </View>
+
+                {/* Tiêu đề & Nội dung */}
+                <Text style={styles.dialogTitle}>{inAppAlert.title}</Text>
+                <Text style={styles.dialogMessage}>{inAppAlert.message}</Text>
+
+                {/* Hàng nút bấm */}
+                <View style={styles.dialogButtonRow}>
+                  {inAppAlert.cancelText ? (
+                    <TouchableOpacity
+                      style={styles.dialogCancelBtn}
+                      onPress={() => {
+                        if (inAppAlert.onCancel) {
+                          inAppAlert.onCancel();
+                        } else {
+                          setInAppAlert(null);
+                        }
+                      }}
+                      disabled={inAppAlertLoading}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.dialogCancelBtnText}>{inAppAlert.cancelText}</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  <TouchableOpacity
+                    style={[
+                      styles.dialogConfirmBtn,
+                      !inAppAlert.cancelText && { width: '100%', flex: 0 },
+                      inAppAlert.confirmStyle === 'danger' && styles.dialogConfirmDanger,
+                      inAppAlert.confirmStyle === 'success' && styles.dialogConfirmSuccess,
+                      (!inAppAlert.confirmStyle || inAppAlert.confirmStyle === 'primary') && styles.dialogConfirmPrimary,
+                    ]}
+                    onPress={async () => {
+                      if (inAppAlert.onConfirm) {
+                        setInAppAlertLoading(true);
+                        try {
+                          await inAppAlert.onConfirm();
+                        } finally {
+                          setInAppAlertLoading(false);
+                        }
+                      } else {
+                        setInAppAlert(null);
+                      }
+                    }}
+                    disabled={inAppAlertLoading}
+                    activeOpacity={0.85}
+                  >
+                    {inAppAlertLoading ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.dialogConfirmBtnText}>
+                        {inAppAlert.confirmText || 'Đồng ý'}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
           </Modal>
         ) : null}
       </SafeAreaView>
@@ -1403,6 +1642,110 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.3,
   },
-
+  dialogModalRoot: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  dialogCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    paddingVertical: 24,
+    paddingHorizontal: 22,
+    width: '100%',
+    maxWidth: 340,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 28,
+    elevation: 20,
+  },
+  dialogIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+  },
+  dialogIconSuccess: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  dialogIconDanger: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FCA5A5',
+  },
+  dialogIconWarning: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FCD34D',
+  },
+  dialogIconInfo: {
+    backgroundColor: '#E0F2FE',
+    borderColor: '#BAE6FD',
+  },
+  dialogTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  dialogMessage: {
+    fontSize: 14,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 21,
+    marginBottom: 22,
+  },
+  dialogButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    width: '100%',
+  },
+  dialogCancelBtn: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 13,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  dialogCancelBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  dialogConfirmBtn: {
+    flex: 1.15,
+    paddingVertical: 13,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dialogConfirmPrimary: {
+    backgroundColor: '#0066FF',
+  },
+  dialogConfirmSuccess: {
+    backgroundColor: '#16A34A',
+  },
+  dialogConfirmDanger: {
+    backgroundColor: '#DC2626',
+  },
+  dialogConfirmBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
 });
 

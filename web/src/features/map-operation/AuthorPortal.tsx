@@ -216,12 +216,15 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
             0,
             Math.floor((Date.now() - new Date(item.createdAt).getTime()) / 60000)
           );
+          const diffHours = Math.floor(diffMinutes / 60);
           const timeAgo =
             diffMinutes < 1
               ? 'Vừa xong'
               : diffMinutes < 60
               ? `${diffMinutes} phút trước`
-              : `${Math.floor(diffMinutes / 60)} giờ trước`;
+              : diffHours < 24
+              ? `${diffHours} giờ trước`
+              : `${Math.floor(diffHours / 24)} ngày trước`;
 
           const areaObj =
             typeof item.areaId === 'object' && item.areaId !== null
@@ -243,10 +246,10 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
               ? 'POLICE'
               : 'RESCUE';
 
-          // Đồng bộ khu vực với cán bộ đang đăng nhập
-          const wardId = officer.jurisdictionAreaId || itemAreaId || 'area-cl';
+          // Đồng bộ khu vực với dữ liệu thực tế
+          const wardId = itemAreaId || officer.jurisdictionAreaId || 'area-cl';
           const wardName = itemAreaName || officer.jurisdictionAreaName || 'Địa bàn phụ trách';
-          const districtId = officer.jurisdictionAreaId || itemAreaId || 'area-cl';
+          const districtId = itemAreaId || officer.jurisdictionAreaId || 'area-cl';
           const districtName = officer.districtName || 'Quận Cẩm Lệ';
 
           return {
@@ -354,10 +357,15 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         domainDService.syncRealSosRequests(realMapped);
         setSosRequests(domainDService.getSosRequests());
 
-        // Nếu URL chưa chỉ định SOS cụ thể hoặc URL trỏ vào ca mock cũ, ưu tiên chọn ca SOS thật từ app
+        // Nếu URL chưa chỉ định SOS cụ thể hoặc URL trỏ vào ca mock cũ, ưu tiên chọn ca SOS thật ĐANG HOẠT ĐỘNG
         const currentUrlId = getCurrentSosIdFromUrl();
-        if ((!currentUrlId || currentUrlId.startsWith('sos-89') || currentUrlId.startsWith('sos-dn-')) && realMapped.length > 0) {
-          setSelectedSosId(realMapped[0].id);
+        const activeReal = realMapped.find((s) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status));
+        if (!currentUrlId || currentUrlId.startsWith('sos-89') || currentUrlId.startsWith('sos-dn-') || currentUrlId.startsWith('sos-88')) {
+          if (activeReal) {
+            setSelectedSosId(activeReal.id);
+          } else {
+            setSelectedSosId('');
+          }
         }
       }
 
@@ -489,13 +497,17 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     if (urlSosId && loadedSos.some((s) => s.id === urlSosId)) {
       setSelectedSosId(urlSosId);
     } else {
-      // Find local SOS for this officer
+      // Find active local SOS for this officer
       const matchSos = loadedSos.find(
-        (s) => s.wardId === activeOfficer.jurisdictionAreaId || s.districtId === activeOfficer.jurisdictionAreaId
+        (s) =>
+          !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status) &&
+          (s.wardId === activeOfficer.jurisdictionAreaId || s.districtId === activeOfficer.jurisdictionAreaId)
       );
       if (matchSos) {
         setSelectedSosId(matchSos.id);
         navigateTo('map', user ?? null, matchSos.id, true);
+      } else {
+        setSelectedSosId('');
       }
     }
   };
@@ -581,9 +593,9 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
   }, [sosRequests, activeOfficer, authorScopedAreas]);
 
   const selectedSos = useMemo(() => {
+    if (!selectedSosId) return {} as SosRequest;
     return (
       authorScopedSosRequests.find((s) => s.id === selectedSosId) ||
-      authorScopedSosRequests[0] ||
       ({} as SosRequest)
     );
   }, [authorScopedSosRequests, selectedSosId]);
@@ -593,10 +605,10 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     return domainDService.getAssignmentBySosId(selectedSos.id);
   }, [selectedSos, sosRequests]);
 
-  // Urgent local count
+  // Urgent local count (chỉ đếm các ca đang diễn ra, loại bỏ hoàn thành và đã hủy)
   const localUrgentCount = useMemo(() => {
     return authorScopedSosRequests.filter(
-      (s) => (s.priority === 'CRITICAL' || s.priority === 'HIGH') && s.status !== 'COMPLETED'
+      (s) => (s.priority === 'CRITICAL' || s.priority === 'HIGH') && !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status)
     ).length;
   }, [authorScopedSosRequests]);
 

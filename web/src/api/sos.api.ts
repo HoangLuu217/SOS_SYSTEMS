@@ -84,3 +84,15 @@ export async function reassignMissionApi(assignmentId: string, payload: {
     body: JSON.stringify(payload),
   });
 }
+
+export async function deleteSosRequestApi(sosId: string): Promise<{ success: boolean; message?: string }> {
+  return fetchWithAuth(`/sos/${sosId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function clearCancelledSosApi(): Promise<{ success: boolean; message?: string; data?: { deletedCount: number } }> {
+  return fetchWithAuth('/sos/clear-cancelled', {
+    method: 'DELETE',
+  });
+}
