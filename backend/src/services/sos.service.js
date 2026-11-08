@@ -564,6 +564,20 @@ const assignShoreHandoff = async (id, data, _user) => {
     });
   }
 
+  // Tra cứu bổ sung theo biển số xe nếu chưa tìm thấy bằng ID
+  const plateToSearch = data.vehiclePlate || data.plate || data.plateNumber;
+  if (!vehicle && plateToSearch) {
+    vehicle = await Vehicle.findOne({
+      plateNumber: new RegExp('^' + String(plateToSearch).trim() + '$', 'i'),
+    }).populate({
+      path: 'teamId',
+      populate: [
+        { path: 'leaderId', select: 'fullName phone avatarUrl' },
+        { path: 'members.rescuerId', select: 'fullName phone avatarUrl' },
+      ],
+    });
+  }
+
   // Kiểm tra xem xe này có đang bận đón bờ cho ca SOS khác đang hoạt động hay không
   const checkConditions = [];
   if (vehicle?._id) checkConditions.push({ 'shoreHandoff.assignedVehicleId': vehicle._id });
@@ -609,8 +623,10 @@ const assignShoreHandoff = async (id, data, _user) => {
     await Vehicle.findByIdAndUpdate(data.vehicleId, { status: 'IN_USE' });
   }
 
+  const validVehicleId = vehicle?._id || (data.vehicleId && mongoose.isValidObjectId(data.vehicleId) ? data.vehicleId : null);
+
   sos.shoreHandoff.status = 'ASSIGNED';
-  sos.shoreHandoff.assignedVehicleId = vehicle?._id || data.vehicleId || null;
+  sos.shoreHandoff.assignedVehicleId = validVehicleId;
   sos.shoreHandoff.assignedVehicleName = typeLabel;
   sos.shoreHandoff.assignedVehiclePlate = vehicle?.plateNumber || data.vehiclePlate || null;
   sos.shoreHandoff.assignedRoadTeamName = vehicle?.teamId?.name || data.roadTeamName || null;
@@ -648,7 +664,7 @@ const assignShoreHandoff = async (id, data, _user) => {
       handoffAssignment.rescueTeamId = teamId;
       handoffAssignment.teamId = teamId;
       handoffAssignment.rescuerId = rescuerId;
-      handoffAssignment.vehicleId = vehicle?._id || data.vehicleId || null;
+      handoffAssignment.vehicleId = validVehicleId;
       handoffAssignment.status = 'PENDING';
       handoffAssignment.destination = destinationText;
       handoffAssignment.assignedBy = _user?._id || null;
@@ -659,11 +675,11 @@ const assignShoreHandoff = async (id, data, _user) => {
       handoffAssignment = await SosAssignment.create({
         sosRequestId: sos._id,
         sosId: sos._id,
-        authorityOrganizationId: vehicle?.teamId?.authorityId || null,
+        authorityOrganizationId: (vehicle?.teamId?.authorityId && mongoose.isValidObjectId(vehicle.teamId.authorityId)) ? vehicle.teamId.authorityId : null,
         rescueTeamId: teamId,
         teamId: teamId,
         rescuerId: rescuerId,
-        vehicleId: vehicle?._id || data.vehicleId || null,
+        vehicleId: validVehicleId,
         missionType: 'SHORE_HANDOFF',
         destination: destinationText,
         recipientName: sos.citizenId?.fullName || 'Nạn nhân chuyển tuyến y tế',
