@@ -569,6 +569,7 @@ const assignShoreHandoff = async (id, data, _user) => {
       _id: { $ne: sos._id },
       status: { $nin: ['COMPLETED', 'CANCELLED', 'RESOLVED', 'REJECTED'] },
       'shoreHandoff.status': 'ASSIGNED',
+      'shoreHandoff.completedAt': null,
       $or: checkConditions,
     });
 

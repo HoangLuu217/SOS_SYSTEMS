@@ -232,7 +232,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     });
   }, [displayPool, vehicleTypeFilter, vehicleSearchQuery, rescueTeams]);
 
-  // Bản đồ nhận diện các xe đang bận đón bờ ở ca SOS khác
+  // Bản đồ nhận diện các xe đang bận đón bờ ở ca SOS khác đang diễn ra
   const busyVehicleMissionMap = useMemo(() => {
     const map = new Map<string, string>();
     (allSos || []).forEach((s) => {
@@ -240,9 +240,10 @@ export const ActiveMissionConsole: React.FC<Props> = ({
       const currentSosId = String(selectedSos?.id || (selectedSos as any)?._id || '');
       if (sId && currentSosId && sId === currentSosId) return;
 
-      if (['COMPLETED', 'CANCELLED', 'REJECTED', 'RESOLVED'].includes(s.status)) return;
+      const st = String(s.status || '').toUpperCase();
+      if (['COMPLETED', 'CANCELLED', 'REJECTED', 'RESOLVED'].includes(st)) return;
 
-      if (s.shoreHandoff && s.shoreHandoff.status === 'ASSIGNED') {
+      if (s.shoreHandoff && s.shoreHandoff.status === 'ASSIGNED' && !s.shoreHandoff.completedAt) {
         const sosCode = s.sosCode || (s as any).code || (sId ? `#SOS-${sId.slice(-4)}` : 'ca khác');
         if (s.shoreHandoff.assignedVehicleId) {
           map.set(String(s.shoreHandoff.assignedVehicleId), sosCode);
@@ -255,17 +256,13 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     return map;
   }, [allSos, selectedSos]);
 
-  // Kiểm tra phương tiện có đang bận đón bờ cho ca khác hoặc bận trong hệ thống
+  // Kiểm tra phương tiện có đang bận đón bờ cho ca khác hay không
   const getVehicleBusyMission = (v: any): string | null => {
     if (busyVehicleMissionMap.has(String(v.id))) {
       return busyVehicleMissionMap.get(String(v.id)) || null;
     }
     if (v.plate && busyVehicleMissionMap.has(v.plate.trim().toLowerCase())) {
       return busyVehicleMissionMap.get(v.plate.trim().toLowerCase()) || null;
-    }
-    const vStatus = String(v.status || '').toUpperCase();
-    if (vStatus === 'IN_USE' || vStatus === 'IN MISSION') {
-      return 'Nhiệm vụ tác chiến';
     }
     return null;
   };
@@ -334,13 +331,21 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     }
   };
   const handleAssignRoadVehicle = async () => {
-    const veh = selectableVehicles.find((v) => v.id === selectedRoadVehId);
-    if (!veh) return;
+    const veh = filteredRoadVehicles.find((v) => v.id === selectedRoadVehId);
+    if (!veh) {
+      toast.error('Vui lòng chọn một phương tiện khả dụng trong danh sách');
+      return;
+    }
+    const targetSosId = selectedSos?.id || (selectedSos as any)?._id;
+    if (!targetSosId) {
+      toast.error('Không tìm thấy thông tin ca cứu hộ');
+      return;
+    }
     setIsSubmittingRoad(true);
     try {
       const team = rescueTeams.find((t) => t.id === veh.teamId);
       const driver = team?.rescuers?.[0];
-      await assignShoreHandoffApi(selectedSos.id, {
+      await assignShoreHandoffApi(targetSosId, {
         vehicleId: veh.id,
         vehicleName: veh.name,
         vehiclePlate: veh.plate,
@@ -350,8 +355,10 @@ export const ActiveMissionConsole: React.FC<Props> = ({
       });
       setIsRoadModalOpen(false);
       window.dispatchEvent(new CustomEvent('sos_data_updated'));
-    } catch (err) {
+      toast.success(`Đã điều động xe ${veh.plate || veh.name} đến bến tiếp nhận nạn nhân!`);
+    } catch (err: any) {
       console.warn('Lỗi phân xe đón bờ:', err);
+      toast.error(err?.message || 'Không thể điều xe đón bờ. Vui lòng thử lại!');
     } finally {
       setIsSubmittingRoad(false);
     }
@@ -1512,7 +1519,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     letterSpacing: 0.5,
                   }}
                 >
-                  Chọn Phương Tiện Đường Bộ ({selectableVehicles.length} xe khả dụng để đổi):
+                  Chọn Phương Tiện Đường Bộ ({selectableVehicles.length} xe khả dụng{selectedSos.shoreHandoff?.status === 'ASSIGNED' ? ' để đổi' : ''}):
                 </label>
 
                 {filteredRoadVehicles.length === 0 ? (
@@ -1805,7 +1812,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 Đóng
               </button>
               {(() => {
-                const canSubmit = !isSubmittingRoad && Boolean(selectedRoadVehId) && selectableVehicles.some((v) => v.id === selectedRoadVehId);
+                const canSubmit = !isSubmittingRoad && Boolean(selectedRoadVehId);
                 return (
                   <button
                     type="button"
