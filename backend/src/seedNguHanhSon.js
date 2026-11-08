@@ -928,8 +928,9 @@ async function seedNguHanhSon() {
     // ========================================================
     console.log('\n--- 7. Tạo Lệnh Phân Công Tác Chiến (SosAssignment) ---');
 
-    // Xóa các phân công cũ của đội teamNHS và rescuer leCuuNan để đảm bảo quy tắc 1 nhóm chỉ làm 1 nhiệm vụ
+    // Xóa các phân công chưa hoàn tất của đội teamNHS và rescuer leCuuNan (bảo toàn các ca COMPLETED)
     await SosAssignment.deleteMany({
+      status: { $ne: 'COMPLETED' },
       $or: [
         { sosRequestId: sos1._id },
         { sosId: sos1._id },
@@ -1288,6 +1289,10 @@ async function seedNguHanhSon() {
     console.log(`➕ Đã tạo ${allEquipments.length} trang thiết bị & vật tư cứu trợ:`);
     console.log(`   ➤ Trang thiết bị (DURABLE): ${durableItems.length} loại`);
     console.log(`   ➤ Vật tư tiêu hao (CONSUMABLE): ${consumableItems.length} loại`);
+
+    // Đồng bộ các đội cứu hộ và xe cứu thương bổ sung tại Ngũ Hành Sơn
+    const { seedAdditionalTeamsNHS } = require('./seedAdditionalTeamsNHS');
+    await seedAdditionalTeamsNHS();
 
     console.log('\n========================================================');
     console.log('🎉 SEED DỮ LIỆU NGŨ HÀNH SƠN HOÀN TẤT THÀNH CÔNG!');
