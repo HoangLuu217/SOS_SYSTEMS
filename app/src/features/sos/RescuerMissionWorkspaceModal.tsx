@@ -1382,6 +1382,30 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     }
   }, [supplyRequestModalVisible, fetchLocalWarehouseSupplies]);
 
+  // Mở modal yêu cầu vật tư: luôn làm mới bảng số lượng về 0 và xóa ghi chú cũ
+  const handleOpenSupplyRequestModal = () => {
+    const freshQty: Record<string, number> = {};
+    warehouseEquipments.forEach((it: any) => {
+      freshQty[it.name] = 0;
+    });
+    setSelectedSuppliesToRequest(freshQty);
+    setSupplyNote('');
+    setSupplyUrgency('NORMAL');
+    setSupplyRequestModalVisible(true);
+  };
+
+  // Đóng modal yêu cầu vật tư và reset trạng thái nhập
+  const handleCloseSupplyRequestModal = () => {
+    const resetQty: Record<string, number> = {};
+    warehouseEquipments.forEach((it: any) => {
+      resetQty[it.name] = 0;
+    });
+    setSelectedSuppliesToRequest(resetQty);
+    setSupplyNote('');
+    setSupplyUrgency('NORMAL');
+    setSupplyRequestModalVisible(false);
+  };
+
   // Xử lý gửi yêu cầu cung cấp bổ sung vật tư lên chính quyền / Ban chỉ huy địa phương
   const handleSubmitSupplyRequest = async () => {
     const items = Object.entries(selectedSuppliesToRequest)
@@ -1421,7 +1445,15 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       }
 
       setRequestedSuppliesList((prev) => [...prev, ...finalItems]);
+      
+      // Reset sạch sẽ bảng vật tư về 0 và xóa ghi chú để lần sau mở ra không bị nhớ số lượng cũ
+      const resetQty: Record<string, number> = {};
+      warehouseEquipments.forEach((it: any) => {
+        resetQty[it.name] = 0;
+      });
+      setSelectedSuppliesToRequest(resetQty);
       setSupplyNote('');
+      setSupplyUrgency('NORMAL');
       setSupplyRequestModalVisible(false);
       setCustomNotice({
         visible: true,
@@ -2420,7 +2452,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
                       <TouchableOpacity
                         style={styles.requestSuppliesBtn}
-                        onPress={() => setSupplyRequestModalVisible(true)}
+                        onPress={handleOpenSupplyRequestModal}
                         activeOpacity={0.8}
                       >
                         <Feather name="plus-circle" size={13} color="#0284C7" />
@@ -3232,7 +3264,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                     </Text>
                   ) : null}
                 </View>
-                <TouchableOpacity onPress={() => setSupplyRequestModalVisible(false)}>
+                <TouchableOpacity onPress={handleCloseSupplyRequestModal}>
                   <Feather name="x" size={20} color="#64748B" />
                 </TouchableOpacity>
               </View>
@@ -3359,7 +3391,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               <View style={styles.modalActionButtons}>
                 <TouchableOpacity
                   style={styles.modalCancelBtn}
-                  onPress={() => setSupplyRequestModalVisible(false)}
+                  onPress={handleCloseSupplyRequestModal}
                 >
                   <Text style={styles.modalCancelBtnText}>Hủy bỏ</Text>
                 </TouchableOpacity>
