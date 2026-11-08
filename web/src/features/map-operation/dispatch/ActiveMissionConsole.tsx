@@ -617,7 +617,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   }}
                 >
                   <Check size={14} />
-                  <span>{isProcessingSupplies ? 'Đang duyệt...' : 'Duyệt (Accept)'}</span>
+                  <span>{isProcessingSupplies ? 'Đang duyệt...' : 'Duyệt'}</span>
                 </button>
                 <button
                   type="button"
