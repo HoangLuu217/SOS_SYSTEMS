@@ -375,15 +375,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   const [suppliesExpanded, setSuppliesExpanded] = useState<boolean>(false); // Xem chi tiết / thu gọn danh mục vật tư
   const [supplyRequestModalVisible, setSupplyRequestModalVisible] = useState<boolean>(false); // Modal yêu cầu cấp thêm vật tư
   const [requestedSuppliesList, setRequestedSuppliesList] = useState<any[]>([]); // Danh sách vật tư đã gửi yêu cầu
-  const [selectedSuppliesToRequest, setSelectedSuppliesToRequest] = useState<Record<string, number>>({
-    'Áo phao cứu sinh tiêu chuẩn SOLAS': 2,
-    'Xuồng ca-nô cao su cứu hộ': 0,
-    'Túi sơ cứu & Thuốc y tế dã chiến': 1,
-    'Nước uống tiệt trùng (Thùng 24 chai)': 2,
-    'Lương khô dã chiến (Thùng)': 0,
-    'Dây thừng cứu nạn chuyên dụng (50m)': 0,
-    'Đèn pin rọi nước dã chiến': 0,
-  });
+  const [warehouseEquipments, setWarehouseEquipments] = useState<any[]>([]); // Danh mục vật tư thực tế từ kho địa phương
+  const [isLoadingWarehouseEquipments, setIsLoadingWarehouseEquipments] = useState<boolean>(false);
+  const [selectedSuppliesToRequest, setSelectedSuppliesToRequest] = useState<Record<string, number>>({});
   const [supplyUrgency, setSupplyUrgency] = useState<'NORMAL' | 'URGENT'>('NORMAL');
   const [supplyNote, setSupplyNote] = useState<string>('');
 
@@ -1321,11 +1315,86 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     }
   }, [isNavigating, teamLocation]);
 
+  // Tải danh mục vật tư thực tế từ kho Ban Chỉ Huy địa phương tương ứng với ca SOS này
+  const fetchLocalWarehouseSupplies = useCallback(async () => {
+    try {
+      setIsLoadingWarehouseEquipments(true);
+      const targetArea =
+        sos?.wardId?._id || sos?.wardId ||
+        sos?.districtId?._id || sos?.districtId ||
+        sos?.areaId?._id || sos?.areaId ||
+        assignment?.authorityOrganizationId?.areaId?._id || assignment?.authorityOrganizationId?.areaId ||
+        assignment?.rescueTeamId?.areaId?._id || assignment?.rescueTeamId?.areaId ||
+        sos?.wardName ||
+        sos?.districtName ||
+        '';
+
+      const teamId = assignment?.rescueTeamId?._id || assignment?.rescueTeamId || assignment?.teamId;
+
+      let queryParams = '?limit=100';
+      if (targetArea) {
+        queryParams += `&areaId=${encodeURIComponent(String(targetArea))}`;
+      } else if (teamId) {
+        queryParams += `&teamId=${encodeURIComponent(String(teamId))}`;
+      }
+
+      const res: any = await backendApi.get(`/equipments${queryParams}`);
+      let eqList: any[] = [];
+      if (res?.success && Array.isArray(res?.data) && res.data.length > 0) {
+        eqList = res.data;
+      } else if (Array.isArray(res?.data?.equipments) && res.data.equipments.length > 0) {
+        eqList = res.data.equipments;
+      } else {
+        const allRes: any = await backendApi.get('/equipments?limit=100');
+        if (allRes?.success && Array.isArray(allRes?.data)) {
+          eqList = allRes.data;
+        } else if (Array.isArray(allRes?.data?.equipments)) {
+          eqList = allRes.data.equipments;
+        }
+      }
+
+      if (eqList.length > 0) {
+        setWarehouseEquipments(eqList);
+        setSelectedSuppliesToRequest((prev) => {
+          const next = { ...prev };
+          eqList.forEach((it: any) => {
+            if (next[it.name] === undefined) {
+              next[it.name] = 0;
+            }
+          });
+          return next;
+        });
+      }
+    } catch (err) {
+      console.warn('Lỗi tải danh mục vật tư kho địa phương:', err);
+    } finally {
+      setIsLoadingWarehouseEquipments(false);
+    }
+  }, [sos, assignment]);
+
+  useEffect(() => {
+    fetchLocalWarehouseSupplies();
+  }, [fetchLocalWarehouseSupplies]);
+
+  useEffect(() => {
+    if (supplyRequestModalVisible) {
+      fetchLocalWarehouseSupplies();
+    }
+  }, [supplyRequestModalVisible, fetchLocalWarehouseSupplies]);
+
   // Xử lý gửi yêu cầu cung cấp bổ sung vật tư lên chính quyền / Ban chỉ huy địa phương
   const handleSubmitSupplyRequest = async () => {
     const items = Object.entries(selectedSuppliesToRequest)
       .filter(([_, qty]) => qty > 0)
-      .map(([name, quantity]) => ({ name, quantity, unit: 'món' }));
+      .map(([name, quantity]) => {
+        const matched = warehouseEquipments.find((w) => w.name === name);
+        return {
+          name,
+          quantity,
+          unit: matched?.unit || 'món',
+          equipmentId: matched?._id,
+        };
+      });
 
     if (items.length === 0 && !supplyNote.trim()) {
       Alert.alert('Chưa có vật tư', 'Vui lòng chọn số lượng vật tư có sẵn hoặc nhập tên vật tư cần cấp thêm.');
@@ -1348,7 +1417,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
       const finalItems = [...items];
       if (supplyNote.trim()) {
-        finalItems.push({ name: supplyNote.trim(), quantity: 1, unit: 'yêu cầu' });
+        finalItems.push({ name: supplyNote.trim(), quantity: 1, unit: 'yêu cầu', equipmentId: undefined });
       }
 
       setRequestedSuppliesList((prev) => [...prev, ...finalItems]);
@@ -3155,49 +3224,82 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             <View style={[styles.modalCard, { maxHeight: SCREEN_HEIGHT * 0.85 }]}>
               <View style={styles.modalHeaderRow}>
                 <MaterialCommunityIcons name="package-variant-plus" size={24} color="#0284C7" />
-                <Text style={styles.modalTitle}>Yêu Cầu Chi Viện Vật Tư</Text>
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.modalTitle}>Yêu Cầu Chi Viện Vật Tư</Text>
+                  {authorityName ? (
+                    <Text style={{ fontSize: 11, color: '#0284C7', fontWeight: '700' }} numberOfLines={1}>
+                      Kho: {authorityName}
+                    </Text>
+                  ) : null}
+                </View>
                 <TouchableOpacity onPress={() => setSupplyRequestModalVisible(false)}>
                   <Feather name="x" size={20} color="#64748B" />
                 </TouchableOpacity>
               </View>
 
               <Text style={styles.modalDesc}>
-                Gửi yêu cầu tiếp tế trang thiết bị, vật tư lên Ban Chỉ Huy địa phương để được hỗ trợ chuyển đến hiện trường:
+                {authorityName
+                  ? `Chọn danh mục vật tư từ kho ${authorityName} để gửi Ban Chỉ Huy xuất cấp chi viện:`
+                  : 'Gửi yêu cầu tiếp tế trang thiết bị, vật tư lên Ban Chỉ Huy địa phương để được hỗ trợ chuyển đến hiện trường:'}
               </Text>
 
-              <ScrollView style={{ maxHeight: 250 }} showsVerticalScrollIndicator={false}>
-                {Object.entries(selectedSuppliesToRequest).map(([itemKey, qty]) => (
-                  <View key={itemKey} style={styles.supplyRequestItemRow}>
-                    <View style={{ flex: 1, paddingRight: 8 }}>
-                      <Text style={styles.supplyRequestItemName}>{itemKey}</Text>
-                    </View>
-                    <View style={styles.qtyControlRow}>
-                      <TouchableOpacity
-                        style={styles.qtyBtn}
-                        onPress={() =>
-                          setSelectedSuppliesToRequest((prev) => ({
-                            ...prev,
-                            [itemKey]: Math.max(0, (prev[itemKey] || 0) - 1),
-                          }))
-                        }
-                      >
-                        <Feather name="minus" size={14} color="#475569" />
-                      </TouchableOpacity>
-                      <Text style={styles.qtyValueText}>{qty}</Text>
-                      <TouchableOpacity
-                        style={[styles.qtyBtn, styles.qtyBtnPlus]}
-                        onPress={() =>
-                          setSelectedSuppliesToRequest((prev) => ({
-                            ...prev,
-                            [itemKey]: (prev[itemKey] || 0) + 1,
-                          }))
-                        }
-                      >
-                        <Feather name="plus" size={14} color="#0284C7" />
-                      </TouchableOpacity>
-                    </View>
+              <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
+                {isLoadingWarehouseEquipments && warehouseEquipments.length === 0 ? (
+                  <View style={{ paddingVertical: 24, alignItems: 'center', justifyContent: 'center' }}>
+                    <ActivityIndicator size="small" color="#0284C7" />
+                    <Text style={{ fontSize: 12, color: '#64748B', marginTop: 8, fontWeight: '600' }}>
+                      Đang kết nối kho vật tư địa phương...
+                    </Text>
                   </View>
-                ))}
+                ) : warehouseEquipments.length === 0 ? (
+                  <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 12.5, color: '#64748B', textAlign: 'center', lineHeight: 18 }}>
+                      Chưa tìm thấy danh mục vật tư sẵn có trong kho địa phương này. Bạn có thể nhập loại vật tư cần cấp vào ô bên dưới.
+                    </Text>
+                  </View>
+                ) : (
+                  warehouseEquipments.map((eq: any) => {
+                    const itemKey = eq.name;
+                    const qty = selectedSuppliesToRequest[itemKey] || 0;
+                    const stock = eq.quantity !== undefined ? eq.quantity : 0;
+                    const unit = eq.unit || 'món';
+                    return (
+                      <View key={eq._id || itemKey} style={styles.supplyRequestItemRow}>
+                        <View style={{ flex: 1, paddingRight: 8 }}>
+                          <Text style={styles.supplyRequestItemName}>{itemKey}</Text>
+                          <Text style={{ fontSize: 11, color: stock > 0 ? '#059669' : '#DC2626', fontWeight: '700', marginTop: 2 }}>
+                            {stock > 0 ? `📦 Tồn kho: ${stock} ${unit}` : '⚠️ Hết tồn kho'}
+                          </Text>
+                        </View>
+                        <View style={styles.qtyControlRow}>
+                          <TouchableOpacity
+                            style={styles.qtyBtn}
+                            onPress={() =>
+                              setSelectedSuppliesToRequest((prev) => ({
+                                ...prev,
+                                [itemKey]: Math.max(0, (prev[itemKey] || 0) - 1),
+                              }))
+                            }
+                          >
+                            <Feather name="minus" size={14} color="#475569" />
+                          </TouchableOpacity>
+                          <Text style={styles.qtyValueText}>{qty}</Text>
+                          <TouchableOpacity
+                            style={[styles.qtyBtn, styles.qtyBtnPlus]}
+                            onPress={() =>
+                              setSelectedSuppliesToRequest((prev) => ({
+                                ...prev,
+                                [itemKey]: (prev[itemKey] || 0) + 1,
+                              }))
+                            }
+                          >
+                            <Feather name="plus" size={14} color="#0284C7" />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
               </ScrollView>
 
               {/* Mức độ cấp bách */}
