@@ -306,6 +306,9 @@ const changeStatus = async (id, newStatus, changedBy, note = '') => {
   const updateFields = { status: newStatus };
   if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(newStatus)) {
     updateFields.resolvedAt = new Date();
+    if (sos.shoreHandoff?.assignedVehicleId && mongoose.isValidObjectId(sos.shoreHandoff.assignedVehicleId)) {
+      await Vehicle.findByIdAndUpdate(sos.shoreHandoff.assignedVehicleId, { status: 'AVAILABLE' });
+    }
   }
   // Cập nhật trạng thái không re-validate các trường dữ liệu test cũ (tránh lỗi 0123456789)
   await SosRequest.updateOne({ _id: id }, { $set: updateFields });
@@ -528,6 +531,34 @@ const assignShoreHandoff = async (id, data, _user) => {
     });
   }
 
+  // Kiểm tra xem xe này có đang bận đón bờ cho ca SOS khác đang hoạt động hay không
+  const checkConditions = [];
+  if (vehicle?._id) checkConditions.push({ 'shoreHandoff.assignedVehicleId': vehicle._id });
+  if (data.vehicleId && mongoose.isValidObjectId(data.vehicleId)) {
+    checkConditions.push({ 'shoreHandoff.assignedVehicleId': data.vehicleId });
+  }
+  if (vehicle?.plateNumber) checkConditions.push({ 'shoreHandoff.assignedVehiclePlate': vehicle.plateNumber });
+  if (data.vehiclePlate && String(data.vehiclePlate).trim()) {
+    checkConditions.push({ 'shoreHandoff.assignedVehiclePlate': String(data.vehiclePlate).trim() });
+  }
+
+  if (checkConditions.length > 0) {
+    const busySos = await SosRequest.findOne({
+      _id: { $ne: sos._id },
+      status: { $nin: ['COMPLETED', 'CANCELLED', 'RESOLVED', 'REJECTED'] },
+      'shoreHandoff.status': 'ASSIGNED',
+      $or: checkConditions,
+    });
+
+    if (busySos) {
+      const busyCode = busySos.sosCode || busySos._id;
+      throw new ApiError(
+        400,
+        `Phương tiện này hiện đang bận đón bờ cho nhiệm vụ #${busyCode}. Vui lòng chờ xe hoàn thành hoặc chọn xe khác!`
+      );
+    }
+  }
+
   const typeLabel = vehicle
     ? (vehicle.type === 'AMBULANCE' ? 'Xe Cứu Thương Dã Chiến 115'
       : vehicle.type === 'TRUCK' ? 'Xe Tải Cứu Hộ Dã Chiến'
@@ -535,6 +566,14 @@ const assignShoreHandoff = async (id, data, _user) => {
       : vehicle.type === 'MOTORBIKE' ? 'Mô-tô Cứu Hộ'
       : 'Xe Cứu Hộ')
     : (data.vehicleName ? (data.vehicleName.length > 40 ? data.vehicleName.substring(0, 40) + '...' : data.vehicleName) : 'Xe Cứu Thương 115');
+
+  // Đánh dấu phương tiện đang bận (IN_USE)
+  if (vehicle) {
+    vehicle.status = 'IN_USE';
+    await vehicle.save();
+  } else if (data.vehicleId && mongoose.isValidObjectId(data.vehicleId)) {
+    await Vehicle.findByIdAndUpdate(data.vehicleId, { status: 'IN_USE' });
+  }
 
   sos.shoreHandoff.status = 'ASSIGNED';
   sos.shoreHandoff.assignedVehicleId = vehicle?._id || data.vehicleId || null;
@@ -562,6 +601,10 @@ const cancelShoreHandoff = async (id, _user) => {
   if (!sos) throw new ApiError(404, 'Không tìm thấy yêu cầu SOS');
 
   if (sos.shoreHandoff) {
+    const prevVehicleId = sos.shoreHandoff.assignedVehicleId;
+    if (prevVehicleId && mongoose.isValidObjectId(prevVehicleId)) {
+      await Vehicle.findByIdAndUpdate(prevVehicleId, { status: 'AVAILABLE' });
+    }
     sos.shoreHandoff.status = 'REQUESTED';
     sos.shoreHandoff.assignedVehicleId = null;
     sos.shoreHandoff.assignedVehicleName = null;
@@ -589,6 +632,10 @@ const completeShoreHandoff = async (id, _user) => {
   if (!sos) throw new ApiError(404, 'Không tìm thấy yêu cầu SOS');
 
   if (sos.shoreHandoff) {
+    const prevVehicleId = sos.shoreHandoff.assignedVehicleId;
+    if (prevVehicleId && mongoose.isValidObjectId(prevVehicleId)) {
+      await Vehicle.findByIdAndUpdate(prevVehicleId, { status: 'AVAILABLE' });
+    }
     sos.shoreHandoff.status = 'COMPLETED';
     sos.shoreHandoff.completedAt = new Date();
     await sos.save();

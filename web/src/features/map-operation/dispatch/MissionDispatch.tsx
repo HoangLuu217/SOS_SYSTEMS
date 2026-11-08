@@ -262,6 +262,7 @@ export const MissionDispatch = ({
       >
         <DispatchWorkflow
           selectedSos={selectedSos}
+          allSos={sosRequests}
           assignment={assignment}
           authorities={authorities}
           rescueTeams={rescueTeams}

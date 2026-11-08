@@ -629,8 +629,11 @@ class SosAssignmentService {
       if (sos) {
         const oldStatus = sos.status;
         sos.status = targetSosStatus;
-        if (targetSosStatus === 'COMPLETED' || targetSosStatus === 'RESOLVED') {
+        if (targetSosStatus === 'COMPLETED' || targetSosStatus === 'RESOLVED' || targetSosStatus === 'CANCELLED') {
           sos.resolvedAt = now;
+          if (sos.shoreHandoff?.assignedVehicleId && mongoose.isValidObjectId(sos.shoreHandoff.assignedVehicleId)) {
+            await Vehicle.findByIdAndUpdate(sos.shoreHandoff.assignedVehicleId, { status: 'AVAILABLE' });
+          }
         }
         if (extraData?.proofImages && Array.isArray(extraData.proofImages) && extraData.proofImages.length > 0) {
           sos.proofImages = [

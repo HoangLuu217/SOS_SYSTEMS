@@ -22,6 +22,7 @@ import { ActiveMissionConsole } from './ActiveMissionConsole';
 
 interface Props {
   selectedSos?: SosRequest | null;
+  allSos?: SosRequest[];
   assignment: SosAssignment | null;
   authorities: AuthorityOrganization[];
   rescueTeams: RescueTeam[];
@@ -51,6 +52,7 @@ interface Props {
 
 export const DispatchWorkflow = ({
   selectedSos,
+  allSos,
   assignment,
   authorities,
   rescueTeams,
@@ -632,6 +634,7 @@ export const DispatchWorkflow = ({
           <ActiveMissionConsole
             assignment={assignment}
             selectedSos={selectedSos}
+            allSos={allSos}
             rescueTeams={rescueTeams}
             vehicles={vehicles}
             activeOfficer={activeOfficer}

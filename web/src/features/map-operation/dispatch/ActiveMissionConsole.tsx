@@ -19,6 +19,7 @@ import { toast } from '@/components/common/toast';
 interface Props {
   assignment: SosAssignment | null;
   selectedSos: SosRequest;
+  allSos?: SosRequest[];
   rescueTeams: RescueTeam[];
   vehicles: Vehicle[];
   activeOfficer?: AuthorityOfficer;
@@ -30,6 +31,7 @@ interface Props {
 export const ActiveMissionConsole: React.FC<Props> = ({
   assignment,
   selectedSos,
+  allSos,
   rescueTeams,
   vehicles,
   activeOfficer,
@@ -228,6 +230,44 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     });
   }, [displayPool, vehicleTypeFilter, vehicleSearchQuery, rescueTeams]);
 
+  // Bản đồ nhận diện các xe đang bận đón bờ ở ca SOS khác
+  const busyVehicleMissionMap = useMemo(() => {
+    const map = new Map<string, string>();
+    (allSos || []).forEach((s) => {
+      const sId = String(s.id || (s as any)._id || '');
+      const currentSosId = String(selectedSos?.id || (selectedSos as any)?._id || '');
+      if (sId && currentSosId && sId === currentSosId) return;
+
+      if (['COMPLETED', 'CANCELLED', 'REJECTED', 'RESOLVED'].includes(s.status)) return;
+
+      if (s.shoreHandoff && s.shoreHandoff.status === 'ASSIGNED') {
+        const sosCode = s.sosCode || (s as any).code || (sId ? `#SOS-${sId.slice(-4)}` : 'ca khác');
+        if (s.shoreHandoff.assignedVehicleId) {
+          map.set(String(s.shoreHandoff.assignedVehicleId), sosCode);
+        }
+        if (s.shoreHandoff.assignedVehiclePlate) {
+          map.set(s.shoreHandoff.assignedVehiclePlate.trim().toLowerCase(), sosCode);
+        }
+      }
+    });
+    return map;
+  }, [allSos, selectedSos]);
+
+  // Kiểm tra phương tiện có đang bận đón bờ cho ca khác hoặc bận trong hệ thống
+  const getVehicleBusyMission = (v: any): string | null => {
+    if (busyVehicleMissionMap.has(String(v.id))) {
+      return busyVehicleMissionMap.get(String(v.id)) || null;
+    }
+    if (v.plate && busyVehicleMissionMap.has(v.plate.trim().toLowerCase())) {
+      return busyVehicleMissionMap.get(v.plate.trim().toLowerCase()) || null;
+    }
+    const vStatus = String(v.status || '').toUpperCase();
+    if (vStatus === 'IN_USE' || vStatus === 'IN MISSION') {
+      return 'Nhiệm vụ tác chiến';
+    }
+    return null;
+  };
+
   // Kiểm tra xem phương tiện có đang được điều động phục vụ điểm đón này hay không
   const isVehicleCurrentlyAssigned = (v: any) => {
     if (!selectedSos?.shoreHandoff) return false;
@@ -244,12 +284,12 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     return false;
   };
 
-  // Danh sách xe khả dụng (loại trừ xe đang phục vụ hiện tại để không cho chọn lại)
+  // Danh sách xe khả dụng (loại trừ xe đang phục vụ hiện tại VÀ xe đang bận nhiệm vụ khác)
   const selectableVehicles = useMemo(() => {
-    return filteredRoadVehicles.filter((v) => !isVehicleCurrentlyAssigned(v));
-  }, [filteredRoadVehicles, selectedSos?.shoreHandoff]);
+    return filteredRoadVehicles.filter((v) => !isVehicleCurrentlyAssigned(v) && !getVehicleBusyMission(v));
+  }, [filteredRoadVehicles, selectedSos?.shoreHandoff, busyVehicleMissionMap]);
 
-  // Tự động chọn xe khả dụng đầu tiên (khác xe hiện tại) khi mở modal hoặc danh sách đổi
+  // Tự động chọn xe khả dụng đầu tiên khi mở modal hoặc danh sách đổi
   useEffect(() => {
     if (isRoadModalOpen && filteredRoadVehicles.length > 0) {
       const existsAndSelectable = selectableVehicles.some((v) => v.id === selectedRoadVehId);
@@ -1502,7 +1542,10 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   >
                     {filteredRoadVehicles.map((v) => {
                       const isCurrentAssigned = isVehicleCurrentlyAssigned(v);
-                      const isSelected = selectedRoadVehId === v.id && !isCurrentAssigned;
+                      const busyMissionLabel = getVehicleBusyMission(v);
+                      const isBusyOther = !isCurrentAssigned && Boolean(busyMissionLabel);
+                      const isDisabled = isCurrentAssigned || isBusyOther;
+                      const isSelected = selectedRoadVehId === v.id && !isDisabled;
                       const team = rescueTeams.find((t) => t.id === v.teamId);
                       const capacityNum = parseInt(v.capacity, 10) || 4;
                       const peopleCount = selectedSos.shoreHandoff?.peopleCount ?? 0;
@@ -1512,26 +1555,36 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                         <div
                           key={v.id}
                           onClick={() => {
-                            if (!isCurrentAssigned) {
+                            if (!isDisabled) {
                               setSelectedRoadVehId(v.id);
                             }
                           }}
-                          title={isCurrentAssigned ? 'Xe này đang được phân công cho điểm này, không thể chọn lại' : undefined}
+                          title={
+                            isCurrentAssigned
+                              ? 'Xe này đang được phân công cho điểm này, không thể chọn lại'
+                              : isBusyOther
+                              ? `Xe này đang bận đón bờ cho ${busyMissionLabel}, chưa thể điều động!`
+                              : undefined
+                          }
                           style={{
                             padding: '10px 14px',
                             borderRadius: 10,
                             border: isCurrentAssigned
                               ? '1.5px dashed #cbd5e1'
+                              : isBusyOther
+                              ? '1.5px dashed #fca5a5'
                               : isSelected
                               ? '2px solid #0284c7'
                               : '1.5px solid #e2e8f0',
                             background: isCurrentAssigned
                               ? '#f8fafc'
+                              : isBusyOther
+                              ? '#fff5f5'
                               : isSelected
                               ? '#f0f9ff'
                               : '#ffffff',
-                            cursor: isCurrentAssigned ? 'not-allowed' : 'pointer',
-                            opacity: isCurrentAssigned ? 0.6 : 1,
+                            cursor: isDisabled ? 'not-allowed' : 'pointer',
+                            opacity: isDisabled ? 0.6 : 1,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
@@ -1548,11 +1601,15 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                 borderRadius: 8,
                                 background: isCurrentAssigned
                                   ? '#f1f5f9'
+                                  : isBusyOther
+                                  ? '#fee2e2'
                                   : v.type === 'Ambulance'
                                   ? '#eff6ff'
                                   : '#fffbeb',
                                 border: isCurrentAssigned
                                   ? '1px solid #cbd5e1'
+                                  : isBusyOther
+                                  ? '1px solid #fecaca'
                                   : v.type === 'Ambulance'
                                   ? '1px solid #bfdbfe'
                                   : '1px solid #fef3c7',
@@ -1561,7 +1618,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                 justifyContent: 'center',
                                 fontSize: 18,
                                 flexShrink: 0,
-                                filter: isCurrentAssigned ? 'grayscale(1)' : 'none',
+                                filter: isDisabled ? 'grayscale(0.8)' : 'none',
                               }}
                             >
                               {v.type === 'Ambulance' ? '🚑' : '🚚'}
@@ -1569,7 +1626,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
 
                             <div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: 13.5, fontWeight: 900, color: isCurrentAssigned ? '#64748b' : '#0f172a' }}>
+                                <span style={{ fontSize: 13.5, fontWeight: 900, color: isDisabled ? '#64748b' : '#0f172a' }}>
                                   {v.name}
                                 </span>
                                 <span
@@ -1601,6 +1658,21 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                     🚫 Đang phục vụ điểm này (Xe hiện tại)
                                   </span>
                                 )}
+                                {isBusyOther && (
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: 800,
+                                      padding: '1px 6px',
+                                      borderRadius: 4,
+                                      background: '#fee2e2',
+                                      color: '#b91c1c',
+                                      border: '1px solid #fecaca',
+                                    }}
+                                  >
+                                    ⏳ Đang bận đón ({busyMissionLabel})
+                                  </span>
+                                )}
                               </div>
 
                               <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
@@ -1616,8 +1688,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                     style={{
                                       fontSize: 10.5,
                                       fontWeight: 800,
-                                      color: isCurrentAssigned ? '#64748b' : '#16a34a',
-                                      background: isCurrentAssigned ? '#f1f5f9' : '#dcfce7',
+                                      color: isDisabled ? '#64748b' : '#16a34a',
+                                      background: isDisabled ? '#f1f5f9' : '#dcfce7',
                                       padding: '1px 5px',
                                       borderRadius: 4,
                                     }}
@@ -1629,13 +1701,13 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                     style={{
                                       fontSize: 10.5,
                                       fontWeight: 800,
-                                      color: '#d97706',
-                                      background: '#fef3c7',
+                                      color: '#ea580c',
+                                      background: '#fff7ed',
                                       padding: '1px 5px',
                                       borderRadius: 4,
                                     }}
                                   >
-                                    ⚠️ Chứa {capacityNum}/{peopleCount} người
+                                    ⚠ Thiếu chỗ ({peopleCount}/{capacityNum})
                                   </span>
                                 )}
                               </div>
@@ -1657,6 +1729,21 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                 }}
                               >
                                 Đang chọn
+                              </div>
+                            ) : isBusyOther ? (
+                              <div
+                                title={`Xe đang bận đón bờ cho ${busyMissionLabel}`}
+                                style={{
+                                  padding: '3px 8px',
+                                  borderRadius: 6,
+                                  background: '#fee2e2',
+                                  border: '1px solid #fecaca',
+                                  fontSize: 10.5,
+                                  fontWeight: 800,
+                                  color: '#b91c1c',
+                                }}
+                              >
+                                Đang bận
                               </div>
                             ) : isSelected ? (
                               <CheckCircle2 size={20} color="#0284c7" />
