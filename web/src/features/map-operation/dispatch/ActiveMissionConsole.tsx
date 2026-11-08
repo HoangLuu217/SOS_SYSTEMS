@@ -1219,35 +1219,37 @@ export const ActiveMissionConsole: React.FC<Props> = ({
             <div
               style={{
                 padding: '16px 20px',
-                background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-                color: '#ffffff',
+                background: 'linear-gradient(to right, #f0f9ff 0%, #f8fafc 100%)',
+                color: '#0f172a',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                borderBottom: '1px solid #334155',
+                borderBottom: '1px solid #e2e8f0',
                 flexShrink: 0,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
                 <div
                   style={{
-                    width: 38,
-                    height: 38,
+                    width: 40,
+                    height: 40,
                     borderRadius: 10,
-                    background: 'rgba(56, 189, 248, 0.15)',
-                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                    background: '#e0f2fe',
+                    border: '1px solid #bae6fd',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    color: '#0284c7',
+                    flexShrink: 0,
                   }}
                 >
-                  <Ambulance size={22} color="#38bdf8" />
+                  <Ambulance size={22} color="#0284c7" />
                 </div>
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 900, letterSpacing: -0.2 }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', letterSpacing: -0.2 }}>
                     Điều Phối Xe Đón Bờ (Tiếp Vận)
                   </div>
-                  <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
                     Tiếp nhận bàn giao nạn nhân tại bến cập bờ
                   </div>
                 </div>
@@ -1256,21 +1258,30 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 type="button"
                 onClick={() => setIsRoadModalOpen(false)}
                 style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: 'none',
+                  background: '#ffffff',
+                  border: '1px solid #cbd5e1',
                   borderRadius: 8,
-                  color: '#94a3b8',
-                  fontSize: 18,
-                  width: 32,
-                  height: 32,
+                  color: '#64748b',
+                  fontSize: 16,
+                  width: 34,
+                  height: 34,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#f1f5f9';
+                  e.currentTarget.style.color = '#0f172a';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#ffffff';
+                  e.currentTarget.style.color = '#64748b';
                 }}
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
 
