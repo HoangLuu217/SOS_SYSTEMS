@@ -47,11 +47,38 @@ const getSosRequests = async (req, res, next) => {
     const userRoles = req.user?.roles || [];
     const userId = req.user?._id;
     
-    // Nếu user không phải ADMIN và không phải LOCAL_AUTHORITY (như CITIZEN, RESCUER...)
-    // Họ chỉ xem được danh sách các ca báo nạn do chính tài khoản của họ gửi
+    // Phân quyền tra cứu danh sách SOS:
+    // - ADMIN / LOCAL_AUTHORITY: Xem toàn bộ hoặc theo địa bàn
+    // - RESCUER / LEADER: Xem các ca do mình gửi HOẶC các ca được phân công cho mình / đội cứu hộ
+    // - CITIZEN: Chỉ xem các ca do chính tài khoản của mình gửi
     const isDispatchAuthority = userRoles.some(r => ['ADMIN', 'LOCAL_AUTHORITY'].includes(r));
     if (!isDispatchAuthority) {
-      query.citizenId = userId;
+      if (userRoles.includes('RESCUER') || userRoles.includes('LEADER')) {
+        const teams = await RescueTeam.find({
+          $or: [
+            { leaderId: userId },
+            { 'members.rescuerId': userId, 'members.status': 'APPROVED' },
+            { 'members.rescuerId': userId },
+          ],
+        }).select('_id');
+        const teamIds = teams.map((t) => t._id);
+
+        const myAssignments = await SosAssignment.find({
+          $or: [
+            { rescuerId: userId },
+            { rescueTeamId: { $in: teamIds } },
+            { teamId: { $in: teamIds } },
+          ],
+        }).select('sosRequestId sosId');
+
+        const assignedSosIds = myAssignments
+          .map((a) => a.sosRequestId || a.sosId)
+          .filter(Boolean);
+
+        query.$or = [{ citizenId: userId }, { _id: { $in: assignedSosIds } }];
+      } else {
+        query.citizenId = userId;
+      }
     }
 
     if (query.areaId === 'ALL') {
