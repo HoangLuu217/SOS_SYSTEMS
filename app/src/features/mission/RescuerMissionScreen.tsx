@@ -1461,8 +1461,6 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                         ? item.proofImages
                         : Array.isArray((sos as any)?.proofImages) && (sos as any).proofImages.length > 0
                         ? (sos as any).proofImages
-                        : item.status === 'COMPLETED' && Array.isArray((sos as any)?.images) && (sos as any).images.length > 0
-                        ? (sos as any).images
                         : [];
 
                     if (cardProofList.length === 0) return null;

@@ -649,6 +649,22 @@ class SosAssignmentService {
     };
 
     if (currentStatus === targetStatus) {
+      let changed = false;
+      if (extraData?.proofImages && Array.isArray(extraData.proofImages) && extraData.proofImages.length > 0) {
+        assignment.proofImages = [
+          ...new Set([...(assignment.proofImages || []), ...extraData.proofImages]),
+        ];
+        changed = true;
+      }
+      if (extraData?.actualRecipient) {
+        assignment.actualRecipient = String(extraData.actualRecipient).trim();
+        changed = true;
+      }
+      if (note && !assignment.note?.includes(note)) {
+        assignment.note = assignment.note ? `${assignment.note} | ${note}` : note;
+        changed = true;
+      }
+      if (changed) await assignment.save();
       return assignment;
     }
 

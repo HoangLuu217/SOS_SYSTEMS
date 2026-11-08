@@ -107,8 +107,8 @@ export class AssignmentApi {
   /**
    * Xác nhận hoàn thành bàn giao nạn nhân tại bờ
    */
-  async completeShoreHandoff(sosId: string): Promise<ApiResponse<any>> {
-    return apiClient.post<any>(`/sos/${sosId}/shore-handoff/complete`, {});
+  async completeShoreHandoff(sosId: string, data?: { proofImages?: string[] }): Promise<ApiResponse<any>> {
+    return apiClient.post<any>(`/sos/${sosId}/shore-handoff/complete`, data || {});
   }
 }
 

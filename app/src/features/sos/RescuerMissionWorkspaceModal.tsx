@@ -1098,16 +1098,8 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       const notePayload = `${fieldReportNotes.trim()} | Đã cứu: ${rescuedHeadcount} người`;
 
       const targetSosId = sos?._id || assignment?.sosRequestId || assignment?.sosId;
-      if (targetSosId && shoreHandoffData && shoreHandoffData.status === 'ASSIGNED') {
-        try {
-          await backendApi.completeShoreHandoff(targetSosId);
-          setShoreHandoffData((prev: any) => (prev ? { ...prev, status: 'COMPLETED' } : null));
-        } catch (err) {
-          console.warn('Auto complete shore handoff error:', err);
-        }
-      }
 
-      // Tải ảnh thực tế chụp tại hiện trường lên máy chủ Cloudinary để có URL vĩnh viễn
+      // 1. Tải ảnh thực tế chụp tại hiện trường lên máy chủ Cloudinary trước để có URL
       let uploadedUrls: string[] = [];
       if (capturedPhotoBase64) {
         try {
@@ -1131,9 +1123,19 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         ? uploadedUrls
         : capturedPhotoUri
         ? [capturedPhotoUri]
-        : ['https://images.unsplash.com/photo-1593113598332-cd288d649433?w=800'];
+        : [];
 
       completedProofImagesRef.current = proofImages;
+
+      // 2. Hoàn tất đón bờ với bằng chứng hình ảnh thực tế
+      if (targetSosId && shoreHandoffData && shoreHandoffData.status === 'ASSIGNED') {
+        try {
+          await backendApi.completeShoreHandoff(targetSosId, { proofImages });
+          setShoreHandoffData((prev: any) => (prev ? { ...prev, status: 'COMPLETED' } : null));
+        } catch (err) {
+          console.warn('Auto complete shore handoff error:', err);
+        }
+      }
 
       if (assignment?._id) {
         await backendApi.updateAssignmentStatus(assignment._id, 'COMPLETED', notePayload, {

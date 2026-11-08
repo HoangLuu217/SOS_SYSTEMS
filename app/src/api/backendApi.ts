@@ -268,7 +268,7 @@ class BackendApiService {
     }
   ) => assignmentApi.requestShoreHandoff(sosId, data);
 
-  completeShoreHandoff = (sosId: string) => assignmentApi.completeShoreHandoff(sosId);
+  completeShoreHandoff = (sosId: string, data?: { proofImages?: string[] }) => assignmentApi.completeShoreHandoff(sosId, data);
 
   // Storage helpers
   saveTokens = (accessToken: string, refreshToken?: string) =>

@@ -320,7 +320,8 @@ const cancelShoreHandoff = async (req, res, next) => {
 
 const completeShoreHandoff = async (req, res, next) => {
   try {
-    const updatedSos = await sosService.completeShoreHandoff(req.params.id, req.user);
+    const { proofImages } = req.body || {};
+    const updatedSos = await sosService.completeShoreHandoff(req.params.id, req.user, proofImages);
     emitSosUpdated(updatedSos);
     const io = require('../socket').getIO();
     if (io) {

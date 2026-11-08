@@ -809,9 +809,15 @@ const cancelShoreHandoff = async (id, _user) => {
 /**
  * Hoàn thành bàn giao nạn nhân tại bờ cho xe đường bộ
  */
-const completeShoreHandoff = async (id, _user) => {
+const completeShoreHandoff = async (id, _user, proofImages = []) => {
   const sos = await SosRequest.findById(id);
   if (!sos) throw new ApiError(404, 'Không tìm thấy yêu cầu SOS');
+
+  if (Array.isArray(proofImages) && proofImages.length > 0) {
+    sos.proofImages = [
+      ...new Set([...(sos.proofImages || []), ...proofImages]),
+    ];
+  }
 
   if (sos.shoreHandoff) {
     const prevVehicleId = sos.shoreHandoff.assignedVehicleId;
@@ -832,6 +838,11 @@ const completeShoreHandoff = async (id, _user) => {
       if (handoffAssignment) {
         handoffAssignment.status = 'COMPLETED';
         handoffAssignment.completedAt = new Date();
+        if (Array.isArray(proofImages) && proofImages.length > 0) {
+          handoffAssignment.proofImages = [
+            ...new Set([...(handoffAssignment.proofImages || []), ...proofImages]),
+          ];
+        }
         await handoffAssignment.save();
 
         const { getIO } = require('../socket');
