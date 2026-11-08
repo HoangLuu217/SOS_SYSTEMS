@@ -1196,18 +1196,18 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                           border: 'none',
                           borderRadius: 8,
                           color: '#ffffff',
-                          fontSize: 12.5,
-                          fontWeight: 900,
+                          fontSize: 13,
+                          fontWeight: 700,
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: 6,
+                          gap: 7,
                           boxShadow: '0 2px 4px rgba(234, 88, 12, 0.25)',
                         }}
                       >
                         <Ambulance size={16} />
-                        <span>ĐIỀU XE CỨU THƯƠNG / TẢI ĐẾN BẾN ĐÓN</span>
+                        <span>Điều xe cứu thương / tải đến bến đón</span>
                       </button>
                     </>
                   )}
@@ -1824,8 +1824,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                       background: !canSubmit ? '#94a3b8' : '#0284c7',
                       border: 'none',
                       borderRadius: 8,
-                      fontWeight: 900,
-                      fontSize: 13,
+                      fontWeight: 700,
+                      fontSize: 13.5,
                       color: '#ffffff',
                       cursor: !canSubmit ? 'not-allowed' : 'pointer',
                       opacity: isSubmittingRoad ? 0.7 : 1,
@@ -1833,7 +1833,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                       transition: 'all 0.12s ease',
                     }}
                   >
-                    {isSubmittingRoad ? 'Đang điều xe...' : 'XÁC NHẬN ĐIỀU XE ĐẾN BẾN'}
+                    {isSubmittingRoad ? 'Đang điều xe...' : 'Xác nhận điều xe đến bến'}
                   </button>
                 );
               })()}
