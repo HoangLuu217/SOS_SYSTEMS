@@ -603,15 +603,28 @@ class AdministrativeAreaService {
           const geoRes = await fetch(geoUrl);
           if (geoRes.ok) {
             const geoData = await geoRes.json();
-            const adminFeatures = (geoData.features || []).filter((f) => {
-              const rt = f.properties?.result_type;
-              return rt !== 'amenity' && rt !== 'building' && rt !== 'street';
+            const rawTarget = cleanTargetName
+              .toLowerCase()
+              .replace(/^(phường|xã|thị trấn|quận|huyện|thị xã|thành phố|tp\.)\s+/i, '')
+              .trim();
+
+            const matchingFeatures = (geoData.features || []).filter((f) => {
+              const fName = (f.properties?.name || f.properties?.formatted || '').toLowerCase();
+              return fName.includes(rawTarget);
             });
+
             chosenFeature =
-              adminFeatures.find((f) => {
+              matchingFeatures.find((f) => {
                 const rt = f.properties?.result_type;
-                return rt === 'county' || rt === 'district' || rt === 'suburb' || rt === 'city' || rt === 'administrative';
-              }) || adminFeatures[0] || geoData.features?.[0];
+                return rt === 'county' || rt === 'district' || rt === 'suburb' || rt === 'administrative';
+              }) ||
+              matchingFeatures.find((f) => f.properties?.place_id) ||
+              (geoData.features || []).find((f) => {
+                const rt = f.properties?.result_type;
+                return (rt === 'county' || rt === 'district' || rt === 'suburb' || rt === 'administrative') &&
+                  (f.properties?.name || '').toLowerCase().includes(rawTarget);
+              }) ||
+              geoData.features?.[0];
 
             const placeId = chosenFeature?.properties?.place_id;
             if (placeId) {
@@ -643,7 +656,8 @@ class AdministrativeAreaService {
                     if (fName.includes('việt nam') || fName.includes('vietnam')) return false;
                     if (fName.includes('thành phố') || fName === 'trung tâm hà nội') return false;
                     if (this.isProvinceLevelBoundary(f.geometry.coordinates)) return false;
-                    return this.isCoordsMatchingProvince(f.geometry.coordinates, cleanProvince);
+                    const nameMatches = fName.includes(rawTarget) || rawTarget.includes(fName);
+                    return nameMatches && this.isCoordsMatchingProvince(f.geometry.coordinates, cleanProvince);
                   });
 
                   const bFeature = matchingByName || subUnitPoly;
