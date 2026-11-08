@@ -103,7 +103,6 @@ export const ActiveMissionConsole: React.FC<Props> = ({
   };
   const [vehicleSearchQuery, setVehicleSearchQuery] = useState('');
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState<'ALL' | 'AMBULANCE' | 'TRUCK'>('ALL');
-  const [showOutsideArea, setShowOutsideArea] = useState(false);
 
   const assignedRescuer = rescueTeams
     .flatMap((t) => t.rescuers)
@@ -151,8 +150,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     };
   }, [selectedSos, activeOfficer]);
 
-  // 2. Phân loại xe theo địa bàn quản lý
-  const { inAreaRoadVehicles, outsideRoadVehicles } = useMemo(() => {
+  // 2. Lọc phương tiện thuộc đúng địa bàn / phường đang làm việc
+  const inAreaRoadVehicles = useMemo(() => {
     const allRoad = vehicles.filter((v) => v.type === 'Ambulance' || v.type === 'Tactical Truck');
 
     const norm = (s?: string) => (s || '').toLowerCase().trim();
@@ -160,7 +159,6 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     const targetDistId = norm(targetAreaInfo.districtId);
 
     const inArea: Vehicle[] = [];
-    const outside: Vehicle[] = [];
 
     allRoad.forEach((v) => {
       const team = rescueTeams.find((t) => t.id === v.teamId);
@@ -176,7 +174,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
         matched = true;
       }
 
-      // 2. Khớp theo từ khóa quận/huyện
+      // 2. Khớp theo từ khóa quận/huyện / phường
       if (!matched && targetLabel && targetLabel !== 'toàn quốc' && targetLabel !== 'khu vực quản lý') {
         if (
           teamName.includes(targetLabel) ||
@@ -201,21 +199,16 @@ export const ActiveMissionConsole: React.FC<Props> = ({
 
       if (matched) {
         inArea.push(v);
-      } else {
-        outside.push(v);
       }
     });
 
-    return { inAreaRoadVehicles: inArea, outsideRoadVehicles: outside };
+    return inArea;
   }, [vehicles, rescueTeams, targetAreaInfo, activeOfficer, areas]);
 
-  // Nhóm xe hiển thị: Ưu tiên bắt buộc xe trong khu vực quản lý
+  // Nhóm xe hiển thị: Chỉ lấy xe thuộc đúng khu vực / phường đang làm việc
   const displayPool = useMemo(() => {
-    if (inAreaRoadVehicles.length === 0 || showOutsideArea) {
-      return [...inAreaRoadVehicles, ...outsideRoadVehicles];
-    }
     return inAreaRoadVehicles;
-  }, [inAreaRoadVehicles, outsideRoadVehicles, showOutsideArea]);
+  }, [inAreaRoadVehicles]);
 
   // Lọc theo tìm kiếm và tab loại xe
   const filteredRoadVehicles = useMemo(() => {
@@ -1333,45 +1326,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 </div>
               </div>
 
-              {/* Thông báo lọc nghiêm ngặt theo khu vực quản lý */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '8px 12px',
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: 8,
-                  fontSize: 11.5,
-                  color: '#475569',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Check size={14} color="#16a34a" />
-                  <span>
-                    Chỉ hiển thị xe thuộc khu vực <strong>{targetAreaInfo.label}</strong> ({inAreaRoadVehicles.length} xe)
-                  </span>
-                </div>
-                {outsideRoadVehicles.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowOutsideArea(!showOutsideArea)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#0284c7',
-                      fontSize: 11.5,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      textDecoration: 'underline',
-                      padding: 0,
-                    }}
-                  >
-                    {showOutsideArea ? 'Thu hẹp về khu vực' : `Xem thêm ${outsideRoadVehicles.length} xe ngoài khu vực`}
-                  </button>
-                )}
-              </div>
+
 
               {/* Bộ lọc loại xe & Thanh tìm kiếm */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1532,25 +1487,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     <div style={{ fontSize: 11.5, color: '#64748b', maxWidth: 360 }}>
                       Không tìm thấy xe tiếp vận khả dụng theo tiêu chí tìm kiếm hoặc tất cả xe trong khu vực đang bận nhiệm vụ khác.
                     </div>
-                    {outsideRoadVehicles.length > 0 && !showOutsideArea && (
-                      <button
-                        type="button"
-                        onClick={() => setShowOutsideArea(true)}
-                        style={{
-                          marginTop: 4,
-                          padding: '6px 14px',
-                          background: '#0284c7',
-                          border: 'none',
-                          borderRadius: 6,
-                          color: '#ffffff',
-                          fontSize: 12,
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Mở rộng tìm xe từ toàn thành phố ({outsideRoadVehicles.length} xe)
-                      </button>
-                    )}
+
                   </div>
                 ) : (
                   <div
