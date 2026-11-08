@@ -235,15 +235,36 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     });
   }, [displayPool, vehicleTypeFilter, vehicleSearchQuery, rescueTeams]);
 
-  // Tự động chọn xe đầu tiên khả dụng khi mở modal hoặc danh sách đổi
+  // Kiểm tra xem phương tiện có đang được điều động phục vụ điểm đón này hay không
+  const isVehicleCurrentlyAssigned = (v: any) => {
+    if (!selectedSos?.shoreHandoff) return false;
+    const handoff = selectedSos.shoreHandoff;
+    if (handoff.status !== 'ASSIGNED') return false;
+    if (handoff.assignedVehicleId && String(v.id) === String(handoff.assignedVehicleId)) return true;
+    if (
+      handoff.assignedVehiclePlate &&
+      v.plate &&
+      v.plate.trim().toLowerCase() === handoff.assignedVehiclePlate.trim().toLowerCase()
+    ) {
+      return true;
+    }
+    return false;
+  };
+
+  // Danh sách xe khả dụng (loại trừ xe đang phục vụ hiện tại để không cho chọn lại)
+  const selectableVehicles = useMemo(() => {
+    return filteredRoadVehicles.filter((v) => !isVehicleCurrentlyAssigned(v));
+  }, [filteredRoadVehicles, selectedSos?.shoreHandoff]);
+
+  // Tự động chọn xe khả dụng đầu tiên (khác xe hiện tại) khi mở modal hoặc danh sách đổi
   useEffect(() => {
     if (isRoadModalOpen && filteredRoadVehicles.length > 0) {
-      const exists = filteredRoadVehicles.some((v) => v.id === selectedRoadVehId);
-      if (!exists) {
-        setSelectedRoadVehId(filteredRoadVehicles[0].id);
+      const existsAndSelectable = selectableVehicles.some((v) => v.id === selectedRoadVehId);
+      if (!existsAndSelectable) {
+        setSelectedRoadVehId(selectableVehicles.length > 0 ? selectableVehicles[0].id : '');
       }
     }
-  }, [isRoadModalOpen, filteredRoadVehicles, selectedRoadVehId]);
+  }, [isRoadModalOpen, filteredRoadVehicles, selectableVehicles, selectedRoadVehId]);
 
 
   const cleanVehicleName = (name?: string) => {
@@ -278,7 +299,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     }
   };
   const handleAssignRoadVehicle = async () => {
-    const veh = filteredRoadVehicles.find((v) => v.id === selectedRoadVehId) || filteredRoadVehicles[0];
+    const veh = selectableVehicles.find((v) => v.id === selectedRoadVehId);
     if (!veh) return;
     setIsSubmittingRoad(true);
     try {
@@ -1487,7 +1508,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     letterSpacing: 0.5,
                   }}
                 >
-                  Chọn Phương Tiện Đường Bộ ({filteredRoadVehicles.length} xe khả dụng):
+                  Chọn Phương Tiện Đường Bộ ({selectableVehicles.length} xe khả dụng để đổi):
                 </label>
 
                 {filteredRoadVehicles.length === 0 ? (
@@ -1543,7 +1564,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     }}
                   >
                     {filteredRoadVehicles.map((v) => {
-                      const isSelected = selectedRoadVehId === v.id;
+                      const isCurrentAssigned = isVehicleCurrentlyAssigned(v);
+                      const isSelected = selectedRoadVehId === v.id && !isCurrentAssigned;
                       const team = rescueTeams.find((t) => t.id === v.teamId);
                       const capacityNum = parseInt(v.capacity, 10) || 4;
                       const peopleCount = selectedSos.shoreHandoff?.peopleCount ?? 0;
@@ -1552,13 +1574,27 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                       return (
                         <div
                           key={v.id}
-                          onClick={() => setSelectedRoadVehId(v.id)}
+                          onClick={() => {
+                            if (!isCurrentAssigned) {
+                              setSelectedRoadVehId(v.id);
+                            }
+                          }}
+                          title={isCurrentAssigned ? 'Xe này đang được phân công cho điểm này, không thể chọn lại' : undefined}
                           style={{
                             padding: '10px 14px',
                             borderRadius: 10,
-                            border: isSelected ? '2px solid #0284c7' : '1.5px solid #e2e8f0',
-                            background: isSelected ? '#f0f9ff' : '#ffffff',
-                            cursor: 'pointer',
+                            border: isCurrentAssigned
+                              ? '1.5px dashed #cbd5e1'
+                              : isSelected
+                              ? '2px solid #0284c7'
+                              : '1.5px solid #e2e8f0',
+                            background: isCurrentAssigned
+                              ? '#f8fafc'
+                              : isSelected
+                              ? '#f0f9ff'
+                              : '#ffffff',
+                            cursor: isCurrentAssigned ? 'not-allowed' : 'pointer',
+                            opacity: isCurrentAssigned ? 0.6 : 1,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
@@ -1573,13 +1609,22 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                 width: 38,
                                 height: 38,
                                 borderRadius: 8,
-                                background: v.type === 'Ambulance' ? '#eff6ff' : '#fffbeb',
-                                border: v.type === 'Ambulance' ? '1px solid #bfdbfe' : '1px solid #fef3c7',
+                                background: isCurrentAssigned
+                                  ? '#f1f5f9'
+                                  : v.type === 'Ambulance'
+                                  ? '#eff6ff'
+                                  : '#fffbeb',
+                                border: isCurrentAssigned
+                                  ? '1px solid #cbd5e1'
+                                  : v.type === 'Ambulance'
+                                  ? '1px solid #bfdbfe'
+                                  : '1px solid #fef3c7',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontSize: 18,
                                 flexShrink: 0,
+                                filter: isCurrentAssigned ? 'grayscale(1)' : 'none',
                               }}
                             >
                               {v.type === 'Ambulance' ? '🚑' : '🚚'}
@@ -1587,7 +1632,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
 
                             <div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: 13.5, fontWeight: 900, color: '#0f172a' }}>
+                                <span style={{ fontSize: 13.5, fontWeight: 900, color: isCurrentAssigned ? '#64748b' : '#0f172a' }}>
                                   {v.name}
                                 </span>
                                 <span
@@ -1604,6 +1649,21 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                 >
                                   {v.plate}
                                 </span>
+                                {isCurrentAssigned && (
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: 800,
+                                      padding: '1px 6px',
+                                      borderRadius: 4,
+                                      background: '#e2e8f0',
+                                      color: '#475569',
+                                      border: '1px solid #cbd5e1',
+                                    }}
+                                  >
+                                    🚫 Đang phục vụ điểm này (Xe hiện tại)
+                                  </span>
+                                )}
                               </div>
 
                               <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
@@ -1619,8 +1679,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                     style={{
                                       fontSize: 10.5,
                                       fontWeight: 800,
-                                      color: '#16a34a',
-                                      background: '#dcfce7',
+                                      color: isCurrentAssigned ? '#64748b' : '#16a34a',
+                                      background: isCurrentAssigned ? '#f1f5f9' : '#dcfce7',
                                       padding: '1px 5px',
                                       borderRadius: 4,
                                     }}
@@ -1646,7 +1706,22 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                           </div>
 
                           <div style={{ flexShrink: 0 }}>
-                            {isSelected ? (
+                            {isCurrentAssigned ? (
+                              <div
+                                title="Xe hiện tại đang được phân công"
+                                style={{
+                                  padding: '3px 8px',
+                                  borderRadius: 6,
+                                  background: '#f1f5f9',
+                                  border: '1px solid #cbd5e1',
+                                  fontSize: 10.5,
+                                  fontWeight: 800,
+                                  color: '#64748b',
+                                }}
+                              >
+                                Đang chọn
+                              </div>
+                            ) : isSelected ? (
                               <CheckCircle2 size={20} color="#0284c7" />
                             ) : (
                               <div
@@ -1696,27 +1771,32 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               >
                 Đóng
               </button>
-              <button
-                type="button"
-                disabled={isSubmittingRoad || filteredRoadVehicles.length === 0}
-                onClick={handleAssignRoadVehicle}
-                style={{
-                  flex: 2,
-                  height: 42,
-                  background: filteredRoadVehicles.length === 0 ? '#94a3b8' : '#0284c7',
-                  border: 'none',
-                  borderRadius: 8,
-                  fontWeight: 900,
-                  fontSize: 13,
-                  color: '#ffffff',
-                  cursor: filteredRoadVehicles.length === 0 ? 'not-allowed' : 'pointer',
-                  opacity: isSubmittingRoad ? 0.7 : 1,
-                  boxShadow: '0 2px 6px rgba(2, 132, 199, 0.25)',
-                  transition: 'all 0.12s ease',
-                }}
-              >
-                {isSubmittingRoad ? 'Đang điều xe...' : 'XÁC NHẬN ĐIỀU XE ĐẾN BẾN'}
-              </button>
+              {(() => {
+                const canSubmit = !isSubmittingRoad && Boolean(selectedRoadVehId) && selectableVehicles.some((v) => v.id === selectedRoadVehId);
+                return (
+                  <button
+                    type="button"
+                    disabled={!canSubmit}
+                    onClick={handleAssignRoadVehicle}
+                    style={{
+                      flex: 2,
+                      height: 42,
+                      background: !canSubmit ? '#94a3b8' : '#0284c7',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontWeight: 900,
+                      fontSize: 13,
+                      color: '#ffffff',
+                      cursor: !canSubmit ? 'not-allowed' : 'pointer',
+                      opacity: isSubmittingRoad ? 0.7 : 1,
+                      boxShadow: !canSubmit ? 'none' : '0 2px 6px rgba(2, 132, 199, 0.25)',
+                      transition: 'all 0.12s ease',
+                    }}
+                  >
+                    {isSubmittingRoad ? 'Đang điều xe...' : 'XÁC NHẬN ĐIỀU XE ĐẾN BẾN'}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>
