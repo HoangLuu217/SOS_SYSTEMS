@@ -640,6 +640,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
+                    gap: 10,
                     fontSize: 12,
                     color: '#1e293b',
                     padding: '5px 8px',
@@ -648,8 +649,15 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     border: '1px solid #fde68a',
                   }}
                 >
-                  <span style={{ fontWeight: 700 }}>• {req.name}</span>
-                  <span style={{ fontWeight: 800, color: '#b45309' }}>
+                  <span style={{ fontWeight: 700, flex: 1, minWidth: 0, wordBreak: 'break-word' }}>• {req.name}</span>
+                  <span
+                    style={{
+                      fontWeight: 800,
+                      color: '#b45309',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                    }}
+                  >
                     {req.quantity} {req.unit || 'món'}
                   </span>
                 </div>
@@ -756,6 +764,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
+                    gap: 10,
                     fontSize: 11.5,
                     color: '#1e293b',
                     padding: '4px 8px',
@@ -764,8 +773,15 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     border: '1px solid #dcfce7',
                   }}
                 >
-                  <span style={{ fontWeight: 600, color: '#166534' }}>• {req.name}</span>
-                  <span style={{ fontWeight: 800, color: '#0284c7' }}>
+                  <span style={{ fontWeight: 600, color: '#166534', flex: 1, minWidth: 0, wordBreak: 'break-word' }}>• {req.name}</span>
+                  <span
+                    style={{
+                      fontWeight: 800,
+                      color: '#0284c7',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                    }}
+                  >
                     {req.quantity} {req.unit || 'món'}
                   </span>
                 </div>
@@ -1933,9 +1949,28 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     Vật tư đội đang yêu cầu (chờ duyệt):
                   </span>
                   {pendingSupplies.map((req: any, idx: number) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: '#0f172a' }}>
-                      <span style={{ fontWeight: 600 }}>• {req.name}</span>
-                      <span style={{ fontWeight: 800, color: '#dc2626' }}>{req.quantity} {req.unit || 'món'}</span>
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                        fontSize: 12.5,
+                        color: '#0f172a',
+                      }}
+                    >
+                      <span style={{ fontWeight: 600, flex: 1, minWidth: 0, wordBreak: 'break-word' }}>• {req.name}</span>
+                      <span
+                        style={{
+                          fontWeight: 800,
+                          color: '#dc2626',
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {req.quantity} {req.unit || 'món'}
+                      </span>
                     </div>
                   ))}
                 </div>
