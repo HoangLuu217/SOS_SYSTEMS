@@ -1226,7 +1226,13 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   const citizenName = isReliefMission
     ? (recipientName || sos?.citizenId?.fullName || 'Đầu mối tiếp nhận cứu trợ')
     : (sos?.citizenId?.fullName || sos?.reporterName || 'Người dân');
-  const citizenPhone = sos?.citizenId?.phone || sos?.contactPhone || '';
+  const citizenPhone =
+    sos?.contactPhone ||
+    sos?.citizenId?.phone ||
+    sos?.secondaryPhone ||
+    (typeof assignment?.note === 'string' && assignment.note.match(/(\b0\d{9,10}\b)/)?.[1]) ||
+    (typeof sos?.description === 'string' && sos.description.match(/(\b0\d{9,10}\b)/)?.[1]) ||
+    '';
 
   // Tính toán chỉ dẫn ngã rẽ gần nhất hiển thị trên Top HUD (Chuẩn Google Maps & Grab):
   // Ưu tiên hiển thị ngã rẽ gần nhất (sau 50m, 100m rẽ...) hoặc đi thẳng tiếp tục trên đường hiện tại
@@ -2378,7 +2384,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             >
               <View style={{ flex: 1 }}>
                 <Text style={styles.collapsedCitizenName} numberOfLines={1}>
-                  {citizenName}{' '}
+                  {citizenName}{citizenPhone ? ` • ${citizenPhone}` : ''}{' '}
                   {isReliefMission ? (
                     <Text style={[styles.collapsedVictimCount, { color: '#059669' }]}>
                       (Điểm tiếp nhận cứu trợ)
@@ -2408,8 +2414,32 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             >
               {/* Khi mở rộng: Hiển thị đầy đủ thông tin */}
               <View style={styles.grabCitizenSection}>
-              {/* Tên người dân - To, đậm, nổi bật */}
-              <Text style={styles.grabCitizenName}>{citizenName}</Text>
+              {/* Tên người dân & SĐT người gặp nạn - To, đậm, có nút gọi nhanh */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
+                <Text style={[styles.grabCitizenName, { marginBottom: 0 }]}>{citizenName}</Text>
+                {citizenPhone ? (
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      backgroundColor: '#EFF6FF',
+                      borderWidth: 1,
+                      borderColor: '#BFDBFE',
+                      paddingHorizontal: 8,
+                      paddingVertical: 2.5,
+                      borderRadius: 6,
+                    }}
+                    onPress={() => Linking.openURL(`tel:${citizenPhone}`)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="call" size={12} color="#0284C7" />
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#0284C7' }}>
+                      {citizenPhone}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
 
               {/* Địa chỉ hiện trường - Hiển thị đầy đủ, không ẩn bớt, không cắt '...' */}
               <Text style={styles.grabAddressText}>{incidentAddress}</Text>
