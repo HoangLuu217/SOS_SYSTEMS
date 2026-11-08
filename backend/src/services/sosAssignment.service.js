@@ -269,20 +269,8 @@ class SosAssignmentService {
       const notifTitle = `🚨 LỆNH ĐIỀU ĐỘNG CỨU HỘ: ${sosCodeStr}`;
       const notifContent = `Ban chỉ huy điều động ứng cứu khẩn cấp ca ${sosCodeStr} tại ${addrStr} (${victimsCount} người cần cứu). Khẩn trương tiếp cận!`;
 
-      // 1. Gửi Realtime SSE & In-App Notification cho toàn bộ thành viên đội
+      // 1. Gửi Realtime SSE & In-App Notification CHỈ cho cán bộ, đội trưởng và thành viên đội được phân công
       const eventBus = require('./eventBus');
-      eventBus.emit('notification_event', {
-        action: 'BROADCAST',
-        data: {
-          type: 'SOS_SYNC',
-          action: 'ASSIGNED',
-          sosId: sos._id,
-          sosCode: sos.sosCode,
-          status: 'ASSIGNED',
-          assignmentId: assignment._id,
-          rescuerId: rescuer._id,
-        },
-      });
 
       for (const uid of targetUserIds) {
         eventBus.emit('notification_event', {
@@ -526,6 +514,22 @@ class SosAssignmentService {
       );
     }
 
+    // Chỉ đội trưởng (hoặc cán bộ/admin) mới có quyền tiếp nhận lệnh điều động
+    if (currentUser && assignment.rescueTeamId) {
+      const team = await RescueTeam.findById(assignment.rescueTeamId).select('leaderId');
+      if (team && team.leaderId) {
+        const currentUserId = (currentUser._id || currentUser)?.toString();
+        const isLeader = team.leaderId.toString() === currentUserId;
+        const isOfficerOrAdmin = currentUser.roles?.some((r) =>
+          ['ADMIN', 'SUPER_ADMIN', 'DISPATCHER', 'OFFICER', 'COORDINATOR'].includes(r)
+        );
+        const isDirectRescuer = assignment.rescuerId?.toString() === currentUserId;
+        if (!isLeader && !isOfficerOrAdmin && !isDirectRescuer) {
+          throw new ApiError(403, 'Chỉ đội trưởng mới có quyền xác nhận tiếp nhận lệnh điều động');
+        }
+      }
+    }
+
     assignment.status = 'ACCEPTED';
     assignment.acceptedAt = new Date();
     await assignment.save();
@@ -654,6 +658,25 @@ class SosAssignmentService {
         400,
         `Không thể chuyển đổi trạng thái phân công từ '${currentStatus}' sang '${targetStatus}'.`
       );
+    }
+
+    // Kiểm tra quyền hạn: Chỉ đội trưởng mới được nhận lệnh (ACCEPTED) hoặc từ chối (REJECTED)
+    if (['ACCEPTED', 'REJECTED'].includes(targetStatus) && currentUser && assignment.rescueTeamId) {
+      const team = await RescueTeam.findById(assignment.rescueTeamId).select('leaderId');
+      if (team && team.leaderId) {
+        const currentUserId = (currentUser._id || currentUser)?.toString();
+        const isLeader = team.leaderId.toString() === currentUserId;
+        const isOfficerOrAdmin = currentUser.roles?.some((r) =>
+          ['ADMIN', 'SUPER_ADMIN', 'DISPATCHER', 'OFFICER', 'COORDINATOR'].includes(r)
+        );
+        const isDirectRescuer = assignment.rescuerId?.toString() === currentUserId;
+        if (!isLeader && !isOfficerOrAdmin && !isDirectRescuer) {
+          throw new ApiError(
+            403,
+            `Chỉ đội trưởng mới có quyền ${targetStatus === 'ACCEPTED' ? 'xác nhận tiếp nhận' : 'từ chối'} lệnh điều động`
+          );
+        }
+      }
     }
 
     // Bắt buộc minh bạch: Nhiệm vụ xuất cấp cứu trợ phải có ít nhất 1 ảnh bằng chứng bàn giao

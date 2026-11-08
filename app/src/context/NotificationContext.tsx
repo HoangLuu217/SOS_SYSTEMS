@@ -189,13 +189,35 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const idsArray = Array.from(seenIdsRef.current).slice(-100);
     AsyncStorage.setItem(SEEN_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(idsArray)).catch(() => {});
 
-    if (incoming.data?.type === 'SOS_SYNC' || incoming.data?.type === 'RESCUE' || incoming.data?.sosId) {
+    // Bỏ qua các sự kiện đồng bộ thuần túy (không phải thông báo gửi người dùng)
+    if (incoming.type === 'SOS_SYNC' || incoming.data?.type === 'SOS_SYNC') {
+      DeviceEventEmitter.emit('sos:sync');
+      return;
+    }
+
+    if (incoming.data?.type === 'RESCUE' || incoming.data?.sosId) {
       DeviceEventEmitter.emit('sos:sync');
     }
 
     if (incoming.data?.type === 'RESCUER_VERIFICATION' || incoming.data?.type === 'USER_SYNC') {
       DeviceEventEmitter.emit('rescuer:verification_status_changed', incoming.data);
       DeviceEventEmitter.emit('user:profile_updated', incoming.data);
+    }
+
+    // Kiểm tra tính xác thực người nhận: nếu thông báo có đích danh userId hoặc targetUserIds
+    const myUserId = (user?._id || (user as any)?.id)?.toString();
+    const targetUserId = ((incoming as any).userId || incoming.data?.userId)?.toString();
+    if (targetUserId && myUserId && targetUserId !== myUserId) {
+      // Thông báo chỉ định user khác -> không hiển thị banner/chuông cho tôi
+      return;
+    }
+
+    const targetUserIds: string[] = Array.isArray(incoming.data?.targetUserIds)
+      ? incoming.data.targetUserIds.map((u: any) => (u?._id || u)?.toString())
+      : [];
+    if (targetUserIds.length > 0 && myUserId && !targetUserIds.includes(myUserId)) {
+      // Thông báo chỉ định danh sách user khác -> không hiển thị banner/chuông cho tôi
+      return;
     }
 
     // 1. Chèn thông báo mới vào đầu danh sách ngay lập tức
@@ -255,7 +277,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     // 5. Hiển thị Banner cảnh báo khẩn cấp nổi trong app
     setLatestEmergencyAlert(incoming);
-  }, []);
+  }, [user?._id]);
 
   // Tải danh sách thông báo và đối chiếu tin mới
   const syncNotifications = useCallback(async () => {

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { backendApi, RescuerAssignmentItem } from '@/api';
+import { useAuth } from '@/context/AuthContext';
 import { RescuerMissionWorkspaceModal } from '../sos/RescuerMissionWorkspaceModal';
 
 export interface RescuerMissionCardProps {
@@ -23,6 +24,25 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
   const [activeAssignment, setActiveAssignment] = useState<RescuerAssignmentItem | null>(null);
   const [availableSosList, setAvailableSosList] = useState<any[]>([]);
   const [workspaceVisible, setWorkspaceVisible] = useState<boolean>(false);
+  const { user } = useAuth();
+
+  const isLeader = React.useMemo(() => {
+    if (!activeAssignment) return true;
+    const currentUserId = (user?._id || (user as any)?.id)?.toString();
+    const currentUserPhone = user?.phone;
+    const teamLeader = (activeAssignment as any).rescueTeamId?.leaderId;
+    const leaderId = (teamLeader?._id || teamLeader)?.toString();
+    const leaderPhone = teamLeader?.phone;
+
+    if (leaderId && currentUserId && leaderId === currentUserId) return true;
+    if (leaderPhone && currentUserPhone && leaderPhone === currentUserPhone) return true;
+
+    const rescuerId = ((activeAssignment as any).rescuerId?._id || (activeAssignment as any).rescuerId)?.toString();
+    if (rescuerId && currentUserId && rescuerId === currentUserId) return true;
+
+    if (user?.roles?.includes('LEADER') || user?.roles?.includes('ADMIN')) return true;
+    return false;
+  }, [activeAssignment, user]);
 
   // Tải danh sách nhiệm vụ của cứu hộ viên
   const loadMissionData = useCallback(async () => {
@@ -78,6 +98,14 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
   // Xử lý chuyển bước trạng thái nhiệm vụ tác chiến
   const handleAdvanceStatus = async (nextStatus: string, confirmMsg?: string) => {
     if (!activeAssignment) return;
+    if (nextStatus === 'ACCEPTED' && !isLeader) {
+      Alert.alert(
+        'Chỉ Đội Trưởng',
+        'Chỉ Đội trưởng mới có quyền xác nhận tiếp nhận hoặc từ chối lệnh điều động.',
+        [{ text: 'Đã hiểu' }]
+      );
+      return;
+    }
 
     if (confirmMsg) {
       Alert.alert('Xác nhận tiến trình', confirmMsg, [
@@ -329,16 +357,42 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
           ) : (
             <>
               {currentStatus === 'PENDING' && (
-                <TouchableOpacity
-                  style={[styles.primaryActionBtn, { backgroundColor: isReliefMission ? '#059669' : '#0284C7' }]}
-                  onPress={() => handleAdvanceStatus('ACCEPTED')}
-                  activeOpacity={0.85}
-                >
-                  <Feather name="check-circle" size={17} color="#FFFFFF" />
-                  <Text style={styles.primaryActionBtnText}>
-                    {isReliefMission ? 'Tiếp Nhận Lệnh Tiếp Tế' : 'Tiếp Nhận Nhiệm Vụ Này'}
-                  </Text>
-                </TouchableOpacity>
+                isLeader ? (
+                  <TouchableOpacity
+                    style={[styles.primaryActionBtn, { backgroundColor: isReliefMission ? '#059669' : '#0284C7' }]}
+                    onPress={() => handleAdvanceStatus('ACCEPTED')}
+                    activeOpacity={0.85}
+                  >
+                    <Feather name="check-circle" size={17} color="#FFFFFF" />
+                    <Text style={styles.primaryActionBtnText}>
+                      {isReliefMission ? 'Tiếp Nhận Lệnh Tiếp Tế' : 'Tiếp Nhận Nhiệm Vụ Này'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[
+                      styles.primaryActionBtn,
+                      {
+                        backgroundColor: '#F1F5F9',
+                        borderColor: '#CBD5E1',
+                        borderWidth: 1,
+                      },
+                    ]}
+                    onPress={() =>
+                      Alert.alert(
+                        'Chờ Đội Trưởng',
+                        'Chỉ Đội trưởng mới có quyền xác nhận nhận lệnh hoặc từ chối. Bạn vui lòng chờ Đội trưởng tiếp nhận.',
+                        [{ text: 'Đã hiểu' }]
+                      )
+                    }
+                    activeOpacity={0.85}
+                  >
+                    <Feather name="shield" size={17} color="#64748B" />
+                    <Text style={[styles.primaryActionBtnText, { color: '#64748B' }]}>
+                      Chờ Đội Trưởng Tiếp Nhận
+                    </Text>
+                  </TouchableOpacity>
+                )
               )}
 
               {currentStatus === 'ACCEPTED' && (

@@ -327,6 +327,26 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     roadCoordinates: null,
   });
 
+  // Kiểm tra quyền Đội trưởng: Chỉ Đội trưởng mới được nhận lệnh hoặc từ chối
+  const isLeader = useMemo(() => {
+    const currentUserId = (user?._id || (user as any)?.id)?.toString();
+    const currentUserPhone = user?.phone;
+    const teamLeader = assignment?.rescueTeamId?.leaderId;
+    const teamLeaderId = (teamLeader?._id || teamLeader)?.toString();
+    const teamLeaderPhone = teamLeader?.phone;
+
+    if (teamLeaderId && currentUserId && teamLeaderId === currentUserId) return true;
+    if (teamLeaderPhone && currentUserPhone && teamLeaderPhone === currentUserPhone) return true;
+
+    const rescuerObj = assignment?.rescuerId;
+    const rescuerId = (rescuerObj?._id || rescuerObj)?.toString();
+    if (rescuerId && currentUserId && rescuerId === currentUserId) return true;
+
+    if (user?.roles?.includes('LEADER') || user?.roles?.includes('ADMIN')) return true;
+
+    return false;
+  }, [user, assignment]);
+
   // Turn-by-Turn Dynamic Navigation State (Chỉ dẫn từng ngã rẽ gần nhất chuẩn Google Maps / Grab)
   const [navigationSteps, setNavigationSteps] = useState<NavigationManeuverStep[]>([]);
   const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
@@ -919,6 +939,14 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
   // 7. Xử lý Chấp Nhận & Xuất Kích (State 1 -> State 2)
   const handleAcceptMission = async () => {
+    if (!isLeader) {
+      Alert.alert(
+        'Chỉ Đội Trưởng',
+        'Chỉ Đội trưởng mới có quyền xác nhận tiếp nhận hoặc từ chối lệnh điều động.',
+        [{ text: 'Đã hiểu' }]
+      );
+      return;
+    }
     try {
       setActionLoading(true);
 
@@ -965,6 +993,14 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
   // 8. Xử lý Báo Cáo Không Thể Nhận / Từ Chối
   const handleConfirmReject = async () => {
+    if (!isLeader) {
+      Alert.alert(
+        'Chỉ Đội Trưởng',
+        'Chỉ Đội trưởng mới có quyền xác nhận tiếp nhận hoặc từ chối lệnh điều động.',
+        [{ text: 'Đã hiểu' }]
+      );
+      return;
+    }
     try {
       setActionLoading(true);
       const finalReason = rejectCustomNote.trim() ? `${rejectReason} - ${rejectCustomNote.trim()}` : rejectReason;
@@ -2843,17 +2879,19 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   <Text style={styles.grabActionLabel}>Gọi điện</Text>
                 </TouchableOpacity>
 
-                {/* Nút 2: Từ chối */}
-                <TouchableOpacity
-                  style={styles.grabActionCol}
-                  onPress={() => setRejectModalVisible(true)}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.grabActionIconWrap, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
-                    <Feather name="x-circle" size={20} color="#DC2626" />
-                  </View>
-                  <Text style={[styles.grabActionLabel, { color: '#DC2626', fontWeight: '800' }]}>Từ chối</Text>
-                </TouchableOpacity>
+                {/* Nút 2: Từ chối - Chỉ hiển thị cho Đội trưởng */}
+                {isLeader && (
+                  <TouchableOpacity
+                    style={styles.grabActionCol}
+                    onPress={() => setRejectModalVisible(true)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.grabActionIconWrap, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                      <Feather name="x-circle" size={20} color="#DC2626" />
+                    </View>
+                    <Text style={[styles.grabActionLabel, { color: '#DC2626', fontWeight: '800' }]}>Từ chối</Text>
+                  </TouchableOpacity>
+                )}
 
                 {/* Nút 3: Trạm trú ẩn */}
                 <TouchableOpacity
@@ -2887,20 +2925,46 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             ) : (
               <>
                 {missionState === 'ASSIGNED_PENDING_ACCEPTANCE' && (
-                  <TouchableOpacity
-                    style={[styles.grabBigGreenBtn, isReliefMission && { backgroundColor: '#059669' }]}
-                    onPress={handleAcceptMission}
-                    activeOpacity={0.88}
-                  >
-                    <Ionicons name="flash" size={20} color="#FFFFFF" />
-                    <Text style={styles.grabBigBtnText}>
-                      {isShoreHandoffMission
-                        ? 'NHẬN LỆNH & XUẤT PHÁT ĐÓN'
-                        : isReliefMission
-                        ? 'NHẬN LỆNH & XUẤT KHO TIẾP TẾ'
-                        : 'NHẬN LỆNH & XUẤT KÍCH'}
-                    </Text>
-                  </TouchableOpacity>
+                  isLeader ? (
+                    <TouchableOpacity
+                      style={[styles.grabBigGreenBtn, isReliefMission && { backgroundColor: '#059669' }]}
+                      onPress={handleAcceptMission}
+                      activeOpacity={0.88}
+                    >
+                      <Ionicons name="flash" size={20} color="#FFFFFF" />
+                      <Text style={styles.grabBigBtnText}>
+                        {isShoreHandoffMission
+                          ? 'NHẬN LỆNH & XUẤT PHÁT ĐÓN'
+                          : isReliefMission
+                          ? 'NHẬN LỆNH & XUẤT KHO TIẾP TẾ'
+                          : 'NHẬN LỆNH & XUẤT KÍCH'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.grabBigGreenBtn, { backgroundColor: '#F1F5F9', borderColor: '#CBD5E1', borderWidth: 1 }]}
+                      onPress={() => {
+                        Alert.alert(
+                          'Chờ Đội Trưởng',
+                          'Chỉ Đội trưởng mới có quyền xác nhận nhận lệnh hoặc từ chối lệnh điều động. Bạn vui lòng chờ Đội trưởng tiếp nhận.',
+                          [{ text: 'Đã hiểu' }]
+                        );
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Ionicons name="time-outline" size={20} color="#64748B" />
+                          <Text style={[styles.grabBigBtnText, { color: '#475569', fontSize: 16 }]}>
+                            CHỜ ĐỘI TRƯỞNG TIẾP NHẬN
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                          Chỉ Đội trưởng mới có quyền nhận hoặc từ chối lệnh này
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  )
                 )}
 
                 {missionState === 'EN_ROUTE' && (

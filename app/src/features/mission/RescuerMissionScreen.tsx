@@ -77,6 +77,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
   const [activeWorkspaceMission, setActiveWorkspaceMission] = useState<SosAssignmentData | null>(null);
   const activeWorkspaceMissionRef = useRef<SosAssignmentData | null>(null);
   const myTeamIdRef = useRef<string | null>(null);
+  const [isTeamLeader, setIsTeamLeader] = useState<boolean>(false);
   useEffect(() => {
     activeWorkspaceMissionRef.current = activeWorkspaceMission;
   }, [activeWorkspaceMission]);
@@ -203,6 +204,12 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
         });
 
         if (myTeam && isMounted) {
+          const leaderIdStr = (myTeam.leaderId?._id || myTeam.leaderId)?.toString();
+          const isLeaderOfTeam =
+            (currentUserId && leaderIdStr === currentUserId) ||
+            (currentUserPhone && myTeam.leaderId?.phone === currentUserPhone) ||
+            (currentUserEmail && myTeam.leaderId?.email?.toLowerCase() === currentUserEmail);
+          setIsTeamLeader(Boolean(isLeaderOfTeam));
           myTeamIdRef.current = (myTeam._id || myTeam.id)?.toString() || null;
           let vehiclePlate = 'Chưa phân bổ';
           let vehicleType = 'AMBULANCE';
@@ -327,8 +334,8 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
       DeviceEventEmitter.emit('sos:sync');
     };
 
-    s.on('assignment:new', handleNewMission);
-    s.on('assignment:created', handleNewMission);
+    s.on('assignment:new', handleSync);
+    s.on('assignment:created', handleSync);
     s.on('assignment:assigned', handleNewMission);
 
     s.on('assignment:cancelled', handleCancelledMission);
@@ -379,8 +386,8 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
       isMounted = false;
       if (locSub) locSub.remove();
       if (s) {
-        s.off('assignment:new', handleNewMission);
-        s.off('assignment:created', handleNewMission);
+        s.off('assignment:new', handleSync);
+        s.off('assignment:created', handleSync);
         s.off('assignment:assigned', handleNewMission);
         s.off('assignment:cancelled', handleCancelledMission);
         s.off('assignment:deleted', handleCancelledMission);
@@ -456,6 +463,28 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     setWorkspaceVisible(true);
   };
 
+  // Kiểm tra quyền Đội trưởng cho từng phân công
+  const checkIsLeaderForMission = useCallback(
+    (mission: SosAssignmentData) => {
+      const currentUserId = (user?._id || (user as any)?.id)?.toString();
+      const currentUserPhone = user?.phone;
+      const teamLeader = (mission.rescueTeamId as any)?.leaderId;
+      const leaderId = (teamLeader?._id || teamLeader)?.toString();
+      const leaderPhone = teamLeader?.phone;
+
+      if (leaderId && currentUserId && leaderId === currentUserId) return true;
+      if (leaderPhone && currentUserPhone && leaderPhone === currentUserPhone) return true;
+      if (isTeamLeader) return true;
+
+      const rescuerId = ((mission.rescuerId as any)?._id || (mission.rescuerId as any))?.toString();
+      if (rescuerId && currentUserId && rescuerId === currentUserId) return true;
+
+      if (user?.roles?.includes('LEADER') || user?.roles?.includes('ADMIN')) return true;
+      return false;
+    },
+    [user, isTeamLeader]
+  );
+
   // Cập nhật trạng thái nhiệm vụ (Tiếp nhận, Xuất phát, Tiếp cận, Hoàn thành)
   const handleUpdateStatus = async (
     missionId: string,
@@ -463,6 +492,18 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     note?: string,
     extraData?: { proofImages?: string[]; actualRecipient?: string }
   ) => {
+    // Chỉ đội trưởng mới có quyền nhận hoặc từ chối lệnh
+    if (['ACCEPTED', 'REJECTED'].includes(targetStatus)) {
+      const mission = missions.find((m) => m._id === missionId);
+      if (mission && !checkIsLeaderForMission(mission)) {
+        Alert.alert(
+          'Chỉ Đội Trưởng',
+          'Chỉ Đội trưởng mới có quyền xác nhận tiếp nhận hoặc từ chối lệnh điều động này.',
+          [{ text: 'Đã hiểu' }]
+        );
+        return;
+      }
+    }
     try {
       setIsSubmitting(true);
       let res;
@@ -1475,32 +1516,65 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                     <>
                       {/* Nút chính chuyển đổi trạng thái tác chiến */}
                       {['PENDING', 'ASSIGNED'].includes(item.status) && (
-                        <TouchableOpacity
-                          style={[styles.primaryActionBtn, { flex: 1.3 }]}
-                          onPress={() => handleUpdateStatus(item._id, 'ACCEPTED')}
-                          activeOpacity={0.85}
-                          disabled={isSubmitting}
-                        >
-                          <LinearGradient
-                            colors={
-                              isShoreHandoffMission
-                                ? ['#0284C7', '#0369A1']
-                                : isReliefMission
-                                ? ['#059669', '#047857']
-                                : ['#0066FF', '#0052CC']
-                            }
-                            style={styles.gradientBtn}
+                        checkIsLeaderForMission(item) ? (
+                          <TouchableOpacity
+                            style={[styles.primaryActionBtn, { flex: 1.3 }]}
+                            onPress={() => handleUpdateStatus(item._id, 'ACCEPTED')}
+                            activeOpacity={0.85}
+                            disabled={isSubmitting}
                           >
-                            <Feather name="check-circle" size={15} color="#FFFFFF" />
-                            <Text style={styles.primaryActionText}>
-                              {isShoreHandoffMission
-                                ? 'Nhận Lệnh'
-                                : isReliefMission
-                                ? 'Nhận Lệnh'
-                                : 'Tiếp Nhận Nhiệm Vụ'}
-                            </Text>
-                          </LinearGradient>
-                        </TouchableOpacity>
+                            <LinearGradient
+                              colors={
+                                isShoreHandoffMission
+                                  ? ['#0284C7', '#0369A1']
+                                  : isReliefMission
+                                  ? ['#059669', '#047857']
+                                  : ['#0066FF', '#0052CC']
+                              }
+                              style={styles.gradientBtn}
+                            >
+                              <Feather name="check-circle" size={15} color="#FFFFFF" />
+                              <Text style={styles.primaryActionText}>
+                                {isShoreHandoffMission
+                                  ? 'Nhận Lệnh'
+                                  : isReliefMission
+                                  ? 'Nhận Lệnh'
+                                  : 'Tiếp Nhận Nhiệm Vụ'}
+                              </Text>
+                            </LinearGradient>
+                          </TouchableOpacity>
+                        ) : (
+                          <TouchableOpacity
+                            style={[
+                              styles.primaryActionBtn,
+                              {
+                                flex: 1.3,
+                                backgroundColor: '#F1F5F9',
+                                borderColor: '#CBD5E1',
+                                borderWidth: 1,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                paddingVertical: 9,
+                                borderRadius: 10,
+                              },
+                            ]}
+                            onPress={() =>
+                              Alert.alert(
+                                'Chờ Đội Trưởng',
+                                'Chỉ Đội trưởng mới có quyền xác nhận nhận lệnh hoặc từ chối. Bạn vui lòng chờ Đội trưởng tiếp nhận.',
+                                [{ text: 'Đã hiểu' }]
+                              )
+                            }
+                            activeOpacity={0.8}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Feather name="shield" size={14} color="#64748B" />
+                              <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B' }}>
+                                Chờ Đội trưởng tiếp nhận
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        )
                       )}
 
                       {item.status === 'ACCEPTED' && (
