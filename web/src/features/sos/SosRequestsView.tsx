@@ -379,8 +379,8 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
   const activeCount = activeSosList.length;
   const criticalCount = activeSosList.filter((s) => s.priority === 'CRITICAL').length;
   const highCount = activeSosList.filter((s) => s.priority === 'HIGH').length;
-  const pendingCount = displaySosList.filter((s) => s.status === 'PENDING').length;
-  const inRescueCount = displaySosList.filter((s) => ['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status) && !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status)).length;
+  const pendingCount = displaySosList.filter((s) => ['PENDING', 'VERIFIED'].includes(s.status)).length;
+  const inRescueCount = displaySosList.filter((s) => ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status) && !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status)).length;
   const completedCount = displaySosList.filter((s) => s.status === 'COMPLETED').length;
   const cancelledCount = displaySosList.filter((s) => s.status === 'CANCELLED').length;
   const totalCount = displaySosList.length;
@@ -395,9 +395,9 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     } else if (triageFilter === 'HIGH') {
       if (sos.priority !== 'HIGH') return false;
     } else if (triageFilter === 'PENDING') {
-      if (sos.status !== 'PENDING') return false;
+      if (!['PENDING', 'VERIFIED'].includes(sos.status)) return false;
     } else if (triageFilter === 'RESCUING') {
-      if (!['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(sos.status)) return false;
+      if (!['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(sos.status)) return false;
     } else if (triageFilter === 'COMPLETED') {
       if (sos.status !== 'COMPLETED') return false;
     } else if (triageFilter === 'CANCELLED') {

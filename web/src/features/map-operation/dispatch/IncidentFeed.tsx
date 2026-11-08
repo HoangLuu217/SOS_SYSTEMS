@@ -108,12 +108,23 @@ export const IncidentFeed = ({
     let active = 0;
 
     scopedIncidents.forEach((s) => {
+      const hasActiveShoreRelay = Boolean(
+        s.shoreHandoff && s.shoreHandoff.status === 'ASSIGNED'
+      );
       const hasPendingShoreRelay = Boolean(
-        s.shoreHandoff && (s.shoreHandoff.status === 'REQUESTED' || s.shoreHandoff.status === 'ASSIGNED')
+        s.shoreHandoff && s.shoreHandoff.status === 'REQUESTED'
       );
       if (['CANCELLED', 'REJECTED'].includes(s.status)) return;
-      if (s.status === 'COMPLETED' && !hasPendingShoreRelay) return;
-      const isAssigned = Boolean((s.assignmentId && s.status !== 'CANCELLED') || hasPendingShoreRelay);
+      if (s.status === 'COMPLETED' && !hasActiveShoreRelay && !hasPendingShoreRelay) return;
+
+      // Ca được coi là "Đang cứu" (ACTIVE) khi:
+      // 1. Đã có đội cứu hộ được giao đang tác chiến (assignmentId tồn tại và status đang triển khai)
+      // 2. HOẶC đã có xe đón bờ được giao đang tiếp cận (shoreHandoff.status === 'ASSIGNED')
+      const isAssigned = Boolean(
+        (s.assignmentId && ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(s.status)) ||
+        hasActiveShoreRelay
+      );
+
       if (!isAssigned) unassigned++;
       if (s.priority === 'CRITICAL' || s.priority === 'HIGH') urgent++;
       if (isAssigned) active++;
@@ -140,11 +151,14 @@ export const IncidentFeed = ({
   // Filter incidents based on search query & selected status tab (chỉ hiển thị các ca đang diễn ra)
   const filteredIncidents = useMemo(() => {
     return scopedIncidents.filter((s) => {
+      const hasActiveShoreRelay = Boolean(
+        s.shoreHandoff && s.shoreHandoff.status === 'ASSIGNED'
+      );
       const hasPendingShoreRelay = Boolean(
-        s.shoreHandoff && (s.shoreHandoff.status === 'REQUESTED' || s.shoreHandoff.status === 'ASSIGNED')
+        s.shoreHandoff && s.shoreHandoff.status === 'REQUESTED'
       );
       if (['CANCELLED', 'REJECTED'].includes(s.status)) return false;
-      if (s.status === 'COMPLETED' && !hasPendingShoreRelay) return false;
+      if (s.status === 'COMPLETED' && !hasActiveShoreRelay && !hasPendingShoreRelay) return false;
 
       // 1. Search query matching
       const matchSearch =
@@ -157,8 +171,14 @@ export const IncidentFeed = ({
 
       if (!matchSearch) return false;
 
-      // 2. Status tabs
-      const isAssigned = Boolean((s.assignmentId && s.status !== 'CANCELLED') || hasPendingShoreRelay);
+      // 2. Status tabs:
+      // "Đang cứu" (ACTIVE): Phải có đội đang cứu hoặc xe đón đang chạy
+      // "Chờ điều phối" (UNASSIGNED): Chưa phân đội nào hoặc đang chờ điều xe đón bờ
+      const isAssigned = Boolean(
+        (s.assignmentId && ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(s.status)) ||
+        hasActiveShoreRelay
+      );
+
       if (statusFilter === 'UNASSIGNED') {
         return !isAssigned;
       }
