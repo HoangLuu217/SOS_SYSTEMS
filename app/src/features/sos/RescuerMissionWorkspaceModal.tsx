@@ -3421,7 +3421,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={styles.modalBackdrop}
           >
-            <View style={[styles.modalCard, { maxHeight: Math.min(SCREEN_HEIGHT * 0.9, 720), display: 'flex', flexDirection: 'column' }]}>
+            <View style={[styles.modalCard, { height: Math.min(SCREEN_HEIGHT * 0.82, 650), maxHeight: Math.min(SCREEN_HEIGHT * 0.9, 720), display: 'flex', flexDirection: 'column' }]}>
               <View style={styles.modalHeaderRow}>
                 <MaterialCommunityIcons name="car-emergency" size={24} color="#EA580C" />
                 <Text style={styles.modalTitle}>Yêu Cầu Xe Đón Tại Bờ</Text>
@@ -3438,7 +3438,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               </Text>
 
               <ScrollView
-                style={{ flex: 1, minHeight: 180 }}
+                style={{ flex: 1 }}
                 contentContainerStyle={{ paddingBottom: 28, flexGrow: 1 }}
                 showsVerticalScrollIndicator={true}
                 keyboardShouldPersistTaps="handled"
