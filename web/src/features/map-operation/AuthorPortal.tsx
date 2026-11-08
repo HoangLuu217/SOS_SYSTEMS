@@ -803,20 +803,20 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
   // Hàm kiểm tra ca SOS đã hoàn thành cứu hộ hay chưa
   const isSosCompleted = (s: SosRequest | null | undefined): boolean => {
     if (!s || !s.id) return false;
-    const hasActiveShoreRelay = Boolean(
-      s.shoreHandoff && s.shoreHandoff.status === 'ASSIGNED'
-    );
-    const hasPendingShoreRelay = Boolean(
-      s.shoreHandoff && s.shoreHandoff.status === 'REQUESTED'
-    );
-    // Nếu vẫn đang cần xe đón bờ hoặc xe đón bờ đang tiếp cận thì ca chưa coi là xong
-    if (hasActiveShoreRelay || hasPendingShoreRelay) return false;
-
     const st = String(s.status || '').toUpperCase();
     if (st === 'COMPLETED' || st === 'RESOLVED') return true;
     const assign = domainDService.getAssignmentBySosId(s.id);
     const assignSt = String(assign?.status || '').toUpperCase();
     if (assignSt === 'COMPLETED') return true;
+
+    const hasActiveShoreRelay = Boolean(
+      s.shoreHandoff && s.shoreHandoff.status === 'ASSIGNED' && !s.shoreHandoff.completedAt
+    );
+    const hasPendingShoreRelay = Boolean(
+      s.shoreHandoff && s.shoreHandoff.status === 'REQUESTED' && !s.shoreHandoff.completedAt
+    );
+    if (hasActiveShoreRelay || hasPendingShoreRelay) return false;
+
     return false;
   };
 
