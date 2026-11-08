@@ -416,7 +416,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
         textColor: '#15803d',
         dotColor: '#16a34a',
         isCompleted: false,
-        showEta: true,
+        showEta: false,
       };
     }
 
@@ -431,7 +431,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
         textColor: '#15803d',
         dotColor: '#16a34a',
         isCompleted: false,
-        showEta: true,
+        showEta: false,
       };
     }
 
@@ -562,7 +562,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               >
                 ✓ HOÀN TẤT
               </span>
-            ) : statusInfo.showEta ? (
+            ) : statusInfo.showEta && Boolean(assignment?.etaMinutes && assignment.etaMinutes > 0) ? (
               <div
                 style={{
                   display: 'inline-flex',
@@ -575,10 +575,10 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                 }}
               >
-                <span style={{ fontSize: 13, fontWeight: 900, color: '#0284c7' }}>
-                  ~{assignment?.etaMinutes ?? 3}p
+                <span style={{ fontSize: 13, fontWeight: 800, color: '#0284c7' }}>
+                  ~{assignment?.etaMinutes}p
                 </span>
-                <span style={{ fontSize: 10, fontWeight: 800, color: '#64748b', letterSpacing: '0.3px' }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.3px' }}>
                   DỰ KIẾN
                 </span>
               </div>
