@@ -438,6 +438,8 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   const [completionModalVisible, setCompletionModalVisible] = useState<boolean>(false);
   const [fieldReportNotes, setFieldReportNotes] = useState<string>('Đã tiếp cận thành công, đưa toàn bộ nạn nhân về trạm an toàn.');
   const [capturedPhotoUri, setCapturedPhotoUri] = useState<string | null>(null);
+  const [capturedPhotoBase64, setCapturedPhotoBase64] = useState<string | null>(null);
+  const completedProofImagesRef = useRef<string[]>([]);
 
   // Thumbnail Zoom Modal
   const [zoomPhotoVisible, setZoomPhotoVisible] = useState<boolean>(false);
@@ -1032,10 +1034,12 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       }
       const res = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
-        quality: 0.6,
+        quality: 0.5,
+        base64: true,
       });
       if (!res.canceled && res.assets && res.assets[0]) {
         setCapturedPhotoUri(res.assets[0].uri);
+        setCapturedPhotoBase64(res.assets[0].base64 || null);
       }
     } catch {
       setCustomNotice({
@@ -1067,10 +1071,33 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         }
       }
 
-      // Đảm bảo luôn có proofImages để backend lưu vết minh bạch và không bị lỗi 400
-      const proofImages = capturedPhotoUri
+      // Tải ảnh thực tế chụp tại hiện trường lên máy chủ Cloudinary để có URL vĩnh viễn
+      let uploadedUrls: string[] = [];
+      if (capturedPhotoBase64) {
+        try {
+          const fileRes = await backendApi.post('/files', {
+            base64Files: [capturedPhotoBase64],
+            sosId: targetSosId,
+          });
+          if (fileRes?.urls && fileRes.urls.length > 0) {
+            uploadedUrls = fileRes.urls;
+          } else if (fileRes?.url) {
+            uploadedUrls = [fileRes.url];
+          } else if (fileRes?.data?.url) {
+            uploadedUrls = [fileRes.data.url];
+          }
+        } catch (uploadErr) {
+          console.warn('Lỗi tải ảnh hiện trường lên máy chủ:', uploadErr);
+        }
+      }
+
+      const proofImages = uploadedUrls.length > 0
+        ? uploadedUrls
+        : capturedPhotoUri
         ? [capturedPhotoUri]
         : ['https://images.unsplash.com/photo-1593113598332-cd288d649433?w=800'];
+
+      completedProofImagesRef.current = proofImages;
 
       if (assignment?._id) {
         await backendApi.updateAssignmentStatus(assignment._id, 'COMPLETED', notePayload, {
@@ -1084,7 +1111,12 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
       setCompletionModalVisible(false);
       setMissionState('COMPLETED');
-      setAssignment((prev: any) => (prev ? { ...prev, status: 'COMPLETED' } : prev));
+      setAssignment((prev: any) => (prev ? {
+        ...prev,
+        status: 'COMPLETED',
+        proofImages,
+        completedAt: new Date().toISOString(),
+      } : prev));
       DeviceEventEmitter.emit('sos:sync');
       onMissionUpdated?.('COMPLETED', assignment?._id);
       Vibration.vibrate([0, 200, 100, 200]);
@@ -3940,7 +3972,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   ]}
                   onPress={() => {
                     setMissionSuccessModalVisible(false);
-                    onMissionCompleted?.({ rescuedCount: rescuedHeadcount });
+                    onMissionCompleted?.({ rescuedCount: rescuedHeadcount, proofImages: completedProofImagesRef.current });
                     onClose();
                   }}
                 >

@@ -651,6 +651,23 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     );
   };
 
+  // Định dạng thời gian hoàn thành nhiệm vụ
+  const formatCompletedTime = (dateStr?: string | Date) => {
+    if (!dateStr) return 'Vừa hoàn tất';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return 'Vừa hoàn tất';
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${hours}:${minutes} • ${day}/${month}/${year}`;
+    } catch {
+      return 'Vừa hoàn tất';
+    }
+  };
+
   // Render tên loại sự cố khẩn cấp
   const getEmergencyLabel = (type?: string) => {
     switch (type) {
@@ -1071,6 +1088,19 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                 {/* Stepper tiến trình nhiệm vụ */}
                 {renderProgressStep(item.status, isReliefMission, isShoreHandoffMission)}
 
+                {/* Thời gian hoàn thành nhiệm vụ (Hiển thị nổi bật trong tab Lịch sử) */}
+                {item.status === 'COMPLETED' && (
+                  <View style={styles.completedTimeBanner}>
+                    <Ionicons name="time-outline" size={15} color="#059669" />
+                    <Text style={styles.completedTimeBannerText}>
+                      Thời gian hoàn thành:{' '}
+                      <Text style={styles.completedTimeHighlight}>
+                        {formatCompletedTime(item.completedAt || item.updatedAt || (sos as any)?.resolvedAt || (sos as any)?.updatedAt)}
+                      </Text>
+                    </Text>
+                  </View>
+                )}
+
                 {/* Chi tiết tiếp tế / cứu hộ & Hiện trường */}
                 <View style={styles.detailsBox}>
                   {/* Địa chỉ / Điểm cứu trợ / Bến đón tiếp nhận */}
@@ -1384,41 +1414,50 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                     </View>
                   )}
                   {/* Bằng chứng hình ảnh bàn giao thực tế (Minh bạch PCTT) */}
-                  {((item.proofImages && item.proofImages.length > 0) ||
-                    (item.status === 'COMPLETED' && (sos as any)?.images && (sos as any).images.length > 0)) && (
-                    <View style={styles.cardProofBox}>
-                      <View style={styles.cardProofHeader}>
-                        <Feather name="shield" size={13} color="#059669" />
-                        <Text style={styles.cardProofTitle}>
-                          BẰNG CHỨNG BÀN GIAO THỰC TẾ (MINH BẠCH):
-                        </Text>
+                  {(() => {
+                    const cardProofList: string[] =
+                      Array.isArray(item.proofImages) && item.proofImages.length > 0
+                        ? item.proofImages
+                        : Array.isArray((sos as any)?.proofImages) && (sos as any).proofImages.length > 0
+                        ? (sos as any).proofImages
+                        : item.status === 'COMPLETED' && Array.isArray((sos as any)?.images) && (sos as any).images.length > 0
+                        ? (sos as any).images
+                        : [];
+
+                    if (cardProofList.length === 0) return null;
+
+                    return (
+                      <View style={styles.cardProofBox}>
+                        <View style={styles.cardProofHeader}>
+                          <Feather name="shield" size={13} color="#059669" />
+                          <Text style={styles.cardProofTitle}>
+                            BẰNG CHỨNG BÀN GIAO THỰC TẾ (MINH BẠCH):
+                          </Text>
+                        </View>
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.cardProofScroll}
+                        >
+                          {cardProofList.map((imgUrl: string, imgIdx: number) => (
+                            <TouchableOpacity
+                              key={imgIdx}
+                              onPress={() => setPreviewImageUri(imgUrl)}
+                              activeOpacity={0.8}
+                              style={styles.cardProofThumbWrap}
+                            >
+                              <Image source={{ uri: imgUrl }} style={styles.cardProofThumb} />
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                        {item.actualRecipient && (
+                          <Text style={styles.cardProofRecipientText}>
+                            👤 Người nhận thực tế: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{item.actualRecipient}</Text>
+                          </Text>
+                        )}
                       </View>
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.cardProofScroll}
-                      >
-                        {(item.proofImages && item.proofImages.length > 0
-                          ? item.proofImages
-                          : (sos as any)?.images || []
-                        ).map((imgUrl: string, imgIdx: number) => (
-                          <TouchableOpacity
-                            key={imgIdx}
-                            onPress={() => setPreviewImageUri(imgUrl)}
-                            activeOpacity={0.8}
-                            style={styles.cardProofThumbWrap}
-                          >
-                            <Image source={{ uri: imgUrl }} style={styles.cardProofThumb} />
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                      {item.actualRecipient && (
-                        <Text style={styles.cardProofRecipientText}>
-                          👤 Người nhận thực tế: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{item.actualRecipient}</Text>
-                        </Text>
-                      )}
-                    </View>
-                  )}
+                    );
+                  })()}
                 </View>
 
                 {/* Các nút hành động: Đầy đủ các bước tiến trình & Điều hướng bản đồ */}
@@ -1887,6 +1926,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                   ? {
                       ...m,
                       status: 'COMPLETED',
+                      completedAt: new Date().toISOString(),
                       proofImages: summary?.proofImages || m.proofImages,
                     }
                   : m
@@ -2897,6 +2937,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  completedTimeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  completedTimeBannerText: {
+    fontSize: 12,
+    color: '#065F46',
+    fontWeight: '600',
+  },
+  completedTimeHighlight: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#047857',
+  },
   // Proof Images in Mission Card
   cardProofBox: {
     marginTop: 10,
