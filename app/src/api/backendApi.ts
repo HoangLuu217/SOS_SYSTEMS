@@ -256,6 +256,20 @@ class BackendApiService {
 
   getAvailableSosRequests = () => assignmentApi.getAvailableSosRequests();
 
+  requestShoreHandoff = (
+    sosId: string,
+    data: {
+      landingPoint: { name: string; address?: string; coordinates: [number, number] };
+      vehicleTypeNeeded: 'AMBULANCE' | 'TRUCK' | 'ANY';
+      peopleCount: number;
+      notes?: string;
+      rescueTeamName?: string;
+      rescueTeamId?: string;
+    }
+  ) => assignmentApi.requestShoreHandoff(sosId, data);
+
+  completeShoreHandoff = (sosId: string, data?: { proofImages?: string[] }) => assignmentApi.completeShoreHandoff(sosId, data);
+
   // Storage helpers
   saveTokens = (accessToken: string, refreshToken?: string) =>
     apiClient.saveTokens(accessToken, refreshToken);

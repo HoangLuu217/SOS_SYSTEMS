@@ -28,10 +28,10 @@ const sosAssignmentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'RescueTeam',
     },
-    // Loại nhiệm vụ: Cứu nạn khẩn cấp hoặc Vận chuyển xuất cấp cứu trợ
+    // Loại nhiệm vụ: Cứu nạn khẩn cấp, Vận chuyển xuất cấp cứu trợ, hoặc Điều xe tiếp vận đón bờ
     missionType: {
       type: String,
-      enum: ['SOS_RESCUE', 'RELIEF_DISPATCH'],
+      enum: ['SOS_RESCUE', 'RELIEF_DISPATCH', 'SHORE_HANDOFF'],
       default: 'SOS_RESCUE',
     },
     destination: {
@@ -126,6 +126,20 @@ const sosAssignmentSchema = new mongoose.Schema(
         name: { type: String, trim: true },
         quantity: { type: Number, default: 1 },
         unit: { type: String, trim: true, default: 'món' },
+      },
+    ],
+    // Danh sách yêu cầu chi viện vật tư khẩn cấp do đội cứu hộ gửi từ hiện trường
+    requestedSupplies: [
+      {
+        name: { type: String, trim: true },
+        quantity: { type: Number, default: 1 },
+        unit: { type: String, trim: true, default: 'món' },
+        urgency: { type: String, enum: ['LOW', 'NORMAL', 'HIGH', 'CRITICAL'], default: 'HIGH' },
+        note: { type: String, trim: true, default: null },
+        status: { type: String, enum: ['PENDING', 'APPROVED', 'REJECTED'], default: 'PENDING' },
+        requestedAt: { type: Date, default: Date.now },
+        respondedAt: { type: Date, default: null },
+        responseNote: { type: String, trim: true, default: null },
       },
     ],
     // Ảnh chụp bằng chứng bàn giao vật tư / hiện trường cứu hộ (Minh bạch phân phối)

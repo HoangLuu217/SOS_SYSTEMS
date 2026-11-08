@@ -8,6 +8,7 @@
     "@react-native-community/datetimepicker": "9.2.1",
     "@supabase/supabase-js": "^2.117.2",
     "expo": "~58.0.19",
+    "expo-audio": "~58.0.11",
     "expo-auth-session": "~58.0.14",
     "expo-blur": "~58.0.5",
     "expo-constants": "~58.0.13",

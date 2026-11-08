@@ -34,10 +34,25 @@ router.patch('/:id/verify', authorize('LOCAL_AUTHORITY', 'ADMIN'), sosController
 // GET /api/sos/:id/files - Lấy toàn bộ file đính kèm của SOS để xác minh
 router.get('/:id/files', authorize('LOCAL_AUTHORITY', 'ADMIN', 'CITIZEN', 'RESCUER'), sosController.getSosFiles);
 
+
+// POST /api/sos/:id/shore-handoff/request - Cứu hộ viên yêu cầu xe đón bờ
+router.post('/:id/shore-handoff/request', authorize('RESCUER', 'LOCAL_AUTHORITY', 'ADMIN'), sosController.requestShoreHandoff);
+
+// POST /api/sos/:id/shore-handoff/assign - Ban chỉ huy điều xe cứu thương/xe tải đón bờ
+router.post('/:id/shore-handoff/assign', authorize('LOCAL_AUTHORITY', 'ADMIN', 'RESCUER'), sosController.assignShoreHandoff);
+
+// POST /api/sos/:id/shore-handoff/cancel - Hủy điều xe đón bờ, đưa về trạng thái chờ
+router.post('/:id/shore-handoff/cancel', authorize('LOCAL_AUTHORITY', 'ADMIN', 'RESCUER'), sosController.cancelShoreHandoff);
+
+// POST /api/sos/:id/shore-handoff/complete - Xác nhận hoàn thành tiếp vận tại bờ
+router.post('/:id/shore-handoff/complete', authorize('RESCUER', 'LOCAL_AUTHORITY', 'ADMIN'), sosController.completeShoreHandoff);
+
+
 // DELETE /api/sos/clear-cancelled - Dọn dẹp hàng loạt các ca đã hủy (Dành cho Authority & Admin)
 router.delete('/clear-cancelled', authorize('LOCAL_AUTHORITY', 'ADMIN'), sosController.clearCancelledSos);
 
 // DELETE /api/sos/:id - Xóa 1 yêu cầu SOS (Người dân xóa ca đã hủy của mình, hoặc Cán bộ/Admin)
 router.delete('/:id', authorize('CITIZEN', 'LOCAL_AUTHORITY', 'ADMIN', 'RESCUER'), sosController.deleteSos);
+
 
 module.exports = router;

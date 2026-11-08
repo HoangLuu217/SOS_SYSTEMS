@@ -4,8 +4,8 @@ import {
   ChevronRight,
   Truck,
   LifeBuoy,
-  RefreshCw,
   Search,
+  RefreshCw,
   X,
   AlertTriangle,
   Eye,
@@ -53,6 +53,7 @@ import 'leaflet/dist/leaflet.css';
 import { fetchSafeLocations } from '@/api/shelter.api';
 import { getAreaCoordinates } from '@/features/authorities/AreaPreviewMap';
 import { domainDService } from '@/services/domainDService';
+import { getSocket } from '@/services/socketService';
 import { toast } from '@/components/common/toast';
 import '@/features/sos/SosRequestsView.css';
 import '@/features/rescuers/RescuerApprovalView.css';
@@ -744,6 +745,42 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     loadData();
   }, [loadData, refreshIndex]);
 
+  // Lắng nghe cập nhật kho và duyệt vật tư theo thời gian thực
+  useEffect(() => {
+    let socket: any = null;
+    try {
+      socket = getSocket();
+      if (socket) {
+        socket.on('equipment:updated', loadData);
+        socket.on('equipment:change', loadData);
+        socket.on('assignment:supply_approved', loadData);
+        socket.on('sos:sync', loadData);
+      }
+    } catch (e) {
+      console.warn('Socket connect error in ResourcesView:', e);
+    }
+
+    const handleWindowUpdate = () => {
+      loadData();
+    };
+
+    window.addEventListener('equipment_updated', handleWindowUpdate);
+    window.addEventListener('equipment:updated', handleWindowUpdate);
+    window.addEventListener('sos_data_updated', handleWindowUpdate);
+
+    return () => {
+      if (socket) {
+        socket.off('equipment:updated', loadData);
+        socket.off('equipment:change', loadData);
+        socket.off('assignment:supply_approved', loadData);
+        socket.off('sos:sync', loadData);
+      }
+      window.removeEventListener('equipment_updated', handleWindowUpdate);
+      window.removeEventListener('equipment:updated', handleWindowUpdate);
+      window.removeEventListener('sos_data_updated', handleWindowUpdate);
+    };
+  }, [loadData]);
+
   const rawVehicles = vehicles;
 
   // Resolve each vehicle strictly by team (yêu cầu: phương tiện phải get theo thằng team)
@@ -1348,6 +1385,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
   // Mở modal Phiếu xuất cứu trợ tổng hợp (nhiều mặt hàng)
   const handleOpenBatchConsumeModal = async () => {
+    refreshData();
     const available = consumableEquipments.filter((e) => e.quantity > 0);
     if (available.length === 0) {
       toast.warning('Hiện không có mặt hàng cứu trợ nào còn tồn kho để xuất cấp');
@@ -1480,7 +1518,14 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         note: batchNote.trim() || undefined,
         teamId: batchDispatchMode === 'ASSIGN_TEAM' ? batchTeamId : undefined,
         priority: batchDispatchMode === 'ASSIGN_TEAM' ? batchPriority : undefined,
-        items: batchItems.map((bi) => ({ equipmentId: bi.equipmentId, quantity: Number(bi.quantity) })),
+        items: batchItems.map((bi) => {
+          const eqDoc = consumableEquipments.find((e) => e._id === bi.equipmentId);
+          return {
+            equipmentId: bi.equipmentId,
+            name: eqDoc?.name,
+            quantity: Number(bi.quantity),
+          };
+        }),
       });
 
       const updatedList: EquipmentItem[] = Array.isArray(res.data)
@@ -1509,9 +1554,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         setBatchRecipientName('');
         setBatchNote('');
       } else {
+        refreshData();
         toast.error(res.message || 'Không thể tạo phiếu xuất cấp cứu trợ tổng hợp');
       }
     } catch (err: any) {
+      refreshData();
       toast.error(err?.message || 'Có lỗi xảy ra khi xuất cấp cứu trợ tổng hợp');
     } finally {
       setIsSubmittingBatchConsume(false);
@@ -2058,6 +2105,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
             )}
           </div>
 
+
           {/* Phía phải Header: Toàn bộ nút hành động cấp kho */}
           <div className="resources-card-header-actions">
             <button
@@ -2071,6 +2119,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
             </button>
 
             {resourceTab === 'VEHICLES' && (
+
               <button
                 type="button"
                 className="coordination-action-btn primary"
@@ -2191,6 +2240,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
           </div>
         </div>
 
+
         {resourceTab === 'VEHICLES' ? (
           <>
             {/* TOOLBAR PHƯƠNG TIỆN (ULTRA-COMPACT: TIÊU ĐỀ + BỘ LỌC + THAO TÁC TRÊN 1 HÀNG) */}
@@ -2214,6 +2264,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       const tId = typeof v.teamId === 'object' ? (v.teamId as any)?._id : v.teamId;
                       return tId === team._id || v.assignedTeam?._id === team._id;
                     }).length;
+
                     return (
                       <option key={team._id} value={team._id}>
                         📍 {team.name} ({count} xe)

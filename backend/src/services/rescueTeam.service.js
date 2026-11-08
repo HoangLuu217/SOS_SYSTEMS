@@ -186,12 +186,12 @@ class RescueTeamService {
 
     const [teams, total] = await Promise.all([
       RescueTeam.find(filter)
-        .populate('leaderId', 'fullName phone email rescuer status')
+        .populate('leaderId', 'fullName phone email rescuer status currentLocation')
         .populate('authorityId', 'name code phone type')
         .populate('areaId', 'name code type')
         .populate({
           path: 'members.rescuerId',
-          select: 'fullName phone email avatarUrl rescuer status isVerified',
+          select: 'fullName phone email avatarUrl rescuer status isVerified currentLocation',
         })
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -246,12 +246,12 @@ class RescueTeamService {
    */
   async getTeamById(id) {
     const team = await RescueTeam.findById(id)
-      .populate('leaderId', 'fullName phone email rescuer')
+      .populate('leaderId', 'fullName phone email rescuer currentLocation')
       .populate('authorityId', 'name code phone address')
       .populate('areaId', 'name code type level')
       .populate({
         path: 'members.rescuerId',
-        select: 'fullName phone email avatarUrl rescuer',
+        select: 'fullName phone email avatarUrl rescuer currentLocation',
       });
 
     if (!team) {

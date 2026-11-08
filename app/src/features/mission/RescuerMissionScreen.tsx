@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,11 +19,15 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
+import { io } from 'socket.io-client';
+import { ENV } from '@/config/env';
 import { backendApi } from '@/api';
 import { useAuth } from '@/context/AuthContext';
 import { SosAssignmentData, SosAssignmentStatus, TabName } from '@/types';
 import { SosScreen, RescuerMissionWorkspaceModal } from '@/features/sos';
+import { playDispatchAlertSound } from '@/services';
 
 interface RescuerMissionScreenProps {
   onNavigateToTab?: (tab: TabName, options?: any) => void;
@@ -60,9 +64,9 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     vehiclePlate: string;
     vehicleType: string;
   }>({
-    teamName: 'Đội Y Tế Cứu Thương Dã Chiến',
-    vehiclePlate: '43B-115.88',
-    vehicleType: 'AMBULANCE',
+    teamName: 'Đội Cứu Hộ Phản Ứng Nhanh Ngũ Hành Sơn (43-NHS-01)',
+    vehiclePlate: '43-CN-08',
+    vehicleType: 'BOAT',
   });
 
   // Modal SOS khẩn cấp dành cho cứu hộ viên
@@ -71,6 +75,13 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
   // Modal Điều hướng Tác chiến Thực địa GrabDriver
   const [workspaceVisible, setWorkspaceVisible] = useState(false);
   const [activeWorkspaceMission, setActiveWorkspaceMission] = useState<SosAssignmentData | null>(null);
+  const activeWorkspaceMissionRef = useRef<SosAssignmentData | null>(null);
+  const myTeamIdRef = useRef<string | null>(null);
+  const [isTeamLeader, setIsTeamLeader] = useState<boolean>(false);
+  useEffect(() => {
+    activeWorkspaceMissionRef.current = activeWorkspaceMission;
+  }, [activeWorkspaceMission]);
+  const dismissedMissionsRef = React.useRef<Set<string>>(new Set());
 
   const isFetchingRef = useRef(false);
   const prevCountRef = useRef<number>(-1);
@@ -98,12 +109,24 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
         if (res.success && Array.isArray(res.data)) {
           hasLoadedRef.current = true;
           setMissions(res.data);
-          const activeCount = res.data.filter(
+          const activeList = res.data.filter(
             (m) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(m.status)
-          ).length;
+          );
+          // Quy tắc tác chiến: 1 nhóm chỉ được phép làm 1 nhiệm vụ tại một thời điểm
+          const activeCount = Math.min(activeList.length, 1);
           if (prevCountRef.current !== activeCount) {
             prevCountRef.current = activeCount;
             onMissionsCountChange?.(activeCount);
+          }
+
+          // TỰ ĐỘNG BAY VÔ TRANG TÁC CHIẾN KHI CÓ NHIỆM VỤ ĐIỀU PHỐI (Chỉ mở nhiệm vụ đang thực hiện)
+          if (activeList.length > 0 && !workspaceVisible) {
+            const ongoingStatuses = ['RESCUING', 'ARRIVED', 'EN_ROUTE', 'IN_PROGRESS', 'ACCEPTED'];
+            const targetMission = activeList.find((m) => ongoingStatuses.includes(m.status)) || activeList[0];
+            if (!dismissedMissionsRef.current.has(targetMission._id)) {
+              setActiveWorkspaceMission(targetMission);
+              setWorkspaceVisible(true);
+            }
           }
         } else {
           setMissions([]);
@@ -120,7 +143,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
         setRefreshing(false);
       }
     },
-    [onMissionsCountChange]
+    [onMissionsCountChange, workspaceVisible]
   );
 
   useEffect(() => {
@@ -147,22 +170,47 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     let isMounted = true;
     const fetchTeamInfo = async () => {
       try {
-        const teamsRes = await backendApi.getRescueTeams();
-        const teams = Array.isArray(teamsRes.data) ? teamsRes.data : [];
-        const currentUserId = user?._id?.toString();
+        const teamsRes = await backendApi.getRescueTeams({ limit: 100 });
+        const teams = Array.isArray(teamsRes.data)
+          ? teamsRes.data
+          : (teamsRes.data as any)?.teams || [];
+        const currentUserId = (user?._id || (user as any)?.id)?.toString();
+        const currentUserPhone = user?.phone;
+        const currentUserEmail = user?.email?.toLowerCase();
 
         const myTeam = teams.find((t: any) => {
-          const isLeader = (t.leaderId?._id || t.leaderId)?.toString() === currentUserId;
+          const leaderIdStr = (t.leaderId?._id || t.leaderId)?.toString();
+          const leaderPhone = t.leaderId?.phone;
+          const leaderEmail = t.leaderId?.email?.toLowerCase();
+          const isLeader =
+            (currentUserId && leaderIdStr === currentUserId) ||
+            (currentUserPhone && leaderPhone === currentUserPhone) ||
+            (currentUserEmail && leaderEmail === currentUserEmail);
+
           const isMember =
             Array.isArray(t.members) &&
             t.members.some((m: any) => {
-              const rId = (m.rescuerId?._id || m.rescuerId)?.toString();
-              return rId === currentUserId && m.status !== 'REJECTED';
+              const r = m.rescuerId;
+              const rId = (r?._id || r)?.toString();
+              const rPhone = r?.phone;
+              const rEmail = r?.email?.toLowerCase();
+              const matchesUser =
+                (currentUserId && rId === currentUserId) ||
+                (currentUserPhone && rPhone === currentUserPhone) ||
+                (currentUserEmail && rEmail === currentUserEmail);
+              return matchesUser && m.status !== 'REJECTED';
             });
           return isLeader || isMember;
         });
 
         if (myTeam && isMounted) {
+          const leaderIdStr = (myTeam.leaderId?._id || myTeam.leaderId)?.toString();
+          const isLeaderOfTeam =
+            (currentUserId && leaderIdStr === currentUserId) ||
+            (currentUserPhone && myTeam.leaderId?.phone === currentUserPhone) ||
+            (currentUserEmail && myTeam.leaderId?.email?.toLowerCase() === currentUserEmail);
+          setIsTeamLeader(Boolean(isLeaderOfTeam));
+          myTeamIdRef.current = (myTeam._id || myTeam.id)?.toString() || null;
           let vehiclePlate = 'Chưa phân bổ';
           let vehicleType = 'AMBULANCE';
 
@@ -199,14 +247,200 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     };
   }, [user?._id]);
 
-  // Lọc nhiệm vụ theo Tab
-  const activeMissions = missions.filter(
-    (m) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(m.status)
-  );
-  const historyMissions = missions.filter((m) =>
-    ['COMPLETED', 'CANCELLED', 'REJECTED'].includes(m.status)
-  );
-  const displayedMissions = activeSegment === 'active' ? activeMissions : historyMissions;
+  // Kết nối Socket.IO realtime để nhận lệnh điều động & hủy điều động tức thời 100%
+  useEffect(() => {
+    let locSub: Location.LocationSubscription | null = null;
+    let s: any = null;
+    let isMounted = true;
+
+    const socketUrl = ENV.API_BASE_URL.replace(/\/api\/?$/, '');
+    s = io(socketUrl, { transports: ['websocket', 'polling'] });
+
+    s.on('connect', () => {
+      console.log('✔ [RescuerMissionScreen] Socket connected realtime');
+      if (user?._id) s.emit('register_user', user._id);
+    });
+
+    const isAssignedToCurrentTeam = (payload: any) => {
+      if (!payload) return false;
+      const myUserId = user?._id?.toString();
+      const myTeamId = myTeamIdRef.current?.toString();
+
+      const targetRescuerId = (payload.rescuerId?._id || payload.rescuerId)?.toString();
+      const targetTeamId = (
+        payload.rescueTeamId?._id ||
+        payload.rescueTeamId ||
+        payload.teamId?._id ||
+        payload.teamId
+      )?.toString();
+      const targetUserIds: string[] = Array.isArray(payload.targetUserIds)
+        ? payload.targetUserIds.map((u: any) => (u?._id || u)?.toString())
+        : [];
+
+      // 1. Khớp User ID người nhận lệnh
+      if (myUserId && (targetRescuerId === myUserId || targetUserIds.includes(myUserId))) {
+        return true;
+      }
+
+      // 2. Khớp Đội cứu hộ được phân công
+      if (myTeamId && targetTeamId && myTeamId === targetTeamId) {
+        return true;
+      }
+
+      return false;
+    };
+
+    // Lắng nghe khi có lệnh điều động mới từ Web - CHỈ PHÁT CHUÔNG CHO ĐÚNG ĐỘI ĐƯỢC PHÂN CÔNG
+    const handleNewMission = (payload?: any) => {
+      const isForMe = isAssignedToCurrentTeam(payload);
+      console.log('🚨 [RescuerMissionScreen] Lệnh điều động mới, isForMe =', isForMe);
+      if (isForMe) {
+        playDispatchAlertSound().catch(() => {});
+      }
+      fetchMissions({ isSilent: true });
+      DeviceEventEmitter.emit('sos:sync');
+    };
+
+    // Lắng nghe khi Ban chỉ huy trên Web HỦY LỆNH điều động -> Mất lệnh ngay lập tức!
+    const handleCancelledMission = (payload?: any) => {
+      console.log('⚠️ [RescuerMissionScreen] Lệnh điều động đã bị hủy:', payload);
+      // Nếu đang mở workspace của ca bị hủy, tự động đóng ngay lập tức
+      if (activeWorkspaceMissionRef.current) {
+        const curAssignId = activeWorkspaceMissionRef.current._id;
+        const curSosId = activeWorkspaceMissionRef.current.sosRequestId?._id;
+        if (
+          !payload ||
+          !payload.assignmentId ||
+          String(payload.assignmentId) === String(curAssignId) ||
+          String(payload.sosId) === String(curSosId)
+        ) {
+          setWorkspaceVisible(false);
+          setActiveWorkspaceMission(null);
+          Alert.alert(
+            '⚠️ ĐIỀU ĐỘNG ĐÃ HỦY',
+            payload?.reason
+              ? `Ban chỉ huy đã thu hồi / hủy lệnh điều động ca này.\nLý do: ${payload.reason}`
+              : 'Ban chỉ huy đã thu hồi hoặc hủy bỏ lệnh điều động.',
+            [{ text: 'Đã hiểu' }]
+          );
+        }
+      }
+      fetchMissions({ isSilent: true });
+      DeviceEventEmitter.emit('sos:sync');
+    };
+
+    const handleSync = () => {
+      fetchMissions({ isSilent: true });
+      DeviceEventEmitter.emit('sos:sync');
+    };
+
+    s.on('assignment:new', handleSync);
+    s.on('assignment:created', handleSync);
+    s.on('assignment:assigned', handleNewMission);
+
+    s.on('assignment:cancelled', handleCancelledMission);
+    s.on('assignment:deleted', handleCancelledMission);
+    s.on('assignment:updated', handleSync);
+    s.on('assignment:status_updated', handleSync);
+    s.on('assignment:completed', handleSync);
+
+    s.on('sos:updated', handleSync);
+    s.on('sos:status_changed', handleSync);
+    s.on('sos:sync', handleSync);
+
+    // Kích hoạt GPS telemetry nếu được cấp quyền
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted' && isMounted) {
+          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+          if (isMounted && pos?.coords && s?.connected) {
+            s.emit('rescuer:location_update', {
+              rescuerId: user?._id,
+              phone: user?.phone,
+              location: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+              coords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+            });
+          }
+
+          locSub = await Location.watchPositionAsync(
+            { accuracy: Location.Accuracy.High, distanceInterval: 5, timeInterval: 4000 },
+            (p) => {
+              if (isMounted && p?.coords && s?.connected) {
+                s.emit('rescuer:location_update', {
+                  rescuerId: user?._id,
+                  phone: user?.phone,
+                  location: { lat: p.coords.latitude, lng: p.coords.longitude },
+                  coords: { lat: p.coords.latitude, lng: p.coords.longitude },
+                });
+              }
+            }
+          );
+        }
+      } catch (err) {
+        console.warn('GPS rescuer telemetry error:', err);
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+      if (locSub) locSub.remove();
+      if (s) {
+        s.off('assignment:new', handleSync);
+        s.off('assignment:created', handleSync);
+        s.off('assignment:assigned', handleNewMission);
+        s.off('assignment:cancelled', handleCancelledMission);
+        s.off('assignment:deleted', handleCancelledMission);
+        s.off('assignment:updated', handleSync);
+        s.off('assignment:status_updated', handleSync);
+        s.off('assignment:completed', handleSync);
+        s.off('sos:updated', handleSync);
+        s.off('sos:status_changed', handleSync);
+        s.off('sos:sync', handleSync);
+        s.disconnect();
+      }
+    };
+  }, [user?._id, user?.phone, fetchMissions]);
+
+  // Lọc nhiệm vụ theo Tab & Áp dụng nguyên tắc: 1 nhóm chỉ được phép làm 1 nhiệm vụ tại một thời điểm
+  const allActiveMissions = useMemo<SosAssignmentData[]>(() => {
+    return missions.filter(
+      (m: SosAssignmentData) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(m.status)
+    );
+  }, [missions]);
+
+  // Sắp xếp: Ưu tiên các nhiệm vụ đã tiếp nhận/đang thực hiện lên trước, sau đó mới tới PENDING
+  const sortedActiveMissions = useMemo<SosAssignmentData[]>(() => {
+    const ongoingStatuses = ['RESCUING', 'ARRIVED', 'EN_ROUTE', 'IN_PROGRESS', 'ACCEPTED'];
+    return [...allActiveMissions].sort((a: SosAssignmentData, b: SosAssignmentData) => {
+      const aIsOngoing = ongoingStatuses.includes(a.status);
+      const bIsOngoing = ongoingStatuses.includes(b.status);
+      if (aIsOngoing && !bIsOngoing) return -1;
+      if (!aIsOngoing && bIsOngoing) return 1;
+      return new Date(a.createdAt || a.assignedAt || 0).getTime() - new Date(b.createdAt || b.assignedAt || 0).getTime();
+    });
+  }, [allActiveMissions]);
+
+  // Duy nhất 1 nhiệm vụ đang thực hiện (xong nhiệm vụ này mới tới nhiệm vụ khác)
+  const currentActiveMission: SosAssignmentData | null = sortedActiveMissions[0] || null;
+  const queuedMissions = useMemo<SosAssignmentData[]>(() => sortedActiveMissions.slice(1), [sortedActiveMissions]);
+  const activeMissions = useMemo<SosAssignmentData[]>(() => (currentActiveMission ? [currentActiveMission] : []), [currentActiveMission]);
+
+  const historyMissions = useMemo<SosAssignmentData[]>(() => {
+    // Chỉ lưu trữ và tổng hợp các nhiệm vụ ĐÃ HOÀN THÀNH thực sự
+    const completedList = missions.filter((m: SosAssignmentData) => m.status === 'COMPLETED');
+    const map = new Map<string, SosAssignmentData>();
+    completedList.forEach((m) => {
+      const sosId = typeof m.sosRequestId === 'object' ? m.sosRequestId?._id : m.sosRequestId;
+      const key = sosId ? String(sosId) : String(m._id);
+      if (!map.has(key)) {
+        map.set(key, m);
+      }
+    });
+    return Array.from(map.values());
+  }, [missions]);
+
+  const displayedMissions: SosAssignmentData[] = activeSegment === 'active' ? activeMissions : historyMissions;
 
   // Xử lý gọi điện thoại cho nạn nhân
   const handleCallVictim = (phone?: string) => {
@@ -222,9 +456,34 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
 
   // Xem vị trí nạn nhân & Mở Màn hình Điều Hướng Tác Chiến
   const handleViewOnMap = (mission: SosAssignmentData) => {
+    if (mission?._id) {
+      dismissedMissionsRef.current.delete(mission._id);
+    }
     setActiveWorkspaceMission(mission);
     setWorkspaceVisible(true);
   };
+
+  // Kiểm tra quyền Đội trưởng cho từng phân công
+  const checkIsLeaderForMission = useCallback(
+    (mission: SosAssignmentData) => {
+      const currentUserId = (user?._id || (user as any)?.id)?.toString();
+      const currentUserPhone = user?.phone;
+      const teamLeader = (mission.rescueTeamId as any)?.leaderId;
+      const leaderId = (teamLeader?._id || teamLeader)?.toString();
+      const leaderPhone = teamLeader?.phone;
+
+      if (leaderId && currentUserId && leaderId === currentUserId) return true;
+      if (leaderPhone && currentUserPhone && leaderPhone === currentUserPhone) return true;
+      if (isTeamLeader) return true;
+
+      const rescuerId = ((mission.rescuerId as any)?._id || (mission.rescuerId as any))?.toString();
+      if (rescuerId && currentUserId && rescuerId === currentUserId) return true;
+
+      if (user?.roles?.includes('LEADER') || user?.roles?.includes('ADMIN')) return true;
+      return false;
+    },
+    [user, isTeamLeader]
+  );
 
   // Cập nhật trạng thái nhiệm vụ (Tiếp nhận, Xuất phát, Tiếp cận, Hoàn thành)
   const handleUpdateStatus = async (
@@ -233,6 +492,18 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     note?: string,
     extraData?: { proofImages?: string[]; actualRecipient?: string }
   ) => {
+    // Chỉ đội trưởng mới có quyền nhận hoặc từ chối lệnh
+    if (['ACCEPTED', 'REJECTED'].includes(targetStatus)) {
+      const mission = missions.find((m) => m._id === missionId);
+      if (mission && !checkIsLeaderForMission(mission)) {
+        Alert.alert(
+          'Chỉ Đội Trưởng',
+          'Chỉ Đội trưởng mới có quyền xác nhận tiếp nhận hoặc từ chối lệnh điều động này.',
+          [{ text: 'Đã hiểu' }]
+        );
+        return;
+      }
+    }
     try {
       setIsSubmitting(true);
       let res;
@@ -271,7 +542,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert('Quyền máy ảnh', 'Vui lòng cấp quyền truy cập máy ảnh để chụp bằng chứng bàn giao hàng.');
+        Alert.alert('Quyền máy ảnh', 'Vui lòng cấp quyền truy cập máy ảnh để chụp bằng chứng cấp phát cứu trợ.');
         return;
       }
       const res = await ImagePicker.launchCameraAsync({
@@ -421,6 +692,23 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     );
   };
 
+  // Định dạng thời gian hoàn thành nhiệm vụ
+  const formatCompletedTime = (dateStr?: string | Date) => {
+    if (!dateStr) return 'Vừa hoàn tất';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return 'Vừa hoàn tất';
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${hours}:${minutes} • ${day}/${month}/${year}`;
+    } catch {
+      return 'Vừa hoàn tất';
+    }
+  };
+
   // Render tên loại sự cố khẩn cấp
   const getEmergencyLabel = (type?: string) => {
     switch (type) {
@@ -443,8 +731,46 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
   };
 
   // Render trạng thái tiến trình (hỗ trợ phân biệt nhiệm vụ Cứu nạn và Tiếp tế cứu trợ)
-  const renderProgressStep = (currentStatus: SosAssignmentStatus, isRelief = false) => {
-    const steps: { key: SosAssignmentStatus; label: string }[] = isRelief
+  const renderProgressStep = (
+    currentStatus: SosAssignmentStatus,
+    isRelief = false,
+    isShoreHandoff = false
+  ) => {
+    if (['CANCELLED', 'REJECTED'].includes(currentStatus)) {
+      return (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 6,
+            paddingVertical: 9,
+            paddingHorizontal: 12,
+            borderRadius: 8,
+            backgroundColor: '#FEF2F2',
+            borderWidth: 1,
+            borderColor: '#FCA5A5',
+            marginBottom: 12,
+          }}
+        >
+          <MaterialCommunityIcons name="close-circle-outline" size={16} color="#DC2626" />
+          <Text style={{ fontSize: 12, fontWeight: '700', color: '#DC2626', flex: 1 }}>
+            {currentStatus === 'REJECTED'
+              ? 'Nhiệm vụ đã được đội cứu hộ từ chối tiếp nhận'
+              : 'Lệnh điều động đã được Ban Chỉ Huy thu hồi / hủy bỏ'}
+          </Text>
+        </View>
+      );
+    }
+
+    const steps: { key: SosAssignmentStatus; label: string }[] = isShoreHandoff
+      ? [
+          { key: 'PENDING', label: 'Lệnh điều xe' },
+          { key: 'ACCEPTED', label: 'Nhận lệnh' },
+          { key: 'EN_ROUTE', label: 'Đang đến bến' },
+          { key: 'IN_PROGRESS', label: 'Tại bến đón' },
+          { key: 'COMPLETED', label: 'Đã tiếp nhận' },
+        ]
+      : isRelief
       ? [
           { key: 'PENDING', label: 'Lệnh điều phối' },
           { key: 'ACCEPTED', label: 'Đã nhận lệnh' },
@@ -527,21 +853,28 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
         <View style={styles.headerTopRow}>
           <View style={styles.headerTitleBox}>
             <View style={styles.badgeLiveRow}>
-              <View style={styles.livePulseDot} />
-              <Text style={styles.headerOverline}>TRỰC BAN 24/7 • SẴN SÀNG ỨNG CỨU</Text>
+              <View
+                style={[
+                  styles.livePulseDot,
+                  activeMissions.length > 0 && { backgroundColor: '#EF4444' },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.headerOverline,
+                  activeMissions.length > 0 && { color: '#FCA5A5' },
+                ]}
+              >
+                {activeMissions.length > 0
+                  ? 'ĐANG TÁC CHIẾN • CÓ 1 CA CẦN XỬ LÝ'
+                  : 'TRỰC BAN 24/7 • SẴN SÀNG NHẬN LỆNH'}
+              </Text>
             </View>
             <Text style={styles.headerTitle}>Nhiệm vụ tác chiến</Text>
           </View>
 
           {/* Action buttons: Làm mới & Nút Báo nguy cấp SOS */}
           <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.headerIconBtn}
-              onPress={() => fetchMissions({ isUserPull: true })}
-              activeOpacity={0.7}
-            >
-              <Feather name="refresh-cw" size={17} color="#E2E8F0" />
-            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.headerIconBtn, styles.headerSosBtn]}
@@ -668,28 +1001,31 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                 ? 'Hiện tại khu vực phụ trách chưa có lệnh điều phối mới. Hãy luôn duy trì trạng thái kết nối mạng và sẵn sàng nhận lệnh từ Ban chỉ huy!'
                 : 'Các nhiệm vụ cứu nạn bạn đã hoàn tất sẽ được lưu trữ và tổng hợp tại đây.'}
             </Text>
-            {activeSegment === 'active' && (
-              <TouchableOpacity
-                style={styles.emptyRefreshBtn}
-                onPress={() => fetchMissions({ isSilent: false })}
-                activeOpacity={0.8}
-              >
-                <Feather name="refresh-cw" size={16} color="#0066FF" />
-                <Text style={styles.emptyRefreshText}>Quét lại nhiệm vụ</Text>
-              </TouchableOpacity>
-            )}
           </View>
         ) : (
           displayedMissions.map((item) => {
             const sos = item.sosRequestId;
+            const shoreHandoff =
+              sos?.shoreHandoff &&
+              sos.shoreHandoff.status !== 'NONE' &&
+              ['REQUESTED', 'ASSIGNED', 'COMPLETED'].includes(sos.shoreHandoff.status)
+                ? sos.shoreHandoff
+                : null;
             const isReliefMission =
               item.missionType === 'RELIEF_DISPATCH' ||
               sos?.emergencyType === 'RELIEF' ||
               (typeof sos?.description === 'string' && sos.description.includes('xuất cấp cứu trợ')) ||
               (typeof item.note === 'string' && item.note.includes('xuất cấp cứu trợ'));
 
-            const emergencyInfo = isReliefMission
-              ? { label: 'Xuất cấp & Tiếp tế cứu trợ', icon: 'package-variant-closed', color: '#059669' }
+            const isShoreHandoffMission =
+              item.missionType === 'SHORE_HANDOFF' ||
+              (typeof item.note === 'string' && item.note.toLowerCase().includes('đón bờ')) ||
+              (item.vehicleId?.type === 'AMBULANCE' && !!shoreHandoff);
+
+            const emergencyInfo = isShoreHandoffMission
+              ? { label: 'Tiếp vận đón bờ', icon: 'ambulance', color: '#0284C7' }
+              : isReliefMission
+              ? { label: 'Tiếp tế cứu trợ', icon: 'package-variant-closed', color: '#059669' }
               : getEmergencyLabel(sos?.emergencyType);
 
             const contactPhone = sos?.contactPhone || sos?.secondaryPhone || item.assignedBy?.phone;
@@ -727,7 +1063,20 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                     <Text style={styles.codePrefix}>MÃ SOS:</Text>
                     <Text style={styles.codeText}>{sos?.sosCode || 'SOS-KHẨN'}</Text>
                   </View>
-                  {renderPriorityBadge(item.priority || sos?.priority)}
+                  {['CANCELLED', 'REJECTED'].includes(item.status) ? (
+                    <View
+                      style={[
+                        styles.priorityBadge,
+                        { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' },
+                      ]}
+                    >
+                      <Text style={{ color: '#DC2626', fontWeight: '800', fontSize: 11 }}>
+                        {item.status === 'REJECTED' ? 'ĐÃ TỪ CHỐI' : 'ĐÃ HỦY LỆNH'}
+                      </Text>
+                    </View>
+                  ) : (
+                    renderPriorityBadge(item.priority || sos?.priority)
+                  )}
                 </View>
 
                 {/* Emergency Category Tag */}
@@ -750,41 +1099,80 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                     </Text>
                   </View>
 
-                  <View style={[styles.victimCountBadge, isReliefMission && { backgroundColor: '#ECFDF5' }]}>
-                    {isReliefMission ? (
+                  <View
+                    style={[
+                      styles.victimCountBadge,
+                      isReliefMission && { backgroundColor: '#ECFDF5' },
+                      isShoreHandoffMission && { backgroundColor: '#E0F2FE' },
+                    ]}
+                  >
+                    {isShoreHandoffMission ? (
+                      <MaterialCommunityIcons name="ambulance" size={13} color="#0284C7" />
+                    ) : isReliefMission ? (
                       <MaterialCommunityIcons name="cube-send" size={13} color="#059669" />
                     ) : (
                       <Feather name="users" size={13} color="#0F172A" />
                     )}
-                    <Text style={[styles.victimCountText, isReliefMission && { color: '#059669', fontWeight: '800' }]}>
-                      {isReliefMission
+                    <Text
+                      style={[
+                        styles.victimCountText,
+                        isReliefMission && { color: '#059669', fontWeight: '800' },
+                        isShoreHandoffMission && { color: '#0284C7', fontWeight: '800' },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {isShoreHandoffMission
+                        ? `${sos?.shoreHandoff?.peopleCount || sos?.people || 1} người`
+                        : isReliefMission
                         ? totalSuppliesCount > 0
-                          ? `${totalSuppliesCount} kiện/thùng hàng`
-                          : 'Tiếp tế nhu yếu phẩm'
+                          ? `${totalSuppliesCount} kiện`
+                          : 'Tiếp tế'
                         : `${sos?.people || 1} người`}
                     </Text>
                   </View>
                 </View>
 
                 {/* Stepper tiến trình nhiệm vụ */}
-                {renderProgressStep(item.status, isReliefMission)}
+                {renderProgressStep(item.status, isReliefMission, isShoreHandoffMission)}
+
+                {/* Thời gian hoàn thành nhiệm vụ (Hiển thị nổi bật trong tab Lịch sử) */}
+                {item.status === 'COMPLETED' && (
+                  <View style={styles.completedTimeBanner}>
+                    <Ionicons name="time-outline" size={15} color="#059669" />
+                    <Text style={styles.completedTimeBannerText}>
+                      Thời gian hoàn thành:{' '}
+                      <Text style={styles.completedTimeHighlight}>
+                        {formatCompletedTime(item.completedAt || item.updatedAt || (sos as any)?.resolvedAt || (sos as any)?.updatedAt)}
+                      </Text>
+                    </Text>
+                  </View>
+                )}
 
                 {/* Chi tiết tiếp tế / cứu hộ & Hiện trường */}
                 <View style={styles.detailsBox}>
-                  {/* Địa chỉ / Điểm giao */}
+                  {/* Địa chỉ / Điểm cứu trợ / Bến đón tiếp nhận */}
                   <View style={styles.detailRow}>
                     <Feather
-                      name={isReliefMission ? 'navigation' : 'map-pin'}
+                      name={isShoreHandoffMission ? 'anchor' : isReliefMission ? 'navigation' : 'map-pin'}
                       size={15}
-                      color={isReliefMission ? '#059669' : '#EF4444'}
+                      color={isShoreHandoffMission ? '#0284C7' : isReliefMission ? '#059669' : '#EF4444'}
                       style={styles.detailIcon}
                     />
                     <View style={styles.detailContent}>
                       <Text style={styles.detailLabel}>
-                        {isReliefMission ? 'Điểm tiếp nhận cứu trợ:' : 'Địa điểm cứu hộ:'}
+                        {isShoreHandoffMission
+                          ? 'Bến đón & Tập kết nạn nhân:'
+                          : isReliefMission
+                          ? 'Điểm tiếp nhận cứu trợ:'
+                          : 'Địa điểm cứu hộ:'}
                       </Text>
                       <Text style={styles.detailValueAddress}>
-                        {item.destination || sos?.address || 'Chưa cập nhật địa chỉ'}
+                        {item.destination ||
+                          (isShoreHandoffMission
+                            ? (sos?.shoreHandoff?.landingPoint?.name || sos?.shoreHandoff?.landingPoint?.address)
+                            : null) ||
+                          sos?.address ||
+                          'Chưa cập nhật địa chỉ'}
                       </Text>
                     </View>
                   </View>
@@ -792,23 +1180,35 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                   {/* Thông tin người nhận / Nạn nhân */}
                   <View style={styles.detailRow}>
                     <Feather
-                      name={isReliefMission ? 'user-check' : 'user'}
+                      name={isShoreHandoffMission ? 'user-check' : isReliefMission ? 'user-check' : 'user'}
                       size={15}
-                      color={isReliefMission ? '#059669' : '#0284C7'}
+                      color={isShoreHandoffMission ? '#0284C7' : isReliefMission ? '#059669' : '#0284C7'}
                       style={styles.detailIcon}
                     />
                     <View style={styles.detailContent}>
                       <Text style={styles.detailLabel}>
-                        {isReliefMission ? 'Người nhận / Cán bộ đầu mối:' : 'Nạn nhân / Người liên hệ:'}
+                        {isShoreHandoffMission
+                          ? 'Nạn nhân cần đưa về nơi an toàn:'
+                          : isReliefMission
+                          ? 'Người nhận / Cán bộ đầu mối:'
+                          : 'Nạn nhân / Người liên hệ:'}
                       </Text>
                       <Text style={styles.detailValue}>
-                        {isReliefMission ? recipientName : victimName}{' '}
+                        {isShoreHandoffMission
+                          ? `${victimName} (${sos?.people || 1} người) • Xuất phát: ${sos?.address || 'Điểm cứu hộ'}`
+                          : isReliefMission
+                          ? recipientName
+                          : victimName}{' '}
                         {contactPhone ? `• ${contactPhone}` : ''}
                       </Text>
                     </View>
                     {contactPhone && (
                       <TouchableOpacity
-                        style={[styles.callNowBtn, isReliefMission && { backgroundColor: '#059669' }]}
+                        style={[
+                          styles.callNowBtn,
+                          isReliefMission && { backgroundColor: '#059669' },
+                          isShoreHandoffMission && { backgroundColor: '#0284C7' },
+                        ]}
                         onPress={() => handleCallVictim(contactPhone)}
                         activeOpacity={0.8}
                       >
@@ -824,12 +1224,16 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                       <Feather
                         name={isReliefMission ? 'file-text' : 'message-square'}
                         size={15}
-                        color={isReliefMission ? '#0284C7' : '#D97706'}
+                        color={isShoreHandoffMission ? '#0284C7' : isReliefMission ? '#0284C7' : '#D97706'}
                         style={styles.detailIcon}
                       />
                       <View style={styles.detailContent}>
                         <Text style={styles.detailLabel}>
-                          {isReliefMission ? 'Lệnh xuất cấp & Ghi chú:' : 'Hiện trường ghi nhận:'}
+                          {isShoreHandoffMission
+                            ? 'Lệnh điều xe & Tiếp vận:'
+                            : isReliefMission
+                            ? 'Lệnh xuất cấp & Ghi chú:'
+                            : 'Hiện trường ghi nhận:'}
                         </Text>
                         <Text style={styles.detailValueDesc}>
                           "{item.note || sos?.description}"
@@ -840,15 +1244,197 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
 
                   {/* Phương tiện cơ động được giao */}
                   {vehicle && (
-                    <View style={styles.vehicleRow}>
+                    <View
+                      style={[
+                        styles.vehicleRow,
+                        isShoreHandoffMission && { backgroundColor: '#F0F9FF', borderColor: '#BAE6FD' },
+                      ]}
+                    >
                       <MaterialCommunityIcons
-                        name={vehicle.type === 'BOAT' ? 'ferry' : 'car'}
+                        name={
+                          vehicle.type === 'BOAT'
+                            ? 'ferry'
+                            : vehicle.type === 'AMBULANCE'
+                            ? 'ambulance'
+                            : 'car'
+                        }
                         size={16}
-                        color="#0066FF"
+                        color={isShoreHandoffMission ? '#0284C7' : '#0066FF'}
                       />
                       <Text style={styles.vehicleText}>
-                        Phương tiện phân bổ: <Text style={{ fontWeight: '700' }}>{vehicle.plateNumber}</Text> ({vehicle.type === 'BOAT' ? 'Xuồng cứu hộ' : 'Xe cơ động'})
+                        Phương tiện phân bổ:{' '}
+                        <Text style={{ fontWeight: '700' }}>{vehicle.plateNumber}</Text>{' '}
+                        ({vehicle.type === 'BOAT'
+                          ? 'Xuồng cứu hộ'
+                          : vehicle.type === 'AMBULANCE'
+                          ? 'Xe cấp cứu 115'
+                          : 'Xe cơ động'})
                       </Text>
+                    </View>
+                  )}
+
+                  {/* Khối Thông tin Xe Đón Bờ Tiếp Cận (Dành cho đội cano nhìn thấy xe đón bờ) */}
+                  {shoreHandoff && !isShoreHandoffMission && (
+                    <View
+                      style={[
+                        styles.shoreHandoffCard,
+                        shoreHandoff.status === 'ASSIGNED'
+                          ? styles.shoreHandoffCardAssigned
+                          : shoreHandoff.status === 'COMPLETED'
+                          ? styles.shoreHandoffCardCompleted
+                          : styles.shoreHandoffCardRequested,
+                      ]}
+                    >
+                      <View style={styles.shoreHandoffHeaderRow}>
+                        <View style={styles.shoreHandoffHeaderLeft}>
+                          <MaterialCommunityIcons
+                            name={
+                              shoreHandoff.status === 'COMPLETED'
+                                ? 'check-decagram'
+                                : shoreHandoff.status === 'ASSIGNED'
+                                ? 'ambulance'
+                                : 'clock-alert-outline'
+                            }
+                            size={18}
+                            color={
+                              shoreHandoff.status === 'COMPLETED'
+                                ? '#059669'
+                                : shoreHandoff.status === 'ASSIGNED'
+                                ? '#0284C7'
+                                : '#D97706'
+                            }
+                          />
+                          <Text
+                            numberOfLines={1}
+                            style={[
+                              styles.shoreHandoffHeaderTitle,
+                              {
+                                color:
+                                  shoreHandoff.status === 'COMPLETED'
+                                    ? '#065F46'
+                                    : shoreHandoff.status === 'ASSIGNED'
+                                    ? '#0369A1'
+                                    : '#92400E',
+                              },
+                            ]}
+                          >
+                            {shoreHandoff.status === 'ASSIGNED'
+                              ? 'XE ĐÓN BỜ TIẾP CẬN'
+                              : shoreHandoff.status === 'COMPLETED'
+                              ? 'ĐÃ BÀN GIAO TIẾP VẬN'
+                              : 'YÊU CẦU XE ĐÓN BỜ'}
+                          </Text>
+                        </View>
+                        <View
+                          style={[
+                            styles.shoreHandoffBadge,
+                            {
+                              backgroundColor:
+                                shoreHandoff.status === 'COMPLETED'
+                                  ? '#D1FAE5'
+                                  : shoreHandoff.status === 'ASSIGNED'
+                                  ? '#E0F2FE'
+                                  : '#FEF3C7',
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 10,
+                              fontWeight: '800',
+                              color:
+                                shoreHandoff.status === 'COMPLETED'
+                                  ? '#059669'
+                                  : shoreHandoff.status === 'ASSIGNED'
+                                  ? '#0284C7'
+                                  : '#D97706',
+                            }}
+                          >
+                            {shoreHandoff.status === 'ASSIGNED'
+                              ? 'ĐÃ PHÂN CÔNG XE'
+                              : shoreHandoff.status === 'COMPLETED'
+                              ? 'HOÀN TẤT BÀN GIAO'
+                              : 'CHỜ ĐIỀU PHỐI'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {shoreHandoff.status === 'ASSIGNED' ? (
+                        <View style={styles.shoreHandoffBody}>
+                          <View style={styles.shoreHandoffInfoLine}>
+                            <Feather name="truck" size={13} color="#0284C7" />
+                            <Text style={styles.shoreHandoffInfoText}>
+                              Phương tiện:{' '}
+                              <Text style={{ fontWeight: '800', color: '#0F172A' }}>
+                                {shoreHandoff.assignedVehiclePlate || 'Chưa rõ biển'}
+                              </Text>{' '}
+                              • {shoreHandoff.assignedVehicleName || 'Xe cấp cứu 115'}
+                            </Text>
+                          </View>
+
+                          {shoreHandoff.assignedRoadTeamName && (
+                            <View style={styles.shoreHandoffInfoLine}>
+                              <Feather name="shield" size={13} color="#0284C7" />
+                              <Text style={styles.shoreHandoffInfoText}>
+                                Đơn vị: {shoreHandoff.assignedRoadTeamName}
+                              </Text>
+                            </View>
+                          )}
+
+                          <View style={styles.shoreHandoffDriverRow}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1 }}>
+                              <Feather name="user-check" size={13} color="#0284C7" />
+                              <Text style={styles.shoreHandoffInfoText} numberOfLines={1}>
+                                Tài xế / Cán bộ:{' '}
+                                <Text style={{ fontWeight: '700', color: '#0F172A' }}>
+                                  {shoreHandoff.assignedDriverName || 'Đội y tế dã chiến'}
+                                </Text>
+                              </Text>
+                            </View>
+                            {shoreHandoff.assignedDriverPhone && (
+                              <TouchableOpacity
+                                style={styles.shoreHandoffCallBtn}
+                                onPress={() => handleCallVictim(shoreHandoff?.assignedDriverPhone || '')}
+                                activeOpacity={0.8}
+                              >
+                                <Feather name="phone-call" size={11} color="#FFFFFF" />
+                                <Text style={styles.shoreHandoffCallText}>Gọi tài xế</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+
+                          <View style={styles.shoreHandoffInfoLine}>
+                            <Feather name="map-pin" size={13} color="#EF4444" />
+                            <Text style={styles.shoreHandoffInfoText}>
+                              Bến đón bàn giao:{' '}
+                              <Text style={{ fontWeight: '700', color: '#B91C1C' }}>
+                                {shoreHandoff.landingPoint?.name ||
+                                  shoreHandoff.landingPoint?.address ||
+                                  'Bến cập bờ chỉ định'}
+                              </Text>
+                            </Text>
+                          </View>
+                        </View>
+                      ) : shoreHandoff.status === 'REQUESTED' ? (
+                        <Text style={styles.shoreHandoffPendingText}>
+                          Đang chờ Ban Chỉ Huy điều xe đường bộ tiếp nhận nạn nhân tại bến:{' '}
+                          <Text style={{ fontWeight: '700' }}>
+                            {shoreHandoff.landingPoint?.name ||
+                              shoreHandoff.landingPoint?.address ||
+                              'Bến bờ'}
+                          </Text>
+                        </Text>
+                      ) : shoreHandoff.status === 'COMPLETED' ? (
+                        <Text style={styles.shoreHandoffCompletedText}>
+                          Đã hoàn tất chuyển nạn nhân lên xe đón bờ
+                          {shoreHandoff.completedAt
+                            ? ` lúc ${new Date(shoreHandoff.completedAt).toLocaleTimeString('vi-VN', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}`
+                            : ''}
+                        </Text>
+                      ) : null}
                     </View>
                   )}
 
@@ -878,65 +1464,124 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                     </View>
                   )}
                   {/* Bằng chứng hình ảnh bàn giao thực tế (Minh bạch PCTT) */}
-                  {((item.proofImages && item.proofImages.length > 0) ||
-                    (item.status === 'COMPLETED' && (sos as any)?.images && (sos as any).images.length > 0)) && (
-                    <View style={styles.cardProofBox}>
-                      <View style={styles.cardProofHeader}>
-                        <Feather name="shield" size={13} color="#059669" />
-                        <Text style={styles.cardProofTitle}>
-                          BẰNG CHỨNG BÀN GIAO THỰC TẾ (MINH BẠCH):
-                        </Text>
+                  {(() => {
+                    const cardProofList: string[] =
+                      Array.isArray(item.proofImages) && item.proofImages.length > 0
+                        ? item.proofImages
+                        : Array.isArray((sos as any)?.proofImages) && (sos as any).proofImages.length > 0
+                        ? (sos as any).proofImages
+                        : [];
+
+                    if (cardProofList.length === 0) return null;
+
+                    return (
+                      <View style={styles.cardProofBox}>
+                        <View style={styles.cardProofHeader}>
+                          <Feather name="shield" size={13} color="#059669" />
+                          <Text style={styles.cardProofTitle}>
+                            BẰNG CHỨNG BÀN GIAO THỰC TẾ (MINH BẠCH):
+                          </Text>
+                        </View>
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.cardProofScroll}
+                        >
+                          {cardProofList.map((imgUrl: string, imgIdx: number) => (
+                            <TouchableOpacity
+                              key={imgIdx}
+                              onPress={() => setPreviewImageUri(imgUrl)}
+                              activeOpacity={0.8}
+                              style={styles.cardProofThumbWrap}
+                            >
+                              <Image source={{ uri: imgUrl }} style={styles.cardProofThumb} />
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                        {item.actualRecipient && (
+                          <Text style={styles.cardProofRecipientText}>
+                            👤 Người nhận thực tế: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{item.actualRecipient}</Text>
+                          </Text>
+                        )}
                       </View>
-                      <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.cardProofScroll}
-                      >
-                        {(item.proofImages && item.proofImages.length > 0
-                          ? item.proofImages
-                          : (sos as any)?.images || []
-                        ).map((imgUrl: string, imgIdx: number) => (
-                          <TouchableOpacity
-                            key={imgIdx}
-                            onPress={() => setPreviewImageUri(imgUrl)}
-                            activeOpacity={0.8}
-                            style={styles.cardProofThumbWrap}
-                          >
-                            <Image source={{ uri: imgUrl }} style={styles.cardProofThumb} />
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                      {item.actualRecipient && (
-                        <Text style={styles.cardProofRecipientText}>
-                          👤 Người nhận thực tế: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{item.actualRecipient}</Text>
-                        </Text>
-                      )}
-                    </View>
-                  )}
+                    );
+                  })()}
                 </View>
 
                 {/* Các nút hành động: Đầy đủ các bước tiến trình & Điều hướng bản đồ */}
                 <View style={styles.actionRow}>
-                  {item.status !== 'COMPLETED' ? (
+                  {['CANCELLED', 'REJECTED'].includes(item.status) ? (
+                    <View style={[styles.completedBadge, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' }]}>
+                      <MaterialCommunityIcons name="close-circle-outline" size={16} color="#DC2626" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.completedBadgeText, { color: '#DC2626' }]}>
+                          {item.status === 'REJECTED' ? 'Nhiệm vụ đã từ chối' : 'Lệnh điều động đã được thu hồi / hủy'}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : item.status !== 'COMPLETED' ? (
                     <>
                       {/* Nút chính chuyển đổi trạng thái tác chiến */}
                       {['PENDING', 'ASSIGNED'].includes(item.status) && (
-                        <TouchableOpacity
-                          style={[styles.primaryActionBtn, { flex: 1.3 }]}
-                          onPress={() => handleUpdateStatus(item._id, 'ACCEPTED')}
-                          activeOpacity={0.85}
-                          disabled={isSubmitting}
-                        >
-                          <LinearGradient
-                            colors={isReliefMission ? ['#059669', '#047857'] : ['#0066FF', '#0052CC']}
-                            style={styles.gradientBtn}
+                        checkIsLeaderForMission(item) ? (
+                          <TouchableOpacity
+                            style={[styles.primaryActionBtn, { flex: 1.3 }]}
+                            onPress={() => handleUpdateStatus(item._id, 'ACCEPTED')}
+                            activeOpacity={0.85}
+                            disabled={isSubmitting}
                           >
-                            <Feather name="check-circle" size={15} color="#FFFFFF" />
-                            <Text style={styles.primaryActionText}>
-                              {isReliefMission ? 'Nhận Lệnh Tiếp Tế' : 'Tiếp Nhận Nhiệm Vụ'}
-                            </Text>
-                          </LinearGradient>
-                        </TouchableOpacity>
+                            <LinearGradient
+                              colors={
+                                isShoreHandoffMission
+                                  ? ['#0284C7', '#0369A1']
+                                  : isReliefMission
+                                  ? ['#059669', '#047857']
+                                  : ['#0066FF', '#0052CC']
+                              }
+                              style={styles.gradientBtn}
+                            >
+                              <Feather name="check-circle" size={15} color="#FFFFFF" />
+                              <Text style={styles.primaryActionText}>
+                                {isShoreHandoffMission
+                                  ? 'Nhận Lệnh'
+                                  : isReliefMission
+                                  ? 'Nhận Lệnh'
+                                  : 'Tiếp Nhận Nhiệm Vụ'}
+                              </Text>
+                            </LinearGradient>
+                          </TouchableOpacity>
+                        ) : (
+                          <TouchableOpacity
+                            style={[
+                              styles.primaryActionBtn,
+                              {
+                                flex: 1.3,
+                                backgroundColor: '#F1F5F9',
+                                borderColor: '#CBD5E1',
+                                borderWidth: 1,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                paddingVertical: 9,
+                                borderRadius: 10,
+                              },
+                            ]}
+                            onPress={() =>
+                              Alert.alert(
+                                'Chờ Đội Trưởng',
+                                'Chỉ Đội trưởng mới có quyền xác nhận nhận lệnh hoặc từ chối. Bạn vui lòng chờ Đội trưởng tiếp nhận.',
+                                [{ text: 'Đã hiểu' }]
+                              )
+                            }
+                            activeOpacity={0.8}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Feather name="shield" size={14} color="#64748B" />
+                              <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B' }}>
+                                Chờ Đội trưởng tiếp nhận
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        )
                       )}
 
                       {item.status === 'ACCEPTED' && (
@@ -952,7 +1597,11 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                           >
                             <MaterialCommunityIcons name="truck-fast" size={16} color="#FFFFFF" />
                             <Text style={styles.primaryActionText}>
-                              {isReliefMission ? 'Xuất Kho Vận Chuyển' : 'Xuất Phát Ứng Cứu'}
+                              {isShoreHandoffMission
+                                ? 'Xuất Phát Ra Bến Đón'
+                                : isReliefMission
+                                ? 'Xuất Kho Vận Chuyển'
+                                : 'Xuất Phát Ứng Cứu'}
                             </Text>
                           </LinearGradient>
                         </TouchableOpacity>
@@ -971,54 +1620,38 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                           >
                             <Ionicons name="location" size={16} color="#FFFFFF" />
                             <Text style={styles.primaryActionText}>
-                              {isReliefMission ? 'Đã Đến Điểm Giao' : 'Đã Đến Hiện Trường'}
+                              {isShoreHandoffMission
+                                ? 'Đã Đến Bến Đón Bờ'
+                                : isReliefMission
+                                ? 'Đã Đến Điểm Cứu Trợ'
+                                : 'Đã Đến Hiện Trường'}
                             </Text>
                           </LinearGradient>
                         </TouchableOpacity>
                       )}
 
-                      {['IN_PROGRESS', 'ARRIVED', 'RESCUING'].includes(item.status) && (
-                        <TouchableOpacity
-                          style={[styles.primaryActionBtn, { flex: 1.3 }]}
-                          onPress={() => {
-                            setSelectedMission(item);
-                            const initialRecipient =
-                              item.actualRecipient ||
-                              item.recipientName ||
-                              (typeof item.note === 'string' &&
-                                item.note.match(/Người nhận:\s*([^.)\]]+)/)?.[1]?.trim()) ||
-                              (typeof item.sosRequestId?.description === 'string' &&
-                                item.sosRequestId.description.match(/Người nhận:\s*([^.)\]]+)/)?.[1]?.trim()) ||
-                              item.sosRequestId?.citizenId?.fullName ||
-                              '';
-                            setActualRecipient(initialRecipient);
-                            setProofPhotos([]);
-                            setCompleteNote('');
-                            setCompleteModalVisible(true);
-                          }}
-                          activeOpacity={0.85}
-                          disabled={isSubmitting}
-                        >
-                          <LinearGradient
-                            colors={['#10B981', '#059669']}
-                            style={styles.gradientBtn}
-                          >
-                            <Feather name="award" size={15} color="#FFFFFF" />
-                            <Text style={styles.primaryActionText}>
-                              {isReliefMission ? 'Bàn Giao & Hoàn Tất' : 'Báo Cáo Hoàn Thành'}
-                            </Text>
-                          </LinearGradient>
-                        </TouchableOpacity>
-                      )}
-
-                      {/* Nút Chỉ đường mở Workspace bản đồ */}
+                      {/* Nút tác chiến mở Workspace bản đồ */}
                       <TouchableOpacity
-                        style={[styles.mapActionBtn, { flex: 0.9 }]}
+                        style={[styles.primaryActionBtn, { flex: 1 }]}
                         onPress={() => handleViewOnMap(item)}
-                        activeOpacity={0.8}
+                        activeOpacity={0.85}
+                        disabled={isSubmitting}
                       >
-                        <Feather name="navigation" size={14} color="#0066FF" />
-                        <Text style={styles.mapActionText}>Chỉ đường</Text>
+                        <LinearGradient
+                          colors={['#0284C7', '#0369A1']}
+                          style={styles.gradientBtn}
+                        >
+                          <Feather name="navigation" size={15} color="#FFFFFF" />
+                          <Text style={styles.primaryActionText}>
+                            {['ARRIVED', 'IN_PROGRESS', 'RESCUING'].includes(item.status)
+                              ? isShoreHandoffMission
+                                ? 'Tiếp Nhận & Báo Cáo Tại Bến'
+                                : isReliefMission
+                                ? 'Bàn Giao Cứu Trợ (Tại Hiện Trường)'
+                                : 'Báo Cáo Cứu Hộ (Tại Hiện Trường)'
+                              : 'Tác Chiến'}
+                          </Text>
+                        </LinearGradient>
                       </TouchableOpacity>
                     </>
                   ) : (
@@ -1026,7 +1659,11 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                       <Feather name="check-circle" size={16} color="#059669" />
                       <View style={{ flex: 1 }}>
                         <Text style={styles.completedBadgeText}>
-                          {isReliefMission ? 'Đã bàn giao cứu trợ thành công' : 'Đã cứu nạn thành công'}
+                          {isShoreHandoffMission
+                            ? 'Đã tiếp nhận nạn nhân tại bến thành công'
+                            : isReliefMission
+                            ? 'Đã bàn giao cứu trợ thành công'
+                            : 'Đã cứu nạn thành công'}
                         </Text>
                         {item.actualRecipient ? (
                           <Text style={styles.completedSubText}>
@@ -1040,6 +1677,36 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
               </View>
             );
           })
+        )}
+
+        {/* Hàng đợi nhiệm vụ tiếp theo (nếu có) - Đảm bảo quy tắc 1 nhóm chỉ làm 1 nhiệm vụ */}
+        {activeSegment === 'active' && queuedMissions.length > 0 && (
+          <View style={styles.queueNoticeCard}>
+            <View style={styles.queueNoticeHeader}>
+              <MaterialCommunityIcons name="clock-fast" size={18} color="#D97706" />
+              <Text style={styles.queueNoticeTitle}>
+                HÀNG ĐỢI NHIỆM VỤ TIẾP THEO ({queuedMissions.length})
+              </Text>
+            </View>
+            <Text style={styles.queueNoticeDesc}>
+              Đội đang ưu tiên xử lý ca {currentActiveMission?.sosRequestId?.sosCode || 'hiện tại'}. Theo quy tắc tác chiến, nhiệm vụ kế tiếp sẽ tự động kích hoạt ngay sau khi hoàn thành ca này.
+            </Text>
+            {queuedMissions.map((qm: SosAssignmentData) => (
+              <View key={qm._id} style={styles.queuedItemRow}>
+                <View style={styles.queuedBullet} />
+                <Text style={styles.queuedCode}>
+                  {qm.sosRequestId?.sosCode || 'SOS-KHẨN'}
+                </Text>
+                <Text style={styles.queuedAddr} numberOfLines={1}>
+                  • {qm.sosRequestId?.address || 'Điểm cứu hộ kế tiếp'}
+                </Text>
+                <View style={styles.queuedLockTag}>
+                  <Feather name="lock" size={10} color="#64748B" />
+                  <Text style={styles.queuedLockText}>Chờ tới lượt</Text>
+                </View>
+              </View>
+            ))}
+          </View>
         )}
       </ScrollView>
 
@@ -1083,7 +1750,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                       </Text>
                       <Text style={styles.modalSubtitle}>
                         {isSelectedRelief
-                          ? 'Xác nhận và lưu vết minh bạch bàn giao hàng cho ca '
+                          ? 'Xác nhận và lưu vết minh bạch cấp phát cứu trợ cho ca '
                           : 'Xác nhận đã hoàn tất cứu hộ cho ca '}
                         <Text style={{ fontWeight: '700' }}>
                           {selectedMission?.sosRequestId?.sosCode}
@@ -1150,7 +1817,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                         </Text>
                       </View>
                       <Text style={styles.proofDesc}>
-                        Chụp ảnh trao hàng tận tay, kiện hàng tại điểm giao hoặc biên bản ký nhận để lưu vết minh bạch vào hệ thống.
+                        Chụp ảnh trao nhu yếu phẩm tận tay tại điểm cứu trợ hoặc biên bản ký nhận để lưu vết minh bạch vào hệ thống.
                       </Text>
 
                       {isSelectedRelief && proofPhotos.length === 0 && (
@@ -1324,13 +1991,32 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
         initialSosData={activeWorkspaceMission?.sosRequestId || (activeWorkspaceMission as any)?.sosId}
         initialAssignmentData={activeWorkspaceMission}
         onClose={() => {
+          if (activeWorkspaceMission?._id) {
+            dismissedMissionsRef.current.add(activeWorkspaceMission._id);
+          }
           setWorkspaceVisible(false);
           setActiveWorkspaceMission(null);
           fetchMissions({ isSilent: true });
         }}
-        onMissionCompleted={() => {
+        onMissionCompleted={(summary?: any) => {
+          if (activeWorkspaceMission?._id) {
+            dismissedMissionsRef.current.add(activeWorkspaceMission._id);
+            setMissions((prev) =>
+              prev.map((m) =>
+                m._id === activeWorkspaceMission._id
+                  ? {
+                      ...m,
+                      status: 'COMPLETED',
+                      completedAt: new Date().toISOString(),
+                      proofImages: summary?.proofImages || m.proofImages,
+                    }
+                  : m
+              )
+            );
+          }
           setWorkspaceVisible(false);
           setActiveWorkspaceMission(null);
+          setCompleteModalVisible(false);
           fetchMissions({ isSilent: true });
         }}
         onMissionUpdated={(updatedStatus, missionId) => {
@@ -1645,6 +2331,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
     marginBottom: 14,
   },
   categoryBadge: {
@@ -1654,6 +2341,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 8,
+    flexShrink: 1,
   },
   categoryText: {
     fontSize: 12,
@@ -1794,6 +2482,93 @@ const styles = StyleSheet.create({
   vehicleText: {
     fontSize: 11.5,
     color: '#1E293B',
+  },
+  shoreHandoffCard: {
+    borderRadius: 10,
+    padding: 11,
+    marginTop: 6,
+    borderWidth: 1.2,
+  },
+  shoreHandoffCardAssigned: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#7DD3FC',
+  },
+  shoreHandoffCardCompleted: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#6EE7B7',
+  },
+  shoreHandoffCardRequested: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FCD34D',
+  },
+  shoreHandoffHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 6,
+  },
+  shoreHandoffHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    minWidth: 0,
+  },
+  shoreHandoffHeaderTitle: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    flexShrink: 1,
+    letterSpacing: 0.2,
+  },
+  shoreHandoffBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    flexShrink: 0,
+  },
+  shoreHandoffBody: {
+    gap: 4,
+  },
+  shoreHandoffInfoLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  shoreHandoffInfoText: {
+    fontSize: 12,
+    color: '#334155',
+    flex: 1,
+  },
+  shoreHandoffDriverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
+  },
+  shoreHandoffCallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#059669',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  shoreHandoffCallText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  shoreHandoffPendingText: {
+    fontSize: 12,
+    color: '#92400E',
+    fontStyle: 'italic',
+  },
+  shoreHandoffCompletedText: {
+    fontSize: 12,
+    color: '#065F46',
+    fontWeight: '600',
   },
   suppliesCardBox: {
     backgroundColor: '#F0FDF4',
@@ -2036,6 +2811,74 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 1,
   },
+  queueNoticeCard: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+    padding: 14,
+    marginTop: 10,
+    marginBottom: 20,
+    gap: 8,
+  },
+  queueNoticeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  queueNoticeTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#B45309',
+    letterSpacing: 0.5,
+  },
+  queueNoticeDesc: {
+    fontSize: 12,
+    color: '#92400E',
+    lineHeight: 18,
+  },
+  queuedItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FEF3C7',
+    gap: 6,
+    marginTop: 4,
+  },
+  queuedBullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#D97706',
+  },
+  queuedCode: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  queuedAddr: {
+    flex: 1,
+    fontSize: 11,
+    color: '#64748B',
+  },
+  queuedLockTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  queuedLockText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
 
   // Supplies Confirm Checklist in Modal
   suppliesConfirmBox: {
@@ -2185,6 +3028,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  completedTimeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  completedTimeBannerText: {
+    fontSize: 12,
+    color: '#065F46',
+    fontWeight: '600',
+  },
+  completedTimeHighlight: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#047857',
+  },
   // Proof Images in Mission Card
   cardProofBox: {
     marginTop: 10,

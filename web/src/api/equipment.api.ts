@@ -137,7 +137,7 @@ export async function consumeEquipment(
 }
 
 export async function batchConsumeEquipments(payload: {
-  items: { equipmentId: string; quantity: number }[];
+  items: { equipmentId: string; name?: string; quantity: number }[];
   destination: string;
   coordinates?: [number, number]; // [lng, lat]
   recipientName?: string;

@@ -25,7 +25,6 @@ import {
 import {
   Map,
   Siren,
-  GitMerge,
   LifeBuoy,
   Package,
   Truck,
@@ -394,16 +393,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           key: 'sos_requests',
-          label: 'Theo dõi SOS',
+          label: 'Theo dõi & Điều phối SOS',
           icon: <Siren size={18} className="sos-nav-icon" />,
-          badge: sosCounts.pending > 0 ? `${sosCounts.pending} Mới` : undefined,
-          badgeType: 'danger',
-        },
-        {
-          key: 'coordination',
-          label: 'Điều phối nhiệm vụ',
-          icon: <GitMerge size={18} className="sos-nav-icon" />,
-          badge: sosCounts.active > 0 ? `${sosCounts.active} Vụ` : undefined,
+          badge: sosCounts.pending > 0 ? `${sosCounts.pending} Mới` : sosCounts.active > 0 ? `${sosCounts.active} Vụ` : undefined,
           badgeType: 'danger',
         },
       ],
@@ -1000,7 +992,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           1. HEADER / LOGO: SOS SYSTEMS & NÚT THU GỌN
           =================================================================== */}
       <div className="sos-sidebar-header">
-        <div className="sos-brand" title="SOS SYSTEMS - Rescue Operations">
+        <div className="sos-brand" title="Hỗ Trợ Cứu Nạn">
           <div className="sos-brand-logo-wrap">
             <img src="/logoSOS.png" alt="SOS Logo" className="sos-brand-logo" />
             <span className="sos-brand-pulse" />
@@ -1008,10 +1000,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {!collapsed && (
             <div className="sos-brand-info">
-              <span className="sos-brand-title">SOS SYSTEMS</span>
-              <span className="sos-brand-subtitle">
-                {isAdmin ? 'Quản Trị Hệ Thống' : 'Hỗ Trợ Cứu Nạn'}
-              </span>
+              <span className="sos-brand-title">Hỗ Trợ Cứu Nạn</span>
             </div>
           )}
         </div>

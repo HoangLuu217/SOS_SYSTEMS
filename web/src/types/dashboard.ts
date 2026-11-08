@@ -54,6 +54,7 @@ export interface SosRequestItem {
   primarySosId?: string;
   assignmentId?: string;
   assignment?: any;
+  shoreHandoff?: any;
   createdAt: string;
   updatedAt: string;
 }
