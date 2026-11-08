@@ -2474,8 +2474,8 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 </View>
               ) : null}
 
-              {/* Hộp vật tư & hàng tiếp tế cấp theo xe (Có Xem Chi Tiết & Yêu cầu cấp thêm) */}
-              {(() => {
+              {/* Hộp vật tư & hàng tiếp tế cấp theo xe (Chỉ hiển thị khi đã tiếp nhận nhiệm vụ) */}
+              {missionState !== 'ASSIGNED_PENDING_ACCEPTANCE' && (() => {
                 const missionSupplies =
                   assignment?.supplies ||
                   (assignment as any)?.reliefItems ||
@@ -2589,8 +2589,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               })()}
             </View>
 
-            {/* KHỐI YÊU CẦU XE ĐẾN CỨU HỘ / XE ĐÓN BỜ (RELAY HANDOFF) - LUÔN HIỂN THỊ RÕ RÀNG */}
-            {shoreHandoffData && shoreHandoffData.status === 'ASSIGNED' ? (
+            {/* KHỐI YÊU CẦU XE ĐẾN CỨU HỘ / XE ĐÓN BỜ (RELAY HANDOFF) - CHỈ HIỂN THỊ KHI ĐÃ TIẾP NHẬN NHIỆM VỤ */}
+            {missionState !== 'ASSIGNED_PENDING_ACCEPTANCE' && (
+              shoreHandoffData && shoreHandoffData.status === 'ASSIGNED' ? (
               <View
                 style={{
                   marginTop: 8,
@@ -2773,7 +2774,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 </View>
                 <Feather name="chevron-right" size={18} color="#EA580C" />
               </TouchableOpacity>
-            )}
+            ))}
 
               {/* Hàng 3 nút thao tác nhanh (Gọi điện, Từ chối, Trú ẩn - Đã bỏ nút Ghim vị trí bị trùng với nút nổi trên map) */}
               <View style={styles.grabActionRow}>
