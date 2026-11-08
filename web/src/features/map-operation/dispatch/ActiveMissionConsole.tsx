@@ -10,6 +10,8 @@ import {
   AlertCircle,
   AlertTriangle,
   X,
+  MapPin,
+  Users,
 } from 'lucide-react';
 import type { SosRequest, SosAssignment, RescueTeam, Vehicle, AuthorityOfficer, AdministrativeArea } from '@/types/domainD';
 import { assignShoreHandoffApi, cancelShoreHandoffApi, approveSuppliesApi, rejectSuppliesApi } from '@/api';
@@ -1326,44 +1328,59 @@ export const ActiveMissionConsole: React.FC<Props> = ({
               <div
                 style={{
                   padding: '12px 14px',
-                  background: '#f0f9ff',
-                  border: '1.5px solid #bae6fd',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
                   borderRadius: 10,
                   fontSize: 12.5,
                   color: '#0f172a',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 8,
+                  gap: 9,
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, lineHeight: 1.45 }}>
-                  <span style={{ fontSize: 14 }}>📍</span>
-                  <div>
-                    <span style={{ color: '#64748b', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase' }}>
-                      Điểm hẹn bến cập bờ:
-                    </span>
-                    <div style={{ fontWeight: 800, color: '#0369a1', fontSize: 13, marginTop: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, lineHeight: 1.45 }}>
+                  <div
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 6,
+                      background: '#fee2e2',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      marginTop: 1,
+                    }}
+                  >
+                    <MapPin size={15} color="#dc2626" />
+                  </div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ color: '#64748b', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                      Điểm hẹn bến cập bờ
+                    </div>
+                    <div style={{ fontWeight: 800, color: '#0f172a', fontSize: 13.5, marginTop: 2 }}>
                       {selectedSos.shoreHandoff?.landingPoint?.name || selectedSos.shoreHandoff?.landingPoint?.address || 'Điểm đón ven bờ'}
                     </div>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', paddingTop: 4, borderTop: '1px dashed #cbd5e1' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
                   <div
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 5,
-                      padding: '3px 8px',
-                      background: '#fee2e2',
-                      border: '1px solid #fecaca',
+                      padding: '4px 9px',
+                      background: '#fff7ed',
+                      border: '1px solid #ffedd5',
                       borderRadius: 6,
                       fontSize: 12,
-                      fontWeight: 800,
-                      color: '#b91c1c',
+                      fontWeight: 700,
+                      color: '#c2410c',
                     }}
                   >
-                    👥 Nạn nhân bàn giao: {selectedSos.shoreHandoff?.peopleCount ?? 0} người
+                    <Users size={13} color="#ea580c" />
+                    <span>Nạn nhân bàn giao: <strong>{selectedSos.shoreHandoff?.peopleCount ?? 0} người</strong></span>
                   </div>
 
                   <div
@@ -1371,17 +1388,17 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 5,
-                      padding: '3px 8px',
-                      background: '#eff6ff',
-                      border: '1px solid #bfdbfe',
+                      padding: '4px 9px',
+                      background: '#f1f5f9',
+                      border: '1px solid #e2e8f0',
                       borderRadius: 6,
                       fontSize: 12,
-                      fontWeight: 800,
-                      color: '#1d4ed8',
+                      fontWeight: 700,
+                      color: '#334155',
                     }}
                   >
-                    <Shield size={13} color="#1d4ed8" />
-                    Khu vực: {targetAreaInfo.label}
+                    <Shield size={13} color="#64748b" />
+                    <span>Khu vực: <strong>{targetAreaInfo.label}</strong></span>
                   </div>
                 </div>
               </div>
