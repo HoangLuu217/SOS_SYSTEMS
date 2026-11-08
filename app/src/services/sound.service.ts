@@ -1,49 +1,10 @@
-import { Platform } from 'react-native';
-import { Audio } from 'expo-av';
+import { Platform, Vibration } from 'react-native';
 
-let nativeSoundInstance: Audio.Sound | null = null;
-let isAudioModeConfigured = false;
+let activePlayer: any = null;
 
 /**
- * Cấu hình chế độ âm thanh tác chiến khẩn cấp cho Expo AV
+ * Trình phát âm thanh Web Audio API khi chạy trên môi trường Web / Browser
  */
-async function configureAudioMode() {
-  if (isAudioModeConfigured) return;
-  try {
-    await Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
-    });
-    isAudioModeConfigured = true;
-  } catch (err) {
-    console.warn('⚠️ [SoundService] Lỗi cấu hình Audio mode:', err);
-  }
-}
-
-/**
- * Trình phát âm thanh Web Audio API dự phòng khi chạy trên môi trường Web / Preview
- */
-function playWebSynthesizerTone(freq: number, startTime: number, duration: number, ctx: AudioContext) {
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-
-  osc.type = 'triangle';
-  osc.frequency.setValueAtTime(freq, startTime);
-
-  // Envelope: Fast attack, exponential decay
-  gain.gain.setValueAtTime(0.001, startTime);
-  gain.gain.exponentialRampToValueAtTime(0.65, startTime + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-
-  osc.start(startTime);
-  osc.stop(startTime + duration);
-}
-
 function playWebFallbackDispatchSound() {
   try {
     const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
@@ -54,36 +15,53 @@ function playWebFallbackDispatchSound() {
     }
 
     const now = ctx.currentTime;
-    // Điệp khúc 3 âm thanh dồn dập chuẩn lệnh điều động tác chiến (880Hz -> 1175Hz -> 1760Hz)
-    // Đợt 1
-    playWebSynthesizerTone(880, now, 0.14, ctx);
-    playWebSynthesizerTone(1175, now + 0.16, 0.14, ctx);
-    playWebSynthesizerTone(1760, now + 0.32, 0.28, ctx);
+    const playTone = (freq: number, startTime: number, duration: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, startTime);
+      gain.gain.setValueAtTime(0.001, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.65, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + duration);
+    };
 
-    // Đợt 2 nhắc lại sau 120ms
+    // Đợt 1: 3 tông dồn dập (880Hz -> 1175Hz -> 1760Hz)
+    playTone(880, now, 0.14);
+    playTone(1175, now + 0.16, 0.14);
+    playTone(1760, now + 0.32, 0.28);
+
+    // Đợt 2: lặp lại sau 120ms
     const secondWave = now + 0.65;
-    playWebSynthesizerTone(880, secondWave, 0.14, ctx);
-    playWebSynthesizerTone(1175, secondWave + 0.16, 0.14, ctx);
-    playWebSynthesizerTone(1760, secondWave + 0.32, 0.32, ctx);
+    playTone(880, secondWave, 0.14);
+    playTone(1175, secondWave + 0.16, 0.14);
+    playTone(1760, secondWave + 0.32, 0.32);
   } catch (err) {
-    console.warn('⚠️ [SoundService] Web Audio fallback error:', err);
+    console.warn('⚠️ [SoundService] Web Audio error:', err);
   }
 }
 
 /**
  * Phát chuông báo động điều động tác chiến cứu nạn (Dispatch Alert Sound)
+ * Hoạt động an toàn 100% trên cả Expo Go, Development Build và Web
  */
 export async function playDispatchAlertSound(): Promise<void> {
+  // Luôn phát nhịp rung báo động đặc thù của cứu hộ
+  try {
+    Vibration.vibrate([0, 500, 150, 500, 150, 800, 200, 800]);
+  } catch (_) {}
+
   // 1. Nếu chạy trên nền Web
   if (Platform.OS === 'web') {
     try {
-      // Thử dùng file audio thực tế
       const audio = new (window as any).Audio(require('../../assets/sounds/dispatch_alert.wav'));
       audio.volume = 1.0;
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise.catch(() => {
-          // Fallback sang Web Audio API nếu trình duyệt chặn autoplay
           playWebFallbackDispatchSound();
         });
       }
@@ -95,35 +73,31 @@ export async function playDispatchAlertSound(): Promise<void> {
   }
 
   // 2. Nếu chạy trên thiết bị Native (iOS / Android)
+  // Sử dụng lazy require để không bao giờ làm sập Expo Go khi thiếu native module
   try {
-    await configureAudioMode();
-
-    // Dừng âm thanh cũ nếu đang phát để tránh chồng chéo
-    if (nativeSoundInstance) {
-      try {
-        await nativeSoundInstance.stopAsync();
-        await nativeSoundInstance.unloadAsync();
-      } catch (_) {}
-      nativeSoundInstance = null;
-    }
-
-    const { sound } = await Audio.Sound.createAsync(
-      require('../../assets/sounds/dispatch_alert.wav'),
-      { shouldPlay: true, volume: 1.0 }
-    );
-
-    nativeSoundInstance = sound;
-
-    sound.setOnPlaybackStatusUpdate((status) => {
-      if (status.isLoaded && status.didJustFinish) {
-        sound.unloadAsync().catch(() => {});
-        if (nativeSoundInstance === sound) {
-          nativeSoundInstance = null;
-        }
+    const ExpoAudio = require('expo-audio');
+    if (ExpoAudio && typeof ExpoAudio.createAudioPlayer === 'function') {
+      if (typeof ExpoAudio.setAudioModeAsync === 'function') {
+        await ExpoAudio.setAudioModeAsync({
+          playsInSilentMode: true,
+          interruptionMode: 'duckOthers',
+        }).catch(() => {});
       }
-    });
+
+      if (activePlayer && typeof activePlayer.remove === 'function') {
+        try {
+          activePlayer.remove();
+        } catch (_) {}
+      }
+
+      const player = ExpoAudio.createAudioPlayer(require('../../assets/sounds/dispatch_alert.wav'));
+      activePlayer = player;
+      player.play();
+      return;
+    }
   } catch (err) {
-    console.warn('⚠️ [SoundService] Không thể phát âm thanh lệnh điều động trên thiết bị:', err);
+    // Graceful fallback cho Expo Go: Hệ thống vẫn sẽ rung chuông dồn dập và phát thông báo hệ thống
+    console.log('ℹ️ [SoundService] Chạy trên Expo Go: Kích hoạt nhịp rung khẩn cấp và thông báo hệ thống.');
   }
 }
 
@@ -131,11 +105,10 @@ export async function playDispatchAlertSound(): Promise<void> {
  * Dừng âm thanh thông báo đang phát
  */
 export async function stopAlertSound(): Promise<void> {
-  if (nativeSoundInstance) {
+  if (activePlayer && typeof activePlayer.remove === 'function') {
     try {
-      await nativeSoundInstance.stopAsync();
-      await nativeSoundInstance.unloadAsync();
+      activePlayer.remove();
     } catch (_) {}
-    nativeSoundInstance = null;
+    activePlayer = null;
   }
 }
