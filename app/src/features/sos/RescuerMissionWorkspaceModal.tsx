@@ -1054,6 +1054,16 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       setActionLoading(true);
       const notePayload = `${fieldReportNotes.trim()} | Đã cứu: ${rescuedHeadcount} người`;
 
+      const targetSosId = sos?._id || assignment?.sosRequestId || assignment?.sosId;
+      if (targetSosId && shoreHandoffData && shoreHandoffData.status === 'ASSIGNED') {
+        try {
+          await backendApi.completeShoreHandoff(targetSosId);
+          setShoreHandoffData((prev: any) => (prev ? { ...prev, status: 'COMPLETED' } : null));
+        } catch (err) {
+          console.warn('Auto complete shore handoff error:', err);
+        }
+      }
+
       if (assignment?._id) {
         await backendApi.updateAssignmentStatus(assignment._id, 'COMPLETED', notePayload);
       }
@@ -2586,45 +2596,26 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   Bến đón / Hiện trường: <Text style={{ fontWeight: '700', color: '#B45309' }}>{shoreHandoffData.landingPoint?.name}</Text>
                 </Text>
 
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                  {shoreHandoffData.assignedDriverPhone && (
-                    <TouchableOpacity
-                      style={{
-                        flex: 1,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 6,
-                        backgroundColor: '#FFFFFF',
-                        borderWidth: 1,
-                        borderColor: '#10B981',
-                        paddingVertical: 8,
-                        borderRadius: 8,
-                      }}
-                      onPress={() => Linking.openURL(`tel:${shoreHandoffData.assignedDriverPhone}`)}
-                    >
-                      <Ionicons name="call" size={14} color="#059669" />
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#059669' }}>Gọi Tài Xế</Text>
-                    </TouchableOpacity>
-                  )}
-
+                {shoreHandoffData.assignedDriverPhone && (
                   <TouchableOpacity
                     style={{
-                      flex: 1.4,
                       flexDirection: 'row',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: 6,
-                      backgroundColor: '#059669',
-                      paddingVertical: 8,
+                      backgroundColor: '#FFFFFF',
+                      borderWidth: 1.5,
+                      borderColor: '#10B981',
+                      paddingVertical: 9,
                       borderRadius: 8,
+                      marginTop: 4,
                     }}
-                    onPress={handleCompleteShoreHandoff}
+                    onPress={() => Linking.openURL(`tel:${shoreHandoffData.assignedDriverPhone}`)}
                   >
-                    <Ionicons name="checkmark-done" size={16} color="#FFFFFF" />
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>Đã Lên Xe Đón</Text>
+                    <Ionicons name="call" size={15} color="#059669" />
+                    <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#059669' }}>Gọi Tài Xế Xe Đón</Text>
                   </TouchableOpacity>
-                </View>
+                )}
               </View>
             ) : shoreHandoffData && shoreHandoffData.status === 'REQUESTED' ? (
               <View
@@ -2833,7 +2824,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                     >
                       <Ionicons name="checkmark-done-circle" size={24} color="#FFFFFF" />
                       <Text style={styles.grabBigBtnText}>
-                        {isReliefMission ? 'BÀN GIAO XONG & HOÀN TẤT' : 'HOÀN TẤT CỨU HỘ & BÁO CÁO'}
+                        {shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
+                          ? 'BÀN GIAO LÊN XE & HOÀN TẤT'
+                          : isReliefMission
+                          ? 'BÀN GIAO XONG & HOÀN TẤT'
+                          : 'HOÀN TẤT CỨU HỘ & BÁO CÁO'}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -3690,7 +3685,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               <View style={styles.modalHeaderRow}>
                 <Ionicons name="checkmark-circle" size={24} color="#16A34A" />
                 <Text style={styles.modalTitle}>
-                  {isReliefMission ? 'Biên Bản Bàn Giao Cứu Trợ' : 'Báo Cáo Hoàn Tất Cứu Hộ'}
+                  {shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
+                    ? 'Biên Bản Bàn Giao Lên Xe Đón'
+                    : isReliefMission
+                    ? 'Biên Bản Bàn Giao Cứu Trợ'
+                    : 'Báo Cáo Hoàn Tất Cứu Hộ'}
                 </Text>
                 <TouchableOpacity onPress={() => setCompletionModalVisible(false)}>
                   <Feather name="x" size={20} color="#64748B" />
@@ -3698,7 +3697,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               </View>
 
               <Text style={styles.modalDesc}>
-                {isReliefMission
+                {shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
+                  ? `Bàn giao nạn nhân lên xe đón bờ (${shoreHandoffData.assignedVehiclePlate || shoreHandoffData.assignedVehicleName}), chụp ảnh xác nhận và hoàn tất nhiệm vụ:`
+                  : isReliefMission
                   ? 'Ghi nhận kết quả bàn giao nhu yếu phẩm cứu trợ để lưu hồ sơ và đồng bộ báo cáo cho Ban Chỉ Huy:'
                   : 'Ghi nhận kết quả tác chiến để lưu hồ sơ cứu trợ và đồng bộ báo cáo cho Ban Chỉ Huy:'}
               </Text>
@@ -3745,7 +3746,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   <TouchableOpacity style={styles.takePhotoBtn} onPress={handleCaptureFieldPhoto}>
                     <Ionicons name="camera-outline" size={20} color="#0284C7" />
                     <Text style={styles.takePhotoBtnText}>
-                      {isReliefMission ? 'Chụp ảnh biên bản / cấp phát cứu trợ' : 'Chụp ảnh xác nhận hiện trường'}
+                      {shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
+                        ? 'Chụp ảnh bàn giao lên xe đón bờ'
+                        : isReliefMission
+                        ? 'Chụp ảnh biên bản / cấp phát cứu trợ'
+                        : 'Chụp ảnh xác nhận hiện trường'}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -3765,7 +3770,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   disabled={actionLoading}
                 >
                   <Text style={styles.modalRejectConfirmBtnText}>
-                    {isReliefMission ? 'Xác Nhận Đã Bàn Giao' : 'Lưu & Hoàn Thành'}
+                    {shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
+                      ? 'Xác Nhận Bàn Giao & Hoàn Tất'
+                      : isReliefMission
+                      ? 'Xác Nhận Đã Bàn Giao'
+                      : 'Lưu & Hoàn Thành'}
                   </Text>
                 </TouchableOpacity>
               </View>
