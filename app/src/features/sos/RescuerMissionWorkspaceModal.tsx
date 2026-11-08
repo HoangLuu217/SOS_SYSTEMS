@@ -3881,7 +3881,8 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
               <View style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]} />
             </TouchableWithoutFeedback>
-            <View style={styles.modalCard}>
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+              <View style={styles.modalCard}>
               <View style={styles.modalHeaderRow}>
                 <Ionicons name="checkmark-circle" size={24} color="#16A34A" />
                 <Text style={styles.modalTitle}>
@@ -3925,21 +3926,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 </View>
               </View>
 
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, marginBottom: 6 }}>
-                <Text style={[styles.inputSectionLabel, { marginTop: 0, marginBottom: 0 }]}>
-                  {isReliefMission
-                    ? 'Biên bản tóm tắt cấp phát cứu trợ:'
-                    : 'Biên bản tóm tắt tình hình hiện trường:'}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => Keyboard.dismiss()}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}
-                >
-                  <Ionicons name="chevron-down-circle-outline" size={14} color="#0284C7" />
-                  <Text style={{ fontSize: 11.5, color: '#0284C7', fontWeight: '700' }}>Ẩn bàn phím</Text>
-                </TouchableOpacity>
-              </View>
+              <Text style={[styles.inputSectionLabel, { marginTop: 12, marginBottom: 6 }]}>
+                {isReliefMission
+                  ? 'Biên bản tóm tắt cấp phát cứu trợ:'
+                  : 'Biên bản tóm tắt tình hình hiện trường:'}
+              </Text>
               <TextInput
                 style={[styles.modalTextInput, { height: 70 }]}
                 value={fieldReportNotes}
@@ -3986,18 +3977,19 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   onPress={handleFinalSubmitCompletion}
                   disabled={actionLoading}
                 >
-                  <Text style={styles.modalRejectConfirmBtnText}>
+                  <Text style={styles.modalRejectConfirmBtnText} numberOfLines={1}>
                     {isShoreHandoffMission
-                      ? 'Xác Nhận Đã Đón & Hoàn Tất'
+                      ? 'Đã đón'
                       : shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
-                      ? 'Xác Nhận Bàn Giao'
+                      ? 'Bàn giao'
                       : isReliefMission
-                      ? 'Xác Nhận Đã Bàn Giao'
-                      : 'Lưu & Hoàn Thành'}
+                      ? 'Bàn giao'
+                      : 'Hoàn thành'}
                   </Text>
                 </TouchableOpacity>
               </View>
             </View>
+            </TouchableWithoutFeedback>
           </KeyboardAvoidingView>
         </Modal>
 
