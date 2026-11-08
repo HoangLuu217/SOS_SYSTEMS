@@ -224,18 +224,34 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
       ? [...rescueTeams]
       : rescueTeams.filter((t) => isTeamInOfficerJurisdiction(t, activeOfficer, managedWard));
 
-    if (sosCoords && list.length > 1) {
+    if (list.length > 1) {
       list.sort((a, b) => {
-        const locA = getTeamCoords(a);
-        const locB = getTeamCoords(b);
-        const distA = locA ? calculateHaversineKm(locA.lat, locA.lng, sosCoords.lat, sosCoords.lng) : 999;
-        const distB = locB ? calculateHaversineKm(locB.lat, locB.lng, sosCoords.lat, sosCoords.lng) : 999;
-        return distA - distB;
+        // Ưu tiên đội SẴN SÀNG lên trước đội BẬN
+        const busyA = !!domainDService.getActiveAssignmentForTeam(a.id, selectedSos?.id);
+        const busyB = !!domainDService.getActiveAssignmentForTeam(b.id, selectedSos?.id);
+        if (busyA !== busyB) return busyA ? 1 : -1;
+
+        if (sosCoords) {
+          const locA = getTeamCoords(a);
+          const locB = getTeamCoords(b);
+          const distA = locA ? calculateHaversineKm(locA.lat, locA.lng, sosCoords.lat, sosCoords.lng) : 999;
+          const distB = locB ? calculateHaversineKm(locB.lat, locB.lng, sosCoords.lat, sosCoords.lng) : 999;
+          return distA - distB;
+        }
+        return 0;
       });
     }
 
     return list;
-  }, [rescueTeams, isAdmin, activeOfficer, managedWard, sosCoords, areas]);
+  }, [rescueTeams, isAdmin, activeOfficer, managedWard, sosCoords, areas, selectedSos?.id]);
+
+  // Đếm số lượng đội thực tế đang sẵn sàng
+  const readyTeamsCount = useMemo(() => {
+    return availableTeams.filter(
+      (t) => !domainDService.getActiveAssignmentForTeam(t.id, selectedSos?.id)
+    ).length;
+  }, [availableTeams, selectedSos?.id]);
+  const busyTeamsCount = availableTeams.length - readyTeamsCount;
 
   // Selected team IDs state (supports selecting multiple teams) - Không tự động chọn ngầm định
   const [localSelectedTeamIds, setLocalSelectedTeamIds] = useState<string[]>(() => {
@@ -662,7 +678,11 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
               <span>PHÂN CÔNG ĐỘI CỨU HỘ</span>
             </div>
             <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginTop: 1 }}>
-              ({availableTeams.length} đội trực chiến sẵn sàng xuất kích)
+              {busyTeamsCount === 0
+                ? `(${readyTeamsCount} đội trực chiến sẵn sàng xuất kích)`
+                : readyTeamsCount === 0
+                ? `(Tất cả ${availableTeams.length} đội đang bận nhiệm vụ)`
+                : `(${readyTeamsCount}/${availableTeams.length} đội sẵn sàng xuất kích • ${busyTeamsCount} đội bận)`}
             </div>
           </div>
 
