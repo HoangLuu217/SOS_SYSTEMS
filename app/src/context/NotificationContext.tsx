@@ -7,6 +7,7 @@ import {
   registerForPushNotificationsAsync,
   triggerLocalNotification,
   sseNotificationService,
+  playDispatchAlertSound,
 } from '@/services';
 import {
   NotificationSettings,
@@ -120,6 +121,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       } catch (_) {}
     }
 
+    // 1b. Phát âm thanh điều động tác chiến nếu bật chuông
+    if (current.sound !== false) {
+      playDispatchAlertSound().catch(() => {});
+    }
+
     // 2. Kích hoạt Local Notification hiển thị ra ngoài hệ điều hành (thanh trạng thái / màn hình khóa)
     triggerLocalNotification({
       title: testItem.title,
@@ -224,6 +230,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           Vibration.vibrate(300);
         }
       } catch (_) {}
+    }
+
+    // 3b. Phát âm thanh chuông điều động tác chiến cứu hộ (nếu bật sound)
+    if (currentSettings.sound !== false) {
+      playDispatchAlertSound().catch(() => {});
     }
 
     // 4. Kích hoạt thông báo hệ thống ra ngoài màn hình máy (Status bar & Lock screen) kèm âm thanh chuông

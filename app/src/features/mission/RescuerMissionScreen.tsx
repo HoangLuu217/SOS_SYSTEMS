@@ -27,6 +27,7 @@ import { backendApi } from '@/api';
 import { useAuth } from '@/context/AuthContext';
 import { SosAssignmentData, SosAssignmentStatus, TabName } from '@/types';
 import { SosScreen, RescuerMissionWorkspaceModal } from '@/features/sos';
+import { playDispatchAlertSound } from '@/services';
 
 interface RescuerMissionScreenProps {
   onNavigateToTab?: (tab: TabName, options?: any) => void;
@@ -108,6 +109,10 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
           // Quy tắc tác chiến: 1 nhóm chỉ được phép làm 1 nhiệm vụ tại một thời điểm
           const activeCount = Math.min(activeList.length, 1);
           if (prevCountRef.current !== activeCount) {
+            // Khi có nhiệm vụ mới xuất hiện, phát âm thanh chuông điều động tác chiến
+            if (activeCount > prevCountRef.current && hasLoadedRef.current) {
+              playDispatchAlertSound().catch(() => {});
+            }
             prevCountRef.current = activeCount;
             onMissionsCountChange?.(activeCount);
           }
@@ -247,6 +252,14 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
           s = io(socketUrl, { transports: ['websocket', 'polling'] });
           s.on('connect', () => {
             if (user?._id) s.emit('register_user', user._id);
+          });
+          s.on('assignment:new', () => {
+            playDispatchAlertSound().catch(() => {});
+            fetchMissions({ isSilent: true });
+          });
+          s.on('assignment:assigned', () => {
+            playDispatchAlertSound().catch(() => {});
+            fetchMissions({ isSilent: true });
           });
 
           const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
