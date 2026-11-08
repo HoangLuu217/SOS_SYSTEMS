@@ -1294,7 +1294,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   const isShoreHandoffMission =
     assignment?.missionType === 'SHORE_HANDOFF' ||
     (typeof assignment?.note === 'string' && assignment.note.toLowerCase().includes('đón bờ')) ||
-    (assignment?.vehicleId?.type === 'AMBULANCE' && !!sos?.shoreHandoff);
+    (assignment?.vehicleId?.type === 'AMBULANCE' && Boolean(sos?.shoreHandoff?.status && sos.shoreHandoff.status !== 'NONE'));
 
   const sosCode = sos?.sosCode || 'SOS';
   const recipientName =

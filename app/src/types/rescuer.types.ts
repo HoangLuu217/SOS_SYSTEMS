@@ -158,7 +158,7 @@ export interface SosAssignmentData {
       avatarUrl?: string;
     };
     shoreHandoff?: {
-      status: 'REQUESTED' | 'ASSIGNED' | 'COMPLETED';
+      status: 'NONE' | 'REQUESTED' | 'ASSIGNED' | 'COMPLETED' | 'CANCELLED';
       requestedAt?: string;
       assignedAt?: string;
       landingPoint?: {

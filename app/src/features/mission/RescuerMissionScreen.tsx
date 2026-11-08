@@ -1005,6 +1005,12 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
         ) : (
           displayedMissions.map((item) => {
             const sos = item.sosRequestId;
+            const shoreHandoff =
+              sos?.shoreHandoff &&
+              sos.shoreHandoff.status !== 'NONE' &&
+              ['REQUESTED', 'ASSIGNED', 'COMPLETED'].includes(sos.shoreHandoff.status)
+                ? sos.shoreHandoff
+                : null;
             const isReliefMission =
               item.missionType === 'RELIEF_DISPATCH' ||
               sos?.emergencyType === 'RELIEF' ||
@@ -1014,7 +1020,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
             const isShoreHandoffMission =
               item.missionType === 'SHORE_HANDOFF' ||
               (typeof item.note === 'string' && item.note.toLowerCase().includes('đón bờ')) ||
-              (item.vehicleId?.type === 'AMBULANCE' && !!sos?.shoreHandoff);
+              (item.vehicleId?.type === 'AMBULANCE' && !!shoreHandoff);
 
             const emergencyInfo = isShoreHandoffMission
               ? { label: 'Tiếp vận đón bờ', icon: 'ambulance', color: '#0284C7' }
@@ -1268,54 +1274,55 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                   )}
 
                   {/* Khối Thông tin Xe Đón Bờ Tiếp Cận (Dành cho đội cano nhìn thấy xe đón bờ) */}
-                  {sos?.shoreHandoff && !isShoreHandoffMission && (
+                  {shoreHandoff && !isShoreHandoffMission && (
                     <View
                       style={[
                         styles.shoreHandoffCard,
-                        sos.shoreHandoff.status === 'ASSIGNED'
+                        shoreHandoff.status === 'ASSIGNED'
                           ? styles.shoreHandoffCardAssigned
-                          : sos.shoreHandoff.status === 'COMPLETED'
+                          : shoreHandoff.status === 'COMPLETED'
                           ? styles.shoreHandoffCardCompleted
                           : styles.shoreHandoffCardRequested,
                       ]}
                     >
                       <View style={styles.shoreHandoffHeaderRow}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <View style={styles.shoreHandoffHeaderLeft}>
                           <MaterialCommunityIcons
                             name={
-                              sos.shoreHandoff.status === 'COMPLETED'
+                              shoreHandoff.status === 'COMPLETED'
                                 ? 'check-decagram'
-                                : sos.shoreHandoff.status === 'ASSIGNED'
+                                : shoreHandoff.status === 'ASSIGNED'
                                 ? 'ambulance'
                                 : 'clock-alert-outline'
                             }
                             size={18}
                             color={
-                              sos.shoreHandoff.status === 'COMPLETED'
+                              shoreHandoff.status === 'COMPLETED'
                                 ? '#059669'
-                                : sos.shoreHandoff.status === 'ASSIGNED'
+                                : shoreHandoff.status === 'ASSIGNED'
                                 ? '#0284C7'
                                 : '#D97706'
                             }
                           />
                           <Text
+                            numberOfLines={1}
                             style={[
                               styles.shoreHandoffHeaderTitle,
                               {
                                 color:
-                                  sos.shoreHandoff.status === 'COMPLETED'
+                                  shoreHandoff.status === 'COMPLETED'
                                     ? '#065F46'
-                                    : sos.shoreHandoff.status === 'ASSIGNED'
+                                    : shoreHandoff.status === 'ASSIGNED'
                                     ? '#0369A1'
                                     : '#92400E',
                               },
                             ]}
                           >
-                            {sos.shoreHandoff.status === 'ASSIGNED'
-                              ? 'XE ĐÓN BỜ TIẾP CẬN (ĐÃ ĐIỀU ĐỘNG)'
-                              : sos.shoreHandoff.status === 'COMPLETED'
-                              ? 'ĐÃ BÀN GIAO LÊN XE ĐÓN BỜ'
-                              : 'YÊU CẦU XE TIẾP VẬN ĐÓN BỜ'}
+                            {shoreHandoff.status === 'ASSIGNED'
+                              ? 'XE ĐÓN BỜ TIẾP CẬN'
+                              : shoreHandoff.status === 'COMPLETED'
+                              ? 'ĐÃ BÀN GIAO TIẾP VẬN'
+                              : 'YÊU CẦU XE ĐÓN BỜ'}
                           </Text>
                         </View>
                         <View
@@ -1323,9 +1330,9 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                             styles.shoreHandoffBadge,
                             {
                               backgroundColor:
-                                sos.shoreHandoff.status === 'COMPLETED'
+                                shoreHandoff.status === 'COMPLETED'
                                   ? '#D1FAE5'
-                                  : sos.shoreHandoff.status === 'ASSIGNED'
+                                  : shoreHandoff.status === 'ASSIGNED'
                                   ? '#E0F2FE'
                                   : '#FEF3C7',
                             },
@@ -1336,40 +1343,40 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                               fontSize: 10,
                               fontWeight: '800',
                               color:
-                                sos.shoreHandoff.status === 'COMPLETED'
+                                shoreHandoff.status === 'COMPLETED'
                                   ? '#059669'
-                                  : sos.shoreHandoff.status === 'ASSIGNED'
+                                  : shoreHandoff.status === 'ASSIGNED'
                                   ? '#0284C7'
                                   : '#D97706',
                             }}
                           >
-                            {sos.shoreHandoff.status === 'ASSIGNED'
+                            {shoreHandoff.status === 'ASSIGNED'
                               ? 'ĐÃ PHÂN CÔNG XE'
-                              : sos.shoreHandoff.status === 'COMPLETED'
+                              : shoreHandoff.status === 'COMPLETED'
                               ? 'HOÀN TẤT BÀN GIAO'
                               : 'CHỜ ĐIỀU PHỐI'}
                           </Text>
                         </View>
                       </View>
 
-                      {sos.shoreHandoff.status === 'ASSIGNED' ? (
+                      {shoreHandoff.status === 'ASSIGNED' ? (
                         <View style={styles.shoreHandoffBody}>
                           <View style={styles.shoreHandoffInfoLine}>
                             <Feather name="truck" size={13} color="#0284C7" />
                             <Text style={styles.shoreHandoffInfoText}>
                               Phương tiện:{' '}
                               <Text style={{ fontWeight: '800', color: '#0F172A' }}>
-                                {sos.shoreHandoff.assignedVehiclePlate || 'Chưa rõ biển'}
+                                {shoreHandoff.assignedVehiclePlate || 'Chưa rõ biển'}
                               </Text>{' '}
-                              • {sos.shoreHandoff.assignedVehicleName || 'Xe cấp cứu 115'}
+                              • {shoreHandoff.assignedVehicleName || 'Xe cấp cứu 115'}
                             </Text>
                           </View>
 
-                          {sos.shoreHandoff.assignedRoadTeamName && (
+                          {shoreHandoff.assignedRoadTeamName && (
                             <View style={styles.shoreHandoffInfoLine}>
                               <Feather name="shield" size={13} color="#0284C7" />
                               <Text style={styles.shoreHandoffInfoText}>
-                                Đơn vị: {sos.shoreHandoff.assignedRoadTeamName}
+                                Đơn vị: {shoreHandoff.assignedRoadTeamName}
                               </Text>
                             </View>
                           )}
@@ -1380,14 +1387,14 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                               <Text style={styles.shoreHandoffInfoText} numberOfLines={1}>
                                 Tài xế / Cán bộ:{' '}
                                 <Text style={{ fontWeight: '700', color: '#0F172A' }}>
-                                  {sos.shoreHandoff.assignedDriverName || 'Đội y tế dã chiến'}
+                                  {shoreHandoff.assignedDriverName || 'Đội y tế dã chiến'}
                                 </Text>
                               </Text>
                             </View>
-                            {sos.shoreHandoff.assignedDriverPhone && (
+                            {shoreHandoff.assignedDriverPhone && (
                               <TouchableOpacity
                                 style={styles.shoreHandoffCallBtn}
-                                onPress={() => handleCallVictim(sos.shoreHandoff?.assignedDriverPhone || '')}
+                                onPress={() => handleCallVictim(shoreHandoff?.assignedDriverPhone || '')}
                                 activeOpacity={0.8}
                               >
                                 <Feather name="phone-call" size={11} color="#FFFFFF" />
@@ -1401,31 +1408,33 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                             <Text style={styles.shoreHandoffInfoText}>
                               Bến đón bàn giao:{' '}
                               <Text style={{ fontWeight: '700', color: '#B91C1C' }}>
-                                {sos.shoreHandoff.landingPoint?.name ||
-                                  sos.shoreHandoff.landingPoint?.address ||
+                                {shoreHandoff.landingPoint?.name ||
+                                  shoreHandoff.landingPoint?.address ||
                                   'Bến cập bờ chỉ định'}
                               </Text>
                             </Text>
                           </View>
                         </View>
-                      ) : sos.shoreHandoff.status === 'REQUESTED' ? (
+                      ) : shoreHandoff.status === 'REQUESTED' ? (
                         <Text style={styles.shoreHandoffPendingText}>
                           Đang chờ Ban Chỉ Huy điều xe đường bộ tiếp nhận nạn nhân tại bến:{' '}
                           <Text style={{ fontWeight: '700' }}>
-                            {sos.shoreHandoff.landingPoint?.name ||
-                              sos.shoreHandoff.landingPoint?.address ||
+                            {shoreHandoff.landingPoint?.name ||
+                              shoreHandoff.landingPoint?.address ||
                               'Bến bờ'}
                           </Text>
                         </Text>
-                      ) : (
+                      ) : shoreHandoff.status === 'COMPLETED' ? (
                         <Text style={styles.shoreHandoffCompletedText}>
-                          Đã hoàn tất chuyển nạn nhân lên xe đón bờ lúc{' '}
-                          {new Date(sos.shoreHandoff.completedAt || Date.now()).toLocaleTimeString('vi-VN', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                          Đã hoàn tất chuyển nạn nhân lên xe đón bờ
+                          {shoreHandoff.completedAt
+                            ? ` lúc ${new Date(shoreHandoff.completedAt).toLocaleTimeString('vi-VN', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}`
+                            : ''}
                         </Text>
-                      )}
+                      ) : null}
                     </View>
                   )}
 
@@ -2496,17 +2505,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
     marginBottom: 6,
   },
+  shoreHandoffHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    minWidth: 0,
+  },
   shoreHandoffHeaderTitle: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '800',
-    letterSpacing: 0.3,
+    flexShrink: 1,
+    letterSpacing: 0.2,
   },
   shoreHandoffBadge: {
     paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingVertical: 2.5,
     borderRadius: 6,
+    flexShrink: 0,
   },
   shoreHandoffBody: {
     gap: 4,
