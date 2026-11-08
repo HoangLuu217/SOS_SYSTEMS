@@ -795,8 +795,9 @@
 .reports-table thead th {
   background: #F8FAFC;
   color: #475569;
-  font-weight: 700;
-  font-size: 12px;
+  font-weight: 800;
+  font-size: 13px;
+  color: #1E293B;
   text-transform: uppercase;
   letter-spacing: 0.3px;
   padding: 12px 14px;
