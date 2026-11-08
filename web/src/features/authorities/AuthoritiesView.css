@@ -38,14 +38,13 @@
   min-height: 0 !important;
   height: auto;
   overflow-y: auto !important;
-  overflow-x: auto !important;
-  padding-right: 6px;
+  overflow-x: hidden !important;
   box-sizing: border-box;
 }
 
 .authorities-executive-container .executive-table {
   width: 100% !important;
-  min-width: 980px !important;
+  min-width: 0 !important;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed !important;
@@ -124,16 +123,15 @@
   border-color: #e2e8f0;
 }
 
-/* Nút hành động phong cách tối giản, màu trung tính ở trạng thái tĩnh, hover mới đổi màu */
+/* Nút hành động icon vuông tối giản, gọn gàng và không tràn khung */
 .officer-action-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 4px 8px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border-radius: 6px;
-  font-size: 11.5px;
-  font-weight: 500;
   cursor: pointer;
   border: 1px solid #e2e8f0;
   background: #ffffff;
@@ -141,31 +139,47 @@
   transition: all 0.15s ease;
   white-space: nowrap !important;
   flex-shrink: 0;
-  line-height: 1.2;
 }
 
 .officer-action-btn:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #0f172a;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+.officer-action-btn.edit {
+  color: #0284c7;
+  background: #f0f9ff;
+  border-color: #bae6fd;
 }
 
 .officer-action-btn.edit:hover {
-  color: #0284c7;
-  border-color: #bae6fd;
-  background: #f0f9ff;
+  color: #ffffff;
+  border-color: #0284c7;
+  background: #0284c7;
+}
+
+.officer-action-btn.lock {
+  color: #dc2626;
+  background: #fef2f2;
+  border-color: #fecaca;
 }
 
 .officer-action-btn.lock:hover {
-  color: #dc2626;
-  border-color: #fecaca;
-  background: #fef2f2;
+  color: #ffffff;
+  border-color: #dc2626;
+  background: #dc2626;
+}
+
+.officer-action-btn.unlock {
+  color: #16a34a;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
 }
 
 .officer-action-btn.unlock:hover {
-  color: #16a34a;
-  border-color: #bbf7d0;
-  background: #f0fdf4;
+  color: #ffffff;
+  border-color: #16a34a;
+  background: #16a34a;
 }
 
 /* Filter & Search Bar Horizontal Layout (Ngang hàng) */

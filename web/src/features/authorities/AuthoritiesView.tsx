@@ -458,12 +458,12 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
           <table className="executive-table">
             <thead>
               <tr>
-                <th style={{ width: '18%', minWidth: '150px' }}>Cán bộ chỉ huy</th>
-                <th style={{ width: '20%', minWidth: '160px' }}>Số điện thoại / Email</th>
-                <th style={{ width: '24%', minWidth: '180px' }}>Khu vực phụ trách (Địa bàn)</th>
-                <th style={{ width: '18%', minWidth: '160px' }}>Đơn vị / Cơ quan</th>
-                <th style={{ width: '10%', minWidth: '105px', textAlign: 'center' }}>Trạng thái</th>
-                <th style={{ width: '10%', minWidth: '115px', textAlign: 'center' }}>Hành động</th>
+                <th style={{ width: '20%' }}>Cán bộ chỉ huy</th>
+                <th style={{ width: '20%' }}>Số điện thoại / Email</th>
+                <th style={{ width: '24%' }}>Khu vực phụ trách (Địa bàn)</th>
+                <th style={{ width: '18%' }}>Đơn vị / Cơ quan</th>
+                <th style={{ width: '10%', minWidth: '95px', textAlign: 'center' }}>Trạng thái</th>
+                <th style={{ width: '8%', minWidth: '68px', textAlign: 'center' }}>Hành động</th>
               </tr>
             </thead>
             <tbody>
@@ -572,14 +572,14 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
 
                       {/* Hành động tối ưu: gọn gàng, vừa vặn không tràn khung */}
                       <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'inline-flex', gap: 4, justifyContent: 'center', alignItems: 'center' }}>
+                        <div style={{ display: 'inline-flex', gap: 5, justifyContent: 'center', alignItems: 'center' }}>
                           <button
                             type="button"
                             className="officer-action-btn edit"
                             title="Chỉnh sửa thông tin cán bộ"
                             onClick={() => handleOpenEditAuthority(a)}
                           >
-                            <Edit size={12} /> <span>Sửa</span>
+                            <Edit size={14} />
                           </button>
                           <button
                             type="button"
@@ -587,8 +587,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                             title={isActive ? 'Khóa tài khoản cán bộ' : 'Mở khóa kích hoạt lại'}
                             onClick={() => handleQuickToggleAuthStatus(a)}
                           >
-                            {isActive ? <Lock size={12} /> : <Unlock size={12} />}
-                            <span>{isActive ? 'Khóa' : 'Mở'}</span>
+                            {isActive ? <Lock size={14} /> : <Unlock size={14} />}
                           </button>
                         </div>
                       </td>
