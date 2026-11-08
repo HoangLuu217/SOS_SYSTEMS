@@ -452,8 +452,8 @@ export async function fetchVietnamProvincesService(): Promise<VietnamProvinceIte
  * Helper: Hợp nhất tên xã/phường có hậu tố chỉ hướng hoặc số thứ tự (Bắc, Nam, Đông, Tây, 1, 2, I, II)
  * Ví dụ: 'Phường An Hải Bắc' & 'Phường An Hải Nam' -> gộp thành 'Phường An Hải'
  */
-function consolidateWardName(name: string): string {
-  return name.replace(/\s+(Bắc|Nam|Đông|Tây|1|2|3|4|I|II|III)\b/i, '').trim();
+function sanitizeWardName(name: string): string {
+  return (name || '').trim();
 }
 
 /**
@@ -518,14 +518,14 @@ export async function fetchProvinceSubUnitsService(
     if (res.ok) {
       const apiWards = await res.json();
       if (Array.isArray(apiWards) && apiWards.length > 0) {
-        const consolidatedMap = new Map<string, any>();
+        const officialWardsMap = new Map<string, any>();
 
         apiWards.forEach((w: any) => {
-          const cleanName = consolidateWardName(w.name);
-          if (!consolidatedMap.has(cleanName)) {
-            consolidatedMap.set(cleanName, {
+          const exactName = sanitizeWardName(w.name);
+          if (exactName && !officialWardsMap.has(exactName)) {
+            officialWardsMap.set(exactName, {
               ...w,
-              consolidatedName: cleanName,
+              exactName,
             });
           }
         });
@@ -533,9 +533,9 @@ export async function fetchProvinceSubUnitsService(
         const codePrefix = `VN${provCode}`;
         let wardIdx = 1;
 
-        consolidatedMap.forEach((w) => {
+        officialWardsMap.forEach((w) => {
           const typeLower = (w.division_type || '').toLowerCase();
-          const nameLower = (w.consolidatedName || '').toLowerCase();
+          const nameLower = (w.exactName || '').toLowerCase();
 
           let type: 'DISTRICT' | 'WARD' | 'COMMUNE' | 'TOWN' = 'WARD';
           if (nameLower.startsWith('quận') || nameLower.startsWith('huyện') || nameLower.startsWith('thị xã')) {
@@ -548,7 +548,7 @@ export async function fetchProvinceSubUnitsService(
 
           units.push({
             id: `w-${w.code}`,
-            name: w.consolidatedName,
+            name: w.exactName,
             code: `${codePrefix}-W${String(wardIdx).padStart(2, '0')}`,
             type,
             parentName: provinceName,

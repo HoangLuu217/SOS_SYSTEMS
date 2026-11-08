@@ -40,12 +40,31 @@
   overflow-y: auto !important;
   overflow-x: hidden !important;
   box-sizing: border-box;
-  scrollbar-gutter: stable;
+  padding-bottom: 6px;
+}
+
+/* Custom slim modern scrollbar */
+.authorities-executive-container .executive-table-wrapper::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.authorities-executive-container .executive-table-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.authorities-executive-container .executive-table-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+.authorities-executive-container .executive-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .authorities-executive-container .executive-table th:last-child,
 .authorities-executive-container .executive-table td:last-child {
-  padding-right: 14px !important;
+  padding-right: 20px !important;
   box-sizing: border-box !important;
 }
 
