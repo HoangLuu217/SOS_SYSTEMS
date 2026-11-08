@@ -28,10 +28,10 @@ const sosAssignmentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'RescueTeam',
     },
-    // Loại nhiệm vụ: Cứu nạn khẩn cấp hoặc Vận chuyển xuất cấp cứu trợ
+    // Loại nhiệm vụ: Cứu nạn khẩn cấp, Vận chuyển xuất cấp cứu trợ, hoặc Điều xe tiếp vận đón bờ
     missionType: {
       type: String,
-      enum: ['SOS_RESCUE', 'RELIEF_DISPATCH'],
+      enum: ['SOS_RESCUE', 'RELIEF_DISPATCH', 'SHORE_HANDOFF'],
       default: 'SOS_RESCUE',
     },
     destination: {

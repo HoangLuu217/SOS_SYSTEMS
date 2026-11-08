@@ -527,7 +527,10 @@ const assignShoreHandoff = async (id, data, _user) => {
   if (data.vehicleId && mongoose.isValidObjectId(data.vehicleId)) {
     vehicle = await Vehicle.findById(data.vehicleId).populate({
       path: 'teamId',
-      populate: { path: 'leaderId', select: 'fullName phone' },
+      populate: [
+        { path: 'leaderId', select: 'fullName phone avatarUrl' },
+        { path: 'members.rescuerId', select: 'fullName phone avatarUrl' },
+      ],
     });
   }
 
@@ -586,9 +589,131 @@ const assignShoreHandoff = async (id, data, _user) => {
 
   await sos.save();
 
+  // Phân bổ hoặc cập nhật SosAssignment cho đội xe đón bờ để hiển thị trên App Cứu Hộ Viên
+  const teamId = vehicle?.teamId?._id || vehicle?.teamId;
+  const rescuerId =
+    vehicle?.teamId?.leaderId?._id ||
+    vehicle?.teamId?.leaderId ||
+    vehicle?.teamId?.members?.[0]?.rescuerId?._id ||
+    vehicle?.teamId?.members?.[0]?.rescuerId ||
+    _user?._id;
+
+  let handoffAssignment = null;
+  if (teamId && rescuerId) {
+    const destinationText =
+      sos.shoreHandoff.landingPoint?.name ||
+      sos.shoreHandoff.landingPoint?.address ||
+      'Bến cập bờ chỉ định';
+
+    handoffAssignment = await SosAssignment.findOne({
+      $or: [{ sosRequestId: sos._id }, { sosId: sos._id }],
+      missionType: 'SHORE_HANDOFF',
+      status: { $nin: ['COMPLETED', 'CANCELLED'] },
+    });
+
+    const missionNote = `Điều xe đón bờ: ${typeLabel} (${vehicle?.plateNumber || data.vehiclePlate || 'Xe tiếp vận'}) tiếp nhận nạn nhân tại ${destinationText}`;
+
+    if (handoffAssignment) {
+      handoffAssignment.rescueTeamId = teamId;
+      handoffAssignment.teamId = teamId;
+      handoffAssignment.rescuerId = rescuerId;
+      handoffAssignment.vehicleId = vehicle?._id || data.vehicleId || null;
+      handoffAssignment.status = 'PENDING';
+      handoffAssignment.destination = destinationText;
+      handoffAssignment.assignedBy = _user?._id || null;
+      handoffAssignment.priority = sos.priority || 'HIGH';
+      handoffAssignment.note = missionNote;
+      await handoffAssignment.save();
+    } else {
+      handoffAssignment = await SosAssignment.create({
+        sosRequestId: sos._id,
+        sosId: sos._id,
+        authorityOrganizationId: vehicle?.teamId?.authorityId || null,
+        rescueTeamId: teamId,
+        teamId: teamId,
+        rescuerId: rescuerId,
+        vehicleId: vehicle?._id || data.vehicleId || null,
+        missionType: 'SHORE_HANDOFF',
+        destination: destinationText,
+        recipientName: sos.citizenId?.fullName || 'Nạn nhân chuyển tuyến y tế',
+        assignedBy: _user?._id || null,
+        priority: sos.priority || 'HIGH',
+        status: 'PENDING',
+        note: missionNote,
+      });
+    }
+
+    // Phát Realtime Socket.IO cho app của Đội xe cứu thương / Cứu hộ viên tiếp vận
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (io) {
+        const populatedAssignment = await SosAssignment.findById(handoffAssignment._id)
+          .populate({
+            path: 'sosRequestId',
+            populate: [
+              { path: 'citizenId', select: '_id fullName phone email avatarUrl address' },
+              { path: 'areaId', select: '_id name code' },
+            ],
+          })
+          .populate('vehicleId', 'plateNumber type capacity status')
+          .populate('rescueTeamId', 'name type leaderId phone');
+
+        io.emit('assignment:created', populatedAssignment || handoffAssignment);
+        io.emit('assignment:new', populatedAssignment || handoffAssignment);
+        if (rescuerId) {
+          io.to(`user_${rescuerId}`).emit('assignment:assigned', populatedAssignment || handoffAssignment);
+        }
+      }
+    } catch (socketErr) {
+      console.warn('Socket emit error for shore handoff:', socketErr?.message);
+    }
+
+    // Gửi thông báo Notification trong hệ thống
+    try {
+      const { Notification } = require('../models');
+      const targetUserIds = new Set();
+      if (rescuerId) targetUserIds.add(rescuerId.toString());
+      (vehicle?.teamId?.members || []).forEach((m) => {
+        const uid = m.rescuerId?._id || m.rescuerId;
+        if (uid) targetUserIds.add(uid.toString());
+      });
+
+      for (const uid of targetUserIds) {
+        await Notification.create({
+          userId: uid,
+          createdBy: _user?._id || null,
+          areaId: sos.areaId || null,
+          sosId: sos._id,
+          type: 'ALERT',
+          title: `🚑 ĐIỀU ĐỘNG XE TIẾP VẬN ĐÓN BỜ: #${sos.sosCode || sos._id.toString().slice(-4)}`,
+          content: `Ban chỉ huy điều xe ${vehicle?.plateNumber || ''} đến ${destinationText} tiếp nhận bàn giao nạn nhân!`,
+          priority: 'CRITICAL',
+          data: {
+            type: 'SOS_SYNC',
+            action: 'ASSIGNED',
+            assignmentId: handoffAssignment._id,
+            sosId: sos._id,
+          },
+        });
+      }
+    } catch (notifErr) {
+      console.warn('Notification error for shore handoff:', notifErr?.message);
+    }
+  }
+
   const populated = await SosRequest.findById(sos._id)
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
     .populate('areaId', 'name code');
+
+  // Phát Realtime sos:updated để các client (kể cả đội cano) cập nhật thông tin xe đón bờ
+  try {
+    const { getIO } = require('../socket');
+    const io = getIO();
+    if (io) {
+      io.emit('sos:updated', populated || sos);
+    }
+  } catch (_) {}
 
   return populated || sos;
 };
@@ -615,11 +740,42 @@ const cancelShoreHandoff = async (id, _user) => {
     sos.shoreHandoff.assignedAt = null;
     sos.shoreHandoff.completedAt = null;
     await sos.save();
+
+    // Hủy phân công nhiệm vụ đón bờ của đội xe
+    try {
+      const handoffAssignment = await SosAssignment.findOne({
+        $or: [{ sosRequestId: sos._id }, { sosId: sos._id }],
+        missionType: 'SHORE_HANDOFF',
+        status: { $nin: ['COMPLETED', 'CANCELLED'] },
+      });
+      if (handoffAssignment) {
+        handoffAssignment.status = 'CANCELLED';
+        handoffAssignment.note = (handoffAssignment.note || '') + ' [Ban chỉ huy đã hủy điều xe đón bờ]';
+        await handoffAssignment.save();
+
+        const { getIO } = require('../socket');
+        const io = getIO();
+        if (io) {
+          io.emit('assignment:updated', handoffAssignment);
+          io.emit('assignment:cancelled', handoffAssignment);
+        }
+      }
+    } catch (assignErr) {
+      console.warn('Error cancelling handoff assignment:', assignErr?.message);
+    }
   }
 
   const populated = await SosRequest.findById(sos._id)
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
     .populate('areaId', 'name code');
+
+  try {
+    const { getIO } = require('../socket');
+    const io = getIO();
+    if (io) {
+      io.emit('sos:updated', populated || sos);
+    }
+  } catch (_) {}
 
   return populated || sos;
 };
@@ -639,11 +795,42 @@ const completeShoreHandoff = async (id, _user) => {
     sos.shoreHandoff.status = 'COMPLETED';
     sos.shoreHandoff.completedAt = new Date();
     await sos.save();
+
+    // Cập nhật hoàn thành nhiệm vụ đón bờ của xe
+    try {
+      const handoffAssignment = await SosAssignment.findOne({
+        $or: [{ sosRequestId: sos._id }, { sosId: sos._id }],
+        missionType: 'SHORE_HANDOFF',
+        status: { $nin: ['COMPLETED', 'CANCELLED'] },
+      });
+      if (handoffAssignment) {
+        handoffAssignment.status = 'COMPLETED';
+        handoffAssignment.completedAt = new Date();
+        await handoffAssignment.save();
+
+        const { getIO } = require('../socket');
+        const io = getIO();
+        if (io) {
+          io.emit('assignment:updated', handoffAssignment);
+          io.emit('assignment:completed', handoffAssignment);
+        }
+      }
+    } catch (assignErr) {
+      console.warn('Error completing handoff assignment:', assignErr?.message);
+    }
   }
 
   const populated = await SosRequest.findById(sos._id)
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')
     .populate('areaId', 'name code');
+
+  try {
+    const { getIO } = require('../socket');
+    const io = getIO();
+    if (io) {
+      io.emit('sos:updated', populated || sos);
+    }
+  } catch (_) {}
 
   return populated || sos;
 

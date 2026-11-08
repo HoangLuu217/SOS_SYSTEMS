@@ -73,7 +73,7 @@ export async function playDispatchAlertSound(): Promise<void> {
   // Luôn phát nhịp rung báo động dồn dập cứu nạn
   try {
     Vibration.vibrate([0, 500, 150, 500, 150, 800, 200, 800]);
-  } catch (_) {}
+  } catch (_) { }
 
   // 1. Nếu chạy trên nền Web
   if (Platform.OS === 'web') {
@@ -101,13 +101,13 @@ export async function playDispatchAlertSound(): Promise<void> {
         await ExpoAudio.setAudioModeAsync({
           playsInSilentMode: true,
           interruptionMode: 'duckOthers',
-        }).catch(() => {});
+        }).catch(() => { });
       }
 
       if (activePlayer && typeof activePlayer.remove === 'function') {
         try {
           activePlayer.remove();
-        } catch (_) {}
+        } catch (_) { }
       }
 
       const player = ExpoAudio.createAudioPlayer(require('../../assets/sounds/dispatch_alert.wav'));
@@ -127,7 +127,7 @@ export async function stopAlertSound(): Promise<void> {
   if (activePlayer && typeof activePlayer.remove === 'function') {
     try {
       activePlayer.remove();
-    } catch (_) {}
+    } catch (_) { }
     activePlayer = null;
   }
 }

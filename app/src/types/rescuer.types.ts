@@ -157,6 +157,26 @@ export interface SosAssignmentData {
       phone?: string;
       avatarUrl?: string;
     };
+    shoreHandoff?: {
+      status: 'REQUESTED' | 'ASSIGNED' | 'COMPLETED';
+      requestedAt?: string;
+      assignedAt?: string;
+      landingPoint?: {
+        name?: string;
+        address?: string;
+        coordinates?: [number, number];
+      };
+      vehicleTypeNeeded?: string;
+      peopleCount?: number;
+      notes?: string;
+      assignedVehicleId?: string;
+      assignedVehicleName?: string;
+      assignedVehiclePlate?: string;
+      assignedRoadTeamName?: string;
+      assignedDriverName?: string;
+      assignedDriverPhone?: string;
+      completedAt?: string;
+    };
   };
   authorityOrganizationId?: {
     _id: string;
@@ -194,7 +214,7 @@ export interface SosAssignmentData {
   cancelledAt?: string;
   cancelReason?: string;
   note?: string;
-  missionType?: 'SOS_RESCUE' | 'RELIEF_DISPATCH';
+  missionType?: 'SOS_RESCUE' | 'RELIEF_DISPATCH' | 'SHORE_HANDOFF';
   destination?: string;
   recipientName?: string;
   supplies?: Array<{

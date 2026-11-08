@@ -530,19 +530,26 @@ class SosAssignmentService {
         .populate('citizenId', 'fullName phone avatarUrl email address')
         .populate('areaId', 'name code');
       if (sos) {
-        const oldStatus = sos.status;
-        sos.status = 'ACCEPTED';
-        await sos.save();
+        if (assignment.missionType === 'SHORE_HANDOFF') {
+          if (sos.shoreHandoff) {
+            sos.shoreHandoff.status = 'ASSIGNED';
+            await sos.save();
+          }
+        } else {
+          const oldStatus = sos.status;
+          sos.status = 'ACCEPTED';
+          await sos.save();
 
-        try {
-          await SosStatusHistory.create({
-            sosId: sos._id,
-            oldStatus,
-            newStatus: 'ACCEPTED',
-            changedBy: currentUser?._id || assignment.rescuerId,
-            note: 'Cứu hộ viên đã tiếp nhận nhiệm vụ',
-          });
-        } catch (err) {}
+          try {
+            await SosStatusHistory.create({
+              sosId: sos._id,
+              oldStatus,
+              newStatus: 'ACCEPTED',
+              changedBy: currentUser?._id || assignment.rescuerId,
+              note: 'Cứu hộ viên đã tiếp nhận nhiệm vụ',
+            });
+          } catch (err) {}
+        }
 
         try {
           await assignment.populate([
@@ -717,31 +724,49 @@ class SosAssignmentService {
         .populate('citizenId', 'fullName phone avatarUrl email address')
         .populate('areaId', 'name code');
       if (sos) {
-        const oldStatus = sos.status;
-        sos.status = targetSosStatus;
-        if (targetSosStatus === 'COMPLETED' || targetSosStatus === 'RESOLVED' || targetSosStatus === 'CANCELLED') {
-          sos.resolvedAt = now;
-          if (sos.shoreHandoff?.assignedVehicleId && mongoose.isValidObjectId(sos.shoreHandoff.assignedVehicleId)) {
-            await Vehicle.findByIdAndUpdate(sos.shoreHandoff.assignedVehicleId, { status: 'AVAILABLE' });
+        if (assignment.missionType === 'SHORE_HANDOFF') {
+          if (sos.shoreHandoff) {
+            if (targetStatus === 'COMPLETED') {
+              sos.shoreHandoff.status = 'COMPLETED';
+              sos.shoreHandoff.completedAt = now;
+              if (assignment.vehicleId) {
+                await Vehicle.findByIdAndUpdate(assignment.vehicleId, { status: 'AVAILABLE' });
+              }
+            } else if (targetStatus === 'CANCELLED' || targetStatus === 'REJECTED') {
+              sos.shoreHandoff.status = 'REQUESTED';
+              if (assignment.vehicleId) {
+                await Vehicle.findByIdAndUpdate(assignment.vehicleId, { status: 'AVAILABLE' });
+              }
+            }
+            await sos.save();
           }
-        }
-        if (extraData?.proofImages && Array.isArray(extraData.proofImages) && extraData.proofImages.length > 0) {
-          sos.proofImages = [
-            ...new Set([...(sos.proofImages || []), ...extraData.proofImages]),
-          ];
-        }
-        await sos.save();
+        } else {
+          const oldStatus = sos.status;
+          sos.status = targetSosStatus;
+          if (targetSosStatus === 'COMPLETED' || targetSosStatus === 'RESOLVED' || targetSosStatus === 'CANCELLED') {
+            sos.resolvedAt = now;
+            if (sos.shoreHandoff?.assignedVehicleId && mongoose.isValidObjectId(sos.shoreHandoff.assignedVehicleId)) {
+              await Vehicle.findByIdAndUpdate(sos.shoreHandoff.assignedVehicleId, { status: 'AVAILABLE' });
+            }
+          }
+          if (extraData?.proofImages && Array.isArray(extraData.proofImages) && extraData.proofImages.length > 0) {
+            sos.proofImages = [
+              ...new Set([...(sos.proofImages || []), ...extraData.proofImages]),
+            ];
+          }
+          await sos.save();
 
-        try {
-          await SosStatusHistory.create({
-            sosId: sos._id,
-            oldStatus,
-            newStatus: targetSosStatus,
-            changedBy: currentUser?._id || assignment.rescuerId,
-            note: note || `Cứu hộ viên cập nhật tiến trình: ${targetStatus}`,
-            images: extraData?.proofImages || [],
-          });
-        } catch (err) {}
+          try {
+            await SosStatusHistory.create({
+              sosId: sos._id,
+              oldStatus,
+              newStatus: targetSosStatus,
+              changedBy: currentUser?._id || assignment.rescuerId,
+              note: note || `Cứu hộ viên cập nhật tiến trình: ${targetStatus}`,
+              images: extraData?.proofImages || [],
+            });
+          } catch (err) {}
+        }
 
         try {
           await assignment.populate([

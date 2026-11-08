@@ -577,7 +577,11 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
   };
 
   // Render trạng thái tiến trình (hỗ trợ phân biệt nhiệm vụ Cứu nạn và Tiếp tế cứu trợ)
-  const renderProgressStep = (currentStatus: SosAssignmentStatus, isRelief = false) => {
+  const renderProgressStep = (
+    currentStatus: SosAssignmentStatus,
+    isRelief = false,
+    isShoreHandoff = false
+  ) => {
     if (['CANCELLED', 'REJECTED'].includes(currentStatus)) {
       return (
         <View
@@ -604,7 +608,15 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
       );
     }
 
-    const steps: { key: SosAssignmentStatus; label: string }[] = isRelief
+    const steps: { key: SosAssignmentStatus; label: string }[] = isShoreHandoff
+      ? [
+          { key: 'PENDING', label: 'Lệnh điều xe' },
+          { key: 'ACCEPTED', label: 'Nhận lệnh' },
+          { key: 'EN_ROUTE', label: 'Đang đến bến' },
+          { key: 'IN_PROGRESS', label: 'Tại bến đón' },
+          { key: 'COMPLETED', label: 'Đã tiếp nhận' },
+        ]
+      : isRelief
       ? [
           { key: 'PENDING', label: 'Lệnh điều phối' },
           { key: 'ACCEPTED', label: 'Đã nhận lệnh' },
@@ -831,7 +843,14 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
               (typeof sos?.description === 'string' && sos.description.includes('xuất cấp cứu trợ')) ||
               (typeof item.note === 'string' && item.note.includes('xuất cấp cứu trợ'));
 
-            const emergencyInfo = isReliefMission
+            const isShoreHandoffMission =
+              item.missionType === 'SHORE_HANDOFF' ||
+              (typeof item.note === 'string' && item.note.toLowerCase().includes('đón bờ')) ||
+              (item.vehicleId?.type === 'AMBULANCE' && !!sos?.shoreHandoff);
+
+            const emergencyInfo = isShoreHandoffMission
+              ? { label: 'Tiếp Vận & Đón Nạn Nhân Tại Bờ', icon: 'ambulance', color: '#0284C7' }
+              : isReliefMission
               ? { label: 'Xuất cấp & Tiếp tế cứu trợ', icon: 'package-variant-closed', color: '#059669' }
               : getEmergencyLabel(sos?.emergencyType);
 
@@ -906,14 +925,30 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                     </Text>
                   </View>
 
-                  <View style={[styles.victimCountBadge, isReliefMission && { backgroundColor: '#ECFDF5' }]}>
-                    {isReliefMission ? (
+                  <View
+                    style={[
+                      styles.victimCountBadge,
+                      isReliefMission && { backgroundColor: '#ECFDF5' },
+                      isShoreHandoffMission && { backgroundColor: '#E0F2FE' },
+                    ]}
+                  >
+                    {isShoreHandoffMission ? (
+                      <MaterialCommunityIcons name="ambulance" size={13} color="#0284C7" />
+                    ) : isReliefMission ? (
                       <MaterialCommunityIcons name="cube-send" size={13} color="#059669" />
                     ) : (
                       <Feather name="users" size={13} color="#0F172A" />
                     )}
-                    <Text style={[styles.victimCountText, isReliefMission && { color: '#059669', fontWeight: '800' }]}>
-                      {isReliefMission
+                    <Text
+                      style={[
+                        styles.victimCountText,
+                        isReliefMission && { color: '#059669', fontWeight: '800' },
+                        isShoreHandoffMission && { color: '#0284C7', fontWeight: '800' },
+                      ]}
+                    >
+                      {isShoreHandoffMission
+                        ? `${sos?.shoreHandoff?.peopleCount || sos?.people || 1} nạn nhân đón bờ`
+                        : isReliefMission
                         ? totalSuppliesCount > 0
                           ? `${totalSuppliesCount} kiện/thùng hàng`
                           : 'Tiếp tế nhu yếu phẩm'
@@ -923,24 +958,33 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                 </View>
 
                 {/* Stepper tiến trình nhiệm vụ */}
-                {renderProgressStep(item.status, isReliefMission)}
+                {renderProgressStep(item.status, isReliefMission, isShoreHandoffMission)}
 
                 {/* Chi tiết tiếp tế / cứu hộ & Hiện trường */}
                 <View style={styles.detailsBox}>
-                  {/* Địa chỉ / Điểm cứu trợ */}
+                  {/* Địa chỉ / Điểm cứu trợ / Bến đón tiếp nhận */}
                   <View style={styles.detailRow}>
                     <Feather
-                      name={isReliefMission ? 'navigation' : 'map-pin'}
+                      name={isShoreHandoffMission ? 'anchor' : isReliefMission ? 'navigation' : 'map-pin'}
                       size={15}
-                      color={isReliefMission ? '#059669' : '#EF4444'}
+                      color={isShoreHandoffMission ? '#0284C7' : isReliefMission ? '#059669' : '#EF4444'}
                       style={styles.detailIcon}
                     />
                     <View style={styles.detailContent}>
                       <Text style={styles.detailLabel}>
-                        {isReliefMission ? 'Điểm tiếp nhận cứu trợ:' : 'Địa điểm cứu hộ:'}
+                        {isShoreHandoffMission
+                          ? 'Bến đón & Tập kết nạn nhân:'
+                          : isReliefMission
+                          ? 'Điểm tiếp nhận cứu trợ:'
+                          : 'Địa điểm cứu hộ:'}
                       </Text>
                       <Text style={styles.detailValueAddress}>
-                        {item.destination || sos?.address || 'Chưa cập nhật địa chỉ'}
+                        {item.destination ||
+                          (isShoreHandoffMission
+                            ? (sos?.shoreHandoff?.landingPoint?.name || sos?.shoreHandoff?.landingPoint?.address)
+                            : null) ||
+                          sos?.address ||
+                          'Chưa cập nhật địa chỉ'}
                       </Text>
                     </View>
                   </View>
@@ -948,23 +992,35 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                   {/* Thông tin người nhận / Nạn nhân */}
                   <View style={styles.detailRow}>
                     <Feather
-                      name={isReliefMission ? 'user-check' : 'user'}
+                      name={isShoreHandoffMission ? 'user-check' : isReliefMission ? 'user-check' : 'user'}
                       size={15}
-                      color={isReliefMission ? '#059669' : '#0284C7'}
+                      color={isShoreHandoffMission ? '#0284C7' : isReliefMission ? '#059669' : '#0284C7'}
                       style={styles.detailIcon}
                     />
                     <View style={styles.detailContent}>
                       <Text style={styles.detailLabel}>
-                        {isReliefMission ? 'Người nhận / Cán bộ đầu mối:' : 'Nạn nhân / Người liên hệ:'}
+                        {isShoreHandoffMission
+                          ? 'Nạn nhân cần vận chuyển về bờ:'
+                          : isReliefMission
+                          ? 'Người nhận / Cán bộ đầu mối:'
+                          : 'Nạn nhân / Người liên hệ:'}
                       </Text>
                       <Text style={styles.detailValue}>
-                        {isReliefMission ? recipientName : victimName}{' '}
+                        {isShoreHandoffMission
+                          ? `${victimName} (${sos?.people || 1} người) • Xuất phát: ${sos?.address || 'Điểm cứu hộ'}`
+                          : isReliefMission
+                          ? recipientName
+                          : victimName}{' '}
                         {contactPhone ? `• ${contactPhone}` : ''}
                       </Text>
                     </View>
                     {contactPhone && (
                       <TouchableOpacity
-                        style={[styles.callNowBtn, isReliefMission && { backgroundColor: '#059669' }]}
+                        style={[
+                          styles.callNowBtn,
+                          isReliefMission && { backgroundColor: '#059669' },
+                          isShoreHandoffMission && { backgroundColor: '#0284C7' },
+                        ]}
                         onPress={() => handleCallVictim(contactPhone)}
                         activeOpacity={0.8}
                       >
@@ -980,12 +1036,16 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                       <Feather
                         name={isReliefMission ? 'file-text' : 'message-square'}
                         size={15}
-                        color={isReliefMission ? '#0284C7' : '#D97706'}
+                        color={isShoreHandoffMission ? '#0284C7' : isReliefMission ? '#0284C7' : '#D97706'}
                         style={styles.detailIcon}
                       />
                       <View style={styles.detailContent}>
                         <Text style={styles.detailLabel}>
-                          {isReliefMission ? 'Lệnh xuất cấp & Ghi chú:' : 'Hiện trường ghi nhận:'}
+                          {isShoreHandoffMission
+                            ? 'Lệnh điều xe & Tiếp vận:'
+                            : isReliefMission
+                            ? 'Lệnh xuất cấp & Ghi chú:'
+                            : 'Hiện trường ghi nhận:'}
                         </Text>
                         <Text style={styles.detailValueDesc}>
                           "{item.note || sos?.description}"
@@ -996,15 +1056,194 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
 
                   {/* Phương tiện cơ động được giao */}
                   {vehicle && (
-                    <View style={styles.vehicleRow}>
+                    <View
+                      style={[
+                        styles.vehicleRow,
+                        isShoreHandoffMission && { backgroundColor: '#F0F9FF', borderColor: '#BAE6FD' },
+                      ]}
+                    >
                       <MaterialCommunityIcons
-                        name={vehicle.type === 'BOAT' ? 'ferry' : 'car'}
+                        name={
+                          vehicle.type === 'BOAT'
+                            ? 'ferry'
+                            : vehicle.type === 'AMBULANCE'
+                            ? 'ambulance'
+                            : 'car'
+                        }
                         size={16}
-                        color="#0066FF"
+                        color={isShoreHandoffMission ? '#0284C7' : '#0066FF'}
                       />
                       <Text style={styles.vehicleText}>
-                        Phương tiện phân bổ: <Text style={{ fontWeight: '700' }}>{vehicle.plateNumber}</Text> ({vehicle.type === 'BOAT' ? 'Xuồng cứu hộ' : 'Xe cơ động'})
+                        Phương tiện phân bổ:{' '}
+                        <Text style={{ fontWeight: '700' }}>{vehicle.plateNumber}</Text>{' '}
+                        ({vehicle.type === 'BOAT'
+                          ? 'Xuồng cứu hộ'
+                          : vehicle.type === 'AMBULANCE'
+                          ? 'Xe cấp cứu 115'
+                          : 'Xe cơ động'})
                       </Text>
+                    </View>
+                  )}
+
+                  {/* Khối Thông tin Xe Đón Bờ Tiếp Cận (Dành cho đội cano nhìn thấy xe đón bờ) */}
+                  {sos?.shoreHandoff && !isShoreHandoffMission && (
+                    <View
+                      style={[
+                        styles.shoreHandoffCard,
+                        sos.shoreHandoff.status === 'ASSIGNED'
+                          ? styles.shoreHandoffCardAssigned
+                          : sos.shoreHandoff.status === 'COMPLETED'
+                          ? styles.shoreHandoffCardCompleted
+                          : styles.shoreHandoffCardRequested,
+                      ]}
+                    >
+                      <View style={styles.shoreHandoffHeaderRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                          <MaterialCommunityIcons
+                            name={
+                              sos.shoreHandoff.status === 'COMPLETED'
+                                ? 'check-decagram'
+                                : sos.shoreHandoff.status === 'ASSIGNED'
+                                ? 'ambulance'
+                                : 'clock-alert-outline'
+                            }
+                            size={18}
+                            color={
+                              sos.shoreHandoff.status === 'COMPLETED'
+                                ? '#059669'
+                                : sos.shoreHandoff.status === 'ASSIGNED'
+                                ? '#0284C7'
+                                : '#D97706'
+                            }
+                          />
+                          <Text
+                            style={[
+                              styles.shoreHandoffHeaderTitle,
+                              {
+                                color:
+                                  sos.shoreHandoff.status === 'COMPLETED'
+                                    ? '#065F46'
+                                    : sos.shoreHandoff.status === 'ASSIGNED'
+                                    ? '#0369A1'
+                                    : '#92400E',
+                              },
+                            ]}
+                          >
+                            {sos.shoreHandoff.status === 'ASSIGNED'
+                              ? 'XE ĐÓN BỜ TIẾP CẬN (ĐÃ ĐIỀU ĐỘNG)'
+                              : sos.shoreHandoff.status === 'COMPLETED'
+                              ? 'ĐÃ BÀN GIAO LÊN XE ĐÓN BỜ'
+                              : 'YÊU CẦU XE TIẾP VẬN ĐÓN BỜ'}
+                          </Text>
+                        </View>
+                        <View
+                          style={[
+                            styles.shoreHandoffBadge,
+                            {
+                              backgroundColor:
+                                sos.shoreHandoff.status === 'COMPLETED'
+                                  ? '#D1FAE5'
+                                  : sos.shoreHandoff.status === 'ASSIGNED'
+                                  ? '#E0F2FE'
+                                  : '#FEF3C7',
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 10,
+                              fontWeight: '800',
+                              color:
+                                sos.shoreHandoff.status === 'COMPLETED'
+                                  ? '#059669'
+                                  : sos.shoreHandoff.status === 'ASSIGNED'
+                                  ? '#0284C7'
+                                  : '#D97706',
+                            }}
+                          >
+                            {sos.shoreHandoff.status === 'ASSIGNED'
+                              ? 'ĐÃ PHÂN CÔNG XE'
+                              : sos.shoreHandoff.status === 'COMPLETED'
+                              ? 'HOÀN TẤT BÀN GIAO'
+                              : 'CHỜ ĐIỀU PHỐI'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {sos.shoreHandoff.status === 'ASSIGNED' ? (
+                        <View style={styles.shoreHandoffBody}>
+                          <View style={styles.shoreHandoffInfoLine}>
+                            <Feather name="truck" size={13} color="#0284C7" />
+                            <Text style={styles.shoreHandoffInfoText}>
+                              Phương tiện:{' '}
+                              <Text style={{ fontWeight: '800', color: '#0F172A' }}>
+                                {sos.shoreHandoff.assignedVehiclePlate || 'Chưa rõ biển'}
+                              </Text>{' '}
+                              • {sos.shoreHandoff.assignedVehicleName || 'Xe cấp cứu 115'}
+                            </Text>
+                          </View>
+
+                          {sos.shoreHandoff.assignedRoadTeamName && (
+                            <View style={styles.shoreHandoffInfoLine}>
+                              <Feather name="shield" size={13} color="#0284C7" />
+                              <Text style={styles.shoreHandoffInfoText}>
+                                Đơn vị: {sos.shoreHandoff.assignedRoadTeamName}
+                              </Text>
+                            </View>
+                          )}
+
+                          <View style={styles.shoreHandoffDriverRow}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1 }}>
+                              <Feather name="user-check" size={13} color="#0284C7" />
+                              <Text style={styles.shoreHandoffInfoText} numberOfLines={1}>
+                                Tài xế / Cán bộ:{' '}
+                                <Text style={{ fontWeight: '700', color: '#0F172A' }}>
+                                  {sos.shoreHandoff.assignedDriverName || 'Đội y tế dã chiến'}
+                                </Text>
+                              </Text>
+                            </View>
+                            {sos.shoreHandoff.assignedDriverPhone && (
+                              <TouchableOpacity
+                                style={styles.shoreHandoffCallBtn}
+                                onPress={() => handleCallVictim(sos.shoreHandoff?.assignedDriverPhone || '')}
+                                activeOpacity={0.8}
+                              >
+                                <Feather name="phone-call" size={11} color="#FFFFFF" />
+                                <Text style={styles.shoreHandoffCallText}>Gọi tài xế</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+
+                          <View style={styles.shoreHandoffInfoLine}>
+                            <Feather name="map-pin" size={13} color="#EF4444" />
+                            <Text style={styles.shoreHandoffInfoText}>
+                              Bến đón bàn giao:{' '}
+                              <Text style={{ fontWeight: '700', color: '#B91C1C' }}>
+                                {sos.shoreHandoff.landingPoint?.name ||
+                                  sos.shoreHandoff.landingPoint?.address ||
+                                  'Bến cập bờ chỉ định'}
+                              </Text>
+                            </Text>
+                          </View>
+                        </View>
+                      ) : sos.shoreHandoff.status === 'REQUESTED' ? (
+                        <Text style={styles.shoreHandoffPendingText}>
+                          Đang chờ Ban Chỉ Huy điều xe đường bộ tiếp nhận nạn nhân tại bến:{' '}
+                          <Text style={{ fontWeight: '700' }}>
+                            {sos.shoreHandoff.landingPoint?.name ||
+                              sos.shoreHandoff.landingPoint?.address ||
+                              'Bến bờ'}
+                          </Text>
+                        </Text>
+                      ) : (
+                        <Text style={styles.shoreHandoffCompletedText}>
+                          Đã hoàn tất chuyển nạn nhân lên xe đón bờ lúc{' '}
+                          {new Date(sos.shoreHandoff.completedAt || Date.now()).toLocaleTimeString('vi-VN', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </Text>
+                      )}
                     </View>
                   )}
 
@@ -1093,12 +1332,22 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                           disabled={isSubmitting}
                         >
                           <LinearGradient
-                            colors={isReliefMission ? ['#059669', '#047857'] : ['#0066FF', '#0052CC']}
+                            colors={
+                              isShoreHandoffMission
+                                ? ['#0284C7', '#0369A1']
+                                : isReliefMission
+                                ? ['#059669', '#047857']
+                                : ['#0066FF', '#0052CC']
+                            }
                             style={styles.gradientBtn}
                           >
                             <Feather name="check-circle" size={15} color="#FFFFFF" />
                             <Text style={styles.primaryActionText}>
-                              {isReliefMission ? 'Nhận Lệnh Tiếp Tế' : 'Tiếp Nhận Nhiệm Vụ'}
+                              {isShoreHandoffMission
+                                ? 'Nhận Lệnh Đón Bờ'
+                                : isReliefMission
+                                ? 'Nhận Lệnh Tiếp Tế'
+                                : 'Tiếp Nhận Nhiệm Vụ'}
                             </Text>
                           </LinearGradient>
                         </TouchableOpacity>
@@ -1117,7 +1366,11 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                           >
                             <MaterialCommunityIcons name="truck-fast" size={16} color="#FFFFFF" />
                             <Text style={styles.primaryActionText}>
-                              {isReliefMission ? 'Xuất Kho Vận Chuyển' : 'Xuất Phát Ứng Cứu'}
+                              {isShoreHandoffMission
+                                ? 'Xuất Phát Ra Bến Đón'
+                                : isReliefMission
+                                ? 'Xuất Kho Vận Chuyển'
+                                : 'Xuất Phát Ứng Cứu'}
                             </Text>
                           </LinearGradient>
                         </TouchableOpacity>
@@ -1136,13 +1389,17 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                           >
                             <Ionicons name="location" size={16} color="#FFFFFF" />
                             <Text style={styles.primaryActionText}>
-                              {isReliefMission ? 'Đã Đến Điểm Cứu Trợ' : 'Đã Đến Hiện Trường'}
+                              {isShoreHandoffMission
+                                ? 'Đã Đến Bến Đón Bờ'
+                                : isReliefMission
+                                ? 'Đã Đến Điểm Cứu Trợ'
+                                : 'Đã Đến Hiện Trường'}
                             </Text>
                           </LinearGradient>
                         </TouchableOpacity>
                       )}
 
-                      {/* Nút tác chiến mở Workspace bản đồ (Bàn giao và chụp ảnh đã được thống nhất làm trực tiếp bên trong bản đồ tác chiến) */}
+                      {/* Nút tác chiến mở Workspace bản đồ */}
                       <TouchableOpacity
                         style={[styles.primaryActionBtn, { flex: 1 }]}
                         onPress={() => handleViewOnMap(item)}
@@ -1156,7 +1413,11 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                           <Feather name="navigation" size={15} color="#FFFFFF" />
                           <Text style={styles.primaryActionText}>
                             {['ARRIVED', 'IN_PROGRESS', 'RESCUING'].includes(item.status)
-                              ? (isReliefMission ? 'Bàn Giao Cứu Trợ (Tại Hiện Trường)' : 'Báo Cáo Cứu Hộ (Tại Hiện Trường)')
+                              ? isShoreHandoffMission
+                                ? 'Tiếp Nhận & Báo Cáo Tại Bến'
+                                : isReliefMission
+                                ? 'Bàn Giao Cứu Trợ (Tại Hiện Trường)'
+                                : 'Báo Cáo Cứu Hộ (Tại Hiện Trường)'
                               : 'Chỉ Đường & Tác Chiến'}
                           </Text>
                         </LinearGradient>
@@ -1167,7 +1428,11 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                       <Feather name="check-circle" size={16} color="#059669" />
                       <View style={{ flex: 1 }}>
                         <Text style={styles.completedBadgeText}>
-                          {isReliefMission ? 'Đã bàn giao cứu trợ thành công' : 'Đã cứu nạn thành công'}
+                          {isShoreHandoffMission
+                            ? 'Đã tiếp nhận nạn nhân tại bến thành công'
+                            : isReliefMission
+                            ? 'Đã bàn giao cứu trợ thành công'
+                            : 'Đã cứu nạn thành công'}
                         </Text>
                         {item.actualRecipient ? (
                           <Text style={styles.completedSubText}>
@@ -1983,6 +2248,83 @@ const styles = StyleSheet.create({
   vehicleText: {
     fontSize: 11.5,
     color: '#1E293B',
+  },
+  shoreHandoffCard: {
+    borderRadius: 10,
+    padding: 11,
+    marginTop: 6,
+    borderWidth: 1.2,
+  },
+  shoreHandoffCardAssigned: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#7DD3FC',
+  },
+  shoreHandoffCardCompleted: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#6EE7B7',
+  },
+  shoreHandoffCardRequested: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FCD34D',
+  },
+  shoreHandoffHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  shoreHandoffHeaderTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  shoreHandoffBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  shoreHandoffBody: {
+    gap: 4,
+  },
+  shoreHandoffInfoLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  shoreHandoffInfoText: {
+    fontSize: 12,
+    color: '#334155',
+    flex: 1,
+  },
+  shoreHandoffDriverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
+  },
+  shoreHandoffCallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#059669',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  shoreHandoffCallText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  shoreHandoffPendingText: {
+    fontSize: 12,
+    color: '#92400E',
+    fontStyle: 'italic',
+  },
+  shoreHandoffCompletedText: {
+    fontSize: 12,
+    color: '#065F46',
+    fontWeight: '600',
   },
   suppliesCardBox: {
     backgroundColor: '#F0FDF4',
