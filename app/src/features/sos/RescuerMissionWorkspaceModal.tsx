@@ -372,6 +372,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   const [isNavigating, setIsNavigating] = useState<boolean>(false); // Dẫn đường trực tiếp trong App chuẩn Grab
   const [isHeadingLocked, setIsHeadingLocked] = useState<boolean>(true); // Ghim theo dõi vị trí và hướng xe chuẩn Grab
   const [isTopHudHidden, setIsTopHudHidden] = useState<boolean>(false); // Thu gọn HUD trên để thoáng bản đồ
+  const [noteExpanded, setNoteExpanded] = useState<boolean>(true); // Hiển thị full ghi chú hiện trường / có nút xem chi tiết
   const [suppliesExpanded, setSuppliesExpanded] = useState<boolean>(false); // Xem chi tiết / thu gọn danh mục vật tư
   const [supplyRequestModalVisible, setSupplyRequestModalVisible] = useState<boolean>(false); // Modal yêu cầu cấp thêm vật tư
   const [requestedSuppliesList, setRequestedSuppliesList] = useState<any[]>([]); // Danh sách vật tư đã gửi yêu cầu
@@ -1301,9 +1302,6 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       });
 
     const clean = parts.join(' • ');
-    if (clean.length > 80) {
-      return clean.slice(0, 78) + '...';
-    }
     return clean || (rawDescription.split('|')[0] || '').trim();
   }, [rawDescription]);
   const teamName = assignment?.rescueTeamId?.name || assignment?.teamName || assignment?.rescueTeamName || '';
@@ -2462,13 +2460,29 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 </Text>
               )}
 
-              {/* Hộp ghi chú điều phối / hiện trường - Tinh gọn ít chữ */}
+              {/* Hộp ghi chú điều phối / hiện trường - Hiển thị đầy đủ nội dung hoặc xem chi tiết */}
               {displayNote ? (
                 <View style={styles.grabNoteBox}>
-                  <Text style={styles.grabNoteLabel}>
-                    {isReliefMission ? 'Ghi chú điều phối:' : 'Ghi chú hiện trường:'}
-                  </Text>
-                  <Text style={styles.grabNoteText} numberOfLines={2} ellipsizeMode="tail">
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
+                    <Text style={styles.grabNoteLabel}>
+                      {isReliefMission ? 'Ghi chú điều phối:' : 'Ghi chú hiện trường:'}
+                    </Text>
+                    {displayNote.length > 60 && (
+                      <TouchableOpacity
+                        onPress={() => setNoteExpanded((prev) => !prev)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text style={{ fontSize: 11.5, color: '#0284C7', fontWeight: '700' }}>
+                          {noteExpanded ? 'Thu gọn' : 'Xem chi tiết'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  <Text
+                    style={styles.grabNoteText}
+                    numberOfLines={noteExpanded ? undefined : 2}
+                    ellipsizeMode="tail"
+                  >
                     {displayNote}
                   </Text>
                 </View>
