@@ -81,7 +81,14 @@ class DomainDService {
     );
     this.rescueTeams = INITIAL_RESCUE_TEAMS;
     this.vehicles = INITIAL_VEHICLES;
-    this.assignments = this.load(STORAGE_ASSIGNMENTS, INITIAL_ASSIGNMENTS);
+    const loadedAssignments = this.load<Record<string, SosAssignment>>(STORAGE_ASSIGNMENTS, {});
+    const cleanAssignments: Record<string, SosAssignment> = {};
+    for (const [k, v] of Object.entries(loadedAssignments)) {
+      if (!k.startsWith('assign-89') && !v?.id?.startsWith('assign-89') && !v?.sosRequestId?.startsWith('sos-89')) {
+        cleanAssignments[k] = v;
+      }
+    }
+    this.assignments = cleanAssignments;
     this.officers = SAMPLE_OFFICERS;
     this.activeOfficerId = this.load(STORAGE_ACTIVE_OFFICER, SAMPLE_OFFICERS[0].id);
   }
@@ -371,6 +378,10 @@ class DomainDService {
     }
 
     return this.assignments[assignmentId];
+  }
+
+  getAllAssignments(): Record<string, SosAssignment> {
+    return { ...this.assignments };
   }
 
   reassignMission(

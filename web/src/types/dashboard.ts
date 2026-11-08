@@ -160,6 +160,7 @@ export interface RescueTeamItem {
   description?: string;
   status: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 
