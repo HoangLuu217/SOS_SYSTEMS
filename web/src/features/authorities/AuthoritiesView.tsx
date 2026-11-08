@@ -458,12 +458,12 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
           <table className="executive-table">
             <thead>
               <tr>
-                <th style={{ width: '20%' }}>Cán bộ chỉ huy</th>
-                <th style={{ width: '20%' }}>Số điện thoại / Email</th>
+                <th style={{ width: '19%' }}>Cán bộ chỉ huy</th>
+                <th style={{ width: '18%' }}>Số điện thoại / Email</th>
                 <th style={{ width: '24%' }}>Khu vực phụ trách (Địa bàn)</th>
                 <th style={{ width: '18%' }}>Đơn vị / Cơ quan</th>
-                <th style={{ width: '10%', minWidth: '95px', textAlign: 'center' }}>Trạng thái</th>
-                <th style={{ width: '8%', minWidth: '68px', textAlign: 'center' }}>Hành động</th>
+                <th style={{ width: '10%', minWidth: '90px', textAlign: 'center' }}>Trạng thái</th>
+                <th style={{ width: '11%', minWidth: '96px', textAlign: 'center' }}>Hành động</th>
               </tr>
             </thead>
             <tbody>

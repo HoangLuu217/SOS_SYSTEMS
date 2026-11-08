@@ -40,6 +40,13 @@
   overflow-y: auto !important;
   overflow-x: hidden !important;
   box-sizing: border-box;
+  scrollbar-gutter: stable;
+}
+
+.authorities-executive-container .executive-table th:last-child,
+.authorities-executive-container .executive-table td:last-child {
+  padding-right: 14px !important;
+  box-sizing: border-box !important;
 }
 
 .authorities-executive-container .executive-table {
