@@ -533,7 +533,7 @@ class ChatService {
    * Tìm thông tin Ban chỉ huy / Cán bộ địa phương theo địa bàn (GPS hoặc địa chỉ)
    */
   async getLocalAuthorityForArea({ areaName, province, ward, lat, lng, userId, currentUser }) {
-    const { User } = require('../models');
+    const { User, AuthorityOrganization, AdministrativeArea } = require('../models');
 
     // 1. Chuẩn hoá tên địa bàn của người dân / cứu hộ viên
     let resolvedAreaName = areaName || (ward && province ? `${ward}, ${province}` : (province || 'Địa phương'));
@@ -542,7 +542,6 @@ class ChatService {
     }
 
     // Địa bàn chính thức: BẮT BUỘC LUÔN LÀ ĐỊA BÀN THỰC TẾ CỦA NGƯỜI DÂN
-    // Tuyệt đối không được thay thế bằng địa bàn của cán bộ quản lý
     const officialAreaName = resolvedAreaName;
     const safeSlug = this.toAreaSlug(officialAreaName);
 
@@ -552,21 +551,62 @@ class ChatService {
     const channel = `area_${safeSlug || 'local'}${userSuffix}`;
 
     let cleanWard = '';
+    let cleanDistrict = '';
     let cleanProvince = '';
+    let cleanArea = '';
+
+    if (areaName) {
+      const parts = areaName.split(',').map((s) => s.trim()).filter(Boolean);
+      let extractedWard = '';
+      let extractedDistrict = '';
+      let extractedProvince = '';
+
+      if (parts.length >= 3) {
+        extractedProvince = parts[parts.length - 1];
+        extractedWard = parts[parts.length - 2];
+        if (parts.length >= 4) extractedDistrict = parts[parts.length - 3];
+      } else if (parts.length === 2) {
+        extractedProvince = parts[1];
+        extractedWard = parts[0];
+      } else if (parts.length === 1) {
+        extractedWard = parts[0];
+      }
+
+      const wMatch = areaName.match(/(phường|xã|thị trấn|p\.|x\.|tt\.)\s+([^,]+)/i);
+      if (wMatch && wMatch[2]) extractedWard = wMatch[2].trim();
+
+      const dMatch = areaName.match(/(quận|huyện|thị xã|q\.|h\.)\s+([^,]+)/i);
+      if (dMatch && dMatch[2]) extractedDistrict = dMatch[2].trim();
+
+      const pMatch = areaName.match(/(thành phố|tỉnh|tp\.?)\s+([^,]+)/i);
+      if (pMatch && pMatch[2]) extractedProvince = pMatch[2].trim();
+
+      if (extractedWard) cleanWard = extractedWard.replace(/^(phường|xã|thị trấn|p\.|x\.|tt\.)\s+/i, '').trim();
+      if (extractedDistrict) cleanDistrict = extractedDistrict.replace(/^(quận|huyện|thị xã|q\.|h\.)\s+/i, '').trim();
+      if (extractedProvince) cleanProvince = extractedProvince.replace(/^(tỉnh|thành phố|tp\.)\s+/i, '').trim();
+    }
+
     if (ward) {
       cleanWard = ward.replace(/^(phường|xã|thị trấn|p\.|x\.|tt\.)\s+/i, '').trim();
     }
     if (province) {
       cleanProvince = province.replace(/^(tỉnh|thành phố|tp\.)\s+/i, '').trim();
     }
+    if (areaName) {
+      cleanArea = areaName.replace(/^(phường|xã|quận|huyện|thị xã|thành phố|tp\.)\s+/i, '').trim();
+    }
 
     let manager = null;
+    let matchedOrg = null;
     let hasMatchedWardOfficer = false;
 
-    // 2. Tìm kiếm Cán bộ địa phương:
-    // Ưu tiên 1: Cán bộ được phân công ĐÚNG PHƯỜNG / XÃ của người dân
-    if (cleanWard) {
-      const wardRegex = new RegExp(cleanWard, 'i');
+    // 2. Tìm kiếm Cán bộ địa phương hoặc Cơ quan chức năng địa phương
+    // ƯU TIÊN 1: Tìm Cán bộ hoặc UBND được phân công ĐÚNG PHƯỜNG / XÃ của người dân
+    const wardKeyword = cleanWard || cleanArea;
+    if (wardKeyword && wardKeyword.length >= 2) {
+      const wardRegex = new RegExp(wardKeyword, 'i');
+
+      // 1.1 Tìm trong danh sách Cán bộ LOCAL_AUTHORITY
       manager = await User.findOne({
         roles: 'LOCAL_AUTHORITY',
         status: { $ne: 'SUSPENDED' },
@@ -574,19 +614,89 @@ class ChatService {
           { 'authority.areaName': wardRegex },
           { 'authority.department': wardRegex },
           { 'authority.organizationName': wardRegex },
+          { address: wardRegex },
         ],
       }).select('fullName phone email roles authority avatarUrl');
 
       if (manager) {
         hasMatchedWardOfficer = true;
       }
+
+      // 1.2 Nếu chưa có cán bộ cá nhân, tìm Cơ quan / UBND trực ban cấp xã/phường
+      if (!manager) {
+        matchedOrg = await AuthorityOrganization.findOne({
+          status: 'ACTIVE',
+          $or: [
+            { name: wardRegex },
+            { address: wardRegex },
+          ],
+        }).select('name code phone email address areaId administrativeAreaId');
+      }
     }
 
-    // Ưu tiên 2: Nếu chưa có cán bộ riêng của phường, tìm Ban Chỉ Huy / Cán bộ cấp Tỉnh / Thành phố
-    if (!manager && cleanProvince) {
+    // ƯU TIÊN 2: Nếu có tọa độ GPS [lat, lng], tìm qua ranh giới AdministrativeArea
+    if (!manager && !matchedOrg && typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)) {
+      try {
+        const matchingArea = await AdministrativeArea.findOne({
+          status: 'ACTIVE',
+          $or: [
+            wardKeyword ? { name: new RegExp(wardKeyword, 'i') } : null,
+            cleanProvince ? { name: new RegExp(cleanProvince, 'i') } : null,
+          ].filter(Boolean),
+        });
+
+        if (matchingArea) {
+          manager = await User.findOne({
+            roles: 'LOCAL_AUTHORITY',
+            status: { $ne: 'SUSPENDED' },
+            'authority.areaId': matchingArea._id,
+          }).select('fullName phone email roles authority avatarUrl');
+
+          if (!manager) {
+            matchedOrg = await AuthorityOrganization.findOne({
+              status: 'ACTIVE',
+              $or: [
+                { areaId: matchingArea._id },
+                { administrativeAreaId: matchingArea._id },
+              ],
+            }).select('name code phone email address');
+          }
+        }
+      } catch (err) {
+        console.log('[ChatService GPS Match Note]:', err.message);
+      }
+    }
+
+    // ƯU TIÊN 3: Nếu chưa có cấp phường, tìm Ban Chỉ Huy / Cơ quan cấp Quận / Huyện
+    if (!manager && !matchedOrg && cleanDistrict && cleanDistrict.length >= 2) {
+      const districtRegex = new RegExp(cleanDistrict, 'i');
+      manager = await User.findOne({
+        roles: 'LOCAL_AUTHORITY',
+        status: { $ne: 'SUSPENDED' },
+        $or: [
+          { 'authority.areaName': districtRegex },
+          { 'authority.department': districtRegex },
+          { 'authority.organizationName': districtRegex },
+          { address: districtRegex },
+        ],
+      }).select('fullName phone email roles authority avatarUrl');
+
+      if (!manager) {
+        matchedOrg = await AuthorityOrganization.findOne({
+          status: 'ACTIVE',
+          $or: [
+            { name: districtRegex },
+            { address: districtRegex },
+          ],
+        }).select('name code phone email address');
+      }
+    }
+
+    // ƯU TIÊN 4: Nếu chưa có cấp quận/huyện, tìm Ban Chỉ Huy / Cơ quan cấp Tỉnh / Thành phố
+    if (!manager && !matchedOrg && cleanProvince) {
       const provinceRegex = new RegExp(cleanProvince, 'i');
 
-      // Tìm cán bộ cấp Tỉnh/Thành phố (không bị giới hạn vào một phường/xã khác)
+      // Tìm cán bộ cấp Tỉnh/Thành phố
       manager = await User.findOne({
         roles: 'LOCAL_AUTHORITY',
         status: { $ne: 'SUSPENDED' },
@@ -602,8 +712,17 @@ class ChatService {
         ],
       }).select('fullName phone email roles authority avatarUrl');
 
-      // Nếu vẫn chưa có, lấy cán bộ bất kỳ thuộc tỉnh/thành phố đó
       if (!manager) {
+        matchedOrg = await AuthorityOrganization.findOne({
+          status: 'ACTIVE',
+          $or: [
+            { name: provinceRegex },
+            { address: provinceRegex },
+          ],
+        }).select('name code phone email address');
+      }
+
+      if (!manager && !matchedOrg) {
         manager = await User.findOne({
           roles: 'LOCAL_AUTHORITY',
           status: { $ne: 'SUSPENDED' },
@@ -615,52 +734,288 @@ class ChatService {
       }
     }
 
-    // Đánh dấu có cán bộ phù hợp hay không
-    const hasMatchedOfficer = !!manager;
+    // Danh bạ đường dây nóng Ban Chỉ Huy PCTT & TKCN các Tỉnh/Thành phố Việt Nam
+    const PROVINCE_HOTLINES = {
+      'cần thơ': { phone: '02923822266', name: 'Ban Chỉ Huy PCTT & TKCN TP. Cần Thơ' },
+      'đà nẵng': { phone: '02363822111', name: 'Ban Chỉ Huy PCTT & TKCN TP. Đà Nẵng' },
+      'hà nội': { phone: '02438344059', name: 'Ban Chỉ Huy PCTT & TKCN TP. Hà Nội' },
+      'hồ chí minh': { phone: '02838297598', name: 'Ban Chỉ Huy PCTT & TKCN TP. Hồ Chí Minh' },
+      'quảng nam': { phone: '02353852554', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Quảng Nam' },
+      'thừa thiên huế': { phone: '02343822076', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Thừa Thiên Huế' },
+      'quảng ngãi': { phone: '02553822841', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Quảng Ngãi' },
+      'bình định': { phone: '02563822934', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Bình Định' },
+      'khánh hòa': { phone: '02583822955', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Khánh Hòa' },
+      'hải phòng': { phone: '02253842322', name: 'Ban Chỉ Huy PCTT & TKCN TP. Hải Phòng' },
+      'bình dương': { phone: '02743822452', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Bình Dương' },
+      'đồng nai': { phone: '02513822521', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Đồng Nai' },
+      'an giang': { phone: '02963953457', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh An Giang' },
+      'kiên giang': { phone: '02973862043', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Kiên Giang' },
+    };
 
-    // Xác định tên cơ quan / đơn vị tiếp nhận phản ánh
+    let provContact = null;
+    const provLower = (cleanProvince || '').toLowerCase().trim();
+    for (const [key, val] of Object.entries(PROVINCE_HOTLINES)) {
+      if (provLower.includes(key) || key.includes(provLower)) {
+        provContact = val;
+        break;
+      }
+    }
+
+    // ƯU TIÊN 5: Fallback cơ quan cứu nạn chỉ khi không xác định được tỉnh/thành nào
+    if (!manager && !matchedOrg && !provContact) {
+      matchedOrg = await AuthorityOrganization.findOne({ status: 'ACTIVE' })
+        .select('name code phone email address');
+    }
+    if (!manager && !matchedOrg && !provContact) {
+      manager = await User.findOne({ roles: 'LOCAL_AUTHORITY', status: { $ne: 'SUSPENDED' } })
+        .select('fullName phone email roles authority avatarUrl');
+    }
+
+    const hasMatchedOfficer = !!manager || !!matchedOrg;
+
+    // Chuẩn hóa tên đơn vị & tên người phụ trách
     const cleanDisplayArea = officialAreaName.replace(/^(phường|xã|thị trấn|p\.|x\.|tt\.)\s+/i, '').trim();
     const isCommune = /phường|xã|thị trấn/i.test(officialAreaName);
 
     let departmentTitle = '';
     if (hasMatchedWardOfficer && manager?.authority?.department) {
       departmentTitle = manager.authority.department;
+    } else if (matchedOrg?.name) {
+      departmentTitle = matchedOrg.name;
     } else if (hasMatchedWardOfficer) {
       departmentTitle = `UBND ${ward || officialAreaName}`;
-    } else if (hasMatchedOfficer && manager?.authority?.department) {
+    } else if (manager?.authority?.department) {
       departmentTitle = manager.authority.department;
     } else if (isCommune && ward) {
       departmentTitle = `UBND ${ward}`;
+    } else if (provContact?.name) {
+      departmentTitle = provContact.name;
     } else {
-      departmentTitle = `Ban Chỉ Huy PCTT & TKCN ${cleanProvince || cleanDisplayArea}`;
+      departmentTitle = `Ban Chỉ Huy PCTT & TKCN ${cleanProvince || cleanDisplayArea || 'Địa Phương'}`;
     }
+
+    // Chuẩn hóa số điện thoại đường dây nóng (phải là số gọi được, không dùng dấu xuyệt)
+    let rawPhone = manager?.phone || matchedOrg?.phone || provContact?.phone || '';
+    // Nếu có dạng "0236... / 0905...", tách lấy số đầu tiên
+    if (rawPhone.includes('/')) {
+      rawPhone = rawPhone.split('/')[0].trim();
+    }
+    let cleanPhone = rawPhone.replace(/[^0-9+]/g, '');
+
+    const authorityName = manager?.fullName || matchedOrg?.name || provContact?.name || `Trực ban PCTT ${cleanWard || cleanDisplayArea || 'Địa phương'}`;
 
     return {
       channel,
-      areaName: officialAreaName, // LUÔN LUÔN là địa bàn thực tế của người dân (vd: Phường Liên Chiểu, Thành phố Đà Nẵng)
-      authority: hasMatchedOfficer && manager
-        ? {
-            id: manager._id,
-            name: manager.fullName || 'Cán bộ trực ban',
-            phone: manager.phone || '112',
-            email: manager.email,
-            position: manager.authority?.position || 'Trực ban tác chiến',
-            department: departmentTitle,
-            areaName: officialAreaName,
-            avatarUrl: manager.avatarUrl,
-            status: 'ONLINE',
-          }
-        : {
-            id: null,
-            name: `Trực ban PCTT ${cleanDisplayArea}`,
-            phone: '112 / 114 / 115',
-            email: 'hotro@sos.vn',
-            position: 'Trực ban điều phối tác chiến',
-            department: departmentTitle,
-            areaName: officialAreaName,
-            status: 'ONLINE',
-          },
+      areaName: officialAreaName, // Địa bàn thực tế của người dân
+      authority: {
+        id: manager?._id || matchedOrg?._id || null,
+        name: authorityName,
+        phone: cleanPhone, // Luôn luôn là số điện thoại chuẩn có thể gọi được ngay
+        email: manager?.email || matchedOrg?.email || 'hotro@sos.vn',
+        position: manager?.authority?.position || 'Trực ban tác chiến PCTT',
+        department: departmentTitle,
+        areaName: officialAreaName,
+        avatarUrl: manager?.avatarUrl || null,
+        status: 'ONLINE',
+      },
     };
+  }
+  /**
+   * Danh bạ đường dây nóng khẩn cấp công khai cho người dân chọn gọi khi chưa đăng nhập
+   */
+  async getEmergencyDirectory({ search, lat, lng } = {}) {
+    const { User, AuthorityOrganization } = require('../models');
+
+    const PROVINCE_DIRECTORY = [
+      {
+        id: 'hotline-can-tho',
+        name: 'Ban Chỉ Huy PCTT & TKCN TP. Cần Thơ',
+        department: 'Ủy Ban Nhân Dân TP. Cần Thơ',
+        phone: '02923822266',
+        areaName: 'Thành phố Cần Thơ',
+        address: 'Số 02 Hoà Bình, Quận Ninh Kiều, TP. Cần Thơ',
+        type: 'PROVINCE',
+        lat: 10.0341,
+        lng: 105.7876,
+      },
+      {
+        id: 'hotline-da-nang',
+        name: 'Ban Chỉ Huy PCTT & TKCN TP. Đà Nẵng',
+        department: 'Ủy Ban Nhân Dân TP. Đà Nẵng',
+        phone: '02363822111',
+        areaName: 'Thành phố Đà Nẵng',
+        address: 'Số 42 Bạch Đằng, Quận Hải Châu, TP. Đà Nẵng',
+        type: 'PROVINCE',
+        lat: 16.0544,
+        lng: 108.2022,
+      },
+      {
+        id: 'hotline-ha-noi',
+        name: 'Ban Chỉ Huy PCTT & TKCN TP. Hà Nội',
+        department: 'Ủy Ban Nhân Dân TP. Hà Nội',
+        phone: '02438344059',
+        areaName: 'Thành phố Hà Nội',
+        address: 'Số 12 phố Lê Lai, Quận Hoàn Kiếm, TP. Hà Nội',
+        type: 'PROVINCE',
+        lat: 21.0285,
+        lng: 105.8542,
+      },
+      {
+        id: 'hotline-hcm',
+        name: 'Ban Chỉ Huy PCTT & TKCN TP. Hồ Chí Minh',
+        department: 'Ủy Ban Nhân Dân TP. Hồ Chí Minh',
+        phone: '02838297598',
+        areaName: 'Thành phố Hồ Chí Minh',
+        address: 'Số 86 Lê Thánh Tôn, Bến Nghé, Quận 1, TP. Hồ Chí Minh',
+        type: 'PROVINCE',
+        lat: 10.7769,
+        lng: 106.7009,
+      },
+      {
+        id: 'hotline-quang-nam',
+        name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Quảng Nam',
+        department: 'Ủy Ban Nhân Dân Tỉnh Quảng Nam',
+        phone: '02353852554',
+        areaName: 'Tỉnh Quảng Nam',
+        address: 'Số 500 Hùng Vương, TP. Tam Kỳ, Tỉnh Quảng Nam',
+        type: 'PROVINCE',
+        lat: 15.5647,
+        lng: 108.4839,
+      },
+      {
+        id: 'hotline-hue',
+        name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Thừa Thiên Huế',
+        department: 'Ủy Ban Nhân Dân Tỉnh Thừa Thiên Huế',
+        phone: '02343822076',
+        areaName: 'Thừa Thiên Huế',
+        address: 'Số 14 Lê Lợi, TP. Huế, Tỉnh Thừa Thiên Huế',
+        type: 'PROVINCE',
+        lat: 16.4637,
+        lng: 107.5909,
+      },
+      {
+        id: 'hotline-quang-ngai',
+        name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Quảng Ngãi',
+        department: 'Ủy Ban Nhân Dân Tỉnh Quảng Ngãi',
+        phone: '02553822841',
+        areaName: 'Tỉnh Quảng Ngãi',
+        address: 'Số 122 Hùng Vương, TP. Quảng Ngãi',
+        type: 'PROVINCE',
+        lat: 15.1205,
+        lng: 108.7923,
+      },
+      {
+        id: 'hotline-binh-dinh',
+        name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Bình Định',
+        department: 'Ủy Ban Nhân Dân Tỉnh Bình Định',
+        phone: '02563822934',
+        areaName: 'Tỉnh Bình Định',
+        address: 'Số 01 Trần Phú, TP. Quy Nhơn, Tỉnh Bình Định',
+        type: 'PROVINCE',
+        lat: 13.783,
+        lng: 109.2197,
+      },
+      {
+        id: 'hotline-khanh-hoa',
+        name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Khánh Hòa',
+        department: 'Ủy Ban Nhân Dân Tỉnh Khánh Hòa',
+        phone: '02583822955',
+        areaName: 'Tỉnh Khánh Hòa',
+        address: 'Số 01 Trần Phú, Lộc Thọ, TP. Nha Trang',
+        type: 'PROVINCE',
+        lat: 12.2388,
+        lng: 109.1967,
+      },
+      {
+        id: 'hotline-hai-phong',
+        name: 'Ban Chỉ Huy PCTT & TKCN TP. Hải Phòng',
+        department: 'Ủy Ban Nhân Dân TP. Hải Phòng',
+        phone: '02253842322',
+        areaName: 'Thành phố Hải Phòng',
+        address: 'Số 18 Hoàng Diệu, Minh Khai, Hồng Bàng, Hải Phòng',
+        type: 'PROVINCE',
+        lat: 20.8449,
+        lng: 106.6881,
+      },
+    ];
+
+    // Lấy tất cả AuthorityOrganization đang ACTIVE
+    const orgs = await AuthorityOrganization.find({ status: 'ACTIVE' })
+      .select('name code phone email address administrativeAreaId areaId')
+      .lean();
+
+    // Lấy các Cán bộ địa phương có số điện thoại
+    const officers = await User.find({
+      roles: 'LOCAL_AUTHORITY',
+      status: { $ne: 'SUSPENDED' },
+      phone: { $exists: true, $ne: '' },
+    })
+      .select('fullName phone email authority address')
+      .lean();
+
+    const seenPhones = new Set();
+    const results = [];
+
+    // 1. Đưa các tổ chức cấp phường/xã/quận/huyện/tỉnh trong DB lên trước
+    for (const org of orgs) {
+      const cleanPhone = (org.phone || '').replace(/[^0-9+]/g, '');
+      if (cleanPhone && !seenPhones.has(cleanPhone)) {
+        seenPhones.add(cleanPhone);
+        results.push({
+          id: String(org._id),
+          name: org.name,
+          department: org.name,
+          phone: cleanPhone,
+          address: org.address || 'Địa bàn phụ trách',
+          areaName: org.address || org.name,
+          type: 'ORGANIZATION',
+        });
+      }
+    }
+
+    // 2. Thêm cán bộ phụ trách
+    for (const officer of officers) {
+      const cleanPhone = (officer.phone || '').replace(/[^0-9+]/g, '');
+      if (cleanPhone && !seenPhones.has(cleanPhone)) {
+        seenPhones.add(cleanPhone);
+        const dept = officer.authority?.department || 'Cán bộ trực ban PCTT';
+        const area = officer.authority?.areaName || officer.address || 'Địa bàn quản lý';
+        results.push({
+          id: String(officer._id),
+          name: officer.fullName || dept,
+          department: dept,
+          phone: cleanPhone,
+          address: area,
+          areaName: area,
+          type: 'OFFICER',
+        });
+      }
+    }
+
+    // 3. Thêm các đầu mối Tỉnh/Thành phố toàn quốc
+    for (const p of PROVINCE_DIRECTORY) {
+      if (!seenPhones.has(p.phone)) {
+        seenPhones.add(p.phone);
+        results.push(p);
+      }
+    }
+
+    // 4. Nếu có từ khóa tìm kiếm (search)
+    let filtered = results;
+    if (search && String(search).trim()) {
+      const q = String(search).toLowerCase().trim();
+      filtered = results.filter((item) => {
+        return (
+          (item.name && item.name.toLowerCase().includes(q)) ||
+          (item.department && item.department.toLowerCase().includes(q)) ||
+          (item.address && item.address.toLowerCase().includes(q)) ||
+          (item.areaName && item.areaName.toLowerCase().includes(q)) ||
+          (item.phone && item.phone.includes(q))
+        );
+      });
+    }
+
+    return filtered;
   }
 }
 

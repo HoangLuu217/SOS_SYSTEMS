@@ -62,6 +62,21 @@ const initSocket = (httpServer) => {
       }
     });
 
+    // Luồng hiệp đồng 2 giai đoạn: Ca-nô yêu cầu xe đường bộ đón bờ
+    socket.on('rescuer:request_shore_handoff', (data) => {
+      if (data) {
+        console.log(`⚡ [Socket.IO] Nhận yêu cầu xe đón bờ từ Ca-nô:`, data);
+        io.emit('sos:shore_handoff_requested', data);
+      }
+    });
+
+    socket.on('dispatcher:assign_shore_handoff', (data) => {
+      if (data) {
+        console.log(`🚑 [Socket.IO] Điều xe đón bờ thành công:`, data);
+        io.emit('sos:shore_handoff_assigned', data);
+      }
+    });
+
     socket.on('disconnect', (reason) => {
       console.log(`🔌 [Socket.IO] Client ngắt kết nối: ${socket.id} (Lý do: ${reason})`);
     });
@@ -96,6 +111,7 @@ const emitSosCreated = (sosData) => {
     const areaKey = typeof sosData.areaId === 'object' ? sosData.areaId._id : sosData.areaId;
     io.to(`area:${areaKey}`).emit('sos:area:created', sosData);
   }
+  io.emit('sos:sync');
   console.log(`📢 [Socket.IO] Đã phát sự kiện SOS mới: ${sosData.sosCode || sosData._id}`);
 
   try {
@@ -125,6 +141,7 @@ const emitSosUpdated = (sosData) => {
   if (!io) return;
   io.emit('sos:updated', sosData);
   io.emit('sos:status_changed', sosData);
+  io.emit('sos:sync');
   console.log(`📢 [Socket.IO] Đã phát sự kiện cập nhật SOS: ${sosData.sosCode || sosData._id} -> Trạng thái: ${sosData.status}`);
 
   try {
@@ -146,9 +163,33 @@ const emitSosUpdated = (sosData) => {
   } catch (err) {}
 };
 
+/**
+ * Helper: Phát sự kiện xóa yêu cầu SOS
+ * @param {string} sosId
+ */
+const emitSosDeleted = (sosId) => {
+  if (!io) return;
+  io.emit('sos:deleted', { sosId });
+  io.emit('sos:sync');
+  console.log(`📢 [Socket.IO] Đã phát sự kiện xóa SOS: ${sosId}`);
+
+  try {
+    const eventBus = require('./services/eventBus');
+    eventBus.emit('notification_event', {
+      action: 'BROADCAST',
+      data: {
+        type: 'SOS_SYNC',
+        action: 'DELETED',
+        sosId,
+      },
+    });
+  } catch (err) {}
+};
+
 module.exports = {
   initSocket,
   getIO,
   emitSosCreated,
   emitSosUpdated,
+  emitSosDeleted,
 };

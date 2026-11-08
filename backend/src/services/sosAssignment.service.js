@@ -7,9 +7,85 @@ const {
   RescueTeam,
   User,
   Vehicle,
+  Equipment,
+  Notification,
 } = require('../models');
 const { emitSosUpdated } = require('../socket');
 const ApiError = require('../utils/apiError');
+
+/**
+ * Hàm trừ trực tiếp số lượng vật tư / trang thiết bị trong kho (Collection Equipment)
+ */
+async function deductSuppliesFromEquipment(suppliesList, contextNote = '') {
+  if (!Array.isArray(suppliesList) || suppliesList.length === 0) return;
+
+  for (const item of suppliesList) {
+    const rawQty = item.quantity || item.allocatedQuantity;
+    const qty = parseInt(rawQty, 10);
+    if (!qty || qty <= 0) continue;
+
+    const eqId = item.equipmentId || item.supplyId || item._id;
+    let eq = null;
+
+    // 1. Tìm theo ObjectId nếu hợp lệ
+    if (eqId && mongoose.Types.ObjectId.isValid(eqId)) {
+      eq = await Equipment.findById(eqId);
+    }
+
+    // 2. Tìm theo tên chính xác hoặc không phân biệt hoa thường
+    if (!eq && item.name) {
+      const cleanName = item.name.trim();
+      const escaped = cleanName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      eq = await Equipment.findOne({
+        name: new RegExp('^' + escaped + '$', 'i'),
+        quantity: { $gte: qty },
+      });
+      if (!eq) {
+        eq = await Equipment.findOne({
+          name: new RegExp('^' + escaped + '$', 'i'),
+        });
+      }
+      if (!eq) {
+        eq = await Equipment.findOne({
+          name: new RegExp(escaped, 'i'),
+        });
+      }
+    }
+
+    // 3. Tìm theo serialNumber hoặc mã vật tư
+    if (!eq && eqId) {
+      eq = await Equipment.findOne({
+        $or: [
+          { serialNumber: String(eqId).trim().toUpperCase() },
+          { name: new RegExp(String(eqId).trim(), 'i') },
+        ],
+      });
+    }
+
+    if (eq) {
+      const beforeQty = eq.quantity;
+      eq.quantity = Math.max(0, eq.quantity - qty);
+      const log = '[Xuất cấp: -' + qty + ' ' + (eq.unit || 'món') + (contextNote ? ' (' + contextNote + ')' : '') + ']';
+      eq.note = eq.note ? eq.note + ' | ' + log : log;
+      if (eq.quantity === 0 && eq.supplyType === 'CONSUMABLE') {
+        eq.status = 'DAMAGED'; // Hết tồn kho
+      }
+      await eq.save();
+      console.log('📦 [Equipment] Đã trừ kho vật tư "' + eq.name + '": ' + beforeQty + ' -> ' + eq.quantity + ' (-' + qty + ')');
+    } else {
+      console.warn('⚠️ [Equipment] Không tìm thấy vật tư trong kho để trừ:', item);
+    }
+  }
+
+  try {
+    const { getIO } = require('../socket');
+    const io = getIO();
+    if (io) {
+      io.emit('equipment:updated');
+      io.emit('equipment:change');
+    }
+  } catch (e) {}
+}
 
 class SosAssignmentService {
   /**
@@ -65,6 +141,27 @@ class SosAssignmentService {
     const rescuer = await User.findById(validRescuerId);
     if (!rescuer) {
       throw new ApiError(404, 'Không tìm thấy cứu hộ viên (Rescuer)');
+    }
+
+    // 4.1. Quy tắc tác chiến: 1 nhóm/đội chỉ được phép làm 1 nhiệm vụ tại một thời điểm
+    const activeAssignment = await SosAssignment.findOne({
+      $or: [
+        { rescueTeamId: team._id },
+        { teamId: team._id },
+        { rescuerId: rescuer._id },
+      ],
+      status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+    }).populate('sosRequestId');
+
+    if (activeAssignment) {
+      const activeCode =
+        activeAssignment.sosRequestId?.sosCode ||
+        activeAssignment.sosId?.sosCode ||
+        'đang thực hiện';
+      throw new ApiError(
+        400,
+        `Đội cứu hộ "${team.name}" đang thực hiện nhiệm vụ (${activeCode}). Mỗi đội chỉ được phép thực hiện 1 nhiệm vụ tại một thời điểm! Vui lòng hoàn thành nhiệm vụ hiện tại trước khi phân công nhiệm vụ mới.`
+      );
     }
 
     // 5. Kiểm tra Vehicle tồn tại (nếu có truyền hoặc lấy theo Đội)
@@ -129,43 +226,136 @@ class SosAssignmentService {
       emitSosUpdated(sos);
     }
 
+    // Trừ kho vật tư ban đầu nếu có cấp khi giao nhiệm vụ
+    if (Array.isArray(supplies) && supplies.length > 0) {
+      try {
+        await deductSuppliesFromEquipment(supplies, "Giao nhiệm vụ ca " + (sos.sosCode || sos._id));
+      } catch (e) {
+        console.warn("Lỗi trừ kho vật tư khi giao nhiệm vụ:", e);
+      }
+    }
+
+    // Tìm danh sách tất cả cán bộ, chiến sĩ và đội trưởng trong đội để gửi thông báo
+    const targetUserIds = new Set();
+    if (rescuer._id) targetUserIds.add(rescuer._id.toString());
+    try {
+      const teamDoc = await RescueTeam.findById(assignment.rescueTeamId).select('leaderId members');
+      if (teamDoc?.leaderId) targetUserIds.add(teamDoc.leaderId.toString());
+      (teamDoc?.members || []).forEach((m) => {
+        if (m.rescuerId) targetUserIds.add(m.rescuerId.toString());
+      });
+    } catch (_) {}
+
+    const assignPayload = assignment.toObject ? assignment.toObject() : { ...assignment };
+    assignPayload.targetUserIds = Array.from(targetUserIds);
+
     // Phát sự kiện Realtime Socket.IO & SSE thông báo cho Cứu Hộ Viên (Nổ nhiệm vụ GrabDriver)
     try {
       const { getIO } = require('../socket');
       const io = getIO();
       if (io) {
-        io.emit('assignment:created', assignment);
-        io.emit('assignment:new', assignment);
-        io.to(`user_${rescuer._id}`).emit('assignment:assigned', assignment);
+        io.emit('assignment:created', assignPayload);
+        io.emit('assignment:new', assignPayload);
+        io.emit('sos:sync');
+        for (const uid of targetUserIds) {
+          io.to(`user_${uid}`).emit('assignment:assigned', assignPayload);
+          io.to(`user_${uid}`).emit('sos:sync');
+        }
       }
 
+      const sosCodeStr = sos.sosCode || (sos._id ? `#SOS-${sos._id.toString().slice(-4)}` : 'mới');
+      const victimsCount = sos.people || 1;
+      const addrStr = sos.address || 'Khu vực ngập lụt';
+      const notifTitle = `🚨 LỆNH ĐIỀU ĐỘNG CỨU HỘ: ${sosCodeStr}`;
+      const notifContent = `Ban chỉ huy điều động ứng cứu khẩn cấp ca ${sosCodeStr} tại ${addrStr} (${victimsCount} người cần cứu). Khẩn trương tiếp cận!`;
+
+      // 1. Gửi Realtime SSE & In-App Notification CHỈ cho cán bộ, đội trưởng và thành viên đội được phân công
       const eventBus = require('./eventBus');
-      eventBus.emit('notification_event', {
-        action: 'BROADCAST',
-        data: {
-          type: 'SOS_SYNC',
-          action: 'ASSIGNED',
-          sosId: sos._id,
-          sosCode: sos.sosCode,
-          status: 'ASSIGNED',
-          assignmentId: assignment._id,
-          rescuerId: rescuer._id,
-        },
-      });
-      eventBus.emit('notification_event', {
-        action: 'USER',
-        userId: rescuer._id.toString(),
-        title: '🚨 LỆNH ĐIỀU ĐỘNG CỨU HỘ MỚI',
-        content: `Bạn vừa được Ban chỉ huy điều động ứng cứu khẩn cấp ca ${sos.sosCode || sos._id}!`,
-        data: {
-          type: 'SOS_SYNC',
-          action: 'ASSIGNED',
-          sosId: sos._id,
-          sosCode: sos.sosCode,
-          status: 'ASSIGNED',
-          assignmentId: assignment._id,
-        },
-      });
+
+      for (const uid of targetUserIds) {
+        eventBus.emit('notification_event', {
+          action: 'USER',
+          userId: uid,
+          title: notifTitle,
+          content: notifContent,
+          data: {
+            title: notifTitle,
+            content: notifContent,
+            type: 'ALERT',
+            action: 'ASSIGNED',
+            priority: 'CRITICAL',
+            sosId: sos._id,
+            sosCode: sos.sosCode,
+            status: 'ASSIGNED',
+            assignmentId: assignment._id,
+            address: addrStr,
+            people: victimsCount,
+          },
+        });
+
+        // Lưu vào CSDL bảng Notifications để lưu vết lịch sử
+        try {
+          await Notification.create({
+            userId: uid,
+            createdBy: assignerId || null,
+            areaId: sos.areaId || null,
+            areaName: sos.areaName || null,
+            sosId: sos._id,
+            type: 'ALERT',
+            title: notifTitle,
+            content: notifContent,
+            priority: 'CRITICAL',
+            data: {
+              type: 'SOS_SYNC',
+              action: 'ASSIGNED',
+              sosId: sos._id,
+              assignmentId: assignment._id,
+            },
+          });
+        } catch (_) {}
+      }
+
+      // 2. Gửi Push Notification ra màn hình khóa điện thoại (Expo Push Service)
+      try {
+        const targetUsers = await User.find({
+          _id: { $in: Array.from(targetUserIds) },
+          $or: [
+            { pushToken: { $exists: true, $ne: null } },
+            { 'citizen.pushToken': { $exists: true, $ne: null } },
+          ],
+        }).select('pushToken citizen.pushToken');
+
+        const pushTokens = [];
+        targetUsers.forEach((u) => {
+          if (u.pushToken && typeof u.pushToken === 'string' && u.pushToken.trim()) {
+            pushTokens.push(u.pushToken.trim());
+          }
+          if (u.citizen?.pushToken && typeof u.citizen.pushToken === 'string' && u.citizen.pushToken.trim()) {
+            pushTokens.push(u.citizen.pushToken.trim());
+          }
+        });
+
+        const uniqueTokens = [...new Set(pushTokens)];
+        if (uniqueTokens.length > 0) {
+          const { sendExpoPushNotification } = require('../utils/expoPush');
+          await sendExpoPushNotification({
+            tokens: uniqueTokens,
+            title: notifTitle,
+            body: notifContent,
+            priority: 'CRITICAL',
+            sound: 'default',
+            channelId: 'emergency-alerts',
+            data: {
+              type: 'SOS_SYNC',
+              action: 'ASSIGNED',
+              sosId: sos._id.toString(),
+              assignmentId: assignment._id.toString(),
+            },
+          });
+        }
+      } catch (pushErr) {
+        console.warn('Lỗi gửi push notification cho đội cứu hộ:', pushErr);
+      }
     } catch (err) {
       console.warn('Lỗi phát socket/SSE cho nhiệm vụ mới:', err);
     }
@@ -324,6 +514,22 @@ class SosAssignmentService {
       );
     }
 
+    // Chỉ đội trưởng (hoặc cán bộ/admin) mới có quyền tiếp nhận lệnh điều động
+    if (currentUser && assignment.rescueTeamId) {
+      const team = await RescueTeam.findById(assignment.rescueTeamId).select('leaderId');
+      if (team && team.leaderId) {
+        const currentUserId = (currentUser._id || currentUser)?.toString();
+        const isLeader = team.leaderId.toString() === currentUserId;
+        const isOfficerOrAdmin = currentUser.roles?.some((r) =>
+          ['ADMIN', 'SUPER_ADMIN', 'DISPATCHER', 'OFFICER', 'COORDINATOR'].includes(r)
+        );
+        const isDirectRescuer = assignment.rescuerId?.toString() === currentUserId;
+        if (!isLeader && !isOfficerOrAdmin && !isDirectRescuer) {
+          throw new ApiError(403, 'Chỉ đội trưởng mới có quyền xác nhận tiếp nhận lệnh điều động');
+        }
+      }
+    }
+
     assignment.status = 'ACCEPTED';
     assignment.acceptedAt = new Date();
     await assignment.save();
@@ -335,21 +541,40 @@ class SosAssignmentService {
         .populate('citizenId', 'fullName phone avatarUrl email address')
         .populate('areaId', 'name code');
       if (sos) {
-        const oldStatus = sos.status;
-        sos.status = 'ACCEPTED';
-        await sos.save();
+        if (assignment.missionType === 'SHORE_HANDOFF') {
+          if (sos.shoreHandoff) {
+            sos.shoreHandoff.status = 'ASSIGNED';
+            await sos.save();
+          }
+        } else {
+          const oldStatus = sos.status;
+          sos.status = 'ACCEPTED';
+          await sos.save();
+
+          try {
+            await SosStatusHistory.create({
+              sosId: sos._id,
+              oldStatus,
+              newStatus: 'ACCEPTED',
+              changedBy: currentUser?._id || assignment.rescuerId,
+              note: 'Cứu hộ viên đã tiếp nhận nhiệm vụ',
+            });
+          } catch (err) {}
+        }
 
         try {
-          await SosStatusHistory.create({
-            sosId: sos._id,
-            oldStatus,
-            newStatus: 'ACCEPTED',
-            changedBy: currentUser?._id || assignment.rescuerId,
-            note: 'Cứu hộ viên đã tiếp nhận nhiệm vụ',
-          });
-        } catch (err) {}
+          await assignment.populate([
+            { path: 'rescueTeamId', select: 'name code phone leaderId' },
+            { path: 'rescuerId', select: 'fullName phone avatarUrl' },
+            { path: 'vehicleId', select: 'plateNumber type capacity' },
+            { path: 'authorityOrganizationId', select: 'name code' },
+          ]);
+        } catch (popErr) {}
 
-        emitSosUpdated(sos);
+        const sosObj = sos.toObject ? sos.toObject() : { ...sos };
+        sosObj.assignment = assignment.toObject ? assignment.toObject() : assignment;
+        sosObj.assignmentId = assignment._id;
+        emitSosUpdated(sosObj);
       }
     }
 
@@ -410,8 +635,8 @@ class SosAssignmentService {
     // Định nghĩa các luồng chuyển trạng thái hợp lệ
     const VALID_TRANSITIONS = {
       PENDING: ['ACCEPTED', 'REJECTED', 'CANCELLED'],
-      ACCEPTED: ['DISPATCHED', 'EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'CANCELLED'],
-      DISPATCHED: ['EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'CANCELLED'],
+      ACCEPTED: ['DISPATCHED', 'EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'RESCUING', 'COMPLETED', 'CANCELLED'],
+      DISPATCHED: ['EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'RESCUING', 'COMPLETED', 'CANCELLED'],
       EN_ROUTE: ['ARRIVED', 'IN_PROGRESS', 'RESCUING', 'COMPLETED', 'CANCELLED'],
       ON_THE_WAY: ['ARRIVED', 'IN_PROGRESS', 'RESCUING', 'COMPLETED', 'CANCELLED'],
       ARRIVED: ['IN_PROGRESS', 'RESCUING', 'COMPLETED', 'CANCELLED'],
@@ -420,10 +645,26 @@ class SosAssignmentService {
       COMPLETED: [],
       REJECTED: [],
       CANCELLED: [],
-      ASSIGNED: ['ACCEPTED', 'DISPATCHED', 'EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'CANCELLED'],
+      ASSIGNED: ['ACCEPTED', 'DISPATCHED', 'EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'RESCUING', 'COMPLETED', 'CANCELLED'],
     };
 
     if (currentStatus === targetStatus) {
+      let changed = false;
+      if (extraData?.proofImages && Array.isArray(extraData.proofImages) && extraData.proofImages.length > 0) {
+        assignment.proofImages = [
+          ...new Set([...(assignment.proofImages || []), ...extraData.proofImages]),
+        ];
+        changed = true;
+      }
+      if (extraData?.actualRecipient) {
+        assignment.actualRecipient = String(extraData.actualRecipient).trim();
+        changed = true;
+      }
+      if (note && !assignment.note?.includes(note)) {
+        assignment.note = assignment.note ? `${assignment.note} | ${note}` : note;
+        changed = true;
+      }
+      if (changed) await assignment.save();
       return assignment;
     }
 
@@ -433,6 +674,25 @@ class SosAssignmentService {
         400,
         `Không thể chuyển đổi trạng thái phân công từ '${currentStatus}' sang '${targetStatus}'.`
       );
+    }
+
+    // Kiểm tra quyền hạn: Chỉ đội trưởng mới được nhận lệnh (ACCEPTED) hoặc từ chối (REJECTED)
+    if (['ACCEPTED', 'REJECTED'].includes(targetStatus) && currentUser && assignment.rescueTeamId) {
+      const team = await RescueTeam.findById(assignment.rescueTeamId).select('leaderId');
+      if (team && team.leaderId) {
+        const currentUserId = (currentUser._id || currentUser)?.toString();
+        const isLeader = team.leaderId.toString() === currentUserId;
+        const isOfficerOrAdmin = currentUser.roles?.some((r) =>
+          ['ADMIN', 'SUPER_ADMIN', 'DISPATCHER', 'OFFICER', 'COORDINATOR'].includes(r)
+        );
+        const isDirectRescuer = assignment.rescuerId?.toString() === currentUserId;
+        if (!isLeader && !isOfficerOrAdmin && !isDirectRescuer) {
+          throw new ApiError(
+            403,
+            `Chỉ đội trưởng mới có quyền ${targetStatus === 'ACCEPTED' ? 'xác nhận tiếp nhận' : 'từ chối'} lệnh điều động`
+          );
+        }
+      }
     }
 
     // Bắt buộc minh bạch: Nhiệm vụ xuất cấp cứu trợ phải có ít nhất 1 ảnh bằng chứng bàn giao
@@ -510,30 +770,69 @@ class SosAssignmentService {
         .populate('citizenId', 'fullName phone avatarUrl email address')
         .populate('areaId', 'name code');
       if (sos) {
-        const oldStatus = sos.status;
-        sos.status = targetSosStatus;
-        if (targetSosStatus === 'COMPLETED' || targetSosStatus === 'RESOLVED') {
-          sos.resolvedAt = now;
+        if (assignment.missionType === 'SHORE_HANDOFF') {
+          if (sos.shoreHandoff) {
+            if (targetStatus === 'COMPLETED') {
+              sos.shoreHandoff.status = 'COMPLETED';
+              sos.shoreHandoff.completedAt = now;
+              if (assignment.vehicleId) {
+                await Vehicle.findByIdAndUpdate(assignment.vehicleId, { status: 'AVAILABLE' });
+              }
+            } else if (targetStatus === 'CANCELLED' || targetStatus === 'REJECTED') {
+              sos.shoreHandoff.status = 'REQUESTED';
+              if (assignment.vehicleId) {
+                await Vehicle.findByIdAndUpdate(assignment.vehicleId, { status: 'AVAILABLE' });
+              }
+            }
+            await sos.save();
+          }
+        } else {
+          const oldStatus = sos.status;
+          sos.status = targetSosStatus;
+          if (targetSosStatus === 'COMPLETED' || targetSosStatus === 'RESOLVED' || targetSosStatus === 'CANCELLED') {
+            sos.resolvedAt = now;
+            if (sos.shoreHandoff) {
+              if (targetSosStatus === 'COMPLETED' || targetSosStatus === 'RESOLVED') {
+                sos.shoreHandoff.status = 'COMPLETED';
+                sos.shoreHandoff.completedAt = sos.shoreHandoff.completedAt || now;
+              }
+              if (sos.shoreHandoff?.assignedVehicleId && mongoose.isValidObjectId(sos.shoreHandoff.assignedVehicleId)) {
+                await Vehicle.findByIdAndUpdate(sos.shoreHandoff.assignedVehicleId, { status: 'AVAILABLE' });
+              }
+            }
+          }
+          if (extraData?.proofImages && Array.isArray(extraData.proofImages) && extraData.proofImages.length > 0) {
+            sos.proofImages = [
+              ...new Set([...(sos.proofImages || []), ...extraData.proofImages]),
+            ];
+          }
+          await sos.save();
+
+          try {
+            await SosStatusHistory.create({
+              sosId: sos._id,
+              oldStatus,
+              newStatus: targetSosStatus,
+              changedBy: currentUser?._id || assignment.rescuerId,
+              note: note || `Cứu hộ viên cập nhật tiến trình: ${targetStatus}`,
+              images: extraData?.proofImages || [],
+            });
+          } catch (err) {}
         }
-        if (extraData?.proofImages && Array.isArray(extraData.proofImages) && extraData.proofImages.length > 0) {
-          sos.images = [
-            ...new Set([...(sos.images || []), ...extraData.proofImages]),
-          ];
-        }
-        await sos.save();
 
         try {
-          await SosStatusHistory.create({
-            sosId: sos._id,
-            oldStatus,
-            newStatus: targetSosStatus,
-            changedBy: currentUser?._id || assignment.rescuerId,
-            note: note || `Cứu hộ viên cập nhật tiến trình: ${targetStatus}`,
-            images: extraData?.proofImages || [],
-          });
-        } catch (err) {}
+          await assignment.populate([
+            { path: 'rescueTeamId', select: 'name code phone leaderId' },
+            { path: 'rescuerId', select: 'fullName phone avatarUrl' },
+            { path: 'vehicleId', select: 'plateNumber type capacity' },
+            { path: 'authorityOrganizationId', select: 'name code' },
+          ]);
+        } catch (popErr) {}
 
-        emitSosUpdated(sos);
+        const sosObj = sos.toObject ? sos.toObject() : { ...sos };
+        sosObj.assignment = assignment.toObject ? assignment.toObject() : assignment;
+        sosObj.assignmentId = assignment._id;
+        emitSosUpdated(sosObj);
       }
     }
 
@@ -613,6 +912,35 @@ class SosAssignmentService {
       assignment.note = note ? String(note).trim() : null;
     }
 
+    // Kiểm tra đội hoặc nhân sự nhận bàn giao có đang bận làm nhiệm vụ khác không
+    if (rescueTeamId || rescuerId) {
+      const busyOrFilters = [];
+      if (rescueTeamId) {
+        busyOrFilters.push({ rescueTeamId: assignment.rescueTeamId }, { teamId: assignment.rescueTeamId });
+      }
+      if (rescuerId) {
+        busyOrFilters.push({ rescuerId: assignment.rescuerId });
+      }
+      if (busyOrFilters.length > 0) {
+        const busyAssignment = await SosAssignment.findOne({
+          _id: { $ne: assignment._id },
+          $or: busyOrFilters,
+          status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+        }).populate('sosRequestId');
+
+        if (busyAssignment) {
+          const activeCode =
+            busyAssignment.sosRequestId?.sosCode ||
+            busyAssignment.sosId?.sosCode ||
+            'nhiệm vụ khác';
+          throw new ApiError(
+            400,
+            `Đội cứu hộ hoặc nhân sự được bàn giao đang thực hiện nhiệm vụ (${activeCode}). Mỗi đội chỉ được phép thực hiện 1 nhiệm vụ tại một thời điểm!`
+          );
+        }
+      }
+    }
+
     await assignment.save();
 
     const sosId = assignment.sosRequestId || assignment.sosId;
@@ -636,16 +964,42 @@ class SosAssignmentService {
       throw new ApiError(400, 'ID phân công không phải là ObjectId hợp lệ');
     }
 
-    const assignment = await SosAssignment.findById(id);
+    let assignment = await SosAssignment.findById(id);
     if (!assignment) {
+      assignment = await SosAssignment.findOne({
+        $or: [{ sosRequestId: id }, { sosId: id }],
+        status: { $nin: ['CANCELLED', 'REJECTED'] },
+      });
+    }
+    if (!assignment) {
+      // Tìm xem có assignment nào đã CANCELLED trước đó không để trả về mà không ném lỗi 404
+      const existing = await SosAssignment.findOne({
+        $or: [{ _id: id }, { sosRequestId: id }, { sosId: id }],
+      });
+      if (existing) return existing;
       throw new ApiError(404, 'Không tìm thấy phân công cứu hộ (Assignment)');
     }
 
-    if (['COMPLETED', 'CANCELLED'].includes(assignment.status)) {
+    if (assignment.status === 'CANCELLED') {
+      return assignment;
+    }
+
+    if (assignment.status === 'COMPLETED') {
       throw new ApiError(
         400,
-        `Không thể hủy phân công đã ở trạng thái '${assignment.status}'`
+        'Nhiệm vụ cứu hộ đã hoàn tất thành công, không thể hủy điều động!'
       );
+    }
+
+    const targetSosIdCheck = assignment.sosRequestId || assignment.sosId;
+    if (targetSosIdCheck) {
+      const sosCheck = await SosRequest.findById(targetSosIdCheck);
+      if (sosCheck && sosCheck.status === 'COMPLETED') {
+        throw new ApiError(
+          400,
+          'Sự cố cứu nạn đã hoàn tất thành công, không thể hủy điều động!'
+        );
+      }
     }
 
     assignment.status = 'CANCELLED';
@@ -689,22 +1043,30 @@ class SosAssignmentService {
           status: 'CANCELLED',
         };
         io.emit('assignment:cancelled', payload);
+        io.emit('assignment:deleted', payload);
         io.emit('assignment:updated', payload);
+        io.emit('sos:sync');
         if (assignment.rescuerId) {
           io.to(`user_${assignment.rescuerId}`).emit('assignment:cancelled', payload);
+          io.to(`user_${assignment.rescuerId}`).emit('sos:sync');
         }
       }
 
       const eventBus = require('./eventBus');
       if (assignment.rescuerId) {
+        const cancelTitle = `⚠️ LỆNH ĐIỀU ĐỘNG ĐÃ BỊ HỦY`;
+        const cancelContent = `Ban chỉ huy đã thu hồi / hủy lệnh điều động cho ca cứu nạn.`;
         eventBus.emit('notification_event', {
           action: 'USER',
           userId: assignment.rescuerId.toString(),
-          title: '⚠️ LỆNH ĐIỀU ĐỘNG ĐÃ BỊ HỦY',
-          content: `Ban chỉ huy đã thu hồi / hủy lệnh điều động cho ca cứu nạn.`,
+          title: cancelTitle,
+          content: cancelContent,
           data: {
-            type: 'SOS_SYNC',
+            title: cancelTitle,
+            content: cancelContent,
+            type: 'ALERT',
             action: 'CANCELLED',
+            priority: 'HIGH',
             assignmentId: assignment._id.toString(),
             status: 'CANCELLED',
           },
@@ -790,6 +1152,179 @@ class SosAssignmentService {
       .populate('areaId', 'name code');
 
     return { assignment, sos: updatedSos };
+  }
+
+  /**
+   * Đội cứu hộ gửi yêu cầu chi viện vật tư từ hiện trường
+   */
+  async requestSupplies(userId, { assignmentId, sosId, items, urgency, note }) {
+    let assignment = null;
+    if (assignmentId && mongoose.Types.ObjectId.isValid(assignmentId)) {
+      assignment = await SosAssignment.findById(assignmentId);
+    }
+    if (!assignment && sosId && mongoose.Types.ObjectId.isValid(sosId)) {
+      assignment = await SosAssignment.findOne({
+        $or: [{ sosRequestId: sosId }, { sosId: sosId }],
+        status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+      });
+    }
+    if (!assignment) {
+      throw new ApiError(404, 'Không tìm thấy phiên phân công tác chiến hợp lệ');
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new ApiError(400, 'Danh sách vật tư yêu cầu không được rỗng');
+    }
+
+    const newRequests = items.map((it) => ({
+      name: it.name,
+      quantity: Number(it.quantity) || 1,
+      unit: it.unit || 'món',
+      urgency: urgency || 'HIGH',
+      note: note || null,
+      status: 'PENDING',
+      requestedAt: new Date(),
+    }));
+
+    if (!assignment.requestedSupplies) {
+      assignment.requestedSupplies = [];
+    }
+    assignment.requestedSupplies.push(...newRequests);
+    await assignment.save();
+
+
+    const populated = await SosAssignment.findById(assignment._id)
+      .populate('sosRequestId', 'sosCode priority emergencyType address description')
+      .populate('rescueTeamId', 'name phone')
+      .populate('rescuerId', 'fullName phone');
+
+    // Realtime notification
+    try {
+      const io = require('../socket').getIO();
+      if (io) {
+        io.emit('assignment:supply_requested', {
+          assignmentId: assignment._id,
+          sosId: assignment.sosRequestId,
+          sosCode: populated?.sosRequestId?.sosCode,
+          teamName: populated?.rescueTeamId?.name,
+          requestedSupplies: assignment.requestedSupplies,
+        });
+        io.emit('notification:new', {
+          title: `CHI VIỆN VẬT TƯ: ${populated?.rescueTeamId?.name || 'Đội Cứu Hộ'}`,
+          message: `Đội cứu hộ yêu cầu cấp thêm: ${newRequests.map((r) => `${r.name} (${r.quantity} ${r.unit})`).join(', ')}`,
+          type: 'WARNING',
+        });
+        io.emit('sos:sync');
+      }
+    } catch (e) {}
+
+    return populated || assignment;
+  }
+
+  /**
+   * Ban chỉ huy phê duyệt & xuất cấp vật tư chi viện cho đội
+   */
+  async approveSupplies(assignmentId, { note, officerId } = {}) {
+    const assignment = await SosAssignment.findById(assignmentId);
+    if (!assignment) {
+      throw new ApiError(404, 'Không tìm thấy phân công cứu hộ');
+    }
+
+    const pendingRequests = (assignment.requestedSupplies || []).filter((s) => s.status === 'PENDING');
+    if (pendingRequests.length === 0) {
+      throw new ApiError(400, 'Không có yêu cầu chi viện vật tư nào đang chờ duyệt');
+    }
+
+    const now = new Date();
+    pendingRequests.forEach((req) => {
+      req.status = 'APPROVED';
+      req.respondedAt = now;
+      req.responseNote = note || 'Ban chỉ huy đã phê duyệt xuất kho tiếp tế';
+
+      // Hợp nhất vào danh sách supplies được giao theo xe
+      const existing = (assignment.supplies || []).find((s) => s.name?.toLowerCase() === req.name?.toLowerCase());
+      if (existing) {
+        existing.quantity = (existing.quantity || 0) + req.quantity;
+      } else {
+        if (!assignment.supplies) assignment.supplies = [];
+        assignment.supplies.push({
+          name: req.name,
+          quantity: req.quantity,
+          unit: req.unit || 'món',
+        });
+      }
+    });
+
+    await assignment.save();
+
+    // Trừ trực tiếp số lượng vật tư trong kho (Collection Equipment) cho các món vừa duyệt
+    try {
+      const approvedItemsToDeduct = pendingRequests.map((r) => ({
+        name: r.name,
+        quantity: r.quantity,
+        unit: r.unit || "món",
+      }));
+      await deductSuppliesFromEquipment(
+        approvedItemsToDeduct,
+        "Chi viện bổ sung ca " + (assignment.sosRequestId?.sosCode || assignment.sosRequestId || assignment._id)
+      );
+    } catch (e) {
+      console.warn("Lỗi trừ kho vật tư khi duyệt chi viện:", e);
+    }
+
+    const populated = await SosAssignment.findById(assignment._id)
+      .populate('sosRequestId', 'sosCode priority emergencyType address description')
+      .populate('rescueTeamId', 'name phone')
+      .populate('rescuerId', 'fullName phone');
+
+    try {
+      const io = require('../socket').getIO();
+      if (io) {
+        io.emit('assignment:supply_approved', {
+          assignmentId: assignment._id,
+          sosId: assignment.sosRequestId,
+          supplies: assignment.supplies,
+          requestedSupplies: assignment.requestedSupplies,
+        });
+        io.emit('sos:sync');
+      }
+    } catch (e) {}
+
+    return populated || assignment;
+  }
+
+  /**
+   * Ban chỉ huy từ chối yêu cầu chi viện vật tư
+   */
+  async rejectSupplies(assignmentId, { note, officerId } = {}) {
+    const assignment = await SosAssignment.findById(assignmentId);
+    if (!assignment) {
+      throw new ApiError(404, 'Không tìm thấy phân công cứu hộ');
+    }
+
+    const pendingRequests = (assignment.requestedSupplies || []).filter((s) => s.status === 'PENDING');
+    const now = new Date();
+    pendingRequests.forEach((req) => {
+      req.status = 'REJECTED';
+      req.respondedAt = now;
+      req.responseNote = note || 'Kho địa phương chưa thể đáp ứng';
+    });
+
+    await assignment.save();
+
+    try {
+      const io = require('../socket').getIO();
+      if (io) {
+        io.emit('assignment:supply_rejected', {
+          assignmentId: assignment._id,
+          sosId: assignment.sosRequestId,
+          requestedSupplies: assignment.requestedSupplies,
+        });
+        io.emit('sos:sync');
+      }
+    } catch (e) {}
+
+    return assignment;
   }
 }
 

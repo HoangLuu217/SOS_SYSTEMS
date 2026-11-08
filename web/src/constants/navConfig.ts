@@ -20,11 +20,11 @@ export const NAV_TITLES: Record<NavItemKey, NavMeta> = {
   },
   rescuers: {
     title: 'ĐỘI NGŨ CỨU NẠN ĐỊA PHƯƠNG',
-    desc: 'Quản lý lực lượng cứu hộ, trạng thái sẵn sàng và khu vực hoạt động',
+    desc: 'Quản lý nhân lực, phương tiện và trạng thái sẵn sàng của các đội cứu hộ trong địa bàn phụ trách.',
   },
   rescuers_approval: {
     title: 'DUYỆT HỒ SƠ ĐĂNG KÝ CỨU HỘ',
-    desc: 'Thẩm định hồ sơ đăng ký Cứu hộ viên, đối soát CCCD, kỹ năng và phê duyệt vào hệ thống',
+    desc: 'Thẩm định thông tin cá nhân, xác minh giấy tờ và phê duyệt tư cách nhân viên cứu hộ.',
   },
   resources: {
     title: 'PHƯƠNG TIỆN & VẬT TƯ',

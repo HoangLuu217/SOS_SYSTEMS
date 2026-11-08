@@ -27,10 +27,10 @@ export const CitizenSosModal = ({ isOpen, onClose, onSubmitSos }: Props) => {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number }>({
-    lat: 16.0465,
-    lng: 108.2178,
+    lat: 16.0544,
+    lng: 108.2022,
   });
-  const [locationName, setLocationName] = useState('Đường Tiểu La, Phường Hòa Cường, Q. Hải Châu, Đà Nẵng');
+  const [locationName, setLocationName] = useState('');
 
   // Field 2: Loại khẩn cấp (Emergency Type - Bắt buộc - Mặc định MEDICAL)
   const [emergencyType, setEmergencyType] = useState<EmergencyType>('MEDICAL');
@@ -45,8 +45,8 @@ export const CitizenSosModal = ({ isOpen, onClose, onSubmitSos }: Props) => {
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [photoName, setPhotoName] = useState<string>('');
 
-  const [citizenName, setCitizenName] = useState('Người dân tại hiện trường');
-  const [citizenPhone, setCitizenPhone] = useState('0905-123-456');
+  const [citizenName, setCitizenName] = useState('');
+  const [citizenPhone, setCitizenPhone] = useState('');
 
   // Request GPS automatically when modal opens
   useEffect(() => {
@@ -60,22 +60,16 @@ export const CitizenSosModal = ({ isOpen, onClose, onSubmitSos }: Props) => {
         (pos) => {
           const lat = Number(pos.coords.latitude.toFixed(4));
           const lng = Number(pos.coords.longitude.toFixed(4));
-          // If browser GPS is within local sector (Hòa Cường: 16.02-16.065, 108.19-108.235), use it; otherwise use local center
-          if (lat >= 16.02 && lat <= 16.065 && lng >= 108.19 && lng <= 108.235) {
-            setCoords({ lat, lng });
-          } else {
-            setCoords({ lat: 16.0465, lng: 108.2178 });
-          }
+          setCoords({ lat, lng });
           setGpsLoading(false);
         },
         (err) => {
-          // Fallback to default Da Nang tactical center if denied or unavailable
-          console.warn('Geolocation warning, fallback to default Da Nang center:', err.message);
+          console.warn('Geolocation warning:', err.message);
           setGpsLoading(false);
           setGpsError(
             lang === 'vi'
-              ? 'Không lấy được GPS tự động từ trình duyệt. Hệ thống sử dụng tọa độ trung tâm Đà Nẵng.'
-              : 'GPS unavailable. Defaulting to Da Nang coordinates.'
+              ? 'Không lấy được GPS tự động từ trình duyệt. Vui lòng nhập địa chỉ hiện trường.'
+              : 'GPS unavailable. Please enter the incident address manually.'
           );
         },
         { enableHighAccuracy: true, timeout: 6000 }
@@ -146,20 +140,18 @@ export const CitizenSosModal = ({ isOpen, onClose, onSubmitSos }: Props) => {
     onSubmitSos({
       emergencyType,
       priority: emergencyType === 'FIRE' || emergencyType === 'MEDICAL' ? 'CRITICAL' : 'HIGH',
-      title: emergencyTitleMap[emergencyType] || 'Yêu cầu hỗ trợ khẩn cấp',
-      description: description.trim() || 'Người dân gửi tín hiệu SOS khẩn cấp từ ứng dụng di động.',
-      locationName: locationName.trim() || 'Khu vực phường Hòa Cường, Đà Nẵng',
-      wardId: 'area-htd',
-      wardName: 'Phường Hòa Cường',
-      districtName: 'Hai Chau District',
-      citizenName: citizenName.trim() || 'Người dân',
-      citizenPhone: citizenPhone.trim() || '0905-000-000',
+      title: emergencyTitleMap[emergencyType] || '',
+      description: description.trim(),
+      locationName: locationName.trim(),
+      wardId: '',
+      wardName: '',
+      districtName: '',
+      citizenName: citizenName.trim(),
+      citizenPhone: citizenPhone.trim(),
       affectedPeople: Math.max(1, peopleCount),
       coordinates: {
         lat: coords.lat,
         lng: coords.lng,
-        svgX: 370,
-        svgY: 340,
       },
       imageUrl: photoBase64 || undefined,
       images: photoBase64 ? [photoBase64] : undefined,

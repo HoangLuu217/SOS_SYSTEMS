@@ -6,6 +6,7 @@ import {
   ImageBackground,
   Keyboard,
   LogBox,
+  DeviceEventEmitter,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '@/context/AuthContext';
@@ -21,7 +22,8 @@ import { backendApi } from '@/api';
 import { AlertModal, BottomNav, LogoSOS, InAppNotificationBanner } from '@/components';
 import { SafetyCheckModal } from '@/features/home/SafetyCheckModal';
 import { BloodDonationModal } from '@/features/home/BloodDonationModal';
-import { DeviceEventEmitter } from 'react-native';
+import { io } from 'socket.io-client';
+import { ENV } from '@/config/env';
 import { MapFilterType, TabName } from '@/types';
 import { BACKGROUND_APP_SOURCE } from '@/constants/backgroundBase64';
 
@@ -68,11 +70,12 @@ export function AuthenticatedApp() {
   const roles = Array.isArray(user?.roles) ? user.roles : [];
   const isRescuer =
     roles.includes('LEADER') ||
-    (roles.includes('RESCUER') && user?.rescuer?.verificationStatus !== 'PENDING');
+    (roles.includes('RESCUER') && user?.rescuer?.verificationStatus === 'VERIFIED');
 
   const { unreadCount, setNavigateHandler } = useNotifications();
 
-  // Tải số lượng nhiệm vụ đang xử lý cho Cứu hộ viên
+  // Tải số lượng nhiệm vụ đang xử lý cho Cứu hộ viên & tự động điều hướng sang tab SOS tác chiến
+  const hasAutoSwitchedToSosRef = React.useRef(false);
   React.useEffect(() => {
     if (!isRescuer) return;
     const loadMissionsCount = async () => {
@@ -81,15 +84,48 @@ export function AuthenticatedApp() {
         if (res.success && Array.isArray(res.data)) {
           const active = res.data.filter(
             (m) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(m.status)
-          ).length;
-          setActiveMissionsCount(active);
+          );
+          setActiveMissionsCount(active.length);
+          if (active.length > 0 && !hasAutoSwitchedToSosRef.current) {
+            hasAutoSwitchedToSosRef.current = true;
+            setActiveTab('sos');
+          }
         }
       } catch {
         // ignore
       }
     };
     loadMissionsCount();
-  }, [isRescuer]);
+    const sub = DeviceEventEmitter.addListener('sos:sync', () => {
+      loadMissionsCount();
+    });
+
+    const socketUrl = ENV.API_BASE_URL.replace(/\/api\/?$/, '');
+    const s = io(socketUrl, { transports: ['websocket', 'polling'] });
+    if (user?._id) {
+      s.on('connect', () => {
+        s.emit('register_user', user._id);
+      });
+    }
+
+    const onSignal = () => {
+      loadMissionsCount();
+    };
+
+    s.on('assignment:new', onSignal);
+    s.on('assignment:created', onSignal);
+    s.on('assignment:assigned', onSignal);
+    s.on('assignment:cancelled', onSignal);
+    s.on('assignment:deleted', onSignal);
+    s.on('assignment:updated', onSignal);
+    s.on('sos:updated', onSignal);
+    s.on('sos:sync', onSignal);
+
+    return () => {
+      sub.remove();
+      s.disconnect();
+    };
+  }, [isRescuer, user?._id]);
 
   const handleNavigateToTab = React.useCallback((tab: TabName, options?: { filter?: MapFilterType; areaId?: string }) => {
     setActiveTab(tab);

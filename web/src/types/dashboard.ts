@@ -54,6 +54,7 @@ export interface SosRequestItem {
   primarySosId?: string;
   assignmentId?: string;
   assignment?: any;
+  shoreHandoff?: any;
   createdAt: string;
   updatedAt: string;
 }
@@ -160,6 +161,7 @@ export interface RescueTeamItem {
   description?: string;
   status: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 

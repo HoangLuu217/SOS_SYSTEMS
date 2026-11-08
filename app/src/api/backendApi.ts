@@ -211,6 +211,9 @@ class BackendApiService {
 
 
   // Chat with Local Authority API
+  getEmergencyDirectory = (params?: Parameters<typeof chatApi.getEmergencyDirectory>[0]) =>
+    chatApi.getEmergencyDirectory(params);
+
   getLocalAuthority = (params: Parameters<typeof chatApi.getLocalAuthority>[0]) =>
     chatApi.getLocalAuthority(params);
 
@@ -252,6 +255,20 @@ class BackendApiService {
     });
 
   getAvailableSosRequests = () => assignmentApi.getAvailableSosRequests();
+
+  requestShoreHandoff = (
+    sosId: string,
+    data: {
+      landingPoint: { name: string; address?: string; coordinates: [number, number] };
+      vehicleTypeNeeded: 'AMBULANCE' | 'TRUCK' | 'ANY';
+      peopleCount: number;
+      notes?: string;
+      rescueTeamName?: string;
+      rescueTeamId?: string;
+    }
+  ) => assignmentApi.requestShoreHandoff(sosId, data);
+
+  completeShoreHandoff = (sosId: string, data?: { proofImages?: string[] }) => assignmentApi.completeShoreHandoff(sosId, data);
 
   // Storage helpers
   saveTokens = (accessToken: string, refreshToken?: string) =>

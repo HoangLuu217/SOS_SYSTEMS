@@ -9,6 +9,7 @@ import {
   RefreshControl,
   StatusBar,
   DeviceEventEmitter,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
@@ -56,6 +57,8 @@ export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack, onNa
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedSosForTracking, setSelectedSosForTracking] = useState<any | null>(null);
   const [trackingModalVisible, setTrackingModalVisible] = useState<boolean>(false);
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   const fetchSosHistory = async (showLoadingIndicator = true) => {
     try {
@@ -85,8 +88,16 @@ export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack, onNa
     fetchSosHistory(true);
 
     // 2. Lắng nghe sự kiện SOS được tạo mới hoặc cập nhật từ bất kỳ đâu trong app / SSE
-    const sub = DeviceEventEmitter.addListener('sos:sync', () => {
+    const subSync = DeviceEventEmitter.addListener('sos:sync', () => {
       fetchSosHistory(false);
+    });
+
+    const subDeleted = DeviceEventEmitter.addListener('sos:deleted', (deletedId: string) => {
+      if (deletedId) {
+        setSosList((prev) => prev.filter((s) => s._id !== deletedId));
+      } else {
+        fetchSosHistory(false);
+      }
     });
 
     // 3. Tự động đồng bộ ngầm định kỳ mỗi 5 giây khi màn hình này đang mở
@@ -95,7 +106,8 @@ export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack, onNa
     }, 5000);
 
     return () => {
-      sub.remove();
+      subSync.remove();
+      subDeleted.remove();
       clearInterval(timer);
     };
   }, []);
@@ -105,12 +117,31 @@ export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack, onNa
     fetchSosHistory(false);
   };
 
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget?._id) return;
+    setIsDeleting(true);
+    try {
+      const res = await backendApi.delete(`/sos/${deleteTarget._id}`);
+      if (res.success) {
+        setSosList((prev) => prev.filter((s) => s._id !== deleteTarget._id));
+        DeviceEventEmitter.emit('sos:sync');
+      }
+    } catch (err: any) {
+      console.warn('Lỗi xóa ca SOS:', err?.message);
+    } finally {
+      setIsDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
+
   const renderSosItem = ({ item }: { item: any }) => {
     const statusConfig = STATUS_CONFIG[item.status] || STATUS_CONFIG['PENDING'];
     const typeLabel = TYPE_CONFIG[item.emergencyType] || TYPE_CONFIG['OTHER'];
     const dateStr = new Date(item.createdAt).toLocaleString('vi-VN', {
       hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric'
     });
+
+    const isClosed = ['CANCELLED', 'COMPLETED', 'REJECTED'].includes(item.status);
 
     return (
       <TouchableOpacity
@@ -123,9 +154,22 @@ export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack, onNa
       >
         <View style={styles.cardHeader}>
           <Text style={styles.dateText}>{dateStr}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: statusConfig.bgColor }]}>
-            <Ionicons name={statusConfig.icon} size={14} color={statusConfig.color} />
-            <Text style={[styles.statusText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={[styles.statusBadge, { backgroundColor: statusConfig.bgColor }]}>
+              <Ionicons name={statusConfig.icon} size={14} color={statusConfig.color} />
+              <Text style={[styles.statusText, { color: statusConfig.color }]}>{statusConfig.label}</Text>
+            </View>
+
+            {isClosed && (
+              <TouchableOpacity
+                onPress={() => setDeleteTarget(item)}
+                style={styles.deleteCardBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Xóa khỏi lịch sử"
+              >
+                <Feather name="trash-2" size={14} color="#EF4444" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -255,6 +299,49 @@ export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack, onNa
           );
         }}
       />
+
+      {/* Modal xác nhận xóa ca SOS đã đóng khỏi lịch sử */}
+      <Modal
+        visible={!!deleteTarget}
+        transparent
+        statusBarTranslucent
+        animationType="fade"
+        onRequestClose={() => setDeleteTarget(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconWrap}>
+              <Feather name="trash-2" size={24} color="#DC2626" />
+            </View>
+            <Text style={styles.modalTitle}>Xóa khỏi lịch sử</Text>
+            <Text style={styles.modalMessage}>
+              Bạn có chắc chắn muốn xóa yêu cầu cứu nạn {deleteTarget?.sosCode ? `(${deleteTarget.sosCode})` : ''} này khỏi danh sách lịch sử để màn hình gọn gàng hơn?
+            </Text>
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setDeleteTarget(null)}
+                disabled={isDeleting}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelText}>Giữ lại</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirmDeleteBtn}
+                onPress={handleConfirmDelete}
+                disabled={isDeleting}
+                activeOpacity={0.85}
+              >
+                {isDeleting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalConfirmDeleteText}>Xác nhận xóa</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -433,5 +520,87 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
+  },
+  deleteCardBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    marginLeft: 8,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 14,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 21,
+    marginBottom: 20,
+  },
+  modalButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  modalConfirmDeleteBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalConfirmDeleteText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

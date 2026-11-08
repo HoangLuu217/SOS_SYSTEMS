@@ -16,6 +16,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { PROFILE_THEME } from './theme';
 import { useNotifications } from '@/context/NotificationContext';
 import { NotificationSettings, NotificationCategoryKey } from '@/utils';
+import { playDispatchAlertSound } from '@/services';
 
 interface NotificationSettingsScreenProps {
   onBack: () => void;
@@ -37,6 +38,9 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
       try {
         Vibration.vibrate(80);
       } catch (_) {}
+    }
+    if (key === 'sound' && value) {
+      playDispatchAlertSound().catch(() => {});
     }
 
     await contextUpdateSetting(key, value);

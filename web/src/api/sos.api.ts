@@ -84,3 +84,51 @@ export async function reassignMissionApi(assignmentId: string, payload: {
     body: JSON.stringify(payload),
   });
 }
+
+
+export async function assignShoreHandoffApi(sosId: string, payload: {
+  vehicleId?: string;
+  vehicleName?: string;
+  vehiclePlate?: string;
+  roadTeamName?: string;
+  driverName?: string;
+  driverPhone?: string;
+}): Promise<{ success: boolean; data: any }> {
+  return fetchWithAuth(`/sos/${sosId}/shore-handoff/assign`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function cancelShoreHandoffApi(sosId: string): Promise<{ success: boolean; data: any }> {
+  return fetchWithAuth(`/sos/${sosId}/shore-handoff/cancel`, {
+    method: 'POST',
+  });
+}
+
+export async function approveSuppliesApi(assignmentId: string, note?: string): Promise<{ success: boolean; data: any }> {
+  return fetchWithAuth(`/assignments/${assignmentId}/supplies/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+}
+
+export async function rejectSuppliesApi(assignmentId: string, note?: string): Promise<{ success: boolean; data: any }> {
+  return fetchWithAuth(`/assignments/${assignmentId}/supplies/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+}
+
+export async function deleteSosRequestApi(sosId: string): Promise<{ success: boolean; message?: string }> {
+  return fetchWithAuth(`/sos/${sosId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function clearCancelledSosApi(): Promise<{ success: boolean; message?: string; data?: { deletedCount: number } }> {
+  return fetchWithAuth('/sos/clear-cancelled', {
+    method: 'DELETE',
+
+  });
+}

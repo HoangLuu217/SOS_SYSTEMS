@@ -335,28 +335,27 @@ export function isSosInOfficerJurisdiction(
     return true;
   }
 
-  // 1. Authoritative GIS spatial check: If boundary polygon is defined, coordinates MUST be inside it
+  // 1. Authoritative GIS spatial check: If boundary polygon is defined and point is inside, return true
   if (managedArea && managedArea.boundary && managedArea.boundary.coordinates) {
-    return isPointInAreaBoundary(sos.coordinates, managedArea);
+    if (isPointInAreaBoundary(sos.coordinates, managedArea)) {
+      return true;
+    }
   }
 
-  // 2. Fallback if polygon boundary is not yet loaded: check administrative ward ID and name
-  const wardKeyword = officer.jurisdictionAreaName
-    ? officer.jurisdictionAreaName
-        .toLowerCase()
-        .replace('phường ', '')
-        .replace('quận ', '')
-        .replace('huyện ', '')
-        .replace('xã ', '')
-        .trim()
-    : '';
+  // 2. Fallback / complementary check: check administrative area name and keywords in ward, district, address
+  const areaKeyword = (officer.jurisdictionAreaName || officer.districtName || managedArea?.name || '')
+    .toLowerCase()
+    .replace(/^(phường|quận|huyện|xã|thị xã|tp|thành phố)s+/i, '')
+    .trim();
 
-  const matchesWard =
-    sos.wardId === officerAreaId ||
-    sos.districtId === officerAreaId ||
-    (wardKeyword && sos.wardName && sos.wardName.toLowerCase().includes(wardKeyword));
+  if (areaKeyword) {
+    const fullText = `${sos.wardName || ''} ${sos.districtName || ''} ${sos.locationName || ''} ${sos.title || ''}`.toLowerCase();
+    if (fullText.includes(areaKeyword)) {
+      return true;
+    }
+  }
 
-  return !!matchesWard;
+  return false;
 }
 
 /**
@@ -412,15 +411,15 @@ export function isTeamInOfficerJurisdiction(
 
   if (districtKeyword && districtKeyword !== 'toàn quốc') {
     const teamNameLower = (team.name || '').toLowerCase();
-    const teamDistrictLower = (team.districtId || '').toLowerCase();
-    if (teamNameLower.includes(districtKeyword)) return true;
-    if (districtKeyword.includes('hải châu') && teamDistrictLower === 'area-hc') return true;
-    if (districtKeyword.includes('cẩm lệ') && teamDistrictLower === 'area-cl') return true;
-    if (districtKeyword.includes('liên chiểu') && teamDistrictLower === 'area-lc') return true;
-    if (districtKeyword.includes('sơn trà') && teamDistrictLower === 'area-st') return true;
-    if (districtKeyword.includes('ngũ hành sơn') && teamDistrictLower === 'area-nhs') return true;
-    if (districtKeyword.includes('thanh khê') && teamDistrictLower === 'area-tk') return true;
-    if (districtKeyword.includes('hòa vang') && teamDistrictLower === 'area-hv') return true;
+    const teamDistrictIdLower = (team.districtId || '').toLowerCase();
+    const teamDistrictNameLower = (((team as any).districtName || '') as string).toLowerCase();
+    if (
+      teamNameLower.includes(districtKeyword) ||
+      teamDistrictNameLower.includes(districtKeyword) ||
+      (teamDistrictIdLower && teamDistrictIdLower.includes(districtKeyword))
+    ) {
+      return true;
+    }
   }
 
   return false;

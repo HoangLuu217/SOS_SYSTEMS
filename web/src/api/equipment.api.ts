@@ -2,13 +2,13 @@ import { fetchWithAuth } from './client';
 
 export interface EquipmentItem {
   _id: string;
-  teamId: {
+  teamId?: {
     _id: string;
     name: string;
     type?: string;
     status?: string;
     areaId?: { _id: string; name: string; code?: string } | string;
-  } | string;
+  } | string | null;
   providedBy?: {
     _id: string;
     name: string;
@@ -137,8 +137,9 @@ export async function consumeEquipment(
 }
 
 export async function batchConsumeEquipments(payload: {
-  items: { equipmentId: string; quantity: number }[];
+  items: { equipmentId: string; name?: string; quantity: number }[];
   destination: string;
+  coordinates?: [number, number]; // [lng, lat]
   recipientName?: string;
   note?: string;
   teamId?: string;

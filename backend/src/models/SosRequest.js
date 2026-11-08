@@ -45,8 +45,6 @@ const sosRequestSchema = new mongoose.Schema(
       default: function () {
         return (
           'SOS-' +
-          Date.now().toString(36).toUpperCase() +
-          '-' +
           Math.random().toString(36).substring(2, 6).toUpperCase()
         );
       },
@@ -84,12 +82,18 @@ const sosRequestSchema = new mongoose.Schema(
           'STORM',
           'ACCIDENT',
           'MISSING_PERSON',
+          'FOOD',
+          'EVACUATION',
           'OTHER',
           'RELIEF',
         ],
         message: 'Loại khẩn cấp {VALUE} không hợp lệ',
       },
     },
+    emergencyTypes: [{
+      type: String,
+      trim: true,
+    }],
     priority: {
       type: String,
       required: [true, 'Mức độ ưu tiên là bắt buộc'],
@@ -118,9 +122,9 @@ const sosRequestSchema = new mongoose.Schema(
         validator: function (v) {
           if (!v || !v.trim()) return true;
           const clean = v.replace(/[\s\.\-]+/g, '');
-          return /^(?:\+84|0)(?:3|5|7|8|9)\d{8}$/.test(clean);
+          return /^(\+?\d{7,15})$/.test(clean);
         },
-        message: 'Số điện thoại liên hệ khẩn cấp không hợp lệ (cần 10 chữ số chuẩn VN)',
+        message: 'Số điện thoại liên hệ khẩn cấp không hợp lệ',
       },
     },
     secondaryPhone: {
@@ -131,9 +135,9 @@ const sosRequestSchema = new mongoose.Schema(
         validator: function (v) {
           if (!v || !v.trim()) return true;
           const clean = v.replace(/[\s\.\-]+/g, '');
-          return /^(?:\+84|0)(?:3|5|7|8|9)\d{8}$/.test(clean);
+          return /^(\+?\d{7,15})$/.test(clean);
         },
-        message: 'Số điện thoại dự phòng không hợp lệ (cần 10 chữ số chuẩn VN)',
+        message: 'Số điện thoại dự phòng không hợp lệ',
       },
     },
     priorityGroups: [{
@@ -141,6 +145,10 @@ const sosRequestSchema = new mongoose.Schema(
       trim: true,
     }],
     images: [{
+      type: String,
+      trim: true,
+    }],
+    proofImages: [{
       type: String,
       trim: true,
     }],
@@ -187,6 +195,38 @@ const sosRequestSchema = new mongoose.Schema(
     resolvedAt: {
       type: Date,
       default: null,
+    },
+    // Luồng cứu hộ 2 giai đoạn: Ca-nô đón nước -> Bến cập bờ -> Xe đường bộ chở viện/trú ẩn
+    shoreHandoff: {
+      status: {
+        type: String,
+        enum: ['NONE', 'REQUESTED', 'ASSIGNED', 'COMPLETED', 'CANCELLED'],
+        default: 'NONE',
+      },
+      requestedAt: { type: Date, default: null },
+      requestedByRescuerName: { type: String, default: null },
+      rescueTeamName: { type: String, default: null },
+      rescueTeamId: { type: mongoose.Schema.Types.ObjectId, ref: 'RescueTeam', default: null },
+      landingPoint: {
+        name: { type: String, default: null },
+        address: { type: String, default: null },
+        coordinates: { type: [Number], default: null }, // [longitude, latitude]
+      },
+      vehicleTypeNeeded: {
+        type: String,
+        enum: ['AMBULANCE', 'TRUCK', 'ANY'],
+        default: 'AMBULANCE',
+      },
+      peopleCount: { type: Number, default: 1 },
+      notes: { type: String, default: null },
+      assignedVehicleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle', default: null },
+      assignedVehicleName: { type: String, default: null },
+      assignedVehiclePlate: { type: String, default: null },
+      assignedRoadTeamName: { type: String, default: null },
+      assignedDriverName: { type: String, default: null },
+      assignedDriverPhone: { type: String, default: null },
+      assignedAt: { type: Date, default: null },
+      completedAt: { type: Date, default: null },
     },
   },
   {

@@ -14,7 +14,7 @@ const isValidEmail = (email) => {
  */
 const isValidPhone = (phone) => {
   if (typeof phone !== 'string') return false;
-  return /^(?:\+84|0)(?:3|5|7|8|9)\d{8}$|^\+?[1-9]\d{8,14}$/.test(phone.trim());
+  return /^(?:\+84|0)\d{9,10}$|^\+?[1-9]\d{8,14}$/.test(phone.trim());
 };
 
 /**

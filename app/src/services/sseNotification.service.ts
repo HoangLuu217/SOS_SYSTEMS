@@ -77,7 +77,7 @@ class SSENotificationService {
               const jsonStr = trimmed.replace(/^data:\s*/, '');
               const payload = JSON.parse(jsonStr);
 
-              if (payload?.data?.type === 'SOS_SYNC') {
+              if (payload?.data?.type === 'SOS_SYNC' || payload?.data?.type === 'RELIEF_MISSION') {
                 console.log('⚡ [SSE_NOTIFICATION] Đồng bộ SOS realtime:', payload.data);
                 DeviceEventEmitter.emit('sos:sync', payload.data);
               }
@@ -92,8 +92,26 @@ class SSENotificationService {
                 DeviceEventEmitter.emit('user:profile_updated', payload.data);
               }
 
+              if (
+                payload?.data?.type === 'TEAM_MEMBERSHIP_CHANGED' ||
+                payload?.data?.type === 'TEAM_MEMBERSHIP' ||
+                payload?.type === 'TEAM_MEMBERSHIP'
+              ) {
+                console.log('⚡ [SSE_NOTIFICATION] Đồng bộ Đội cứu hộ realtime:', payload.data);
+                DeviceEventEmitter.emit('team:membership_updated', payload.data);
+                DeviceEventEmitter.emit('user:profile_updated', payload.data);
+              }
+
               if (payload && (payload.action === 'BROADCAST' || payload.action === 'USER')) {
-                const item = this.normalizeNotification(payload.data);
+                const combinedData = {
+                  ...(payload || {}),
+                  ...(payload.data || {}),
+                  title: payload.data?.title || payload.title,
+                  content: payload.data?.content || payload.content || payload.data?.body || payload.body || payload.data?.message || payload.message,
+                  priority: payload.data?.priority || payload.priority || 'HIGH',
+                  type: payload.data?.type || payload.type || 'ALERT',
+                };
+                const item = this.normalizeNotification(combinedData);
                 if (item.title || item.content) {
                   console.log(`📢 [SSE_NOTIFICATION] Nhận thông báo mới: "${item.title}"`);
                   this.notificationListeners.forEach((fn) => {
@@ -166,14 +184,14 @@ class SSENotificationService {
   private normalizeNotification(data: any): NotificationItem {
     return {
       _id: data._id || data.id || `sse_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-      title: data.title || 'Thông báo mới',
-      content: data.content || '',
-      type: data.type || 'INSTANT',
-      priority: data.priority || 'NORMAL',
+      title: data.title || '🚨 Thông báo khẩn cấp',
+      content: data.content || data.body || data.message || '',
+      type: data.type || 'ALERT',
+      priority: data.priority || 'HIGH',
       areaId: data.areaId,
       areaName: data.areaName,
       createdBy: data.createdBy,
-      data: data.data || {},
+      data: data.data || data || {},
       isRead: false,
       createdAt: data.createdAt || new Date().toISOString(),
       actionUrl: data.actionUrl,

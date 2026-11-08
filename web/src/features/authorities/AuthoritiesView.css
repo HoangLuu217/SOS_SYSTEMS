@@ -38,29 +38,54 @@
   min-height: 0 !important;
   height: auto;
   overflow-y: auto !important;
-  overflow-x: auto !important;
-  padding-right: 6px;
+  overflow-x: hidden !important;
   box-sizing: border-box;
+  padding-bottom: 6px;
+}
+
+/* Custom slim modern scrollbar */
+.authorities-executive-container .executive-table-wrapper::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.authorities-executive-container .executive-table-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.authorities-executive-container .executive-table-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+.authorities-executive-container .executive-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.authorities-executive-container .executive-table th:last-child,
+.authorities-executive-container .executive-table td:last-child {
+  padding-right: 20px !important;
+  box-sizing: border-box !important;
 }
 
 .authorities-executive-container .executive-table {
   width: 100% !important;
-  min-width: 980px !important;
+  min-width: 0 !important;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed !important;
 }
 
 .authorities-executive-container .executive-table th {
-  padding: 10px 10px !important;
-  font-size: 11.5px !important;
-  font-weight: 700 !important;
+  padding: 12px 10px !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
   text-transform: uppercase !important;
-  letter-spacing: 0.3px !important;
-  color: #475569 !important;
+  letter-spacing: 0.4px !important;
   white-space: nowrap !important;
-  border-bottom: 1px solid #e2e8f0 !important;
-  background: #f8fafc;
+  border-bottom: 2px solid #cbd5e1 !important;
+  background: #f1f5f9 !important;
 }
 
 .authorities-executive-container .executive-table td {
@@ -124,16 +149,15 @@
   border-color: #e2e8f0;
 }
 
-/* Nút hành động phong cách tối giản, màu trung tính ở trạng thái tĩnh, hover mới đổi màu */
+/* Nút hành động icon vuông tối giản, gọn gàng và không tràn khung */
 .officer-action-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 4px 8px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border-radius: 6px;
-  font-size: 11.5px;
-  font-weight: 500;
   cursor: pointer;
   border: 1px solid #e2e8f0;
   background: #ffffff;
@@ -141,31 +165,47 @@
   transition: all 0.15s ease;
   white-space: nowrap !important;
   flex-shrink: 0;
-  line-height: 1.2;
 }
 
 .officer-action-btn:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #0f172a;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+
+.officer-action-btn.edit {
+  color: #0284c7;
+  background: #f0f9ff;
+  border-color: #bae6fd;
 }
 
 .officer-action-btn.edit:hover {
-  color: #0284c7;
-  border-color: #bae6fd;
-  background: #f0f9ff;
+  color: #ffffff;
+  border-color: #0284c7;
+  background: #0284c7;
+}
+
+.officer-action-btn.lock {
+  color: #dc2626;
+  background: #fef2f2;
+  border-color: #fecaca;
 }
 
 .officer-action-btn.lock:hover {
-  color: #dc2626;
-  border-color: #fecaca;
-  background: #fef2f2;
+  color: #ffffff;
+  border-color: #dc2626;
+  background: #dc2626;
+}
+
+.officer-action-btn.unlock {
+  color: #16a34a;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
 }
 
 .officer-action-btn.unlock:hover {
-  color: #16a34a;
-  border-color: #bbf7d0;
-  background: #f0fdf4;
+  color: #ffffff;
+  border-color: #16a34a;
+  background: #16a34a;
 }
 
 /* Filter & Search Bar Horizontal Layout (Ngang hàng) */
@@ -500,4 +540,148 @@
   background: #f8fafc !important;
   border-color: #94a3b8 !important;
   color: #0f172a !important;
+}
+
+
+/* Province Filter Select in Toolbar */
+.executive-province-filter-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.executive-province-filter-wrap .province-filter-icon {
+  position: absolute;
+  left: 11px;
+  color: #0284c7;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.executive-province-select {
+  padding: 8px 30px 8px 32px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  outline: none;
+  cursor: pointer;
+  height: 36px;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  max-width: 280px;
+}
+
+.executive-province-select:hover {
+  border-color: #94a3b8;
+  background-color: #f8fafc;
+}
+
+.executive-province-select:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+/* Supervision / Managed Areas Bar */
+.executive-managed-areas-bar {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: fadeIn 0.2s ease;
+}
+
+.managed-areas-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.managed-areas-title {
+  font-size: 13px;
+  color: #0369a1;
+  font-weight: 500;
+}
+
+.managed-areas-title strong {
+  font-weight: 700;
+  color: #0c4a6e;
+}
+
+.managed-areas-count-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #0284c7;
+  color: #ffffff;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.managed-areas-reset-btn {
+  background: transparent;
+  border: none;
+  color: #0284c7;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+  transition: color 0.15s ease;
+}
+
+.managed-areas-reset-btn:hover {
+  color: #0369a1;
+}
+
+.managed-areas-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.managed-area-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: #ffffff;
+  border: 1px solid #7dd3fc;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #0f172a;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.managed-area-pill:hover {
+  background: #e0f2fe;
+  border-color: #0284c7;
+  transform: translateY(-1px);
+}
+
+.managed-area-pill .pill-name {
+  font-weight: 600;
+  color: #0369a1;
+}
+
+.managed-area-pill .pill-officer {
+  color: #64748b;
+  font-size: 11.5px;
 }

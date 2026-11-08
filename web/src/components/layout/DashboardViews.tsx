@@ -16,8 +16,7 @@ export {
 
 // Feature Views
 import { SosRequestsView } from '@/features/sos';
-import { CoordinationView } from '@/features/coordination';
-import { RescuersView } from '@/features/rescuers';
+import { RescuersView, RescuerApprovalView } from '@/features/rescuers';
 import { ResourcesView } from '@/features/resources';
 import { AlertsView, SafetyCheckView } from '@/features/alerts';
 import { WeatherView } from '@/features/weather';
@@ -56,9 +55,9 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     case 'sos_requests':
       return <SosRequestsView onOpenMap={onOpenMap} user={user} />;
 
-    // 2. Điều phối & Phân công
+    // 2. Điều phối & Phân công (Đã gộp vào Theo dõi & Điều phối SOS)
     case 'coordination':
-      return <CoordinationView onOpenMap={onOpenMap} />;
+      return <SosRequestsView onOpenMap={onOpenMap} user={user} />;
 
     // 3. Đội cứu hộ địa phương
     case 'rescuers':
@@ -66,7 +65,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
     // 3.1. Duyệt hồ sơ đăng ký cứu hộ viên
     case 'rescuers_approval':
-      return <RescuersView mode="admin" />;
+      return <RescuerApprovalView user={user} />;
 
     // 4. Phương tiện & Nhu yếu phẩm
     case 'resources':
@@ -111,7 +110,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
     // 8. Báo cáo thống kê
     case 'reports':
-      return <ReportsView />;
+      return <ReportsView user={user} onOpenMap={onOpenMap} />;
 
     // 9. Tổng quan & Giám sát quản trị
     case 'admin_overview':

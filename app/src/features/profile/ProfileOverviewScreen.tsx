@@ -36,7 +36,7 @@ export const ProfileOverviewScreen: React.FC<ProfileOverviewScreenProps> = ({
   // Khi hồ sơ vẫn đang PENDING, người dùng vẫn ở giao diện Công dân để theo dõi tiến trình duyệt hồ sơ.
   const isRescuer =
     roles.includes('LEADER') ||
-    (roles.includes('RESCUER') && user?.rescuer?.verificationStatus !== 'PENDING');
+    (roles.includes('RESCUER') && user?.rescuer?.verificationStatus === 'VERIFIED');
 
   // Đăng nhập tài khoản nào sẽ vào đúng 100% trang hồ sơ của vai trò đó
   if (isRescuer) {

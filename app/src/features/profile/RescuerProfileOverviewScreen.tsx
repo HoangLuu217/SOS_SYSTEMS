@@ -15,6 +15,8 @@ import {
   Platform,
   TextInput,
   Linking,
+  RefreshControl,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -42,68 +44,11 @@ export interface RescuerProfileOverviewScreenProps {
   onNavigateToNotifications: () => void;
   unreadNotificationsCount?: number;
   refreshTrigger?: number;
-  onNavigateToTab?: (tab: any) => void;
+  onNavigateToTab?: (tab: any, options?: any) => void;
 }
 
-const FALLBACK_RESCUE_TEAMS: RescueTeamData[] = [
-  {
-    _id: 'team_dn_flood_01',
-    name: 'Đội Cứu Hộ Ca-nô Sông Hàn 01',
-    type: 'FLOOD_RESCUE',
-    status: 'ACTIVE',
-    areaId: { name: 'Phường Hòa Cường Bắc' },
-    authorityId: { name: 'UBND Quận Hải Châu' },
-    leaderId: { fullName: 'Nguyễn Văn An (Chỉ huy)', phone: '0905123456' },
-    members: [
-      { rescuerId: 'mem_1' as any, role: 'LEADER', joinedAt: '2024-01-01T00:00:00.000Z' },
-      { rescuerId: 'mem_2' as any, role: 'MEMBER', joinedAt: '2024-01-01T00:00:00.000Z' },
-      { rescuerId: 'mem_3' as any, role: 'MEMBER', joinedAt: '2024-01-01T00:00:00.000Z' },
-    ],
-    description: 'Chuyên trách cứu nạn đường thủy, vượt lũ, tiếp tế vùng cô lập.',
-  },
-  {
-    _id: 'team_dn_flood_02',
-    name: 'Đội Xuồng Máy Sơ Tán Lũ Lụt Hải Châu',
-    type: 'FLOOD_RESCUE',
-    status: 'ACTIVE',
-    areaId: { name: 'Phường Hòa Cường Nam' },
-    authorityId: { name: 'Ban Chỉ Huy PCTT Quận Hải Châu' },
-    leaderId: { fullName: 'Hoàng Quốc Tuấn (Đội trưởng)', phone: '0913445566' },
-    members: [
-      { rescuerId: 'mem_4' as any, role: 'LEADER', joinedAt: '2024-01-01T00:00:00.000Z' },
-      { rescuerId: 'mem_5' as any, role: 'MEMBER', joinedAt: '2024-01-01T00:00:00.000Z' },
-    ],
-    description: 'Xuồng máy cao tốc sơ tán hộ gia đình ngập sâu và tiếp tế lương thực.',
-  },
-  {
-    _id: 'team_dn_med_03',
-    name: 'Đội Y Tế Cứu Thương Khẩn Cấp Đà Nẵng',
-    type: 'MEDICAL_RESCUE',
-    status: 'ACTIVE',
-    areaId: { name: 'Phường Thuận Phước' },
-    authorityId: { name: 'Trung Tâm Y Tế Hải Châu' },
-    leaderId: { fullName: 'BS. Trần Minh Tuấn', phone: '0905999888' },
-    members: [
-      { rescuerId: 'mem_6' as any, role: 'LEADER', joinedAt: '2024-01-01T00:00:00.000Z' },
-      { rescuerId: 'mem_7' as any, role: 'MEMBER', joinedAt: '2024-01-01T00:00:00.000Z' },
-    ],
-    description: 'Sơ cứu chấn thương, vận chuyển cấp cứu vùng ngập sâu.',
-  },
-  {
-    _id: 'team_dn_search_04',
-    name: 'Đội Tìm Kiếm & Cứu Hộ Sạt Lở Sơn Trà',
-    type: 'SEARCH_RESCUE',
-    status: 'ACTIVE',
-    areaId: { name: 'Phường Thọ Quang' },
-    authorityId: { name: 'Ban Chỉ Huy PCTT Sơn Trà' },
-    leaderId: { fullName: 'Phạm Quốc Hưng (Chỉ huy)', phone: '0905333444' },
-    members: [
-      { rescuerId: 'mem_8' as any, role: 'LEADER', joinedAt: '2024-01-01T00:00:00.000Z' },
-      { rescuerId: 'mem_9' as any, role: 'MEMBER', joinedAt: '2024-01-01T00:00:00.000Z' },
-    ],
-    description: 'Ứng phó sạt lở đèo dốc, cứu hộ rừng và ven biển.',
-  },
-];
+const FALLBACK_RESCUE_TEAMS: RescueTeamData[] = [];
+
 
 export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreenProps> = ({
   onNavigateToEditProfile,
@@ -167,18 +112,35 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
   };
 
   const isUserLeaderOfTeam = (team?: RescueTeamData | null) => {
-    if (!team || !user?._id) return false;
-    const currentUserId = user._id.toString();
+    if (!team || !user) return false;
+    const currentUserId = (user._id || (user as any)?.id)?.toString();
+    const currentUserPhone = user.phone;
+    const currentUserEmail = user.email?.toLowerCase();
     const leaderIdStr = (team.leaderId?._id || team.leaderId)?.toString();
-    return !!currentUserId && currentUserId === leaderIdStr;
+    const leaderPhone = team.leaderId?.phone;
+    const leaderEmail = team.leaderId?.email?.toLowerCase();
+    return (
+      (!!currentUserId && currentUserId === leaderIdStr) ||
+      (!!currentUserPhone && currentUserPhone === leaderPhone) ||
+      (!!currentUserEmail && currentUserEmail === leaderEmail)
+    );
   };
 
   const isUserPendingInTeam = (team?: RescueTeamData | null) => {
-    if (!team || !user?._id || !Array.isArray(team.members)) return false;
-    const currentUserId = user._id.toString();
+    if (!team || !user || !Array.isArray(team.members)) return false;
+    const currentUserId = (user._id || (user as any)?.id)?.toString();
+    const currentUserPhone = user.phone;
+    const currentUserEmail = user.email?.toLowerCase();
     return team.members.some((m: any) => {
-      const rId = (m.rescuerId?._id || m.rescuerId)?.toString();
-      return rId === currentUserId && m.status === 'PENDING';
+      const r = m.rescuerId;
+      const rId = (r?._id || r)?.toString();
+      const rPhone = r?.phone;
+      const rEmail = r?.email?.toLowerCase();
+      const matchesUser =
+        (currentUserId && rId === currentUserId) ||
+        (currentUserPhone && rPhone === currentUserPhone) ||
+        (currentUserEmail && rEmail === currentUserEmail);
+      return matchesUser && m.status === 'PENDING';
     });
   };
 
@@ -189,11 +151,20 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
 
   const getOtherTeamMembers = (team?: RescueTeamData | null) => {
     if (!team || !Array.isArray(team.members)) return [];
-    const currentUserId = user?._id?.toString();
+    const currentUserId = (user?._id || (user as any)?.id)?.toString();
+    const currentUserPhone = user?.phone;
+    const currentUserEmail = user?.email?.toLowerCase();
     return team.members.filter((m: any) => {
-      const mId = (m.rescuerId?._id || m.rescuerId)?.toString();
+      const r = m.rescuerId;
+      const mId = (r?._id || r)?.toString();
+      const mPhone = r?.phone;
+      const mEmail = r?.email?.toLowerCase();
+      const matchesUser =
+        (currentUserId && mId === currentUserId) ||
+        (currentUserPhone && mPhone === currentUserPhone) ||
+        (currentUserEmail && mEmail === currentUserEmail);
       const isApproved = m.status === 'APPROVED' || !m.status;
-      return mId && mId !== currentUserId && isApproved;
+      return !matchesUser && isApproved;
     });
   };
 
@@ -537,102 +508,130 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
     );
   };
 
-  // Đồng bộ hồ sơ cứu hộ và Đội trực thuộc từ Backend
-  useEffect(() => {
-    let isMounted = true;
-    const fetchRescuerData = async () => {
-      try {
-        const res = await backendApi.getRescuerProfile();
-        if (res.success && res.data && isMounted) {
-          const rescuer: any = res.data.rescuer || {};
-          if (rescuer.availabilityStatus) {
-            setAvailability(
-              rescuer.availabilityStatus === 'AVAILABLE' ? 'READY' : rescuer.availabilityStatus
-            );
-          }
-          if (rescuer.verificationStatus) {
-            setVerificationStatus(rescuer.verificationStatus);
-          }
-          if (rescuer.areaName) {
-            setUserAreaName(rescuer.areaName);
-          } else if (res.data?.citizen?.areaName) {
-            setUserAreaName(res.data.citizen.areaName);
-          } else if (res.data?.address) {
-            setUserAreaName(res.data.address);
-          }
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Đồng bộ hồ sơ cứu hộ và Đội trực thuộc từ Backend (Real-time & on-demand)
+  const fetchRescuerData = React.useCallback(async () => {
+    try {
+      const res = await backendApi.getRescuerProfile();
+      if (res.success && res.data) {
+        const rescuer: any = res.data.rescuer || {};
+        if (rescuer.availabilityStatus) {
+          setAvailability(
+            rescuer.availabilityStatus === 'AVAILABLE' ? 'READY' : rescuer.availabilityStatus
+          );
         }
 
-        // Tải danh sách Đội cứu hộ
-        const teamsRes = await backendApi.getRescueTeams({ limit: 50 });
-        if (teamsRes.success && isMounted) {
-          const rawTeams = Array.isArray(teamsRes.data)
-            ? teamsRes.data
-            : (teamsRes.data as any)?.teams || [];
-          const combinedTeams = rawTeams.length > 0 ? rawTeams : FALLBACK_RESCUE_TEAMS;
-          setAllTeams(combinedTeams);
-
-          const currentUserId = user?._id?.toString();
-          // Đội đã tham gia chính thức (Leader hoặc Member đã được Approved)
-          const foundTeam = combinedTeams.find((t: any) => {
-            if (t.status === 'INACTIVE') return false;
-            const isLead = (t.leaderId?._id || t.leaderId)?.toString() === currentUserId;
-            const isMem =
-              Array.isArray(t.members) &&
-              t.members.some((m: any) => {
-                const rId = (m.rescuerId?._id || m.rescuerId)?.toString();
-                return rId === currentUserId && (m.status === 'APPROVED' || !m.status);
-              });
-            return isLead || isMem;
-          });
-
-          // Kiểm tra xem người dùng có đơn ứng tuyển đang chờ phê duyệt ở đội nào không
-          const foundPendingTeam = combinedTeams.find((t: any) => {
-            if (t.status === 'INACTIVE') return false;
-            return (
-              Array.isArray(t.members) &&
-              t.members.some((m: any) => {
-                const rId = (m.rescuerId?._id || m.rescuerId)?.toString();
-                return rId === currentUserId && m.status === 'PENDING';
-              })
-            );
-          });
-
-          if (foundTeam) {
-            setMyTeam(foundTeam);
-            setPendingTeam(null);
-            // Tải phương tiện của đội
-            try {
-              const vehRes = await backendApi.getVehicles({ teamId: foundTeam._id });
-              const rawVehicles = Array.isArray(vehRes?.data)
-                ? vehRes.data
-                : (vehRes?.data as any)?.vehicles || [];
-
-              if (vehRes.success && rawVehicles.length > 0 && isMounted) {
-                setTeamVehicles(rawVehicles);
-              } else if (Array.isArray(foundTeam.vehicles) && foundTeam.vehicles.length > 0 && isMounted) {
-                setTeamVehicles(foundTeam.vehicles);
-              }
-            } catch {
-              if (Array.isArray(foundTeam.vehicles) && isMounted) {
-                setTeamVehicles(foundTeam.vehicles);
-              }
-            }
-          } else {
-            setMyTeam(null);
-            setTeamVehicles([]);
-            setPendingTeam(foundPendingTeam || null);
-          }
+        if (rescuer.verificationStatus) {
+          setVerificationStatus(rescuer.verificationStatus);
         }
-      } catch (err) {
-        console.warn('Lỗi tải dữ liệu cứu hộ viên:', err);
+        if (rescuer.areaName) {
+          setUserAreaName(rescuer.areaName);
+        } else if (res.data?.citizen?.areaName) {
+          setUserAreaName(res.data.citizen.areaName);
+        } else if (res.data?.address) {
+          setUserAreaName(res.data.address);
+
+        }
       }
-    };
 
-    fetchRescuerData();
+      // Tải danh sách Đội cứu hộ
+      const teamsRes = await backendApi.getRescueTeams({ limit: 50 });
+      if (teamsRes.success) {
+        const rawTeams = Array.isArray(teamsRes.data)
+          ? teamsRes.data
+          : (teamsRes.data as any)?.teams || [];
+        const combinedTeams = rawTeams.length > 0 ? rawTeams : FALLBACK_RESCUE_TEAMS;
+        setAllTeams(combinedTeams);
+
+        const currentUserId = user?._id?.toString();
+        // Đội đã tham gia chính thức (Leader hoặc Member đã được Approved)
+        const foundTeam = combinedTeams.find((t: any) => {
+          if (t.status === 'INACTIVE') return false;
+          const isLead = (t.leaderId?._id || t.leaderId)?.toString() === currentUserId;
+          const isMem =
+            Array.isArray(t.members) &&
+            t.members.some((m: any) => {
+              const rId = (m.rescuerId?._id || m.rescuerId)?.toString();
+              return rId === currentUserId && (m.status === 'APPROVED' || !m.status);
+            });
+          return isLead || isMem;
+        });
+
+        // Kiểm tra xem người dùng có đơn ứng tuyển đang chờ phê duyệt ở đội nào không
+        const foundPendingTeam = combinedTeams.find((t: any) => {
+          if (t.status === 'INACTIVE') return false;
+          return (
+            Array.isArray(t.members) &&
+            t.members.some((m: any) => {
+              const rId = (m.rescuerId?._id || m.rescuerId)?.toString();
+              return rId === currentUserId && m.status === 'PENDING';
+            })
+          );
+        });
+
+        if (foundTeam) {
+          setMyTeam(foundTeam);
+          setPendingTeam(null);
+          // Tải phương tiện của đội
+          try {
+            const vehRes = await backendApi.getVehicles({ teamId: foundTeam._id });
+            const rawVehicles = Array.isArray(vehRes?.data)
+              ? vehRes.data
+              : (vehRes?.data as any)?.vehicles || [];
+
+            if (vehRes.success && rawVehicles.length > 0) {
+              setTeamVehicles(rawVehicles);
+            } else if (Array.isArray(foundTeam.vehicles) && foundTeam.vehicles.length > 0) {
+              setTeamVehicles(foundTeam.vehicles);
+            }
+          } catch {
+            if (Array.isArray(foundTeam.vehicles)) {
+              setTeamVehicles(foundTeam.vehicles);
+            }
+          }
+        } else {
+          setMyTeam(null);
+          setTeamVehicles([]);
+          setPendingTeam(foundPendingTeam || null);
+        }
+      }
+    } catch (err) {
+      console.warn('Lỗi tải dữ liệu cứu hộ viên:', err);
+    }
+  }, [user?._id]);
+
+  const onPullToRefresh = React.useCallback(async () => {
+    setIsRefreshing(true);
+    await fetchRescuerData();
+    setIsRefreshing(false);
+  }, [fetchRescuerData]);
+
+  // Lắng nghe sự kiện SSE / Socket Realtime thay đổi trạng thái đội cứu hộ
+  useEffect(() => {
+    const subTeam = DeviceEventEmitter.addListener('team:membership_updated', (payload) => {
+      console.log('⚡ [RescuerProfileOverviewScreen] Nhận sự kiện cập nhật Đội cứu hộ realtime:', payload);
+      fetchRescuerData();
+    });
+
+    const subProfile = DeviceEventEmitter.addListener('user:profile_updated', () => {
+      fetchRescuerData();
+    });
+
+    const subVerification = DeviceEventEmitter.addListener('rescuer:verification_status_changed', () => {
+      fetchRescuerData();
+    });
+
     return () => {
-      isMounted = false;
+      subTeam.remove();
+      subProfile.remove();
+      subVerification.remove();
     };
-  }, [refreshTrigger, localRefreshTrigger, user?._id]);
+  }, [fetchRescuerData]);
+
+  useEffect(() => {
+    fetchRescuerData();
+  }, [refreshTrigger, localRefreshTrigger, fetchRescuerData]);
 
   // Dữ liệu thực tế từ User Profile
   const isLeader = user?.roles?.includes('LEADER');
@@ -975,6 +974,14 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onPullToRefresh}
+            colors={['#0284C7']}
+            tintColor="#0284C7"
+          />
+        }
       >
         {/* 2. Main Profile Card */}
         <View style={styles.profileCard}>

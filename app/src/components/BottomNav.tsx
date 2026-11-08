@@ -80,12 +80,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           const isSOS = tab.name === 'sos';
 
           if (isSOS) {
+            const hasActiveMission = isRescuer && activeMissionsCount > 0;
             return (
               <View key={tab.name} style={styles.sosWrapper}>
                 <TouchableOpacity
                   style={[
                     styles.sosButton,
-                    isRescuer && styles.missionButton,
+                    isRescuer && (hasActiveMission ? styles.missionButtonActive : styles.missionButtonReady),
                   ]}
                   onPress={() => onTabPress(tab.name)}
                   activeOpacity={0.8}
@@ -93,7 +94,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
                   <Ionicons
                     name={
                       isRescuer
-                        ? (isActive ? 'shield-checkmark' : 'shield-outline')
+                        ? ((hasActiveMission ? 'shield' : 'shield-checkmark') as any)
                         : (isActive ? tab.iconActive : tab.icon)
                     }
                     size={isRescuer ? 26 : 30}
@@ -105,7 +106,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
                   {/* Badge số nhiệm vụ đang xử lý */}
                   {isRescuer && activeMissionsCount > 0 && (
-                    <View style={styles.centerBadge}>
+                    <View style={[styles.centerBadge, { backgroundColor: '#B91C1C' }]}>
                       <Text style={styles.centerBadgeText}>
                         {activeMissionsCount > 9 ? '9+' : activeMissionsCount}
                       </Text>
@@ -260,13 +261,27 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: 1,
   },
-  missionButton: {
-    backgroundColor: '#0066FF',
+  missionButtonActive: {
+    backgroundColor: '#EF4444', // Màu ĐỎ khi đang có nhiệm vụ tác chiến
     ...Platform.select({
       ios: {
-        shadowColor: '#0066FF',
+        shadowColor: '#EF4444',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.45,
+        shadowOpacity: 0.5,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 10,
+      },
+    }),
+  },
+  missionButtonReady: {
+    backgroundColor: '#10B981', // Màu XANH khi không có nhiệm vụ (sẵn sàng nhận lệnh)
+    ...Platform.select({
+      ios: {
+        shadowColor: '#10B981',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.5,
         shadowRadius: 8,
       },
       android: {

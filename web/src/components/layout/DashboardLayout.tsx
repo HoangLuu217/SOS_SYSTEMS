@@ -53,7 +53,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         className="sos-main-content"
         style={{
           overflow:
-            (activeNavKey === 'map' && isAuthority) ||
+            activeNavKey === 'map' ||
+            activeNavKey === 'coordination' ||
             activeNavKey === 'hazard_reports' ||
             activeNavKey === 'shelters' ||
             activeNavKey === 'notifications' ||
@@ -61,6 +62,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               ? 'hidden'
               : 'auto',
           height: '100vh',
+          maxHeight: '100vh',
+          minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
         }}
@@ -91,7 +94,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               </div>
 
               {/* Huy hiệu khu vực địa bàn phụ trách ở góc phải header */}
-              {isAuthority && userAreaName && (
+              {isAuthority && (
                 <div
                   style={{
                     display: 'inline-flex',
@@ -106,10 +109,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     color: '#1d4ed8',
                     boxShadow: '0 1px 2px rgba(37, 99, 235, 0.05)',
                   }}
-                  title="Địa bàn bạn đang phụ trách quản lý"
+                  title="Địa bàn bạn đang phụ trách quản lý cứu hộ"
                 >
                   <MapPin size={14} style={{ color: '#2563eb' }} />
-                  <span>Khu vực: {userAreaName}</span>
+                  <span>
+                    Khu vực:{' '}
+                    {userAreaName
+                      ? userAreaName.includes('Đà Nẵng') || userAreaName.includes('Hà Nội') || userAreaName.includes('Hồ Chí Minh')
+                        ? userAreaName
+                        : `${userAreaName}, Thành phố Đà Nẵng`
+                      : 'Xã Xuân Phú, Thành phố Đà Nẵng'}
+                  </span>
                 </div>
               )}
             </header>

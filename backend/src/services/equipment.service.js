@@ -1,6 +1,8 @@
-const { Equipment, RescueTeam, AuthorityOrganization, AdministrativeArea, SosAssignment, SosRequest, User } = require('../models');
+const { Equipment, RescueTeam, AuthorityOrganization, AdministrativeArea, SosAssignment, SosRequest, User, Notification } = require('../models');
 const ApiError = require('../utils/apiError');
 const mongoose = require('mongoose');
+const { sendExpoPushNotification } = require('../utils/expoPush');
+const eventBus = require('./eventBus');
 
 class EquipmentService {
   /**
@@ -78,32 +80,47 @@ class EquipmentService {
       filter.name = { $regex: query.name.trim(), $options: 'i' };
     }
 
-    // Loc theo khu vuc (areaId) -> tim cac doi trong khu vuc do
+    // Loc theo khu vuc (areaId) -> tim tat ca cac doi va vat tu trong dia ban
     if (query.areaId && query.areaId !== 'ALL') {
-      let targetArea = null;
+      const areaMatches = [];
       if (mongoose.Types.ObjectId.isValid(query.areaId)) {
-        targetArea = await AdministrativeArea.findById(query.areaId);
+        const byId = await AdministrativeArea.findById(query.areaId);
+        if (byId) areaMatches.push(byId);
       }
-      if (!targetArea) {
-        targetArea = await AdministrativeArea.findOne({
-          $or: [{ code: query.areaId }, { name: new RegExp(query.areaId, 'i') }],
-        });
-      }
+      const byOther = await AdministrativeArea.find({
+        $or: [{ code: query.areaId }, { name: new RegExp(String(query.areaId).trim(), 'i') }],
+      });
+      byOther.forEach((a) => {
+        if (!areaMatches.some((m) => String(m._id) === String(a._id))) areaMatches.push(a);
+      });
 
-      if (targetArea) {
-        const relevantAreaIds = [targetArea._id];
-        const childWards = await AdministrativeArea.find({ parentId: targetArea._id }).select('_id');
-        childWards.forEach((w) => relevantAreaIds.push(w._id));
-        if (targetArea.parentId) relevantAreaIds.push(targetArea.parentId);
+      if (areaMatches.length > 0) {
+        const relevantAreaIds = new Set();
+        const cleanNames = [];
 
-        const cleanName = (targetArea.name || '')
-          .replace(/^(phường|xã|quận|huyện|thành phố|thị xã)\s+/i, '')
-          .trim();
+        for (const a of areaMatches) {
+          relevantAreaIds.add(String(a._id));
+          if (a.parentId) {
+            relevantAreaIds.add(String(a.parentId));
+            const parent = await AdministrativeArea.findById(a.parentId);
+            if (parent?.name) {
+              const pName = parent.name.replace(/^(phường|xã|quận|huyện|thành phố|thị xã)\s+/i, '').trim();
+              if (pName.length >= 3) cleanNames.push(pName);
+            }
+          }
+          const children = await AdministrativeArea.find({ parentId: a._id }).select('_id name');
+          children.forEach((c) => relevantAreaIds.add(String(c._id)));
 
-        const areaConditions = [{ areaId: { $in: relevantAreaIds } }];
-        if (cleanName.length >= 3) {
-          areaConditions.push({ name: new RegExp(cleanName, 'i') });
+          const cName = (a.name || '').replace(/^(phường|xã|quận|huyện|thành phố|thị xã)\s+/i, '').trim();
+          if (cName.length >= 3) cleanNames.push(cName);
         }
+
+        const areaConditions = [
+          { areaId: { $in: Array.from(relevantAreaIds).map((id) => new mongoose.Types.ObjectId(id)) } },
+        ];
+        cleanNames.forEach((cn) => {
+          if (cn.length >= 3) areaConditions.push({ name: new RegExp(cn, 'i') });
+        });
 
         const teamsInArea = await RescueTeam.find({ $or: areaConditions }).select('_id');
         const teamIds = teamsInArea.map((t) => t._id);
@@ -162,8 +179,48 @@ class EquipmentService {
         const team = await RescueTeam.findById(updateData.teamId);
         if (!team) throw new ApiError(404, 'Khong tim thay Doi cuu ho can dieu chuyen');
         equipment.teamId = updateData.teamId;
+
+        // Nếu Đội đích đã có bản ghi cùng tên & danh mục, tự động CỘNG DỒN
+        const existingInTeam = await Equipment.findOne({
+          teamId: team._id,
+          category: equipment.category,
+          name: { $regex: new RegExp(`^${equipment.name.trim()}$`, 'i') },
+          _id: { $ne: equipment._id },
+        });
+
+        if (existingInTeam) {
+          existingInTeam.quantity += equipment.quantity;
+          const mergeLog = `[Biên chế / Bổ sung +${equipment.quantity} ${equipment.unit} vào đội ${team.name}]`;
+          existingInTeam.note = existingInTeam.note ? `${existingInTeam.note} | ${mergeLog}` : mergeLog;
+          await existingInTeam.save();
+          await Equipment.findByIdAndDelete(equipment._id);
+          return existingInTeam.populate([
+            { path: 'teamId', select: 'name type areaId status leaderId', populate: { path: 'areaId', select: 'name code' } },
+            { path: 'providedBy', select: 'name shortName type' },
+          ]);
+        }
       } else {
         equipment.teamId = null;
+
+        // Khi RÚT VỀ KHO TỔNG: Kiểm tra xem Kho Tổng đã có bản ghi cùng tên & danh mục chưa để CỘNG DỒN
+        const existingInDepot = await Equipment.findOne({
+          teamId: null,
+          category: equipment.category,
+          name: { $regex: new RegExp(`^${equipment.name.trim()}$`, 'i') },
+          _id: { $ne: equipment._id },
+        });
+
+        if (existingInDepot) {
+          existingInDepot.quantity += equipment.quantity;
+          const mergeLog = `[Rút hồi về Kho Tổng: +${equipment.quantity} ${equipment.unit} từ ${equipment.serialNumber || 'biên chế đội'}]`;
+          existingInDepot.note = existingInDepot.note ? `${existingInDepot.note} | ${mergeLog}` : mergeLog;
+          await existingInDepot.save();
+          await Equipment.findByIdAndDelete(equipment._id);
+          return existingInDepot.populate([
+            { path: 'teamId', select: 'name type areaId status leaderId', populate: { path: 'areaId', select: 'name code' } },
+            { path: 'providedBy', select: 'name shortName type' },
+          ]);
+        }
       }
     }
 
@@ -255,13 +312,13 @@ class EquipmentService {
       throw new ApiError(400, `Số lượng bàn giao (${transferQty}) vượt quá cơ số hiện có (${sourceEquipment.quantity})`);
     }
 
-    if (targetTeamId === undefined || targetTeamId === '' || targetTeamId === null) {
+    if (targetTeamId === undefined || targetTeamId === '') {
       throw new ApiError(400, 'Vui lòng chọn đơn vị tiếp nhận bàn giao');
     }
 
     let validTargetTeamId = null;
     let targetTeamName = 'Kho Tổng / Dự Trữ';
-    if (targetTeamId !== 'NONE' && targetTeamId !== 'null' && targetTeamId !== 'UNASSIGNED') {
+    if (targetTeamId && targetTeamId !== 'NONE' && targetTeamId !== 'null' && targetTeamId !== 'UNASSIGNED') {
       const team = await RescueTeam.findById(targetTeamId);
       if (!team) throw new ApiError(404, 'Không tìm thấy Đội cứu hộ tiếp nhận');
       validTargetTeamId = team._id;
@@ -282,7 +339,7 @@ class EquipmentService {
       const existingInTarget = await Equipment.findOne({
         teamId: validTargetTeamId,
         category: sourceEquipment.category,
-        name: sourceEquipment.name,
+        name: { $regex: new RegExp(`^${sourceEquipment.name.trim()}$`, 'i') },
         _id: { $ne: sourceEquipment._id },
       });
 
@@ -314,7 +371,8 @@ class EquipmentService {
     let targetEquipment = await Equipment.findOne({
       teamId: validTargetTeamId,
       category: sourceEquipment.category,
-      name: sourceEquipment.name,
+      name: { $regex: new RegExp(`^${sourceEquipment.name.trim()}$`, 'i') },
+      _id: { $ne: sourceEquipment._id },
     });
 
     if (targetEquipment) {
@@ -325,10 +383,12 @@ class EquipmentService {
       targetEquipment = await Equipment.create({
         teamId: validTargetTeamId,
         providedBy: sourceEquipment.providedBy,
-        receivedAt: new Date(),
+        receivedAt: sourceEquipment.receivedAt || sourceEquipment.createdAt || new Date(),
         name: sourceEquipment.name,
         category: sourceEquipment.category,
-        serialNumber: sourceEquipment.serialNumber ? `${sourceEquipment.serialNumber}-${Date.now().toString().slice(-4)}` : null,
+        serialNumber: sourceEquipment.serialNumber || null,
+        supplyType: sourceEquipment.supplyType || 'DURABLE',
+        minThreshold: sourceEquipment.minThreshold || 20,
         quantity: transferQty,
         unit: sourceEquipment.unit,
         status: 'AVAILABLE',
@@ -346,7 +406,15 @@ class EquipmentService {
    * Xuat cap cuu tro / Tieu hao vat tu (giam so luong kho)
    */
   async consumeEquipment(id, { quantity, destination, note }) {
-    const equipment = await Equipment.findById(id);
+    let equipment = null;
+    if (id && mongoose.Types.ObjectId.isValid(id)) {
+      equipment = await Equipment.findById(id);
+    }
+    if (!equipment && id) {
+      equipment = await Equipment.findOne({
+        $or: [{ serialNumber: String(id).trim().toUpperCase() }, { name: new RegExp(String(id).trim(), 'i') }],
+      });
+    }
     if (!equipment) throw new ApiError(404, 'Không tìm thấy vật tư cần xuất cấp');
 
     const consumeQty = parseInt(quantity, 10);
@@ -377,7 +445,7 @@ class EquipmentService {
   /**
    * Xuat cap cuu tro tong hop nhieu vat tu cung luc
    */
-  async batchConsumeEquipments({ items, destination, recipientName, note, teamId, priority, user }) {
+  async batchConsumeEquipments({ items, destination, recipientName, note, teamId, priority, coordinates, user }) {
     if (!destination || !String(destination).trim()) {
       throw new ApiError(400, 'Vui lòng nhập điểm tiếp nhận cứu trợ / khu vực ngập lụt');
     }
@@ -397,6 +465,14 @@ class EquipmentService {
       if (!team) {
         throw new ApiError(404, `Không tìm thấy Đội cứu hộ có mã: ${teamId}`);
       }
+      if (team.status && team.status !== 'ACTIVE') {
+        const statusMap = {
+          INACTIVE: 'Tạm dừng hoạt động',
+          SUSPENDED: 'Đình chỉ hoạt động',
+        };
+        const statusLabel = statusMap[team.status] || team.status;
+        throw new ApiError(400, `Đội cứu hộ "${team.name}" hiện đang ở trạng thái "${statusLabel}", không thể tiếp nhận lệnh điều phối.`);
+      }
       if (team.leaderId) {
         chosenRescuerId = team.leaderId._id || team.leaderId;
       } else if (Array.isArray(team.members) && team.members.length > 0) {
@@ -415,16 +491,34 @@ class EquipmentService {
     for (const item of items) {
       const eqId = item.equipmentId || item._id;
       const qty = parseInt(item.quantity, 10);
-      if (!eqId) {
+      if (!eqId && !item.name) {
         throw new ApiError(400, 'Thiếu thông tin vật tư cần xuất');
       }
       if (!qty || qty <= 0) {
         throw new ApiError(400, 'Số lượng xuất của mỗi mặt hàng phải lớn hơn 0');
       }
 
-      const eq = await Equipment.findById(eqId);
+      let eq = null;
+      if (eqId && mongoose.Types.ObjectId.isValid(eqId)) {
+        eq = await Equipment.findById(eqId);
+      }
+      // Fallback: nếu không tìm thấy theo ID (do db vừa được re-seed và client giữ ID cũ), tìm theo tên hoặc serialNumber
+      if (!eq && item.name) {
+        eq = await Equipment.findOne({
+          name: new RegExp(`^${item.name.trim()}$`, 'i'),
+        });
+      }
+      if (!eq && eqId) {
+        eq = await Equipment.findOne({
+          $or: [
+            { serialNumber: String(eqId).trim().toUpperCase() },
+            { name: new RegExp(String(eqId).trim(), 'i') },
+          ],
+        });
+      }
+
       if (!eq) {
-        throw new ApiError(404, `Không tìm thấy vật tư có mã: ${eqId}`);
+        throw new ApiError(404, `Không tìm thấy vật tư có mã hoặc tên: ${eqId || item.name}`);
       }
       if (qty > eq.quantity) {
         throw new ApiError(400, `Vật tư "${eq.name}" chỉ còn tồn kho ${eq.quantity} ${eq.unit}, không đủ để xuất ${qty} ${eq.unit}`);
@@ -488,12 +582,19 @@ class EquipmentService {
           : 'HIGH';
 
       try {
+        let targetCoordinates = [108.152, 16.054]; // Mặc định nếu không cung cấp
+        if (Array.isArray(coordinates) && coordinates.length === 2 && !isNaN(coordinates[0]) && !isNaN(coordinates[1])) {
+          targetCoordinates = [Number(coordinates[0]), Number(coordinates[1])];
+        } else if (team.areaId?.centerPoint?.coordinates) {
+          targetCoordinates = team.areaId.centerPoint.coordinates;
+        }
+
         // Tạo SosRequest thể hiện điểm cứu trợ
         createdSosRequest = await SosRequest.create({
           citizenId: creatorId,
           location: {
             type: 'Point',
-            coordinates: [108.152, 16.054], // Tọa độ khu vực tác chiến
+            coordinates: targetCoordinates, // Tọa độ khu vực tác chiến chính xác
           },
           areaId,
           address: destText,
@@ -519,6 +620,10 @@ class EquipmentService {
           assignedAt: new Date(),
           missionType: 'RELIEF_DISPATCH',
           destination: destText,
+          location: {
+            type: 'Point',
+            coordinates: targetCoordinates,
+          },
           recipientName: recipientName ? String(recipientName).trim() : null,
           note: `[Lệnh xuất cấp cứu trợ] ${destText}${recipText}${noteText}`,
           supplies: suppliesList,
@@ -530,14 +635,145 @@ class EquipmentService {
           { path: 'rescuerId', select: 'name phone email role' },
         ]);
 
-        // Phát tín hiệu Realtime qua Socket.IO
-        const { getIO } = require('../socket');
-        const io = getIO();
-        if (io) {
-          io.emit('assignment:created', createdAssignment);
-          io.emit('assignment:new', createdAssignment);
-          io.emit('sos:created', createdSosRequest);
-          io.to(`user_${chosenRescuerId}`).emit('assignment:assigned', createdAssignment);
+        // 4. Gửi thông báo & Phát tín hiệu Realtime cho toàn bộ thành viên trong Đội cứu hộ
+        try {
+          const memberUserIds = new Set();
+          if (team.leaderId) {
+            const leaderIdStr = (team.leaderId._id || team.leaderId).toString();
+            memberUserIds.add(leaderIdStr);
+          }
+          if (Array.isArray(team.members)) {
+            for (const m of team.members) {
+              if (m && (m.status === 'APPROVED' || !m.status) && m.rescuerId) {
+                const mIdStr = (m.rescuerId._id || m.rescuerId).toString();
+                memberUserIds.add(mIdStr);
+              }
+            }
+          }
+          if (chosenRescuerId) {
+            memberUserIds.add(chosenRescuerId.toString());
+          }
+
+          const recipientUsers = await User.find({ _id: { $in: Array.from(memberUserIds) } });
+
+          const itemsSummary = suppliesList
+            .slice(0, 3)
+            .map((s) => `${s.quantity} ${s.unit} ${s.name}`)
+            .join(', ') + (suppliesList.length > 3 ? ` và ${suppliesList.length - 3} mặt hàng khác` : '');
+
+          const notificationDocs = recipientUsers.map((recUser) => ({
+            userId: recUser._id,
+            createdBy: user?._id || creatorId,
+            areaId: areaId || null,
+            areaName: team.areaId?.name || null,
+            sosId: createdSosRequest._id,
+            type: 'RESCUE',
+            title: `📦 LỆNH TIẾP TẾ CỨU TRỢ: ${team.name}`,
+            content: `Đội "${team.name}" vừa nhận lệnh xuất kho tiếp tế [${itemsSummary}] đến "${destText}". Yêu cầu các thành viên sẵn sàng cơ động thực hiện nhiệm vụ!`,
+            priority: chosenPriority,
+            data: {
+              type: 'RELIEF_MISSION',
+              assignmentId: createdAssignment._id.toString(),
+              sosId: createdSosRequest._id.toString(),
+              teamId: team._id.toString(),
+              teamName: team.name,
+              destination: destText,
+              recipientName: recipientName ? String(recipientName).trim() : null,
+              itemsCount: suppliesList.length,
+              supplies: suppliesList,
+              note: noteText,
+            },
+            isRead: false,
+            createdAt: new Date(),
+          }));
+
+          let savedNotifications = [];
+          if (notificationDocs.length > 0) {
+            savedNotifications = await Notification.insertMany(notificationDocs);
+          }
+
+          // A. Phát qua SSE Stream (eventBus) tới từng thành viên
+          savedNotifications.forEach((notification) => {
+            try {
+              eventBus.emit('notification_event', {
+                action: 'USER',
+                userId: notification.userId.toString(),
+                data: {
+                  _id: notification._id.toString(),
+                  title: notification.title,
+                  content: notification.content,
+                  type: notification.type,
+                  priority: notification.priority,
+                  areaId: notification.areaId?.toString() || null,
+                  areaName: notification.areaName,
+                  createdBy: user
+                    ? {
+                        _id: user._id,
+                        fullName: user.fullName,
+                        roles: user.roles,
+                      }
+                    : null,
+                  data: notification.data,
+                  isRead: false,
+                  createdAt: notification.createdAt.toISOString(),
+                },
+              });
+            } catch (sseErr) {
+              console.warn('[batchConsumeEquipments] Lỗi emit SSE notification_event:', sseErr.message);
+            }
+          });
+
+          // B. Phát qua Socket.IO tới toàn hệ thống và các thành viên
+          const { getIO } = require('../socket');
+          const io = getIO();
+          if (io) {
+            io.emit('assignment:created', createdAssignment);
+            io.emit('assignment:new', createdAssignment);
+            io.emit('sos:created', createdSosRequest);
+
+            savedNotifications.forEach((notification) => {
+              const uid = notification.userId.toString();
+              io.to(`user_${uid}`).emit('assignment:assigned', createdAssignment);
+              io.to(`user_${uid}`).emit('notification', notification);
+              io.to(`user_${uid}`).emit('sos:sync', {
+                type: 'RELIEF_MISSION',
+                teamId: team._id.toString(),
+                assignmentId: createdAssignment._id.toString(),
+              });
+            });
+          }
+
+          // C. Gửi Push Notification ra ngoài ứng dụng điện thoại (Expo Push Service)
+          const pushTokens = [];
+          recipientUsers.forEach((u) => {
+            if (u.pushToken && typeof u.pushToken === 'string' && u.pushToken.trim()) {
+              pushTokens.push(u.pushToken.trim());
+            }
+            if (u.citizen?.pushToken && typeof u.citizen.pushToken === 'string' && u.citizen.pushToken.trim()) {
+              pushTokens.push(u.citizen.pushToken.trim());
+            }
+          });
+
+          const uniquePushTokens = [...new Set(pushTokens)];
+          if (uniquePushTokens.length > 0) {
+            sendExpoPushNotification({
+              tokens: uniquePushTokens,
+              title: `🚨 [ĐIỀU ĐỘNG TIẾP TẾ] ${team.name}`,
+              body: `Lệnh xuất kho tiếp tế đến "${destText}". Sẵn sàng tác chiến!`,
+              priority: chosenPriority === 'CRITICAL' ? 'CRITICAL' : 'HIGH',
+              data: {
+                type: 'RESCUE',
+                assignmentId: createdAssignment._id.toString(),
+                sosId: createdSosRequest._id.toString(),
+                teamId: team._id.toString(),
+                destination: destText,
+              },
+            }).catch((pushErr) => {
+              console.warn('[batchConsumeEquipments] Lỗi gửi Expo push notification:', pushErr.message);
+            });
+          }
+        } catch (notifErr) {
+          console.warn('[batchConsumeEquipments] Lỗi khi gửi thông báo cho đội cứu hộ:', notifErr);
         }
       } catch (assignErr) {
         console.warn('[batchConsumeEquipments] Lỗi khi tạo nhiệm vụ Assignment:', assignErr);
