@@ -1219,6 +1219,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     (typeof sos?.description === 'string' && sos.description.includes('xuất cấp cứu trợ')) ||
     (typeof assignment?.note === 'string' && assignment.note.includes('xuất cấp cứu trợ'));
 
+  const isShoreHandoffMission =
+    assignment?.missionType === 'SHORE_HANDOFF' ||
+    (typeof assignment?.note === 'string' && assignment.note.toLowerCase().includes('đón bờ')) ||
+    (assignment?.vehicleId?.type === 'AMBULANCE' && !!sos?.shoreHandoff);
+
   const sosCode = sos?.sosCode || 'SOS';
   const recipientName =
     assignment?.recipientName ||
@@ -2603,8 +2608,8 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               })()}
             </View>
 
-            {/* KHỐI YÊU CẦU XE ĐẾN CỨU HỘ / XE ĐÓN BỜ (RELAY HANDOFF) - CHỈ HIỂN THỊ KHI ĐÃ TIẾP NHẬN NHIỆM VỤ */}
-            {missionState !== 'ASSIGNED_PENDING_ACCEPTANCE' && (
+            {/* KHỐI YÊU CẦU XE ĐẾN CỨU HỘ / XE ĐÓN BỜ (RELAY HANDOFF) - CHỈ DÀNH CHO ĐỘI TRÊN NƯỚC, KHÔNG HIỂN THỊ CHO CHÍNH XE ĐI ĐÓN */}
+            {!isShoreHandoffMission && missionState !== 'ASSIGNED_PENDING_ACCEPTANCE' && (
               shoreHandoffData && shoreHandoffData.status === 'ASSIGNED' ? (
               <View
                 style={{
@@ -2855,7 +2860,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   >
                     <Ionicons name="flash" size={20} color="#FFFFFF" />
                     <Text style={styles.grabBigBtnText}>
-                      {isReliefMission ? 'NHẬN LỆNH & XUẤT KHO TIẾP TẾ' : 'NHẬN LỆNH & XUẤT KÍCH'}
+                      {isShoreHandoffMission
+                        ? 'NHẬN LỆNH & XUẤT PHÁT ĐÓN'
+                        : isReliefMission
+                        ? 'NHẬN LỆNH & XUẤT KHO TIẾP TẾ'
+                        : 'NHẬN LỆNH & XUẤT KÍCH'}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -2868,7 +2877,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   >
                     <Ionicons name="location-sharp" size={22} color="#FFFFFF" />
                     <Text style={styles.grabBigBtnText}>
-                      {isReliefMission ? 'ĐÃ ĐẾN ĐIỂM CỨU TRỢ' : 'ĐÃ ĐẾN HIỆN TRƯỜNG (ARRIVED)'}
+                      {isShoreHandoffMission
+                        ? 'ĐÃ ĐẾN BẾN ĐÓN (ARRIVED)'
+                        : isReliefMission
+                        ? 'ĐÃ ĐẾN ĐIỂM CỨU TRỢ'
+                        : 'ĐÃ ĐẾN HIỆN TRƯỜNG (ARRIVED)'}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -2883,7 +2896,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                     >
                       <Ionicons name="checkmark-done-circle" size={24} color="#FFFFFF" />
                       <Text style={styles.grabBigBtnText}>
-                        {shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
+                        {isShoreHandoffMission
+                          ? 'ĐÃ ĐÓN NẠN NHÂN & HOÀN TẤT'
+                          : shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
                           ? 'BÀN GIAO LÊN XE & HOÀN TẤT'
                           : isReliefMission
                           ? 'BÀN GIAO XONG & HOÀN TẤT'
@@ -3766,7 +3781,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               <View style={styles.modalHeaderRow}>
                 <Ionicons name="checkmark-circle" size={24} color="#16A34A" />
                 <Text style={styles.modalTitle}>
-                  {shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
+                  {isShoreHandoffMission
+                    ? 'Báo Cáo Tiếp Nhận Nạn Nhân Tại Bến'
+                    : shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
                     ? 'Biên Bản Bàn Giao Lên Xe Đón'
                     : isReliefMission
                     ? 'Biên Bản Bàn Giao Cứu Trợ'
@@ -3778,7 +3795,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               </View>
 
               <Text style={styles.modalDesc}>
-                {shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
+                {isShoreHandoffMission
+                  ? 'Xác nhận đã đón nạn nhân tại bến và chuyển về nơi an toàn:'
+                  : shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
                   ? `Bàn giao nạn nhân lên xe đón bờ (${shoreHandoffData.assignedVehiclePlate || shoreHandoffData.assignedVehicleName}), chụp ảnh xác nhận và hoàn tất nhiệm vụ:`
                   : isReliefMission
                   ? 'Ghi nhận kết quả bàn giao nhu yếu phẩm cứu trợ để lưu hồ sơ và đồng bộ báo cáo cho Ban Chỉ Huy:'
@@ -3827,7 +3846,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   <TouchableOpacity style={styles.takePhotoBtn} onPress={handleCaptureFieldPhoto}>
                     <Ionicons name="camera-outline" size={20} color="#0284C7" />
                     <Text style={styles.takePhotoBtnText}>
-                      {shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
+                      {isShoreHandoffMission
+                        ? 'Chụp ảnh đón nạn nhân tại bến'
+                        : shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
                         ? 'Chụp ảnh bàn giao lên xe đón bờ'
                         : isReliefMission
                         ? 'Chụp ảnh biên bản / cấp phát cứu trợ'
@@ -3851,7 +3872,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   disabled={actionLoading}
                 >
                   <Text style={styles.modalRejectConfirmBtnText}>
-                    {shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
+                    {isShoreHandoffMission
+                      ? 'Xác Nhận Đã Đón & Hoàn Tất'
+                      : shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
                       ? 'Xác Nhận Bàn Giao & Hoàn Tất'
                       : isReliefMission
                       ? 'Xác Nhận Đã Bàn Giao'
