@@ -52,17 +52,15 @@
 }
 
 .authorities-executive-container .executive-table th {
-  padding: 10px 10px !important;
+  padding: 12px 10px !important;
   font-size: 13px !important;
   font-weight: 800 !important;
-  color: #1E293B !important;
-  font-weight: 700 !important;
+  color: #0f172a !important;
   text-transform: uppercase !important;
-  letter-spacing: 0.3px !important;
-  color: #475569 !important;
+  letter-spacing: 0.4px !important;
   white-space: nowrap !important;
-  border-bottom: 1px solid #e2e8f0 !important;
-  background: #f8fafc;
+  border-bottom: 2px solid #cbd5e1 !important;
+  background: #f1f5f9 !important;
 }
 
 .authorities-executive-container .executive-table td {
