@@ -3315,18 +3315,40 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         <Modal visible={supplyRequestModalVisible} transparent animationType="slide">
           <View style={styles.modalBackdrop}>
             <View style={[styles.modalCard, { maxHeight: SCREEN_HEIGHT * 0.85 }]}>
-              <View style={styles.modalHeaderRow}>
-                <MaterialCommunityIcons name="package-variant-plus" size={24} color="#0284C7" />
-                <View style={{ flex: 1, marginLeft: 8 }}>
-                  <Text style={styles.modalTitle}>Yêu Cầu Chi Viện Vật Tư</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 10,
+                    backgroundColor: '#E0F2FE',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 10,
+                  }}
+                >
+                  <MaterialCommunityIcons name="package-variant-plus" size={22} color="#0284C7" />
+                </View>
+                <View style={{ flex: 1, justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A', lineHeight: 21 }}>
+                    Yêu Cầu Chi Viện Vật Tư
+                  </Text>
                   {authorityName ? (
-                    <Text style={{ fontSize: 11, color: '#0284C7', fontWeight: '700' }} numberOfLines={1}>
+                    <Text
+                      style={{ fontSize: 11.5, color: '#0284C7', fontWeight: '700', marginTop: 2 }}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
                       Kho: {authorityName}
                     </Text>
                   ) : null}
                 </View>
-                <TouchableOpacity onPress={handleCloseSupplyRequestModal}>
-                  <Feather name="x" size={20} color="#64748B" />
+                <TouchableOpacity
+                  onPress={handleCloseSupplyRequestModal}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={{ padding: 4, marginLeft: 8 }}
+                >
+                  <Feather name="x" size={22} color="#64748B" />
                 </TouchableOpacity>
               </View>
 
