@@ -16,8 +16,7 @@ export {
 
 // Feature Views
 import { SosRequestsView } from '@/features/sos';
-// Merged into SosRequestsView
-import { RescuersView } from '@/features/rescuers';
+import { RescuersView, RescuerApprovalView } from '@/features/rescuers';
 import { ResourcesView } from '@/features/resources';
 import { AlertsView } from '@/features/alerts';
 import { WeatherView } from '@/features/weather';
@@ -65,7 +64,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
     // 3.1. Duyệt hồ sơ đăng ký cứu hộ viên
     case 'rescuers_approval':
-      return <RescuersView mode="admin" />;
+      return <RescuerApprovalView user={user} />;
 
     // 4. Phương tiện & Nhu yếu phẩm
     case 'resources':

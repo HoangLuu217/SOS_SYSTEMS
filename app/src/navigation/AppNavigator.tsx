@@ -44,7 +44,7 @@ export function AuthenticatedApp() {
   const roles = Array.isArray(user?.roles) ? user.roles : [];
   const isRescuer =
     roles.includes('LEADER') ||
-    (roles.includes('RESCUER') && user?.rescuer?.verificationStatus !== 'PENDING');
+    (roles.includes('RESCUER') && user?.rescuer?.verificationStatus === 'VERIFIED');
 
   const { unreadCount, setNavigateHandler } = useNotifications();
 

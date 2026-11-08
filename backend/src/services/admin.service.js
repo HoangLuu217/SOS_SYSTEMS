@@ -475,18 +475,43 @@ class AdminService {
 
         const apiKey = process.env.RESEND_API_KEY;
         if (apiKey) {
-          const transporter = nodemailer.createTransport({
-            host: 'smtp.resend.com',
-            port: 465,
-            secure: true,
-            auth: {
-              user: 'resend',
-              pass: apiKey,
-            },
-          });
-          await transporter.sendMail(mailOptions);
-          emailSent = true;
-          console.log(`[Admin Create User] Đã gửi thông tin tài khoản và mật khẩu tới ${email}`);
+          try {
+            const transporter = nodemailer.createTransport({
+              host: 'smtp.resend.com',
+              port: 465,
+              secure: true,
+              auth: {
+                user: 'resend',
+                pass: apiKey,
+              },
+            });
+            await transporter.sendMail(mailOptions);
+            emailSent = true;
+            console.log(`[Admin Create User] Đã gửi thông tin tài khoản và mật khẩu tới ${email} qua Resend SMTP`);
+          } catch (smtpErr) {
+            console.warn(`[Admin Create User Resend SMTP fallback to REST API]: ${smtpErr.message}`);
+            const resp = await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                from: fromAddress,
+                to: [email.trim().toLowerCase()],
+                subject: mailOptions.subject,
+                html: mailOptions.html,
+                text: mailOptions.text,
+              }),
+            });
+            if (resp.ok) {
+              emailSent = true;
+              console.log(`[Admin Create User] Đã gửi thông tin tài khoản tới ${email} qua Resend REST API`);
+            } else {
+              const errBody = await resp.text();
+              throw new Error(`Resend API error: ${errBody}`);
+            }
+          }
         }
       } catch (err) {
         console.error('[Admin Create User Email Error]:', err.message);
@@ -524,7 +549,7 @@ class AdminService {
   /**
    * Xác minh / từ chối cứu hộ viên
    */
-  async verifyRescuer(id, verificationStatus) {
+  async verifyRescuer(id, verificationStatus, reason = '') {
     const ALLOWED = ['VERIFIED', 'REJECTED'];
     if (!ALLOWED.includes(verificationStatus)) {
       throw new ApiError(400, `verificationStatus không hợp lệ. Cho phép: ${ALLOWED.join(', ')}`);
@@ -532,12 +557,9 @@ class AdminService {
 
     const user = await User.findById(id);
     if (!user) throw new ApiError(404, 'Không tìm thấy cứu hộ viên này');
-    if (!user.roles.includes('RESCUER')) {
-      if (verificationStatus === 'VERIFIED') {
-        user.roles.push('RESCUER');
-      } else {
-        throw new ApiError(400, 'Tài khoản này không có vai trò RESCUER');
-      }
+
+    if (!user.rescuer) {
+      user.rescuer = {};
     }
 
     user.rescuer.verificationStatus = verificationStatus;
@@ -546,6 +568,30 @@ class AdminService {
       if (user.status === 'PENDING') user.status = 'ACTIVE';
       if (!user.roles.includes('RESCUER')) {
         user.roles.push('RESCUER');
+      }
+    } else if (verificationStatus === 'REJECTED') {
+      user.rescuer.availabilityStatus = 'OFFLINE';
+      // Thu hồi quyền RESCUER: Đưa về CITIZEN
+      user.roles = (user.roles || []).filter((r) => r !== 'RESCUER');
+      if (user.roles.length === 0) {
+        user.roles = ['CITIZEN'];
+      }
+      if (user.role === 'RESCUER') {
+        user.role = 'CITIZEN';
+      }
+
+      // Tự động rút khỏi các Đội cứu hộ địa phương
+      try {
+        await RescueTeam.updateMany(
+          { 'members.rescuerId': user._id },
+          { $pull: { members: { rescuerId: user._id } } }
+        );
+        await RescueTeam.updateMany(
+          { leaderId: user._id },
+          { $unset: { leaderId: '' } }
+        );
+      } catch (teamErr) {
+        console.warn('⚠️ Lỗi rút cứu hộ khỏi đội:', teamErr.message);
       }
     }
     await user.save();
@@ -556,10 +602,12 @@ class AdminService {
       const userIdStr = user._id.toString();
 
       // 1. Tạo bản ghi Notification lưu trữ trong DB
-      const notifTitle = isApproved ? '🎉 Hồ sơ cứu hộ đã được phê duyệt!' : 'Thông báo kết quả duyệt hồ sơ cứu hộ';
+      const notifTitle = isApproved ? '🎉 Hồ sơ cứu hộ đã được phê duyệt!' : 'Thông báo kết quả / Thu hồi tư cách Cứu hộ viên';
       const notifContent = isApproved
         ? 'Chúc mừng bạn! Hồ sơ đăng ký Cứu hộ viên đã được chính quyền phê duyệt. Bạn đã có thể nhận lệnh điều phối và gia nhập đội cứu hộ.'
-        : 'Hồ sơ đăng ký Cứu hộ viên của bạn chưa đáp ứng đủ điều kiện hoặc đã bị từ chối.';
+        : (reason && reason.trim())
+          ? `Tư cách Cứu hộ viên của bạn đã bị chính quyền thu hồi/từ chối. Lý do: ${reason.trim()}`
+          : 'Hồ sơ đăng ký Cứu hộ viên của bạn đã bị thu hồi hoặc từ chối bởi Ban chỉ huy địa phương.';
       const broadcastId = `rescuer_verification_${userIdStr}_${verificationStatus}`;
 
       const notifDoc = await Notification.create({

@@ -126,7 +126,7 @@ class AuthController {
   async forgotPassword(req, res, next) {
     try {
       const { email, phone, account, identifier } = req.body;
-      const target = phone || account || identifier || email;
+      const target = (email && typeof email === 'string' && email.trim()) ? email.trim() : (phone || account || identifier);
       const result = await authService.forgotPassword(target);
 
       return sendSuccess(res, 200, result.message, result);

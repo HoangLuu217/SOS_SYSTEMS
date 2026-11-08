@@ -101,7 +101,7 @@ export const IncidentFeed = ({
     });
   }, [sosRequests, isAdmin, adminDistrictFilter]);
 
-  // Tab counts based on current scoped jurisdiction (bỏ hoàn thành)
+  // Tab counts based on current scoped jurisdiction (chỉ tính các ca đang hoạt động, bỏ hoàn thành & đã hủy)
   const tabCounts = useMemo(() => {
     let unassigned = 0;
     let urgent = 0;
@@ -111,6 +111,7 @@ export const IncidentFeed = ({
       const hasPendingShoreRelay = Boolean(
         s.shoreHandoff && (s.shoreHandoff.status === 'REQUESTED' || s.shoreHandoff.status === 'ASSIGNED')
       );
+      if (['CANCELLED', 'REJECTED'].includes(s.status)) return;
       if (s.status === 'COMPLETED' && !hasPendingShoreRelay) return;
       const isAssigned = Boolean((s.assignmentId && s.status !== 'CANCELLED') || hasPendingShoreRelay);
       if (!isAssigned) unassigned++;
@@ -142,7 +143,7 @@ export const IncidentFeed = ({
       const hasPendingShoreRelay = Boolean(
         s.shoreHandoff && (s.shoreHandoff.status === 'REQUESTED' || s.shoreHandoff.status === 'ASSIGNED')
       );
-      // Bỏ các ca đã hoàn thành khỏi feed tác chiến trực tiếp (trừ khi đang có yêu cầu đón bờ cần điều xe)
+      if (['CANCELLED', 'REJECTED'].includes(s.status)) return false;
       if (s.status === 'COMPLETED' && !hasPendingShoreRelay) return false;
 
       // 1. Search query matching
@@ -389,28 +390,20 @@ export const IncidentFeed = ({
               {/* Card Top: Code + Priority Pill + Time Elapsed */}
               <div className="compact-card-top">
                 <div className="code-beacon-wrapper">
-                  <span className="beacon-dot" />
-                  <span className="card-code-mono">{sos.sosCode}</span>
-                  {sos.id.length === 24 && (
+                  <span className="beacon-dot pulse-red" />
+                  <span className="card-code-mono">
+                    {sos.sosCode}
+                  </span>
+                  {sos.senderRole === 'RESCUER' && (
                     <span
-                      style={{
-                        fontSize: 8.5,
-                        fontWeight: 800,
-                        backgroundColor: sos.senderRole === 'RESCUER' ? '#2563eb' : '#16a34a',
-                        color: '#ffffff',
-                        padding: '1px 5px',
-                        borderRadius: 3,
-                        marginLeft: 3,
-                        letterSpacing: '0.2px',
-                        flexShrink: 0,
-                      }}
+                      className="sender-role-badge rescuer"
                       title={
-                        sos.senderRole === 'RESCUER'
+                        lang === 'vi'
                           ? 'Tín hiệu khẩn cấp từ lực lượng cứu hộ hiện trường'
-                          : 'Tín hiệu gửi trực tiếp từ ứng dụng SOS người dân'
+                          : 'Reported by field rescuer'
                       }
                     >
-                      {sos.senderRole === 'RESCUER' ? 'RESCUER' : 'CITIZEN'}
+                      {lang === 'vi' ? 'Cứu hộ' : 'Rescuer'}
                     </span>
                   )}
                 </div>
@@ -667,9 +660,13 @@ export const IncidentFeed = ({
         })}
 
         {filteredIncidents.length === 0 && (
-          <div className="feed-empty-state">
-            <p style={{ margin: 0, fontWeight: 600, color: 'var(--sos-text-muted)' }}>
-              {lang === 'vi' ? 'Không có tin SOS nào theo bộ lọc.' : 'No SOS incidents match current filter.'}
+          <div className="feed-empty-state" style={{ padding: '32px 16px', textAlign: 'center' }}>
+            <div style={{ fontSize: 24, marginBottom: 8 }}>🛡️</div>
+            <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 13, color: 'var(--sos-text-primary)' }}>
+              {lang === 'vi' ? 'Địa bàn an toàn' : 'Area is safe'}
+            </p>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--sos-text-muted)' }}>
+              {lang === 'vi' ? 'Hiện không có yêu cầu SOS nào đang chờ điều phối.' : 'No active rescue requests pending.'}
             </p>
           </div>
         )}

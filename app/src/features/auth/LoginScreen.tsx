@@ -13,9 +13,11 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import { CustomInput, PrimaryButton, GoogleButton, AlertModal, LogoSOS } from '@/components';
 import { useAuth } from '@/context/AuthContext';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { EmergencyDirectoryModal } from './EmergencyDirectoryModal';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -35,6 +37,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [showEmergencyDirectory, setShowEmergencyDirectory] = useState(false);
 
   // Tự động làm sạch mật khẩu khi đăng xuất
   useEffect(() => {
@@ -119,10 +122,28 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar barStyle="light-content" />
 
       {/* Vùng hiển thị form đăng nhập với nền trong suốt (nền ảnh duy trì tại cấp cha) */}
       <View style={styles.backgroundImage}>
+        {/* Nút Gọi Khẩn Cấp tròn trên góc phải màn hình cho người dân chưa đăng nhập */}
+        <View
+          style={[
+            styles.topRightHeader,
+            { top: Math.max(insets.top + 6, Platform.OS === 'android' ? 36 : 14) },
+          ]}
+          pointerEvents="box-none"
+        >
+          <TouchableOpacity
+            style={styles.emergencyCallCircleBtn}
+            onPress={() => setShowEmergencyDirectory(true)}
+            activeOpacity={0.75}
+            accessibilityLabel="Đường dây nóng cứu nạn địa phương"
+          >
+            <Ionicons name="call" size={19} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+
         <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -301,6 +322,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         message={alertInfo.message}
         onClose={() => setAlertInfo(prev => ({ ...prev, visible: false }))}
       />
+
+      {/* Modal danh bạ đường dây nóng các cơ quan / ban chỉ huy địa phương */}
+      <EmergencyDirectoryModal
+        visible={showEmergencyDirectory}
+        onClose={() => setShowEmergencyDirectory(false)}
+      />
     </View>
   );
 };
@@ -315,6 +342,34 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: 'transparent',
+    position: 'relative',
+  },
+  /* Nút Gọi Cứu Nạn khẩn cấp hình tròn trên góc phải màn hình */
+  topRightHeader: {
+    position: 'absolute',
+    right: 18,
+    zIndex: 99,
+  },
+  emergencyCallCircleBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#16A34A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.65)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#16A34A',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.45,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
   },
   safeArea: {
     flex: 1,
@@ -331,7 +386,7 @@ const styles = StyleSheet.create({
   },
   centerContainer: {
     width: '100%',
-    maxWidth: 310,
+    maxWidth: 345,
     alignItems: 'center',
   },
   /* Bóng đổ mềm cho khung kính */

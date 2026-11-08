@@ -72,7 +72,7 @@ class EquipmentController {
   /** POST /equipments/batch-consume */
   async batchConsumeEquipments(req, res, next) {
     try {
-      const { items, destination, recipientName, note, teamId, priority } = req.body;
+      const { items, destination, recipientName, note, teamId, priority, coordinates } = req.body;
       const result = await equipmentService.batchConsumeEquipments({
         items,
         destination,
@@ -80,6 +80,7 @@ class EquipmentController {
         note,
         teamId,
         priority,
+        coordinates,
         user: req.user,
       });
       const count = result.updatedEquipments ? result.updatedEquipments.length : (Array.isArray(result) ? result.length : 0);

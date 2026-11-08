@@ -82,7 +82,7 @@ const formatDateDisplay = (val?: any): string => {
       const year = d.getFullYear();
       return `${day}/${month}/${year}`;
     }
-  } catch {}
+  } catch { }
   return str.split('T')[0] || str;
 };
 
@@ -109,7 +109,7 @@ const parseDateString = (str?: string): Date => {
   try {
     const d = new Date(clean);
     if (!isNaN(d.getTime())) return d;
-  } catch {}
+  } catch { }
 
   const fallback = new Date();
   fallback.setFullYear(fallback.getFullYear() - 20);
@@ -164,7 +164,7 @@ export const MandatoryOnboardingModal: React.FC = () => {
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [phoneSuccess, setPhoneSuccess] = useState<string | null>(null);
   const { seconds: countdown, start: startCountdown } = useCountdown({ initialSeconds: 60 });
-  const otpInputRef = useRef<TextInput>(null);
+  const otpInputRef = useRef<any>(null);
 
   // ===================== STATE: HOÀN THIỆN THÔNG TIN CÁ NHÂN =====================
   const initialAddr = useMemo(() => parseAddressComponents(user?.address), [user?.address]);
@@ -188,6 +188,7 @@ export const MandatoryOnboardingModal: React.FC = () => {
   const [loadingWards, setLoadingWards] = useState(false);
   const [showProvincePicker, setShowProvincePicker] = useState(false);
   const [showWardPicker, setShowWardPicker] = useState(false);
+  const [showGenderPicker, setShowGenderPicker] = useState(false);
   const [provinceSearch, setProvinceSearch] = useState('');
   const [wardSearch, setWardSearch] = useState('');
 
@@ -304,12 +305,12 @@ export const MandatoryOnboardingModal: React.FC = () => {
     }
   };
 
-  const handleVerifyPhoneOtp = async () => {
+  const handleVerifyPhoneOtp = async (codeToVerify?: string) => {
     setPhoneError(null);
     setPhoneSuccess(null);
 
     const cleanPhone = phoneInput.trim().replace(/\s+/g, '');
-    const cleanOtp = phoneOtpCode.trim();
+    const cleanOtp = (codeToVerify || phoneOtpCode).trim();
 
     if (!cleanOtp || cleanOtp.length < 6) {
       setPhoneError('Vui lòng nhập đủ 6 chữ số mã OTP.');
@@ -468,6 +469,53 @@ export const MandatoryOnboardingModal: React.FC = () => {
   return (
     <Modal visible={isVisible} animationType="slide" transparent={false} statusBarTranslucent>
       <View style={styles.container}>
+        {/* ===================== CỐ ĐỊNH PHẦN ĐẦU (KHÔNG CUỘN) ===================== */}
+        <View style={styles.fixedHeader}>
+          {/* Nút Đăng xuất ở góc trên bên phải */}
+          <TouchableOpacity
+            style={styles.headerLogoutBtn}
+            onPress={handleLogout}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            activeOpacity={0.7}
+          >
+            <Feather name="log-out" size={19} color="#EF4444" />
+          </TouchableOpacity>
+
+          {/* Logo SOS */}
+          <View style={styles.topLogoWrap}>
+            <LogoSOS style={styles.logoImage} />
+            <Text style={styles.appBrandText}>SOS SYSTEMS</Text>
+          </View>
+
+          {/* Thanh tiến trình (Step Progress: 1. Xác thực SĐT - 2. Thông tin cá nhân) */}
+          <View style={styles.progressContainer}>
+            <View style={[styles.progressStep, step === 'PHONE' && styles.progressStepActive]}>
+              <View style={[styles.stepDot, step === 'PHONE' && styles.stepDotActive]}>
+                {isPhoneOk ? (
+                  <Feather name="check" size={12} color="#FFFFFF" />
+                ) : (
+                  <Text style={[styles.stepDotNum, step === 'PHONE' && styles.stepDotNumActive]}>1</Text>
+                )}
+              </View>
+              <Text style={[styles.stepLabel, step === 'PHONE' && styles.stepLabelActive]}>
+                Xác thực SĐT
+              </Text>
+            </View>
+
+            <View style={styles.progressLine} />
+
+            <View style={[styles.progressStep, step === 'PROFILE' && styles.progressStepActive]}>
+              <View style={[styles.stepDot, step === 'PROFILE' && styles.stepDotActive]}>
+                <Text style={[styles.stepDotNum, step === 'PROFILE' && styles.stepDotNumActive]}>2</Text>
+              </View>
+              <Text style={[styles.stepLabel, step === 'PROFILE' && styles.stepLabelActive]}>
+                Thông tin cá nhân
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ===================== PHẦN NỘI DUNG CUỘN (SCROLLABLE CARD) ===================== */}
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -477,153 +525,183 @@ export const MandatoryOnboardingModal: React.FC = () => {
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
+            scrollEnabled={false}
+            bounces={false}
+            overScrollMode="never"
           >
-            {/* Logo SOS thương hiệu nổi bật */}
-            <View style={styles.topLogoWrap}>
-              <LogoSOS style={styles.logoImage} />
-              <Text style={styles.appBrandText}>SOS SYSTEMS</Text>
-            </View>
-
-            {/* Thanh tiến trình (Step Progress) */}
-            <View style={styles.progressContainer}>
-              <View style={[styles.progressStep, step === 'PHONE' && styles.progressStepActive]}>
-                <View style={[styles.stepDot, step === 'PHONE' && styles.stepDotActive]}>
-                  {isPhoneOk ? (
-                    <Feather name="check" size={12} color="#FFFFFF" />
-                  ) : (
-                    <Text style={[styles.stepDotNum, step === 'PHONE' && styles.stepDotNumActive]}>1</Text>
-                  )}
-                </View>
-                <Text style={[styles.stepLabel, step === 'PHONE' && styles.stepLabelActive]}>
-                  Xác thực SĐT
-                </Text>
-              </View>
-
-              <View style={styles.progressLine} />
-
-              <View style={[styles.progressStep, step === 'PROFILE' && styles.progressStepActive]}>
-                <View style={[styles.stepDot, step === 'PROFILE' && styles.stepDotActive]}>
-                  <Text style={[styles.stepDotNum, step === 'PROFILE' && styles.stepDotNumActive]}>2</Text>
-                </View>
-                <Text style={[styles.stepLabel, step === 'PROFILE' && styles.stepLabelActive]}>
-                  Thông tin cá nhân
-                </Text>
-              </View>
-            </View>
 
             {/* ========================================================
                 BƯỚC 1: XÁC THỰC SỐ ĐIỆN THOẠI (DÀNH CHO GOOGLE / CHƯA XÁC THỰC SĐT)
                ======================================================== */}
             {step === 'PHONE' && (
               <View style={styles.cardContainer}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.headerIconWrap}>
-                    <Feather name="phone-call" size={24} color="#0066FF" />
-                  </View>
-                  <Text style={styles.cardTitle}>Xác thực số điện thoại</Text>
-                  <Text style={styles.cardSubtitle}>
-                    Để bảo vệ an toàn của bạn và lực lượng cứu hộ có thể liên lạc khẩn cấp khi xảy ra thiên tai, vui lòng xác minh số điện thoại cá nhân.
-                  </Text>
-                </View>
-
-                {/* Nhập số điện thoại */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>
-                    Số điện thoại <Text style={styles.requiredStar}>*</Text>
-                  </Text>
-                  <View style={[styles.inputBox, phoneError ? styles.inputBoxError : null]}>
-                    <Feather name="phone" size={18} color="#0066FF" style={styles.inputIcon} />
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder="Ví dụ: 0912 345 678"
-                      placeholderTextColor="#94A3B8"
-                      keyboardType="phone-pad"
-                      value={phoneInput}
-                      onChangeText={(t) => {
-                        setPhoneInput(t);
-                        if (phoneError) setPhoneError(null);
-                      }}
-                      editable={!isSendingOtp && !isVerifyingOtp}
-                    />
-                  </View>
-                </View>
-
-                {/* Nút gửi mã OTP */}
-                <TouchableOpacity
-                  style={[
-                    styles.primaryButton,
-                    (isSendingOtp || (otpSent && countdown > 0)) && styles.disabledButton,
-                  ]}
-                  onPress={handleSendPhoneOtp}
-                  disabled={isSendingOtp || (otpSent && countdown > 0)}
-                  activeOpacity={0.8}
-                >
-                  {isSendingOtp ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>
-                      {otpSent && countdown > 0
-                        ? `Gửi lại mã sau (${countdown}s)`
-                        : otpSent
-                        ? 'Gửi lại mã OTP'
-                        : 'Gửi mã OTP qua SMS'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-
-                {/* Vùng nhập mã OTP khi đã gửi */}
-                {otpSent && (
-                  <View style={styles.otpSection}>
-                    <Text style={styles.inputLabel}>
-                      Nhập mã OTP gồm 6 chữ số <Text style={styles.requiredStar}>*</Text>
-                    </Text>
-                    <View style={[styles.inputBox, phoneError ? styles.inputBoxError : null]}>
-                      <MaterialCommunityIcons
-                        name="numeric"
-                        size={22}
-                        color="#0066FF"
-                        style={styles.inputIcon}
-                      />
-                      <TextInput
-                        ref={otpInputRef}
-                        style={[styles.textInput, styles.otpInput]}
-                        placeholder="••••••"
-                        placeholderTextColor="#94A3B8"
-                        keyboardType="number-pad"
-                        maxLength={6}
-                        value={phoneOtpCode}
-                        onChangeText={(t) => {
-                          setPhoneOtpCode(t);
-                          if (phoneError) setPhoneError(null);
-                        }}
-                        editable={!isVerifyingOtp}
-                      />
+                {!otpSent ? (
+                  <>
+                    {/* GIAO DIỆN HÌNH 2: NHẬP SỐ ĐIỆN THOẠI */}
+                    <View style={styles.cardHeader}>
+                      <View style={styles.headerIconWrap}>
+                        <Feather name="phone-call" size={24} color="#0066FF" />
+                      </View>
+                      <Text style={styles.cardTitle}>Xác thực số điện thoại</Text>
+                      <Text style={styles.cardSubtitle}>
+                        Để bảo vệ an toàn của bạn và lực lượng cứu hộ có thể liên lạc khẩn cấp khi xảy ra thiên tai, vui lòng xác minh số điện thoại cá nhân.
+                      </Text>
                     </View>
+
+                    {/* Nhập số điện thoại */}
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>
+                        Số điện thoại <Text style={styles.requiredStar}>*</Text>
+                      </Text>
+                      <View style={[styles.inputBox, phoneError ? styles.inputBoxError : null]}>
+                        <Feather name="phone" size={18} color="#0066FF" style={styles.inputIcon} />
+                        <TextInput
+                          style={styles.textInput}
+                          placeholder="Ví dụ: 0912 345 678"
+                          placeholderTextColor="#94A3B8"
+                          keyboardType="phone-pad"
+                          value={phoneInput}
+                          onChangeText={(t) => {
+                            setPhoneInput(t);
+                            if (phoneError) setPhoneError(null);
+                          }}
+                          editable={!isSendingOtp}
+                        />
+                      </View>
+                    </View>
+
+                    {phoneError && (
+                      <Text style={[styles.errorMessage, { marginBottom: 10 }]}>{phoneError}</Text>
+                    )}
+
+                    {/* Nút gửi mã OTP */}
+                    <TouchableOpacity
+                      style={[
+                        styles.primaryButton,
+                        isSendingOtp && styles.disabledButton,
+                      ]}
+                      onPress={handleSendPhoneOtp}
+                      disabled={isSendingOtp}
+                      activeOpacity={0.8}
+                    >
+                      {isSendingOtp ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.primaryButtonText}>Gửi mã OTP qua SMS</Text>
+                      )}
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    {/* CỬA SỔ THAY THẾ: NHẬP MÃ XÁC THỰC OTP 6 SỐ */}
+                    <View style={styles.cardHeader}>
+                      <View style={[styles.headerIconWrap, { backgroundColor: '#EFF6FF' }]}>
+                        <MaterialCommunityIcons name="shield-check-outline" size={26} color="#0066FF" />
+                      </View>
+                      <Text style={styles.cardTitle}>Xác thực mã OTP</Text>
+                      <Text style={styles.cardSubtitle}>
+                        Vui lòng nhập mã OTP vừa gửi đến số điện thoại{' '}
+                        <Text style={{ fontWeight: '700', color: '#0F172A' }}>{phoneInput.trim()}</Text>
+                      </Text>
+                    </View>
+
+                    {/* Khung 6 ô hiển thị mã OTP */}
+                    <TouchableOpacity
+                      activeOpacity={1}
+                      onPress={() => otpInputRef.current?.focus()}
+                      style={styles.otpBoxesContainer}
+                    >
+                      {[0, 1, 2, 3, 4, 5].map((index) => {
+                        const digit = phoneOtpCode[index] || '';
+                        const isCurrent = phoneOtpCode.length === index;
+                        return (
+                          <View
+                            key={index}
+                            style={[
+                              styles.otpBox,
+                              digit ? styles.otpBoxFilled : null,
+                              isCurrent ? styles.otpBoxActive : null,
+                            ]}
+                          >
+                            <Text style={styles.otpDigit}>{digit}</Text>
+                          </View>
+                        );
+                      })}
+                    </TouchableOpacity>
+
+                    {/* Input ẩn hứng bàn phím */}
+                    <TextInput
+                      ref={otpInputRef}
+                      value={phoneOtpCode}
+                      onChangeText={(t) => {
+                        const clean = t.replace(/[^0-9]/g, '').slice(0, 6);
+                        setPhoneOtpCode(clean);
+                        if (phoneError) setPhoneError(null);
+                        if (clean.length === 6) {
+                          handleVerifyPhoneOtp(clean);
+                        }
+                      }}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      autoFocus={true}
+                      style={styles.hiddenInput}
+                    />
 
                     {phoneSuccess && <Text style={styles.successMessage}>{phoneSuccess}</Text>}
                     {phoneError && <Text style={styles.errorMessage}>{phoneError}</Text>}
 
+                    {/* Nút xác nhận mã OTP */}
                     <TouchableOpacity
                       style={[
-                        styles.verifyButton,
+                        styles.primaryButton,
+                        { backgroundColor: '#0066FF', marginTop: 12 },
                         (phoneOtpCode.trim().length !== 6 || isVerifyingOtp) && styles.disabledButton,
                       ]}
-                      onPress={handleVerifyPhoneOtp}
+                      onPress={() => handleVerifyPhoneOtp()}
                       disabled={phoneOtpCode.trim().length !== 6 || isVerifyingOtp}
                       activeOpacity={0.8}
                     >
                       {isVerifyingOtp ? (
                         <ActivityIndicator size="small" color="#FFFFFF" />
                       ) : (
-                        <Text style={styles.verifyButtonText}>Xác nhận & Tiếp tục</Text>
+                        <Text style={styles.primaryButtonText}>Xác nhận & Tiếp tục</Text>
                       )}
                     </TouchableOpacity>
-                  </View>
-                )}
 
-                {/* Thông báo lỗi khi chưa gửi OTP */}
-                {!otpSent && phoneError && (
-                  <Text style={[styles.errorMessage, { marginTop: 12 }]}>{phoneError}</Text>
+                    {/* Row chức năng: Gửi lại mã & Đổi SĐT */}
+                    <View style={styles.otpActionRow}>
+                      <TouchableOpacity
+                        onPress={handleSendPhoneOtp}
+                        disabled={countdown > 0 || isSendingOtp}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.resendOtpText,
+                            countdown > 0 && styles.resendOtpTextDisabled,
+                          ]}
+                        >
+                          {isSendingOtp
+                            ? 'Đang gửi...'
+                            : countdown > 0
+                            ? `Gửi lại mã (${countdown}s)`
+                            : 'Gửi lại mã OTP'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => {
+                          setOtpSent(false);
+                          setPhoneOtpCode('');
+                          setPhoneError(null);
+                          setPhoneSuccess(null);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.changePhoneText}>Đổi số điện thoại</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
                 )}
               </View>
             )}
@@ -633,14 +711,8 @@ export const MandatoryOnboardingModal: React.FC = () => {
                ======================================================== */}
             {step === 'PROFILE' && (
               <View style={styles.cardContainer}>
-                <View style={styles.cardHeader}>
-                  <View style={[styles.headerIconWrap, { backgroundColor: '#F0FDF4' }]}>
-                    <Feather name="user-check" size={24} color="#16A34A" />
-                  </View>
+                <View style={[styles.cardHeader, { marginBottom: 16 }]}>
                   <Text style={styles.cardTitle}>Hoàn tất thông tin cá nhân</Text>
-                  <Text style={styles.cardSubtitle}>
-                    Vui lòng cung cấp đầy đủ thông tin để hoàn thiện hồ sơ ứng cứu khẩn cấp. Mọi thông tin đều bắt buộc.
-                  </Text>
                 </View>
 
                 {/* 1. Họ và tên */}
@@ -664,56 +736,58 @@ export const MandatoryOnboardingModal: React.FC = () => {
                   {nameError && <Text style={styles.errorMessage}>{nameError}</Text>}
                 </View>
 
-                {/* 2. Ngày sinh */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>
-                    Ngày sinh (DD/MM/YYYY) <Text style={styles.requiredStar}>*</Text>
-                  </Text>
-                  <TouchableOpacity
-                    style={[styles.inputBox, dobError ? styles.inputBoxError : null]}
-                    onPress={handleOpenDatePicker}
-                    activeOpacity={0.7}
-                  >
-                    <Feather name="calendar" size={18} color="#0066FF" style={styles.inputIcon} />
-                    <Text
-                      style={[
-                        styles.textInput,
-                        styles.selectValueText,
-                        !dateOfBirth && styles.placeholderText,
-                      ]}
-                    >
-                      {dateOfBirth || 'Chọn ngày sinh...'}
+                {/* 2. Ngày sinh & 3. Giới tính (Gọn gàng 2 cột trái - phải) */}
+                <View style={[styles.inputGroup, { flexDirection: 'row', gap: 12 }]}>
+                  {/* Cột trái: Ngày sinh */}
+                  <View style={{ flex: 1.15 }}>
+                    <Text style={styles.inputLabel}>
+                      Ngày sinh <Text style={styles.requiredStar}>*</Text>
                     </Text>
-                    <Feather name="chevron-down" size={18} color="#64748B" />
-                  </TouchableOpacity>
-                  {dobError && <Text style={styles.errorMessage}>{dobError}</Text>}
-                </View>
+                    <TouchableOpacity
+                      style={[styles.inputBox, dobError ? styles.inputBoxError : null, { paddingHorizontal: 12 }]}
+                      onPress={handleOpenDatePicker}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="calendar" size={16} color="#0066FF" style={{ marginRight: 6 }} />
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.textInput,
+                          styles.selectValueText,
+                          !dateOfBirth && styles.placeholderText,
+                          { fontSize: 13.5 },
+                        ]}
+                      >
+                        {dateOfBirth || 'Chọn ngày...'}
+                      </Text>
+                      <Feather name="chevron-down" size={16} color="#64748B" />
+                    </TouchableOpacity>
+                    {dobError && <Text style={styles.errorMessage}>{dobError}</Text>}
+                  </View>
 
-                {/* 3. Giới tính */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>
-                    Giới tính <Text style={styles.requiredStar}>*</Text>
-                  </Text>
-                  <View style={styles.genderRow}>
-                    {(['MALE', 'FEMALE', 'OTHER'] as const).map((g) => {
-                      const isSelected = gender === g;
-                      const label = g === 'MALE' ? 'Nam' : g === 'FEMALE' ? 'Nữ' : 'Khác';
-                      return (
-                        <TouchableOpacity
-                          key={g}
-                          style={[styles.genderChip, isSelected && styles.genderChipSelected]}
-                          onPress={() => setGender(g)}
-                          activeOpacity={0.8}
-                        >
-                          <View style={[styles.radioCircle, isSelected && styles.radioCircleActive]}>
-                            {isSelected && <View style={styles.radioDot} />}
-                          </View>
-                          <Text style={[styles.genderLabel, isSelected && styles.genderLabelActive]}>
-                            {label}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
+                  {/* Cột phải: Giới tính (Pop-up cửa sổ chọn) */}
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.inputLabel}>
+                      Giới tính <Text style={styles.requiredStar}>*</Text>
+                    </Text>
+                    <TouchableOpacity
+                      style={[styles.inputBox, { paddingHorizontal: 12 }]}
+                      onPress={() => setShowGenderPicker(true)}
+                      activeOpacity={0.7}
+                    >
+                      <Feather name="user" size={16} color="#0066FF" style={{ marginRight: 6 }} />
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.textInput,
+                          styles.selectValueText,
+                          { fontSize: 13.5 },
+                        ]}
+                      >
+                        {gender === 'MALE' ? 'Nam' : gender === 'FEMALE' ? 'Nữ' : 'Khác'}
+                      </Text>
+                      <Feather name="chevron-down" size={16} color="#64748B" />
+                    </TouchableOpacity>
                   </View>
                 </View>
 
@@ -808,22 +882,122 @@ export const MandatoryOnboardingModal: React.FC = () => {
                   {isSavingProfile ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
-                    <>
-                      <Feather name="check-circle" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                      <Text style={styles.saveButtonText}>Lưu & Bắt đầu sử dụng</Text>
-                    </>
+                    <Text style={styles.saveButtonText}>Lưu & Bắt đầu sử dụng</Text>
                   )}
                 </TouchableOpacity>
               </View>
             )}
 
-            {/* Thoát / Đăng xuất tài khoản */}
-            <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
-              <Feather name="log-out" size={15} color="#EF4444" style={{ marginRight: 6 }} />
-              <Text style={styles.logoutBtnText}>Đăng xuất khỏi tài khoản này</Text>
-            </TouchableOpacity>
+
           </ScrollView>
         </KeyboardAvoidingView>
+
+        {/* ===================== MODAL POP-UP CHỌN GIỚI TÍNH HIỆN ĐẠI ===================== */}
+        <Modal
+          visible={showGenderPicker}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setShowGenderPicker(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity
+              style={styles.modalDismissArea}
+              activeOpacity={1}
+              onPress={() => setShowGenderPicker(false)}
+            />
+            <View style={styles.genderSheetBox}>
+              {/* Thanh gạt nhỏ trên đầu (Drag handle) */}
+              <View style={styles.sheetHandleBar} />
+
+              <View style={styles.genderSheetHeader}>
+                <View>
+                  <Text style={styles.genderSheetTitle}>Chọn Giới tính</Text>
+                  <Text style={styles.genderSheetSubtitle}>
+                    Lựa chọn giới tính để hiển thị trong hồ sơ cứu hộ
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.sheetCloseBtn}
+                  onPress={() => setShowGenderPicker(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  activeOpacity={0.7}
+                >
+                  <Feather name="x" size={18} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.genderOptionsList}>
+                {[
+                  {
+                    value: 'MALE',
+                    label: 'Nam',
+                    desc: 'Nam giới',
+                    icon: 'user' as const,
+                    iconBg: '#EFF6FF',
+                    iconColor: '#0066FF',
+                  },
+                  {
+                    value: 'FEMALE',
+                    label: 'Nữ',
+                    desc: 'Nữ giới',
+                    icon: 'user' as const,
+                    iconBg: '#FDF2F8',
+                    iconColor: '#EC4899',
+                  },
+                  {
+                    value: 'OTHER',
+                    label: 'Khác',
+                    desc: 'Bảo mật hoặc lựa chọn khác',
+                    icon: 'smile' as const,
+                    iconBg: '#F5F3FF',
+                    iconColor: '#8B5CF6',
+                  },
+                ].map((item) => {
+                  const isSelected = gender === item.value;
+                  return (
+                    <TouchableOpacity
+                      key={item.value}
+                      style={[
+                        styles.genderOptionCard,
+                        isSelected && styles.genderOptionCardSelected,
+                      ]}
+                      onPress={() => {
+                        setGender(item.value as 'MALE' | 'FEMALE' | 'OTHER');
+                        setShowGenderPicker(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                        <View style={[styles.genderIconWrap, { backgroundColor: item.iconBg }]}>
+                          <Feather name={item.icon} size={18} color={item.iconColor} />
+                        </View>
+                        <View>
+                          <Text
+                            style={[
+                              styles.genderOptionLabel,
+                              isSelected && styles.genderOptionLabelSelected,
+                            ]}
+                          >
+                            {item.label}
+                          </Text>
+                          <Text style={styles.genderOptionDesc}>{item.desc}</Text>
+                        </View>
+                      </View>
+
+                      {isSelected ? (
+                        <View style={styles.genderCheckCircle}>
+                          <Feather name="check" size={13} color="#FFFFFF" />
+                        </View>
+                      ) : (
+                        <View style={styles.genderRadioUnchecked} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* ===================== MODAL CHỌN TỈNH/THÀNH PHỐ ===================== */}
         <Modal visible={showProvincePicker} animationType="slide" transparent>
@@ -1027,17 +1201,34 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0F172A',
   },
+  fixedHeader: {
+    paddingTop: Platform.OS === 'ios' ? 52 : 36,
+    paddingHorizontal: 18,
+    paddingBottom: 14,
+    backgroundColor: '#0F172A',
+    position: 'relative',
+  },
+  headerLogoutBtn: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 34,
+    right: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    paddingTop: Platform.OS === 'ios' ? 56 : 40,
-    paddingBottom: 40,
-    paddingHorizontal: 18,
+    flexGrow: 1,
   },
   topLogoWrap: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   logoImage: {
     width: 68,
@@ -1054,7 +1245,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: 6,
     paddingHorizontal: 16,
   },
   progressStep: {
@@ -1100,13 +1291,19 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
   },
   cardContainer: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 22,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
     elevation: 8,
   },
   cardHeader: {
@@ -1136,7 +1333,7 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   inputGroup: {
-    marginBottom: 16,
+    marginBottom: 13,
   },
   inputLabel: {
     fontSize: 13,
@@ -1196,17 +1393,40 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.6,
   },
-  otpSection: {
-    marginTop: 20,
-    paddingTop: 18,
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+  otpBoxesContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 16,
   },
-  otpInput: {
-    fontSize: 20,
+  otpBox: {
+    width: 44,
+    height: 54,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  otpBoxFilled: {
+    borderColor: '#0066FF',
+    backgroundColor: '#EFF6FF',
+  },
+  otpBoxActive: {
+    borderColor: '#0066FF',
+    borderWidth: 2,
+    backgroundColor: '#FFFFFF',
+  },
+  otpDigit: {
+    fontSize: 22,
     fontWeight: '800',
-    letterSpacing: 6,
-    textAlign: 'center',
+    color: '#0F172A',
+  },
+  hiddenInput: {
+    position: 'absolute',
+    width: 1,
+    height: 1,
+    opacity: 0.01,
   },
   verifyButton: {
     backgroundColor: '#16A34A',
@@ -1232,6 +1452,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
+  },
+  otpActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    paddingHorizontal: 4,
+  },
+  resendOtpText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0066FF',
+  },
+  resendOtpTextDisabled: {
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  changePhoneText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+    textDecorationLine: 'underline',
   },
   genderRow: {
     flexDirection: 'row',
@@ -1312,6 +1554,109 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   // Modal chọn địa chỉ
+  genderSheetBox: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  sheetHandleBar: {
+    width: 40,
+    height: 4.5,
+    borderRadius: 2.5,
+    backgroundColor: '#E2E8F0',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  genderSheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  genderSheetTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  genderSheetSubtitle: {
+    fontSize: 12.5,
+    color: '#64748B',
+    marginTop: 3,
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  genderOptionsList: {
+    gap: 10,
+  },
+  genderOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  genderOptionCardSelected: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#0066FF',
+    shadowColor: '#0066FF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  genderIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  genderOptionLabel: {
+    fontSize: 15.5,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  genderOptionLabelSelected: {
+    color: '#0066FF',
+  },
+  genderOptionDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  genderCheckCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#0066FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  genderRadioUnchecked: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',

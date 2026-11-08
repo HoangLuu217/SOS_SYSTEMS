@@ -230,12 +230,15 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
             0,
             Math.floor((Date.now() - new Date(item.createdAt).getTime()) / 60000)
           );
+          const diffHours = Math.floor(diffMinutes / 60);
           const timeAgo =
             diffMinutes < 1
               ? 'Vừa xong'
               : diffMinutes < 60
               ? `${diffMinutes} phút trước`
-              : `${Math.floor(diffMinutes / 60)} giờ trước`;
+              : diffHours < 24
+              ? `${diffHours} giờ trước`
+              : `${Math.floor(diffHours / 24)} ngày trước`;
 
           const areaObj =
             typeof item.areaId === 'object' && item.areaId !== null
@@ -257,6 +260,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
               ? 'POLICE'
               : 'RESCUE';
 
+
           // Đồng bộ thông tin khu vực hành chính từ CSDL
           const fullText = (itemAreaName + ' ' + (item.address || '') + ' ' + (officer.jurisdictionAreaName || '') + ' ' + (officer.districtName || '')).toLowerCase();
           const isNHS = fullText.includes('ngũ hành sơn') || fullText.includes('mỹ an') || fullText.includes('khuê mỹ') || fullText.includes('hòa quý') || fullText.includes('hòa hải');
@@ -266,6 +270,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
           const wardName = itemAreaName || officer.jurisdictionAreaName || (isNHS ? 'Quận Ngũ Hành Sơn' : 'Địa bàn phụ trách');
           const districtId = areaObj?.parentId || itemAreaId || officer.jurisdictionAreaId || '';
           const districtName = officer.districtName || (isNHS ? 'Quận Ngũ Hành Sơn' : isLC ? 'Quận Liên Chiểu' : itemAreaName || '');
+
 
           return {
             id: item._id,
@@ -380,13 +385,17 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         domainDService.syncRealSosRequests(realMapped);
         setSosRequests(domainDService.getSosRequests());
 
-        // Nếu URL có chỉ định SOS cụ thể, kiểm tra và giữ ca đó nếu còn hợp lệ
         const currentUrlId = getCurrentSosIdFromUrl();
+        const activeReal = realMapped.find((s) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status));
         if (currentUrlId) {
           const match = realMapped.find((s: any) => s.id === currentUrlId);
-          if (match && String(match.status || '').toUpperCase() !== 'COMPLETED' && String(match.status || '').toUpperCase() !== 'RESOLVED') {
+          if (match && !['COMPLETED', 'RESOLVED', 'CANCELLED', 'REJECTED'].includes(match.status)) {
             setSelectedSosId(match.id);
+          } else if (activeReal) {
+            setSelectedSosId(activeReal.id);
           }
+        } else if (activeReal) {
+          setSelectedSosId(activeReal.id);
         }
       }
 
@@ -690,6 +699,21 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
 
     if (urlSosId && loadedSos.some((s) => s.id === urlSosId)) {
       setSelectedSosId(urlSosId);
+
+    } else {
+      // Find active local SOS for this officer
+      const matchSos = loadedSos.find(
+        (s) =>
+          !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status) &&
+          (s.wardId === activeOfficer.jurisdictionAreaId || s.districtId === activeOfficer.jurisdictionAreaId)
+      );
+      if (matchSos) {
+        setSelectedSosId(matchSos.id);
+        navigateTo('map', user ?? null, matchSos.id, true);
+      } else {
+        setSelectedSosId('');
+      }
+
     }
   };
 
@@ -796,7 +820,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       const found = authorActiveSosRequests.find((s) => s.id === selectedSosId);
       if (found) return found;
     }
-    return null; // Khi không chọn ca nào (hoặc click ra ngoài), không tự động ép chọn ca đầu tiên
+    return null;
   }, [authorActiveSosRequests, selectedSosId]);
 
   const currentAssignment = useMemo(() => {
@@ -804,10 +828,10 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     return domainDService.getAssignmentBySosId(selectedSos.id);
   }, [selectedSos]);
 
-  // Urgent local count
+  // Urgent local count (chỉ đếm các ca đang diễn ra, loại bỏ hoàn thành và đã hủy)
   const localUrgentCount = useMemo(() => {
     return authorScopedSosRequests.filter(
-      (s) => (s.priority === 'CRITICAL' || s.priority === 'HIGH') && s.status !== 'COMPLETED'
+      (s) => (s.priority === 'CRITICAL' || s.priority === 'HIGH') && !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status)
     ).length;
   }, [authorScopedSosRequests]);
 

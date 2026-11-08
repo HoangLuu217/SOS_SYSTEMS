@@ -220,6 +220,18 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
     setAuthSubmitting(true);
     setAuthSubmitError(null);
     try {
+      if (!createAuthForm.email.trim()) {
+        setAuthSubmitError('Vui lòng nhập Gmail/Email cán bộ để nhận mã OTP.');
+        setAuthSubmitting(false);
+        return;
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(createAuthForm.email.trim())) {
+        setAuthSubmitError('Địa chỉ Gmail/Email không hợp lệ. VD: canbo.hoangsa@gmail.com');
+        setAuthSubmitting(false);
+        return;
+      }
+
       const currentCityAreas = modalProvinceSubUnits;
       const selectedArea = currentCityAreas.find((a) => a.id === createAuthForm.areaId);
       const areaName = selectedArea ? selectedArea.name : createAuthForm.areaName || 'Khu vực quản lý';
@@ -673,13 +685,18 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div className="executive-modal-field">
-                    <label className="executive-modal-label">Email liên hệ</label>
+                    <label className="executive-modal-label">Gmail / Email cán bộ (*)</label>
                     <input
                       type="email"
+                      required
                       className="executive-modal-input"
+                      placeholder="VD: canbo.hoangsa@gmail.com"
                       value={editAuthForm.email}
                       onChange={(e) => setEditAuthForm({ ...editAuthForm, email: e.target.value })}
                     />
+                    <span style={{ fontSize: '11px', color: '#0284c7', marginTop: '2px', display: 'block' }}>
+                      Dùng nhận mã OTP đổi mật khẩu qua Resend
+                    </span>
                   </div>
                   <div className="executive-modal-field">
                     <label className="executive-modal-label">Trạng thái tài khoản (*)</label>
@@ -902,15 +919,18 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         <div className="executive-modal-field">
-                          <label className="executive-modal-label">Email liên hệ (*)</label>
+                          <label className="executive-modal-label">Gmail / Email cán bộ (*)</label>
                           <input
                             type="email"
                             required
                             className="executive-modal-input"
-                            placeholder="VD: canbo@sos.gov.vn"
+                            placeholder="VD: canbo.hoangsa@gmail.com"
                             value={createAuthForm.email}
                             onChange={(e) => setCreateAuthForm({ ...createAuthForm, email: e.target.value })}
                           />
+                          <span style={{ fontSize: '11px', color: '#0284c7', marginTop: '2px', display: 'block' }}>
+                            Dùng nhận mã OTP đổi mật khẩu qua Resend
+                          </span>
                         </div>
                         <div className="executive-modal-field">
                           <label className="executive-modal-label">Mật khẩu khởi tạo (*)</label>

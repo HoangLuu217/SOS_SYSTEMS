@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { User } from '@/types/auth';
 import {
@@ -7,6 +7,7 @@ import {
   fetchHazardReports,
   fetchSafeLocations,
   fetchChatConversations,
+
   updateUserProfile,
   updateUserAvatar,
   sendPhoneOtp,
@@ -14,6 +15,7 @@ import {
 } from '@/api';
 import { domainDService } from '@/services/domainDService';
 import { onRescuerApplicationSubmitted, onRescuerVerificationChanged } from '@/services/socketService';
+import { getRolePrefix } from '@/services/appRouter';
 import {
   fetchProvincesV2,
   fetchProvinceWithWardsV2,
@@ -25,6 +27,8 @@ import {
   Siren,
   LifeBuoy,
   Package,
+  Truck,
+
   Bell,
   Home,
   AlertTriangle,
@@ -94,7 +98,7 @@ export interface NavGroupConfig {
 export interface SidebarProps {
   user?: User | null;
   activeKey?: NavItemKey;
-  onSelectKey?: (key: NavItemKey) => void;
+  onSelectKey?: (key: NavItemKey, subPath?: string) => void;
   onLogout?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
@@ -123,6 +127,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [shelterCount, setShelterCount] = useState<number>(0);
   const [pendingRescuersCount, setPendingRescuersCount] = useState<number>(0);
   const [chatUnreadCount, setChatUnreadCount] = useState<number>(0);
+
+
+
+  // State menu nổi (Flyout Submenu) khi hover vào Phương tiện & Vật tư
+  const [isResourcesFlyoutOpen, setIsResourcesFlyoutOpen] = useState(false);
+  const [flyoutPosition, setFlyoutPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const [currentResourceSubTab, setCurrentResourceSubTab] = useState<'VEHICLES' | 'SUPPLIES' | 'CONSUMABLES'>('VEHICLES');
+  const flyoutTimerRef = useRef<any>(null);
+  const resourcesItemRef = useRef<HTMLDivElement | null>(null);
 
   // Đồng bộ số liệu thời gian thực
   const fetchRealCounts = useCallback(async () => {
@@ -173,8 +186,55 @@ export const Sidebar: React.FC<SidebarProps> = ({
     try {
       const rescuerRes = await fetchAdminUsers({ role: 'RESCUER', limit: '100' });
       if (rescuerRes.success && Array.isArray(rescuerRes.data?.users)) {
-        const pendingCount = rescuerRes.data.users.filter(
-          (u: any) => u.rescuer?.verificationStatus === 'PENDING'
+        let rescuers = rescuerRes.data.users;
+
+        const isAuthority = Boolean(
+          user?.roles?.includes('LOCAL_AUTHORITY') ||
+          user?.roles?.includes('AUTHORITY') ||
+          Boolean(user?.authority?.areaId || user?.authority?.areaName)
+        );
+        const isAdminUser = Boolean(user?.roles?.includes('ADMIN') || (user as any)?.role === 'ADMIN') && !isAuthority;
+
+        if (!isAdminUser) {
+          const activeOfficer = domainDService.getActiveOfficer();
+          const userAreaId =
+            user?.authority?.areaId ||
+            (user?.authority as any)?.administrativeAreaId ||
+            (user?.authority as any)?.jurisdictionAreaId ||
+            activeOfficer?.jurisdictionAreaId;
+
+          const userAreaName =
+            user?.authority?.areaName ||
+            (user?.authority as any)?.jurisdictionAreaName ||
+            activeOfficer?.jurisdictionAreaName ||
+            '';
+
+          const localCommuneName = (userAreaName || '').split(',')[0].trim();
+          const cleanLocalCommune = localCommuneName
+            .replace(/^(phường|xã|thị trấn|quận|huyện)s+/i, '')
+            .trim()
+            .toLowerCase();
+
+          if (cleanLocalCommune || userAreaId) {
+            const normalizeStr = (s: string) =>
+              s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+            const normCommune = normalizeStr(cleanLocalCommune);
+
+            rescuers = rescuers.filter((u: any) => {
+              if (userAreaId && (u.authority?.areaId === userAreaId || u.rescuer?.preferredAreaId === userAreaId)) {
+                return true;
+              }
+              const addrStr = typeof u.address === 'string'
+                ? u.address
+                : `${u.address?.street || ''} ${u.address?.communeName || u.address?.ward || ''} ${u.address?.province || ''}`;
+              const target = `${u.rescuer?.targetCommune || ''} ${addrStr}`.toLowerCase();
+              return (cleanLocalCommune && target.includes(cleanLocalCommune)) || (normCommune && normalizeStr(target).includes(normCommune));
+            });
+          }
+        }
+
+        const pendingCount = rescuers.filter(
+          (u: any) => (u.rescuer?.verificationStatus || u.verificationStatus || 'PENDING') === 'PENDING'
         ).length;
         setPendingRescuersCount(pendingCount);
       }
@@ -192,7 +252,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     } catch {
       // ignore
     }
-  }, []);
+  }, [user, isAdmin]);
 
   useEffect(() => {
     fetchRealCounts();
@@ -221,7 +281,98 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
   }, [fetchRealCounts]);
 
+  // Đồng bộ sub-tab Phương tiện & Vật tư từ URL và sự kiện điều hướng
+  useEffect(() => {
+    const syncSubTab = () => {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab')?.toUpperCase();
+      const path = window.location.pathname.toLowerCase();
+      if (tabParam === 'SUPPLIES' || path.includes('/supplies')) {
+        setCurrentResourceSubTab('SUPPLIES');
+      } else if (tabParam === 'CONSUMABLES' || path.includes('/consumables')) {
+        setCurrentResourceSubTab('CONSUMABLES');
+      } else {
+        setCurrentResourceSubTab('VEHICLES');
+      }
+    };
+
+    syncSubTab();
+    window.addEventListener('popstate', syncSubTab);
+    const onTabSwitch = (e: any) => {
+      if (e?.detail?.tab) {
+        setCurrentResourceSubTab(e.detail.tab);
+      }
+    };
+    window.addEventListener('sos_switch_resource_tab', onTabSwitch);
+    return () => {
+      window.removeEventListener('popstate', syncSubTab);
+      window.removeEventListener('sos_switch_resource_tab', onTabSwitch);
+      if (flyoutTimerRef.current) {
+        clearTimeout(flyoutTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Xử lý mở / đóng Flyout Submenu khi hover vào Phương tiện & Vật tư
+  const handleResourcesMouseEnter = () => {
+    if (flyoutTimerRef.current) {
+      clearTimeout(flyoutTimerRef.current);
+      flyoutTimerRef.current = null;
+    }
+    if (resourcesItemRef.current) {
+      const rect = resourcesItemRef.current.getBoundingClientRect();
+      setFlyoutPosition({
+        top: Math.max(16, rect.top - 6),
+        left: rect.right + 10,
+      });
+    }
+    setIsResourcesFlyoutOpen(true);
+  };
+
+  const handleResourcesMouseLeave = () => {
+    flyoutTimerRef.current = setTimeout(() => {
+      setIsResourcesFlyoutOpen(false);
+    }, 180);
+  };
+
+  const handleFlyoutMouseEnter = () => {
+    if (flyoutTimerRef.current) {
+      clearTimeout(flyoutTimerRef.current);
+      flyoutTimerRef.current = null;
+    }
+  };
+
+  const handleFlyoutMouseLeave = () => {
+    flyoutTimerRef.current = setTimeout(() => {
+      setIsResourcesFlyoutOpen(false);
+    }, 160);
+  };
+
+  const handleSelectResourceSubTab = (tab: 'VEHICLES' | 'SUPPLIES' | 'CONSUMABLES') => {
+    if (flyoutTimerRef.current) {
+      clearTimeout(flyoutTimerRef.current);
+      flyoutTimerRef.current = null;
+    }
+    setIsResourcesFlyoutOpen(false);
+    setCurrentResourceSubTab(tab);
+
+    const prefix = getRolePrefix(user || null);
+    const targetUrl = `${prefix}/resources?tab=${tab}`;
+
+    if (onSelectKey) {
+      onSelectKey('resources', tab.toLowerCase());
+    }
+
+    window.history.pushState(null, '', targetUrl);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    window.dispatchEvent(new CustomEvent('sos_switch_resource_tab', { detail: { tab } }));
+  };
+
   const handleItemClick = (key: NavItemKey) => {
+    if (key === 'resources') {
+      handleSelectResourceSubTab(currentResourceSubTab || 'VEHICLES');
+      return;
+    }
     if (onSelectKey) {
       onSelectKey(key);
     }
@@ -284,6 +435,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           key: 'resources',
           label: 'Phương tiện & Vật tư',
           icon: <Package size={18} className="sos-nav-icon" />,
+
+
         },
       ],
     },
@@ -299,12 +452,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         ...(isAdmin
           ? [
-              {
-                key: 'weather' as NavItemKey,
-                label: 'Bản tin thời tiết',
-                icon: <CloudSun size={18} className="sos-nav-icon" />,
-              },
-            ]
+            {
+              key: 'weather' as NavItemKey,
+              label: 'Bản tin thời tiết',
+              icon: <CloudSun size={18} className="sos-nav-icon" />,
+            },
+          ]
           : []),
         {
           key: 'shelters',
@@ -313,6 +466,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           icon: <Home size={18} className="sos-nav-icon" />,
           badge: shelterCount > 0 ? `${shelterCount}` : undefined,
           badgeType: 'info',
+
         },
         {
           key: 'hazard_reports',
@@ -321,6 +475,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           icon: <AlertTriangle size={18} className="sos-nav-icon" />,
           badge: hazardCount > 0 ? `${hazardCount}` : undefined,
           badgeType: 'info',
+
         },
       ],
     },
@@ -766,17 +921,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         isPhoneVerified: isPhoneVerified,
         authority: isAdmin
           ? {
-              position: localProfile.position,
-              organizationName: localProfile.organizationName,
-              areaName: 'Toàn quốc',
-            }
+            position: localProfile.position,
+            organizationName: localProfile.organizationName,
+            areaName: 'Toàn quốc',
+          }
           : {
-              position: localProfile.position,
-              organizationName: localProfile.organizationName,
-              areaName: localProfile.managedArea,
-              provinceCode: selectedProvinceCode ? Number(selectedProvinceCode) : undefined,
-              wardCode: selectedWardCode !== 'ALL' ? Number(selectedWardCode) : undefined,
-            },
+            position: localProfile.position,
+            organizationName: localProfile.organizationName,
+            areaName: localProfile.managedArea,
+            provinceCode: selectedProvinceCode ? Number(selectedProvinceCode) : undefined,
+            wardCode: selectedWardCode !== 'ALL' ? Number(selectedWardCode) : undefined,
+          },
       });
 
       const serverUser = res.success && res.data ? res.data : null;
@@ -881,10 +1036,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="sos-nav-group-items">
               {group.items.map((item) => {
                 const active = isItemActive(item.key);
+                const isResources = item.key === 'resources';
                 return (
                   <div
                     key={item.key}
-                    className={`sos-nav-item ${active ? 'active' : ''}`}
+                    ref={isResources ? resourcesItemRef : undefined}
+                    className={`sos-nav-item ${active ? 'active' : ''} ${isResources ? 'sos-nav-item-resources' : ''}`}
+                    onMouseEnter={isResources ? handleResourcesMouseEnter : undefined}
+                    onMouseLeave={isResources ? handleResourcesMouseLeave : undefined}
                     onClick={() => handleItemClick(item.key)}
                     title={collapsed ? item.label : undefined}
                     role="button"
@@ -902,6 +1061,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {!collapsed && (
                       <>
                         <span className="sos-nav-label">{item.label}</span>
+                        {isResources && (
+                          <ChevronRight
+                            size={14}
+                            style={{
+                              marginLeft: item.badge ? 6 : 'auto',
+                              color: active ? '#2563eb' : '#94a3b8',
+                              opacity: 0.8,
+                              flexShrink: 0,
+                            }}
+                          />
+                        )}
                         {item.badge && (
                           item.badge === 'dot' ? (
                             <span className="sos-nav-badge-dot" title="Có tin nhắn mới" />
@@ -1070,300 +1240,372 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         style={{ display: 'none' }}
                       />
                     </div>
-                  <div className="sos-profile-preview-text">
-                    <strong>{localProfile.fullName || 'Cán bộ trực ban'}</strong>
-                    <span>{localProfile.position || 'Chỉ huy cứu hộ'}</span>
-                    <small>{localProfile.organizationName || 'Ban Chỉ Huy PCTT & TKCN'}</small>
-                    {uploadingAvatar && (
-                      <span className="sos-avatar-uploading-inline">Đang lưu ảnh lên Cloudinary...</span>
-                    )}
-                    {avatarError && <span className="sos-avatar-error-inline">{avatarError}</span>}
-                  </div>
-                </div>
-
-                {/* Bố cục hai cột độc lập */}
-                <div className="sos-profile-columns-grid">
-                  {/* Cột trái: Họ và tên cán bộ → Cơ quan/Đơn vị công tác → Hòm thư điện tử công vụ */}
-                  <div className="sos-profile-col sos-profile-col-left">
-                    <div className="sos-profile-field sos-field-fullname">
-                      <label>
-                        <i className="bi bi-pencil"></i>
-                        <span>Họ và tên cán bộ:</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={localProfile.fullName}
-                        onChange={(e) => setLocalProfile({ ...localProfile, fullName: e.target.value })}
-                        placeholder="VD: Cán Bộ Điều Hành SOS"
-                      />
-                    </div>
-
-                    <div className="sos-profile-field sos-field-organization">
-                      <label>
-                        <i className="bi bi-building"></i>
-                        <span>Cơ quan / Đơn vị công tác:</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={localProfile.organizationName}
-                        onChange={(e) => setLocalProfile({ ...localProfile, organizationName: e.target.value })}
-                        placeholder="VD: Ban Chỉ Huy PCTT & TKCN Quận Hải Châu"
-                      />
-                    </div>
-
-                    <div className="sos-profile-field sos-field-email">
-                      <label>
-                        <i className="bi bi-envelope"></i>
-                        <span>Hòm thư điện tử công vụ:</span>
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        value={localProfile.email}
-                        onChange={(e) => setLocalProfile({ ...localProfile, email: e.target.value })}
-                        placeholder="VD: authority@sos.vn"
-                      />
+                    <div className="sos-profile-preview-text">
+                      <strong>{localProfile.fullName || 'Cán bộ trực ban'}</strong>
+                      <span>{localProfile.position || 'Chỉ huy cứu hộ'}</span>
+                      <small>{localProfile.organizationName || 'Ban Chỉ Huy PCTT & TKCN'}</small>
+                      {uploadingAvatar && (
+                        <span className="sos-avatar-uploading-inline">Đang lưu ảnh lên Cloudinary...</span>
+                      )}
+                      {avatarError && <span className="sos-avatar-error-inline">{avatarError}</span>}
                     </div>
                   </div>
 
-                  {/* Cột phải: Chức vụ/Vị trí → Số điện thoại trực ban → Khối xác thực OTP */}
-                  <div className="sos-profile-col sos-profile-col-right">
-                    <div className="sos-profile-field sos-field-position">
-                      <label>
-                        <i className="bi bi-shield"></i>
-                        <span>Chức vụ / Vị trí:</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={localProfile.position}
-                        onChange={(e) => setLocalProfile({ ...localProfile, position: e.target.value })}
-                        placeholder="VD: Chuyên viên Điều phối Tác chiến"
-                      />
-                    </div>
-
-                    <div className="sos-profile-field sos-field-phone">
-                      <div className="sos-phone-label-row">
+                  {/* Bố cục hai cột độc lập */}
+                  <div className="sos-profile-columns-grid">
+                    {/* Cột trái: Họ và tên cán bộ → Cơ quan/Đơn vị công tác → Hòm thư điện tử công vụ */}
+                    <div className="sos-profile-col sos-profile-col-left">
+                      <div className="sos-profile-field sos-field-fullname">
                         <label>
-                          <i className="bi bi-telephone"></i>
-                          <span>Số điện thoại trực ban / Hotline:</span>
+                          <i className="bi bi-pencil"></i>
+                          <span>Họ và tên cán bộ:</span>
                         </label>
-                        {isPhoneVerified ? (
-                          <span className="sos-phone-badge sos-phone-badge-verified">
-                            Đã xác thực
-                          </span>
-                        ) : (
-                          <span className="sos-phone-badge sos-phone-badge-unverified">
-                            Chưa xác thực
-                          </span>
-                        )}
+                        <input
+                          type="text"
+                          required
+                          value={localProfile.fullName}
+                          onChange={(e) => setLocalProfile({ ...localProfile, fullName: e.target.value })}
+                          placeholder="VD: Cán Bộ Điều Hành SOS"
+                        />
                       </div>
 
-                      <div className="sos-phone-auth-group">
-                        {/* Hàng đầu: input số điện thoại và nút “Gửi mã” hoặc “Gửi lại (58s)” */}
-                        <div className="sos-phone-input-row">
-                          <input
-                            type="tel"
-                            required
-                            value={localProfile.phone}
-                            onChange={handlePhoneChange}
-                            placeholder="VD: 0909876543"
-                            className={isPhoneVerified ? 'phone-verified' : ''}
-                          />
-                          {!isPhoneVerified && (
-                            <button
-                              type="button"
-                              className="sos-btn-send-otp"
-                              onClick={handleSendPhoneOtp}
-                              disabled={sendingOtp || otpCountdown > 0 || !localProfile.phone.trim()}
-                              title="Gửi mã OTP xác minh số điện thoại này"
-                            >
-                              {sendingOtp
-                                ? 'Đang gửi...'
-                                : otpCountdown > 0
-                                ? `Gửi lại (${otpCountdown}s)`
-                                : showOtpBox
-                                ? 'Gửi lại'
-                                : 'Gửi mã'}
-                            </button>
+                      <div className="sos-profile-field sos-field-organization">
+                        <label>
+                          <i className="bi bi-building"></i>
+                          <span>Cơ quan / Đơn vị công tác:</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={localProfile.organizationName}
+                          onChange={(e) => setLocalProfile({ ...localProfile, organizationName: e.target.value })}
+                          placeholder="VD: Ban Chỉ Huy PCTT & TKCN Quận Hải Châu"
+                        />
+                      </div>
+
+                      <div className="sos-profile-field sos-field-email">
+                        <label>
+                          <i className="bi bi-envelope"></i>
+                          <span>Hòm thư điện tử công vụ:</span>
+                        </label>
+                        <input
+                          type="email"
+                          required
+                          value={localProfile.email}
+                          onChange={(e) => setLocalProfile({ ...localProfile, email: e.target.value })}
+                          placeholder="VD: authority@sos.vn"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Cột phải: Chức vụ/Vị trí → Số điện thoại trực ban → Khối xác thực OTP */}
+                    <div className="sos-profile-col sos-profile-col-right">
+                      <div className="sos-profile-field sos-field-position">
+                        <label>
+                          <i className="bi bi-shield"></i>
+                          <span>Chức vụ / Vị trí:</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={localProfile.position}
+                          onChange={(e) => setLocalProfile({ ...localProfile, position: e.target.value })}
+                          placeholder="VD: Chuyên viên Điều phối Tác chiến"
+                        />
+                      </div>
+
+                      <div className="sos-profile-field sos-field-phone">
+                        <div className="sos-phone-label-row">
+                          <label>
+                            <i className="bi bi-telephone"></i>
+                            <span>Số điện thoại trực ban / Hotline:</span>
+                          </label>
+                          {isPhoneVerified ? (
+                            <span className="sos-phone-badge sos-phone-badge-verified">
+                              Đã xác thực
+                            </span>
+                          ) : (
+                            <span className="sos-phone-badge sos-phone-badge-unverified">
+                              Chưa xác thực
+                            </span>
                           )}
                         </div>
 
-                        {/* Hàng tiếp theo: input “Mã OTP 6 số” và nút “Xác nhận” */}
-                        {showOtpBox && !isPhoneVerified && (
-                          <div className="sos-otp-row">
-                            <div className="sos-otp-input-wrap">
-                              <i className="bi bi-key sos-otp-icon"></i>
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                maxLength={6}
-                                className="sos-otp-input"
-                                placeholder="Mã OTP 6 số"
-                                value={otpCode}
-                                onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    handleVerifyPhoneOtp();
-                                  }
-                                }}
-                                autoFocus
-                              />
+                        <div className="sos-phone-auth-group">
+                          {/* Hàng đầu: input số điện thoại và nút “Gửi mã” hoặc “Gửi lại (58s)” */}
+                          <div className="sos-phone-input-row">
+                            <input
+                              type="tel"
+                              required
+                              value={localProfile.phone}
+                              onChange={handlePhoneChange}
+                              placeholder="VD: 0909876543"
+                              className={isPhoneVerified ? 'phone-verified' : ''}
+                            />
+                            {!isPhoneVerified && (
+                              <button
+                                type="button"
+                                className="sos-btn-send-otp"
+                                onClick={handleSendPhoneOtp}
+                                disabled={sendingOtp || otpCountdown > 0 || !localProfile.phone.trim()}
+                                title="Gửi mã OTP xác minh số điện thoại này"
+                              >
+                                {sendingOtp
+                                  ? 'Đang gửi...'
+                                  : otpCountdown > 0
+                                    ? `Gửi lại (${otpCountdown}s)`
+                                    : showOtpBox
+                                      ? 'Gửi lại'
+                                      : 'Gửi mã'}
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Hàng tiếp theo: input “Mã OTP 6 số” và nút “Xác nhận” */}
+                          {showOtpBox && !isPhoneVerified && (
+                            <div className="sos-otp-row">
+                              <div className="sos-otp-input-wrap">
+                                <i className="bi bi-key sos-otp-icon"></i>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  maxLength={6}
+                                  className="sos-otp-input"
+                                  placeholder="Mã OTP 6 số"
+                                  value={otpCode}
+                                  onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      handleVerifyPhoneOtp();
+                                    }
+                                  }}
+                                  autoFocus
+                                />
+                              </div>
+
+                              <button
+                                type="button"
+                                className="sos-btn-verify-otp"
+                                onClick={handleVerifyPhoneOtp}
+                                disabled={verifyingOtp || otpCode.trim().length !== 6}
+                              >
+                                {verifyingOtp ? 'Kiểm tra...' : 'Xác nhận'}
+                              </button>
                             </div>
+                          )}
 
-                            <button
-                              type="button"
-                              className="sos-btn-verify-otp"
-                              onClick={handleVerifyPhoneOtp}
-                              disabled={verifyingOtp || otpCode.trim().length !== 6}
-                            >
-                              {verifyingOtp ? 'Kiểm tra...' : 'Xác nhận'}
-                            </button>
-                          </div>
-                        )}
+                          {/* Ghi chú nhỏ dưới OTP: chỉ hiển thị sau khi gửi thành công */}
+                          {showOtpBox && !isPhoneVerified && (
+                            <div className="sos-otp-note">
+                              Mã xác thực đã gửi đến số điện thoại của bạn.
+                            </div>
+                          )}
 
-                        {/* Ghi chú nhỏ dưới OTP: chỉ hiển thị sau khi gửi thành công */}
-                        {showOtpBox && !isPhoneVerified && (
-                          <div className="sos-otp-note">
-                            Mã xác thực đã gửi đến số điện thoại của bạn.
-                          </div>
-                        )}
-
-                        {/* Lỗi hiển thị ngay dưới trường liên quan, không đưa xuống cuối form */}
-                        {otpError && (
-                          <div className="sos-field-error">
-                            <i className="bi bi-exclamation-triangle"></i> {otpError}
-                          </div>
-                        )}
-                        {otpSuccessNotice && (
-                          <div className="sos-field-success">
-                            <i className="bi bi-check-circle"></i> {otpSuccessNotice}
-                          </div>
-                        )}
+                          {/* Lỗi hiển thị ngay dưới trường liên quan, không đưa xuống cuối form */}
+                          {otpError && (
+                            <div className="sos-field-error">
+                              <i className="bi bi-exclamation-triangle"></i> {otpError}
+                            </div>
+                          )}
+                          {otpSuccessNotice && (
+                            <div className="sos-field-success">
+                              <i className="bi bi-check-circle"></i> {otpSuccessNotice}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
+
+                  {/* Phần địa bàn phụ trách: Admin là Toàn quốc, Cán bộ địa phương chọn Tỉnh/Xã */}
+                  {isAdmin ? (
+                    <div className="sos-profile-area-section">
+                      <label className="sos-profile-section-label">
+                        <i className="bi bi-shield-check" style={{ color: '#2563eb' }}></i>
+                        <span>Phạm vi quản trị hệ thống:</span>
+                      </label>
+                      <div
+                        style={{
+                          padding: '14px 16px',
+                          background: '#f0f9ff',
+                          borderRadius: '8px',
+                          border: '1px solid #bae6fd',
+                          color: '#0369a1',
+                          fontSize: '13.5px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          marginTop: '6px',
+                        }}
+                      >
+                        <i className="bi bi-globe2" style={{ fontSize: '22px', color: '#0284c7' }}></i>
+                        <div>
+                          <strong style={{ fontSize: '14px', color: '#0c4a6e', display: 'block', marginBottom: '2px' }}>
+                            Toàn quốc (Quản trị viên toàn hệ thống)
+                          </strong>
+                          Tài khoản Quản trị viên (Admin) có phạm vi điều hành, giám sát toàn diện trên tất cả các Tỉnh / Thành phố trên cả nước, không giới hạn theo địa bàn phụ trách cụ thể.
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="sos-profile-area-section">
+                      <label className="sos-profile-section-label">
+                        <i className="bi bi-geo-alt" style={{ color: '#2563eb' }}></i>
+                        <span>Địa bàn phụ trách quản lý:</span>
+                      </label>
+
+                      <div className="sos-profile-area-dropdowns">
+                        <div className="sos-profile-area-col">
+                          <span className="sos-profile-sublabel">Tỉnh / Thành phố:</span>
+                          <select
+                            value={selectedProvinceCode}
+                            onChange={handleProvinceChange}
+                            disabled={loadingProvinces}
+                          >
+                            <option value="">
+                              {loadingProvinces ? '-- Đang tải danh sách Tỉnh/TP... --' : '-- Chọn Tỉnh / Thành phố --'}
+                            </option>
+                            {provinces.map((p) => (
+                              <option key={p.code} value={p.code}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="sos-profile-area-col">
+                          <span className="sos-profile-sublabel">
+                            Phường / Xã:
+                            {loadingWards && <span style={{ marginLeft: 6, fontSize: 11, color: '#2563eb' }}>(Đang nạp...)</span>}
+                          </span>
+                          <select
+                            value={selectedWardCode}
+                            onChange={handleWardChange}
+                            disabled={!selectedProvinceCode || loadingWards}
+                          >
+                            <option value="ALL">-- Toàn bộ Tỉnh / Thành phố (Cấp Tỉnh) --</option>
+                            {wards.map((w) => (
+                              <option key={w.code} value={w.code}>
+                                {w.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="sos-profile-managed-area">
+                        <span className="sos-profile-sublabel">Địa bàn hiển thị trong hồ sơ &amp; phân quyền:</span>
+                        <input
+                          type="text"
+                          required
+                          value={localProfile.managedArea}
+                          onChange={(e) => setLocalProfile({ ...localProfile, managedArea: e.target.value })}
+                          placeholder="VD: Phường Hải Châu, Thành phố Đà Nẵng"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {profileErrorMsg && (
+                    <div className="sos-profile-form-error">
+                      <i className="bi bi-exclamation-triangle"></i> {profileErrorMsg}
+                    </div>
+                  )}
                 </div>
 
-                {/* Phần địa bàn phụ trách: Admin là Toàn quốc, Cán bộ địa phương chọn Tỉnh/Xã */}
-                {isAdmin ? (
-                  <div className="sos-profile-area-section">
-                    <label className="sos-profile-section-label">
-                      <i className="bi bi-shield-check" style={{ color: '#2563eb' }}></i>
-                      <span>Phạm vi quản trị hệ thống:</span>
-                    </label>
-                    <div
-                      style={{
-                        padding: '14px 16px',
-                        background: '#f0f9ff',
-                        borderRadius: '8px',
-                        border: '1px solid #bae6fd',
-                        color: '#0369a1',
-                        fontSize: '13.5px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        marginTop: '6px',
-                      }}
-                    >
-                      <i className="bi bi-globe2" style={{ fontSize: '22px', color: '#0284c7' }}></i>
-                      <div>
-                        <strong style={{ fontSize: '14px', color: '#0c4a6e', display: 'block', marginBottom: '2px' }}>
-                          Toàn quốc (Quản trị viên toàn hệ thống)
-                        </strong>
-                        Tài khoản Quản trị viên (Admin) có phạm vi điều hành, giám sát toàn diện trên tất cả các Tỉnh / Thành phố trên cả nước, không giới hạn theo địa bàn phụ trách cụ thể.
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="sos-profile-area-section">
-                    <label className="sos-profile-section-label">
-                      <i className="bi bi-geo-alt" style={{ color: '#2563eb' }}></i>
-                      <span>Địa bàn phụ trách quản lý:</span>
-                    </label>
+                {/* Footer có viền trên nhẹ và các nút căn phải */}
+                <div className="sos-profile-modal-actions">
+                  <button
+                    type="button"
+                    className="sos-profile-btn-cancel"
+                    onClick={() => setIsProfileModalOpen(false)}
+                    disabled={savingProfile}
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button type="submit" className="sos-profile-btn-save" disabled={savingProfile}>
+                    <i className="bi bi-check2"></i>
+                    <span>{savingProfile ? 'Đang lưu...' : 'Lưu hồ sơ'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )}
+      {/* ===================================================================
+          4. MENU NỔI (FLYOUT POPOVER) KHI HOVER VÀO PHƯƠNG TIỆN & VẬT TƯ
+          =================================================================== */}
+      {isResourcesFlyoutOpen &&
+        createPortal(
+          <div
+            className="sos-nav-flyout-popover"
+            style={{
+              top: flyoutPosition.top,
+              left: flyoutPosition.left,
+            }}
+            onMouseEnter={handleFlyoutMouseEnter}
+            onMouseLeave={handleFlyoutMouseLeave}
+          >
+            <div className="sos-nav-flyout-menu">
+              {/* 1. Phương tiện cơ động */}
+              <div
+                className={`sos-nav-flyout-item ${activeKey === 'resources' && currentResourceSubTab === 'VEHICLES' ? 'active' : ''
+                  }`}
+                onClick={() => handleSelectResourceSubTab('VEHICLES')}
+                role="button"
+                tabIndex={0}
+              >
 
-                    <div className="sos-profile-area-dropdowns">
-                      <div className="sos-profile-area-col">
-                        <span className="sos-profile-sublabel">Tỉnh / Thành phố:</span>
-                        <select
-                          value={selectedProvinceCode}
-                          onChange={handleProvinceChange}
-                          disabled={loadingProvinces}
-                        >
-                          <option value="">
-                            {loadingProvinces ? '-- Đang tải danh sách Tỉnh/TP... --' : '-- Chọn Tỉnh / Thành phố --'}
-                          </option>
-                          {provinces.map((p) => (
-                            <option key={p.code} value={p.code}>
-                              {p.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
 
-                      <div className="sos-profile-area-col">
-                        <span className="sos-profile-sublabel">
-                          Phường / Xã:
-                          {loadingWards && <span style={{ marginLeft: 6, fontSize: 11, color: '#2563eb' }}>(Đang nạp...)</span>}
-                        </span>
-                        <select
-                          value={selectedWardCode}
-                          onChange={handleWardChange}
-                          disabled={!selectedProvinceCode || loadingWards}
-                        >
-                          <option value="ALL">-- Toàn bộ Tỉnh / Thành phố (Cấp Tỉnh) --</option>
-                          {wards.map((w) => (
-                            <option key={w.code} value={w.code}>
-                              {w.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
+                <Truck size={18} color="#475569" className="sos-nav-flyout-item-icon" />
+                <div className="sos-nav-flyout-info">
+                  <div className="sos-nav-flyout-title">Phương tiện cơ động</div>
+                  <div className="sos-nav-flyout-desc">Ca-nô, xuồng máy, xe tải, cứu thương</div>
+                </div>
 
-                    <div className="sos-profile-managed-area">
-                      <span className="sos-profile-sublabel">Địa bàn hiển thị trong hồ sơ &amp; phân quyền:</span>
-                      <input
-                        type="text"
-                        required
-                        value={localProfile.managedArea}
-                        onChange={(e) => setLocalProfile({ ...localProfile, managedArea: e.target.value })}
-                        placeholder="VD: Phường Hải Châu, Thành phố Đà Nẵng"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {profileErrorMsg && (
-                  <div className="sos-profile-form-error">
-                    <i className="bi bi-exclamation-triangle"></i> {profileErrorMsg}
-                  </div>
-                )}
               </div>
 
-              {/* Footer có viền trên nhẹ và các nút căn phải */}
-              <div className="sos-profile-modal-actions">
-                <button
-                  type="button"
-                  className="sos-profile-btn-cancel"
-                  onClick={() => setIsProfileModalOpen(false)}
-                  disabled={savingProfile}
-                >
-                  Hủy bỏ
-                </button>
-                <button type="submit" className="sos-profile-btn-save" disabled={savingProfile}>
-                  <i className="bi bi-check2"></i>
-                  <span>{savingProfile ? 'Đang lưu...' : 'Lưu hồ sơ'}</span>
-                </button>
+              {/* 2. Trang thiết bị */}
+              <div
+                className={`sos-nav-flyout-item ${activeKey === 'resources' && currentResourceSubTab === 'SUPPLIES' ? 'active' : ''
+                  }`}
+                onClick={() => handleSelectResourceSubTab('SUPPLIES')}
+                role="button"
+                tabIndex={0}
+              >
+
+
+                <LifeBuoy size={18} color="#475569" className="sos-nav-flyout-item-icon" />
+                <div className="sos-nav-flyout-info">
+                  <div className="sos-nav-flyout-title">Trang thiết bị tác chiến</div>
+                  <div className="sos-nav-flyout-desc">Áo phao, bộ đàm, đèn pin, cứu sinh</div>
+                </div>
+
               </div>
-            </form>
-          </div>
-        </div>,
-        document.body
-      )}
+
+              {/* 3. Vật tư cứu trợ */}
+              <div
+                className={`sos-nav-flyout-item ${activeKey === 'resources' && currentResourceSubTab === 'CONSUMABLES' ? 'active' : ''
+                  }`}
+                onClick={() => handleSelectResourceSubTab('CONSUMABLES')}
+                role="button"
+                tabIndex={0}
+              >
+
+
+                <Package size={18} color="#475569" className="sos-nav-flyout-item-icon" />
+                <div className="sos-nav-flyout-info">
+                  <div className="sos-nav-flyout-title">Vật tư cứu trợ &amp; Nhu yếu phẩm</div>
+                  <div className="sos-nav-flyout-desc">Lương thực, nước uống, thuốc men, xăng</div>
+                </div>
+
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </aside>
   );
 };

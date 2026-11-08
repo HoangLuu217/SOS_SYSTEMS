@@ -188,17 +188,9 @@ class DomainDService {
   }
 
   syncRealSosRequests(realRequests: SosRequest[]): SosRequest[] {
-    const realIds = new Set(realRequests.map((r) => r.id));
-    // Khi có dữ liệu thật từ MongoDB, loại bỏ hoàn toàn các ca mock cũ (sos-89..., 8924, 8927)
-    const nonColliding = this.sosRequests.filter(
-      (s) =>
-        !realIds.has(s.id) &&
-        !s.id.startsWith('sos-89') &&
-        !s.id.startsWith('sos-dn-') &&
-        !s.sosCode.includes('8924') &&
-        !s.sosCode.includes('8927')
-    );
-    this.sosRequests = [...realRequests, ...nonColliding];
+    // Khi có dữ liệu thật từ MongoDB / API, sử dụng toàn bộ danh sách thực tế
+    // và loại bỏ triệt để tất cả các ca mock / dữ liệu giả định cũ
+    this.sosRequests = [...realRequests];
     this.save(STORAGE_SOS, this.sosRequests);
     return [...this.sosRequests];
   }
@@ -402,6 +394,10 @@ class DomainDService {
     }
 
     return this.assignments[assignmentId];
+  }
+
+  getAllAssignments(): Record<string, SosAssignment> {
+    return { ...this.assignments };
   }
 
   reassignMission(

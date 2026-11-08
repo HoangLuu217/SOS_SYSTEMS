@@ -332,6 +332,9 @@ export const DispatchWorkflow = ({
   }
 
   const isAssigned = Boolean(assignment && assignment.status !== 'CANCELLED');
+  const isCompleted = selectedSos.status === 'COMPLETED';
+  const isCancelled = selectedSos.status === 'CANCELLED' || (selectedSos.status as any) === 'REJECTED';
+  const isClosed = isCompleted || isCancelled;
 
 
 
@@ -367,8 +370,14 @@ export const DispatchWorkflow = ({
                   width: 9,
                   height: 9,
                   borderRadius: '50%',
-                  background: isAssigned ? '#1e293b' : '#dc2626',
-                  boxShadow: isAssigned ? '0 0 0 2px rgba(30, 41, 59, 0.2)' : '0 0 0 2px rgba(220, 38, 38, 0.2)',
+                  background: isCompleted ? '#16a34a' : isCancelled ? '#64748b' : isAssigned ? '#1e293b' : '#dc2626',
+                  boxShadow: isCompleted
+                    ? '0 0 0 2px rgba(22, 163, 74, 0.2)'
+                    : isCancelled
+                    ? '0 0 0 2px rgba(100, 116, 139, 0.2)'
+                    : isAssigned
+                    ? '0 0 0 2px rgba(30, 41, 59, 0.2)'
+                    : '0 0 0 2px rgba(220, 38, 38, 0.2)',
                 }}
               />
               <span
@@ -377,10 +386,16 @@ export const DispatchWorkflow = ({
                   fontWeight: 900,
                   textTransform: 'uppercase',
                   letterSpacing: '0.4px',
-                  color: isAssigned ? '#1e293b' : '#dc2626',
+                  color: isCompleted ? '#16a34a' : isCancelled ? '#64748b' : isAssigned ? '#1e293b' : '#dc2626',
                 }}
               >
-                {isAssigned ? 'Hỗ Trợ Cứu Nạn (Đã Điều Động)' : 'Hỗ Trợ Cứu Nạn (Chờ Phân Công)'}
+                {isCompleted
+                  ? 'Hồ Sơ Cứu Nạn (Đã Hoàn Thành)'
+                  : isCancelled
+                  ? 'Hồ Sơ Cứu Nạn (Đã Hủy)'
+                  : isAssigned
+                  ? 'Hỗ Trợ Cứu Nạn (Đã Điều Động)'
+                  : 'Hỗ Trợ Cứu Nạn (Chờ Phân Công)'}
               </span>
             </div>
 
@@ -453,8 +468,62 @@ export const DispatchWorkflow = ({
         </div>
       </div>
 
-      {/* 2. VÙNG 2 - KHUNG PHÂN CÔNG ĐỘI CỨU HỘ (flex-1 min-h-0 flex flex-col overflow-hidden) */}
-      {!isAssigned ? (
+      {/* 2. VÙNG 2 - KHUNG PHÂN CÔNG ĐỘI CỨU HỘ HOẶC THÔNG BÁO TRẠNG THÁI CA ĐÃ ĐÓNG */}
+      {isClosed ? (
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px 20px',
+            textAlign: 'center',
+            background: 'var(--sos-surface)',
+          }}
+        >
+          <div
+            style={{
+              width: 58,
+              height: 58,
+              borderRadius: '50%',
+              background: isCompleted ? '#dcfce7' : '#f1f5f9',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 26,
+              marginBottom: 12,
+              border: isCompleted ? '1.5px solid #86efac' : '1.5px solid #cbd5e1',
+            }}
+          >
+            {isCompleted ? '✅' : '🚫'}
+          </div>
+          <div
+            style={{
+              fontSize: 15,
+              fontWeight: 800,
+              color: isCompleted ? '#166534' : '#334155',
+              marginBottom: 6,
+            }}
+          >
+            {isCompleted ? 'Ca cứu hộ đã hoàn thành' : 'Yêu cầu cứu nạn đã được hủy'}
+          </div>
+          <p
+            style={{
+              fontSize: 12.5,
+              color: 'var(--sos-text-muted)',
+              lineHeight: 1.6,
+              maxWidth: 290,
+              margin: 0,
+            }}
+          >
+            {isCompleted
+              ? 'Tất cả nạn nhân đã được lực lượng cứu hộ ứng cứu an toàn. Hồ sơ ca này đã kết thúc.'
+              : 'Yêu cầu cứu nạn đã được đóng lại bởi người dân hoặc ban chỉ huy.'}
+          </p>
+        </div>
+      ) : !isAssigned ? (
         <div
           style={{
             flex: 1,
@@ -574,7 +643,7 @@ export const DispatchWorkflow = ({
       )}
 
       {/* 3. VÙNG 3 - CỐ ĐỊNH Ở ĐÁY (shrink-0): STICKY ACTION FOOTER */}
-      {!isAssigned && (
+      {!isAssigned && !isClosed && (
         <div
           style={{
             flexShrink: 0,

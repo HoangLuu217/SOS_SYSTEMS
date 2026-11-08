@@ -504,6 +504,7 @@
 
 
 
+
 /* Global Coordination & Executive Action Buttons */
 .coordination-action-btn {
   display: inline-flex;
@@ -559,4 +560,434 @@
   background: #f8fafc;
   border-color: #94a3b8;
   color: #0f172a;
+}
+
+/* --------------------------------------------------------------------------
+   SEGMENTED TABS NAVIGATION (3 TABS) - FULL WIDTH
+   -------------------------------------------------------------------------- */
+/* ==========================================================================
+   THANH TIÊU ĐỀ PHÂN HỆ HIỆN TẠI (CONTEXT HEADER)
+   ========================================================================== */
+.resources-context-header {
+  margin-bottom: 0;
+  width: 100%;
+  flex-shrink: 0;
+  border-bottom: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.resources-context-badge {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #ffffff;
+  border: none;
+  border-radius: 0;
+  padding: 12px 18px;
+  box-shadow: none;
+}
+
+.resources-context-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.resources-context-icon.vehicles {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.resources-context-icon.supplies {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.resources-context-icon.consumables {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.resources-context-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.resources-context-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.resources-context-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.25;
+}
+
+.resources-context-stat {
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.resources-context-stat.vehicles {
+  background: #e0f2fe;
+  color: #0284c7;
+  border: 1px solid #bae6fd;
+}
+
+.resources-context-stat.supplies {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.resources-context-stat.consumables {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.resources-context-desc {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ==========================================================================
+   TOOLBAR ULTRA-COMPACT (1 HÀNG DUY NHẤT: NHẬN DIỆN PHÂN HỆ + BỘ LỌC + NÚT)
+   ========================================================================== */
+.resources-toolbar-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 13.5px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.resources-toolbar-tab-badge.vehicles {
+  background: #f0f9ff;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.resources-toolbar-tab-badge.supplies {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.resources-toolbar-tab-badge.consumables {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.resources-toolbar-tab-title {
+  font-weight: 700;
+  font-size: 13.5px;
+  letter-spacing: -0.2px;
+}
+
+.resources-toolbar-tab-count {
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.resources-toolbar-tab-badge.vehicles .resources-toolbar-tab-count {
+  color: #0284c7;
+  border: 1px solid #bae6fd;
+}
+
+.resources-toolbar-tab-badge.supplies .resources-toolbar-tab-count {
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+.resources-toolbar-tab-badge.consumables .resources-toolbar-tab-count {
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+
+.resources-toolbar-divider {
+  width: 1px;
+  height: 22px;
+  background: #e2e8f0;
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* Hỗ trợ Dark Mode */
+[data-theme="dark"] .resources-toolbar-tab-badge.vehicles {
+  background: rgba(2, 132, 199, 0.15);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+[data-theme="dark"] .resources-toolbar-tab-badge.supplies {
+  background: rgba(22, 163, 74, 0.15);
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.3);
+}
+
+[data-theme="dark"] .resources-toolbar-tab-badge.consumables {
+  background: rgba(217, 119, 6, 0.15);
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+[data-theme="dark"] .resources-toolbar-tab-count {
+  background: #1e293b;
+  border-color: #334155 !important;
+}
+
+[data-theme="dark"] .resources-toolbar-divider {
+  background: #334155;
+}
+
+/* ==========================================================================
+   CARD HEADER - GỘP CHUNG TIÊU ĐỀ PHÂN HỆ & NÚT THAO TÁC CẤP KHO (PHƯƠNG ÁN 1)
+   ========================================================================== */
+.resources-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 12px 20px;
+  flex-shrink: 0;
+}
+
+.resources-card-header-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  flex: 1;
+}
+
+.resources-card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* Mở rộng ô tìm kiếm trong Toolbar khi các nút thao tác đã dời lên Header */
+.ra-toolbar .ra-toolbar-controls .ra-search-box {
+  flex: 1;
+  min-width: 280px;
+  max-width: 520px;
+}
+
+[data-theme="dark"] .resources-card-header {
+  background: #0f172a;
+  border-bottom-color: #1e293b;
+}
+
+/* ==========================================================================
+   RESOURCE DETAIL DRAWER REDESIGN (Bố cục tối giản, loại bỏ Card lồng Card)
+   ========================================================================== */
+.rd-drawer-content {
+  flex: 1;
+  padding: 24px 28px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  background: #ffffff;
+}
+
+/* 1. Thanh tóm tắt chỉ số ngang đồng nhất (Single seamless bar) */
+.rd-metrics-bar {
+  display: flex;
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 20px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.rd-metric-cell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rd-metric-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.rd-metric-val {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rd-metric-val.highlight {
+  color: #0284c7;
+}
+
+.rd-metric-val.success {
+  color: #16a34a;
+}
+
+.rd-metric-sub {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.rd-metric-divider {
+  width: 1px;
+  height: 36px;
+  background: #e2e8f0;
+  margin: 0 18px;
+  flex-shrink: 0;
+}
+
+/* 2. Nhóm thông tin chi tiết (Property Section - Flat, không viền card) */
+.rd-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rd-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.rd-section-header svg {
+  color: #0284c7;
+}
+
+.rd-property-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 24px;
+}
+
+.rd-property-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.rd-property-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.rd-property-val {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.rd-property-val.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 800;
+  color: #0369a1;
+}
+
+/* 3. Khối ghi chú / Quy cách (Callout phẳng có vạch màu bên trái) */
+.rd-callout {
+  background: #f8fafc;
+  border-left: 3.5px solid #0284c7;
+  border-radius: 0 10px 10px 0;
+  padding: 14px 18px;
+  font-size: 13.5px;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.rd-alert-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+
+/* Dark mode */
+[data-theme="dark"] .rd-drawer-content {
+  background: #0b132b;
+}
+
+[data-theme="dark"] .rd-metrics-bar {
+  background: #111e38;
+  border-color: #1e293b;
+}
+
+[data-theme="dark"] .rd-metric-val {
+  color: #f1f5f9;
+}
+
+[data-theme="dark"] .rd-metric-divider {
+  background: #1e293b;
+}
+
+[data-theme="dark"] .rd-section-header {
+  border-bottom-color: #1e293b;
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .rd-property-val {
+  color: #f1f5f9;
+}
+
+[data-theme="dark"] .rd-callout {
+  background: #111e38;
+  color: #cbd5e1;
+
 }

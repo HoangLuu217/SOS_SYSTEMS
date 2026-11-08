@@ -85,6 +85,7 @@ export async function reassignMissionApi(assignmentId: string, payload: {
   });
 }
 
+
 export async function assignShoreHandoffApi(sosId: string, payload: {
   vehicleId?: string;
   vehicleName?: string;
@@ -116,5 +117,18 @@ export async function rejectSuppliesApi(assignmentId: string, note?: string): Pr
   return fetchWithAuth(`/assignments/${assignmentId}/supplies/reject`, {
     method: 'POST',
     body: JSON.stringify({ note }),
+  });
+}
+
+export async function deleteSosRequestApi(sosId: string): Promise<{ success: boolean; message?: string }> {
+  return fetchWithAuth(`/sos/${sosId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function clearCancelledSosApi(): Promise<{ success: boolean; message?: string; data?: { deletedCount: number } }> {
+  return fetchWithAuth('/sos/clear-cancelled', {
+    method: 'DELETE',
+
   });
 }
