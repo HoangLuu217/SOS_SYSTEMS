@@ -1129,49 +1129,24 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                         </TouchableOpacity>
                       )}
 
-                      {['IN_PROGRESS', 'ARRIVED', 'RESCUING'].includes(item.status) && (
-                        <TouchableOpacity
-                          style={[styles.primaryActionBtn, { flex: 1.3 }]}
-                          onPress={() => {
-                            setSelectedMission(item);
-                            const initialRecipient =
-                              item.actualRecipient ||
-                              item.recipientName ||
-                              (typeof item.note === 'string' &&
-                                item.note.match(/Người nhận:\s*([^.)\]]+)/)?.[1]?.trim()) ||
-                              (typeof item.sosRequestId?.description === 'string' &&
-                                item.sosRequestId.description.match(/Người nhận:\s*([^.)\]]+)/)?.[1]?.trim()) ||
-                              item.sosRequestId?.citizenId?.fullName ||
-                              '';
-                            setActualRecipient(initialRecipient);
-                            const existingPhotos = (item.proofImages || []).map((url: string) => ({ uri: url }));
-                            setProofPhotos(existingPhotos);
-                            setCompleteNote('');
-                            setCompleteModalVisible(true);
-                          }}
-                          activeOpacity={0.85}
-                          disabled={isSubmitting}
-                        >
-                          <LinearGradient
-                            colors={['#10B981', '#059669']}
-                            style={styles.gradientBtn}
-                          >
-                            <Feather name="award" size={15} color="#FFFFFF" />
-                            <Text style={styles.primaryActionText}>
-                              {isReliefMission ? 'Bàn Giao & Hoàn Tất' : 'Báo Cáo Hoàn Thành'}
-                            </Text>
-                          </LinearGradient>
-                        </TouchableOpacity>
-                      )}
-
-                      {/* Nút Chỉ đường mở Workspace bản đồ */}
+                      {/* Nút tác chiến mở Workspace bản đồ (Bàn giao và chụp ảnh đã được thống nhất làm trực tiếp bên trong bản đồ tác chiến) */}
                       <TouchableOpacity
-                        style={[styles.mapActionBtn, { flex: 0.9 }]}
+                        style={[styles.primaryActionBtn, { flex: 1 }]}
                         onPress={() => handleViewOnMap(item)}
-                        activeOpacity={0.8}
+                        activeOpacity={0.85}
+                        disabled={isSubmitting}
                       >
-                        <Feather name="navigation" size={14} color="#0066FF" />
-                        <Text style={styles.mapActionText}>Chỉ đường</Text>
+                        <LinearGradient
+                          colors={['#0284C7', '#0369A1']}
+                          style={styles.gradientBtn}
+                        >
+                          <Feather name="navigation" size={15} color="#FFFFFF" />
+                          <Text style={styles.primaryActionText}>
+                            {['ARRIVED', 'IN_PROGRESS', 'RESCUING'].includes(item.status)
+                              ? (isReliefMission ? 'Bàn Giao Cứu Trợ (Tại Hiện Trường)' : 'Báo Cáo Cứu Hộ (Tại Hiện Trường)')
+                              : 'Chỉ Đường & Tác Chiến'}
+                          </Text>
+                        </LinearGradient>
                       </TouchableOpacity>
                     </>
                   ) : (

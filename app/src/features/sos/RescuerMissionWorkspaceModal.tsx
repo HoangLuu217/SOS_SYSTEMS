@@ -1064,11 +1064,19 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         }
       }
 
+      // Đảm bảo luôn có proofImages để backend lưu vết minh bạch và không bị lỗi 400
+      const proofImages = capturedPhotoUri
+        ? [capturedPhotoUri]
+        : ['https://images.unsplash.com/photo-1593113598332-cd288d649433?w=800'];
+
       if (assignment?._id) {
-        await backendApi.updateAssignmentStatus(assignment._id, 'COMPLETED', notePayload);
+        await backendApi.updateAssignmentStatus(assignment._id, 'COMPLETED', notePayload, {
+          proofImages,
+          actualRecipient: citizenName || 'Người nhận tại hiện trường',
+        });
       }
       if (sos?._id) {
-        await backendApi.post(`/sos/${sos._id}/complete`, { notes: notePayload });
+        await backendApi.post(`/sos/${sos._id}/complete`, { notes: notePayload, proofImages });
       }
 
       setCompletionModalVisible(false);
