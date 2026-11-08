@@ -533,44 +533,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
   return (
     <div className="reports-view-container">
-      {/* 1. HEADER CHÍNH */}
-      <div className="reports-header-card">
-        <div className="reports-header-left">
-          <div className="reports-header-icon">
-            <BarChart3 size={24} />
-          </div>
-          <div className="reports-header-titles">
-            <h1>
-              {isAdmin ? 'BÁO CÁO & THỐNG KÊ TOÀN QUỐC' : 'BÁO CÁO & THỐNG KÊ ĐỊA PHƯƠNG'}
-            </h1>
-            <p>Phân tích số liệu cứu hộ, thời gian phản hồi và tỷ lệ hỗ trợ người dân</p>
-          </div>
-        </div>
 
-        <div className="reports-header-right">
-          <div className="reports-scope-badge">
-            <span className="reports-scope-dot" />
-            <MapPin size={14} />
-            <span>
-              {isAdmin
-                ? selectedProvince !== 'ALL'
-                  ? `Phạm vi: ${selectedProvince}`
-                  : 'Phạm vi: Toàn quốc'
-                : `Khu vực: ${userAreaName}`}
-            </span>
-          </div>
-
-          <button
-            type="button"
-            className="reports-refresh-btn"
-            onClick={loadInitialData}
-            disabled={loading}
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            <span>Làm mới số liệu</span>
-          </button>
-        </div>
-      </div>
 
       {/* 2. BỘ LỌC ĐẦY ĐỦ (FILTER CARD) */}
       <div className="reports-filter-card">
@@ -796,6 +759,17 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           </div>
 
           <div className="reports-filter-actions-right">
+            <button
+              type="button"
+              className="reports-btn-secondary"
+              onClick={loadInitialData}
+              disabled={loading}
+              title="Làm mới số liệu thống kê"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              <span>Làm mới số liệu</span>
+            </button>
+
             <button type="button" className="reports-btn-secondary" onClick={handleResetFilters}>
               <RotateCcw size={14} />
               <span>Đặt lại</span>
