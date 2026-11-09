@@ -824,9 +824,6 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                       value={editAuthForm.email}
                       onChange={(e) => setEditAuthForm({ ...editAuthForm, email: e.target.value })}
                     />
-                    <span style={{ fontSize: '11px', color: '#0284c7', marginTop: '2px', display: 'block' }}>
-                      Dùng nhận mã OTP đổi mật khẩu qua Resend
-                    </span>
                   </div>
                   <div className="executive-modal-field">
                     <label className="executive-modal-label">Trạng thái tài khoản (*)</label>
@@ -1058,9 +1055,6 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                             value={createAuthForm.email}
                             onChange={(e) => setCreateAuthForm({ ...createAuthForm, email: e.target.value })}
                           />
-                          <span style={{ fontSize: '11px', color: '#0284c7', marginTop: '2px', display: 'block' }}>
-                            Dùng nhận mã OTP đổi mật khẩu qua Resend
-                          </span>
                         </div>
                         <div className="executive-modal-field">
                           <label className="executive-modal-label">Mật khẩu khởi tạo (*)</label>

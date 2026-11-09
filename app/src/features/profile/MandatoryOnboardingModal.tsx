@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Alert,
   FlatList,
+  Keyboard,
 } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -165,6 +166,26 @@ export const MandatoryOnboardingModal: React.FC = () => {
   const [phoneSuccess, setPhoneSuccess] = useState<string | null>(null);
   const { seconds: countdown, start: startCountdown } = useCountdown({ initialSeconds: 60 });
   const otpInputRef = useRef<any>(null);
+  const scrollViewRef = useRef<any>(null);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, () => {
+      setIsKeyboardVisible(true);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setIsKeyboardVisible(false);
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // ===================== STATE: HOÀN THIỆN THÔNG TIN CÁ NHÂN =====================
   const initialAddr = useMemo(() => parseAddressComponents(user?.address), [user?.address]);
@@ -515,18 +536,22 @@ export const MandatoryOnboardingModal: React.FC = () => {
           </View>
         </View>
 
-        {/* ===================== PHẦN NỘI DUNG CUỘN (SCROLLABLE CARD) ===================== */}
+        {/* ===================== PHẦN NỘI DUNG FORM ===================== */}
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <ScrollView
+            ref={scrollViewRef}
             style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
+            contentContainerStyle={[
+              styles.scrollContent,
+              isKeyboardVisible && { paddingBottom: Platform.OS === 'ios' ? 260 : 160 },
+            ]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            scrollEnabled={false}
-            bounces={false}
+            scrollEnabled={isKeyboardVisible}
+            bounces={isKeyboardVisible}
             overScrollMode="never"
           >
 
@@ -561,6 +586,8 @@ export const MandatoryOnboardingModal: React.FC = () => {
                           placeholderTextColor="#94A3B8"
                           keyboardType="phone-pad"
                           value={phoneInput}
+                          returnKeyType="done"
+                          onSubmitEditing={() => Keyboard.dismiss()}
                           onChangeText={(t) => {
                             setPhoneInput(t);
                             if (phoneError) setPhoneError(null);
@@ -727,6 +754,10 @@ export const MandatoryOnboardingModal: React.FC = () => {
                       placeholder="Nhập họ và tên đầy đủ..."
                       placeholderTextColor="#94A3B8"
                       value={fullName}
+                      returnKeyType="next"
+                      onFocus={() => {
+                        scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+                      }}
                       onChangeText={(t) => {
                         setFullName(t);
                         if (nameError) setNameError(null);
@@ -863,6 +894,13 @@ export const MandatoryOnboardingModal: React.FC = () => {
                       placeholder="Ví dụ: 120 Hoàng Hoa Thám..."
                       placeholderTextColor="#94A3B8"
                       value={street}
+                      returnKeyType="done"
+                      onSubmitEditing={() => Keyboard.dismiss()}
+                      onFocus={() => {
+                        setTimeout(() => {
+                          scrollViewRef.current?.scrollToEnd({ animated: true });
+                        }, Platform.OS === 'ios' ? 120 : 200);
+                      }}
                       onChangeText={(t) => {
                         setStreet(t);
                         if (streetError) setStreetError(null);

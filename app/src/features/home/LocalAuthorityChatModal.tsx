@@ -13,6 +13,7 @@ import {
   Linking,
   Alert,
   StatusBar,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -22,6 +23,7 @@ import {
   FontAwesome5,
 } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '@/context/AuthContext';
 import { backendApi, ChatMessageItem, LocalAuthorityInfo } from '@/api';
@@ -52,6 +54,8 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendingGps, setSendingGps] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
@@ -335,6 +339,91 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
     }
   };
 
+  // Chọn ảnh từ máy và gửi lên Cloudinary
+  const handlePickImage = async () => {
+    if (uploadingImage || !localInfo?.channel) return;
+
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert(
+          'Quyền truy cập ảnh',
+          'Vui lòng cấp quyền truy cập thư viện ảnh để gửi hình ảnh hiện trường cứu hộ.'
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.7,
+        base64: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      if (!asset.base64 && !asset.uri) {
+        Alert.alert('Lỗi', 'Không thể đọc dữ liệu ảnh đã chọn.');
+        return;
+      }
+
+      setUploadingImage(true);
+
+      // Gửi chuỗi base64 lên backend -> backend upload trực tiếp sang Cloudinary
+      const base64Data = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      const uploadRes = await backendApi.uploadFile(base64Data, asset.fileName || `chat_${Date.now()}.jpg`);
+
+      const uploadedUrl = (uploadRes as any)?.data?.url || (uploadRes as any)?.url || (uploadRes as any)?.data?.data?.url;
+      if (!uploadedUrl) {
+        throw new Error(uploadRes.message || 'Không nhận được đường dẫn ảnh từ máy chủ');
+      }
+
+      const caption = inputText.trim();
+      setInputText('');
+
+      // Optimistic UI: hiển thị ảnh ngay lập tức
+      const tempId = `temp_img_${Date.now()}`;
+      const optimisticMsg: ChatMessageItem = {
+        _id: tempId,
+        senderId: user?._id || 'me',
+        senderName: user?.fullName || 'Tôi',
+        senderRole: (user?.roles || []).includes('RESCUER') ? 'RESCUER' : (user?.roles?.[0] || 'CITIZEN'),
+        channel: localInfo.channel,
+        content: caption || '[Hình ảnh]',
+        attachments: [{ url: uploadedUrl, fileType: 'IMAGE', fileName: asset.fileName || 'photo.jpg' }],
+        createdAt: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, optimisticMsg]);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+
+      const sendRes = await backendApi.sendChatMessage({
+        content: caption || '[Hình ảnh]',
+        channel: localInfo.channel,
+        recipientId: localInfo.authority?.id || undefined,
+        attachments: [{ url: uploadedUrl, fileType: 'IMAGE', fileName: asset.fileName || 'photo.jpg' }],
+      });
+
+      if (sendRes.success && sendRes.data) {
+        const confirmedMsg = sendRes.data;
+        setMessages((prev) => {
+          const alreadyHasConfirmed = prev.some((m) => m._id === confirmedMsg._id);
+          if (alreadyHasConfirmed) {
+            return prev.filter((m) => m._id !== tempId);
+          }
+          return prev.map((m) => (m._id === tempId ? confirmedMsg : m));
+        });
+      }
+    } catch (err: any) {
+      Alert.alert('Không thể gửi ảnh', err.message || 'Lỗi tải ảnh lên Cloudinary.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   // Xử lý gọi điện trực tiếp tới chính quyền / cán bộ địa phương: Mở trực tiếp màn hình quay số điện thoại
   const handleCallHotline = () => {
     const hotline = localInfo?.authority?.phone;
@@ -481,6 +570,19 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
     const timeStr = formatTime(item.createdAt);
     const hasGps = isGpsMessage(item.content);
 
+    // Kiểm tra tệp đính kèm hình ảnh
+    const hasAttachments = Array.isArray(item.attachments) && item.attachments.length > 0;
+    const imageAttachments = hasAttachments
+      ? item.attachments!.filter(
+          (att) =>
+            att.url &&
+            (!att.fileType ||
+              att.fileType.toUpperCase().includes('IMAGE') ||
+              /\.(jpg|jpeg|png|webp|gif)/i.test(att.url))
+        )
+      : [];
+    const showText = item.content && item.content.trim() !== '[Hình ảnh]';
+
     return (
       <View
         style={[
@@ -510,16 +612,40 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
               style={[
                 styles.messageBubble,
                 isMe ? styles.messageBubbleMe : styles.messageBubbleOther,
+                imageAttachments.length > 0 && styles.messageBubbleWithImage,
               ]}
             >
-              <Text
-                style={[
-                  styles.messageText,
-                  isMe ? styles.messageTextMe : styles.messageTextOther,
-                ]}
-              >
-                {item.content}
-              </Text>
+              {/* Hiển thị danh sách ảnh nếu có */}
+              {imageAttachments.map((img, imgIdx) => (
+                <TouchableOpacity
+                  key={`img_${imgIdx}`}
+                  activeOpacity={0.88}
+                  onPress={() => setPreviewImageUrl(img.url)}
+                  style={styles.chatImageWrap}
+                >
+                  <Image
+                    source={{ uri: img.url }}
+                    style={styles.chatImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.chatImageOverlayIcon}>
+                    <Feather name="maximize-2" size={13} color="#FFFFFF" />
+                  </View>
+                </TouchableOpacity>
+              ))}
+
+              {/* Nội dung văn bản kèm theo */}
+              {showText && (
+                <Text
+                  style={[
+                    styles.messageText,
+                    isMe ? styles.messageTextMe : styles.messageTextOther,
+                    imageAttachments.length > 0 && { marginTop: 6 },
+                  ]}
+                >
+                  {item.content}
+                </Text>
+              )}
             </View>
           )}
 
@@ -736,7 +862,7 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
             <TouchableOpacity
               style={styles.attachBtn}
               onPress={handleSendLocation}
-              disabled={sendingGps}
+              disabled={sendingGps || uploadingImage}
               activeOpacity={0.7}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
@@ -744,6 +870,21 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
                 <ActivityIndicator size="small" color="#0066FF" />
               ) : (
                 <Ionicons name="location" size={21} color="#0066FF" />
+              )}
+            </TouchableOpacity>
+
+            {/* Nút gửi ảnh chụp / ảnh thư viện */}
+            <TouchableOpacity
+              style={styles.attachBtn}
+              onPress={handlePickImage}
+              disabled={sendingGps || uploadingImage}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              {uploadingImage ? (
+                <ActivityIndicator size="small" color="#0066FF" />
+              ) : (
+                <Ionicons name="images-outline" size={21} color="#0066FF" />
               )}
             </TouchableOpacity>
 
@@ -783,6 +924,32 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
+
+        {/* Modal phóng to ảnh trong chat */}
+        <Modal
+          visible={!!previewImageUrl}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setPreviewImageUrl(null)}
+        >
+          <View style={styles.lightboxContainer}>
+            <StatusBar barStyle="light-content" backgroundColor="#000000" />
+            <TouchableOpacity
+              style={[styles.lightboxCloseBtn, { top: insets.top + 10 }]}
+              onPress={() => setPreviewImageUrl(null)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close" size={26} color="#FFFFFF" />
+            </TouchableOpacity>
+            {previewImageUrl && (
+              <Image
+                source={{ uri: previewImageUrl }}
+                style={styles.lightboxImage}
+                resizeMode="contain"
+              />
+            )}
+          </View>
+        </Modal>
       </View>
     </Modal>
   );
@@ -1191,5 +1358,55 @@ const styles = StyleSheet.create({
   },
   sendRoundBtnDisabled: {
     backgroundColor: '#93C5FD',
+  },
+
+  // ==================== IMAGE ATTACHMENTS & LIGHTBOX ====================
+  messageBubbleWithImage: {
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  chatImageWrap: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#E2E8F0',
+  },
+  chatImage: {
+    width: 220,
+    height: 160,
+    borderRadius: 14,
+  },
+  chatImageOverlayIcon: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lightboxContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lightboxCloseBtn: {
+    position: 'absolute',
+    right: 18,
+    zIndex: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lightboxImage: {
+    width: '100%',
+    height: '80%',
   },
 });

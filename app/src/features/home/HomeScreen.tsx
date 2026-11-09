@@ -840,14 +840,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       </View>
                     )}
                   </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.circleIconButton}
-                    onPress={onOpenSettings}
-                    activeOpacity={0.75}
-                  >
-                    <Ionicons name="settings-outline" size={20} color="#FFFFFF" />
-                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -1152,31 +1144,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 onPress={() => handleUtilityPress('chat_local_authority')}
                 activeOpacity={0.7}
               >
-                <View style={[styles.utilityIconBox, { backgroundColor: '#E0F2FE' }]}>
-                  <Ionicons
-                    name="chatbubbles"
-                    size={28}
-                    color="#0284C7"
+                <View style={styles.utilityIconBoxStandalone}>
+                  <Image
+                    source={require('../../../assets/appicon/message.png')}
+                    style={styles.utilityImage}
+                    resizeMode="contain"
                   />
                 </View>
                 <Text style={styles.utilityLabel}>Nhắn tin{'\n'}địa phương</Text>
               </TouchableOpacity>
 
-              {/* 8. Đăng tin cảnh báo */}
-              <TouchableOpacity
-                style={styles.utilityItem}
-                onPress={() => handleUtilityPress('post_news')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.utilityIconBox, { backgroundColor: '#F1F5F9' }]}>
-                  <MaterialCommunityIcons
-                    name="bullhorn-outline"
-                    size={28}
-                    color="#64748B"
-                  />
-                </View>
-                <Text style={styles.utilityLabel}>Đăng tin{'\n'}cảnh báo</Text>
-              </TouchableOpacity>
+              {/* Khoảng trống căn thẳng cột với hàng trên */}
+              <View style={styles.utilityItem} />
             </View>
           </View>
         </View>
