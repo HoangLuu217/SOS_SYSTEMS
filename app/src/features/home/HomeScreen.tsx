@@ -1014,11 +1014,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 onPress={() => handleUtilityPress('chat_local_authority')}
                 activeOpacity={0.7}
               >
-                <View style={[styles.utilityIconBox, { backgroundColor: '#E0F2FE' }]}>
-                  <Ionicons
-                    name="chatbubbles"
-                    size={28}
-                    color="#0284C7"
+                <View style={styles.utilityIconBoxStandalone}>
+                  <Image
+                    source={require('../../../assets/appicon/message.png')}
+                    style={styles.utilityImage}
+                    resizeMode="contain"
                   />
                 </View>
                 <Text style={styles.utilityLabel}>Nhắn tin với{'\n'}địa phương</Text>

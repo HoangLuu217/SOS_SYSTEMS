@@ -1,4 +1,12 @@
 require('dotenv').config();
+const dns = require('dns');
+// Tự động phân giải DNS qua Google DNS & Cloudflare để khắc phục triệt để lỗi querySrv ECONNREFUSED của mạng Wifi gia đình
+try {
+  dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+} catch (e) {
+  // Bỏ qua nếu môi trường không cho phép
+}
+
 const http = require('http');
 const mongoose = require('mongoose');
 const app = require('./app');
