@@ -96,8 +96,8 @@ async function findAreaByCoordinates(coordinates, AdministrativeAreaModel) {
   }
 
   try {
-    // 1. Try MongoDB $geoIntersects on 2dsphere index
-    const area = await AdministrativeAreaModel.findOne({
+    // 1. Try MongoDB $geoIntersects on 2dsphere index (prefer WARD -> DISTRICT -> PROVINCE)
+    const matchedAreas = await AdministrativeAreaModel.find({
       status: 'ACTIVE',
       boundary: {
         $geoIntersects: {
@@ -109,7 +109,11 @@ async function findAreaByCoordinates(coordinates, AdministrativeAreaModel) {
       },
     });
 
-    if (area) return area;
+    if (matchedAreas && matchedAreas.length > 0) {
+      const order = { WARD: 1, DISTRICT: 2, PROVINCE: 3, COUNTRY: 4 };
+      matchedAreas.sort((a, b) => (order[a.type] || 5) - (order[b.type] || 5));
+      return matchedAreas[0];
+    }
   } catch (err) {
     // $geoIntersects might throw if geometry in DB is invalid or index issue; fallback to manual test
   }

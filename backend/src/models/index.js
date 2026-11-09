@@ -15,6 +15,8 @@ const ChatMessage = require('./ChatMessage');
 const Equipment = require('./Equipment');
 const WeatherArticle = require('./WeatherArticle');
 const WeatherNotification = WeatherArticle;
+const SafetyCheck = require('./SafetyCheck');
+const SafetyCheckResponse = require('./SafetyCheckResponse');
 
 module.exports = {
   User,
@@ -35,5 +37,6 @@ module.exports = {
   WeatherArticle,
   WeatherNotification,
   weather_article: WeatherArticle,
+  SafetyCheck,
+  SafetyCheckResponse,
 };
-

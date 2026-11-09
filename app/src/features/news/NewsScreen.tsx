@@ -13,6 +13,7 @@ import {
   Image,
   Linking,
   Alert,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -286,7 +287,7 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle="dark-content" {...({ backgroundColor: '#FFFFFF' } as any)} />
 
       {/* ==================== 1. TOP HEADER ==================== */}
       <View style={styles.header}>
@@ -763,27 +764,65 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
 
             {/* Các nút hành động */}
             <View style={styles.detailActionsRow}>
-              <TouchableOpacity
-                style={styles.testPushBtn}
-                onPress={() => selectedNotif && handleTestPush(selectedNotif)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="notifications-outline" size={16} color="#0066FF" />
-                <Text style={styles.testPushText}>Thử báo ra máy</Text>
-              </TouchableOpacity>
-
-              {onNavigateToTab && (
+              {Boolean(
+                selectedNotif?.type === 'SAFETY_CHECK' ||
+                selectedNotif?.actionUrl === 'safety_check' ||
+                selectedNotif?.data?.isSafetyCheck
+              ) ? (
                 <TouchableOpacity
-                  style={styles.actionBtnPrimary}
+                  style={[styles.actionBtnPrimary, { backgroundColor: '#16A34A', flex: 1, paddingVertical: 14 }]}
                   onPress={() => {
                     setDetailVisible(false);
-                    onNavigateToTab('map');
+                    const sid = selectedNotif?.data?.safetyCheckId || (selectedNotif as any)?.safetyCheckId || selectedNotif?._id;
+                    DeviceEventEmitter.emit('open:safety_check', { safetyCheckId: sid });
                   }}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="map-outline" size={16} color="#FFFFFF" />
-                  <Text style={styles.actionBtnPrimaryText}>Xem trên bản đồ</Text>
+                  <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={[styles.actionBtnPrimaryText, { fontWeight: '700' }]}>Xác nhận an toàn ngay</Text>
                 </TouchableOpacity>
+              ) : Boolean(
+                selectedNotif?.type === 'BLOOD_DONATION' ||
+                selectedNotif?.actionUrl === 'blood_donation' ||
+                selectedNotif?.data?.isBloodDonation
+              ) ? (
+                <TouchableOpacity
+                  style={[styles.actionBtnPrimary, { backgroundColor: '#DC2626', flex: 1, paddingVertical: 14 }]}
+                  onPress={() => {
+                    setDetailVisible(false);
+                    const eid = selectedNotif?.data?.eventId || (selectedNotif as any)?.eventId;
+                    DeviceEventEmitter.emit('open:blood_donation', { eventId: eid });
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="water" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={[styles.actionBtnPrimaryText, { fontWeight: '700' }]}>Xem & Xác nhận đăng ký hiến máu</Text>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={styles.testPushBtn}
+                    onPress={() => selectedNotif && handleTestPush(selectedNotif)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="notifications-outline" size={16} color="#0066FF" />
+                    <Text style={styles.testPushText}>Thử báo ra máy</Text>
+                  </TouchableOpacity>
+
+                  {onNavigateToTab && (
+                    <TouchableOpacity
+                      style={styles.actionBtnPrimary}
+                      onPress={() => {
+                        setDetailVisible(false);
+                        onNavigateToTab('map');
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="map-outline" size={16} color="#FFFFFF" />
+                      <Text style={styles.actionBtnPrimaryText}>Xem trên bản đồ</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
               )}
             </View>
           </View>

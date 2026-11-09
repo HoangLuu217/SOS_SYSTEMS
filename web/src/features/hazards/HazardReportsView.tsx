@@ -16,7 +16,8 @@ import {
   Edit,
   Compass,
   XCircle,
-  Clock
+  Clock,
+  Download
 } from 'lucide-react';
 import type { User } from '@/types/auth';
 import type { HazardReportItem, AdministrativeAreaItem } from '@/types/dashboard';
@@ -752,6 +753,73 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       }
     };
 
+    const handleExportHazardsCsv = () => {
+      const escapeCsvCell = (val: unknown): string => {
+        const str = val === null || val === undefined ? '' : String(val);
+        return `"${str.replace(/"/g, '""')}"`;
+      };
+
+      const getStatusLabel = (status: string) => {
+        if (status === 'APPROVED') return 'Đã duyệt';
+        if (status === 'PENDING') return 'Chờ thẩm định';
+        if (status === 'REJECTED') return 'Từ chối';
+        return status || '';
+      };
+
+      const headers = [
+        'STT',
+        'Tiêu đề điểm nguy hiểm',
+        'Loại hiểm họa',
+        'Mức độ nguy hiểm',
+        'Trạng thái',
+        'Khu vực / Địa phương',
+        'Địa chỉ hiện trường',
+        'Mô tả hiện trường',
+        'Người báo cáo',
+        'SĐT người báo',
+        'Vĩ độ (Lat)',
+        'Kinh độ (Lng)',
+        'Thời gian ghi nhận',
+      ];
+
+      const rows = sortedReports.map((r, idx) => {
+        const typeCfg = getHazardTypeConfig(r.hazardType, r.customHazardType);
+        const sevCfg = getSeverityBadge(r.severity);
+        const reporterName = typeof r.reportedBy === 'object' ? (r.reportedBy?.fullName || 'Người dân') : 'Hệ thống';
+        const reporterPhone = typeof r.reportedBy === 'object' ? (r.reportedBy?.phone || '') : '';
+        const coords = r.location?.coordinates;
+        return [
+          idx + 1,
+          r.title || '',
+          typeCfg.label,
+          sevCfg.label,
+          getStatusLabel(r.status),
+          getHazardDistrictName(r),
+          r.address || '',
+          r.description || '',
+          reporterName,
+          reporterPhone,
+          Array.isArray(coords) && coords.length === 2 ? coords[1] : '',
+          Array.isArray(coords) && coords.length === 2 ? coords[0] : '',
+          formatHazardTime(r.createdAt),
+        ];
+      });
+
+      const csvContent =
+        '\uFEFF' +
+        [headers.map(escapeCsvCell).join(','), ...rows.map((r) => r.map(escapeCsvCell).join(','))].join('\r\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Danh_sach_diem_nguy_hiem_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast(`Đã xuất ${sortedReports.length} điểm nguy hiểm ra file CSV!`, 'success');
+    };
+
     // Mở Form thẩm định & chuẩn hóa thông tin điểm nguy hiểm (Tự động ẩn form chi tiết)
     const handleOpenReviewModal = (hazard: HazardReportItem) => {
       setDetailHazard(null);
@@ -781,13 +849,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       setEditErrors({});
     };
 
-    // Mở Form Tạo Điểm Nguy Hiểm Mới (Chỉ dành cho Cán bộ chính quyền địa phương)
+    // Mở Form Tạo Điểm Nguy Hiểm Mới (Dành cho Quản trị viên ADMIN & Cán bộ chính quyền địa phương)
     const handleOpenCreateHazardModal = () => {
-      if (isAdmin) {
-        showToast('Quản trị viên (ADMIN) không có thẩm quyền tạo điểm nguy hiểm. Quyền này chỉ dành riêng cho Cán bộ chính quyền địa phương.', 'error');
-        return;
-      }
-
       let defaultLat = 16.0570;
       let defaultLng = 108.2170;
       if (fixedJurisdictionConfig?.bounds) {
@@ -803,18 +866,24 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
         if (selectedAdminProvince !== 'ALL') {
           const matched = areas.find(
             (a) =>
+              String(a._id) === selectedAdminProvince ||
               a.name.toLowerCase().includes(selectedAdminProvince.toLowerCase()) ||
               selectedAdminProvince.toLowerCase().includes(a.name.toLowerCase())
           );
-          initAreaId = matched ? String(matched._id) : `PROV_${selectedAdminProvince}`;
+          initAreaId = matched ? String(matched._id) : (areas[0] ? String(areas[0]._id) : '');
         } else if (areas.length > 0) {
           initAreaId = String(areas[0]._id);
         }
       } else {
         initAreaId = (validAreaById?._id as string) || (foundAreaByName?._id as string) || accountAreaId || '';
       }
+      const selectedInitArea = areas.find((a) => String(a._id) === initAreaId);
       setCreateHazardAreaId(initAreaId);
-      setCreateAddress(isAdmin ? (selectedAdminProvince !== 'ALL' ? selectedAdminProvince : '') : (accountAreaWithCity || accountAreaDisplayName));
+      setCreateAddress(
+        isAdmin
+          ? selectedInitArea?.name || (selectedAdminProvince !== 'ALL' ? selectedAdminProvince : '')
+          : accountAreaWithCity || accountAreaDisplayName
+      );
       setCreateLat(defaultLat);
       setCreateLng(defaultLng);
       setCreateDescription('');
@@ -890,11 +959,6 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
     // Gửi yêu cầu Tạo Điểm Nguy Hiểm Mới lên server
     const handleSubmitCreateHazard = async () => {
-      if (isAdmin) {
-        showToast('Quản trị viên (ADMIN) không có thẩm quyền tạo điểm nguy hiểm. Quyền này chỉ dành riêng cho Cán bộ chính quyền địa phương.', 'error');
-        return;
-      }
-
       const errors: {
         title?: string;
         address?: string;
@@ -961,15 +1025,10 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
     // Thực hiện gọi API tạo điểm nguy hiểm sau khi đã xác nhận
     const executeSubmitCreateHazard = async () => {
-      if (isAdmin) {
-        showToast('Quản trị viên (ADMIN) không có thẩm quyền tạo điểm nguy hiểm. Quyền này chỉ dành riêng cho Cán bộ chính quyền địa phương.', 'error');
-        return;
-      }
       try {
         setSubmittingCreate(true);
         const resolvedAreaId =
           createHazardAreaId ||
-          (isAdmin && selectedAdminProvince !== 'ALL' ? `PROV_${selectedAdminProvince}` : '') ||
           (validAreaById?._id as string) ||
           (foundAreaByName?._id as string) ||
           (areas[0]?._id as string) ||
@@ -1406,28 +1465,45 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {!isAdmin && (
-              <button
-                type="button"
-                className="sos-btn-flat primary"
-                onClick={handleOpenCreateHazardModal}
-                style={{
-                  padding: '8px 16px',
-                  fontSize: '13px',
-                  backgroundColor: '#0284c7',
-                  color: '#ffffff',
-                  borderColor: '#0284c7',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                <PlusCircle size={15} />
-                <span>Tạo Điểm Nguy Hiểm</span>
-              </button>
-            )}
+            <button
+              type="button"
+              className="sos-btn-flat"
+              onClick={handleExportHazardsCsv}
+              style={{
+                padding: '8px 14px',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+              title="Xuất danh sách điểm nguy hiểm đang lọc ra file CSV"
+            >
+              <Download size={15} />
+              <span>Xuất CSV</span>
+            </button>
+
+            <button
+              type="button"
+              className="sos-btn-flat primary"
+              onClick={handleOpenCreateHazardModal}
+              style={{
+                padding: '8px 16px',
+                fontSize: '13px',
+                backgroundColor: '#0284c7',
+                color: '#ffffff',
+                borderColor: '#0284c7',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <PlusCircle size={15} />
+              <span>Tạo Điểm Nguy Hiểm</span>
+            </button>
 
             <button
               type="button"
@@ -1460,7 +1536,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '4px' }}>
                 <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500 }}>
-                  Lọc theo Tỉnh / Thành phố:
+                  Lọc theo Khu vực / Tỉnh thành:
                 </span>
                 <select
                   value={selectedAdminProvince}
@@ -1478,16 +1554,40 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     fontWeight: 500,
                     cursor: 'pointer',
                     outline: 'none',
-                    minWidth: '220px',
+                    minWidth: '240px',
                     boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                   }}
                 >
-                  <option value="ALL">-- Tất cả Tỉnh / Thành phố (Toàn quốc) --</option>
-                  {adminProvinceOptions.map((p: { code?: number; name: string; count: number }) => (
-                    <option key={p.code || p.name} value={p.name}>
-                      {p.name} {p.count > 0 ? `(${p.count})` : ''}
-                    </option>
-                  ))}
+                  <option value="ALL">-- Tất cả Khu vực / Tỉnh thành (Toàn quốc) --</option>
+                  {areas.filter((a) => a.type === 'PROVINCE').length > 0 && (
+                    <optgroup label="Tỉnh / Thành phố (Trong CSDL Area)">
+                      {areas
+                        .filter((a) => a.type === 'PROVINCE')
+                        .map((a) => (
+                          <option key={`hf-prov-${a._id}`} value={a.name}>
+                            {a.name} {a.code ? `[${a.code}]` : ''}
+                          </option>
+                        ))}
+                    </optgroup>
+                  )}
+                  {areas.filter((a) => a.type === 'WARD').length > 0 && (
+                    <optgroup label="Phường / Xã (Trong CSDL Area)">
+                      {areas
+                        .filter((a) => a.type === 'WARD')
+                        .map((a) => (
+                          <option key={`hf-ward-${a._id}`} value={a.name}>
+                            {a.name} {a.code ? `[${a.code}]` : ''}
+                          </option>
+                        ))}
+                    </optgroup>
+                  )}
+                  <optgroup label="Danh mục Tỉnh / Thành phố">
+                    {adminProvinceOptions.map((p: { code?: number; name: string; count: number }) => (
+                      <option key={p.code || p.name} value={p.name}>
+                        {p.name} {p.count > 0 ? `(${p.count})` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
                 </select>
 
                 {selectedAdminProvince !== 'ALL' && (
@@ -1831,29 +1931,27 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     <td colSpan={8} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b', fontSize: '13px' }}>
                       <AlertTriangle size={32} color="#94a3b8" style={{ marginBottom: '8px' }} />
                       <div>Không có điểm nguy hiểm nào trong danh mục này.</div>
-                      {!isAdmin && (
-                        <button
-                          type="button"
-                          onClick={handleOpenCreateHazardModal}
-                          style={{
-                            marginTop: '12px',
-                            padding: '6px 14px',
-                            fontSize: '12px',
-                            color: '#0284c7',
-                            background: '#f0f9ff',
-                            border: '1px solid #bae6fd',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontWeight: 600,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                          }}
-                        >
-                          <PlusCircle size={13} />
-                          <span>Tạo điểm nguy hiểm mới ngay</span>
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={handleOpenCreateHazardModal}
+                        style={{
+                          marginTop: '12px',
+                          padding: '6px 14px',
+                          fontSize: '12px',
+                          color: '#0284c7',
+                          background: '#f0f9ff',
+                          border: '1px solid #bae6fd',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                        }}
+                      >
+                        <PlusCircle size={13} />
+                        <span>Tạo điểm nguy hiểm mới ngay</span>
+                      </button>
                     </td>
                   </tr>
                 ) : (
@@ -1906,7 +2004,17 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                               <HazardTypeIcon type={r.hazardType} size={18} color="#334155" />
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px', lineHeight: '1.4' }}>
+                              <div
+                                onClick={() => setDetailHazard(r)}
+                                title="Nhấn để xem chi tiết điểm nguy hiểm"
+                                style={{
+                                  fontWeight: 700,
+                                  color: '#2563eb',
+                                  fontSize: '14px',
+                                  lineHeight: '1.4',
+                                  cursor: 'pointer',
+                                }}
+                              >
                                 {r.title}
                               </div>
                               <span
@@ -2219,32 +2327,34 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
           </div>
         </div>
 
-        {/* MODAL CHI TIẾT ĐIỂM NGUY HIỂM (MINIMAL 2 COLUMNS) */}
+        {/* DRAWER CHI TIẾT ĐIỂM NGUY HIỂM (MỞ TỪ BÊN PHẢI MÀN HÌNH) */}
         {detailHazard && (
           <div
             style={{
               position: 'fixed',
               inset: 0,
-              backgroundColor: 'rgba(15, 23, 42, 0.65)',
+              backgroundColor: 'rgba(15, 23, 42, 0.5)',
+              backdropFilter: 'blur(3px)',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              alignItems: 'stretch',
+              justifyContent: 'flex-end',
               zIndex: 9999,
-              padding: '20px',
+              padding: 0,
             }}
             onClick={() => setDetailHazard(null)}
           >
             <div
               style={{
                 background: '#ffffff',
-                borderRadius: '10px',
-                width: '100%',
-                maxWidth: '920px',
-                maxHeight: '90vh',
+                borderRadius: 0,
+                width: '680px',
+                maxWidth: '94vw',
+                height: '100vh',
+                maxHeight: '100vh',
                 display: 'flex',
                 flexDirection: 'column',
-                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15)',
-                border: '1px solid #cbd5e1',
+                boxShadow: '-12px 0 32px rgba(15, 23, 42, 0.18)',
+                borderLeft: '1px solid #cbd5e1',
                 overflow: 'hidden',
               }}
               onClick={(e) => e.stopPropagation()}
@@ -3424,8 +3534,8 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
           </div>
         )}
 
-        {/* MODAL TẠO ĐIỂM NGUY HIỂM MỚI (CHỈ DÀNH CHO CÁN BỘ CHÍNH QUYỀN ĐỊA PHƯƠNG) */}
-        {isCreateHazardOpen && !isAdmin && (
+        {/* MODAL TẠO ĐIỂM NGUY HIỂM MỚI (DÀNH CHO ADMIN & CÁN BỘ ĐỊA PHƯƠNG) */}
+        {isCreateHazardOpen && (
           <div
             style={{
               position: 'fixed',
@@ -3485,7 +3595,9 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                       Khởi Tạo Điểm Nguy Hiểm Mới
                     </h3>
                     <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                      Cán bộ địa phương {localTabLabel} thiết lập điểm cảnh báo và công bố trực tiếp lên hệ thống.
+                      {isAdmin
+                        ? 'Quản trị viên thiết lập điểm cảnh báo nguy hiểm và chọn khu vực hành chính trên toàn hệ thống.'
+                        : `Cán bộ địa phương ${localTabLabel} thiết lập điểm cảnh báo và công bố trực tiếp lên hệ thống.`}
                     </p>
                   </div>
                 </div>
@@ -3684,76 +3796,156 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                       </div>
                     </div>
 
-                    {/* 4. Khu vực quản lý hành chính */}
+                    {/* 4. Khu vực quản lý hành chính & Mục tiêu gửi thông báo GPS */}
                     <div>
                       <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
-                        Khu vực / Tỉnh thành
+                        Khu vực mục tiêu & Tự động gửi thông báo theo GPS
                       </label>
                       {isAdmin ? (
-                        <select
-                          value={createHazardAreaId}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setCreateHazardAreaId(val);
-                            const found = areas.find((a) => a._id === val);
-                            if (found && !createAddress) {
-                              setCreateAddress(found.name);
-                            }
-                          }}
-                          style={{
-                            width: '100%',
-                            padding: '8px 10px',
-                            borderRadius: '6px',
-                            border: '1px solid #cbd5e1',
-                            fontSize: '12.5px',
-                            color: '#0f172a',
-                            background: '#ffffff',
-                            boxSizing: 'border-box',
-                          }}
-                        >
-                          <option value="">-- Chọn khu vực hành chính ({accountAreaDisplayName || 'Toàn quốc'}) --</option>
-                          {areas.length > 0 && (
-                            <optgroup label="Khu vực hành chính hệ thống">
-                              {areas.map((a) => (
-                                <option key={`h-area-${a._id}`} value={a._id}>
-                                  {a.name} {a.code ? `[${a.code}]` : ''}
-                                </option>
-                              ))}
-                            </optgroup>
-                          )}
-                          {allProvinces.length > 0 && (
-                            <optgroup label="Tất cả 63 Tỉnh / Thành phố">
-                              {allProvinces.map((p) => {
-                                const matchedArea = areas.find((a) => a.name.toLowerCase() === p.name.toLowerCase());
-                                const val = matchedArea ? matchedArea._id : `PROV_${p.name}`;
-                                return (
-                                  <option key={`h-prov-${p.code || p.name}`} value={val}>
-                                    {p.name}
-                                  </option>
-                                );
-                              })}
-                            </optgroup>
-                          )}
-                        </select>
+                        (() => {
+                          const provinces = areas.filter((a) => a.type === 'PROVINCE');
+                          const currentArea = areas.find((a) => String(a._id) === String(createHazardAreaId));
+                          const selectedProvId =
+                            currentArea?.type === 'PROVINCE'
+                              ? String(currentArea._id)
+                              : currentArea?.parentId
+                                ? String((currentArea.parentId as any)?._id || currentArea.parentId)
+                                : '';
+                          const childWards = selectedProvId
+                            ? areas.filter(
+                                (a) =>
+                                  a.type === 'WARD' &&
+                                  String((a.parentId as any)?._id || a.parentId) === selectedProvId
+                              )
+                            : [];
+                          const selectedProvObj = provinces.find((p) => String(p._id) === selectedProvId);
+
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: selectedProvId ? '1fr 1fr' : '1fr', gap: '8px' }}>
+                                <div>
+                                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
+                                    1. Tỉnh / Thành phố
+                                  </div>
+                                  <select
+                                    value={selectedProvId}
+                                    onChange={(e) => {
+                                      const provId = e.target.value;
+                                      setCreateHazardAreaId(provId);
+                                      const found = areas.find((a) => String(a._id) === provId);
+                                      if (found && (!createAddress || areas.some((a) => a.name === createAddress))) {
+                                        setCreateAddress(found.name);
+                                      }
+                                    }}
+                                    style={{
+                                      width: '100%',
+                                      padding: '8px 10px',
+                                      borderRadius: '6px',
+                                      border: '1px solid #cbd5e1',
+                                      fontSize: '12.5px',
+                                      color: '#0f172a',
+                                      background: '#ffffff',
+                                      boxSizing: 'border-box',
+                                    }}
+                                  >
+                                    <option value="">-- Chọn Tỉnh / Thành phố (hoặc tự động theo GPS) --</option>
+                                    {provinces.map((p) => (
+                                      <option key={`h-prov-${p._id}`} value={p._id}>
+                                        {p.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                {selectedProvId && (
+                                  <div>
+                                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
+                                      2. Phường / Xã nhận thông báo
+                                    </div>
+                                    <select
+                                      value={createHazardAreaId}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setCreateHazardAreaId(val);
+                                        const found = areas.find((a) => String(a._id) === val);
+                                        if (found && (!createAddress || areas.some((a) => a.name === createAddress))) {
+                                          setCreateAddress(found.name);
+                                        }
+                                      }}
+                                      style={{
+                                        width: '100%',
+                                        padding: '8px 10px',
+                                        borderRadius: '6px',
+                                        border: '1px solid #cbd5e1',
+                                        fontSize: '12.5px',
+                                        color: '#0f172a',
+                                        background: '#ffffff',
+                                        boxSizing: 'border-box',
+                                      }}
+                                    >
+                                      <option value={selectedProvId}>
+                                        Toàn {selectedProvObj?.name || 'Tỉnh / Thành phố'}
+                                      </option>
+                                      {childWards.map((w) => (
+                                        <option key={`h-ward-${w._id}`} value={w._id}>
+                                          {w.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div
+                                style={{
+                                  fontSize: '11.5px',
+                                  color: '#0369a1',
+                                  background: '#f0f9ff',
+                                  border: '1px solid #bae6fd',
+                                  borderRadius: '6px',
+                                  padding: '6px 10px',
+                                }}
+                              >
+                                Hệ thống sẽ tự động gửi thông báo đẩy theo tọa độ GPS cho toàn bộ người dân (Citizen) đang có mặt trong{' '}
+                                <strong>{currentArea?.name || 'khu vực mục tiêu được chọn'}</strong>.
+                              </div>
+                            </div>
+                          );
+                        })()
                       ) : (
-                        <div
-                          style={{
-                            width: '100%',
-                            padding: '8px 12px',
-                            borderRadius: '6px',
-                            border: '1px solid #cbd5e1',
-                            background: '#f8fafc',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            boxSizing: 'border-box',
-                            minHeight: '36px',
-                          }}
-                        >
-                          <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
-                          <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
-                            {accountAreaDisplayName}
-                          </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <div
+                            style={{
+                              width: '100%',
+                              padding: '8px 12px',
+                              borderRadius: '6px',
+                              border: '1px solid #cbd5e1',
+                              background: '#f8fafc',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              boxSizing: 'border-box',
+                              minHeight: '36px',
+                            }}
+                          >
+                            <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
+                              {accountAreaDisplayName}
+                            </span>
+                          </div>
+                          <div
+                            style={{
+                              fontSize: '11.5px',
+                              color: '#0369a1',
+                              background: '#f0f9ff',
+                              border: '1px solid #bae6fd',
+                              borderRadius: '6px',
+                              padding: '6px 10px',
+                            }}
+                          >
+                            Khi tạo điểm nguy hiểm, hệ thống tự động gửi thông báo theo GPS tới người dân đang nằm trong địa bàn{' '}
+                            <strong>{accountAreaDisplayName}</strong>.
+                          </div>
                         </div>
                       )}
                     </div>

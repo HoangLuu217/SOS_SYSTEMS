@@ -9,17 +9,6 @@ class SafeLocationController {
    */
   async createSafeLocation(req, res, next) {
     try {
-      const userRoles = Array.isArray(req.user.roles)
-        ? req.user.roles
-        : (req.user.role ? [req.user.role] : []);
-      const isAuthority = userRoles.includes('LOCAL_AUTHORITY') || userRoles.includes('AUTHORITY');
-      if (userRoles.includes('ADMIN') && !isAuthority) {
-        throw new ApiError(
-          403,
-          'Quản trị viên (ADMIN) không có thẩm quyền tạo điểm an toàn. Chức năng này chỉ dành riêng cho Cán bộ chính quyền địa phương (LOCAL_AUTHORITY).'
-        );
-      }
-
       const actorRole = req.user.roles?.[0] || req.user.role || 'LOCAL_AUTHORITY';
       const safeLocation = await safeLocationService.createSafeLocation(req.body, req.user._id, req.user);
 
@@ -34,7 +23,7 @@ class SafeLocationController {
         metadata: { name: safeLocation.name, type: safeLocation.type },
       });
 
-      return sendSuccess(res, 201, 'Tạo địa điểm an toàn mới thành công', safeLocation);
+      return sendSuccess(res, 201, 'Tạo điểm trú ẩn an toàn thành công và đã gửi thông báo tới người dân trong khu vực!', safeLocation);
     } catch (error) {
       next(error);
     }

@@ -7,7 +7,8 @@ import {
   fetchHazardReports,
   fetchSafeLocations,
   fetchChatConversations,
-
+  fetchSafetyChecksApi,
+  fetchWithAuth,
   updateUserProfile,
   updateUserAvatar,
   sendPhoneOtp,
@@ -47,6 +48,8 @@ import {
   Camera,
   X,
   CloudSun,
+  ShieldCheck,
+  Droplet,
 } from 'lucide-react';
 
 import './Sidebar.css';
@@ -66,6 +69,8 @@ export type NavItemKey =
   | 'notifications'
   | 'alerts'
   | 'weather'
+  | 'safety_checks'
+  | 'blood_donations'
   | 'shelters'
   | 'hazard_reports'
   | 'reports'
@@ -125,6 +130,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   });
   const [hazardCount, setHazardCount] = useState<number>(0);
   const [shelterCount, setShelterCount] = useState<number>(0);
+  const [safetyCheckCount, setSafetyCheckCount] = useState<number>(0);
+  const [bloodDonationCount, setBloodDonationCount] = useState<number>(0);
   const [pendingRescuersCount, setPendingRescuersCount] = useState<number>(0);
   const [chatUnreadCount, setChatUnreadCount] = useState<number>(0);
 
@@ -178,6 +185,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const shelterRes = await fetchSafeLocations();
       if (shelterRes.success && Array.isArray(shelterRes.data)) {
         setShelterCount(shelterRes.data.length);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const scRes = await fetchSafetyChecksApi({ status: 'ACTIVE', limit: 100 });
+      if (scRes?.success && scRes.data) {
+        const list = Array.isArray(scRes.data)
+          ? scRes.data
+          : Array.isArray((scRes.data as any).safetyChecks)
+            ? (scRes.data as any).safetyChecks
+            : Array.isArray((scRes.data as any).items)
+              ? (scRes.data as any).items
+              : [];
+        const activeItems = list.filter((i: any) => i.status === 'ACTIVE').length;
+        setSafetyCheckCount(activeItems);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const bdRes = await fetchWithAuth<any>('/blood-donations/events?status=ACTIVE&limit=100');
+      if (bdRes?.success && Array.isArray(bdRes.data)) {
+        const activeEvs = bdRes.data.filter((e: any) => e.status === 'ACTIVE').length;
+        setBloodDonationCount(activeEvs);
       }
     } catch {
       // ignore
@@ -388,7 +422,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           key: 'map',
-          label: 'Bản đồ cứu hộ SOS',
+          label: 'Bản đồ cứu hộ',
           icon: <Map size={18} className="sos-nav-icon" />,
         },
         {
@@ -421,12 +455,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           key: 'rescuers',
-          label: 'Đội cứu hộ địa phương',
+          label: 'Đội cứu hộ',
           icon: <LifeBuoy size={18} className="sos-nav-icon" />,
         },
         {
           key: 'rescuers_approval',
-          label: 'Duyệt hồ sơ cứu hộ',
+          label: 'Duyệt hồ sơ',
           icon: <UserCheck size={18} className="sos-nav-icon" />,
           badge: pendingRescuersCount > 0 ? `${pendingRescuersCount} duyệt` : undefined,
           badgeType: 'warning',
@@ -445,23 +479,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: 'THÔNG BÁO & CỘNG ĐỒNG',
       items: [
+        ...(isAdmin
+          ? [
+              {
+                key: 'notifications' as NavItemKey,
+                label: 'Gửi thông báo',
+                icon: <Bell size={18} className="sos-nav-icon" />,
+              },
+            ]
+          : []),
         {
-          key: 'notifications',
-          label: 'Gửi thông báo',
-          icon: <Bell size={18} className="sos-nav-icon" />,
+          key: 'safety_checks',
+          label: 'Kiểm tra an toàn',
+          icon: <ShieldCheck size={18} className="sos-nav-icon" />,
+          badge: safetyCheckCount > 0 ? `${safetyCheckCount}` : undefined,
+          badgeType: 'info',
+        },
+        {
+          key: 'blood_donations',
+          label: 'Hiến máu',
+          icon: <Droplet size={18} className="sos-nav-icon" />,
+          badge: bloodDonationCount > 0 ? `${bloodDonationCount}` : undefined,
+          badgeType: 'info',
         },
         ...(isAdmin
           ? [
-            {
-              key: 'weather' as NavItemKey,
-              label: 'Bản tin thời tiết',
-              icon: <CloudSun size={18} className="sos-nav-icon" />,
-            },
-          ]
+              {
+                key: 'weather' as NavItemKey,
+                label: 'Bản tin thời tiết',
+                icon: <CloudSun size={18} className="sos-nav-icon" />,
+              },
+            ]
           : []),
         {
           key: 'shelters',
-          label: 'Điểm trú ẩn & Trạm an toàn',
+          label: 'Điểm trú ẩn',
           useCase: 'UC-L12',
           icon: <Home size={18} className="sos-nav-icon" />,
           badge: shelterCount > 0 ? `${shelterCount}` : undefined,
@@ -470,7 +522,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           key: 'hazard_reports',
-          label: 'Quản lý điểm nguy hiểm',
+          label: 'Điểm nguy hiểm',
           useCase: 'UC-L15',
           icon: <AlertTriangle size={18} className="sos-nav-icon" />,
           badge: hazardCount > 0 ? `${hazardCount}` : undefined,
@@ -508,17 +560,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           key: 'admin_overview',
-          label: 'Tổng quan hệ thống',
+          label: 'Tổng quan',
           icon: <LayoutDashboard size={18} className="sos-nav-icon" />,
         },
         {
           key: 'citizens',
-          label: 'Quản lý Người dân',
+          label: 'Người dân',
           icon: <Users size={18} className="sos-nav-icon" />,
         },
         {
           key: 'rescuers_admin',
-          label: 'Xác minh Đội cứu nạn',
+          label: 'Xác minh cứu hộ',
           icon: <UserCheck size={18} className="sos-nav-icon" />,
           badge: pendingRescuersCount > 0 ? `${pendingRescuersCount}` : undefined,
           badgeType: 'warning',

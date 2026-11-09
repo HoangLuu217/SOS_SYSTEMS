@@ -18,14 +18,6 @@ class HazardReportController {
         userRoles.push(req.user.role);
       }
 
-      const isAuthority = userRoles.includes('LOCAL_AUTHORITY') || userRoles.includes('AUTHORITY');
-      if (userRoles.includes('ADMIN') && !isAuthority) {
-        throw new ApiError(
-          403,
-          'Quản trị viên (ADMIN) không có thẩm quyền tạo điểm nguy hiểm. Chức năng này chỉ dành riêng cho Cán bộ chính quyền địa phương (LOCAL_AUTHORITY) hoặc người dân đóng góp báo cáo.'
-        );
-      }
-
       const report = await hazardReportService.createHazardReport(req.body, userId, userRoles, req.user);
 
       await auditService.log({
@@ -43,10 +35,10 @@ class HazardReportController {
         },
       });
 
-      const isAuth = userRoles.includes('LOCAL_AUTHORITY') || userRoles.includes('AUTHORITY');
+      const isAuth = userRoles.includes('LOCAL_AUTHORITY') || userRoles.includes('AUTHORITY') || userRoles.includes('ADMIN');
       const message = isAuth
         ? (report.status === 'APPROVED'
-            ? 'Tạo điểm nguy hiểm thành công và đã được công bố trên bản đồ!'
+            ? 'Tạo điểm nguy hiểm thành công, đã công bố trên bản đồ và gửi thông báo tới người dân trong khu vực!'
             : 'Tạo điểm nguy hiểm thành công (Lưu nháp / Chờ duyệt)!')
         : 'Gửi đóng góp điểm nguy hiểm thành công! Đang ở trạng thái PENDING chờ chính quyền duyệt.';
       return sendSuccess(res, 201, message, report);
