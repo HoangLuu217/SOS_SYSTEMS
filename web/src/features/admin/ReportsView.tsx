@@ -1,10 +1,5 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import {
-  RefreshCw,
-  Download,
-  Search,
-  ArrowUpRight,
-} from 'lucide-react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { RefreshCw, Download, ArrowUpRight, Map } from 'lucide-react';
 import {
   fetchSosRequests,
   fetchAdministrativeAreas,
@@ -27,6 +22,8 @@ import type { User } from '@/types/auth';
 import type { SosRequestItem } from '@/types';
 import { EMERGENCY_TYPE_LABELS } from '@/features/hazards';
 import { toast } from '@/components/common/toast';
+import { SosActivityChart, ProportionBar } from './ReportsCharts';
+import { exportDashboardWorkbook } from './exportReportsExcel';
 import './ReportsView.css';
 
 export interface ReportsViewProps {
@@ -35,22 +32,17 @@ export interface ReportsViewProps {
   onOpenMap?: (sosId?: any) => void;
 }
 
-interface TabMetricItem {
-  label: string;
-  value: string | number;
-  highlight?: boolean;
-}
+type TimeRangeKey = 'ALL' | 'TODAY' | '7D' | '30D';
 
-interface TabSummarySection {
-  key: NavItemKey;
-  group: 'OPERATIONS' | 'COMMUNITY' | 'SYSTEM';
-  groupLabel: string;
-  title: string;
-  description: string;
-  totalLabel: string;
-  totalValue: string | number;
-  metrics: TabMetricItem[];
-}
+// Bảng màu trầm, đồng bộ cho các thanh tỷ lệ
+const TONE = {
+  blue: '#2563eb',
+  sky: '#60a5fa',
+  teal: '#0d9488',
+  amber: '#d97706',
+  rose: '#e11d48',
+  slate: '#94a3b8',
+} as const;
 
 export const ReportsView: React.FC<ReportsViewProps> = ({
   initialSosList,
@@ -62,10 +54,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   const userAreaName = user?.authority?.areaName || 'Địa phương phụ trách';
 
   const [loading, setLoading] = useState(false);
-  const [groupFilter, setGroupFilter] = useState<'ALL' | 'OPERATIONS' | 'COMMUNITY' | 'SYSTEM'>('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [timeRange, setTimeRange] = useState<TimeRangeKey>('ALL');
 
-  // State dữ liệu tổng hợp từ tất cả các tab
   const [sosList, setSosList] = useState<SosRequestItem[]>(initialSosList || []);
   const [rescueTeamsCount, setRescueTeamsCount] = useState({ total: 0, available: 0, busy: 0 });
   const [rescuersStats, setRescuersStats] = useState({ total: 0, verified: 0, pending: 0, rejected: 0 });
@@ -140,7 +130,45 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
     total: 0,
   });
 
-  const loadAllTabsStatistics = useCallback(async () => {
+  const rawListsRef = useRef<{
+    loaded: boolean;
+    rescueTeams: any[];
+    rescuers: any[];
+    vehicles: any[];
+    equipments: any[];
+    safetyChecks: any[];
+    bloodEvents: any[];
+    bloodRegistrations: any[];
+    shelters: any[];
+    hazards: any[];
+    broadcasts: any[];
+    weatherArticles: any[];
+    citizens: any[];
+    authorities: any[];
+    areas: any[];
+    conversations: any[];
+    auditLogs: any[];
+  }>({
+    loaded: false,
+    rescueTeams: [],
+    rescuers: [],
+    vehicles: [],
+    equipments: [],
+    safetyChecks: [],
+    bloodEvents: [],
+    bloodRegistrations: [],
+    shelters: [],
+    hazards: [],
+    broadcasts: [],
+    weatherArticles: [],
+    citizens: [],
+    authorities: [],
+    areas: [],
+    conversations: [],
+    auditLogs: [],
+  });
+
+  const loadAllDashboardData = useCallback(async () => {
     setLoading(true);
     try {
       const areaParam: Record<string, string> = !isAdmin && userAreaId ? { areaId: userAreaId } : {};
@@ -183,22 +211,20 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         fetchAuditLogs(),
       ]);
 
-      // 1. SOS Requests
       if (sosRes.status === 'fulfilled' && sosRes.value?.success && Array.isArray(sosRes.value.data)) {
         setSosList(sosRes.value.data);
       }
 
-      // 2. Rescue Teams
       if (teamsRes.status === 'fulfilled' && teamsRes.value?.success && Array.isArray(teamsRes.value.data)) {
         const list = teamsRes.value.data;
+        rawListsRef.current.rescueTeams = list;
         const available = list.filter((t) => t.status === 'AVAILABLE').length;
-        const busy = list.filter((t) => t.status !== 'AVAILABLE').length;
-        setRescueTeamsCount({ total: list.length, available, busy });
+        setRescueTeamsCount({ total: list.length, available, busy: list.length - available });
       }
 
-      // 3. Rescuers & Rescuer Approval
       if (rescuersRes.status === 'fulfilled' && rescuersRes.value?.success) {
         const users = rescuersRes.value.data?.users || [];
+        rawListsRef.current.rescuers = users;
         const total = rescuersRes.value.data?.pagination?.total ?? users.length;
         const verified = users.filter(
           (u: any) => (u.rescuer?.verificationStatus || u.verificationStatus) === 'VERIFIED'
@@ -212,21 +238,22 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         setRescuersStats({ total, verified, pending, rejected });
       }
 
-      // 4. Vehicles & Equipments
       let vTotal = 0;
       let vAvail = 0;
       let vInUse = 0;
       if (vehiclesRes.status === 'fulfilled' && vehiclesRes.value?.success && Array.isArray(vehiclesRes.value.data)) {
         const vList = vehiclesRes.value.data;
+        rawListsRef.current.vehicles = vList;
         vTotal = vList.length;
         vAvail = vList.filter((v) => v.status === 'AVAILABLE').length;
-        vInUse = vList.filter((v) => v.status !== 'AVAILABLE').length;
+        vInUse = vList.length - vAvail;
       }
       let eqTotal = 0;
       let eqDurable = 0;
       let eqConsumable = 0;
       if (equipRes.status === 'fulfilled' && equipRes.value?.success && Array.isArray(equipRes.value.data)) {
         const eqList = equipRes.value.data;
+        rawListsRef.current.equipments = eqList;
         eqTotal = eqList.length;
         eqConsumable = eqList.filter((e) => e.supplyType === 'CONSUMABLE').length;
         eqDurable = eqList.length - eqConsumable;
@@ -240,21 +267,19 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         consumableCount: eqConsumable,
       });
 
-      // 5. Broadcast Notifications
       if (broadcastRes.status === 'fulfilled' && broadcastRes.value?.success && Array.isArray(broadcastRes.value.data)) {
         const bList = broadcastRes.value.data;
+        rawListsRef.current.broadcasts = bList;
         const instant = bList.filter((b) => b.type === 'INSTANT').length;
         const system = bList.filter((b) => b.type === 'SYSTEM').length;
-        const autoGenerated = bList.length - instant - system;
         setBroadcastStats({
           total: bList.length,
           instant,
           system,
-          autoGenerated,
+          autoGenerated: Math.max(0, bList.length - instant - system),
         });
       }
 
-      // 6. Safety Checks
       if (safetyRes.status === 'fulfilled' && safetyRes.value?.success && safetyRes.value.data) {
         const rawData: any = safetyRes.value.data;
         const scList: any[] = Array.isArray(rawData)
@@ -264,8 +289,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             : Array.isArray(rawData.items)
               ? rawData.items
               : [];
+        rawListsRef.current.safetyChecks = scList;
         const active = scList.filter((c) => c.status === 'ACTIVE').length;
-        const closed = scList.filter((c) => c.status !== 'ACTIVE').length;
         let safeCount = 0;
         let needHelpCount = 0;
         scList.forEach((c) => {
@@ -275,13 +300,12 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         setSafetyCheckStats({
           total: scList.length,
           active,
-          closed,
+          closed: scList.length - active,
           safeCount,
           needHelpCount,
         });
       }
 
-      // 7. Blood Donations
       const evList: any[] =
         bloodEventsRes.status === 'fulfilled' && Array.isArray(bloodEventsRes.value?.data)
           ? bloodEventsRes.value.data
@@ -290,20 +314,23 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         bloodRegsRes.status === 'fulfilled' && Array.isArray(bloodRegsRes.value?.data)
           ? bloodRegsRes.value.data
           : [];
+      rawListsRef.current.bloodEvents = evList;
+      rawListsRef.current.bloodRegistrations = regList;
+      const evActive = evList.filter((e) => e.status === 'ACTIVE').length;
       setBloodDonationStats({
         eventsTotal: evList.length,
-        eventsActive: evList.filter((e) => e.status === 'ACTIVE').length,
-        eventsClosed: evList.filter((e) => e.status !== 'ACTIVE').length,
+        eventsActive: evActive,
+        eventsClosed: evList.length - evActive,
         registrationsTotal: regList.length,
         confirmedCount: regList.filter((r) => r.status === 'CONFIRMED' || r.status === 'COMPLETED').length,
         preRegCount: regList.filter((r) => r.status === 'PENDING').length,
       });
 
-      // 8. Weather Articles
       if (weatherRes.status === 'fulfilled' && weatherRes.value) {
         const wVal: any = weatherRes.value;
         const counts = wVal.pagination?.counts || wVal.counts;
         const items: any[] = Array.isArray(wVal.data) ? wVal.data : [];
+        rawListsRef.current.weatherArticles = items;
         if (counts) {
           setWeatherStats({
             total: counts.total ?? items.length,
@@ -319,9 +346,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         }
       }
 
-      // 9. Safe Locations (Shelters)
       if (sheltersRes.status === 'fulfilled' && sheltersRes.value?.success && Array.isArray(sheltersRes.value.data)) {
         const sList = sheltersRes.value.data;
+        rawListsRef.current.shelters = sList;
         const active = sList.filter(
           (s) => s.status === 'ACTIVE' && (s.capacity <= 0 || (s.currentOccupancy || 0) < s.capacity)
         ).length;
@@ -336,7 +363,6 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         });
       }
 
-      // 10. Hazard Reports
       if (hazardsRes.status === 'fulfilled' && hazardsRes.value?.success && hazardsRes.value.data) {
         const hData: any = hazardsRes.value.data;
         const reports: any[] = Array.isArray(hData.reports)
@@ -344,6 +370,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
           : Array.isArray(hData)
             ? hData
             : [];
+        rawListsRef.current.hazards = reports;
         const approved = hData.counts?.APPROVED ?? reports.filter((r) => r.status === 'APPROVED').length;
         const pending = hData.counts?.PENDING ?? reports.filter((r) => r.status === 'PENDING').length;
         const rejected = hData.counts?.REJECTED ?? reports.filter((r) => r.status === 'REJECTED').length;
@@ -357,44 +384,47 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         });
       }
 
-      // 11. Chat Conversations
       if (chatRes.status === 'fulfilled' && chatRes.value?.success && Array.isArray(chatRes.value.data)) {
         const cList = chatRes.value.data;
+        rawListsRef.current.conversations = cList;
         const unread = cList.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
         setChatStats({ conversations: cList.length, unread });
       }
 
-      // 12. Administrative Areas
       if (areasRes.status === 'fulfilled' && areasRes.value?.success && Array.isArray(areasRes.value.data)) {
         const aList = areasRes.value.data;
+        rawListsRef.current.areas = aList;
         const provinces = aList.filter((a: any) => a.type === 'PROVINCE').length;
         const wards = aList.filter((a: any) => a.type === 'WARD').length;
         setAreasStats({ total: aList.length, provinces, wards });
       }
 
-      // 13. Citizens
       if (citizensRes.status === 'fulfilled' && citizensRes.value?.success) {
         const uList = citizensRes.value.data?.users || [];
+        rawListsRef.current.citizens = uList;
         const total = citizensRes.value.data?.pagination?.total ?? uList.length;
         const active = uList.filter((u: any) => u.status === 'ACTIVE').length;
         setCitizensStats({ total, active, locked: Math.max(0, uList.length - active) });
       }
 
-      // 14. Authorities
       if (authUsersRes.status === 'fulfilled' && authUsersRes.value?.success) {
         const uList = authUsersRes.value.data?.users || [];
+        rawListsRef.current.authorities = uList;
         const total = authUsersRes.value.data?.pagination?.total ?? uList.length;
         const active = uList.filter((u: any) => u.status === 'ACTIVE').length;
         setAuthoritiesStats({ total, active });
       }
 
-      // 15. Audit / Operation Logs
       if (logsRes.status === 'fulfilled' && logsRes.value?.success) {
-        const lList = logsRes.value.data?.logs || [];
-        setLogsStats({ total: lList.length });
+        const rawLogs: any = logsRes.value;
+        const lList = rawLogs.data?.logs || (Array.isArray(rawLogs.data) ? rawLogs.data : []);
+        rawListsRef.current.auditLogs = lList;
+        const total = rawLogs.meta?.total ?? rawLogs.data?.pagination?.total ?? lList.length;
+        setLogsStats({ total });
       }
+      rawListsRef.current.loaded = true;
     } catch (err) {
-      console.error('[ReportsView] Error loading summary statistics:', err);
+      console.error('[ReportsView] Error loading dashboard:', err);
       toast.error('Không thể tải đầy đủ số liệu thống kê');
     } finally {
       setLoading(false);
@@ -402,484 +432,281 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
   }, [isAdmin, userAreaId]);
 
   useEffect(() => {
-    void loadAllTabsStatistics();
-  }, [loadAllTabsStatistics]);
+    void loadAllDashboardData();
+  }, [loadAllDashboardData]);
 
-  // Thống kê SOS
-  const sosSummary = useMemo(() => {
-    const total = sosList.length;
-    const pending = sosList.filter((s) => s.status === 'PENDING').length;
-    const active = sosList.filter((s) =>
+  useEffect(() => {
+    if (!rawListsRef.current.loaded && !loading) {
+      void loadAllDashboardData();
+    }
+  });
+
+  const filteredSos = useMemo(() => {
+    if (timeRange === 'ALL') return sosList;
+    const now = Date.now();
+    const days = timeRange === 'TODAY' ? 1 : timeRange === '7D' ? 7 : 30;
+    const cutoff = now - days * 24 * 60 * 60 * 1000;
+    return sosList.filter((s) => new Date(s.createdAt).getTime() >= cutoff);
+  }, [sosList, timeRange]);
+
+  const sosStats = useMemo(() => {
+    const total = filteredSos.length;
+    const pending = filteredSos.filter((s) => s.status === 'PENDING').length;
+    const active = filteredSos.filter((s) =>
       ['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status)
     ).length;
-    const completed = sosList.filter((s) => s.status === 'COMPLETED').length;
-    const cancelled = sosList.filter((s) => ['CANCELLED', 'REJECTED'].includes(s.status)).length;
-    const totalPeople = sosList.reduce((sum, curr) => sum + (curr.people || 1), 0);
-    return { total, pending, active, completed, cancelled, totalPeople };
-  }, [sosList]);
+    const completed = filteredSos.filter((s) => s.status === 'COMPLETED').length;
+    const cancelled = filteredSos.filter((s) => ['CANCELLED', 'REJECTED'].includes(s.status)).length;
+    const totalPeople = filteredSos.reduce((sum, curr) => sum + (Number(curr.people) || 0), 0);
 
-  // Danh sách toàn bộ các Tab trong hệ thống kèm số liệu thống kê đầy đủ
-  const allTabSummaries = useMemo<TabSummarySection[]>(() => {
-    const items: TabSummarySection[] = [
-      // NHÓM 1: ĐIỀU HÀNH & LỰC LƯỢNG
-      {
-        key: 'map',
-        group: 'OPERATIONS',
-        groupLabel: 'Điều hành & Lực lượng',
-        title: 'Bản đồ cứu hộ',
-        description: 'Giám sát vị trí SOS, điểm trú ẩn và điểm nguy hiểm trên bản đồ thời gian thực',
-        totalLabel: 'Điểm đang hiển thị',
-        totalValue: sosSummary.pending + sosSummary.active + shelterStats.active + hazardStats.approved,
-        metrics: [
-          { label: 'SOS cần xử lý / đang cứu', value: sosSummary.pending + sosSummary.active, highlight: sosSummary.pending > 0 },
-          { label: 'Điểm trú ẩn đang mở', value: shelterStats.active },
-          { label: 'Điểm nguy hiểm đã duyệt', value: hazardStats.approved },
-        ],
-      },
-      {
-        key: 'sos_requests',
-        group: 'OPERATIONS',
-        groupLabel: 'Điều hành & Lực lượng',
-        title: 'Theo dõi & Điều phối SOS',
-        description: 'Tiếp nhận, xác minh và điều phối lực lượng ứng cứu các yêu cầu khẩn cấp',
-        totalLabel: 'Tổng yêu cầu SOS',
-        totalValue: sosSummary.total,
-        metrics: [
-          { label: 'Chờ xử lý mới', value: sosSummary.pending, highlight: sosSummary.pending > 0 },
-          { label: 'Đang điều phối / ứng cứu', value: sosSummary.active },
-          { label: 'Đã hoàn thành', value: sosSummary.completed },
-          { label: 'Đã hủy / từ chối', value: sosSummary.cancelled },
-          { label: 'Tổng số người cần cứu', value: sosSummary.totalPeople },
-        ],
-      },
-      {
-        key: 'rescuers',
-        group: 'OPERATIONS',
-        groupLabel: 'Điều hành & Lực lượng',
-        title: 'Đội cứu hộ',
-        description: 'Quản lý danh sách các đội cứu hộ và tình trạng sẵn sàng làm nhiệm vụ',
-        totalLabel: 'Tổng số đội cứu hộ',
-        totalValue: rescueTeamsCount.total,
-        metrics: [
-          { label: 'Đội sẵn sàng', value: rescueTeamsCount.available },
-          { label: 'Đội đang làm nhiệm vụ', value: rescueTeamsCount.busy },
-          { label: 'Cứu hộ viên đã xác minh', value: rescuersStats.verified },
-        ],
-      },
-      {
-        key: 'rescuers_approval',
-        group: 'OPERATIONS',
-        groupLabel: 'Điều hành & Lực lượng',
-        title: 'Duyệt hồ sơ cứu hộ viên',
-        description: 'Thẩm định và phê duyệt hồ sơ đăng ký tình nguyện viên / cứu hộ viên',
-        totalLabel: 'Tổng hồ sơ cứu hộ',
-        totalValue: rescuersStats.total,
-        metrics: [
-          { label: 'Chờ duyệt', value: rescuersStats.pending, highlight: rescuersStats.pending > 0 },
-          { label: 'Đã xác minh', value: rescuersStats.verified },
-          { label: 'Từ chối', value: rescuersStats.rejected },
-        ],
-      },
-      {
-        key: 'resources',
-        group: 'OPERATIONS',
-        groupLabel: 'Điều hành & Lực lượng',
-        title: 'Phương tiện & Vật tư',
-        description: 'Quản lý phương tiện chuyên dụng, trang thiết bị cứu nạn và nhu yếu phẩm',
-        totalLabel: 'Tổng phương tiện & vật tư',
-        totalValue: resourcesStats.vehiclesTotal + resourcesStats.equipmentsTotal,
-        metrics: [
-          { label: 'Phương tiện (Sẵn sàng / Tổng)', value: `${resourcesStats.vehiclesAvailable} / ${resourcesStats.vehiclesTotal}` },
-          { label: 'Phương tiện đang điều động', value: resourcesStats.vehiclesInUse },
-          { label: 'Trang thiết bị bền', value: resourcesStats.durableCount },
-          { label: 'Nhu yếu phẩm tiêu hao', value: resourcesStats.consumableCount },
-        ],
-      },
-      {
-        key: 'chat',
-        group: 'OPERATIONS',
-        groupLabel: 'Điều hành & Lực lượng',
-        title: 'Trao đổi tác chiến',
-        description: 'Kênh liên lạc trực tuyến giữa chỉ huy, chính quyền địa phương và đội cứu hộ',
-        totalLabel: 'Cuộc hội thoại',
-        totalValue: chatStats.conversations,
-        metrics: [
-          { label: 'Tổng kênh / hội thoại', value: chatStats.conversations },
-          { label: 'Tin nhắn chưa đọc', value: chatStats.unread, highlight: chatStats.unread > 0 },
-        ],
-      },
+    const typeCounts: Record<string, number> = {};
+    filteredSos.forEach((s) => {
+      const t = s.emergencyType || 'OTHER';
+      typeCounts[t] = (typeCounts[t] || 0) + 1;
+    });
+    const byType = Object.entries(typeCounts)
+      .map(([key, count]) => ({
+        key,
+        label: EMERGENCY_TYPE_LABELS[key] || key,
+        count,
+        pct: total > 0 ? Math.round((count / total) * 100) : 0,
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
 
-      // NHÓM 2: THÔNG BÁO & CỘNG ĐỒNG
-      ...(isAdmin
-        ? [
-            {
-              key: 'notifications' as NavItemKey,
-              group: 'COMMUNITY' as const,
-              groupLabel: 'Thông báo & Cộng đồng',
-              title: 'Gửi thông báo',
-              description: 'Phát thông báo khẩn cấp, thông báo hệ thống và lịch sử phát tự động',
-              totalLabel: 'Tổng thông báo đã phát',
-              totalValue: broadcastStats.total,
-              metrics: [
-                { label: 'Tin khẩn cấp (Soạn thủ công)', value: broadcastStats.instant },
-                { label: 'Thông báo hệ thống', value: broadcastStats.system },
-                { label: 'Tự động từ các mục cộng đồng', value: broadcastStats.autoGenerated },
-              ],
-            },
-          ]
-        : []),
-      {
-        key: 'safety_checks',
-        group: 'COMMUNITY',
-        groupLabel: 'Thông báo & Cộng đồng',
-        title: 'Kiểm tra an toàn',
-        description: 'Phát động kiểm tra an toàn sau thiên tai và theo dõi phản hồi người dân',
-        totalLabel: 'Tổng đợt kiểm tra',
-        totalValue: safetyCheckStats.total,
-        metrics: [
-          { label: 'Đang mở', value: safetyCheckStats.active },
-          { label: 'Đã đóng', value: safetyCheckStats.closed },
-          { label: 'Báo an toàn', value: safetyCheckStats.safeCount },
-          { label: 'Báo cần cứu hộ', value: safetyCheckStats.needHelpCount, highlight: safetyCheckStats.needHelpCount > 0 },
-        ],
-      },
-      {
-        key: 'blood_donations',
-        group: 'COMMUNITY',
-        groupLabel: 'Thông báo & Cộng đồng',
-        title: 'Hiến máu tình nguyện',
-        description: 'Quản lý các đợt hiến máu tình nguyện và danh sách người dân đăng ký tham gia',
-        totalLabel: 'Tổng đợt hiến máu',
-        totalValue: bloodDonationStats.eventsTotal,
-        metrics: [
-          { label: 'Đợt đang mở', value: bloodDonationStats.eventsActive },
-          { label: 'Đợt đã đóng', value: bloodDonationStats.eventsClosed },
-          { label: 'Tổng hồ sơ đăng ký', value: bloodDonationStats.registrationsTotal },
-          { label: 'Xác nhận tham gia theo đợt', value: bloodDonationStats.confirmedCount },
-          { label: 'ĐK nhận thông báo trước', value: bloodDonationStats.preRegCount },
-        ],
-      },
-      ...(isAdmin
-        ? [
-            {
-              key: 'weather' as NavItemKey,
-              group: 'COMMUNITY' as const,
-              groupLabel: 'Thông báo & Cộng đồng',
-              title: 'Bản tin thời tiết',
-              description: 'Thu thập, kiểm duyệt và phát hành bản tin cảnh báo khí tượng thiên tai',
-              totalLabel: 'Tổng bản tin',
-              totalValue: weatherStats.total,
-              metrics: [
-                { label: 'Đã duyệt phát hành', value: weatherStats.approved },
-                { label: 'Chờ kiểm duyệt', value: weatherStats.pending, highlight: weatherStats.pending > 0 },
-                { label: 'Lưu trữ / từ chối', value: weatherStats.archived },
-              ],
-            },
-          ]
-        : []),
-      {
-        key: 'shelters',
-        group: 'COMMUNITY',
-        groupLabel: 'Thông báo & Cộng đồng',
-        title: 'Điểm trú ẩn',
-        description: 'Quản lý cơ sở sơ tán an toàn, sức chứa và số lượng người dân đang lưu trú',
-        totalLabel: 'Tổng điểm trú ẩn',
-        totalValue: shelterStats.total,
-        metrics: [
-          { label: 'Sẵn sàng đón tiếp', value: shelterStats.active },
-          { label: 'Đã đầy / Tạm ngưng', value: shelterStats.fullOrInactive },
-          { label: 'Đang lưu trú / Sức chứa', value: `${shelterStats.totalOccupancy.toLocaleString()} / ${shelterStats.totalCapacity.toLocaleString()} chỗ` },
-          { label: 'Chỗ trống khả dụng', value: Math.max(0, shelterStats.totalCapacity - shelterStats.totalOccupancy).toLocaleString() },
-        ],
-      },
-      {
-        key: 'hazard_reports',
-        group: 'COMMUNITY',
-        groupLabel: 'Thông báo & Cộng đồng',
-        title: 'Điểm nguy hiểm',
-        description: 'Thẩm định và công bố các điểm ngập lụt, sạt lở, cản trở giao thông',
-        totalLabel: 'Tổng điểm nguy hiểm',
-        totalValue: hazardStats.total,
-        metrics: [
-          { label: 'Đã duyệt công bố', value: hazardStats.approved },
-          { label: 'Chờ thẩm định', value: hazardStats.pending, highlight: hazardStats.pending > 0 },
-          { label: 'Từ chối', value: hazardStats.rejected },
-          { label: 'Mức nguy cấp / cao', value: hazardStats.highSeverity },
-        ],
-      },
+    return { total, pending, active, completed, cancelled, totalPeople, byType };
+  }, [filteredSos]);
 
-      // NHÓM 3: QUẢN TRỊ & GIÁM SÁT
-      {
-        key: 'operation_logs',
-        group: 'SYSTEM',
-        groupLabel: 'Quản trị & Giám sát',
-        title: 'Nhật ký hoạt động',
-        description: 'Tra cứu lịch sử thao tác điều hành và nhật ký tác chiến hệ thống',
-        totalLabel: 'Bản ghi nhật ký',
-        totalValue: logsStats.total,
-        metrics: [
-          { label: 'Tổng bản ghi gần đây', value: logsStats.total },
-        ],
-      },
-      ...(isAdmin
-        ? [
-            {
-              key: 'admin_overview' as NavItemKey,
-              group: 'SYSTEM' as const,
-              groupLabel: 'Quản trị & Giám sát',
-              title: 'Tổng quan hệ thống',
-              description: 'Bảng giám sát tổng thể trạng thái vận hành toàn hệ thống dành cho Admin',
-              totalLabel: 'Tổng người dùng',
-              totalValue: citizensStats.total + rescuersStats.total + authoritiesStats.total,
-              metrics: [
-                { label: 'Người dân', value: citizensStats.total },
-                { label: 'Cứu hộ viên', value: rescuersStats.total },
-                { label: 'Cán bộ địa phương', value: authoritiesStats.total },
-              ],
-            },
-            {
-              key: 'citizens' as NavItemKey,
-              group: 'SYSTEM' as const,
-              groupLabel: 'Quản trị & Giám sát',
-              title: 'Người dân',
-              description: 'Quản lý danh sách tài khoản người dân sử dụng ứng dụng di động',
-              totalLabel: 'Tổng tài khoản người dân',
-              totalValue: citizensStats.total,
-              metrics: [
-                { label: 'Đang hoạt động', value: citizensStats.active },
-                { label: 'Đã khóa / Tạm ngưng', value: citizensStats.locked },
-              ],
-            },
-            {
-              key: 'authorities' as NavItemKey,
-              group: 'SYSTEM' as const,
-              groupLabel: 'Quản trị & Giám sát',
-              title: 'Cán bộ & Tổ chức',
-              description: 'Quản lý tài khoản cán bộ chính quyền địa phương và phân công địa bàn',
-              totalLabel: 'Tổng cán bộ địa phương',
-              totalValue: authoritiesStats.total,
-              metrics: [
-                { label: 'Đang hoạt động', value: authoritiesStats.active },
-                { label: 'Đơn vị hành chính', value: areasStats.total },
-              ],
-            },
-            {
-              key: 'areas' as NavItemKey,
-              group: 'SYSTEM' as const,
-              groupLabel: 'Quản trị & Giám sát',
-              title: 'Khu vực hành chính',
-              description: 'Danh mục Tỉnh / Thành phố, Phường / Xã và ranh giới tọa độ địa lý',
-              totalLabel: 'Tổng đơn vị hành chính',
-              totalValue: areasStats.total,
-              metrics: [
-                { label: 'Tỉnh / Thành phố', value: areasStats.provinces },
-                { label: 'Phường / Xã', value: areasStats.wards },
-              ],
-            },
-          ]
-        : []),
-    ];
+  const sosSeries = useMemo(() => {
+    const now = new Date();
+    const points: { label: string; total: number; completed: number }[] = [];
 
-    return items;
-  }, [
-    isAdmin,
-    sosSummary,
-    rescueTeamsCount,
-    rescuersStats,
-    resourcesStats,
-    chatStats,
-    broadcastStats,
-    safetyCheckStats,
-    bloodDonationStats,
-    weatherStats,
-    shelterStats,
-    hazardStats,
-    logsStats,
-    citizensStats,
-    authoritiesStats,
-    areasStats,
-  ]);
-
-  const filteredTabSummaries = useMemo(() => {
-    return allTabSummaries.filter((item) => {
-      if (groupFilter !== 'ALL' && item.group !== groupFilter) return false;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchTitle = item.title.toLowerCase().includes(q);
-        const matchDesc = item.description.toLowerCase().includes(q);
-        const matchMetrics = item.metrics.some((m) => m.label.toLowerCase().includes(q));
-        if (!matchTitle && !matchDesc && !matchMetrics) return false;
+    if (timeRange === 'TODAY') {
+      const start = new Date(now);
+      start.setMinutes(0, 0, 0);
+      start.setHours(start.getHours() - 23);
+      for (let i = 0; i < 24; i++) {
+        const d = new Date(start.getTime() + i * 3600000);
+        points.push({ label: `${String(d.getHours()).padStart(2, '0')}h`, total: 0, completed: 0 });
       }
-      return true;
-    });
-  }, [allTabSummaries, groupFilter, searchQuery]);
-
-  // Chuyển nhanh tới tab bất kỳ
-  const handleJumpToTab = (navKey: NavItemKey) => {
-    navigateTo(navKey, user || null);
-  };
-
-  // Xuất báo cáo tổng hợp tất cả các tab ra CSV
-  const handleExportAllTabsCsv = () => {
-    const escapeCsvCell = (val: unknown): string => {
-      const str = val === null || val === undefined ? '' : String(val);
-      return `"${str.replace(/"/g, '""')}"`;
-    };
-
-    const headers = [
-      'STT',
-      'Nhóm chức năng',
-      'Tên Tab / Phân hệ',
-      'Chỉ số chính',
-      'Giá trị tổng',
-      'Chi tiết thống kê các chỉ số',
-    ];
-
-    const rows = filteredTabSummaries.map((item, idx) => [
-      idx + 1,
-      item.groupLabel,
-      item.title,
-      item.totalLabel,
-      item.totalValue,
-      item.metrics.map((m) => `${m.label}: ${m.value}`).join(' | '),
-    ]);
-
-    const csvContent =
-      '\uFEFF' +
-      [headers.map(escapeCsvCell).join(','), ...rows.map((r) => r.map(escapeCsvCell).join(','))].join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Bao_cao_tong_hop_he_thong_${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast.success(`Đã xuất báo cáo tổng hợp ${filteredTabSummaries.length} phân hệ ra file CSV.`);
-  };
-
-  // Xuất danh sách SOS chi tiết ra CSV
-  const handleExportSosCsv = () => {
-    if (sosList.length === 0) {
-      toast.warning('Chưa có dữ liệu SOS để xuất CSV');
-      return;
+      sosList.forEach((s) => {
+        const idx = Math.floor((new Date(s.createdAt).getTime() - start.getTime()) / 3600000);
+        if (idx >= 0 && idx < 24) {
+          points[idx].total += 1;
+          if (s.status === 'COMPLETED') points[idx].completed += 1;
+        }
+      });
+    } else {
+      const days = timeRange === '7D' ? 7 : timeRange === '30D' ? 30 : 14;
+      const start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      start.setDate(start.getDate() - (days - 1));
+      for (let i = 0; i < days; i++) {
+        const d = new Date(start.getTime() + i * 86400000);
+        points.push({
+          label: `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`,
+          total: 0,
+          completed: 0,
+        });
+      }
+      sosList.forEach((s) => {
+        const idx = Math.floor((new Date(s.createdAt).getTime() - start.getTime()) / 86400000);
+        if (idx >= 0 && idx < days) {
+          points[idx].total += 1;
+          if (s.status === 'COMPLETED') points[idx].completed += 1;
+        }
+      });
     }
-    const headers = [
-      'Mã hồ sơ',
-      'Thời gian báo',
-      'Người dân',
-      'Số điện thoại',
-      'Địa chỉ hiện trường',
-      'Loại sự cố',
-      'Mức độ ưu tiên',
-      'Số người cần cứu',
-      'Đội cứu hộ phụ trách',
-      'Trạng thái',
-    ];
-    const rows = sosList.map((s) => {
-      const citizen = typeof s.citizenId === 'object' && s.citizenId !== null ? s.citizenId : null;
-      const teamName = s.assignment?.rescueTeamId?.name || s.assignment?.rescueTeamName || '—';
-      return [
-        `"${s.sosCode || ''}"`,
-        `"${new Date(s.createdAt).toLocaleString('vi-VN')}"`,
-        `"${citizen?.fullName || 'Người dân'}"`,
-        `"${citizen?.phone || s.contactPhone || ''}"`,
-        `"${(s.address || '').replace(/"/g, '""')}"`,
-        `"${EMERGENCY_TYPE_LABELS[s.emergencyType] || s.emergencyType}"`,
-        `"${s.priority}"`,
-        s.people || 1,
-        `"${teamName}"`,
-        `"${s.status}"`,
-      ].join(',');
-    });
-    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Bao_cao_chi_tiet_SOS_${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast.success(`Đã xuất ${sosList.length} hồ sơ SOS ra file CSV.`);
+    return points;
+  }, [sosList, timeRange]);
+
+  const jumpTo = (key: NavItemKey) => {
+    navigateTo(key, user || null);
   };
+
+  const handleExportSummaryCsv = async () => {
+    if (!rawListsRef.current.loaded) {
+      await loadAllDashboardData();
+    }
+
+    const timeRangeLabel =
+      timeRange === 'TODAY'
+        ? 'Hôm nay'
+        : timeRange === '7D'
+          ? '7 ngày gần nhất'
+          : timeRange === '30D'
+            ? '30 ngày gần nhất'
+            : 'Tất cả thời gian';
+
+    exportDashboardWorkbook({
+      scopeName: isAdmin ? 'Toàn hệ thống' : userAreaName,
+      timeRangeLabel,
+      isAdmin,
+      stats: {
+        sosStats,
+        rescueTeamsCount,
+        rescuersStats,
+        resourcesStats,
+        broadcastStats,
+        safetyCheckStats,
+        bloodDonationStats,
+        weatherStats,
+        shelterStats,
+        hazardStats,
+        chatStats,
+        citizensStats,
+        authoritiesStats,
+        areasStats,
+        logsStats,
+      },
+      sosList: filteredSos,
+      ...rawListsRef.current,
+    });
+
+    toast.success('Đã xuất báo cáo thống kê đa sheet (.xlsx) kèm định dạng biểu mẫu.');
+  };
+
+  const shelterAvailableSlots = Math.max(0, shelterStats.totalCapacity - shelterStats.totalOccupancy);
+
+  const ledgerRows: {
+    key: NavItemKey;
+    name: string;
+    totalLabel: string;
+    totalValue: number;
+    metrics: { label: string; val: number | string; warn?: boolean }[];
+  }[] = [
+    {
+      key: 'rescuers_approval' as NavItemKey,
+      name: 'Duyệt hồ sơ cứu hộ viên',
+      totalLabel: 'Tổng hồ sơ',
+      totalValue: rescuersStats.total,
+      metrics: [
+        { label: 'Chờ duyệt', val: rescuersStats.pending, warn: rescuersStats.pending > 0 },
+        { label: 'Đã xác minh', val: rescuersStats.verified },
+        { label: 'Từ chối', val: rescuersStats.rejected },
+      ],
+    },
+    {
+      key: 'blood_donations' as NavItemKey,
+      name: 'Hiến máu tình nguyện',
+      totalLabel: 'Đợt hiến máu',
+      totalValue: bloodDonationStats.eventsTotal,
+      metrics: [
+        { label: 'Đang mở', val: bloodDonationStats.eventsActive },
+        { label: 'Lượt đăng ký', val: bloodDonationStats.registrationsTotal },
+        { label: 'Đã xác nhận', val: bloodDonationStats.confirmedCount },
+      ],
+    },
+    {
+      key: 'chat' as NavItemKey,
+      name: 'Trao đổi tác chiến',
+      totalLabel: 'Hội thoại',
+      totalValue: chatStats.conversations,
+      metrics: [
+        { label: 'Tin chưa đọc', val: chatStats.unread, warn: chatStats.unread > 0 },
+      ],
+    },
+    {
+      key: 'operation_logs' as NavItemKey,
+      name: 'Nhật ký hoạt động',
+      totalLabel: 'Bản ghi',
+      totalValue: logsStats.total,
+      metrics: [
+        { label: 'Trạng thái', val: 'Đang ghi nhận' },
+      ],
+    },
+    ...(isAdmin
+      ? [
+          {
+            key: 'notifications' as NavItemKey,
+            name: 'Gửi thông báo',
+            totalLabel: 'Đã phát',
+            totalValue: broadcastStats.total,
+            metrics: [
+              { label: 'Khẩn cấp', val: broadcastStats.instant },
+              { label: 'Hệ thống', val: broadcastStats.system },
+              { label: 'Tự động', val: broadcastStats.autoGenerated },
+            ],
+          },
+          {
+            key: 'weather' as NavItemKey,
+            name: 'Bản tin thời tiết',
+            totalLabel: 'Tổng bản tin',
+            totalValue: weatherStats.total,
+            metrics: [
+              { label: 'Phát hành', val: weatherStats.approved },
+              { label: 'Chờ duyệt', val: weatherStats.pending, warn: weatherStats.pending > 0 },
+              { label: 'Lưu trữ', val: weatherStats.archived },
+            ],
+          },
+          {
+            key: 'citizens' as NavItemKey,
+            name: 'Tài khoản người dân',
+            totalLabel: 'Người dân',
+            totalValue: citizensStats.total,
+            metrics: [
+              { label: 'Hoạt động', val: citizensStats.active },
+              { label: 'Tạm khóa', val: citizensStats.locked },
+            ],
+          },
+          {
+            key: 'areas' as NavItemKey,
+            name: 'Đơn vị hành chính & Cán bộ',
+            totalLabel: 'Đơn vị',
+            totalValue: areasStats.total,
+            metrics: [
+              { label: 'Tỉnh/TP', val: areasStats.provinces },
+              { label: 'Phường/Xã', val: areasStats.wards },
+              { label: 'Cán bộ', val: authoritiesStats.total },
+            ],
+          },
+        ]
+      : []),
+  ];
 
   return (
-    <div className="reports-minimal-container">
-      {/* Thanh công cụ gọn trên 1 hàng */}
-      <div className="reports-minimal-toolbar">
-        <div className="reports-minimal-tabs">
-          <button
-            type="button"
-            className={`reports-minimal-tab ${groupFilter === 'ALL' ? 'active' : ''}`}
-            onClick={() => setGroupFilter('ALL')}
-          >
-            Tất cả các tab ({allTabSummaries.length})
-          </button>
-          <button
-            type="button"
-            className={`reports-minimal-tab ${groupFilter === 'OPERATIONS' ? 'active' : ''}`}
-            onClick={() => setGroupFilter('OPERATIONS')}
-          >
-            Điều hành & Lực lượng ({allTabSummaries.filter((i) => i.group === 'OPERATIONS').length})
-          </button>
-          <button
-            type="button"
-            className={`reports-minimal-tab ${groupFilter === 'COMMUNITY' ? 'active' : ''}`}
-            onClick={() => setGroupFilter('COMMUNITY')}
-          >
-            Thông báo & Cộng đồng ({allTabSummaries.filter((i) => i.group === 'COMMUNITY').length})
-          </button>
-          <button
-            type="button"
-            className={`reports-minimal-tab ${groupFilter === 'SYSTEM' ? 'active' : ''}`}
-            onClick={() => setGroupFilter('SYSTEM')}
-          >
-            Quản trị & Giám sát ({allTabSummaries.filter((i) => i.group === 'SYSTEM').length})
-          </button>
-        </div>
-
-        <div className="reports-minimal-actions">
-          <span className="reports-scope-text">
+    <div className="rpt-page">
+      {/* 1. THANH ĐIỀU KHIỂN ĐẦU TRANG */}
+      <div className="rpt-bar">
+        <div className="rpt-bar-left">
+          <span className="rpt-scope">
             Phạm vi: <strong>{isAdmin ? 'Toàn hệ thống' : userAreaName}</strong>
           </span>
-
-          <div className="reports-minimal-search">
-            <Search size={14} className="reports-minimal-search-icon" />
-            <input
-              type="text"
-              placeholder="Tìm tên tab, chỉ số..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+          <span className="rpt-sep" />
+          <div className="rpt-seg">
+            {(
+              [
+                { id: 'ALL', label: 'Tất cả' },
+                { id: 'TODAY', label: 'Hôm nay' },
+                { id: '7D', label: '7 ngày' },
+                { id: '30D', label: '30 ngày' },
+              ] as const
+            ).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={`rpt-seg-btn ${timeRange === t.id ? 'is-active' : ''}`}
+                onClick={() => setTimeRange(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
+        </div>
 
-          <button
-            type="button"
-            className="reports-minimal-btn"
-            onClick={handleExportAllTabsCsv}
-            title="Xuất bảng thống kê tổng hợp tất cả các tab ra file CSV"
-          >
-            <Download size={14} />
-            <span>Xuất CSV tổng hợp</span>
+        <div className="rpt-bar-right">
+          <button type="button" className="rpt-action-btn" onClick={() => jumpTo('map')}>
+            <Map size={14} />
+            <span>Bản đồ</span>
           </button>
-
-          <button
-            type="button"
-            className="reports-minimal-btn"
-            onClick={handleExportSosCsv}
-            title="Xuất danh sách chi tiết các ca SOS ra file CSV"
-          >
+          <button type="button" className="rpt-action-btn" onClick={handleExportSummaryCsv}>
             <Download size={14} />
-            <span>Xuất CSV SOS</span>
+            <span>Xuất CSV</span>
           </button>
-
           <button
             type="button"
-            className="reports-minimal-btn"
-            onClick={loadAllTabsStatistics}
+            className="rpt-action-btn"
+            onClick={loadAllDashboardData}
             disabled={loading}
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
@@ -888,79 +715,278 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         </div>
       </div>
 
-      {/* Bảng thống kê đầy đủ tất cả các tab */}
-      <div className="reports-minimal-table-card">
-        <table className="reports-minimal-table">
-          <thead>
-            <tr>
-              <th style={{ width: '22%' }}>Phân hệ / Tab</th>
-              <th style={{ width: '14%' }}>Nhóm chức năng</th>
-              <th style={{ width: '14%', textAlign: 'center' }}>Tổng số lượng</th>
-              <th style={{ width: '38%' }}>Chi tiết số liệu thống kê</th>
-              <th style={{ width: '12%', textAlign: 'right' }}>Điều hướng</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && allTabSummaries.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="reports-minimal-empty">
-                  Đang tải dữ liệu thống kê toàn hệ thống...
-                </td>
-              </tr>
-            ) : filteredTabSummaries.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="reports-minimal-empty">
-                  Không tìm thấy phân hệ phù hợp với từ khóa.
-                </td>
-              </tr>
-            ) : (
-              filteredTabSummaries.map((section) => (
-                <tr key={section.key}>
-                  <td>
-                    <div className="reports-tab-title">{section.title}</div>
-                    <div className="reports-tab-desc">{section.description}</div>
-                  </td>
+      {/* 2. DẢI CHỈ SỐ TỔNG QUAN (1 KHUNG LIỀN MẠCH 6 CỘT) */}
+      <div className="rpt-strip">
+        <div className="rpt-strip-cell" onClick={() => jumpTo('sos_requests')}>
+          <div className="rpt-strip-top">
+            <span>Yêu cầu SOS</span>
+            <ArrowUpRight size={13} />
+          </div>
+          <div className="rpt-strip-val">{sosStats.total}</div>
+          <div className="rpt-strip-sub">
+            Chờ xử lý <b>{sosStats.pending}</b> · Đang cứu <b>{sosStats.active}</b>
+          </div>
+        </div>
 
-                  <td>
-                    <span className="reports-group-pill">{section.groupLabel}</span>
-                  </td>
+        <div className="rpt-strip-cell" onClick={() => jumpTo('rescuers')}>
+          <div className="rpt-strip-top">
+            <span>Đội cứu hộ</span>
+            <ArrowUpRight size={13} />
+          </div>
+          <div className="rpt-strip-val">{rescueTeamsCount.total}</div>
+          <div className="rpt-strip-sub">
+            Sẵn sàng <b>{rescueTeamsCount.available}</b> · Đang bận <b>{rescueTeamsCount.busy}</b>
+          </div>
+        </div>
 
-                  <td style={{ textAlign: 'center' }}>
-                    <div className="reports-total-num">{section.totalValue}</div>
-                    <div className="reports-total-sub">{section.totalLabel}</div>
-                  </td>
+        <div className="rpt-strip-cell" onClick={() => jumpTo('resources')}>
+          <div className="rpt-strip-top">
+            <span>Phương tiện & Vật tư</span>
+            <ArrowUpRight size={13} />
+          </div>
+          <div className="rpt-strip-val">
+            {resourcesStats.vehiclesTotal + resourcesStats.equipmentsTotal}
+          </div>
+          <div className="rpt-strip-sub">
+            Xe <b>{resourcesStats.vehiclesAvailable}/{resourcesStats.vehiclesTotal}</b> · Vật tư{' '}
+            <b>{resourcesStats.equipmentsTotal}</b>
+          </div>
+        </div>
 
-                  <td>
-                    <div className="reports-metrics-list">
-                      {section.metrics.map((m, idx) => (
-                        <div key={idx} className="reports-metric-chip">
-                          <span className="reports-metric-label">{m.label}:</span>
-                          <strong
-                            className={`reports-metric-val ${m.highlight ? 'highlight' : ''}`}
-                          >
-                            {m.value}
-                          </strong>
-                        </div>
-                      ))}
-                    </div>
-                  </td>
+        <div className="rpt-strip-cell" onClick={() => jumpTo('safety_checks')}>
+          <div className="rpt-strip-top">
+            <span>Kiểm tra an toàn</span>
+            <ArrowUpRight size={13} />
+          </div>
+          <div className="rpt-strip-val">{safetyCheckStats.total}</div>
+          <div className="rpt-strip-sub">
+            Đang mở <b>{safetyCheckStats.active}</b> · Cần cứu <b>{safetyCheckStats.needHelpCount}</b>
+          </div>
+        </div>
 
-                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    <button
-                      type="button"
-                      className="reports-jump-btn"
-                      onClick={() => handleJumpToTab(section.key)}
-                    >
-                      <span>Mở tab</span>
-                      <ArrowUpRight size={14} />
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        <div className="rpt-strip-cell" onClick={() => jumpTo('blood_donations')}>
+          <div className="rpt-strip-top">
+            <span>Hiến máu</span>
+            <ArrowUpRight size={13} />
+          </div>
+          <div className="rpt-strip-val">{bloodDonationStats.eventsTotal}</div>
+          <div className="rpt-strip-sub">
+            Đang mở <b>{bloodDonationStats.eventsActive}</b> · Đăng ký{' '}
+            <b>{bloodDonationStats.registrationsTotal}</b>
+          </div>
+        </div>
+
+        <div className="rpt-strip-cell" onClick={() => jumpTo('shelters')}>
+          <div className="rpt-strip-top">
+            <span>Trú ẩn & Nguy hiểm</span>
+            <ArrowUpRight size={13} />
+          </div>
+          <div className="rpt-strip-val">{shelterStats.total + hazardStats.total}</div>
+          <div className="rpt-strip-sub">
+            Trú ẩn <b>{shelterStats.total}</b> · Nguy hiểm <b>{hazardStats.total}</b>
+          </div>
+        </div>
       </div>
+
+      {/* 3. KHỐI PHÂN TÍCH TRUNG TÂM (2 CỘT CÂN ĐỐI) */}
+      <div className="rpt-split">
+        {/* Cột trái: Biểu đồ hoạt động SOS & phân loại sự cố */}
+        <section className="rpt-box">
+          <header className="rpt-box-head">
+            <div>
+              <h3 className="rpt-box-title">Hoạt động tiếp nhận & điều phối SOS</h3>
+              <p className="rpt-box-desc">Biểu đồ yêu cầu phát sinh, hoàn thành và phân loại sự cố</p>
+            </div>
+            <button type="button" className="rpt-tab-link" onClick={() => jumpTo('sos_requests')}>
+              Mở tab SOS <ArrowUpRight size={13} />
+            </button>
+          </header>
+
+          <div className="rpt-inline-kpis">
+            <div>
+              <span>Chờ tiếp nhận</span>
+              <strong style={{ color: sosStats.pending > 0 ? TONE.amber : undefined }}>
+                {sosStats.pending}
+              </strong>
+            </div>
+            <div>
+              <span>Đang ứng cứu</span>
+              <strong style={{ color: sosStats.active > 0 ? TONE.blue : undefined }}>
+                {sosStats.active}
+              </strong>
+            </div>
+            <div>
+              <span>Đã hoàn thành</span>
+              <strong style={{ color: sosStats.completed > 0 ? TONE.teal : undefined }}>
+                {sosStats.completed}
+              </strong>
+            </div>
+            <div>
+              <span>Người cần cứu</span>
+              <strong>{sosStats.totalPeople}</strong>
+            </div>
+          </div>
+
+          <SosActivityChart data={sosSeries} />
+
+          <div className="rpt-subblock">
+            <div className="rpt-subblock-title">Phân loại theo nhóm sự cố</div>
+            {sosStats.byType.length === 0 ? (
+              <div className="rpt-empty">Chưa có bản ghi SOS trong khoảng thời gian đã chọn.</div>
+            ) : (
+              <div className="rpt-type-list">
+                {sosStats.byType.map((item) => (
+                  <div key={item.key} className="rpt-type-row">
+                    <span className="rpt-type-name">{item.label}</span>
+                    <div className="rpt-type-bar">
+                      <div style={{ width: `${Math.max(3, item.pct)}%` }} />
+                    </div>
+                    <span className="rpt-type-num">
+                      <b>{item.count}</b> ({item.pct}%)
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Cột phải: Tỷ lệ vận hành An toàn, Trú ẩn, Nguy hiểm & Nguồn lực */}
+        <section className="rpt-box">
+          <header className="rpt-box-head">
+            <div>
+              <h3 className="rpt-box-title">Tình hình an toàn, trú ẩn & nguồn lực</h3>
+              <p className="rpt-box-desc">Tỷ lệ thực tế từ cơ sở dữ liệu theo từng nghiệp vụ</p>
+            </div>
+          </header>
+
+          <div className="rpt-prop-groups">
+            <div className="rpt-prop-card">
+              <div className="rpt-prop-head">
+                <span>
+                  Trạng thái xử lý SOS <b>({sosStats.total})</b>
+                </span>
+                <button type="button" className="rpt-inline-link" onClick={() => jumpTo('sos_requests')}>
+                  Chi tiết <ArrowUpRight size={12} />
+                </button>
+              </div>
+              <ProportionBar
+                segments={[
+                  { label: 'Chờ xử lý', value: sosStats.pending, color: TONE.amber },
+                  { label: 'Đang cứu', value: sosStats.active, color: TONE.blue },
+                  { label: 'Hoàn thành', value: sosStats.completed, color: TONE.teal },
+                  { label: 'Đã hủy', value: sosStats.cancelled, color: TONE.slate },
+                ]}
+              />
+            </div>
+
+            <div className="rpt-prop-card">
+              <div className="rpt-prop-head">
+                <span>
+                  Công suất điểm trú ẩn <b>({shelterStats.active}/{shelterStats.total} điểm mở)</b>
+                </span>
+                <button type="button" className="rpt-inline-link" onClick={() => jumpTo('shelters')}>
+                  Mở tab <ArrowUpRight size={12} />
+                </button>
+              </div>
+              <ProportionBar
+                segments={[
+                  { label: 'Đang lưu trú', value: shelterStats.totalOccupancy, color: TONE.blue },
+                  { label: 'Chỗ trống', value: shelterAvailableSlots, color: TONE.teal },
+                ]}
+              />
+            </div>
+
+            <div className="rpt-prop-card">
+              <div className="rpt-prop-head">
+                <span>
+                  Phản hồi kiểm tra an toàn <b>({safetyCheckStats.total} đợt)</b>
+                </span>
+                <button type="button" className="rpt-inline-link" onClick={() => jumpTo('safety_checks')}>
+                  Mở tab <ArrowUpRight size={12} />
+                </button>
+              </div>
+              <ProportionBar
+                segments={[
+                  { label: 'Báo an toàn', value: safetyCheckStats.safeCount, color: TONE.teal },
+                  { label: 'Cần cứu hộ', value: safetyCheckStats.needHelpCount, color: TONE.rose },
+                ]}
+              />
+            </div>
+
+            <div className="rpt-prop-card">
+              <div className="rpt-prop-head">
+                <span>
+                  Điểm nguy hiểm <b>({hazardStats.total} báo cáo · {hazardStats.highSeverity} mức cao)</b>
+                </span>
+                <button type="button" className="rpt-inline-link" onClick={() => jumpTo('hazard_reports')}>
+                  Mở tab <ArrowUpRight size={12} />
+                </button>
+              </div>
+              <ProportionBar
+                segments={[
+                  { label: 'Đã duyệt', value: hazardStats.approved, color: TONE.blue },
+                  { label: 'Chờ duyệt', value: hazardStats.pending, color: TONE.amber },
+                  { label: 'Từ chối', value: hazardStats.rejected, color: TONE.slate },
+                ]}
+              />
+            </div>
+
+            <div className="rpt-prop-card">
+              <div className="rpt-prop-head">
+                <span>
+                  Phương tiện & Kho vật tư <b>({resourcesStats.vehiclesTotal + resourcesStats.equipmentsTotal})</b>
+                </span>
+                <button type="button" className="rpt-inline-link" onClick={() => jumpTo('resources')}>
+                  Mở tab <ArrowUpRight size={12} />
+                </button>
+              </div>
+              <ProportionBar
+                segments={[
+                  { label: 'Xe sẵn sàng', value: resourcesStats.vehiclesAvailable, color: TONE.teal },
+                  { label: 'Xe đang điều động', value: resourcesStats.vehiclesInUse, color: TONE.blue },
+                  { label: 'Thiết bị bền', value: resourcesStats.durableCount, color: TONE.sky },
+                  { label: 'Nhu yếu phẩm', value: resourcesStats.consumableCount, color: TONE.amber },
+                ]}
+              />
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {/* 4. DANH MỤC THỐNG KÊ CÁC TAB CÒN LẠI (BẢNG ĐỐI SOÁT 2 CỘT GỌN MẮT) */}
+      <section className="rpt-box">
+        <header className="rpt-box-head">
+          <div>
+            <h3 className="rpt-box-title">Tổng hợp các phân hệ quản lý khác</h3>
+            <p className="rpt-box-desc">Số liệu chi tiết và liên kết truy cập nhanh tới từng trang</p>
+          </div>
+        </header>
+
+        <div className="rpt-ledger">
+          {ledgerRows.map((row) => (
+            <div key={row.key} className="rpt-ledger-item">
+              <div className="rpt-ledger-main">
+                <div className="rpt-ledger-name">{row.name}</div>
+                <div className="rpt-ledger-metrics">
+                  <span>
+                    {row.totalLabel}: <b>{row.totalValue}</b>
+                  </span>
+                  {row.metrics.map((m) => (
+                    <span key={m.label}>
+                      · {m.label}:{' '}
+                      <b className={m.warn ? 'is-warn' : ''}>{m.val}</b>
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <button type="button" className="rpt-tab-link" onClick={() => jumpTo(row.key)}>
+                Mở <ArrowUpRight size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 };

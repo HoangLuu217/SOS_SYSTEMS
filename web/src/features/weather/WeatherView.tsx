@@ -702,7 +702,11 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
       'Link bài viết gốc',
     ];
 
-    const rows = articles.map((item, idx) => [
+    const nonPendingArticles = articles.filter(
+      (item) => (item.status || '').toUpperCase() !== 'PENDING'
+    );
+
+    const rows = nonPendingArticles.map((item, idx) => [
       idx + 1,
       item.title || '',
       item.category || '',
@@ -729,7 +733,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    toast.success(`Đã xuất ${articles.length} bản tin thời tiết ra file CSV.`);
+    toast.success(`Đã xuất ${nonPendingArticles.length} bản tin thời tiết ra file CSV.`);
   };
 
   return (
