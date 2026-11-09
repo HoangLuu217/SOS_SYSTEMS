@@ -30,12 +30,12 @@ router.use(authenticate);
 
 /**
  * @route   POST /safe-locations
- * @desc    Tạo mới địa điểm an toàn (Chỉ chính quyền địa phương mới được tạo)
- * @access  LOCAL_AUTHORITY, AUTHORITY
+ * @desc    Tạo mới địa điểm an toàn (Chính quyền địa phương & Admin)
+ * @access  LOCAL_AUTHORITY, AUTHORITY, ADMIN
  */
 router.post(
   '/',
-  authorize('LOCAL_AUTHORITY', 'AUTHORITY'),
+  authorize('LOCAL_AUTHORITY', 'AUTHORITY', 'ADMIN'),
   safeLocationController.createSafeLocation
 );
 

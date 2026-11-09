@@ -36,6 +36,11 @@ class WeatherNotificationController {
       ? req.body.executionId.slice(0, 120)
       : undefined;
 
+    // Tự động dọn dẹp các bản tin chưa duyệt (pending) quá 2 ngày
+    weatherNotificationService.cleanupExpiredPendingArticles(2).catch((err) => {
+      console.warn('Lỗi dọn dẹp bản tin cũ sau workflow n8n:', err);
+    });
+
     weatherArticleRealtimeService.publishWorkflowCompleted({
       action: 'WEATHER_ARTICLES_UPDATED',
       completedAt,
@@ -131,6 +136,20 @@ class WeatherNotificationController {
     try {
       const item = await weatherNotificationService.deleteWeatherNotification(req.params.id);
       return sendSuccess(res, 200, 'Hủy thông báo thời tiết thành công', item);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /weather-notifications/cleanup-expired
+   * (Chỉ ADMIN)
+   */
+  async cleanupExpiredArticles(req, res, next) {
+    try {
+      const days = parseInt(req.body?.days, 10) || 2;
+      const deletedCount = await weatherNotificationService.cleanupExpiredPendingArticles(days);
+      return sendSuccess(res, 200, `Đã dọn dẹp thành công ${deletedCount} bản tin pending cũ quá ${days} ngày.`, { deletedCount });
     } catch (error) {
       next(error);
     }

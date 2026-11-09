@@ -17,7 +17,8 @@ import {
   PlusCircle,
   Edit,
   RotateCcw,
-  EyeOff
+  EyeOff,
+  Download
 } from 'lucide-react';
 import type { User } from '@/types/auth';
 import type { SafeLocationItem, AdministrativeAreaItem } from '@/types/dashboard';
@@ -687,6 +688,64 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       setShelterPage(1);
     };
 
+    const handleExportSheltersCsv = () => {
+      const escapeCsvCell = (val: unknown): string => {
+        const str = val === null || val === undefined ? '' : String(val);
+        return `"${str.replace(/"/g, '""')}"`;
+      };
+
+      const headers = [
+        'STT',
+        'Tên điểm trú ẩn / Cơ sở an toàn',
+        'Phân loại cơ sở',
+        'Trạng thái hoạt động',
+        'Đang lưu trú (người)',
+        'Sức chứa tối đa (người)',
+        'Chỗ trống khả dụng',
+        'Khu vực / Địa phương',
+        'Địa chỉ chi tiết',
+        'Vĩ độ (Lat)',
+        'Kinh độ (Lng)',
+        'Thời gian cập nhật',
+      ];
+
+      const rows = sortedShelters.map((sh, idx) => {
+        const statusInfo = getShelterStatusBadge(sh.status, sh.currentOccupancy, sh.capacity);
+        const cap = sh.capacity || 0;
+        const occ = sh.currentOccupancy || 0;
+        const avail = Math.max(0, cap - occ);
+        const coords = sh.location?.coordinates;
+        return [
+          idx + 1,
+          sh.name || '',
+          getShelterTypeLabel(sh.type),
+          statusInfo.label,
+          occ,
+          cap,
+          avail,
+          getShelterDistrictName(sh),
+          sh.address || '',
+          Array.isArray(coords) && coords.length === 2 ? coords[1] : '',
+          Array.isArray(coords) && coords.length === 2 ? coords[0] : '',
+          formatShelterTime(sh.createdAt),
+        ];
+      });
+
+      const csvContent =
+        '\uFEFF' +
+        [headers.map(escapeCsvCell).join(','), ...rows.map((r) => r.map(escapeCsvCell).join(','))].join('\r\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Danh_sach_diem_tru_an_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast(`Đã xuất ${sortedShelters.length} điểm trú ẩn an toàn ra file CSV!`, 'success');
+    };
+
     const renderSortIcon = (field: typeof shelterSortField) => {
       if (shelterSortField !== field) {
         return <ArrowUpDown size={12} style={{ color: '#94a3b8', marginLeft: '6px', opacity: 0.6 }} />;
@@ -698,13 +757,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       );
     };
 
-    // Mở Form Thêm Điểm Trú Ẩn Mới (Chỉ dành cho Cán bộ chính quyền địa phương)
+    // Mở Form Thêm Điểm Trú Ẩn Mới (Dành cho Quản trị viên ADMIN & Cán bộ chính quyền địa phương)
     const handleOpenCreateShelterModal = () => {
-      if (isAdmin) {
-        showToast('Quản trị viên (ADMIN) không có thẩm quyền tạo điểm an toàn. Chức năng này chỉ dành riêng cho Cán bộ chính quyền địa phương.', 'error');
-        return;
-      }
-
       let defaultLat = 16.0570;
       let defaultLng = 108.2170;
       if (fixedJurisdictionConfig.bounds) {
@@ -719,24 +773,34 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
         if (selectedAdminProvince !== 'ALL') {
           const matched = areas.find(
             (a) =>
+              String(a._id) === selectedAdminProvince ||
               a.name.toLowerCase().includes(selectedAdminProvince.toLowerCase()) ||
               selectedAdminProvince.toLowerCase().includes(a.name.toLowerCase())
           );
-          initAreaId = matched ? String(matched._id) : `PROV_${selectedAdminProvince}`;
+          initAreaId = matched ? String(matched._id) : (areas[0] ? String(areas[0]._id) : '');
         } else if (areas.length > 0) {
           initAreaId = String(areas[0]._id);
         }
       } else {
         initAreaId = (resolvedAccountArea?._id as string) || accountAreaId || '';
       }
+      const selectedInitArea = areas.find((a) => String(a._id) === initAreaId);
       setCreateShelterAreaId(initAreaId);
-      setCreateShelterAddress(isAdmin ? (selectedAdminProvince !== 'ALL' ? selectedAdminProvince : '') : (accountAreaWithCity || accountAreaDisplayName));
+      setCreateShelterAddress(
+        isAdmin
+          ? selectedInitArea?.name || (selectedAdminProvince !== 'ALL' ? selectedAdminProvince : '')
+          : accountAreaWithCity || accountAreaDisplayName
+      );
       setCreateShelterCapacity(300);
       setCreateShelterOccupancy(0);
       setCreateShelterStatus('ACTIVE');
       setCreateShelterLat(defaultLat);
       setCreateShelterLng(defaultLng);
-      setCreateShelterNotes(isAdmin ? 'Điểm trú ẩn an toàn thuộc Quản trị viên hệ thống SOS quản lý' : `Điểm trú ẩn an toàn thuộc quản lý Ban Chỉ Huy PCTT ${localTabLabel}`);
+      setCreateShelterNotes(
+        isAdmin
+          ? 'Điểm trú ẩn an toàn thuộc Quản trị viên hệ thống SOS quản lý'
+          : `Điểm trú ẩn an toàn thuộc quản lý Ban Chỉ Huy PCTT ${localTabLabel}`
+      );
       setCreateShelterMapLinkInput('');
       setCreateShelterMapLinkStatus(null);
       setCreateShelterErrors({});
@@ -833,10 +897,6 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
     // Gửi yêu cầu Tạo Điểm Trú Ẩn Mới lên server
     const handleSubmitCreateShelter = () => {
-      if (isAdmin) {
-        showToast('Quản trị viên (ADMIN) không có thẩm quyền tạo điểm an toàn. Chức năng này chỉ dành riêng cho Cán bộ chính quyền địa phương.', 'error');
-        return;
-      }
       const errors: typeof createShelterErrors = {};
 
       if (!createShelterName.trim()) {
@@ -890,15 +950,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
     // Thực hiện gọi API tạo điểm trú ẩn
     const executeSubmitCreateShelter = async () => {
-      if (isAdmin) {
-        showToast('Quản trị viên (ADMIN) không có thẩm quyền tạo điểm an toàn.', 'error');
-        return;
-      }
       try {
         setSubmittingCreateShelter(true);
         const resolvedAreaId =
           createShelterAreaId ||
-          (isAdmin && selectedAdminProvince !== 'ALL' ? `PROV_${selectedAdminProvince}` : '') ||
           (resolvedAccountArea?._id as string) ||
           accountAreaId ||
           (areas[0]?._id as string) ||
@@ -1316,28 +1371,45 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {!isAdmin && (
-              <button
-                type="button"
-                className="sos-btn-flat primary"
-                onClick={handleOpenCreateShelterModal}
-                style={{
-                  padding: '8px 16px',
-                  fontSize: '13px',
-                  backgroundColor: '#0284c7',
-                  color: '#ffffff',
-                  borderColor: '#0284c7',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                <PlusCircle size={15} />
-                <span>Thêm Điểm Trú Ẩn Mới</span>
-              </button>
-            )}
+            <button
+              type="button"
+              className="sos-btn-flat"
+              onClick={handleExportSheltersCsv}
+              style={{
+                padding: '8px 14px',
+                fontSize: '13px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+              title="Xuất danh sách điểm trú ẩn đang lọc ra file CSV"
+            >
+              <Download size={15} />
+              <span>Xuất CSV</span>
+            </button>
+
+            <button
+              type="button"
+              className="sos-btn-flat primary"
+              onClick={handleOpenCreateShelterModal}
+              style={{
+                padding: '8px 16px',
+                fontSize: '13px',
+                backgroundColor: '#0284c7',
+                color: '#ffffff',
+                borderColor: '#0284c7',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <PlusCircle size={15} />
+              <span>Thêm Điểm Trú Ẩn Mới</span>
+            </button>
 
             <button
               type="button"
@@ -1371,7 +1443,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '4px' }}>
                   <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500 }}>
-                    Lọc theo Tỉnh / Thành phố:
+                    Lọc theo Khu vực / Tỉnh thành:
                   </span>
                   <select
                     value={selectedAdminProvince}
@@ -1389,16 +1461,40 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                       fontWeight: 500,
                       cursor: 'pointer',
                       outline: 'none',
-                      minWidth: '220px',
+                      minWidth: '240px',
                       boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                     }}
                   >
-                    <option value="ALL">-- Tất cả Tỉnh / Thành phố (Toàn quốc) --</option>
-                    {adminProvinceOptions.map((p: { code?: number; name: string; count: number }) => (
-                      <option key={p.code || p.name} value={p.name}>
-                        {p.name} {p.count > 0 ? `(${p.count})` : ''}
-                      </option>
-                    ))}
+                    <option value="ALL">-- Tất cả Khu vực / Tỉnh thành (Toàn quốc) --</option>
+                    {areas.filter((a) => a.type === 'PROVINCE').length > 0 && (
+                      <optgroup label="Tỉnh / Thành phố (Trong CSDL Area)">
+                        {areas
+                          .filter((a) => a.type === 'PROVINCE')
+                          .map((a) => (
+                            <option key={`f-prov-${a._id}`} value={a.name}>
+                              {a.name} {a.code ? `[${a.code}]` : ''}
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
+                    {areas.filter((a) => a.type === 'WARD').length > 0 && (
+                      <optgroup label="Phường / Xã (Trong CSDL Area)">
+                        {areas
+                          .filter((a) => a.type === 'WARD')
+                          .map((a) => (
+                            <option key={`f-ward-${a._id}`} value={a.name}>
+                              {a.name} {a.code ? `[${a.code}]` : ''}
+                            </option>
+                          ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="Danh mục Tỉnh / Thành phố">
+                      {adminProvinceOptions.map((p: { code?: number; name: string; count: number }) => (
+                        <option key={p.code || p.name} value={p.name}>
+                          {p.name} {p.count > 0 ? `(${p.count})` : ''}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
 
                   {selectedAdminProvince !== 'ALL' && (
@@ -1804,29 +1900,27 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     <td colSpan={8} style={{ textAlign: 'center', padding: '36px 20px', color: '#64748b', fontSize: '13px' }}>
                       <Shield size={32} color="#94a3b8" style={{ marginBottom: '8px' }} />
                       <div>Không có điểm trú ẩn an toàn nào trong danh mục này.</div>
-                      {!isAdmin && (
-                        <button
-                          type="button"
-                          onClick={handleOpenCreateShelterModal}
-                          style={{
-                            marginTop: '12px',
-                            padding: '6px 14px',
-                            fontSize: '12px',
-                            color: '#0284c7',
-                            background: '#f0f9ff',
-                            border: '1px solid #bae6fd',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontWeight: 600,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                          }}
-                        >
-                          <PlusCircle size={13} />
-                          <span>Thêm điểm trú ẩn mới ngay</span>
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={handleOpenCreateShelterModal}
+                        style={{
+                          marginTop: '12px',
+                          padding: '6px 14px',
+                          fontSize: '12px',
+                          color: '#0284c7',
+                          background: '#f0f9ff',
+                          border: '1px solid #bae6fd',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                        }}
+                      >
+                        <PlusCircle size={13} />
+                        <span>Thêm điểm trú ẩn mới ngay</span>
+                      </button>
                     </td>
                   </tr>
                 ) : (
@@ -1881,7 +1975,17 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                               <ShelterTypeIcon type={sh.type} size={18} color="#16a34a" />
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px', lineHeight: '1.4' }}>
+                              <div
+                                onClick={() => setDetailShelter(sh)}
+                                title="Nhấn để xem chi tiết điểm trú ẩn"
+                                style={{
+                                  fontWeight: 700,
+                                  color: '#2563eb',
+                                  fontSize: '14px',
+                                  lineHeight: '1.4',
+                                  cursor: 'pointer',
+                                }}
+                              >
                                 {sh.name}
                               </div>
                               <span
@@ -2218,33 +2322,35 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
         </div>
 
         {/* ============================================================ */}
-        {/* MODAL CHI TIẾT ĐIỂM TRÚ ẨN (2 CỘT TƯƠNG ĐỒNG VỚI HAZARD) */}
+        {/* DRAWER CHI TIẾT ĐIỂM TRÚ ẨN (MỞ TỪ BÊN PHẢI MÀN HÌNH) */}
         {/* ============================================================ */}
         {detailShelter && (
           <div
             style={{
               position: 'fixed',
               inset: 0,
-              backgroundColor: 'rgba(15, 23, 42, 0.65)',
+              backgroundColor: 'rgba(15, 23, 42, 0.5)',
+              backdropFilter: 'blur(3px)',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              alignItems: 'stretch',
+              justifyContent: 'flex-end',
               zIndex: 9999,
-              padding: '20px',
+              padding: 0,
             }}
             onClick={() => setDetailShelter(null)}
           >
             <div
               style={{
                 background: '#ffffff',
-                borderRadius: '10px',
-                width: '100%',
-                maxWidth: '920px',
-                maxHeight: '90vh',
+                borderRadius: 0,
+                width: '680px',
+                maxWidth: '94vw',
+                height: '100vh',
+                maxHeight: '100vh',
                 display: 'flex',
                 flexDirection: 'column',
-                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15)',
-                border: '1px solid #cbd5e1',
+                boxShadow: '-12px 0 32px rgba(15, 23, 42, 0.18)',
+                borderLeft: '1px solid #cbd5e1',
                 overflow: 'hidden',
               }}
               onClick={(e) => e.stopPropagation()}
@@ -2579,9 +2685,9 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
         )}
 
         {/* ============================================================ */}
-        {/* MODAL TẠO ĐIỂM TRÚ ẨN MỚI (CHỈ DÀNH CHO CÁN BỘ CHÍNH QUYỀN ĐỊA PHƯƠNG) */}
+        {/* MODAL TẠO ĐIỂM TRÚ ẨN MỚI (DÀNH CHO ADMIN & CÁN BỘ ĐỊA PHƯƠNG) */}
         {/* ============================================================ */}
-        {isCreateShelterOpen && !isAdmin && (
+        {isCreateShelterOpen && (
           <div
             style={{
               position: 'fixed',
@@ -2641,7 +2747,9 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                       Khởi Tạo Điểm Trú Ẩn / Trạm An Toàn Mới
                     </h3>
                     <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#64748b' }}>
-                      Cán bộ địa phương {accountAreaDisplayName} thiết lập cơ sở sơ tán và công bố phục vụ ứng cứu thiên tai.
+                      {isAdmin
+                        ? 'Quản trị viên thiết lập cơ sở sơ tán và chọn khu vực hành chính trên toàn hệ thống.'
+                        : `Cán bộ địa phương ${accountAreaDisplayName} thiết lập cơ sở sơ tán và công bố phục vụ ứng cứu thiên tai.`}
                     </p>
                   </div>
                 </div>
@@ -2766,77 +2874,157 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                       </div>
                     </div>
 
-                    {/* 3. Khu vực hành chính (Lấy cố định từ tài khoản quản lý) & Trạng thái ban đầu */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    {/* 3. Khu vực hành chính & Mục tiêu gửi thông báo GPS + Trạng thái ban đầu */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       <div>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#0f172a', marginBottom: '5px' }}>
-                          Khu vực quản lý
+                          Khu vực mục tiêu & Tự động gửi thông báo theo GPS
                         </label>
                         {isAdmin ? (
-                          <select
-                            value={createShelterAreaId}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setCreateShelterAreaId(val);
-                              const found = areas.find((a) => a._id === val);
-                              if (found && !createShelterAddress) {
-                                setCreateShelterAddress(found.name);
-                              }
-                            }}
-                            style={{
-                              width: '100%',
-                              padding: '8px 10px',
-                              borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              fontSize: '12.5px',
-                              color: '#0f172a',
-                              background: '#ffffff',
-                              boxSizing: 'border-box',
-                            }}
-                          >
-                            <option value="">-- Chọn khu vực hành chính ({accountAreaDisplayName || 'Toàn quốc'}) --</option>
-                            {areas.length > 0 && (
-                              <optgroup label="Khu vực hành chính hệ thống">
-                                {areas.map((a) => (
-                                  <option key={a._id} value={a._id}>
-                                    {a.name} {a.code ? `[${a.code}]` : ''}
-                                  </option>
-                                ))}
-                              </optgroup>
-                            )}
-                            {allProvinces.length > 0 && (
-                              <optgroup label="Tất cả 63 Tỉnh / Thành phố">
-                                {allProvinces.map((p) => {
-                                  const matchedArea = areas.find((a) => a.name.toLowerCase() === p.name.toLowerCase());
-                                  const val = matchedArea ? matchedArea._id : `PROV_${p.name}`;
-                                  return (
-                                    <option key={`c-prov-${p.code || p.name}`} value={val}>
-                                      {p.name}
-                                    </option>
-                                  );
-                                })}
-                              </optgroup>
-                            )}
-                          </select>
+                          (() => {
+                            const provinces = areas.filter((a) => a.type === 'PROVINCE');
+                            const currentArea = areas.find((a) => String(a._id) === String(createShelterAreaId));
+                            const selectedProvId =
+                              currentArea?.type === 'PROVINCE'
+                                ? String(currentArea._id)
+                                : currentArea?.parentId
+                                  ? String((currentArea.parentId as any)?._id || currentArea.parentId)
+                                  : '';
+                            const childWards = selectedProvId
+                              ? areas.filter(
+                                  (a) =>
+                                    a.type === 'WARD' &&
+                                    String((a.parentId as any)?._id || a.parentId) === selectedProvId
+                                )
+                              : [];
+                            const selectedProvObj = provinces.find((p) => String(p._id) === selectedProvId);
+
+                            return (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: selectedProvId ? '1fr 1fr' : '1fr', gap: '8px' }}>
+                                  <div>
+                                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
+                                      1. Tỉnh / Thành phố
+                                    </div>
+                                    <select
+                                      value={selectedProvId}
+                                      onChange={(e) => {
+                                        const provId = e.target.value;
+                                        setCreateShelterAreaId(provId);
+                                        const found = areas.find((a) => String(a._id) === provId);
+                                        if (found && (!createShelterAddress || areas.some((a) => a.name === createShelterAddress))) {
+                                          setCreateShelterAddress(found.name);
+                                        }
+                                      }}
+                                      style={{
+                                        width: '100%',
+                                        padding: '8px 10px',
+                                        borderRadius: '6px',
+                                        border: '1px solid #cbd5e1',
+                                        fontSize: '12.5px',
+                                        color: '#0f172a',
+                                        background: '#ffffff',
+                                        boxSizing: 'border-box',
+                                      }}
+                                    >
+                                      <option value="">-- Chọn Tỉnh / Thành phố (hoặc tự động theo GPS) --</option>
+                                      {provinces.map((p) => (
+                                        <option key={`c-prov-${p._id}`} value={p._id}>
+                                          {p.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  {selectedProvId && (
+                                    <div>
+                                      <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
+                                        2. Phường / Xã nhận thông báo
+                                      </div>
+                                      <select
+                                        value={createShelterAreaId}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          setCreateShelterAreaId(val);
+                                          const found = areas.find((a) => String(a._id) === val);
+                                          if (found && (!createShelterAddress || areas.some((a) => a.name === createShelterAddress))) {
+                                            setCreateShelterAddress(found.name);
+                                          }
+                                        }}
+                                        style={{
+                                          width: '100%',
+                                          padding: '8px 10px',
+                                          borderRadius: '6px',
+                                          border: '1px solid #cbd5e1',
+                                          fontSize: '12.5px',
+                                          color: '#0f172a',
+                                          background: '#ffffff',
+                                          boxSizing: 'border-box',
+                                        }}
+                                      >
+                                        <option value={selectedProvId}>
+                                          Toàn {selectedProvObj?.name || 'Tỉnh / Thành phố'}
+                                        </option>
+                                        {childWards.map((w) => (
+                                          <option key={`c-ward-${w._id}`} value={w._id}>
+                                            {w.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div
+                                  style={{
+                                    fontSize: '11.5px',
+                                    color: '#0369a1',
+                                    background: '#f0f9ff',
+                                    border: '1px solid #bae6fd',
+                                    borderRadius: '6px',
+                                    padding: '6px 10px',
+                                  }}
+                                >
+                                  Hệ thống sẽ tự động gửi thông báo đẩy theo tọa độ GPS cho toàn bộ người dân (Citizen) đang có mặt trong{' '}
+                                  <strong>{currentArea?.name || 'khu vực mục tiêu được chọn'}</strong>.
+                                </div>
+                              </div>
+                            );
+                          })()
                         ) : (
-                          <div
-                            style={{
-                              width: '100%',
-                              padding: '8px 12px',
-                              borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              background: '#f8fafc',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              boxSizing: 'border-box',
-                              minHeight: '36px',
-                            }}
-                          >
-                            <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
-                              {accountAreaDisplayName}
-                            </span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <div
+                              style={{
+                                width: '100%',
+                                padding: '8px 12px',
+                                borderRadius: '6px',
+                                border: '1px solid #cbd5e1',
+                                background: '#f8fafc',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                boxSizing: 'border-box',
+                                minHeight: '36px',
+                              }}
+                            >
+                              <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>
+                                {accountAreaDisplayName}
+                              </span>
+                            </div>
+                            <div
+                              style={{
+                                fontSize: '11.5px',
+                                color: '#0369a1',
+                                background: '#f0f9ff',
+                                border: '1px solid #bae6fd',
+                                borderRadius: '6px',
+                                padding: '6px 10px',
+                              }}
+                            >
+                              Khi tạo điểm trú ẩn, hệ thống tự động gửi thông báo theo GPS tới người dân đang nằm trong địa bàn{' '}
+                              <strong>{accountAreaDisplayName}</strong>.
+                            </div>
                           </div>
                         )}
                       </div>
@@ -3466,8 +3654,8 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                             onChange={(e) => {
                               const val = e.target.value;
                               setEditShelterAreaId(val);
-                              const found = areas.find((a) => a._id === val);
-                              if (found && !editShelterAddress) {
+                              const found = areas.find((a) => String(a._id) === val);
+                              if (found && (!editShelterAddress || areas.some((a) => a.name === editShelterAddress))) {
                                 setEditShelterAddress(found.name);
                               }
                             }}
@@ -3482,27 +3670,38 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                               boxSizing: 'border-box',
                             }}
                           >
-                            <option value="">-- Chọn khu vực hành chính ({accountAreaDisplayName || 'Toàn quốc'}) --</option>
-                            {areas.length > 0 && (
-                              <optgroup label="Khu vực hành chính hệ thống">
-                                {areas.map((a) => (
-                                  <option key={`edit-area-${a._id}`} value={a._id}>
-                                    {a.name} {a.code ? `[${a.code}]` : ''}
-                                  </option>
-                                ))}
+                            <option value="">-- Chọn khu vực hành chính trong hệ thống ({areas.length} khu vực) --</option>
+                            {areas.filter((a) => a.type === 'PROVINCE').length > 0 && (
+                              <optgroup label="Cấp Tỉnh / Thành phố">
+                                {areas
+                                  .filter((a) => a.type === 'PROVINCE')
+                                  .map((a) => (
+                                    <option key={`edit-prov-${a._id}`} value={a._id}>
+                                      {a.name} {a.code ? `[${a.code}]` : ''}
+                                    </option>
+                                  ))}
                               </optgroup>
                             )}
-                            {allProvinces.length > 0 && (
-                              <optgroup label="Tất cả 63 Tỉnh / Thành phố">
-                                {allProvinces.map((p) => {
-                                  const matchedArea = areas.find((a) => a.name.toLowerCase() === p.name.toLowerCase());
-                                  const val = matchedArea ? matchedArea._id : `PROV_${p.name}`;
-                                  return (
-                                    <option key={`edit-prov-${p.code || p.name}`} value={val}>
-                                      {p.name}
+                            {areas.filter((a) => a.type === 'WARD').length > 0 && (
+                              <optgroup label="Cấp Phường / Xã">
+                                {areas
+                                  .filter((a) => a.type === 'WARD')
+                                  .map((a) => (
+                                    <option key={`edit-ward-${a._id}`} value={a._id}>
+                                      {a.name} {a.code ? `[${a.code}]` : ''}
                                     </option>
-                                  );
-                                })}
+                                  ))}
+                              </optgroup>
+                            )}
+                            {areas.filter((a) => a.type !== 'PROVINCE' && a.type !== 'WARD').length > 0 && (
+                              <optgroup label="Khu vực hành chính khác">
+                                {areas
+                                  .filter((a) => a.type !== 'PROVINCE' && a.type !== 'WARD')
+                                  .map((a) => (
+                                    <option key={`edit-other-${a._id}`} value={a._id}>
+                                      {a.name} {a.code ? `[${a.code}]` : ''}
+                                    </option>
+                                  ))}
                               </optgroup>
                             )}
                           </select>

@@ -41,7 +41,7 @@
     "predev": "node scripts/patch-expo-notifications.js",
     "pretunnel": "node scripts/patch-expo-notifications.js",
     "start": "expo start",
-    "dev": "expo start",
+    "dev": "expo start --tunnel",
     "tunnel": "expo start --tunnel",
     "android": "expo run:android",
     "ios": "expo run:ios",

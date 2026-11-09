@@ -30,12 +30,15 @@ class SafeLocationService {
       throw new ApiError(400, 'Tọa độ GPS kinh độ (-180..180) hoặc vĩ độ (-90..90) không hợp lệ');
     }
 
-    // 1. Tự động xác định khu vực hành chính (areaId) chính xác qua tọa độ GPS
-    let area = await findAreaByCoordinates([lng, lat], AdministrativeArea);
-
-    // 2. Fallback nếu GPS chưa trúng ranh giới polygon cụ thể
-    if (!area && areaId && mongoose.isValidObjectId(areaId)) {
+    // 1. Nếu có truyền areaId hợp lệ từ DB (ví dụ Admin hoặc Cán bộ chọn trực tiếp khu vực trong area), ưu tiên lấy area đó
+    let area = null;
+    if (areaId && mongoose.isValidObjectId(areaId)) {
       area = await AdministrativeArea.findById(areaId);
+    }
+
+    // 2. Nếu chưa có area hoặc chưa chọn cụ thể, tự động xác định qua tọa độ GPS
+    if (!area) {
+      area = await findAreaByCoordinates([lng, lat], AdministrativeArea);
     }
     if (!area && areaId) {
       const cleanAreaId = String(areaId).replace(/^PROV_/i, '').trim();
@@ -112,10 +115,37 @@ class SafeLocationService {
       createdBy: actorId,
     });
 
-    return safeLocation.populate([
+    const populated = await safeLocation.populate([
       { path: 'areaId', select: 'name code type' },
       { path: 'createdBy', select: 'fullName phone email' },
     ]);
+
+    // Tự động phát thông báo theo GPS trong khu vực mục tiêu khi tạo điểm trú ẩn an toàn
+    if (populated.status !== 'CLOSED' && creatorUser) {
+      try {
+        const notificationService = require('./notification.service');
+        const userRoles = creatorUser.roles || [];
+        const isLocalAuthOnly = userRoles.includes('LOCAL_AUTHORITY') && !userRoles.includes('ADMIN');
+        const notifyAreaId = isLocalAuthOnly
+          ? (creatorUser.authority?.areaId || area._id)
+          : (data.notifyAreaId || data.areaId || area._id);
+        const areaName = populated.areaId?.name || area?.name || 'khu vực quản lý';
+        await notificationService.broadcastNotification(creatorUser, {
+          title: `Điểm trú ẩn an toàn mới: ${populated.name}`,
+          content: `Điểm trú ẩn "${populated.name}" tại ${populated.address || areaName} đã sẵn sàng tiếp nhận người dân (Sức chứa: ${populated.capacity || 0} người).`,
+          type: 'SAFE_LOCATION',
+          priority: 'HIGH',
+          areaId: notifyAreaId ? notifyAreaId.toString() : undefined,
+          data: {
+            safeLocationId: populated._id.toString(),
+          },
+        });
+      } catch (notifyErr) {
+        console.error('[SafeLocationService] Auto broadcast notification failed on create:', notifyErr.message);
+      }
+    }
+
+    return populated;
   }
 
   /**

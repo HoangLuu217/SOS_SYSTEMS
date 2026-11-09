@@ -3,18 +3,19 @@ import {
   View,
   Text,
   AppState,
+  DeviceEventEmitter,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
   StatusBar,
   Platform,
-  Alert,
   Image,
   ImageBackground,
   ActivityIndicator,
   Modal,
   Linking,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
@@ -26,8 +27,9 @@ import { LogoSOS } from '@/components';
 import { BACKGROUND_APP_SOURCE } from '@/constants/backgroundBase64';
 import { SOSMapScreen, ContributeHazardModal } from '@/features/sos';
 import { LocalAuthorityChatModal } from './LocalAuthorityChatModal';
+import { SafetyCheckModal } from './SafetyCheckModal';
 import { TabName } from '@/types';
-import { backendApi } from '@/api';
+import { backendApi, safetyCheckApi, SafetyCheckItem, bloodDonationApi } from '@/api';
 
 
 export interface HomeScreenProps {
@@ -283,8 +285,33 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [showSOSMap, setShowSOSMap] = useState(false);
   const [showHazardModal, setShowHazardModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
+  const [showSafetyCheckModal, setShowSafetyCheckModal] = useState(false);
+  const [activeSafetyCheckId, setActiveSafetyCheckId] = useState<string | undefined>(undefined);
+  const [activeSafetyCheck, setActiveSafetyCheck] = useState<SafetyCheckItem | null>(null);
+  const [unrespondedSafetyCount, setUnrespondedSafetyCount] = useState<number>(0);
+  const [myPrimaryResponse, setMyPrimaryResponse] = useState<any>(null);
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
   const [unreadNotifCount, setUnreadNotifCount] = useState<number>(0);
+
+  interface ConfirmModalState {
+    visible: boolean;
+    icon: React.ReactNode;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    confirmColor?: string;
+    isSingleButton?: boolean;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+  }
+
+  const [confirmModal, setConfirmModal] = useState<ConfirmModalState>({
+    visible: false,
+    icon: null,
+    title: '',
+    message: '',
+  });
 
   // Thông tin chính quyền / Ban chỉ huy địa phương gần nhất
   const [nearestAuthority, setNearestAuthority] = useState<{
@@ -377,6 +404,64 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       setLoadingNews(false);
     }
   }, []);
+
+  // Lấy đợt kiểm tra an toàn đang mở (ACTIVE) cho địa phương người dân
+  const [unrespondedBloodCount, setUnrespondedBloodCount] = useState<number>(0);
+
+  const fetchBloodDonationStatus = useCallback(async () => {
+    try {
+      const res = await bloodDonationApi.getMyStatus();
+      if (res.success && res.data) {
+        setUnrespondedBloodCount(res.data.unrespondedCount || 0);
+      }
+    } catch {
+      // Ignored
+    }
+  }, []);
+
+  const fetchActiveSafetyCheck = useCallback(async () => {
+    try {
+      const res = await safetyCheckApi.getActiveSafetyCheck();
+      if (res.success && res.data) {
+        setActiveSafetyCheck(res.data.activeCheck || null);
+        setMyPrimaryResponse(res.data.myResponse || null);
+        const checks = res.data.activeChecks || (res.data.activeCheck ? [res.data.activeCheck] : []);
+        const respondedIds = new Set(
+          (res.data.myResponses || (res.data.myResponse ? [res.data.myResponse] : [])).map((r: any) =>
+            String(r.safetyCheckId)
+          )
+        );
+        const unresponded = checks.filter((c) => !respondedIds.has(String(c._id))).length;
+        setUnrespondedSafetyCount(unresponded);
+      }
+    } catch {
+      // Ignored
+    }
+  }, []);
+
+  // Lắng nghe sự kiện mở hoặc cập nhật kiểm tra an toàn
+  useEffect(() => {
+    const subOpen = DeviceEventEmitter.addListener('open:safety_check', (data: any) => {
+      const targetId = data?.safetyCheckId || data?._id;
+      if (targetId) {
+        setActiveSafetyCheckId(targetId);
+      }
+      setShowSafetyCheckModal(true);
+      fetchActiveSafetyCheck();
+    });
+    const subUpdate = DeviceEventEmitter.addListener('safety_check:updated', () => {
+      fetchActiveSafetyCheck();
+    });
+    const subBloodUpdate = DeviceEventEmitter.addListener('blood_donation:updated', () => {
+      fetchBloodDonationStatus();
+    });
+    void fetchBloodDonationStatus();
+    return () => {
+      subOpen.remove();
+      subUpdate.remove();
+      subBloodUpdate.remove();
+    };
+  }, [fetchActiveSafetyCheck, fetchBloodDonationStatus]);
 
   // Lấy thông tin Ban chỉ huy / UBND địa phương theo ĐỊA CHỈ của customer
   const fetchNearestAuthority = useCallback(async (fallbackCity?: string) => {
@@ -554,12 +639,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     }
   };
 
-  // Nạp thời tiết, tin tức và chính quyền địa phương thực tế khi vào màn hình
+  // Nạp thời tiết, tin tức, đợt kiểm tra an toàn và chính quyền địa phương thực tế khi vào màn hình
   useEffect(() => {
     void fetchRealWeather();
     void fetchFeaturedWeatherNews();
+    void fetchActiveSafetyCheck();
     void fetchNearestAuthority();
-  }, [fetchRealWeather, fetchFeaturedWeatherNews, fetchNearestAuthority]);
+  }, [fetchRealWeather, fetchFeaturedWeatherNews, fetchActiveSafetyCheck, fetchNearestAuthority]);
 
   // Kéo xuống để làm mới (Pull-to-refresh)
   const handleRefresh = useCallback(async () => {
@@ -567,10 +653,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     await Promise.allSettled([
       fetchRealWeather(),
       fetchFeaturedWeatherNews(),
+      fetchActiveSafetyCheck(),
+      fetchBloodDonationStatus(),
       fetchNearestAuthority(),
     ]);
     setRefreshing(false);
-  }, [fetchRealWeather, fetchFeaturedWeatherNews, fetchNearestAuthority]);
+  }, [fetchRealWeather, fetchFeaturedWeatherNews, fetchActiveSafetyCheck, fetchBloodDonationStatus, fetchNearestAuthority]);
 
   // Cập nhật GPS khi người dùng quay lại app; không bật theo dõi vị trí nền.
   useEffect(() => {
@@ -623,47 +711,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         break;
 
       case 'mark_safe':
-        // Đánh dấu an toàn
-        Alert.alert(
-          'Đánh dấu an toàn (I’m Safe)',
-          'Bạn muốn gửi trạng thái AN TOÀN của mình đến lực lượng cứu hộ và người thân?',
-          [
-            { text: 'Hủy', style: 'cancel' },
-            {
-              text: 'Xác nhận an toàn',
-              onPress: () => {
-                Alert.alert(
-                  'Thành công',
-                  'Đã cập nhật trạng thái AN TOÀN cho tài khoản ' +
-                  (user?.fullName || 'Người dùng') +
-                  '. Đội cứu trợ đã ghi nhận vị trí an toàn của bạn!'
-                );
-              },
-            },
-          ]
-        );
+        // Mở trực tiếp màn hình Kiểm tra & Báo an toàn
+        DeviceEventEmitter.emit('open:safety_check', activeSafetyCheck || {});
         break;
 
       case 'blood_donation':
-        // Đăng ký hiến máu
-        Alert.alert(
-          'Đăng ký hiến máu khẩn cấp',
-          'Chương trình kết nối nguồn máu tiếp viện cho các bệnh viện vùng thiên tai bão lũ. Bạn có muốn đăng ký tham gia đội ngũ hiến máu tình nguyện?',
-          [
-            { text: 'Để sau', style: 'cancel' },
-            {
-              text: 'Đăng ký ngay',
-              onPress: () => {
-                Alert.alert(
-                  'Đã ghi nhận',
-                  'Cảm ơn tấm lòng của bạn! Đội ngũ y tế SOS sẽ liên hệ qua số điện thoại ' +
-                  (user?.phone || 'của bạn') +
-                  ' khi có đợt tiếp nhận máu phù hợp.'
-                );
-              },
-            },
-          ]
-        );
+        // Mở trực tiếp tiện ích Đăng ký hiến máu & Sự kiện hiến máu
+        DeviceEventEmitter.emit('open:blood_donation', {});
         break;
 
       case 'post_hazard':
@@ -677,33 +731,51 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         setShowChatModal(true);
         break;
 
-      case 'post_news':
-        // Đăng tin (Admin)
+      case 'post_news': {
+        // Đăng tin cảnh báo (Admin / Cán bộ)
         const isAuthority =
           user?.roles?.includes('ADMIN') ||
           user?.roles?.includes('LOCAL_AUTHORITY') ||
           user?.roles?.includes('RESCUER');
         if (isAuthority) {
-          Alert.alert(
-            'Đăng tin cảnh báo (Ban chỉ huy)',
-            'Bạn đang đăng nhập với quyền hạn ' +
-            (user?.roles?.[0] || 'AUTHORITY') +
-            '. Bạn có thể soạn thông báo khẩn hoặc duyệt tin từ Web Dashboard.',
-            [
-              { text: 'Đóng', style: 'cancel' },
-              {
-                text: 'Báo điểm nguy hiểm',
-                onPress: () => setShowHazardModal(true),
-              },
-            ]
-          );
+          setConfirmModal({
+            visible: true,
+            isSingleButton: false,
+            icon: (
+              <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialCommunityIcons name="bullhorn" size={30} color="#0284C7" />
+              </View>
+            ),
+            title: 'Đăng tin cảnh báo (Ban chỉ huy)',
+            message: `Bạn đang đăng nhập với quyền hạn ${user?.roles?.[0] || 'AUTHORITY'}. Bạn có thể gửi thông báo khẩn hoặc báo điểm nguy hiểm đến người dân.`,
+            confirmText: 'Báo điểm nguy hiểm',
+            cancelText: 'Đóng',
+            confirmColor: '#0284C7',
+            onConfirm: () => {
+              setShowHazardModal(true);
+            },
+          });
         } else {
-          Alert.alert(
-            'Quyền hạn đăng tin',
-            'Chức năng phát thanh tin tức chính thức dành cho Cán bộ địa phương (LOCAL_AUTHORITY) và Ban chỉ huy. Người dân có thể dùng nút "Đăng cảnh báo" để gửi tin chờ duyệt.'
-          );
+          setConfirmModal({
+            visible: true,
+            isSingleButton: false,
+            icon: (
+              <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="information-circle" size={34} color="#D97706" />
+              </View>
+            ),
+            title: 'Quyền hạn phát tin',
+            message: 'Chức năng phát thanh tin tức chính thức dành cho Cán bộ địa phương (LOCAL_AUTHORITY) và Ban chỉ huy. Người dân có thể dùng nút "Báo điểm nguy hiểm" để gửi tin tức chờ duyệt.',
+            confirmText: 'Báo điểm nguy hiểm',
+            cancelText: 'Đóng',
+            confirmColor: '#D97706',
+            onConfirm: () => {
+              setShowHazardModal(true);
+            },
+          });
         }
         break;
+      }
 
       default:
         break;
@@ -712,7 +784,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar barStyle="light-content" translucent={true} {...({ backgroundColor: 'transparent' } as any)} />
 
       <ScrollView
         style={styles.scrollView}
@@ -798,10 +870,19 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 style={styles.weatherCard}
                 activeOpacity={0.9}
                 onPress={() => {
-                  Alert.alert(
-                    'Thời tiết thực tế',
-                    `Vị trí: ${weatherData.city}\nNhiệt độ: ${weatherData.temp} (Biên độ ${weatherData.tempRange})\nTình trạng: ${weatherData.desc}\n${weatherData.rainChance}\n\nNguồn: Cảm biến Khí tượng & Vệ tinh Open-Meteo.`
-                  );
+                  setConfirmModal({
+                    visible: true,
+                    isSingleButton: true,
+                    icon: (
+                      <View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="partly-sunny" size={32} color="#0284C7" />
+                      </View>
+                    ),
+                    title: `Thời tiết tại ${weatherData.city}`,
+                    message: `Nhiệt độ hiện tại: ${weatherData.temp} (Biên độ ${weatherData.tempRange})\n\nTình trạng: ${weatherData.desc}\nKhả năng mưa: ${weatherData.rainChance}\n\nNguồn trích xuất: Cảm biến Khí tượng & Vệ tinh Open-Meteo cập nhật thời gian thực.`,
+                    confirmText: 'Đã hiểu',
+                    confirmColor: '#0284C7',
+                  });
                 }}
               >
                 <View style={styles.weatherLeft}>
@@ -839,6 +920,49 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         {/* ==================== 2. NỘI DUNG CHÍNH (NỀN TRẮNG) ==================== */}
         <View style={styles.bodyContainer}>
+          {/* Banner Đợt Kiểm Tra An Toàn Đang Hoạt Động */}
+          {activeSafetyCheck && (
+            <TouchableOpacity
+              style={styles.safetyCheckBanner}
+              activeOpacity={0.85}
+              onPress={() => {
+                DeviceEventEmitter.emit('open:safety_check', activeSafetyCheck);
+              }}
+            >
+              <View style={styles.safetyCheckBannerPulse}>
+                <Ionicons name="shield-checkmark" size={22} color="#16A34A" />
+              </View>
+              <View style={styles.safetyCheckBannerInfo}>
+                <View style={styles.safetyCheckBadgeRow}>
+                  <View style={styles.safetyCheckAlertBadge}>
+                    <Text style={styles.safetyCheckAlertText}>XÁC NHẬN AN TOÀN</Text>
+                  </View>
+                  <View style={styles.safetyCheckScopeBadge}>
+                    <Text style={styles.safetyCheckScopeText} numberOfLines={1}>
+                      {activeSafetyCheck.areaId?.name || activeSafetyCheck.areaName || 'Toàn khu vực'}
+                    </Text>
+                  </View>
+                  {unrespondedSafetyCount > 0 ? (
+                    <View style={styles.safetyCheckPendingBadge}>
+                      <Text style={styles.safetyCheckPendingText}>
+                        {unrespondedSafetyCount} chưa báo
+                      </Text>
+                    </View>
+                  ) : myPrimaryResponse ? (
+                    <View style={styles.safetyCheckDoneBadge}>
+                      <Text style={styles.safetyCheckDoneText}>Đã xác nhận</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <Text style={styles.safetyCheckBannerTitle} numberOfLines={1}>
+                  {activeSafetyCheck.title}
+                </Text>
+              </View>
+              <View style={styles.safetyCheckBannerArrow}>
+                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+              </View>
+            </TouchableOpacity>
+          )}
           {/* Section: Tin nổi bật */}
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>Tin nổi bật</Text>
@@ -909,7 +1033,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <View style={styles.utilitiesGrid}>
             {/* Hàng 1 */}
             <View style={styles.utilitiesRow}>
-              {/* 1. Bản đồ cần cứu trợ */}
+              {/* 1. Điểm cần cứu trợ */}
               <TouchableOpacity
                 style={styles.utilityItem}
                 onPress={() => handleUtilityPress('map_sos')}
@@ -922,10 +1046,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     resizeMode="contain"
                   />
                 </View>
-                <Text style={styles.utilityLabel}>Bản đồ{'\n'}cần cứu trợ</Text>
+                <Text style={styles.utilityLabel}>Điểm{'\n'}cứu trợ</Text>
               </TouchableOpacity>
 
-              {/* 2. Bản đồ điểm hỗ trợ */}
+              {/* 2. Điểm hỗ trợ */}
               <TouchableOpacity
                 style={styles.utilityItem}
                 onPress={() => handleUtilityPress('map_support')}
@@ -938,10 +1062,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     resizeMode="contain"
                   />
                 </View>
-                <Text style={styles.utilityLabel}>Bản đồ{'\n'}điểm hỗ trợ</Text>
+                <Text style={styles.utilityLabel}>Điểm{'\n'}hỗ trợ</Text>
               </TouchableOpacity>
 
-              {/* 3. Bản đồ nơi nguy hiểm */}
+              {/* 3. Điểm nguy hiểm */}
               <TouchableOpacity
                 style={styles.utilityItem}
                 onPress={() => handleUtilityPress('map_hazard')}
@@ -954,10 +1078,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     resizeMode="contain"
                   />
                 </View>
-                <Text style={styles.utilityLabel}>Bản đồ{'\n'}nơi nguy hiểm</Text>
+                <Text style={styles.utilityLabel}>Điểm{'\n'}nguy hiểm</Text>
               </TouchableOpacity>
 
-              {/* 4. Đánh dấu an toàn */}
+              {/* 4. Báo an toàn */}
               <TouchableOpacity
                 style={styles.utilityItem}
                 onPress={() => handleUtilityPress('mark_safe')}
@@ -969,8 +1093,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     style={styles.utilityImage}
                     resizeMode="contain"
                   />
+                  {unrespondedSafetyCount > 0 && (
+                    <View style={styles.utilityBadge}>
+                      <Text style={styles.utilityBadgeText}>
+                        {unrespondedSafetyCount > 9 ? '9+' : unrespondedSafetyCount}
+                      </Text>
+                    </View>
+                  )}
                 </View>
-                <Text style={styles.utilityLabel}>Đánh dấu{'\n'}an toàn</Text>
+                <Text style={styles.utilityLabel}>Báo{'\n'}an toàn</Text>
               </TouchableOpacity>
             </View>
 
@@ -988,11 +1119,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     style={styles.utilityImage}
                     resizeMode="contain"
                   />
+                  {unrespondedBloodCount > 0 && (
+                    <View style={styles.utilityBadge}>
+                      <Text style={styles.utilityBadgeText}>
+                        {unrespondedBloodCount > 9 ? '9+' : unrespondedBloodCount}
+                      </Text>
+                    </View>
+                  )}
                 </View>
                 <Text style={styles.utilityLabel}>Đăng ký{'\n'}hiến máu</Text>
               </TouchableOpacity>
 
-              {/* 6. Đóng góp điểm nguy hiểm */}
+              {/* 6. Báo điểm nguy hiểm */}
               <TouchableOpacity
                 style={styles.utilityItem}
                 onPress={() => handleUtilityPress('post_hazard')}
@@ -1005,10 +1143,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     resizeMode="contain"
                   />
                 </View>
-                <Text style={styles.utilityLabel}>Đóng góp{'\n'}điểm nguy hiểm</Text>
+                <Text style={styles.utilityLabel}>Báo điểm{'\n'}nguy hiểm</Text>
               </TouchableOpacity>
 
-              {/* 7. Nhắn tin với địa phương */}
+              {/* 7. Nhắn tin địa phương */}
               <TouchableOpacity
                 style={styles.utilityItem}
                 onPress={() => handleUtilityPress('chat_local_authority')}
@@ -1021,10 +1159,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     color="#0284C7"
                   />
                 </View>
-                <Text style={styles.utilityLabel}>Nhắn tin với{'\n'}địa phương</Text>
+                <Text style={styles.utilityLabel}>Nhắn tin{'\n'}địa phương</Text>
               </TouchableOpacity>
 
-              {/* 8. Đăng tin (Admin) */}
+              {/* 8. Đăng tin cảnh báo */}
               <TouchableOpacity
                 style={styles.utilityItem}
                 onPress={() => handleUtilityPress('post_news')}
@@ -1037,7 +1175,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     color="#64748B"
                   />
                 </View>
-                <Text style={styles.utilityLabel}>Đăng tin{'\n'}(Admin)</Text>
+                <Text style={styles.utilityLabel}>Đăng tin{'\n'}cảnh báo</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1095,7 +1233,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       style={styles.newsModalSourceBtn}
                       onPress={() => {
                         if (selectedNews.sourceUrl) {
-                          Linking.openURL(selectedNews.sourceUrl).catch(() => {});
+                          Linking.openURL(selectedNews.sourceUrl).catch(() => { });
                         }
                       }}
                       activeOpacity={0.7}
@@ -1124,6 +1262,65 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         visible={showChatModal}
         onClose={() => setShowChatModal(false)}
       />
+
+      {/* Modal Xác nhận Tùy chỉnh (Thay thế hoàn toàn Alert.alert) */}
+      <Modal
+        visible={confirmModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (confirmModal.onCancel) confirmModal.onCancel();
+          setConfirmModal((prev) => ({ ...prev, visible: false }));
+        }}
+      >
+        <View style={styles.confirmModalOverlay}>
+          <View style={styles.confirmModalContent}>
+            {confirmModal.icon && (
+              <View style={styles.confirmModalIconContainer}>
+                {confirmModal.icon}
+              </View>
+            )}
+            <Text style={styles.confirmModalTitle}>{confirmModal.title}</Text>
+            <Text style={styles.confirmModalMessage}>{confirmModal.message}</Text>
+
+            <View style={styles.confirmModalActionRow}>
+              {!confirmModal.isSingleButton && (
+                <TouchableOpacity
+                  style={styles.confirmModalBtnCancel}
+                  onPress={() => {
+                    if (confirmModal.onCancel) confirmModal.onCancel();
+                    setConfirmModal((prev) => ({ ...prev, visible: false }));
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.confirmModalBtnCancelText}>
+                    {confirmModal.cancelText || 'Hủy bỏ'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[
+                  styles.confirmModalBtnConfirm,
+                  confirmModal.confirmColor
+                    ? { backgroundColor: confirmModal.confirmColor }
+                    : null,
+                  confirmModal.isSingleButton ? { flex: 1 } : null,
+                ]}
+                onPress={() => {
+                  const onConf = confirmModal.onConfirm;
+                  setConfirmModal((prev) => ({ ...prev, visible: false }));
+                  if (onConf) onConf();
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmModalBtnConfirmText}>
+                  {confirmModal.confirmText || 'Xác nhận'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1557,5 +1754,194 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
+  },
+
+  // ==================== MODAL XÁC NHẬN (THAY THẾ ALERT) ====================
+  confirmModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  confirmModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 380,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  confirmModalIconContainer: {
+    marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  confirmModalMessage: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#475569',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  confirmModalActionRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  confirmModalBtnCancel: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmModalBtnCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  confirmModalBtnConfirm: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: '#0066FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0066FF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  confirmModalBtnConfirmText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  // ==================== BANNER KIỂM TRA AN TOÀN (TRẮNG - ICON XANH) ====================
+  safetyCheckBanner: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  safetyCheckBannerPulse: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  safetyCheckBannerInfo: {
+    flex: 1,
+  },
+  safetyCheckBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 4,
+  },
+  safetyCheckAlertBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  safetyCheckAlertText: {
+    color: '#15803D',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  safetyCheckScopeBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    maxWidth: 140,
+  },
+  safetyCheckScopeText: {
+    color: '#475569',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  safetyCheckPendingBadge: {
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  safetyCheckPendingText: {
+    color: '#DC2626',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  safetyCheckDoneBadge: {
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  safetyCheckDoneText: {
+    color: '#16A34A',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  safetyCheckBannerTitle: {
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  safetyCheckBannerArrow: {
+    marginLeft: 8,
+  },
+  utilityBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#EF4444',
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    zIndex: 10,
+  },
+  utilityBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
   },
 });
