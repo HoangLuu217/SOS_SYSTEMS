@@ -344,13 +344,25 @@ export function isSosInOfficerJurisdiction(
 
   // 2. Fallback / complementary check: check administrative area name and keywords in ward, district, address
   const areaKeyword = (officer.jurisdictionAreaName || officer.districtName || managedArea?.name || '')
+    .split(',')[0]
+    .split('(')[0]
     .toLowerCase()
-    .replace(/^(phường|quận|huyện|xã|thị xã|tp|thành phố)s+/i, '')
+    .replace(/^(phường|quận|huyện|xã|thị xã|thị trấn|tp\.|tp|thành phố)\s+/i, '')
     .trim();
 
   if (areaKeyword) {
     const fullText = `${sos.wardName || ''} ${sos.districtName || ''} ${sos.locationName || ''} ${sos.title || ''}`.toLowerCase();
-    if (fullText.includes(areaKeyword)) {
+    const keywords = [areaKeyword];
+    if (areaKeyword.includes('ngũ hành sơn')) {
+      keywords.push('mỹ an', 'khuê mỹ', 'hòa quý', 'hòa hải');
+    } else if (areaKeyword.includes('liên chiểu')) {
+      keywords.push('hòa khánh', 'hòa minh', 'hòa hiệp');
+    } else if (areaKeyword.includes('thanh khê')) {
+      keywords.push('an khê', 'xuân hà', 'thạc gián', 'chính gián', 'tân chính', 'vĩnh trung', 'tam thuận', 'hòa khê');
+    } else if (areaKeyword.includes('điện bàn')) {
+      keywords.push('điện bàn');
+    }
+    if (keywords.some((kw) => kw.length >= 2 && fullText.includes(kw))) {
       return true;
     }
   }
