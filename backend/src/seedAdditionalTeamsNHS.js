@@ -36,7 +36,7 @@ async function seedAdditionalTeamsNHS() {
     $or: [{ code: 'DAD-NHS-03' }, { name: /Hòa Quý/i }],
   });
   const wardMyAn = await AdministrativeArea.findOne({
-    $or: [{ code: 'DAD-NHS-01' }, { name: /Mỹ An/i }],
+    $or: [{ code: 'DAD-NHS-05' }, { name: /Mỹ An/i }],
   });
 
   // Tìm các user cứu hộ viên để làm đội trưởng & thành viên
