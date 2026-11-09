@@ -85,8 +85,8 @@ class ChatService {
   async sendMessage(senderUser, data) {
     const { recipientId, content, attachments = [] } = data;
 
-    if (!content || !content.trim()) {
-      throw new ApiError(400, 'Nội dung tin nhắn không được để trống');
+    if ((!content || !content.trim()) && (!attachments || attachments.length === 0)) {
+      throw new ApiError(400, 'Nội dung tin nhắn hoặc tệp đính kèm không được để trống');
     }
 
     let channel = 'COMMAND_GENERAL';
@@ -152,7 +152,7 @@ class ChatService {
       senderRole,
       recipientId: recipientObjectId,
       channel,
-      content: content.trim(),
+      content: (content && content.trim()) || (attachments && attachments.length > 0 ? '[Hình ảnh]' : ''),
       attachments,
       readBy: [senderUser._id],
     });

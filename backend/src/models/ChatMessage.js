@@ -30,8 +30,8 @@ const chatMessageSchema = new mongoose.Schema(
     },
     content: {
       type: String,
-      required: [true, 'Nội dung tin nhắn không được để trống'],
       trim: true,
+      default: '',
     },
     attachments: [
       {

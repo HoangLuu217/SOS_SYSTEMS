@@ -5,6 +5,7 @@ import {
   fetchChatConversations,
   fetchChatMessages,
   sendChatMessage,
+  uploadChatImage,
   markChatMessagesRead,
   markAllChatMessagesRead,
 } from '@/api';
@@ -23,6 +24,22 @@ interface TacticalChatViewProps {
 const cleanChatName = (name: string) =>
   name.replace(/tác chiến\s*/gi, '').replace(/\s+/g, ' ').trim();
 
+// Tách tọa độ GPS và địa chỉ gần từ tin nhắn
+const parseGpsContent = (content: string) => {
+  if (!content) return null;
+  const match = content.match(/([0-9]+\.[0-9]+),\s*([0-9]+\.[0-9]+)/);
+  if (!match) return null;
+
+  const lat = parseFloat(match[1]);
+  const lng = parseFloat(match[2]);
+  if (isNaN(lat) || isNaN(lng)) return null;
+
+  const addrMatch = content.match(/\(Vị trí gần:\s*([^\)]+)\)/i);
+  const address = addrMatch ? addrMatch[1].trim() : '';
+
+  return { lat, lng, address };
+};
+
 export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser }) => {
   const [conversations, setConversations] = useState<ChatConversationItem[]>([]);
   const [activeConv, setActiveConv] = useState<ChatConversationItem | null>(null);
@@ -31,6 +48,8 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
   const [loadingConv, setLoadingConv] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState(false);
   const [sending, setSending] = useState(false);
+  const [uploadingImg, setUploadingImg] = useState(false);
+  const [lightboxImg, setLightboxImg] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRole, setFilterRole] = useState<'ALL' | 'CITIZEN' | 'LOCAL_AUTHORITY' | 'ADMIN'>('ALL');
   const [realtimeConnected, setRealtimeConnected] = useState(true);
@@ -38,6 +57,7 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const activeConvRef = useRef<ChatConversationItem | null>(null);
   useEffect(() => {
     activeConvRef.current = activeConv;
@@ -144,6 +164,25 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
     } catch (err) {
       console.warn('Lỗi khi đánh dấu tất cả đã đọc:', err);
     }
+  };
+
+  // Mở tọa độ trực tiếp trên Bản đồ cứu hộ (Map)
+  const handleViewOnRescueMap = (lat: number, lng: number, senderName?: string, address?: string) => {
+    const detail = {
+      lat,
+      lng,
+      senderName: senderName || 'Người dân',
+      address: address || '',
+    };
+    try {
+      sessionStorage.setItem('sos_highlight_chat_location', JSON.stringify(detail));
+    } catch {}
+
+    window.dispatchEvent(new CustomEvent('sos_navigate_tab', { detail: { key: 'map' } }));
+
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('sos_highlight_chat_location', { detail }));
+    }, 250);
   };
 
   const totalUnreadCount = conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
@@ -299,6 +338,65 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
       console.error('Lỗi khi gửi tin nhắn:', err);
     } finally {
       setSending(false);
+    }
+  };
+
+  // Chọn và gửi hình ảnh lên Cloudinary từ máy tính
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeConv || uploadingImg) return;
+
+    setUploadingImg(true);
+    try {
+      const uploadRes = await uploadChatImage(file);
+      const uploadedUrl = uploadRes.url || uploadRes.data?.url;
+      if (!uploadedUrl) {
+        throw new Error('Không nhận được liên kết ảnh Cloudinary từ máy chủ');
+      }
+
+      const caption = inputContent.trim();
+      const payload: {
+        content: string;
+        recipientId?: string;
+        channel?: string;
+        attachments?: Array<{ url: string; fileType: string; fileName: string }>;
+      } = {
+        content: caption || '[Hình ảnh]',
+        attachments: [
+          {
+            url: uploadedUrl,
+            fileType: 'IMAGE',
+            fileName: file.name || `photo_${Date.now()}.jpg`,
+          },
+        ],
+      };
+
+      if (activeConv.type === 'CHANNEL') {
+        payload.channel = activeConv.channel;
+      } else if (activeConv.partnerId) {
+        payload.recipientId = activeConv.partnerId;
+      }
+
+      const res = await sendChatMessage(payload);
+      if (res.success && res.data) {
+        setInputContent('');
+        if (textareaRef.current) {
+          textareaRef.current.style.height = 'auto';
+        }
+        setMessages((prev) => {
+          if (prev.some((m) => m._id === res.data._id)) return prev;
+          return [...prev, res.data];
+        });
+        scrollToBottom(true);
+      }
+    } catch (err) {
+      console.error('Lỗi khi tải ảnh lên chat:', err);
+      alert('Không thể tải ảnh lên máy chủ Cloudinary. Vui lòng thử lại.');
+    } finally {
+      setUploadingImg(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -631,7 +729,84 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                           )}
 
                           <div className="sos-chat-msg-card">
-                            <div className="sos-chat-msg-text">{msg.content}</div>
+                            {(() => {
+                              const gps = parseGpsContent(msg.content);
+                              if (gps) {
+                                return (
+                                  <div className="sos-chat-gps-box">
+                                    <div className="sos-chat-gps-badge">
+                                      <i className="bi bi-geo-alt-fill" /> Tọa độ GPS khẩn cấp
+                                    </div>
+                                    <div className="sos-chat-gps-coords-text">
+                                      📍 {gps.lat.toFixed(6)}, {gps.lng.toFixed(6)}
+                                    </div>
+                                    {gps.address && (
+                                      <div className="sos-chat-gps-addr-text">
+                                        {gps.address}
+                                      </div>
+                                    )}
+                                    <div className="sos-chat-gps-btn-row">
+                                      <button
+                                        type="button"
+                                        className="sos-chat-gps-btn-primary"
+                                        onClick={() => handleViewOnRescueMap(gps.lat, gps.lng, msg.senderName, gps.address)}
+                                        title="Chuyển sang Bản đồ cứu hộ và định vị ngay"
+                                      >
+                                        <i className="bi bi-map-fill" /> Xem trên Bản đồ cứu hộ
+                                      </button>
+                                      <a
+                                        href={`https://www.google.com/maps?q=${gps.lat},${gps.lng}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="sos-chat-gps-btn-secondary"
+                                        title="Mở trên Google Maps"
+                                      >
+                                        <i className="bi bi-compass" />
+                                      </a>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              const hasAttachments = Array.isArray(msg.attachments) && msg.attachments.length > 0;
+                              const imageAttachments = hasAttachments
+                                ? msg.attachments!.filter(
+                                    (att) =>
+                                      att.url &&
+                                      (!att.fileType ||
+                                        att.fileType.toUpperCase().includes('IMAGE') ||
+                                        /\.(jpg|jpeg|png|webp|gif)/i.test(att.url))
+                                  )
+                                : [];
+                              const showText = msg.content && msg.content.trim() !== '[Hình ảnh]';
+
+                              return (
+                                <div className="sos-chat-msg-body">
+                                  {imageAttachments.length > 0 && (
+                                    <div className="sos-chat-msg-images-wrap">
+                                      {imageAttachments.map((img, idx) => (
+                                        <div
+                                          key={`web_img_${idx}`}
+                                          className="sos-chat-msg-image-item"
+                                          onClick={() => setLightboxImg(img.url)}
+                                          title="Nhấn để xem phóng to ảnh"
+                                        >
+                                          <img
+                                            src={img.url}
+                                            alt={img.fileName || 'Hình ảnh hiện trường'}
+                                            className="sos-chat-thumb-img"
+                                            loading="lazy"
+                                          />
+                                          <div className="sos-chat-img-zoom-hint">
+                                            <i className="bi bi-arrows-fullscreen" />
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {showText && <div className="sos-chat-msg-text">{msg.content}</div>}
+                                </div>
+                              );
+                            })()}
                             <div className="sos-chat-msg-time-status">
                               <i className="bi bi-clock" style={{ fontSize: '10px' }} />
                               <span>
@@ -696,6 +871,27 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
 
                 {/* THANH NHẬP LIỆU */}
                 <div className="sos-chat-input-bar">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    style={{ display: 'none' }}
+                    accept="image/*"
+                    onChange={handleImageFileChange}
+                  />
+                  <button
+                    type="button"
+                    className="sos-chat-btn-attach"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingImg || sending}
+                    title="Gửi hình ảnh đính kèm (Lưu trữ Cloudinary)"
+                    aria-label="Đính kèm hình ảnh"
+                  >
+                    {uploadingImg ? (
+                      <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                    ) : (
+                      <i className="bi bi-image" aria-hidden="true" />
+                    )}
+                  </button>
                   <textarea
                     ref={textareaRef}
                     className="sos-chat-textarea"
@@ -703,14 +899,14 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                     value={inputContent}
                     onChange={handleTextareaChange}
                     onKeyDown={handleKeyDown}
-                    disabled={sending}
+                    disabled={sending || uploadingImg}
                     rows={1}
                   />
                   <button
                     type="button"
                     className="sos-chat-btn-send"
                     onClick={() => handleSend()}
-                    disabled={!inputContent.trim() || sending}
+                    disabled={!inputContent.trim() || sending || uploadingImg}
                     aria-label="Gửi tin nhắn"
                   >
                     <span>{sending ? 'Đang gửi...' : 'Gửi'}</span>
@@ -727,6 +923,33 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
           )}
         </div>
       </div>
+
+      {/* Lightbox Modal xem ảnh toàn màn hình trên Web */}
+      {lightboxImg && (
+        <div className="sos-chat-lightbox-backdrop" onClick={() => setLightboxImg(null)}>
+          <div className="sos-chat-lightbox-content" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="sos-chat-lightbox-close"
+              onClick={() => setLightboxImg(null)}
+              title="Đóng xem ảnh"
+            >
+              <i className="bi bi-x-lg" />
+            </button>
+            <img src={lightboxImg} alt="Ảnh cứu nạn phóng to" className="sos-chat-lightbox-img" />
+            <div className="sos-chat-lightbox-footer">
+              <a
+                href={lightboxImg}
+                target="_blank"
+                rel="noreferrer"
+                className="sos-chat-lightbox-download"
+              >
+                <i className="bi bi-box-arrow-up-right" /> Mở trong tab mới
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
