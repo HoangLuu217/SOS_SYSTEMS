@@ -106,10 +106,12 @@ class WeatherNotificationService {
       ];
     }
 
-    // Tùy chọn sắp xếp
-    let sortOptions = { createdAt: -1 };
+    // Tùy chọn sắp xếp (Mặc định: Bản tin thời tiết mới nhất xếp trước)
+    let sortOptions = { published_at: -1, createdAt: -1 };
     if (query.sortBy === 'score') {
-      sortOptions = { score: -1, relevance_score: -1, createdAt: -1 };
+      sortOptions = { score: -1, relevance_score: -1, published_at: -1, createdAt: -1 };
+    } else if (query.sortBy === 'createdAt') {
+      sortOptions = { createdAt: -1, published_at: -1 };
     } else if (query.sortBy === 'publishedAt') {
       sortOptions = { published_at: -1, createdAt: -1 };
     }
@@ -323,6 +325,22 @@ class WeatherNotificationService {
 
     if (!item) {
       throw new ApiError(404, 'Không tìm thấy thông báo thời tiết');
+    }
+
+    // Tự động xóa luôn các bản ghi thông báo (broadcast) liên quan trong bảng Notification
+    try {
+      const { Notification } = require('../models');
+      await Notification.deleteMany({
+        $or: [
+          { 'data.weatherArticleId': id.toString() },
+          { 'data.broadcastId': item.broadcastId },
+          ...(item.broadcastId && mongoose.Types.ObjectId.isValid(item.broadcastId)
+            ? [{ _id: item.broadcastId }]
+            : []),
+        ],
+      });
+    } catch (delErr) {
+      console.warn('Lỗi dọn dẹp Notification liên kết khi xóa bản tin thời tiết:', delErr);
     }
 
     return item;

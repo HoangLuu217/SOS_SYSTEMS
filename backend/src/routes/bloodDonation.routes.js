@@ -4,7 +4,11 @@ const bloodDonationController = require('../controllers/bloodDonation.controller
 const { authenticate } = require('../middlewares/authMiddleware');
 const { authorize } = require('../middlewares/roleMiddleware');
 
-// Yêu cầu đăng nhập cho tất cả các API hiến máu
+// 0. Proxy tìm kiếm địa chỉ và tọa độ trên bản đồ cho đợt hiến máu (không yêu cầu token khắt khe)
+router.get('/geocode/search', bloodDonationController.searchLocation);
+router.get('/geocode/reverse', bloodDonationController.reverseLocation);
+
+// Yêu cầu đăng nhập cho tất cả các API hiến máu bên dưới
 router.use(authenticate);
 
 // 1. Người dân lấy trạng thái đăng ký của mình + danh sách sự kiện đang mở

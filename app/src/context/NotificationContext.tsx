@@ -52,6 +52,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const settingsRef = useRef<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
 
   const seenIdsRef = useRef<Set<string>>(new Set());
+  const triggeredPushKeysRef = useRef<Set<string>>(new Set());
   const isInitializedRef = useRef<boolean>(false);
   const navigateHandlerRef = useRef<((tab: string) => void) | null>(null);
 
@@ -114,10 +115,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       isRead: false,
     };
 
-    // 1. Rung nếu bật
+    // 1. Rung 1 lần duy nhất nếu bật vibration
     if (current.vibration) {
       try {
-        Vibration.vibrate(category === 'alert' ? [0, 400, 200, 400] : 300);
+        Vibration.vibrate(300);
       } catch (_) {}
     }
 
@@ -138,8 +139,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       },
     }).catch(() => {});
 
-    // 3. Hiển thị Banner cảnh báo nổi trong app
-    setLatestEmergencyAlert(testItem);
+    // Không hiển thị banner nổi trong app (chỉ đẩy thông báo ra ngoài máy)
     return true;
   }, []);
 
@@ -153,8 +153,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return t === 'SYSTEM' || t === 'THONG_BAO_HE_THONG';
   };
 
-  // Xử lý thông báo đến tức thời (kích hoạt banner, chuông, rung)
-  const processIncomingAlert = useCallback(async (incoming: NotificationItem) => {
+  // Xử lý thông báo đến tức thời (chỉ đẩy thông báo ra ngoài app, không hiển thị trong app)
+  const processIncomingAlert = useCallback(async (incoming: NotificationItem, isFromRemotePush = false) => {
     const isRescuerVerification =
       incoming.type === 'RESCUER_VERIFICATION' ||
       incoming.data?.type === 'RESCUER_VERIFICATION';
@@ -165,11 +165,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const safetyCheckId = incoming.data?.safetyCheckId || (incoming as any).safetyCheckId;
     const broadcastKey =
       incoming.data?.broadcastId ||
-      `${incoming.title?.trim()}_${incoming.content?.trim()}_${incoming.createdAt?.slice(0, 16)}`;
       (safetyCheckId ? `safety_${safetyCheckId}` : null) ||
-      `${incoming.title?.trim()}_${incoming.content?.trim()}`;
+      `${incoming.title?.trim()}_${incoming.content?.trim()}_${incoming.createdAt?.slice(0, 16)}`;
 
-    // Bỏ qua nếu đã từng hiển thị thông báo này (Deduplicate)
+    // Bỏ qua nếu đã từng xử lý thông báo này (Deduplicate)
     if (
       seenIdsRef.current.has(incoming._id) ||
       (incoming.data?.broadcastId && seenIdsRef.current.has(incoming.data.broadcastId)) ||
@@ -243,47 +242,43 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const currentSettings = settingsRef.current;
 
     // NẾU NGƯỜI DÙNG ĐÃ TẮT NHÓM THÔNG BÁO NÀY:
-    // Bỏ qua hoàn toàn rung, âm thanh và banner cảnh báo khẩn cấp nổi!
     if (!currentSettings[category]) {
       console.log(`ℹ️ [NotificationContext] Bỏ qua cảnh báo cho nhóm '${category}' vì người dùng đã tắt.`);
       return;
     }
 
-    // 3. Phản hồi thiết bị: Rung cảnh báo khẩn cấp dồn dập (nếu bật vibration)
-    if (currentSettings.vibration) {
-      try {
-        if (incoming.priority === 'CRITICAL' || incoming.type === 'INSTANT' || incoming.type === 'ALERT' || category === 'alert') {
-          // Nhịp rung chuông báo động cứu nạn dồn dập
-          Vibration.vibrate([0, 500, 150, 500, 150, 800, 200, 800]);
-        } else {
-          Vibration.vibrate(300);
-        }
-      } catch (_) {}
+    // 3. Nếu là thông báo nhận từ remote push, hệ thống đã phát thông báo rồi, KHÔNG gọi triggerLocalNotification để tránh bị alert 2 lần!
+    // Chỉ kích hoạt local notification ra thanh trạng thái máy nếu thông báo đến từ kênh khác (SSE) và chưa từng phát
+    if (
+      !isFromRemotePush &&
+      !triggeredPushKeysRef.current.has(incoming._id) &&
+      !triggeredPushKeysRef.current.has(broadcastKey)
+    ) {
+      triggeredPushKeysRef.current.add(incoming._id);
+      triggeredPushKeysRef.current.add(broadcastKey);
+
+      triggerLocalNotification({
+        title: incoming.title || '🚨 LỆNH ĐIỀU ĐỘNG CỨU HỘ MỚI',
+        body:
+          incoming.content ||
+          (incoming.data?.address
+            ? `Vị trí ứng cứu: ${incoming.data.address}`
+            : 'Có thông báo mới từ hệ thống cứu hộ SOS'),
+        priority: incoming.priority,
+        data: {
+          notificationId: incoming._id,
+          type: incoming.type,
+          areaId: incoming.areaId,
+          areaName: incoming.areaName,
+          isLocalTrigger: true,
+          assignmentId: incoming.data?.assignmentId,
+          sosId: incoming.data?.sosId,
+        },
+      }).catch(() => {});
     }
 
-    // 3b. Phát âm thanh chuông điều động tác chiến cứu hộ (nếu bật sound)
-    if (currentSettings.sound !== false) {
-      playDispatchAlertSound().catch(() => {});
-    }
-
-    // 4. Kích hoạt thông báo hệ thống ra ngoài màn hình máy (Status bar & Lock screen) kèm âm thanh chuông
-    triggerLocalNotification({
-      title: incoming.title || '🚨 LỆNH ĐIỀU ĐỘNG CỨU HỘ MỚI',
-      body: incoming.content || (incoming.data?.address ? `Vị trí ứng cứu: ${incoming.data.address}` : 'Có lệnh điều động khẩn cấp mới từ Ban chỉ huy!'),
-      priority: incoming.priority,
-      data: {
-        notificationId: incoming._id,
-        type: incoming.type,
-        areaId: incoming.areaId,
-        areaName: incoming.areaName,
-        isLocalTrigger: true,
-        assignmentId: incoming.data?.assignmentId,
-        sosId: incoming.data?.sosId,
-      },
-    }).catch(() => {});
-
-    // 5. Hiển thị Banner cảnh báo khẩn cấp nổi trong app
-    setLatestEmergencyAlert(incoming);
+    // "Chỉ đẩy thông báo ra ngoài app không hiển thị trong app":
+    // Tuyệt đối không gọi setLatestEmergencyAlert(incoming) để không bật banner nổi trong app.
   }, [user?._id]);
 
   // Tải danh sách thông báo và đối chiếu tin mới
@@ -361,7 +356,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         isRead: false,
         createdAt: new Date().toISOString(),
       };
-      processIncomingAlert(item);
+
+      // Đánh dấu đã nhận từ Remote Push để không kích hoạt Local Notification lần thứ 2
+      if (item._id) triggeredPushKeysRef.current.add(item._id);
+      if (item.data?.broadcastId) triggeredPushKeysRef.current.add(item.data.broadcastId);
+
+      processIncomingAlert(item, true);
     });
 
     const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {

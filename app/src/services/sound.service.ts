@@ -70,9 +70,9 @@ function playWebFallbackDispatchSound() {
  * Phát chuông báo động điều động tác chiến cứu nạn (Rescue Siren Yelp + Dispatch Ping)
  */
 export async function playDispatchAlertSound(): Promise<void> {
-  // Luôn phát nhịp rung báo động dồn dập cứu nạn
+  // Rung 1 lần duy nhất
   try {
-    Vibration.vibrate([0, 500, 150, 500, 150, 800, 200, 800]);
+    Vibration.vibrate(300);
   } catch (_) { }
 
   // 1. Nếu chạy trên nền Web

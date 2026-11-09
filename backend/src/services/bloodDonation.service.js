@@ -522,6 +522,13 @@ class BloodDonationService {
     const eventProvinceId = eventProvince.provinceId;
     const eventProvinceName = eventProvince.provinceName || '';
 
+    // Chuẩn hóa đường dẫn Google Maps dẫn đường
+    const resolvedGoogleMapsUrl =
+      (data.googleMapsUrl || data.mapUrl || '').trim() ||
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        `${locationName.trim()}, ${address.trim()}`
+      )}`;
+
     // Tìm danh sách các user đã ĐK nhận thông báo đợt hiến máu (PRE_REGISTRATION)
     const preRegFilter = {
       registrationType: 'PRE_REGISTRATION',
@@ -532,15 +539,12 @@ class BloodDonationService {
       .select('userId bloodType areaId areaName provinceId provinceName address fullName phone')
       .lean();
 
-    // Chỉ gửi thông báo cho đúng những người đã đăng ký trong cùng Tỉnh/Thành phố với đợt hiến máu
+    // CHỈ gửi thông báo cho đúng những người đã ĐK nhận thông báo trong cùng Tỉnh/Thành phố với đợt hiến máu
     const matchedPreRegistrations = [];
     for (const reg of allPreRegistrations) {
-      if (!eventProvinceId || scope === 'ALL') {
-        matchedPreRegistrations.push(reg);
-        continue;
-      }
-
       let regProvId = reg.provinceId ? reg.provinceId.toString() : null;
+      let regProvName = reg.provinceName || '';
+
       if (!regProvId) {
         const resolvedReg = await this.resolveProvinceFromArea(
           reg.areaId,
@@ -549,9 +553,21 @@ class BloodDonationService {
         if (resolvedReg.provinceId) {
           regProvId = resolvedReg.provinceId.toString();
         }
+        if (resolvedReg.provinceName) {
+          regProvName = resolvedReg.provinceName;
+        }
       }
 
-      if (regProvId && regProvId === eventProvinceId.toString()) {
+      // So khớp chính xác theo ID tỉnh hoặc tên tỉnh/thành phố
+      const isSameProvinceId =
+        eventProvinceId && regProvId && regProvId === eventProvinceId.toString();
+      const isSameProvinceName =
+        eventProvinceName &&
+        regProvName &&
+        (regProvName.toLowerCase().includes(eventProvinceName.toLowerCase()) ||
+          eventProvinceName.toLowerCase().includes(regProvName.toLowerCase()));
+
+      if (isSameProvinceId || isSameProvinceName) {
         matchedPreRegistrations.push(reg);
       }
     }
@@ -586,6 +602,7 @@ class BloodDonationService {
       description: description.trim(),
       locationName: locationName.trim(),
       address: address.trim(),
+      googleMapsUrl: resolvedGoogleMapsUrl,
       location: {
         type: 'Point',
         coordinates:
@@ -618,12 +635,13 @@ class BloodDonationService {
       },
     });
 
-    // Gửi thông báo đến tất cả người dùng đã đăng ký hiến máu trước đó (và lưu vào lịch sử thông báo)
+    // Gửi thông báo đến đúng người dùng trong cùng tỉnh đã ĐK nhận thông báo
     const now = new Date();
     const notifTitle = `🩸 [Đợt Hiến Máu] ${title.trim()}`;
-    const notifContent = `📍 Địa điểm: ${locationName.trim()} (${address.trim()})\n🕒 Thời gian: ${startTime.trim()} - ${endTime.trim()} ngày ${formattedDate}. Nhấn vào để xác nhận đăng ký hiến máu tại điểm này!`;
+    const notifContent = `📍 Địa điểm: ${locationName.trim()} (${address.trim()})\n🕒 Thời gian: ${startTime.trim()} - ${endTime.trim()} ngày ${formattedDate}. Nhấn vào để xem vị trí trên Google Maps và xác nhận tham gia!`;
 
-    const targetUsersForNotification = recipientUsers.length > 0 ? recipientUsers : [{ _id: senderUser._id }];
+    // Chỉ gửi thông báo nếu có người đăng ký nhận thông báo trong tỉnh
+    const targetUsersForNotification = recipientUsers;
     const notificationDocs = targetUsersForNotification.map((u) => ({
       userId: u._id,
       createdBy: senderUser._id,
@@ -642,6 +660,7 @@ class BloodDonationService {
         title: eventDoc.title,
         locationName: eventDoc.locationName,
         address: eventDoc.address,
+        googleMapsUrl: resolvedGoogleMapsUrl,
         eventDate: eventDoc.eventDate,
         startTime: eventDoc.startTime,
         endTime: eventDoc.endTime,

@@ -6,27 +6,22 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
-  Modal,
   RefreshControl,
-  ActivityIndicator,
-  Platform,
   Image,
   Linking,
   Alert,
   DeviceEventEmitter,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NotificationItem } from '@/types';
-import { triggerLocalNotification } from '@/services';
+import { weatherApi, WeatherArticleItem } from '@/api';
 import { useNotifications } from '@/context/NotificationContext';
 import {
   formatRelativeTime,
   classifyNotification,
   NOTIFICATION_CATEGORIES,
-  NotificationCategoryKey,
-  NotificationFilterKey,
-  SAMPLE_FILTERED_NOTIFICATIONS,
 } from '@/utils';
 
 interface NewsScreenProps {
@@ -34,75 +29,61 @@ interface NewsScreenProps {
   onOpenSettings?: () => void;
 }
 
-// Fallback dữ liệu mẫu khi chưa kết nối máy chủ
-const FALLBACK_NEWS: NotificationItem[] = [
-  {
-    _id: 'sample-instant-1',
-    type: 'INSTANT',
-    title: 'Cảnh báo ngập lụt khẩn cấp lưu vực Sông Hàn & Ngũ Hành Sơn',
-    content:
-      'Mực nước sông dâng nhanh trên 0.8m do mưa lớn kéo dài. Toàn bộ người dân vùng trũng thấp khẩn trương ngắt nguồn điện, di dời người già và trẻ nhỏ đến điểm trú ẩn an toàn của phường. Lực lượng cứu hộ đang túc trực ca-nô tại các chốt chính.',
-    priority: 'CRITICAL',
-    areaName: 'Quận Ngũ Hành Sơn',
-    createdBy: {
-      _id: 'sample-auth-1',
-      fullName: 'Ban Chỉ huy PCTT & TKCN Đà Nẵng',
-      roles: ['LOCAL_AUTHORITY'],
-    },
-    isRead: false,
-    createdAt: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-    actionUrl: 'map',
-  },
-  {
-    _id: 'sample-instant-2',
-    type: 'INSTANT',
-    title: 'Cảnh báo bão đổ bộ sức gió cấp 9-10 tại khu vực ven biển Sơn Trà',
-    content:
-      'Gió giật mạnh nguy hiểm kèm mưa lớn. Yêu cầu toàn bộ người dân ở yên trong nhà kiên cố, chằng chống cửa nẻo, tuyệt đối không di chuyển trên đường hoặc đứng gần cây to, cột điện cao thế.',
-    priority: 'HIGH',
-    areaName: 'Quận Sơn Trà',
-    createdBy: {
-      _id: 'sample-auth-2',
-      fullName: 'Trực ban tác chiến PCTT',
-      roles: ['LOCAL_AUTHORITY'],
-    },
-    isRead: false,
-    createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    actionUrl: 'map',
-  },
-  {
-    _id: 'sample-system-1',
-    type: 'SYSTEM',
-    title: 'Nâng cấp hệ thống điều phối cứu nạn tự động phiên bản 2.5',
-    content:
-      'Hệ thống hỗ trợ cứu nạn đã bổ sung tính năng tự động quét ca-nô gần nhất và phát thông báo khẩn cấp theo khu vực hành chính. Mọi yêu cầu cứu trợ sẽ được kết nối trực tiếp đến cán bộ địa phương phụ trách.',
-    priority: 'NORMAL',
-    areaName: 'Toàn thành phố Đà Nẵng',
-    createdBy: {
-      _id: 'sample-admin-1',
-      fullName: 'Quản trị viên Hệ thống SOS',
-      roles: ['ADMIN'],
-    },
-    isRead: true,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
-  },
-  {
-    _id: 'sample-system-2',
-    type: 'SYSTEM',
-    title: 'Thông báo danh sách các điểm cấp phát nhu yếu phẩm & nước sạch',
-    content:
-      'Ban cứu trợ thông báo các điểm tiếp nhận và cấp phát lương khô, nước uống tinh khiết và thuốc men tại các Trạm y tế và Trường học trên địa bàn Hòa Vang, Cẩm Lệ.',
-    priority: 'NORMAL',
-    areaName: 'Huyện Hòa Vang',
-    createdBy: {
-      _id: 'sample-auth-3',
-      fullName: 'Ủy ban Mặt trận Cứu trợ',
-      roles: ['LOCAL_AUTHORITY'],
-    },
-    isRead: true,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 18).toISOString(),
-  },
+type TabKey = 'news' | 'alert' | 'safeLocation' | 'all';
+
+interface TabItem {
+  key: TabKey;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}
+
+// 4 tab tinh gọn: Tin thời tiết (mặc định), Thông báo (thông thường), Điểm an toàn, Tất cả
+const TABS: TabItem[] = [
+  { key: 'news', label: 'Tin thời tiết', icon: 'partly-sunny-outline' },
+  { key: 'alert', label: 'Thông báo', icon: 'notifications-outline' },
+  { key: 'safeLocation', label: 'Điểm an toàn', icon: 'shield-checkmark-outline' },
+  { key: 'all', label: 'Tất cả', icon: 'layers-outline' },
 ];
+
+const WEATHER_CATEGORY_LABELS: Record<string, string> = {
+  mua_lu: 'Mưa lũ',
+  bao: 'Bão & Áp thấp',
+  du_bao: 'Dự báo thời tiết',
+  canh_bao: 'Cảnh báo thiên tai',
+  nang_nong: 'Nắng nóng',
+  trieu_cuong: 'Triều cường',
+  khac: 'Thời tiết',
+};
+
+// Kiểm tra xem 1 thông báo có phải là bài viết thời tiết hay không
+function isWeatherNotification(item: NotificationItem): boolean {
+  if (item.type === 'WEATHER' || item.type === 'TIN_TUC_THOI') return true;
+  if (item.data?.weatherArticleId || item.data?.weatherType || item.data?.isWeather) return true;
+  if ((item as any).category === 'WEATHER' || item.data?.category === 'WEATHER') return true;
+  if (classifyNotification(item) === 'news') return true;
+  return false;
+}
+
+function formatDisplayDate(dateStr?: string): string {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    const now = new Date();
+    const diffHours = (now.getTime() - d.getTime()) / (1000 * 60 * 60);
+    if (diffHours < 24 && diffHours >= 0) {
+      return formatRelativeTime(dateStr);
+    }
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    return `${hours}:${mins} ngày ${day}/${month}/${year}`;
+  } catch {
+    return dateStr;
+  }
+}
 
 export const NewsScreen: React.FC<NewsScreenProps> = ({
   onNavigateToTab,
@@ -114,31 +95,49 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
     markAsRead,
     markAllAsRead,
     isRealtimeConnected,
-    settings,
   } = useNotifications();
 
-  // Bộ lọc danh mục thông báo: 'all' | 'alert' | 'safeLocation' | 'systemNotification' | 'news'
-  const [selectedCategory, setSelectedCategory] = useState<NotificationFilterKey>('all');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'UNREAD'>('ALL');
+  // Mặc định hiển thị tab Tin thời tiết đầu tiên
+  const [selectedTab, setSelectedTab] = useState<TabKey>('news');
+  const [weatherArticles, setWeatherArticles] = useState<WeatherArticleItem[]>([]);
+  const [loadingWeather, setLoadingWeather] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Modal chi tiết thông báo
-  const [selectedNotif, setSelectedNotif] = useState<NotificationItem | null>(null);
-  const [detailVisible, setDetailVisible] = useState(false);
-
-  // Nguồn dữ liệu kết hợp giữa dữ liệu thật và fallback mẫu
-  const notifications = useMemo(() => {
-    if (liveNotifications && liveNotifications.length > 0) {
-      return liveNotifications;
+  // Tải danh sách bài viết thời tiết đã duyệt thực tế từ CSDL và sắp xếp MỚI NHẤT lên đầu
+  const fetchWeatherArticles = useCallback(async () => {
+    try {
+      setLoadingWeather(true);
+      const res = await weatherApi.getWeatherArticles({ status: 'approved', limit: 100 });
+      if (res.success && Array.isArray(res.data)) {
+        // Luôn sắp xếp bài viết thời tiết mới nhất lên trước
+        const sorted = [...res.data].sort((a, b) => {
+          const timeA = new Date(a.published_at || a.created_at || a.createdAt || 0).getTime();
+          const timeB = new Date(b.published_at || b.created_at || b.createdAt || 0).getTime();
+          return timeB - timeA;
+        });
+        setWeatherArticles(sorted);
+      } else {
+        setWeatherArticles([]);
+      }
+    } catch (err) {
+      console.warn('Lỗi nạp tin tức thời tiết:', err);
+    } finally {
+      setLoadingWeather(false);
     }
-    return SAMPLE_FILTERED_NOTIFICATIONS;
-  }, [liveNotifications]);
+  }, []);
 
-  // Khử trùng lặp danh sách
+  useEffect(() => {
+    fetchWeatherArticles();
+  }, [fetchWeatherArticles]);
+
+  // Khử trùng lặp danh sách thông báo từ server (không dùng dữ liệu mock)
   const uniqueNotifications = useMemo(() => {
+    if (!liveNotifications || liveNotifications.length === 0) {
+      return [];
+    }
     const list: NotificationItem[] = [];
     const seen = new Set<string>();
-    for (const item of notifications) {
+    for (const item of liveNotifications) {
       const key =
         item.data?.broadcastId ||
         `${item.title?.trim()}_${item.content?.trim()}_${item.createdAt?.slice(0, 16)}`;
@@ -147,147 +146,110 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
       list.push(item);
     }
     return list;
-  }, [notifications]);
+  }, [liveNotifications]);
 
-  // Đếm số lượng thông báo theo từng danh mục trong Cài đặt
-  const categoryCounts = useMemo(() => {
-    const counts: Record<NotificationFilterKey, { total: number; unread: number }> = {
-      all: { total: uniqueNotifications.length, unread: 0 },
-      alert: { total: 0, unread: 0 },
-      safeLocation: { total: 0, unread: 0 },
-      systemNotification: { total: 0, unread: 0 },
-      news: { total: 0, unread: 0 },
-    };
-
-    for (const item of uniqueNotifications) {
-      const cat = classifyNotification(item);
-      const isUnread = !item.isRead;
-
-      if (isUnread) counts.all.unread += 1;
-
-      if (counts[cat]) {
-        counts[cat].total += 1;
-        if (isUnread) counts[cat].unread += 1;
-      }
-    }
-
-    return counts;
+  // Danh sách thông báo KHÔNG chứa bài viết thời tiết
+  const nonWeatherNotifications = useMemo(() => {
+    return uniqueNotifications.filter((n) => !isWeatherNotification(n));
   }, [uniqueNotifications]);
 
-  // Danh sách thông báo sau khi lọc theo danh mục & trạng thái
-  const filteredList = useMemo(() => {
-    return uniqueNotifications.filter((item) => {
-      const itemCat = classifyNotification(item);
+  // Đếm số lượng thực tế cho từng tab
+  const counts = useMemo(() => {
+    const normalCount = nonWeatherNotifications.filter(
+      (n) => classifyNotification(n) !== 'safeLocation'
+    ).length;
+    const safeCount = nonWeatherNotifications.filter(
+      (n) => classifyNotification(n) === 'safeLocation'
+    ).length;
+    const weatherTotal = weatherArticles.length;
+    const totalAll = weatherArticles.length + nonWeatherNotifications.length;
 
-      // 1. Lọc theo danh mục đã chọn
-      if (selectedCategory !== 'all') {
-        if (itemCat !== selectedCategory) {
-          return false;
-        }
-      } else {
-        // Nếu ở tab "Tất cả", chỉ hiển thị nhóm thông báo đang BẬT trong Cài đặt
-        if (settings && settings[itemCat] === false) {
-          return false;
-        }
-      }
+    return {
+      news: weatherTotal,
+      alert: normalCount,
+      safeLocation: safeCount,
+      all: totalAll,
+    };
+  }, [weatherArticles.length, nonWeatherNotifications]);
 
-      // 2. Lọc theo trạng thái đọc
-      if (statusFilter === 'UNREAD') {
-        return !item.isRead;
-      }
+  const unreadCount = useMemo(() => {
+    return nonWeatherNotifications.filter((n) => !n.isRead).length;
+  }, [nonWeatherNotifications]);
 
-      return true;
-    });
-  }, [uniqueNotifications, selectedCategory, statusFilter, settings]);
+  // Lọc dữ liệu hiển thị theo tab được chọn
+  const displayData = useMemo(() => {
+    if (selectedTab === 'news') {
+      // 1. Tab Tin thời tiết: CHỈ hiển thị bài viết thời tiết thực tế từ DB, sắp xếp mới nhất trước
+      return {
+        articles: weatherArticles,
+        notifications: [],
+      };
+    }
 
-  // Bản tin khẩn cấp nổi bật nhất (nếu có thông báo ALERT chưa đọc và người dùng đang BẬT nhận ALERT)
-  const topAlert = useMemo(() => {
-    if (settings && settings.alert === false) return null;
-    return uniqueNotifications.find(
-      (n) => classifyNotification(n) === 'alert' && (n.priority === 'CRITICAL' || !n.isRead)
-    );
-  }, [uniqueNotifications, settings]);
+    if (selectedTab === 'alert') {
+      // 2. Tab Thông báo: Thông báo thông thường (KHÔNG hiển thị bài viết thời tiết ở đây)
+      const normalNotifs = nonWeatherNotifications.filter(
+        (n) => classifyNotification(n) !== 'safeLocation'
+      );
+      return {
+        articles: [],
+        notifications: normalNotifs,
+      };
+    }
+
+    if (selectedTab === 'safeLocation') {
+      // 3. Tab Điểm an toàn
+      const safeNotifs = nonWeatherNotifications.filter(
+        (n) => classifyNotification(n) === 'safeLocation'
+      );
+      return {
+        articles: [],
+        notifications: safeNotifs,
+      };
+    }
+
+    // 4. Tab "Tất cả": Bài viết thời tiết mới nhất ở đầu, tiếp theo là các thông báo thông thường
+    return {
+      articles: weatherArticles,
+      notifications: nonWeatherNotifications,
+    };
+  }, [selectedTab, weatherArticles, nonWeatherNotifications]);
+
+  const totalItemsCount = displayData.articles.length + displayData.notifications.length;
 
   // Kéo xuống để làm mới (Pull-to-refresh)
   const handlePullRefresh = async () => {
     setRefreshing(true);
     try {
-      await refreshNotifications();
-    } catch {
-      // Giữ nguyên giao diện mượt mà
+      await Promise.all([
+        refreshNotifications(),
+        fetchWeatherArticles(),
+      ]);
+    } catch (_) {
+      // Giữ giao diện ổn định
     } finally {
       setRefreshing(false);
     }
   };
 
-  // Mở xem chi tiết
-  const handleOpenDetail = async (item: NotificationItem) => {
-    setSelectedNotif(item);
-    setDetailVisible(true);
-
-    if (!item.isRead) {
-      await markAsRead(item._id);
+  // Mở liên kết bài báo gốc
+  const handleOpenUrl = async (url?: string) => {
+    if (!url) return;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Không thể mở liên kết', 'Đường dẫn bài báo không hợp lệ: ' + url);
+      }
+    } catch {
+      Alert.alert('Không thể mở liên kết', 'Vui lòng kiểm tra lại kết nối mạng hoặc đường dẫn.');
     }
   };
 
-  // Thử nghiệm phát chuông thông báo
-  const handleTestPush = async (item: NotificationItem) => {
-    await triggerLocalNotification({
-      title: item.title,
-      body: item.content,
-      data: { notificationId: item._id, type: item.type },
-      priority: item.priority as any,
-    });
-  };
-
-  // Danh sách các tab danh mục để hiển thị thanh cuộn
-  const filterTabs: Array<{
-    key: NotificationFilterKey;
-    label: string;
-    icon: keyof typeof Ionicons.glyphMap;
-    color: string;
-    bgColor: string;
-  }> = [
-    {
-      key: 'all',
-      label: 'Tất cả',
-      icon: 'layers-outline',
-      color: '#475569',
-      bgColor: '#F1F5F9',
-    },
-    {
-      key: 'alert',
-      label: NOTIFICATION_CATEGORIES.alert.shortLabel,
-      icon: 'warning-outline',
-      color: NOTIFICATION_CATEGORIES.alert.color,
-      bgColor: NOTIFICATION_CATEGORIES.alert.bgColor,
-    },
-    {
-      key: 'safeLocation',
-      label: NOTIFICATION_CATEGORIES.safeLocation.shortLabel,
-      icon: 'shield-checkmark-outline',
-      color: NOTIFICATION_CATEGORIES.safeLocation.color,
-      bgColor: NOTIFICATION_CATEGORIES.safeLocation.bgColor,
-    },
-    {
-      key: 'systemNotification',
-      label: NOTIFICATION_CATEGORIES.systemNotification.shortLabel,
-      icon: 'notifications-outline',
-      color: NOTIFICATION_CATEGORIES.systemNotification.color,
-      bgColor: NOTIFICATION_CATEGORIES.systemNotification.bgColor,
-    },
-    {
-      key: 'news',
-      label: NOTIFICATION_CATEGORIES.news.shortLabel,
-      icon: 'partly-sunny-outline',
-      color: NOTIFICATION_CATEGORIES.news.color,
-      bgColor: NOTIFICATION_CATEGORIES.news.bgColor,
-    },
-  ];
-
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <StatusBar barStyle="dark-content" {...({ backgroundColor: '#FFFFFF' } as any)} />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* ==================== 1. TOP HEADER ==================== */}
       <View style={styles.header}>
@@ -307,14 +269,14 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
         </View>
 
         <View style={styles.headerRight}>
-          {categoryCounts.all.unread > 0 && (
+          {unreadCount > 0 && (
             <TouchableOpacity
               style={styles.markAllBtn}
               onPress={() => markAllAsRead()}
               activeOpacity={0.7}
             >
-              <Ionicons name="checkmark-done" size={16} color="#0066FF" />
-              <Text style={styles.markAllText}>Đọc tất cả</Text>
+              <Ionicons name="checkmark-done" size={15} color="#0F172A" />
+              <Text style={styles.markAllText}>Đã đọc ({unreadCount})</Text>
             </TouchableOpacity>
           )}
 
@@ -329,505 +291,347 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
             }}
             activeOpacity={0.7}
           >
-            <Ionicons name="settings-outline" size={20} color="#475569" />
+            <Ionicons name="settings-outline" size={19} color="#475569" />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* ==================== 2. HORIZONTAL CATEGORY FILTER BAR (NHƯ TRONG CÀI ĐẶT) ==================== */}
-      <View style={styles.categoryFilterWrapper}>
+      {/* ==================== 2. HORIZONTAL TAB SELECTOR ==================== */}
+      <View style={styles.tabBarWrapper}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryFilterContainer}
+          contentContainerStyle={styles.tabBarContainer}
         >
-          {filterTabs.map((tab) => {
-            const isSelected = selectedCategory === tab.key;
-            const countInfo = categoryCounts[tab.key];
-            const hasUnread = countInfo.unread > 0;
+          {TABS.map((tab) => {
+            const isActive = selectedTab === tab.key;
+            const count = counts[tab.key];
 
             return (
               <TouchableOpacity
                 key={tab.key}
-                style={[
-                  styles.categoryChip,
-                  isSelected && styles.categoryChipActive,
-                  isSelected && { borderColor: tab.color },
-                ]}
-                onPress={() => setSelectedCategory(tab.key)}
+                style={[styles.tabChip, isActive && styles.tabChipActive]}
+                onPress={() => setSelectedTab(tab.key)}
                 activeOpacity={0.8}
               >
                 <Ionicons
                   name={tab.icon}
                   size={15}
-                  color={isSelected ? tab.color : '#64748B'}
-                  style={styles.chipIcon}
+                  color={isActive ? '#FFFFFF' : '#64748B'}
+                  style={{ marginRight: 6 }}
                 />
-                <Text
-                  style={[
-                    styles.categoryChipText,
-                    isSelected && styles.categoryChipTextActive,
-                    isSelected && { color: tab.color },
-                  ]}
-                >
+                <Text style={[styles.tabChipText, isActive && styles.tabChipTextActive]}>
                   {tab.label}
                 </Text>
 
-                {countInfo.total > 0 && (
-                  <View
+                <View
+                  style={[
+                    styles.tabCountBadge,
+                    isActive && styles.tabCountBadgeActive,
+                  ]}
+                >
+                  <Text
                     style={[
-                      styles.categoryCountBadge,
-                      isSelected && { backgroundColor: tab.color },
-                      hasUnread && !isSelected && styles.unreadCountBadge,
+                      styles.tabCountText,
+                      isActive && styles.tabCountTextActive,
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.categoryCountText,
-                        isSelected && { color: '#FFFFFF' },
-                        hasUnread && !isSelected && { color: '#DC2626' },
-                      ]}
-                    >
-                      {countInfo.total}
-                    </Text>
-                  </View>
-                )}
+                    {count}
+                  </Text>
+                </View>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
       </View>
 
-      {/* ==================== 3. SUB-FILTER ROW (TẤT CẢ / CHƯA ĐỌC) ==================== */}
-      <View style={styles.subFilterBar}>
-        <View style={styles.pillsRow}>
-          <TouchableOpacity
-            style={[styles.pillBtn, statusFilter === 'ALL' && styles.pillBtnActive]}
-            onPress={() => setStatusFilter('ALL')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.pillText, statusFilter === 'ALL' && styles.pillTextActive]}>
-              Tất cả ({categoryCounts[selectedCategory]?.total || 0})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.pillBtn, statusFilter === 'UNREAD' && styles.pillBtnActive]}
-            onPress={() => setStatusFilter('UNREAD')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.pillText, statusFilter === 'UNREAD' && styles.pillTextActive]}>
-              Chưa đọc ({categoryCounts[selectedCategory]?.unread || 0})
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {selectedCategory !== 'all' && (
-          <TouchableOpacity
-            style={styles.clearFilterBtn}
-            onPress={() => setSelectedCategory('all')}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="close-circle" size={14} color="#64748B" />
-            <Text style={styles.clearFilterText}>Xóa lọc</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* ==================== 4. BANNER CẢNH BÁO NGUY CẤP (NẾU CÓ) ==================== */}
-      {topAlert && selectedCategory === 'all' && (
-        <TouchableOpacity
-          style={styles.criticalBanner}
-          onPress={() => handleOpenDetail(topAlert)}
-          activeOpacity={0.88}
-        >
-          <View style={styles.criticalPulseDot} />
-          <View style={{ flex: 1 }}>
-            <View style={styles.criticalHeaderRow}>
-              <Text style={styles.criticalTag}>CẢNH BÁO SOS KHẨN CẤP</Text>
-              <Text style={styles.criticalTime}>{formatRelativeTime(topAlert.createdAt)}</Text>
-            </View>
-            <Text style={styles.criticalTitle} numberOfLines={1}>
-              {topAlert.title}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color="#DC2626" />
-        </TouchableOpacity>
-      )}
-
-      {/* ==================== 5. DANH SÁCH THÔNG BÁO ==================== */}
-      {filteredList.length === 0 ? (
+      {/* ==================== 3. DANH SÁCH BẢN TIN & THÔNG BÁO ==================== */}
+      {totalItemsCount === 0 && !loadingWeather ? (
         <ScrollView
           contentContainerStyle={styles.emptyContainer}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handlePullRefresh}
-              colors={['#0066FF']}
-              tintColor="#0066FF"
+              colors={['#0F172A']}
+              tintColor="#0F172A"
             />
           }
         >
           <View style={styles.emptyIconCircle}>
-            <Ionicons name="notifications-off-outline" size={40} color="#94A3B8" />
+            <Ionicons name="newspaper-outline" size={38} color="#94A3B8" />
           </View>
-          <Text style={styles.emptyTitle}>Không có thông báo phù hợp</Text>
+          <Text style={styles.emptyTitle}>Chưa có bản tin nào</Text>
           <Text style={styles.emptyDesc}>
-            {statusFilter === 'UNREAD'
-              ? 'Bạn đã đọc tất cả thông báo trong mục này.'
-              : 'Hiện tại chưa có thông báo mới trong danh mục đã chọn.'}
+            Hiện tại không có bản tin hoặc thông báo mới trong danh mục này.
           </Text>
-          {selectedCategory !== 'all' && (
+          {selectedTab !== 'news' && (
             <TouchableOpacity
               style={styles.emptyResetBtn}
-              onPress={() => {
-                setSelectedCategory('all');
-                setStatusFilter('ALL');
-              }}
+              onPress={() => setSelectedTab('news')}
               activeOpacity={0.8}
             >
-              <Text style={styles.emptyResetText}>Xem tất cả thông báo</Text>
+              <Text style={styles.emptyResetText}>Về mục Tin thời tiết</Text>
             </TouchableOpacity>
           )}
         </ScrollView>
       ) : (
         <ScrollView
-          style={styles.newsList}
-          contentContainerStyle={styles.newsListContent}
+          style={styles.listContainer}
+          contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handlePullRefresh}
-              colors={['#0066FF']}
-              tintColor="#0066FF"
+              colors={['#0F172A']}
+              tintColor="#0F172A"
             />
           }
         >
-          {filteredList.map((item) => {
-            const cat = classifyNotification(item);
-            const meta = NOTIFICATION_CATEGORIES[cat] || NOTIFICATION_CATEGORIES.systemNotification;
-            const isCritical = item.priority === 'CRITICAL' || item.priority === 'HIGH';
-            const imageUrl = item.imageUrl || item.data?.imageUrl;
-            const articleUrl = item.articleUrl || item.data?.articleUrl || item.data?.url;
-            const sourceName = item.sourceName || item.data?.sourceName;
+          {/* A. DANH SÁCH BÀI VIẾT THỜI TIẾT (MỚI NHẤT XẾP TRƯỚC, HIỂN THỊ FULL) */}
+          {displayData.articles.map((article) => {
+            const imageUrl = article.imageUrl || article.image_url;
+            const articleUrl = article.articleUrl || article.source_url;
+            const sourceName = article.sourceName || article.source_name || 'Bản tin khí tượng';
+            const regionText =
+              article.area ||
+              (Array.isArray(article.regions) && article.regions.length > 0
+                ? article.regions.join(', ')
+                : null);
 
             return (
-              <TouchableOpacity
-                key={item._id}
-                style={[
-                  styles.newsCard,
-                  !item.isRead && styles.newsCardUnread,
-                  cat === 'alert' && isCritical && styles.newsCardAlertBorder,
-                ]}
-                onPress={() => handleOpenDetail(item)}
-                activeOpacity={0.78}
-              >
-                {/* Icon danh mục */}
-                <View style={[styles.newsIconBox, { backgroundColor: meta.bgColor }]}>
-                  <Ionicons name={meta.iconName as any} size={20} color={meta.color} />
+              <View key={article._id} style={styles.card}>
+                {/* Dòng tag và thời gian */}
+                <View style={styles.cardMetaRow}>
+                  <View style={styles.tagBadge}>
+                    <Text style={styles.tagBadgeText}>
+                      {WEATHER_CATEGORY_LABELS[article.category] || article.category || 'THỜI TIẾT'}
+                    </Text>
+                  </View>
+
+                  {Boolean(regionText) && (
+                    <View style={styles.regionBadge}>
+                      <Ionicons name="location-outline" size={12} color="#64748B" />
+                      <Text style={styles.regionBadgeText}>{regionText}</Text>
+                    </View>
+                  )}
+
+                  <Text style={styles.timeMetaText}>
+                    {formatDisplayDate(article.published_at || article.created_at)}
+                  </Text>
                 </View>
 
-                {/* Nội dung thông báo */}
-                <View style={styles.newsCardBody}>
-                  {/* Hàng nhãn: Danh mục, Mức độ, Khu vực & Nguồn tham chiếu */}
-                  <View style={styles.tagsRow}>
-                    <View
-                      style={[
-                        styles.badgePill,
-                        { backgroundColor: meta.badgeBg },
-                      ]}
+                {/* Tiêu đề bài viết: Hiển thị đầy đủ, không cắt dòng */}
+                <Text style={styles.newsTitle}>{article.title}</Text>
+
+                {/* Ảnh bài viết nếu có */}
+                {Boolean(imageUrl) && (
+                  <Image
+                    source={{ uri: imageUrl }}
+                    style={styles.newsImage}
+                    resizeMode="cover"
+                  />
+                )}
+
+                {/* Nội dung đầy đủ: Hiển thị full trực tiếp trên thẻ, không cần nhấn vào */}
+                <Text style={styles.newsContent}>
+                  {article.content || article.summary}
+                </Text>
+
+                {/* Chân thẻ: Nguồn tin & nút mở bài gốc */}
+                <View style={styles.cardFooter}>
+                  <View style={styles.sourceWrap}>
+                    <Ionicons name="globe-outline" size={13} color="#64748B" />
+                    <Text style={styles.sourceText}>{sourceName}</Text>
+                  </View>
+
+                  {Boolean(articleUrl) && (
+                    <TouchableOpacity
+                      style={styles.linkButton}
+                      onPress={() => handleOpenUrl(articleUrl)}
+                      activeOpacity={0.7}
                     >
-                      <Text
-                        style={[
-                          styles.badgePillText,
-                          { color: meta.badgeTextColor },
-                        ]}
-                      >
-                        {meta.badgeLabel}
-                      </Text>
-                    </View>
-
-                    {item.priority === 'CRITICAL' && (
-                      <View style={styles.badgeCritical}>
-                        <Text style={styles.badgeCriticalText}>NGUY CẤP</Text>
-                      </View>
-                    )}
-
-                    {Boolean(item.areaName) && (
-                      <View style={styles.badgeArea}>
-                        <Ionicons name="location-sharp" size={10} color="#64748B" />
-                        <Text style={styles.badgeAreaText} numberOfLines={1}>
-                          {item.areaName}
-                        </Text>
-                      </View>
-                    )}
-
-                    {Boolean(articleUrl) && (
-                      <View style={styles.badgeSource}>
-                        <Ionicons name="link-outline" size={10} color="#0284C7" />
-                        <Text style={styles.badgeSourceText} numberOfLines={1}>
-                          {sourceName || 'Bài báo'}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Tiêu đề & Tóm tắt kèm Thumbnail ảnh nếu có */}
-                  <View style={styles.cardContentRow}>
-                    <View style={{ flex: 1, marginRight: imageUrl ? 10 : 0 }}>
-                      <Text
-                        style={[styles.newsCardTitle, !item.isRead && styles.newsCardTitleUnread]}
-                        numberOfLines={2}
-                      >
-                        {item.title}
-                      </Text>
-
-                      <Text style={styles.newsCardSnippet} numberOfLines={2}>
-                        {item.content}
-                      </Text>
-                    </View>
-
-                    {Boolean(imageUrl) && (
-                      <Image
-                        source={{ uri: imageUrl }}
-                        style={styles.newsThumbnail}
-                        resizeMode="cover"
-                      />
-                    )}
-                  </View>
-
-                  {/* Hàng thông tin cuối thẻ */}
-                  <View style={styles.newsCardFooter}>
-                    <View style={styles.senderWrap}>
-                      <Ionicons name="person-circle-outline" size={13} color="#94A3B8" />
-                      <Text style={styles.senderText} numberOfLines={1}>
-                        {sourceName || item.createdBy?.fullName || item.data?.senderName || 'Ban chỉ huy SOS'}
-                      </Text>
-                    </View>
-
-                    <View style={styles.timeWrap}>
-                      <Ionicons name="time-outline" size={12} color="#94A3B8" />
-                      <Text style={styles.timeText}>{formatRelativeTime(item.createdAt)}</Text>
-                      {!item.isRead && <View style={styles.unreadDot} />}
-                    </View>
-                  </View>
+                      <Text style={styles.linkButtonText}>Mở bài viết gốc</Text>
+                      <Ionicons name="open-outline" size={12} color="#0F172A" />
+                    </TouchableOpacity>
+                  )}
                 </View>
-              </TouchableOpacity>
+              </View>
             );
           })}
 
-          <View style={{ height: 36 }} />
-        </ScrollView>
-      )}
+          {/* B. DANH SÁCH THÔNG BÁO BÌNH THƯỜNG (KHÔNG CHỨA BÀI VIẾT THỜI TIẾT) */}
+          {displayData.notifications.map((item) => {
+            const isBloodDonation =
+              item.type === 'BLOOD_DONATION' ||
+              item.actionUrl === 'blood_donation' ||
+              item.data?.isBloodDonation ||
+              item.title?.includes('Hiến Máu');
 
-      {/* ==================== 6. MODAL XEM CHI TIẾT THÔNG BÁO ==================== */}
-      <Modal
-        visible={detailVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setDetailVisible(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.detailCard}>
-            <View style={styles.modalHandle} />
+            const isSafetyCheck =
+              item.type === 'SAFETY_CHECK' ||
+              item.actionUrl === 'safety_check' ||
+              item.data?.isSafetyCheck;
 
-            {/* Ảnh bài báo minh họa nếu có */}
-            {Boolean(selectedNotif?.imageUrl || selectedNotif?.data?.imageUrl) && (
-              <Image
-                source={{ uri: selectedNotif?.imageUrl || selectedNotif?.data?.imageUrl }}
-                style={styles.detailCoverImage}
-                resizeMode="cover"
-              />
-            )}
+            const isSafeLocation =
+              item.type === 'SAFE_LOCATION' ||
+              item.data?.safeLocationId;
 
-            {/* Header Modal */}
-            <View style={styles.detailHeader}>
-              <View style={{ flex: 1 }}>
-                {selectedNotif && (
-                  <View style={styles.tagsRow}>
-                    {(() => {
-                      const cat = classifyNotification(selectedNotif);
-                      const meta =
-                        NOTIFICATION_CATEGORIES[cat] || NOTIFICATION_CATEGORIES.systemNotification;
-                      return (
-                        <View style={[styles.badgePill, { backgroundColor: meta.badgeBg }]}>
-                          <Text style={[styles.badgePillText, { color: meta.badgeTextColor }]}>
-                            {meta.badgeLabel}
-                          </Text>
-                        </View>
-                      );
-                    })()}
+            const imageUrl = item.imageUrl || item.data?.imageUrl;
+            const articleUrl = item.articleUrl || item.data?.articleUrl;
 
-                    {selectedNotif.priority === 'CRITICAL' && (
-                      <View style={styles.badgeCritical}>
-                        <Text style={styles.badgeCriticalText}>BÁO ĐỘNG ĐỎ</Text>
-                      </View>
-                    )}
-                  </View>
-                )}
-
-                <Text style={styles.detailTitle}>{selectedNotif?.title}</Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.closeBtn}
-                onPress={() => setDetailVisible(false)}
-                activeOpacity={0.7}
+            return (
+              <View
+                key={item._id}
+                style={[styles.card, !item.isRead && styles.cardUnreadHighlight]}
               >
-                <Ionicons name="close" size={20} color="#64748B" />
-              </TouchableOpacity>
-            </View>
+                {/* Dòng tag và thời gian: Thông báo bình thường */}
+                <View style={styles.cardMetaRow}>
+                  <View style={styles.tagBadge}>
+                    <Text style={styles.tagBadgeText}>
+                      {isBloodDonation
+                        ? 'ĐỢT HIẾN MÁU'
+                        : isSafetyCheck
+                        ? 'XÁC NHẬN AN TOÀN'
+                        : isSafeLocation
+                        ? 'ĐIỂM AN TOÀN'
+                        : 'THÔNG BÁO'}
+                    </Text>
+                  </View>
 
-            {/* Thông tin metadata */}
-            <View style={styles.detailMetaBox}>
-              <View style={styles.metaRow}>
-                <Ionicons name="location-outline" size={14} color="#0066FF" />
-                <Text style={styles.metaLabel}>Địa bàn:</Text>
-                <Text style={styles.metaValue}>{selectedNotif?.areaName || 'Toàn thành phố'}</Text>
-              </View>
+                  {Boolean(item.areaName) && (
+                    <View style={styles.regionBadge}>
+                      <Ionicons name="location-outline" size={12} color="#64748B" />
+                      <Text style={styles.regionBadgeText}>{item.areaName}</Text>
+                    </View>
+                  )}
 
-              <View style={styles.metaRow}>
-                <Ionicons name="shield-checkmark-outline" size={14} color="#059669" />
-                <Text style={styles.metaLabel}>Cơ quan phát tin:</Text>
-                <Text style={styles.metaValue}>
-                  {selectedNotif?.createdBy?.fullName ||
-                    selectedNotif?.data?.senderName ||
-                    'Ban chỉ huy PCTT'}
-                </Text>
-              </View>
-
-              {Boolean(selectedNotif?.sourceName || selectedNotif?.articleUrl || selectedNotif?.data?.articleUrl) && (
-                <View style={styles.metaRow}>
-                  <Ionicons name="newspaper-outline" size={14} color="#0284C7" />
-                  <Text style={styles.metaLabel}>Nguồn bài báo:</Text>
-                  <Text style={styles.metaValue}>
-                    {selectedNotif?.sourceName || selectedNotif?.data?.sourceName || 'Bài báo trực tuyến'}
+                  <Text style={styles.timeMetaText}>
+                    {formatRelativeTime(item.createdAt)}
                   </Text>
                 </View>
-              )}
 
-              <View style={styles.metaRow}>
-                <Ionicons name="time-outline" size={14} color="#64748B" />
-                <Text style={styles.metaLabel}>Thời gian:</Text>
-                <Text style={styles.metaValue}>{formatRelativeTime(selectedNotif?.createdAt)}</Text>
-              </View>
-            </View>
+                {/* Tiêu đề thông báo: Hiển thị đầy đủ */}
+                <Text style={styles.newsTitle}>{item.title}</Text>
 
-            {/* Nội dung chi tiết */}
-            <ScrollView style={styles.detailBodyScroll} showsVerticalScrollIndicator={false}>
-              <Text style={styles.detailContentText}>{selectedNotif?.content}</Text>
+                {/* Ảnh nếu có */}
+                {Boolean(imageUrl) && (
+                  <Image
+                    source={{ uri: imageUrl }}
+                    style={styles.newsImage}
+                    resizeMode="cover"
+                  />
+                )}
 
-              {/* Hướng dẫn an toàn nếu là cảnh báo khẩn cấp */}
-              {selectedNotif && classifyNotification(selectedNotif) === 'alert' && (
-                <View style={styles.safetyBox}>
-                  <Text style={styles.safetyBoxTitle}>KHUYẾN CÁO AN TOÀN:</Text>
-                  <Text style={styles.safetyBoxItem}>• Giữ liên lạc với lực lượng trực ban qua Hotline SOS 112.</Text>
-                  <Text style={styles.safetyBoxItem}>• Ngắt nguồn cầu dao điện nếu nước tràn vào nhà.</Text>
-                  <Text style={styles.safetyBoxItem}>• Di dời người già, trẻ nhỏ đến Vị trí an toàn gần nhất.</Text>
-                </View>
-              )}
+                {/* Nội dung thông báo: Hiển thị full trực tiếp */}
+                <Text style={styles.newsContent}>{item.content}</Text>
 
-              {/* Thẻ liên kết bài báo tham chiếu gốc */}
-              {Boolean(selectedNotif?.articleUrl || selectedNotif?.data?.articleUrl) && (
-                <TouchableOpacity
-                  style={styles.articleRefCard}
-                  onPress={() => {
-                    const url = selectedNotif?.articleUrl || selectedNotif?.data?.articleUrl;
-                    if (url) {
-                      Linking.openURL(url).catch(() =>
-                        Alert.alert('Không thể mở liên kết', 'Vui lòng kiểm tra lại đường dẫn bài báo.')
-                      );
-                    }
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.articleRefIconBox}>
-                    <Ionicons name="newspaper" size={22} color="#0066FF" />
-                  </View>
-                  <View style={styles.articleRefTextBox}>
-                    <View style={styles.articleRefTagRow}>
-                      <Text style={styles.articleRefTag}>BÀI BÁO THAM CHIẾU GỐC</Text>
-                      <Ionicons name="open-outline" size={12} color="#0066FF" />
-                    </View>
-                    <Text style={styles.articleRefTitle} numberOfLines={1}>
-                      {selectedNotif?.sourceName || 'Đọc toàn văn bài báo'}
-                    </Text>
-                    <Text style={styles.articleRefUrl} numberOfLines={1}>
-                      {selectedNotif?.articleUrl || selectedNotif?.data?.articleUrl}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color="#94A3B8" />
-                </TouchableOpacity>
-              )}
-            </ScrollView>
-
-            {/* Các nút hành động */}
-            <View style={styles.detailActionsRow}>
-              {Boolean(
-                selectedNotif?.type === 'SAFETY_CHECK' ||
-                selectedNotif?.actionUrl === 'safety_check' ||
-                selectedNotif?.data?.isSafetyCheck
-              ) ? (
-                <TouchableOpacity
-                  style={[styles.actionBtnPrimary, { backgroundColor: '#16A34A', flex: 1, paddingVertical: 14 }]}
-                  onPress={() => {
-                    setDetailVisible(false);
-                    const sid = selectedNotif?.data?.safetyCheckId || (selectedNotif as any)?.safetyCheckId || selectedNotif?._id;
-                    DeviceEventEmitter.emit('open:safety_check', { safetyCheckId: sid });
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={[styles.actionBtnPrimaryText, { fontWeight: '700' }]}>Xác nhận an toàn ngay</Text>
-                </TouchableOpacity>
-              ) : Boolean(
-                selectedNotif?.type === 'BLOOD_DONATION' ||
-                selectedNotif?.actionUrl === 'blood_donation' ||
-                selectedNotif?.data?.isBloodDonation
-              ) ? (
-                <TouchableOpacity
-                  style={[styles.actionBtnPrimary, { backgroundColor: '#DC2626', flex: 1, paddingVertical: 14 }]}
-                  onPress={() => {
-                    setDetailVisible(false);
-                    const eid = selectedNotif?.data?.eventId || (selectedNotif as any)?.eventId;
-                    DeviceEventEmitter.emit('open:blood_donation', { eventId: eid });
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="water" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={[styles.actionBtnPrimaryText, { fontWeight: '700' }]}>Xem & Xác nhận đăng ký hiến máu</Text>
-                </TouchableOpacity>
-              ) : (
-                <>
-                  <TouchableOpacity
-                    style={styles.testPushBtn}
-                    onPress={() => selectedNotif && handleTestPush(selectedNotif)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="notifications-outline" size={16} color="#0066FF" />
-                    <Text style={styles.testPushText}>Thử báo ra máy</Text>
-                  </TouchableOpacity>
-
-                  {onNavigateToTab && (
+                {/* Các nút thao tác tiện ích trực tiếp trên thẻ */}
+                {isBloodDonation && (
+                  <>
                     <TouchableOpacity
-                      style={styles.actionBtnPrimary}
+                      style={styles.actionButton}
                       onPress={() => {
-                        setDetailVisible(false);
-                        onNavigateToTab('map');
+                        markAsRead(item._id);
+                        const eid = item.data?.eventId || (item as any)?.eventId || item.data?.broadcastId;
+                        DeviceEventEmitter.emit('open:blood_donation', item.data || { eventId: eid });
                       }}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="map-outline" size={16} color="#FFFFFF" />
-                      <Text style={styles.actionBtnPrimaryText}>Xem trên bản đồ</Text>
+                      <Ionicons name="water-outline" size={16} color="#FFFFFF" />
+                      <Text style={styles.actionButtonText}>Đăng ký tham gia hiến máu</Text>
                     </TouchableOpacity>
-                  )}
-                </>
-              )}
-            </View>
-          </View>
-        </View>
-      </Modal>
+
+                    {Boolean(item.data?.googleMapsUrl || item.data?.address) && (
+                      <TouchableOpacity
+                        style={styles.actionOutlineButton}
+                        onPress={() => {
+                          const mapUrl =
+                            item.data?.googleMapsUrl ||
+                            `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                              `${item.data?.locationName || ''} ${item.data?.address || ''}`.trim()
+                            )}`;
+                          Linking.openURL(mapUrl).catch(() => {});
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="navigate-outline" size={15} color="#0F172A" />
+                        <Text style={styles.actionOutlineButtonText}>Chỉ đường trên Google Maps</Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                )}
+
+                {isSafetyCheck && (
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => {
+                      markAsRead(item._id);
+                      const sid = item.data?.safetyCheckId || (item as any)?.safetyCheckId || item._id;
+                      DeviceEventEmitter.emit('open:safety_check', item.data || { safetyCheckId: sid });
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="shield-checkmark-outline" size={16} color="#FFFFFF" />
+                    <Text style={styles.actionButtonText}>Xác nhận an toàn ngay</Text>
+                  </TouchableOpacity>
+                )}
+
+                {(isSafeLocation || item.actionUrl === 'map') && onNavigateToTab && (
+                  <TouchableOpacity
+                    style={styles.actionOutlineButton}
+                    onPress={() => {
+                      markAsRead(item._id);
+                      onNavigateToTab('map');
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="map-outline" size={15} color="#0F172A" />
+                    <Text style={styles.actionOutlineButtonText}>Xem vị trí trên bản đồ</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Chân thẻ: Người gửi */}
+                <View style={styles.cardFooter}>
+                  <View style={styles.sourceWrap}>
+                    <Ionicons name="person-circle-outline" size={14} color="#64748B" />
+                    <Text style={styles.sourceText}>
+                      {item.sourceName || item.createdBy?.fullName || item.data?.senderName || 'Ban chỉ huy SOS'}
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {Boolean(articleUrl) && (
+                      <TouchableOpacity
+                        style={styles.linkButton}
+                        onPress={() => handleOpenUrl(articleUrl)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.linkButtonText}>Mở bài gốc</Text>
+                        <Ionicons name="open-outline" size={12} color="#0F172A" />
+                      </TouchableOpacity>
+                    )}
+
+                    {!item.isRead && (
+                      <TouchableOpacity
+                        style={styles.unreadTag}
+                        onPress={() => markAsRead(item._id)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.unreadDot} />
+                        <Text style={styles.unreadText}>Chưa đọc</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 };
@@ -842,7 +646,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? 24 : 10,
+    paddingTop: Platform.OS === 'android' ? 20 : 10,
     paddingBottom: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
@@ -885,334 +689,263 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#F1F5F9',
   },
   markAllText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#0066FF',
+    fontWeight: '600',
+    color: '#0F172A',
   },
   settingsBtn: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: 8,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // Thanh bộ lọc ngang
-  categoryFilterWrapper: {
+  // Thanh chọn Tab ngang
+  tabBarWrapper: {
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
     paddingVertical: 10,
   },
-  categoryFilterContainer: {
+  tabBarContainer: {
     paddingHorizontal: 16,
     gap: 8,
   },
-  categoryChip: {
+  tabChip: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 7,
-    paddingHorizontal: 12,
+    paddingHorizontal: 13,
     borderRadius: 20,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  categoryChipActive: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
+  tabChipActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
   },
-  chipIcon: {
-    marginRight: 6,
-  },
-  categoryChipText: {
-    fontSize: 12.5,
+  tabChipText: {
+    fontSize: 13,
     fontWeight: '600',
     color: '#64748B',
   },
-  categoryChipTextActive: {
+  tabChipTextActive: {
+    color: '#FFFFFF',
     fontWeight: '700',
   },
-  categoryCountBadge: {
+  tabCountBadge: {
     marginLeft: 6,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#F1F5F9',
     paddingHorizontal: 6,
     paddingVertical: 1.5,
     borderRadius: 10,
     minWidth: 18,
     alignItems: 'center',
   },
-  unreadCountBadge: {
-    backgroundColor: '#FEE2E2',
+  tabCountBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
   },
-  categoryCountText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  // Sub-filter bar
-  subFilterBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#F8FAFC',
-  },
-  pillsRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  pillBtn: {
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 6,
-    backgroundColor: '#E2E8F0',
-  },
-  pillBtnActive: {
-    backgroundColor: '#0F172A',
-  },
-  pillText: {
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  pillTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  clearFilterBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  clearFilterText: {
+  tabCountText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  // Banner cảnh báo khẩn cấp
-  criticalBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginTop: 10,
-    padding: 12,
-  },
-  criticalPulseDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#DC2626',
-  },
-  criticalHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-  },
-  criticalTag: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: '#DC2626',
-    letterSpacing: 0.4,
-  },
-  criticalTime: {
-    fontSize: 10,
-    color: '#991B1B',
-  },
-  criticalTitle: {
-    fontSize: 13,
     fontWeight: '700',
-    color: '#7F1D1D',
+    color: '#475569',
   },
-  // Danh sách thông báo
-  newsList: {
+  tabCountTextActive: {
+    color: '#FFFFFF',
+  },
+  // Danh sách
+  listContainer: {
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
-  newsListContent: {
+  listContent: {
     padding: 16,
-    gap: 10,
   },
-  newsCard: {
-    flexDirection: 'row',
+  // Thẻ bài viết / thông báo: Giao diện gọn gàng, viền xám nhạt đồng bộ, KHÔNG có viền màu đỏ/xanh cạnh thẻ
+  card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    padding: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 12,
+    padding: 16,
+    marginBottom: 12,
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
     elevation: 1,
   },
-  newsCardUnread: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#BFDBFE',
-    borderLeftWidth: 3.5,
-    borderLeftColor: '#0066FF',
+  cardUnreadHighlight: {
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FCFDFF',
   },
-  newsCardAlertBorder: {
-    borderLeftWidth: 3.5,
-    borderLeftColor: '#DC2626',
-  },
-  newsIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  newsCardBody: {
-    flex: 1,
-  },
-  tagsRow: {
+  cardMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 6,
+    gap: 8,
+    marginBottom: 10,
   },
-  badgePill: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 5,
+  tagBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  badgePillText: {
-    fontSize: 9.5,
-    fontWeight: '800',
+  tagBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+    textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
-  badgeCritical: {
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
-  badgeCriticalText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#DC2626',
-  },
-  badgeArea: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
-  badgeAreaText: {
-    fontSize: 9.5,
-    fontWeight: '600',
-    color: '#475569',
-    maxWidth: 120,
-  },
-  badgeSource: {
+  regionBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#E0F2FE',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 5,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
   },
-  badgeSourceText: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: '#0284C7',
-    maxWidth: 120,
+  regionBadgeText: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '500',
   },
-  cardContentRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 6,
+  timeMetaText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginLeft: 'auto',
   },
-  newsThumbnail: {
-    width: 68,
-    height: 68,
-    borderRadius: 10,
-    backgroundColor: '#E2E8F0',
-  },
-  newsCardTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1E293B',
-    lineHeight: 19,
-    marginBottom: 4,
-  },
-  newsCardTitleUnread: {
+  newsTitle: {
+    fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
+    lineHeight: 23,
+    marginBottom: 10,
   },
-  newsCardSnippet: {
-    fontSize: 12,
-    lineHeight: 17,
-    color: '#64748B',
-    marginBottom: 8,
+  newsImage: {
+    width: '100%',
+    height: 185,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    marginBottom: 12,
   },
-  newsCardFooter: {
+  newsContent: {
+    fontSize: 14,
+    color: '#334155',
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  // Nút hành động nhanh
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#0F172A',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    marginTop: 2,
+    marginBottom: 12,
+  },
+  actionButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  actionOutlineButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    marginTop: 2,
+    marginBottom: 12,
+  },
+  actionOutlineButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 6,
     borderTopWidth: 1,
-    borderTopColor: '#F8FAFC',
+    borderTopColor: '#F1F5F9',
+    paddingTop: 10,
   },
-  senderWrap: {
+  sourceWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     flex: 1,
+    marginRight: 8,
   },
-  senderText: {
-    fontSize: 11,
-    color: '#94A3B8',
-    maxWidth: 160,
+  sourceText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
   },
-  timeWrap: {
+  linkButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
   },
-  timeText: {
-    fontSize: 11,
-    color: '#94A3B8',
+  linkButtonText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  unreadTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   unreadDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#0066FF',
-    marginLeft: 2,
+    backgroundColor: '#64748B',
+  },
+  unreadText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
   },
   // Empty State
   emptyContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    padding: 32,
-    minHeight: 320,
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    paddingVertical: 60,
+    backgroundColor: '#F8FAFC',
   },
   emptyIconCircle: {
     width: 68,
@@ -1226,214 +959,25 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1E293B',
+    color: '#0F172A',
     marginBottom: 6,
-    textAlign: 'center',
   },
   emptyDesc: {
     fontSize: 13,
     color: '#64748B',
     textAlign: 'center',
-    lineHeight: 19,
-    marginBottom: 16,
+    lineHeight: 20,
+    marginBottom: 20,
   },
   emptyResetBtn: {
     paddingVertical: 9,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#0066FF',
+    backgroundColor: '#0F172A',
   },
   emptyResetText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  // Modal Chi tiết
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
-    justifyContent: 'flex-end',
-  },
-  detailCard: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '86%',
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
-  },
-  modalHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#CBD5E1',
-    alignSelf: 'center',
-    marginBottom: 14,
-  },
-  detailCoverImage: {
-    width: '100%',
-    height: 160,
-    borderRadius: 14,
-    marginBottom: 14,
-    backgroundColor: '#E2E8F0',
-  },
-  articleRefCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    borderRadius: 12,
-    padding: 12,
-    gap: 12,
-    marginTop: 14,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  articleRefIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
-    backgroundColor: '#DBEAFE',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  articleRefTextBox: {
-    flex: 1,
-  },
-  articleRefTagRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 2,
-  },
-  articleRefTag: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#0066FF',
-    letterSpacing: 0.3,
-  },
-  articleRefTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1E3A8A',
-    marginBottom: 2,
-  },
-  articleRefUrl: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  detailHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 14,
-  },
-  detailTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-    lineHeight: 22,
-    marginTop: 6,
-  },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  detailMetaBox: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    padding: 12,
-    gap: 6,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  metaLabel: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  metaValue: {
-    fontSize: 12,
-    color: '#0F172A',
     fontWeight: '600',
-    flex: 1,
-  },
-  detailBodyScroll: {
-    maxHeight: 240,
-    marginBottom: 16,
-  },
-  detailContentText: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: '#334155',
-  },
-  safetyBox: {
-    marginTop: 14,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: 10,
-    padding: 12,
-    gap: 4,
-  },
-  safetyBoxTitle: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#DC2626',
-    letterSpacing: 0.3,
-    marginBottom: 4,
-  },
-  safetyBoxItem: {
-    fontSize: 12,
-    lineHeight: 18,
-    color: '#991B1B',
-  },
-  detailActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingTop: 8,
-  },
-  testPushBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  testPushText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0066FF',
-  },
-  actionBtnPrimary: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#0066FF',
-  },
-  actionBtnPrimaryText: {
-    fontSize: 13,
-    fontWeight: '700',
     color: '#FFFFFF',
   },
 });

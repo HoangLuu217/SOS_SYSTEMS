@@ -29,17 +29,17 @@ export interface CategoryMeta {
 export const NOTIFICATION_CATEGORIES: Record<NotificationCategoryKey, CategoryMeta> = {
   alert: {
     key: 'alert',
-    label: 'Cảnh báo khẩn cấp',
-    shortLabel: 'Khẩn cấp',
-    badgeLabel: 'CẢNH BÁO SOS',
-    iconName: 'warning',
-    featherIcon: 'alert-triangle',
-    color: '#DC2626',
-    bgColor: '#FEF2F2',
-    badgeBg: '#FEE2E2',
-    badgeTextColor: '#DC2626',
-    borderColor: '#FECACA',
-    desc: 'Báo động SOS, lũ quét, sạt lở đất nguy cấp',
+    label: 'Thông báo',
+    shortLabel: 'Thông báo',
+    badgeLabel: 'THÔNG BÁO',
+    iconName: 'notifications-outline',
+    featherIcon: 'bell',
+    color: '#0F172A',
+    bgColor: '#F1F5F9',
+    badgeBg: '#F1F5F9',
+    badgeTextColor: '#334155',
+    borderColor: '#E2E8F0',
+    desc: 'Thông báo điều động và cảnh báo từ ban chỉ huy',
   },
   safeLocation: {
     key: 'safeLocation',
@@ -98,10 +98,34 @@ export function classifyNotification(item: NotificationItem): NotificationCatego
   const title = (item.title || '').toLowerCase();
   const content = (item.content || '').toLowerCase();
 
-  // 1. Vị trí an toàn (Safe location)
+  // 1. Tin tức & Thời tiết (News & Weather) - Kiểm tra đầu tiên để bài viết thời tiết không bao giờ bị xếp nhầm vào Thông báo/Cảnh báo
+  if (
+    type === 'WEATHER' ||
+    type === 'NEWS' ||
+    type === 'TIN_TUC' ||
+    item.data?.weatherArticleId ||
+    item.data?.weatherType ||
+    Boolean(item.data?.isWeather) ||
+    Boolean(item.data?.imageUrl && item.data?.articleUrl) ||
+    title.includes('thời tiết') ||
+    title.includes('dự báo') ||
+    title.includes('lượng mưa') ||
+    title.includes('áp thấp') ||
+    title.includes('triều cường') ||
+    title.includes('sóng lớn') ||
+    title.includes('cẩm nang') ||
+    title.includes('bản tin') ||
+    content.includes('khí tượng thủy văn') ||
+    content.includes('dự báo thời tiết')
+  ) {
+    return 'news';
+  }
+
+  // 2. Vị trí an toàn (Safe location)
   if (
     type === 'SAFE_LOCATION' ||
     type === 'SAFE' ||
+    Boolean(item.data?.safeLocationId) ||
     title.includes('vị trí an toàn') ||
     title.includes('điểm an toàn') ||
     title.includes('điểm sơ tán') ||
@@ -115,11 +139,13 @@ export function classifyNotification(item: NotificationItem): NotificationCatego
     return 'safeLocation';
   }
 
-  // 2. Cảnh báo khẩn cấp (Emergency Alert)
+  // 3. Thông báo chung & Cảnh báo tác chiến
   if (
     type === 'ALERT' ||
     type === 'HAZARD' ||
     type === 'RESCUE' ||
+    type === 'BLOOD_DONATION' ||
+    type === 'SAFETY_CHECK' ||
     priority === 'CRITICAL' ||
     (type === 'INSTANT' && (priority === 'HIGH' || priority === 'CRITICAL')) ||
     title.includes('khẩn cấp') ||
@@ -128,31 +154,10 @@ export function classifyNotification(item: NotificationItem): NotificationCatego
     title.includes('lũ quét') ||
     title.includes('sạt lở') ||
     title.includes('vỡ đê') ||
-    title.includes('cứu hộ khẩn cấp') ||
-    title.includes('ứng cứu') ||
-    content.includes('báo động đỏ') ||
-    content.includes('nguy hiểm đặc biệt')
+    title.includes('cứu hộ') ||
+    title.includes('ứng cứu')
   ) {
     return 'alert';
-  }
-
-  // 3. Tin tức & Thời tiết (News & Weather)
-  if (
-    type === 'WEATHER' ||
-    type === 'NEWS' ||
-    type === 'TIN_TUC' ||
-    title.includes('thời tiết') ||
-    title.includes('dự báo') ||
-    title.includes('lượng mưa') ||
-    title.includes('áp thấp') ||
-    title.includes('triều cường') ||
-    title.includes('sóng lớn') ||
-    title.includes('cẩm nang') ||
-    title.includes('bản tin') ||
-    content.includes('khí tượng thủy văn') ||
-    content.includes('dự báo thời tiết')
-  ) {
-    return 'news';
   }
 
   // 4. Mặc định: Thông báo hệ thống (System Notification)

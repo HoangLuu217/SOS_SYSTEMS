@@ -4,7 +4,9 @@ import Constants from 'expo-constants';
 import { backendApi } from '@/api';
 import { getSavedNotificationSettings, classifyNotification } from '@/utils';
 
-// Cấu hình cách hiển thị thông báo khi ứng dụng đang chạy ở foreground dựa trên Cài đặt thông báo của người dùng
+// Cấu hình cách xử lý thông báo khi ứng dụng đang chạy ở foreground:
+// "Chỉ đẩy thông báo ra ngoài app không hiển thị trong app":
+// Không bật banner nổi và chuông khi đang mở app, chỉ cập nhật badge và lưu vào trung tâm thông báo bên ngoài của hệ điều hành.
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     try {
@@ -33,16 +35,16 @@ Notifications.setNotificationHandler({
       }
 
       return {
-        shouldPlaySound: settings.sound !== false,
+        shouldPlaySound: false, // Không chuông đè khi đang mở app
         shouldSetBadge: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
+        shouldShowBanner: false, // KHÔNG hiển thị banner trong app (chỉ đẩy ra ngoài hệ điều hành)
+        shouldShowList: true,   // Lưu vào danh sách thông báo ngoài màn hình máy
       };
     } catch {
       return {
-        shouldPlaySound: true,
+        shouldPlaySound: false,
         shouldSetBadge: true,
-        shouldShowBanner: true,
+        shouldShowBanner: false,
         shouldShowList: true,
       };
     }
@@ -62,7 +64,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
         await Notifications.setNotificationChannelAsync('emergency-alerts', {
           name: 'Cảnh báo khẩn cấp & Tin tức SOS',
           importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: [0, 500, 250, 500],
+          vibrationPattern: [0, 300],
           lightColor: '#EF4444',
           sound: 'default',
           enableVibrate: true,
@@ -166,13 +168,9 @@ export async function triggerLocalNotification(options: {
       return;
     }
 
-    // Rung nếu bật vibration (nhịp rung báo động SOS dồn dập cho nhiệm vụ khẩn cấp)
+    // Rung 1 lần duy nhất nếu bật vibration
     if (settings.vibration !== false) {
-      if (options.priority === 'CRITICAL' || options.priority === 'HIGH' || category === 'alert') {
-        Vibration.vibrate([0, 500, 150, 500, 150, 800, 200, 800]);
-      } else {
-        Vibration.vibrate(350);
-      }
+      Vibration.vibrate(300);
     }
 
     // Đảm bảo kênh Android đã sẵn sàng trước khi bắn thông báo (nếu được hỗ trợ)
@@ -182,7 +180,7 @@ export async function triggerLocalNotification(options: {
         await Notifications.setNotificationChannelAsync('emergency-alerts', {
           name: 'Cảnh báo khẩn cấp & Tin tức SOS',
           importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: settings.vibration ? [0, 500, 250, 500] : [0],
+          vibrationPattern: settings.vibration ? [0, 300] : [0],
           lightColor: '#EF4444',
           sound: settings.sound ? 'default' : undefined,
           enableVibrate: settings.vibration,

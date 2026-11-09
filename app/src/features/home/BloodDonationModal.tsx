@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   DeviceEventEmitter,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -802,13 +803,44 @@ export function BloodDonationModal({
                           <View style={styles.infoGrid}>
                             <View style={styles.infoRow}>
                               <Ionicons name="location" size={15} color="#DC2626" style={{ marginTop: 1 }} />
-                              <Text style={styles.infoCompactText} numberOfLines={2}>
-                                <Text style={styles.infoRowLabel}>Địa điểm: </Text>
-                                <Text style={styles.infoRowValue}>{selectedEvent.locationName}</Text>
-                                {selectedEvent.address ? (
-                                  <Text style={styles.infoRowSub}> ({selectedEvent.address})</Text>
-                                ) : null}
-                              </Text>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.infoCompactText}>
+                                  <Text style={styles.infoRowLabel}>Địa điểm: </Text>
+                                  <Text style={styles.infoRowValue}>{selectedEvent.locationName}</Text>
+                                  {selectedEvent.address ? (
+                                    <Text style={styles.infoRowSub}> ({selectedEvent.address})</Text>
+                                  ) : null}
+                                </Text>
+                                {Boolean((selectedEvent as any).googleMapsUrl || selectedEvent.address) && (
+                                  <TouchableOpacity
+                                    style={{
+                                      flexDirection: 'row',
+                                      alignItems: 'center',
+                                      gap: 4,
+                                      marginTop: 4,
+                                      paddingVertical: 3,
+                                      paddingHorizontal: 8,
+                                      borderRadius: 6,
+                                      backgroundColor: '#EFF6FF',
+                                      alignSelf: 'flex-start',
+                                    }}
+                                    onPress={() => {
+                                      const mapUrl =
+                                        (selectedEvent as any).googleMapsUrl ||
+                                        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                                          `${selectedEvent.locationName} ${selectedEvent.address || ''}`.trim()
+                                        )}`;
+                                      Linking.openURL(mapUrl).catch(() => {});
+                                    }}
+                                    activeOpacity={0.7}
+                                  >
+                                    <Ionicons name="navigate-outline" size={12} color="#0066FF" />
+                                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0066FF' }}>
+                                      Chỉ đường Google Maps ↗
+                                    </Text>
+                                  </TouchableOpacity>
+                                )}
+                              </View>
                             </View>
 
                             <View style={styles.infoRow}>

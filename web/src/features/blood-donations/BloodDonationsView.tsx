@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Droplet,
   Plus,
@@ -14,10 +14,12 @@ import {
   User as UserIcon,
   Activity,
   Download,
+  ExternalLink,
 } from 'lucide-react';
 import { fetchWithAuth } from '@/api/client';
 import { fetchAdministrativeAreas } from '@/api/area.api';
 import type { User } from '@/types/auth';
+import { BloodEventMapPicker, parseGoogleMapsUrlOrCoords } from './BloodEventMapPicker';
 
 export interface BloodDonationsViewProps {
   user?: User | null;
@@ -73,6 +75,7 @@ interface BloodDonationEvent {
   description?: string;
   locationName: string;
   address: string;
+  googleMapsUrl?: string;
   eventDate: string;
   startTime: string;
   endTime: string;
@@ -99,6 +102,13 @@ interface BloodDonationEvent {
 
 const BLOOD_TYPE_LIST = ['O+', 'A+', 'B+', 'AB+', 'O-', 'A-', 'B-', 'AB-', 'UNKNOWN'];
 
+const getStatusLabelText = (status: string) => {
+  if (status === 'PENDING') return 'ĐK nhận thông báo đợt hiến';
+  if (status === 'CONFIRMED' || status === 'COMPLETED') return 'Xác nhận tham gia';
+  if (status === 'DECLINED') return 'Chưa tham gia';
+  return status || '';
+};
+
 export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) => {
   const isAdmin = Boolean(user?.roles?.includes('ADMIN'));
   const authorityAreaId = user?.authority?.areaId ? String(user.authority.areaId) : '';
@@ -109,11 +119,21 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Bộ lọc gọn
+  // Thanh tìm kiếm thông minh & Gợi ý bộ lọc
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('ALL');
-  const [filterBloodType, setFilterBloodType] = useState<string>('ALL');
-  const [filterAreaId, setFilterAreaId] = useState<string>('ALL');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Đóng popover gợi ý khi click ra ngoài
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Slide-over Drawer bên phải cho chi tiết Người đăng ký
   const [selectedRegistration, setSelectedRegistration] =
@@ -130,6 +150,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
   const [formTitle, setFormTitle] = useState('Đợt hiến máu tình nguyện');
   const [formLocationName, setFormLocationName] = useState('');
   const [formAddress, setFormAddress] = useState('');
+  const [formMapUrl, setFormMapUrl] = useState('');
   const [selectedProvinceId, setSelectedProvinceId] = useState<string>('ALL');
   const [formAreaId, setFormAreaId] = useState<string>(isAdmin ? 'ALL' : authorityAreaId || 'ALL');
   const [formEventDate, setFormEventDate] = useState<string>(() => {
@@ -215,46 +236,42 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
 
   const filteredRegistrations = useMemo(() => {
     return registrations.filter((r) => {
-      if (filterStatus !== 'ALL' && r.status !== filterStatus) return false;
-      if (filterBloodType !== 'ALL' && r.bloodType !== filterBloodType) return false;
-      if (
-        filterAreaId !== 'ALL' &&
-        String(r.areaId) !== filterAreaId &&
-        String(r.provinceId) !== filterAreaId
-      ) {
-        return false;
-      }
+      // Chỉ hiển thị người đăng ký nhận thông báo về hiến máu
+      if (r.registrationType !== 'PRE_REGISTRATION') return false;
+
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchName = r.fullName?.toLowerCase().includes(q);
-        const matchPhone = r.phone?.toLowerCase().includes(q);
+        const q = searchQuery.toLowerCase().trim();
+        const matchName = (r.fullName || r.userId?.fullName || '').toLowerCase().includes(q);
+        const matchPhone = (r.phone || r.userId?.phone || '').toLowerCase().includes(q);
         const matchArea = (r.provinceName || r.areaName || r.address || '')
           .toLowerCase()
           .includes(q);
-        if (!matchName && !matchPhone && !matchArea) return false;
+        const blood = (r.bloodType || '').toLowerCase();
+        const matchBlood =
+          blood.includes(q) || (q === 'chưa rõ' && (blood === 'unknown' || !blood));
+        const statusText = getStatusLabelText(r.status).toLowerCase();
+        const matchStatus = statusText.includes(q);
+
+        if (!matchName && !matchPhone && !matchArea && !matchBlood && !matchStatus) return false;
       }
       return true;
     });
-  }, [registrations, filterStatus, filterBloodType, filterAreaId, searchQuery]);
+  }, [registrations, searchQuery]);
 
   const filteredEvents = useMemo(() => {
     return events.filter((ev) => {
-      if (
-        filterAreaId !== 'ALL' &&
-        String(ev.areaId) !== filterAreaId &&
-        String(ev.provinceId) !== filterAreaId
-      ) {
-        return false;
-      }
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchTitle = ev.title?.toLowerCase().includes(q);
-        const matchLoc = ev.locationName?.toLowerCase().includes(q);
-        if (!matchTitle && !matchLoc) return false;
+        const q = searchQuery.toLowerCase().trim();
+        const matchTitle = (ev.title || '').toLowerCase().includes(q);
+        const matchLoc = (ev.locationName || '').toLowerCase().includes(q);
+        const matchAddress = (ev.address || '').toLowerCase().includes(q);
+        const matchArea = (ev.provinceName || ev.areaName || '').toLowerCase().includes(q);
+        const matchBlood = ev.neededBloodTypes?.some((bt) => bt.toLowerCase().includes(q));
+        if (!matchTitle && !matchLoc && !matchAddress && !matchArea && !matchBlood) return false;
       }
       return true;
     });
-  }, [events, filterAreaId, searchQuery]);
+  }, [events, searchQuery]);
 
   const toggleBloodNeed = (bt: string) => {
     if (bt === 'ALL') {
@@ -278,6 +295,22 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
       return;
     }
 
+    let resolvedMapUrl = formMapUrl.trim();
+    const parsedCoords = parseGoogleMapsUrlOrCoords(resolvedMapUrl);
+    if (parsedCoords) {
+      resolvedMapUrl = `https://www.google.com/maps?q=${parsedCoords.lat},${parsedCoords.lng}`;
+    }
+
+    if (!resolvedMapUrl) {
+      showToast('error', 'Vui lòng chọn vị trí trên bản đồ bên phải hoặc dán link Google Maps dẫn đường.');
+      return;
+    }
+
+    if (isAdmin && selectedProvinceId === 'ALL' && formAreaId === 'ALL') {
+      showToast('error', 'Vui lòng chọn Tỉnh / Thành phố tổ chức để hệ thống gửi thông báo cho người hiến máu trong tỉnh.');
+      return;
+    }
+
     setCreating(true);
     try {
       const res = await fetchWithAuth<any>('/blood-donations/events', {
@@ -286,6 +319,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
           title: formTitle.trim(),
           locationName: formLocationName.trim(),
           address: formAddress.trim(),
+          googleMapsUrl: resolvedMapUrl,
           areaId: formAreaId,
           eventDate: formEventDate,
           startTime: formStartTime.trim(),
@@ -443,13 +477,6 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
   const escapeCsvCell = (val: unknown): string => {
     const str = val === null || val === undefined ? '' : String(val);
     return `"${str.replace(/"/g, '""')}"`;
-  };
-
-  const getStatusLabelText = (status: string) => {
-    if (status === 'PENDING') return 'ĐK nhận thông báo đợt hiến';
-    if (status === 'CONFIRMED' || status === 'COMPLETED') return 'Xác nhận tham gia';
-    if (status === 'DECLINED') return 'Chưa tham gia';
-    return status || '';
   };
 
   // Xuất CSV danh sách người tham gia cho từng đợt hiến máu cụ thể
@@ -655,7 +682,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         </div>
       )}
 
-      {/* Thanh công cụ & Nút đồng bộ màu #2563eb */}
+      {/* Thanh công cụ 1 hàng duy nhất & Nút đồng bộ màu #2563eb */}
       <div
         style={{
           background: '#ffffff',
@@ -667,10 +694,11 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
           overflowX: 'auto',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 8,
+          gap: 12,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {/* Nhóm Tabs bên trái */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           <button
             type="button"
             onClick={() => setActiveTab('REGISTRATIONS')}
@@ -683,9 +711,10 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               fontSize: 13,
               background: activeTab === 'REGISTRATIONS' ? '#2563eb' : '#f1f5f9',
               color: activeTab === 'REGISTRATIONS' ? '#ffffff' : '#475569',
+              whiteSpace: 'nowrap',
             }}
           >
-            Đăng ký ({registrations.length})
+            ĐK nhận thông báo ({filteredRegistrations.length})
           </button>
 
           <button
@@ -700,32 +729,42 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               fontSize: 13,
               background: activeTab === 'EVENTS' ? '#2563eb' : '#f1f5f9',
               color: activeTab === 'EVENTS' ? '#ffffff' : '#475569',
+              whiteSpace: 'nowrap',
             }}
           >
             Đợt hiến máu ({events.length})
           </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {/* Tìm kiếm */}
+        {/* Thanh Search thông minh & Popover gợi ý bộ lọc */}
+        <div
+          ref={searchContainerRef}
+          style={{
+            position: 'relative',
+            flex: '1 1 auto',
+            maxWidth: 440,
+            minWidth: 200,
+          }}
+        >
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              background: '#ffffff',
-              border: '1px solid #cbd5e1',
+              background: '#f8fafc',
+              border: showSuggestions ? '1.5px solid #2563eb' : '1px solid #cbd5e1',
               borderRadius: 8,
               padding: '6px 10px',
-              minWidth: 200,
+              transition: 'border 0.15s ease',
             }}
           >
-            <Search size={14} color="#94a3b8" />
+            <Search size={14} color={showSuggestions ? '#2563eb' : '#94a3b8'} style={{ flexShrink: 0 }} />
             <input
               type="text"
               value={searchQuery}
+              onFocus={() => setShowSuggestions(true)}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm tên, SĐT..."
+              placeholder="Tìm tên, SĐT, nhóm máu (A, B, O...), khu vực..."
               style={{
                 border: 'none',
                 outline: 'none',
@@ -735,83 +774,160 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                 color: '#0f172a',
               }}
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  padding: 0,
+                  display: 'flex',
+                  color: '#94a3b8',
+                }}
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
 
-          <select
-            value={filterAreaId}
-            onChange={(e) => setFilterAreaId(e.target.value)}
-            style={{
-              padding: '7px 10px',
-              borderRadius: 8,
-              border: '1px solid #cbd5e1',
-              fontSize: 13,
-              color: '#0f172a',
-              background: '#ffffff',
-            }}
-          >
-            <option value="ALL">Tất cả khu vực</option>
-            {provinceAreas.length > 0 && (
-              <optgroup label="Tỉnh / Thành phố">
-                {provinceAreas.map((a) => (
-                  <option key={a._id} value={a._id}>
-                    {a.name}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            {wardAreas.length > 0 && (
-              <optgroup label="Phường / Xã">
-                {wardAreas.map((a) => (
-                  <option key={a._id} value={a._id}>
-                    {a.name}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-          </select>
+          {/* Popover gợi ý lọc nhanh */}
+          {showSuggestions && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 6px)',
+                left: 0,
+                right: 0,
+                background: '#ffffff',
+                borderRadius: 10,
+                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                border: '1px solid #e2e8f0',
+                padding: '12px 14px',
+                zIndex: 100,
+                maxHeight: 330,
+                overflowY: 'auto',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Gợi ý lọc nhanh
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowSuggestions(false)}
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 11 }}
+                >
+                  Đóng
+                </button>
+              </div>
 
-          {activeTab === 'REGISTRATIONS' && (
-            <>
-              <select
-                value={filterBloodType}
-                onChange={(e) => setFilterBloodType(e.target.value)}
-                style={{
-                  padding: '7px 10px',
-                  borderRadius: 8,
-                  border: '1px solid #cbd5e1',
-                  fontSize: 13,
-                  color: '#0f172a',
-                  background: '#ffffff',
-                }}
-              >
-                <option value="ALL">Nhóm máu</option>
-                {BLOOD_TYPE_LIST.map((bt) => (
-                  <option key={bt} value={bt}>
-                    {bt === 'UNKNOWN' ? 'Chưa rõ' : bt}
-                  </option>
-                ))}
-              </select>
+              {/* Nhóm máu */}
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
+                  🩸 Nhóm máu:
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  {['O+', 'A+', 'B+', 'AB+', 'O-', 'A-', 'B-', 'AB-'].map((bt) => (
+                    <button
+                      key={bt}
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery(bt);
+                        setShowSuggestions(false);
+                      }}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: 6,
+                        border: '1px solid #fed7aa',
+                        background: searchQuery.toUpperCase() === bt ? '#ea580c' : '#fff7ed',
+                        color: searchQuery.toUpperCase() === bt ? '#ffffff' : '#c2410c',
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {bt}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                style={{
-                  padding: '7px 10px',
-                  borderRadius: 8,
-                  border: '1px solid #cbd5e1',
-                  fontSize: 13,
-                  color: '#0f172a',
-                  background: '#ffffff',
-                }}
-              >
-                <option value="ALL">Trạng thái</option>
-                <option value="PENDING">ĐK nhận thông báo đợt hiến</option>
-                <option value="CONFIRMED">Xác nhận tham gia</option>
-                <option value="DECLINED">Chưa tham gia</option>
-              </select>
-            </>
+              {/* Trạng thái (ở tab ĐK nhận thông báo) */}
+              {activeTab === 'REGISTRATIONS' && (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
+                    📋 Trạng thái:
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {[
+                      { label: 'ĐK nhận thông báo', val: 'ĐK nhận thông báo' },
+                      { label: 'Xác nhận tham gia', val: 'Xác nhận' },
+                      { label: 'Chưa tham gia', val: 'Chưa tham gia' },
+                    ].map((st) => (
+                      <button
+                        key={st.val}
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery(st.val);
+                          setShowSuggestions(false);
+                        }}
+                        style={{
+                          padding: '3px 8px',
+                          borderRadius: 6,
+                          border: '1px solid #cbd5e1',
+                          background: searchQuery === st.val ? '#2563eb' : '#f8fafc',
+                          color: searchQuery === st.val ? '#ffffff' : '#334155',
+                          fontSize: 11.5,
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {st.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Khu vực phổ biến */}
+              {provinceAreas.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
+                    📍 Tỉnh / Thành phố:
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, maxHeight: 90, overflowY: 'auto' }}>
+                    {provinceAreas.map((p) => (
+                      <button
+                        key={p._id}
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery(p.name);
+                          setShowSuggestions(false);
+                        }}
+                        style={{
+                          padding: '3px 8px',
+                          borderRadius: 6,
+                          border: '1px solid #e2e8f0',
+                          background: searchQuery === p.name ? '#2563eb' : '#f1f5f9',
+                          color: searchQuery === p.name ? '#ffffff' : '#475569',
+                          fontSize: 11.5,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {p.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
+        </div>
 
+        {/* Nhóm nút hành động bên phải */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, whiteSpace: 'nowrap' }}>
           <button
             type="button"
             onClick={handleExportToolbarCsv}
@@ -827,6 +943,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               display: 'inline-flex',
               alignItems: 'center',
               gap: 6,
+              whiteSpace: 'nowrap',
             }}
             title="Xuất danh sách hiện tại ra file CSV"
           >
@@ -849,9 +966,10 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               display: 'inline-flex',
               alignItems: 'center',
               gap: 6,
+              whiteSpace: 'nowrap',
             }}
           >
-            <RefreshCw size={14} />
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             <span>Làm mới</span>
           </button>
 
@@ -870,6 +988,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               display: 'inline-flex',
               alignItems: 'center',
               gap: 6,
+              whiteSpace: 'nowrap',
             }}
           >
             <Plus size={15} />
@@ -1473,6 +1592,31 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                   <div>
                     <div style={{ fontWeight: 700 }}>{selectedEventDetail.locationName}</div>
                     <div style={{ color: '#64748b', fontSize: 12 }}>{selectedEventDetail.address}</div>
+                    {Boolean(selectedEventDetail.googleMapsUrl || selectedEventDetail.address) && (
+                      <a
+                        href={
+                          selectedEventDetail.googleMapsUrl ||
+                          `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                            `${selectedEventDetail.locationName} ${selectedEventDetail.address}`
+                          )}`
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          fontSize: 12,
+                          color: '#2563eb',
+                          fontWeight: 600,
+                          textDecoration: 'none',
+                          marginTop: 4,
+                        }}
+                      >
+                        <span>📍 Chỉ đường Google Maps</span>
+                        <ExternalLink size={12} />
+                      </a>
+                    )}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -1611,7 +1755,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         </>
       )}
 
-      {/* ================= MODAL TẠO ĐỢT HIẾN MÁU (ĐỒNG BỘ MÀU #2563eb) ================= */}
+      {/* ================= MODAL TẠO ĐỢT HIẾN MÁU (2 CỘT: FORM + MAP SEARCH & PICKER) ================= */}
       {isCreateOpen && (
         <div
           style={{
@@ -1630,24 +1774,27 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               background: '#ffffff',
               borderRadius: 14,
               width: '100%',
-              maxWidth: 600,
-              maxHeight: '90vh',
+              maxWidth: 1040,
+              maxHeight: '92vh',
               overflowY: 'auto',
               boxShadow: '0 20px 50px rgba(0,0,0,0.2)',
             }}
           >
             <div
               style={{
-                padding: '14px 18px',
+                padding: '14px 20px',
                 borderBottom: '1px solid #e2e8f0',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}
             >
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
-                Tạo đợt hiến máu & Gửi thông báo App
-              </h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Droplet size={18} color="#dc2626" />
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+                  Tạo đợt hiến máu & Gửi thông báo App
+                </h3>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsCreateOpen(false)}
@@ -1667,310 +1814,397 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               </button>
             </div>
 
-            <form
-              onSubmit={handleCreateEvent}
-              style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}
+            <div
+              style={{
+                padding: 20,
+                display: 'grid',
+                gridTemplateColumns: '1.05fr 1fr',
+                gap: 20,
+                alignItems: 'start',
+              }}
             >
-              <div>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
-                  Tên đợt hiến máu *
-                </label>
-                <input
-                  type="text"
-                  value={formTitle}
-                  onChange={(e) => setFormTitle(e.target.value)}
-                  required
-                  style={{
-                    width: '100%',
-                    padding: '8px 11px',
-                    borderRadius: 8,
-                    border: '1px solid #cbd5e1',
-                    fontSize: 13,
+              {/* CỘT TRÁI: FORM NHẬP THÔNG TIN */}
+              <form onSubmit={handleCreateEvent} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                    Tên đợt hiến máu *
+                  </label>
+                  <input
+                    type="text"
+                    value={formTitle}
+                    onChange={(e) => setFormTitle(e.target.value)}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '8px 11px',
+                      borderRadius: 8,
+                      border: '1px solid #cbd5e1',
+                      fontSize: 13,
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                    Khu vực *
+                  </label>
+                  {!isAdmin && authorityAreaId ? (
+                    <input
+                      type="text"
+                      disabled
+                      value={
+                        areas.find((a) => a._id === authorityAreaId)?.name ||
+                        user?.authority?.areaName ||
+                        'Khu vực địa phương quản lý'
+                      }
+                      style={{
+                        width: '100%',
+                        padding: '8px 11px',
+                        borderRadius: 8,
+                        border: '1px solid #cbd5e1',
+                        fontSize: 13,
+                        background: '#f1f5f9',
+                        color: '#475569',
+                        cursor: 'not-allowed',
+                      }}
+                    />
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div>
+                        <div style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4 }}>
+                          1. Tỉnh / Thành phố
+                        </div>
+                        <select
+                          value={selectedProvinceId}
+                          onChange={(e) => {
+                            const provId = e.target.value || 'ALL';
+                            setSelectedProvinceId(provId);
+                            setFormAreaId(provId);
+                            const matched = areas.find((a) => a._id === provId);
+                            if (matched && !formAddress) setFormAddress(matched.name);
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 11px',
+                            borderRadius: 8,
+                            border: '1px solid #cbd5e1',
+                            fontSize: 13,
+                            background: '#ffffff',
+                          }}
+                        >
+                          <option value="">-- Chọn Tỉnh / Thành phố --</option>
+                          {provinceAreas.map((p) => (
+                            <option key={p._id} value={p._id}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4 }}>
+                          2. Phường / Xã
+                        </div>
+                        <select
+                          value={
+                            areas.find((a) => a._id === formAreaId)?.type === 'WARD'
+                              ? formAreaId
+                              : ''
+                          }
+                          onChange={(e) => {
+                            const wardId = e.target.value;
+                            const nextAreaId = wardId || selectedProvinceId;
+                            setFormAreaId(nextAreaId);
+                            const matched = areas.find((a) => a._id === nextAreaId);
+                            if (matched) setFormAddress(matched.name);
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 11px',
+                            borderRadius: 8,
+                            border: '1px solid #cbd5e1',
+                            fontSize: 13,
+                            background: '#ffffff',
+                          }}
+                        >
+                          <option value="">
+                            {selectedProvinceId === 'ALL' || !selectedProvinceId
+                              ? `Tất cả Phường/Xã (${modalWardAreas.length})`
+                              : `Toàn Tỉnh/TP đã chọn (${modalWardAreas.length} Phường/Xã)`}
+                          </option>
+                          {modalWardAreas.map((w) => (
+                            <option key={w._id} value={w._id}>
+                              {w.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                      Địa điểm tổ chức *
+                    </label>
+                    <input
+                      type="text"
+                      value={formLocationName}
+                      onChange={(e) => setFormLocationName(e.target.value)}
+                      required
+                      placeholder="VD: Nhà văn hóa Phường"
+                      style={{
+                        width: '100%',
+                        padding: '8px 11px',
+                        borderRadius: 8,
+                        border: '1px solid #cbd5e1',
+                        fontSize: 13,
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                      Địa chỉ *
+                    </label>
+                    <input
+                      type="text"
+                      value={formAddress}
+                      onChange={(e) => setFormAddress(e.target.value)}
+                      required
+                      placeholder="Số nhà, đường, phường/xã"
+                      style={{
+                        width: '100%',
+                        padding: '8px 11px',
+                        borderRadius: 8,
+                        border: '1px solid #cbd5e1',
+                        fontSize: 13,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Khung tạo địa chỉ map là bắt buộc */}
+                <div>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                    Địa chỉ Google Maps / Link dẫn đường <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      type="text"
+                      value={formMapUrl}
+                      onChange={(e) => setFormMapUrl(e.target.value)}
+                      required
+                      placeholder="Dán link Google Maps, nhập tọa độ (lat, lng), hoặc click chọn trên bản đồ bên phải"
+                      style={{
+                        flex: 1,
+                        padding: '8px 11px',
+                        borderRadius: 8,
+                        border: '1px solid #cbd5e1',
+                        fontSize: 13,
+                        background: '#f8fafc',
+                      }}
+                    />
+                    {Boolean(formMapUrl.trim()) && (
+                      <a
+                        href={
+                          formMapUrl.trim().startsWith('http')
+                            ? formMapUrl.trim()
+                            : `https://www.google.com/maps?q=${encodeURIComponent(formMapUrl.trim())}`
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: 8,
+                          border: '1px solid #cbd5e1',
+                          background: '#f8fafc',
+                          color: '#2563eb',
+                          fontSize: 12.5,
+                          fontWeight: 600,
+                          textDecoration: 'none',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <span>Mở Maps</span>
+                        <ExternalLink size={13} />
+                      </a>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 11.5, color: '#64748b', marginTop: 3, display: 'block' }}>
+                    * Bắt buộc: Dán link Google Maps (hoặc tọa độ) vào đây, hoặc click trực tiếp lên bản đồ bên phải để chọn vị trí.
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr 90px', gap: 10 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                      Ngày tổ chức *
+                    </label>
+                    <input
+                      type="date"
+                      value={formEventDate}
+                      onChange={(e) => setFormEventDate(e.target.value)}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '8px 11px',
+                        borderRadius: 8,
+                        border: '1px solid #cbd5e1',
+                        fontSize: 13,
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                      Bắt đầu *
+                    </label>
+                    <input
+                      type="time"
+                      value={formStartTime}
+                      onChange={(e) => setFormStartTime(e.target.value)}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '8px 11px',
+                        borderRadius: 8,
+                        border: '1px solid #cbd5e1',
+                        fontSize: 13,
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                      Kết thúc *
+                    </label>
+                    <input
+                      type="time"
+                      value={formEndTime}
+                      onChange={(e) => setFormEndTime(e.target.value)}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '8px 11px',
+                        borderRadius: 8,
+                        border: '1px solid #cbd5e1',
+                        fontSize: 13,
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
+                      Chỉ tiêu
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={formTargetDonors}
+                      onChange={(e) => setFormTargetDonors(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 11px',
+                        borderRadius: 8,
+                        border: '1px solid #cbd5e1',
+                        fontSize: 13,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 5 }}>
+                    Nhóm máu cần:
+                  </label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {['ALL', 'O+', 'A+', 'B+', 'AB+', 'O-', 'A-', 'B-', 'AB-'].map((bt) => {
+                      const active = formNeededBlood.includes(bt);
+                      return (
+                        <button
+                          key={bt}
+                          type="button"
+                          onClick={() => toggleBloodNeed(bt)}
+                          style={{
+                            padding: '5px 10px',
+                            borderRadius: 6,
+                            border: `1px solid ${active ? '#2563eb' : '#cbd5e1'}`,
+                            background: active ? '#2563eb' : '#f8fafc',
+                            color: active ? '#ffffff' : '#334155',
+                            fontWeight: 600,
+                            fontSize: 12,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {bt === 'ALL' ? 'Tất cả' : bt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateOpen(false)}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: 8,
+                      border: '1px solid #cbd5e1',
+                      background: '#ffffff',
+                      color: '#334155',
+                      fontWeight: 600,
+                      fontSize: 13,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={creating}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: 8,
+                      border: '1px solid #2563eb',
+                      background: '#2563eb',
+                      color: '#ffffff',
+                      fontWeight: 600,
+                      fontSize: 13,
+                      cursor: creating ? 'not-allowed' : 'pointer',
+                      opacity: creating ? 0.7 : 1,
+                    }}
+                  >
+                    {creating ? 'Đang gửi...' : 'Tạo & Gửi thông báo App'}
+                  </button>
+                </div>
+              </form>
+
+              {/* CỘT PHẢI: BẢN ĐỒ MAP SEARCH & TỌA ĐỘ DẪN ĐƯỜNG */}
+              <div
+                style={{
+                  borderLeft: '1px solid #e2e8f0',
+                  paddingLeft: 20,
+                  height: '100%',
+                }}
+              >
+                <BloodEventMapPicker
+                  mapUrl={formMapUrl}
+                  selectedProvinceName={
+                    selectedProvinceId !== 'ALL'
+                      ? provinceAreas.find((p) => p._id === selectedProvinceId)?.name
+                      : undefined
+                  }
+                  onLocationSelected={(_lat, _lng, googleMapsUrl, detectedAddress) => {
+                    setFormMapUrl(googleMapsUrl);
+                    if (detectedAddress && !formAddress.trim()) {
+                      setFormAddress(detectedAddress);
+                    }
                   }}
                 />
               </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
-                  Khu vực *
-                </label>
-                {!isAdmin && authorityAreaId ? (
-                  <input
-                    type="text"
-                    disabled
-                    value={
-                      areas.find((a) => a._id === authorityAreaId)?.name ||
-                      user?.authority?.areaName ||
-                      'Khu vực địa phương quản lý'
-                    }
-                    style={{
-                      width: '100%',
-                      padding: '8px 11px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      fontSize: 13,
-                      background: '#f1f5f9',
-                      color: '#475569',
-                      cursor: 'not-allowed',
-                    }}
-                  />
-                ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    <div>
-                      <div style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4 }}>
-                        1. Tỉnh / Thành phố
-                      </div>
-                      <select
-                        value={selectedProvinceId}
-                        onChange={(e) => {
-                          const provId = e.target.value || 'ALL';
-                          setSelectedProvinceId(provId);
-                          setFormAreaId(provId);
-                          const matched = areas.find((a) => a._id === provId);
-                          if (matched && !formAddress) setFormAddress(matched.name);
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '8px 11px',
-                          borderRadius: 8,
-                          border: '1px solid #cbd5e1',
-                          fontSize: 13,
-                          background: '#ffffff',
-                        }}
-                      >
-                        <option value="ALL">Toàn hệ thống (Tất cả Tỉnh/TP)</option>
-                        {provinceAreas.map((p) => (
-                          <option key={p._id} value={p._id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <div style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4 }}>
-                        2. Phường / Xã
-                      </div>
-                      <select
-                        value={
-                          areas.find((a) => a._id === formAreaId)?.type === 'WARD'
-                            ? formAreaId
-                            : ''
-                        }
-                        onChange={(e) => {
-                          const wardId = e.target.value;
-                          const nextAreaId = wardId || selectedProvinceId;
-                          setFormAreaId(nextAreaId);
-                          const matched = areas.find((a) => a._id === nextAreaId);
-                          if (matched) setFormAddress(matched.name);
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '8px 11px',
-                          borderRadius: 8,
-                          border: '1px solid #cbd5e1',
-                          fontSize: 13,
-                          background: '#ffffff',
-                        }}
-                      >
-                        <option value="">
-                          {selectedProvinceId === 'ALL'
-                            ? `Tất cả Phường/Xã (${modalWardAreas.length})`
-                            : `Toàn Tỉnh/TP đã chọn (${modalWardAreas.length} Phường/Xã)`}
-                        </option>
-                        {modalWardAreas.map((w) => (
-                          <option key={w._id} value={w._id}>
-                            {w.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
-                    Địa điểm tổ chức *
-                  </label>
-                  <input
-                    type="text"
-                    value={formLocationName}
-                    onChange={(e) => setFormLocationName(e.target.value)}
-                    required
-                    placeholder="VD: Nhà văn hóa Phường"
-                    style={{
-                      width: '100%',
-                      padding: '8px 11px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      fontSize: 13,
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
-                    Địa chỉ *
-                  </label>
-                  <input
-                    type="text"
-                    value={formAddress}
-                    onChange={(e) => setFormAddress(e.target.value)}
-                    required
-                    placeholder="Số nhà, đường, phường/xã"
-                    style={{
-                      width: '100%',
-                      padding: '8px 11px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      fontSize: 13,
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr 90px', gap: 10 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
-                    Ngày tổ chức *
-                  </label>
-                  <input
-                    type="date"
-                    value={formEventDate}
-                    onChange={(e) => setFormEventDate(e.target.value)}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '8px 11px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      fontSize: 13,
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
-                    Bắt đầu *
-                  </label>
-                  <input
-                    type="time"
-                    value={formStartTime}
-                    onChange={(e) => setFormStartTime(e.target.value)}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '8px 11px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      fontSize: 13,
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
-                    Kết thúc *
-                  </label>
-                  <input
-                    type="time"
-                    value={formEndTime}
-                    onChange={(e) => setFormEndTime(e.target.value)}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '8px 11px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      fontSize: 13,
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>
-                    Chỉ tiêu
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={formTargetDonors}
-                    onChange={(e) => setFormTargetDonors(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 11px',
-                      borderRadius: 8,
-                      border: '1px solid #cbd5e1',
-                      fontSize: 13,
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#1e293b', marginBottom: 5 }}>
-                  Nhóm máu cần:
-                </label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {['ALL', 'O+', 'A+', 'B+', 'AB+', 'O-', 'A-', 'B-', 'AB-'].map((bt) => {
-                    const active = formNeededBlood.includes(bt);
-                    return (
-                      <button
-                        key={bt}
-                        type="button"
-                        onClick={() => toggleBloodNeed(bt)}
-                        style={{
-                          padding: '5px 10px',
-                          borderRadius: 6,
-                          border: `1px solid ${active ? '#2563eb' : '#cbd5e1'}`,
-                          background: active ? '#2563eb' : '#f8fafc',
-                          color: active ? '#ffffff' : '#334155',
-                          fontWeight: 600,
-                          fontSize: 12,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {bt === 'ALL' ? 'Tất cả' : bt}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
-                <button
-                  type="button"
-                  onClick={() => setIsCreateOpen(false)}
-                  style={{
-                    padding: '8px 14px',
-                    borderRadius: 8,
-                    border: '1px solid #cbd5e1',
-                    background: '#ffffff',
-                    color: '#334155',
-                    fontWeight: 600,
-                    fontSize: 13,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: 8,
-                    border: '1px solid #2563eb',
-                    background: '#2563eb',
-                    color: '#ffffff',
-                    fontWeight: 600,
-                    fontSize: 13,
-                    cursor: creating ? 'not-allowed' : 'pointer',
-                    opacity: creating ? 0.7 : 1,
-                  }}
-                >
-                  {creating ? 'Đang gửi...' : 'Tạo & Gửi thông báo App'}
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

@@ -29,6 +29,11 @@ const bloodDonationEventSchema = new mongoose.Schema(
       required: [true, 'Địa chỉ chi tiết điểm hiến máu là bắt buộc'],
       trim: true,
     },
+    googleMapsUrl: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     location: {
       type: {
         type: String,
