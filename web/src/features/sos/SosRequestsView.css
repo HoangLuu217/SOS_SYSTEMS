@@ -1023,32 +1023,35 @@
   background: #1E293B;
 }
 
-/* Lightbox xem ảnh hiện trường */
+/* Lightbox xem ảnh hiện trường (đè lên toàn bộ màn hình kể cả panel bên phải) */
 .executive-photo-lightbox-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(6px);
-  z-index: 9999;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 20000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 24px;
   animation: fadeIn 0.2s ease-out;
 }
 
 .executive-photo-lightbox-modal {
   background: #FFFFFF;
   border-radius: 16px;
-  max-width: 650px;
+  max-width: 820px;
   width: 100%;
   overflow: hidden;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  border: 1px solid #E2E8F0;
+  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.45);
+  border: 1px solid #CBD5E1;
+  z-index: 20001;
+  position: relative;
 }
 
 .executive-photo-lightbox-header {
-  padding: 14px 18px;
+  padding: 14px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1065,28 +1068,29 @@
   color: #64748B;
   display: flex;
   align-items: center;
-  padding: 4px;
+  padding: 6px;
   border-radius: 6px;
+  transition: background 0.15s ease;
 }
 
 .executive-photo-lightbox-close:hover {
-  background: #F1F5F9;
+  background: #E2E8F0;
   color: #0F172A;
 }
 
 .executive-photo-lightbox-body {
-  padding: 16px;
+  padding: 16px 20px;
   display: flex;
   justify-content: center;
-  background: #F8FAFC;
+  background: #0F172A;
 }
 
 .executive-photo-lightbox-body img {
-  max-height: 480px;
+  max-height: 78vh;
   max-width: 100%;
   object-fit: contain;
-  border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
 }
 
 
@@ -1284,7 +1288,7 @@
 }
 
 .sos-panel-header {
-  padding: 16px 20px;
+  padding: 14px 20px;
   background: #F8FAFC;
   border-bottom: 1.5px solid #E2E8F0;
   display: flex;
@@ -1294,22 +1298,53 @@
   flex-shrink: 0;
 }
 
+/* Quy chuẩn đồng nhất chiều cao và bo góc cho toàn bộ ô huy hiệu ở header */
+.sos-panel-header .sos-panel-code,
+.sos-panel-header .source-tag,
+.sos-panel-header .source-pill,
+.sos-panel-header .sos-panel-priority,
+.sos-panel-header .sos-panel-type {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: 6px;
+  line-height: 1;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
 .sos-panel-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-weight: 900;
-  font-size: 15px;
+  font-size: 13.5px;
   color: #0F172A;
   background: #FFFFFF;
-  padding: 3px 8px;
-  border-radius: 6px;
-  border: 1px solid #CBD5E1;
+  padding: 0 10px;
+  border: 1.5px solid #CBD5E1;
+  letter-spacing: 0.5px;
+}
+
+.sos-panel-header .source-tag {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 0 8px;
+  letter-spacing: 0.4px;
+}
+
+.sos-panel-header .source-pill {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 0 8px;
+  letter-spacing: 0.3px;
+  border: 1px solid #BAE6FD;
 }
 
 .sos-panel-priority {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 800;
-  padding: 3px 8px;
-  border-radius: 6px;
+  padding: 0 10px;
   letter-spacing: 0.3px;
 }
 
@@ -1333,13 +1368,12 @@
 }
 
 .sos-panel-type {
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 11.5px;
+  font-weight: 700;
   color: #0369A1;
   background: #E0F2FE;
   border: 1px solid #BAE6FD;
-  padding: 3px 8px;
-  border-radius: 6px;
+  padding: 0 10px;
 }
 
 .sos-panel-close-btn {

@@ -446,7 +446,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   });
 
   // State 3 On-Scene Triage Verification
-  const [rescuedHeadcount, setRescuedHeadcount] = useState<number>(4);
+  const [rescuedHeadcount, setRescuedHeadcount] = useState<number>(initialSosData?.people ?? 1);
   const [activeTriageTags, setActiveTriageTags] = useState<Record<string, boolean>>({
     'Cần hỗ trợ y tế': true,
     'Nước chảy xiết': true,
@@ -460,6 +460,44 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   const [capturedPhotoUri, setCapturedPhotoUri] = useState<string | null>(null);
   const [capturedPhotoBase64, setCapturedPhotoBase64] = useState<string | null>(null);
   const completedProofImagesRef = useRef<string[]>([]);
+  const [missionDurationText, setMissionDurationText] = useState<string>('Vừa tiếp nhận');
+
+  // Tính toán thời gian thực hiện thực tế (từ khi nhận/bắt đầu nhiệm vụ đến khi hoàn thành)
+  useEffect(() => {
+    if (completionModalVisible) {
+      const rawStart =
+        assignment?.acceptedAt ||
+        assignment?.startedAt ||
+        assignment?.assignedAt ||
+        assignment?.createdAt ||
+        sos?.createdAt;
+
+      if (!rawStart) {
+        setMissionDurationText('< 1 phút');
+        return;
+      }
+
+      const startDate = new Date(rawStart);
+      if (isNaN(startDate.getTime())) {
+        setMissionDurationText('< 1 phút');
+        return;
+      }
+
+      const endDate = assignment?.completedAt ? new Date(assignment.completedAt) : new Date();
+      const durationMs = Math.max(0, endDate.getTime() - startDate.getTime());
+      const totalMinutes = Math.round(durationMs / 60000);
+
+      if (totalMinutes < 1) {
+        setMissionDurationText('< 1 phút');
+      } else if (totalMinutes < 60) {
+        setMissionDurationText(`${totalMinutes} phút`);
+      } else {
+        const hours = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+        setMissionDurationText(mins > 0 ? `${hours} giờ ${mins} phút` : `${hours} giờ`);
+      }
+    }
+  }, [completionModalVisible, assignment, sos]);
 
   // Thumbnail Zoom Modal
   const [zoomPhotoVisible, setZoomPhotoVisible] = useState<boolean>(false);
@@ -958,7 +996,15 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       }
 
       setMissionState('EN_ROUTE');
-      setAssignment((prev: any) => (prev ? { ...prev, status: 'EN_ROUTE' } : prev));
+      setAssignment((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              status: 'EN_ROUTE',
+              acceptedAt: prev.acceptedAt || new Date().toISOString(),
+            }
+          : prev
+      );
       Vibration.vibrate([0, 150, 100, 150]);
       DeviceEventEmitter.emit('sos:sync');
       onMissionUpdated?.('EN_ROUTE', assignment?._id);
@@ -1030,6 +1076,14 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
   // 9. Xử lý Đã Đến Hiện Trường (State 2 -> State 3)
   const handleArriveAtScene = () => {
+    if (!isLeader) {
+      Alert.alert(
+        'Chỉ Đội Trưởng',
+        'Thành viên chỉ có quyền theo dõi nhiệm vụ. Chỉ Đội trưởng mới có quyền xác nhận đã đến hiện trường.',
+        [{ text: 'Đã hiểu' }]
+      );
+      return;
+    }
     setArriveConfirmModalVisible(true);
   };
 
@@ -1089,13 +1143,21 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
   // 11. Xử lý Hoàn Tất Cứu Hộ & Báo Cáo Kết Thúc (State 3 -> State 4)
   const handleOpenCompleteModal = () => {
+    if (!isLeader) {
+      Alert.alert(
+        'Chỉ Đội Trưởng',
+        'Thành viên chỉ có quyền theo dõi nhiệm vụ. Chỉ Đội trưởng mới có quyền báo cáo hoàn tất cứu hộ.',
+        [{ text: 'Đã hiểu' }]
+      );
+      return;
+    }
     setCompletionModalVisible(true);
   };
 
   const handleFinalSubmitCompletion = async () => {
     try {
       setActionLoading(true);
-      const notePayload = `${fieldReportNotes.trim()} | Đã cứu: ${rescuedHeadcount} người`;
+      const notePayload = `${fieldReportNotes.trim()} | Đã cứu: ${rescuedHeadcount} người | Thời gian hoàn thành: ${missionDurationText}`;
 
       const targetSosId = sos?._id || assignment?.sosRequestId || assignment?.sosId;
 
@@ -1106,6 +1168,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           const fileRes = await backendApi.post('/files', {
             base64Files: [capturedPhotoBase64],
             sosId: targetSosId,
+            purpose: 'PROOF',
           });
           if (fileRes?.urls && fileRes.urls.length > 0) {
             uploadedUrls = fileRes.urls;
@@ -1137,14 +1200,24 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         }
       }
 
+      const recipientName = citizenName || 'Người nhận tại hiện trường';
       if (assignment?._id) {
-        await backendApi.updateAssignmentStatus(assignment._id, 'COMPLETED', notePayload, {
-          proofImages,
-          actualRecipient: citizenName || 'Người nhận tại hiện trường',
-        });
+        try {
+          await backendApi.updateAssignmentStatus(assignment._id, 'COMPLETED', notePayload, {
+            proofImages,
+            actualRecipient: recipientName,
+          });
+        } catch (assignErr) {
+          console.warn('Cập nhật trạng thái phân công thất bại, tiếp tục hoàn tất ca SOS:', assignErr);
+        }
       }
       if (sos?._id) {
-        await backendApi.post(`/sos/${sos._id}/complete`, { notes: notePayload, proofImages });
+        await backendApi.post(`/sos/${sos._id}/complete`, {
+          note: notePayload,
+          notes: notePayload,
+          proofImages,
+          actualRecipient: recipientName,
+        });
       }
 
       setCompletionModalVisible(false);
@@ -2970,41 +3043,67 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 )}
 
                 {missionState === 'EN_ROUTE' && (
-                  <TouchableOpacity
-                    style={[styles.grabBigGreenBtn, { backgroundColor: '#0066FF' }]}
-                    onPress={handleArriveAtScene}
-                    activeOpacity={0.88}
-                  >
-                    <Ionicons name="location-sharp" size={22} color="#FFFFFF" />
-                    <Text style={styles.grabBigBtnText}>
-                      {isShoreHandoffMission
-                        ? 'ĐÃ ĐẾN BẾN ĐÓN (ARRIVED)'
-                        : isReliefMission
-                        ? 'ĐÃ ĐẾN ĐIỂM CỨU TRỢ'
-                        : 'ĐÃ ĐẾN HIỆN TRƯỜNG (ARRIVED)'}
-                    </Text>
-                  </TouchableOpacity>
+                  isLeader ? (
+                    <TouchableOpacity
+                      style={[styles.grabBigGreenBtn, { backgroundColor: '#0066FF' }]}
+                      onPress={handleArriveAtScene}
+                      activeOpacity={0.88}
+                    >
+                      <Ionicons name="location-sharp" size={22} color="#FFFFFF" />
+                      <Text style={styles.grabBigBtnText}>
+                        {isShoreHandoffMission
+                          ? 'ĐÃ ĐẾN BẾN ĐÓN (ARRIVED)'
+                          : isReliefMission
+                          ? 'ĐÃ ĐẾN ĐIỂM CỨU TRỢ'
+                          : 'ĐÃ ĐẾN HIỆN TRƯỜNG (ARRIVED)'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={[styles.grabBigGreenBtn, { backgroundColor: '#F1F5F9', borderColor: '#CBD5E1', borderWidth: 1 }]}>
+                      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={[styles.grabBigBtnText, { color: '#475569', fontSize: 15 }]}>
+                          ĐANG DI CHUYỂN ĐẾN HIỆN TRƯỜNG
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                          Chế độ thành viên (Chờ Đội trưởng xác nhận đến nơi)
+                        </Text>
+                      </View>
+                    </View>
+                  )
                 )}
 
                 {missionState === 'ON_SCENE_RESCUING' && (
                   <View style={{ gap: 10, width: '100%' }}>
-                    {/* NÚT CHÍNH TO BẢN: HOÀN TẤT CỨU HỘ & BÁO CÁO (LUÔN GIỮ NGUYÊN) */}
-                    <TouchableOpacity
-                      style={[styles.grabBigGreenBtn, { backgroundColor: '#059669' }]}
-                      onPress={handleOpenCompleteModal}
-                      activeOpacity={0.88}
-                    >
-                      <Ionicons name="checkmark-done-circle" size={24} color="#FFFFFF" />
-                      <Text style={styles.grabBigBtnText}>
-                        {isShoreHandoffMission
-                          ? 'ĐÃ ĐÓN NẠN NHÂN & HOÀN TẤT'
-                          : shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
-                          ? 'BÀN GIAO LÊN XE & HOÀN TẤT'
-                          : isReliefMission
-                          ? 'BÀN GIAO XONG & HOÀN TẤT'
-                          : 'HOÀN TẤT CỨU HỘ & BÁO CÁO'}
-                      </Text>
-                    </TouchableOpacity>
+                    {/* NÚT CHÍNH TO BẢN: HOÀN TẤT CỨU HỘ & BÁO CÁO (CHỈ ĐỘI TRƯỞNG MỚI ĐƯỢC BẤM) */}
+                    {isLeader ? (
+                      <TouchableOpacity
+                        style={[styles.grabBigGreenBtn, { backgroundColor: '#059669' }]}
+                        onPress={handleOpenCompleteModal}
+                        activeOpacity={0.88}
+                      >
+                        <Ionicons name="checkmark-done-circle" size={24} color="#FFFFFF" />
+                        <Text style={styles.grabBigBtnText}>
+                          {isShoreHandoffMission
+                            ? 'ĐÃ ĐÓN NẠN NHÂN & HOÀN TẤT'
+                            : shoreHandoffData && shoreHandoffData.status === 'ASSIGNED'
+                            ? 'BÀN GIAO LÊN XE & HOÀN TẤT'
+                            : isReliefMission
+                            ? 'BÀN GIAO XONG & HOÀN TẤT'
+                            : 'HOÀN TẤT CỨU HỘ & BÁO CÁO'}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={[styles.grabBigGreenBtn, { backgroundColor: '#F1F5F9', borderColor: '#CBD5E1', borderWidth: 1 }]}>
+                        <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                          <Text style={[styles.grabBigBtnText, { color: '#475569', fontSize: 15 }]}>
+                            ĐANG TÁC CHIẾN TẠI HIỆN TRƯỜNG
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                            Chế độ thành viên (Chờ Đội trưởng hoàn tất & báo cáo)
+                          </Text>
+                        </View>
+                      </View>
+                    )}
                   </View>
                 )}
 
@@ -3923,8 +4022,8 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   </Text>
                 </View>
                 <View style={styles.statBox}>
-                  <Text style={styles.statLabel}>Thời gian tiếp cận</Text>
-                  <Text style={styles.statValue}>18 phút</Text>
+                  <Text style={styles.statLabel}>Thời gian hoàn thành</Text>
+                  <Text style={styles.statValue}>{missionDurationText}</Text>
                 </View>
               </View>
 
