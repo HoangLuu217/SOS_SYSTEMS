@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import {
   Alert,
   StatusBar,
   Image,
+  ScrollView,
+  Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -27,6 +29,57 @@ import * as ImagePicker from 'expo-image-picker';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '@/context/AuthContext';
 import { backendApi, ChatMessageItem, LocalAuthorityInfo } from '@/api';
+
+export interface WardOption {
+  ward: string;
+  category: string;
+  province: string;
+  fullName: string;
+}
+
+const removeVietnameseTones = (str: string): string => {
+  return (str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim();
+};
+
+const DANANG_CATEGORIES = [
+  'Tất cả',
+  'Trung tâm',
+  'Ven biển',
+  'Đô thị mới',
+  'Ngoại thành',
+];
+
+const POPULAR_WARDS: WardOption[] = [
+  // 1. Phường Trung tâm
+  { ward: 'Phường Hải Châu', category: 'Trung tâm', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hải Châu, Thành phố Đà Nẵng' },
+  { ward: 'Phường Thanh Khê', category: 'Trung tâm', province: 'Thành phố Đà Nẵng', fullName: 'Phường Thanh Khê, Thành phố Đà Nẵng' },
+  { ward: 'Phường An Khê', category: 'Trung tâm', province: 'Thành phố Đà Nẵng', fullName: 'Phường An Khê, Thành phố Đà Nẵng' },
+  { ward: 'Phường Hòa Cường', category: 'Trung tâm', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hòa Cường, Thành phố Đà Nẵng' },
+
+  // 2. Phường Ven biển & Hải đảo
+  { ward: 'Phường Sơn Trà', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường Sơn Trà, Thành phố Đà Nẵng' },
+  { ward: 'Phường An Hải', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường An Hải, Thành phố Đà Nẵng' },
+  { ward: 'Phường Ngũ Hành Sơn', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường Ngũ Hành Sơn, Thành phố Đà Nẵng' },
+  { ward: 'Phường Hải Vân', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hải Vân, Thành phố Đà Nẵng' },
+  { ward: 'Đặc khu Hoàng Sa', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Đặc khu Hoàng Sa, Thành phố Đà Nẵng' },
+
+  // 3. Phường Đô thị mới & Công nghiệp
+  { ward: 'Phường Liên Chiểu', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Liên Chiểu, Thành phố Đà Nẵng' },
+  { ward: 'Phường Hòa Khánh', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hòa Khánh, Thành phố Đà Nẵng' },
+  { ward: 'Phường Cẩm Lệ', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Cẩm Lệ, Thành phố Đà Nẵng' },
+  { ward: 'Phường Hòa Xuân', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hòa Xuân, Thành phố Đà Nẵng' },
+
+  // 4. Ngoại thành & Nông thôn
+  { ward: 'Xã Hòa Vang', category: 'Ngoại thành', province: 'Thành phố Đà Nẵng', fullName: 'Xã Hòa Vang, Thành phố Đà Nẵng' },
+  { ward: 'Xã Hòa Tiến', category: 'Ngoại thành', province: 'Thành phố Đà Nẵng', fullName: 'Xã Hòa Tiến, Thành phố Đà Nẵng' },
+  { ward: 'Xã Bà Nà', category: 'Ngoại thành', province: 'Thành phố Đà Nẵng', fullName: 'Xã Bà Nà, Thành phố Đà Nẵng' },
+];
 
 interface LocalAuthorityChatModalProps {
   visible: boolean;
@@ -48,6 +101,12 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
   const [wardName, setWardName] = useState<string>('Thanh Khê');
   const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number } | null>(null);
 
+  // Tùy chọn chuyển đổi Phường/Xã thủ công (thay vì cố định theo GPS / Hồ sơ)
+  const [showWardPicker, setShowWardPicker] = useState(false);
+  const [selectedCustomWard, setSelectedCustomWard] = useState<WardOption | null>(null);
+  const [searchWardText, setSearchWardText] = useState('');
+  const [selectedCategoryTab, setSelectedCategoryTab] = useState('Tất cả');
+
   // Danh sách tin nhắn & input
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
   const [inputText, setInputText] = useState('');
@@ -61,128 +120,25 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
   const flatListRef = useRef<FlatList>(null);
   const socketRef = useRef<Socket | null>(null);
 
-  // Xác định địa phương của người dân (từ GPS thực tế hoặc địa chỉ trong hồ sơ)
-  useEffect(() => {
-    if (!visible) {
-      setMessages([]);
-      return;
-    }
-
-    // Reset sạch tin nhắn khi mở modal hoặc khi tài khoản thay đổi
-    setMessages([]);
-    let isMounted = true;
-
-    const resolveAreaAndAuthority = async () => {
-      setLoadingInfo(true);
-      let detectedArea = '';
-      let detectedProvince = '';
-      let detectedWard = '';
-      let lat: number | undefined = undefined;
-      let lng: number | undefined = undefined;
-
-      // 1. ƯU TIÊN SỐ 1 TUYỆT ĐỐI: Dựa trên ĐỊA CHỈ của Customer (user.address)
-      if (user?.address && user.address.trim()) {
-        const fullAddress = user.address.trim();
-        detectedArea = fullAddress;
-
-        const parts = fullAddress.split(',').map((s) => s.trim()).filter(Boolean);
-        if (parts.length >= 3) {
-          detectedProvince = parts[parts.length - 1]; // Tỉnh / Thành phố
-          detectedWard = parts[parts.length - 2];     // Phường / Xã / Thị trấn
-        } else if (parts.length === 2) {
-          detectedProvince = parts[1];
-          detectedWard = parts[0];
-        } else {
-          detectedProvince = fullAddress;
-        }
-
-        // Tự động geocode toạ độ [lat, lng] của địa chỉ Customer để khớp đúng Ban chỉ huy / UBND địa bàn đó
-        try {
-          const geoList = await Location.geocodeAsync(fullAddress);
-          if (geoList && geoList.length > 0) {
-            lat = geoList[0].latitude;
-            lng = geoList[0].longitude;
-            if (isMounted) setCurrentCoords({ lat, lng });
-          }
-        } catch (err) {
-          console.log('[Geocode Customer Address Note]:', err);
-        }
-      } else {
-        // 2. CHỈ KHI CUSTOMER CHƯA LƯU ĐỊA CHỈ: Mới fallback lấy toạ độ GPS thiết bị
-        try {
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status === 'granted') {
-            const loc = await Location.getCurrentPositionAsync({
-              accuracy: Location.Accuracy.Balanced,
-            });
-            lat = loc.coords.latitude;
-            lng = loc.coords.longitude;
-            if (isMounted) setCurrentCoords({ lat, lng });
-
-            // Dịch ngược toạ độ (reverse geocode)
-            const geoList = await Location.reverseGeocodeAsync({
-              latitude: loc.coords.latitude,
-              longitude: loc.coords.longitude,
-            });
-
-            if (geoList && geoList.length > 0) {
-              const geo = geoList[0];
-              detectedProvince = geo.region || geo.city || '';
-              detectedWard = geo.district || geo.subregion || geo.street || geo.name || '';
-              detectedArea = [detectedWard, detectedProvince].filter(Boolean).join(', ');
-            }
-          }
-        } catch (err) {
-          console.log('[GPS Detect Note]:', err);
-        }
-      }
-
-      if (!detectedArea) {
-        detectedArea = 'Khu vực của bạn';
-      }
-
-      if (isMounted) {
-        setUserLocationName(detectedArea);
-        if (detectedProvince) setProvinceName(detectedProvince);
-        if (detectedWard) setWardName(detectedWard);
-      }
-
-      // 3. Gọi Backend lấy thông tin Ban chỉ huy / Cán bộ địa phương quản lý đúng địa bàn
-      try {
-        const res = await backendApi.getLocalAuthority({
-          areaName: detectedArea !== 'Khu vực của bạn' ? detectedArea : (user?.address || undefined),
-          province: detectedProvince || undefined,
-          ward: detectedWard || undefined,
-          lat,
-          lng,
-          userId: user?._id,
+  // Tải lịch sử tin nhắn của kênh địa phương
+  const loadChatHistory = async (channel: string) => {
+    setLoadingMessages(true);
+    try {
+      const res = await backendApi.getChatMessages({ channel, limit: 100 });
+      if (res.success && res.data?.messages) {
+        const seen = new Set<string>();
+        const uniqueList = res.data.messages.filter((m) => {
+          if (!m._id || seen.has(m._id)) return false;
+          seen.add(m._id);
+          return true;
         });
-
-        if (isMounted && res.success && res.data) {
-          setLocalInfo(res.data);
-          if (res.data.areaName) {
-            setUserLocationName(res.data.areaName);
-          }
-          loadChatHistory(res.data.channel);
-          initRealtimeSocket(res.data.channel);
-        }
-      } catch (err) {
-        console.warn('[Get Local Authority Error]:', err);
-      } finally {
-        if (isMounted) setLoadingInfo(false);
+        setMessages(uniqueList);
       }
-    };
-
-    resolveAreaAndAuthority();
-
-    return () => {
-      isMounted = false;
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-    };
-  }, [visible, user?._id, user?.address]);
+    } catch {
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
 
   // Kết nối Socket.IO thời gian thực
   const initRealtimeSocket = async (channel: string) => {
@@ -242,25 +198,195 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
     }
   };
 
-  // Tải lịch sử tin nhắn của kênh địa phương
-  const loadChatHistory = async (channel: string) => {
-    setLoadingMessages(true);
-    try {
-      const res = await backendApi.getChatMessages({ channel, limit: 100 });
-      if (res.success && res.data?.messages) {
-        const seen = new Set<string>();
-        const uniqueList = res.data.messages.filter((m) => {
-          if (!m._id || seen.has(m._id)) return false;
-          seen.add(m._id);
-          return true;
-        });
-        setMessages(uniqueList);
+  // Tự động phân giải địa phương mặc định (từ GPS thực tế hoặc địa chỉ trong hồ sơ)
+  const resolveAreaAndAuthority = useCallback(async () => {
+    setLoadingInfo(true);
+    let detectedArea = '';
+    let detectedProvince = '';
+    let detectedWard = '';
+    let lat: number | undefined = undefined;
+    let lng: number | undefined = undefined;
+
+    // 1. ƯU TIÊN SỐ 1 TUYỆT ĐỐI: Dựa trên ĐỊA CHỈ của Customer (user.address)
+    if (user?.address && user.address.trim()) {
+      const fullAddress = user.address.trim();
+      detectedArea = fullAddress;
+
+      const parts = fullAddress.split(',').map((s) => s.trim()).filter(Boolean);
+      if (parts.length >= 3) {
+        detectedProvince = parts[parts.length - 1]; // Tỉnh / Thành phố
+        detectedWard = parts[parts.length - 2];     // Phường / Xã / Thị trấn
+      } else if (parts.length === 2) {
+        detectedProvince = parts[1];
+        detectedWard = parts[0];
+      } else {
+        detectedProvince = fullAddress;
       }
-    } catch {
+
+      // Tự động geocode toạ độ [lat, lng] của địa chỉ Customer
+      try {
+        const geoList = await Location.geocodeAsync(fullAddress);
+        if (geoList && geoList.length > 0) {
+          lat = geoList[0].latitude;
+          lng = geoList[0].longitude;
+          setCurrentCoords({ lat, lng });
+        }
+      } catch (err) {
+        console.log('[Geocode Customer Address Note]:', err);
+      }
+    } else {
+      // 2. CHỈ KHI CUSTOMER CHƯA LƯU ĐỊA CHỈ: Mới fallback lấy toạ độ GPS thiết bị
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          lat = loc.coords.latitude;
+          lng = loc.coords.longitude;
+          setCurrentCoords({ lat, lng });
+
+          const geoList = await Location.reverseGeocodeAsync({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          });
+
+          if (geoList && geoList.length > 0) {
+            const geo = geoList[0];
+            detectedProvince = geo.region || geo.city || '';
+            detectedWard = geo.district || geo.subregion || geo.street || geo.name || '';
+            detectedArea = [detectedWard, detectedProvince].filter(Boolean).join(', ');
+          }
+        }
+      } catch (err) {
+        console.log('[GPS Detect Note]:', err);
+      }
+    }
+
+    if (!detectedArea) {
+      detectedArea = 'Khu vực của bạn';
+    }
+
+    setUserLocationName(detectedArea);
+    if (detectedProvince) setProvinceName(detectedProvince);
+    if (detectedWard) setWardName(detectedWard);
+
+    // 3. Gọi Backend lấy thông tin Ban chỉ huy / Cán bộ địa phương quản lý đúng địa bàn
+    try {
+      const res = await backendApi.getLocalAuthority({
+        areaName: detectedArea !== 'Khu vực của bạn' ? detectedArea : (user?.address || undefined),
+        province: detectedProvince || undefined,
+        ward: detectedWard || undefined,
+        lat,
+        lng,
+        userId: user?._id,
+      });
+
+      if (res.success && res.data) {
+        setLocalInfo(res.data);
+        if (res.data.areaName) {
+          setUserLocationName(res.data.areaName);
+        }
+        loadChatHistory(res.data.channel);
+        initRealtimeSocket(res.data.channel);
+      }
+    } catch (err) {
+      console.warn('[Get Local Authority Error]:', err);
     } finally {
-      setLoadingMessages(false);
+      setLoadingInfo(false);
+    }
+  }, [user?._id, user?.address]);
+
+  // Khởi động phân giải khi mở modal
+  useEffect(() => {
+    if (!visible) {
+      setMessages([]);
+      setSelectedCustomWard(null);
+      return;
+    }
+
+    setMessages([]);
+    if (!selectedCustomWard) {
+      resolveAreaAndAuthority();
+    }
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    };
+  }, [visible, resolveAreaAndAuthority]);
+
+  // Xử lý chuyển kênh chat sang một Phường/Xã được người dân tự chọn
+  const handleSelectWard = async (wardItem: WardOption | null) => {
+    setShowWardPicker(false);
+    setSearchWardText('');
+    setMessages([]);
+    setLoadingInfo(true);
+
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+
+    if (!wardItem) {
+      // Quay về mặc định GPS / Hồ sơ cá nhân
+      setSelectedCustomWard(null);
+      await resolveAreaAndAuthority();
+      return;
+    }
+
+    setSelectedCustomWard(wardItem);
+    setUserLocationName(wardItem.fullName);
+    setWardName(wardItem.ward);
+    setProvinceName(wardItem.province);
+
+    try {
+      const res = await backendApi.getLocalAuthority({
+        areaName: wardItem.fullName,
+        ward: wardItem.ward,
+        province: wardItem.province,
+        userId: user?._id,
+      });
+
+      if (res.success && res.data) {
+        setLocalInfo(res.data);
+        if (res.data.areaName) {
+          setUserLocationName(res.data.areaName);
+        }
+        loadChatHistory(res.data.channel);
+        initRealtimeSocket(res.data.channel);
+      }
+    } catch (err) {
+      console.warn('[Select Custom Ward Error]:', err);
+      Alert.alert('Lỗi kết nối', `Không thể kết nối đến cơ quan ${wardItem.ward}. Vui lòng thử lại.`);
+    } finally {
+      setLoadingInfo(false);
     }
   };
+
+  // Danh sách phường/xã đã lọc theo ô tìm kiếm và tab Khu vực (hỗ trợ tiếng Việt không dấu)
+  const filteredWards = POPULAR_WARDS.filter((w) => {
+    const matchCategory = selectedCategoryTab === 'Tất cả' || w.category === selectedCategoryTab;
+    const rawQ = searchWardText.trim().toLowerCase();
+    if (!rawQ) return matchCategory;
+
+    const cleanQ = removeVietnameseTones(rawQ);
+    const wardClean = removeVietnameseTones(w.ward);
+    const catClean = removeVietnameseTones(w.category);
+    const fullClean = removeVietnameseTones(w.fullName);
+
+    const matchSearch =
+      w.ward.toLowerCase().includes(rawQ) ||
+      w.category.toLowerCase().includes(rawQ) ||
+      w.fullName.toLowerCase().includes(rawQ) ||
+      wardClean.includes(cleanQ) ||
+      catClean.includes(cleanQ) ||
+      fullClean.includes(cleanQ);
+
+    return matchCategory && matchSearch;
+  });
 
   // Gửi tin nhắn văn bản
   const handleSendMessage = async (textToSend?: string) => {
@@ -451,6 +577,18 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
               {
                 text: `Gọi trực ban (${hotline})`,
                 onPress: handleCallHotline,
+              },
+            ]
+          : []),
+        {
+          text: 'Đổi Phường / Xã khác',
+          onPress: () => setShowWardPicker(true),
+        },
+        ...(selectedCustomWard
+          ? [
+              {
+                text: 'Về địa chỉ GPS / hồ sơ mặc định',
+                onPress: () => handleSelectWard(null),
               },
             ]
           : []),
@@ -723,11 +861,18 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
             />
           </View>
 
-          {/* Tiêu đề & phụ đề địa phương */}
-          <View style={styles.headerTextWrap}>
-            <Text style={styles.headerTitle} numberOfLines={1}>
-              {headerDepartmentTitle}
-            </Text>
+          {/* Tiêu đề & phụ đề địa phương (nhấn để đổi phường/xã) */}
+          <TouchableOpacity
+            style={styles.headerTextWrap}
+            onPress={() => setShowWardPicker(true)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.headerTitleRow}>
+              <Text style={styles.headerTitle} numberOfLines={1}>
+                {headerDepartmentTitle}
+              </Text>
+              <Ionicons name="chevron-down" size={14} color="#64748B" style={{ marginLeft: 3 }} />
+            </View>
             <View style={styles.headerSubRow}>
               <View
                 style={[
@@ -738,8 +883,20 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
               <Text style={styles.headerSubtitle} numberOfLines={1}>
                 {isConnected ? headerSubtitleText : 'Đang kết nối lại...'}
               </Text>
+              <Text style={styles.headerChangeBadge}>Đổi</Text>
             </View>
-          </View>
+          </TouchableOpacity>
+
+          {/* Nút chọn phường / xã */}
+          <TouchableOpacity
+            style={styles.headerActionBtn}
+            onPress={() => setShowWardPicker(true)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            activeOpacity={0.7}
+            accessibilityLabel="Đổi Phường / Xã"
+          >
+            <Ionicons name="map-outline" size={18} color="#0066FF" />
+          </TouchableOpacity>
 
           {/* Nút gọi điện khẩn cấp đến chính quyền địa phương */}
           <TouchableOpacity
@@ -807,6 +964,22 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
                     <Text style={styles.introCardDesc}>
                       Kết nối trực tiếp với cán bộ phụ trách cứu hộ & phòng chống thiên tai cơ sở. Gửi ngay vị trí hoặc tin nhắn nếu cần hỗ trợ khẩn cấp.
                     </Text>
+
+                    {/* Nút chuyển đổi phường / xã nhanh */}
+                    <TouchableOpacity
+                      style={styles.introWardBadgeBtn}
+                      onPress={() => setShowWardPicker(true)}
+                      activeOpacity={0.75}
+                    >
+                      <Ionicons name="location-outline" size={15} color="#0066FF" />
+                      <Text style={styles.introWardBadgeText} numberOfLines={1}>
+                        {selectedCustomWard ? `Đang kết nối: ${selectedCustomWard.ward}` : `Khu vực: ${displayArea}`}
+                      </Text>
+                      <View style={styles.introWardChangeTag}>
+                        <Text style={styles.introWardChangeLink}>Đổi phường</Text>
+                        <Ionicons name="chevron-forward" size={12} color="#0066FF" />
+                      </View>
+                    </TouchableOpacity>
 
                     {/* Nút gửi tọa độ GPS */}
                     <TouchableOpacity
@@ -950,6 +1123,178 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
             )}
           </View>
         </Modal>
+
+        {/* Modal Chọn Phường / Xã để kết nối cứu hộ */}
+        <Modal
+          visible={showWardPicker}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => {
+            Keyboard.dismiss();
+            setShowWardPicker(false);
+          }}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.wardModalBackdrop}
+          >
+            {/* Vùng mờ bấm ngoài để đóng và ẩn bàn phím */}
+            <TouchableOpacity
+              style={StyleSheet.absoluteFillObject}
+              activeOpacity={1}
+              onPress={() => {
+                Keyboard.dismiss();
+                setShowWardPicker(false);
+              }}
+            />
+
+            <View style={styles.wardModalContent}>
+              {/* Header Modal */}
+              <View style={styles.wardModalHeader}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={styles.wardModalTitle}>Chọn Phường / Xã cứu hộ</Text>
+                  <Text style={styles.wardModalSubtitle}>
+                    Kết nối trực tiếp tới cơ quan trực ban theo địa bàn bạn chọn
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.wardModalCloseBtn}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setShowWardPicker(false);
+                  }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Ionicons name="close" size={20} color="#0F172A" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Ô tìm kiếm */}
+              <View style={styles.wardSearchBox}>
+                <Ionicons name="search" size={17} color="#64748B" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.wardSearchInput}
+                  placeholder="Tìm theo tên phường, xã, khu vực..."
+                  placeholderTextColor="#94A3B8"
+                  value={searchWardText}
+                  onChangeText={setSearchWardText}
+                  autoCorrect={false}
+                  returnKeyType="search"
+                  onSubmitEditing={() => Keyboard.dismiss()}
+                />
+                {!!searchWardText && (
+                  <TouchableOpacity onPress={() => setSearchWardText('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
+                {/* Nút hạ bàn phím nhanh */}
+                <TouchableOpacity
+                  onPress={() => Keyboard.dismiss()}
+                  style={styles.dismissKeyboardBtn}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <Ionicons name="chevron-down" size={16} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Thanh cuộn ngang lọc theo Khu vực */}
+              <View style={styles.districtChipsWrap}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.districtChipsScroll}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {DANANG_CATEGORIES.map((cat) => {
+                    const isActive = selectedCategoryTab === cat;
+                    return (
+                      <TouchableOpacity
+                        key={cat}
+                        style={[styles.districtChip, isActive && styles.districtChipActive]}
+                        onPress={() => setSelectedCategoryTab(cat)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.districtChipText, isActive && styles.districtChipTextActive]}>
+                          {cat}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              {/* Nút đặt lại về địa chỉ GPS / hồ sơ cá nhân (chỉ hiện khi chưa gõ tìm kiếm để không choán chỗ) */}
+              {!searchWardText.trim() && (
+                <TouchableOpacity
+                  style={styles.defaultAddressBtn}
+                  onPress={() => handleSelectWard(null)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.defaultAddressIconWrap}>
+                    <Ionicons name="locate" size={18} color="#0066FF" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.defaultAddressTitle}>Dùng vị trí mặc định (GPS / Hồ sơ)</Text>
+                    <Text style={styles.defaultAddressSub} numberOfLines={1}>
+                      {user?.address || 'Tự động định vị vị trí hiện tại của thiết bị'}
+                    </Text>
+                  </View>
+                  {!selectedCustomWard && (
+                    <Ionicons name="checkmark-circle" size={20} color="#0066FF" />
+                  )}
+                </TouchableOpacity>
+              )}
+
+              {/* Danh sách các phường / xã (mô hình 2 cấp sau sáp nhập) */}
+              <FlatList
+                data={filteredWards}
+                keyExtractor={(item, index) => `${item.ward}_${index}`}
+                contentContainerStyle={styles.wardListContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                renderItem={({ item }) => {
+                  const isSelected = selectedCustomWard?.ward === item.ward;
+                  return (
+                    <TouchableOpacity
+                      style={[styles.wardItemCard, isSelected && styles.wardItemCardSelected]}
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        handleSelectWard(item);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.wardItemLeft}>
+                        <View style={[styles.wardItemIcon, isSelected && styles.wardItemIconSelected]}>
+                          <FontAwesome5 name="landmark" size={13} color={isSelected ? '#0066FF' : '#64748B'} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.wardItemName, isSelected && styles.wardItemNameSelected]}>
+                            {item.ward}
+                          </Text>
+                          <Text style={styles.wardItemDistrict}>
+                            Trực thuộc TP. Đà Nẵng · Khu vực {item.category}
+                          </Text>
+                        </View>
+                      </View>
+                      {isSelected ? (
+                        <Ionicons name="checkmark-circle" size={20} color="#0066FF" />
+                      ) : (
+                        <Ionicons name="chevron-forward" size={16} color="#CBD5E1" />
+                      )}
+                    </TouchableOpacity>
+                  );
+                }}
+                ListEmptyComponent={
+                  <View style={styles.wardEmptyWrap}>
+                    <Ionicons name="search-outline" size={32} color="#CBD5E1" />
+                    <Text style={styles.wardEmptyText}>Không tìm thấy phường/xã phù hợp</Text>
+                  </View>
+                }
+              />
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       </View>
     </Modal>
   );
@@ -1011,6 +1356,20 @@ const styles = StyleSheet.create({
   headerTextWrap: {
     flex: 1,
     justifyContent: 'center',
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerChangeBadge: {
+    fontSize: 10,
+    color: '#0066FF',
+    fontWeight: '700',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginLeft: 4,
   },
   headerTitle: {
     fontSize: 15.5,
@@ -1098,7 +1457,39 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748B',
     lineHeight: 19,
-    marginBottom: 14,
+    marginBottom: 10,
+  },
+  introWardBadgeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    marginBottom: 12,
+  },
+  introWardBadgeText: {
+    flex: 1,
+    fontSize: 12.5,
+    color: '#1E293B',
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  introWardChangeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+  },
+  introWardChangeLink: {
+    fontSize: 11,
+    color: '#0066FF',
+    fontWeight: '700',
   },
   sendGpsButton: {
     flexDirection: 'row',
@@ -1408,5 +1799,198 @@ const styles = StyleSheet.create({
   lightboxImage: {
     width: '100%',
     height: '80%',
+  },
+
+  // ==================== WARD PICKER MODAL ====================
+  wardModalBackdrop: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    justifyContent: 'flex-end',
+  },
+  wardModalContent: {
+    width: '100%',
+    maxWidth: '100%',
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 16,
+    maxHeight: '92%',
+    height: '78%',
+    overflow: 'hidden',
+  },
+  wardModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    width: '100%',
+  },
+  wardModalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  wardModalSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  wardModalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  wardSearchBox: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 42,
+    marginBottom: 10,
+  },
+  wardSearchInput: {
+    flex: 1,
+    fontSize: 13.5,
+    color: '#0F172A',
+    paddingVertical: 0,
+  },
+  dismissKeyboardBtn: {
+    marginLeft: 6,
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  districtChipsWrap: {
+    width: '100%',
+    marginBottom: 10,
+  },
+  districtChipsScroll: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 2,
+  },
+  districtChip: {
+    paddingHorizontal: 13,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  districtChipActive: {
+    backgroundColor: '#0066FF',
+    borderColor: '#0066FF',
+  },
+  districtChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  districtChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  defaultAddressBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 10,
+  },
+  defaultAddressIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#DBEAFE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  defaultAddressTitle: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0066FF',
+  },
+  defaultAddressSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  wardListContent: {
+    paddingBottom: 16,
+  },
+  wardItemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    marginBottom: 6,
+  },
+  wardItemCardSelected: {
+    backgroundColor: '#F0F9FF',
+    borderColor: '#BAE6FD',
+  },
+  wardItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  wardItemIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  wardItemIconSelected: {
+    backgroundColor: '#EFF6FF',
+  },
+  wardItemName: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  wardItemNameSelected: {
+    color: '#0066FF',
+    fontWeight: '700',
+  },
+  wardItemDistrict: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  wardEmptyWrap: {
+    alignItems: 'center',
+    paddingVertical: 24,
+  },
+  wardEmptyText: {
+    fontSize: 12.5,
+    color: '#94A3B8',
+    marginTop: 6,
   },
 });
