@@ -178,6 +178,19 @@ class BloodDonationController {
   }
 
   /**
+   * DELETE /blood-donations/events/:id
+   * Xóa sự kiện hiến máu
+   */
+  async deleteEvent(req, res, next) {
+    try {
+      const result = await bloodDonationService.deleteEvent(req.user, req.params.id);
+      return sendSuccess(res, 200, result.message, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * GET /blood-donations/geocode/search?q=...
    * Tìm kiếm vị trí, địa chỉ qua Nominatim & Photon (tránh lỗi CORS và 403 ở client)
    */

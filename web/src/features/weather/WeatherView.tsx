@@ -241,10 +241,10 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
           activeTab === 'approved'
             ? 'approved'
             : activeTab === 'pending'
-            ? 'pending'
-            : activeTab === 'archived'
-            ? 'archived'
-            : undefined;
+              ? 'pending'
+              : activeTab === 'archived'
+                ? 'archived'
+                : undefined;
 
         const res = await fetchWeatherArticlesApi({
           search: searchTerm.trim() || undefined,
@@ -450,8 +450,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
       typeof item.areaId === 'object' && item.areaId?._id
         ? item.areaId._id
         : typeof item.areaId === 'string' && item.areaId
-        ? item.areaId
-        : 'ALL';
+          ? item.areaId
+          : 'ALL';
 
     if (defaultAreaId !== 'ALL') {
       const matchedArea = areaById.get(defaultAreaId);
@@ -633,6 +633,44 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
           fetchArticles();
         } catch (err: any) {
           toast.error(err.message || 'Lỗi khi duyệt hàng loạt');
+        } finally {
+          setBatchLoading(false);
+        }
+      },
+    });
+  };
+
+  // Batch action: Xóa đồng loạt nhiều bài viết đã chọn
+  const handleBatchDelete = () => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    setConfirmModal({
+      isOpen: true,
+      title: `Xác nhận xóa ${count} bản tin đã chọn`,
+      message: `Bạn có chắc chắn muốn xóa/lưu trữ đồng loạt ${count} bản tin đã chọn? Sau khi xóa, các bản tin này sẽ không còn hiển thị và bị gỡ bỏ khỏi ứng dụng di động.`,
+      type: 'danger',
+      confirmText: `Xóa ${count} bản tin`,
+      cancelText: 'Hủy bỏ',
+      onConfirm: async () => {
+        try {
+          setBatchLoading(true);
+          const ids = Array.from(selectedIds);
+          let successCount = 0;
+          await Promise.all(
+            ids.map(async (id) => {
+              try {
+                await deleteWeatherArticleApi(id);
+                successCount++;
+              } catch (e) {
+                console.error(`Lỗi xóa ID ${id}:`, e);
+              }
+            })
+          );
+          toast.success(`Đã xóa thành công ${successCount}/${ids.length} bản tin đã chọn!`);
+          setSelectedIds(new Set());
+          fetchArticles();
+        } catch (err: any) {
+          toast.error(err.message || 'Lỗi khi xóa đồng loạt bản tin');
         } finally {
           setBatchLoading(false);
         }
@@ -907,23 +945,34 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Batch Actions Bar for Pending Tab Table */}
-      {activeTab === 'pending' && selectedIds.size > 0 && (
+      {/* Batch Actions Bar for Selected Articles */}
+      {selectedIds.size > 0 && (
         <div className="weather-batch-bar">
           <div className="weather-batch-info">
             <CheckCheck size={18} color="#0284c7" />
             <span>
-              Đã chọn <strong>{selectedIds.size}</strong> bản tin chờ duyệt
+              Đã chọn <strong>{selectedIds.size}</strong> bản tin
+              {activeTab === 'pending' ? ' chờ duyệt' : ''}
             </span>
           </div>
           <div className="weather-batch-buttons">
+            {activeTab === 'pending' && (
+              <button
+                className="btn-batch-approve"
+                onClick={handleBatchApprove}
+                disabled={batchLoading}
+              >
+                <CheckCircle2 size={16} />
+                {batchLoading ? 'Đang duyệt...' : `Duyệt nhanh ${selectedIds.size} bản tin đã chọn`}
+              </button>
+            )}
             <button
-              className="btn-batch-approve"
-              onClick={handleBatchApprove}
+              className="btn-batch-delete"
+              onClick={handleBatchDelete}
               disabled={batchLoading}
             >
-              <CheckCircle2 size={16} />
-              {batchLoading ? 'Đang duyệt...' : `Duyệt nhanh ${selectedIds.size} bản tin đã chọn`}
+              <Trash2 size={15} />
+              {batchLoading ? 'Đang xóa...' : `Xóa ${selectedIds.size} bản tin đã chọn`}
             </button>
             <button className="btn-batch-clear" onClick={() => setSelectedIds(new Set())}>
               Bỏ chọn
@@ -946,8 +995,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
             {activeTab === 'approved'
               ? 'Chưa có bản tin nào được phê duyệt. Hãy chuyển sang tab "Chờ kiểm duyệt" để duyệt các bản tin cào về!'
               : activeTab === 'pending'
-              ? 'Tất cả bản tin cào về đã được duyệt sạch sẽ! Nhấn "Chạy thu thập ngay" để AI cào thêm tin mới.'
-              : 'Không tìm thấy kết quả phù hợp với bộ lọc hiện tại.'}
+                ? 'Tất cả bản tin cào về đã được duyệt sạch sẽ! Nhấn "Chạy thu thập ngay" để AI cào thêm tin mới.'
+                : 'Không tìm thấy kết quả phù hợp với bộ lọc hiện tại.'}
           </p>
           {activeTab === 'approved' && globalCounts.pending > 0 && (
             <button
@@ -967,7 +1016,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
             <table className="weather-table">
               <thead>
                 <tr>
-                  {canManage && activeTab === 'pending' && (
+                  {canManage && (
                     <th style={{ width: 40, textAlign: 'center' }}>
                       <input
                         type="checkbox"
@@ -1000,11 +1049,10 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                   return (
                     <tr
                       key={item._id}
-                      className={`${isSelected ? 'row-selected' : ''} ${
-                        isPending ? 'row-pending' : ''
-                      }`}
+                      className={`${isSelected ? 'row-selected' : ''} ${isPending ? 'row-pending' : ''
+                        }`}
                     >
-                      {canManage && activeTab === 'pending' && (
+                      {canManage && (
                         <td style={{ textAlign: 'center' }}>
                           <input
                             type="checkbox"
@@ -1056,17 +1104,15 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                       <td style={{ textAlign: 'center' }}>
                         <div className="weather-score-cell">
                           <span
-                            className={`weather-score-tag ${
-                              score >= 80 ? 'high' : score >= 50 ? 'med' : 'low'
-                            }`}
+                            className={`weather-score-tag ${score >= 80 ? 'high' : score >= 50 ? 'med' : 'low'
+                              }`}
                           >
                             {score}/100
                           </span>
                           <div className="weather-score-bar">
                             <div
-                              className={`weather-score-bar-fill ${
-                                score >= 80 ? 'high' : score >= 50 ? 'med' : 'low'
-                              }`}
+                              className={`weather-score-bar-fill ${score >= 80 ? 'high' : score >= 50 ? 'med' : 'low'
+                                }`}
                               style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
                             />
                           </div>
@@ -1429,9 +1475,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
               {/* Dải nhãn thông tin quan trọng */}
               <div className="weather-detail-tags-strip">
                 <span
-                  className={`weather-badge-category ${
-                    CATEGORY_MAP[detailItem.category]?.colorClass || 'khac'
-                  }`}
+                  className={`weather-badge-category ${CATEGORY_MAP[detailItem.category]?.colorClass || 'khac'
+                    }`}
                 >
                   {CATEGORY_MAP[detailItem.category]?.icon}
                   {CATEGORY_MAP[detailItem.category]?.label || 'Thời tiết'}
@@ -1853,8 +1898,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                       broadcastForm.priority === 'CRITICAL'
                         ? '#fee2e2'
                         : broadcastForm.priority === 'HIGH'
-                        ? '#ffedd5'
-                        : '#e0f2fe',
+                          ? '#ffedd5'
+                          : '#e0f2fe',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1862,8 +1907,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                       broadcastForm.priority === 'CRITICAL'
                         ? '#dc2626'
                         : broadcastForm.priority === 'HIGH'
-                        ? '#ea580c'
-                        : '#0284c7',
+                          ? '#ea580c'
+                          : '#0284c7',
                     flexShrink: 0,
                   }}
                 >
@@ -1935,9 +1980,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
                     <span
-                      className={`weather-badge-category ${
-                        CATEGORY_MAP[broadcastModalItem.category]?.colorClass || 'khac'
-                      }`}
+                      className={`weather-badge-category ${CATEGORY_MAP[broadcastModalItem.category]?.colorClass || 'khac'
+                        }`}
                       style={{ fontSize: '11px', padding: '2px 7px' }}
                     >
                       {CATEGORY_MAP[broadcastModalItem.category]?.label || 'Tin thời tiết'}
@@ -2147,20 +2191,20 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                         broadcastForm.priority === 'CRITICAL'
                           ? '#fef2f2'
                           : broadcastForm.priority === 'HIGH'
-                          ? '#fff7ed'
-                          : '#f0f9ff',
+                            ? '#fff7ed'
+                            : '#f0f9ff',
                       color:
                         broadcastForm.priority === 'CRITICAL'
                           ? '#dc2626'
                           : broadcastForm.priority === 'HIGH'
-                          ? '#ea580c'
-                          : '#0284c7',
+                            ? '#ea580c'
+                            : '#0284c7',
                       border:
                         broadcastForm.priority === 'CRITICAL'
                           ? '1px solid #fecaca'
                           : broadcastForm.priority === 'HIGH'
-                          ? '1px solid #fed7aa'
-                          : '1px solid #bae6fd',
+                            ? '1px solid #fed7aa'
+                            : '1px solid #bae6fd',
                     }}
                   >
                     {broadcastForm.priority}
@@ -2251,8 +2295,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                     {broadcasting
                       ? 'Đang xử lý...'
                       : broadcastModalItem.status === 'pending'
-                      ? 'Duyệt & Đăng thông báo ngay'
-                      : 'Đăng thông báo ngay'}
+                        ? 'Duyệt & Đăng thông báo ngay'
+                        : 'Đăng thông báo ngay'}
                   </span>
                 </button>
               </div>

@@ -640,8 +640,9 @@ class BloodDonationService {
     const notifTitle = `🩸 [Đợt Hiến Máu] ${title.trim()}`;
     const notifContent = `📍 Địa điểm: ${locationName.trim()} (${address.trim()})\n🕒 Thời gian: ${startTime.trim()} - ${endTime.trim()} ngày ${formattedDate}. Nhấn vào để xem vị trí trên Google Maps và xác nhận tham gia!`;
 
-    // Chỉ gửi thông báo nếu có người đăng ký nhận thông báo trong tỉnh
-    const targetUsersForNotification = recipientUsers;
+    // Gửi thông báo đến người dùng trong cùng tỉnh đã ĐK nhận thông báo (nếu chưa có ai, vẫn lưu 1 bản ghi lịch sử phát cho người tạo)
+    const targetUsersForNotification =
+      recipientUsers.length > 0 ? recipientUsers : [{ _id: senderUser._id }];
     const notificationDocs = targetUsersForNotification.map((u) => ({
       userId: u._id,
       createdBy: senderUser._id,
@@ -922,6 +923,33 @@ class BloodDonationService {
     event.status = status;
     await event.save();
     return event;
+  }
+
+  /**
+   * 11. Xóa sự kiện hiến máu và thông báo liên quan
+   */
+  async deleteEvent(requester, eventId) {
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      throw new ApiError(400, 'Mã sự kiện hiến máu không hợp lệ.');
+    }
+
+    const event = await BloodDonationEvent.findById(eventId);
+    if (!event) {
+      throw new ApiError(404, 'Không tìm thấy sự kiện hiến máu.');
+    }
+
+    await BloodDonationEvent.findByIdAndDelete(eventId);
+    await BloodDonationRegistration.deleteMany({ eventId });
+    await Notification.deleteMany({
+      $or: [{ 'data.eventId': eventId }, { 'data.broadcastId': eventId }],
+    });
+
+    try {
+      eventBus.emit('blood_donation_event', { action: 'DELETED', eventId });
+      eventBus.emit('notification_event', { action: 'DELETED', broadcastId: eventId });
+    } catch (_) {}
+
+    return { message: 'Đã xóa đợt hiến máu thành công.' };
   }
 }
 

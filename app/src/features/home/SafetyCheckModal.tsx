@@ -21,6 +21,7 @@ interface SafetyCheckModalProps {
   onClose: () => void;
   safetyCheckId?: string;
   onSuccess?: () => void;
+  onNavigateToSos?: (data?: { people?: number; description?: string }) => void;
 }
 
 export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
@@ -28,6 +29,7 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
   onClose,
   safetyCheckId,
   onSuccess,
+  onNavigateToSos,
 }) => {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState<boolean>(true);
@@ -173,6 +175,39 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
     applySelectedCheck(target, responsesMap);
   };
 
+  const handleOpenSosScreen = () => {
+    // 1. Lưu ngầm cập nhật phản hồi an toàn NEED_HELP lên máy chủ
+    if (safetyCheck?._id) {
+      const payload: any = {
+        status: 'NEED_HELP',
+        message: message.trim() || 'Người dân cần cứu hộ khẩn cấp',
+        peopleCount: selectedStatus === 'NEED_HELP' ? peopleCount : 1,
+        createSosRequest: false,
+        address: locationAddress || undefined,
+      };
+      if (coords) {
+        payload.location = {
+          coordinates: [coords.longitude, coords.latitude],
+        };
+      }
+      void safetyCheckApi.respondToSafetyCheck(safetyCheck._id, payload);
+    }
+
+    // 2. Đóng SafetyCheckModal
+    onClose();
+
+    // 3. Mở tab SOS kèm dữ liệu điền sẵn
+    const sosData = {
+      people: selectedStatus === 'NEED_HELP' ? peopleCount : 1,
+      description: message.trim() || undefined,
+    };
+    if (onNavigateToSos) {
+      onNavigateToSos(sosData);
+    }
+    DeviceEventEmitter.emit('navigate:sos', sosData);
+    DeviceEventEmitter.emit('navigate:tab', 'sos');
+  };
+
   const handleSubmit = async () => {
     if (!safetyCheck?._id) return;
 
@@ -217,6 +252,20 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
 
         DeviceEventEmitter.emit('safety_check:updated');
         if (onSuccess) onSuccess();
+
+        // Nếu người dùng chọn Tạo yêu cầu SOS khẩn cấp, mở thẳng trang nhập SOS
+        if (selectedStatus === 'NEED_HELP' && createSosRequest) {
+          onClose();
+          const sosData = {
+            people: peopleCount,
+            description: message.trim() || undefined,
+          };
+          if (onNavigateToSos) {
+            onNavigateToSos(sosData);
+          }
+          DeviceEventEmitter.emit('navigate:sos', sosData);
+          DeviceEventEmitter.emit('navigate:tab', 'sos');
+        }
       } else {
         Alert.alert('Không thể gửi', res.message || 'Vui lòng thử lại.');
       }
@@ -352,14 +401,15 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
 
                   {/* Nếu ĐÃ PHẢN HỒI và không bấm Cập nhật -> chỉ hiện trạng thái + nút Cập nhật */}
                   {myResponse && !isEditing ? (
-                    <View
-                      style={[
-                        styles.respondedSummaryCard,
-                        myResponse.status === 'SAFE'
-                          ? styles.respondedSafeCard
-                          : styles.respondedHelpCard,
-                      ]}
-                    >
+                    <View>
+                      <View
+                        style={[
+                          styles.respondedSummaryCard,
+                          myResponse.status === 'SAFE'
+                            ? styles.respondedSafeCard
+                            : styles.respondedHelpCard,
+                        ]}
+                      >
                       <View style={styles.respondedSummaryLeft}>
                         <Ionicons
                           name={
@@ -399,6 +449,27 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
                         <Text style={styles.updateToggleBtnText}>Cập nhật</Text>
                       </TouchableOpacity>
                     </View>
+
+                    {/* Nút mở trang SOS nếu đã báo cần cứu hộ */}
+                    {myResponse.status === 'NEED_HELP' && (
+                      <TouchableOpacity
+                        style={styles.openSosScreenCard}
+                        onPress={handleOpenSosScreen}
+                        activeOpacity={0.85}
+                      >
+                        <View style={styles.openSosIconCircle}>
+                          <Ionicons name="megaphone" size={18} color="#FFFFFF" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.openSosCardTitle}>Mở trang nhập yêu cầu SOS khẩn cấp</Text>
+                          <Text style={styles.openSosCardSub}>
+                            Bạn đã báo cần cứu hộ. Bấm để mở form cứu nạn với định vị & hình ảnh hiện trường
+                          </Text>
+                        </View>
+                        <Feather name="arrow-right" size={18} color="#DC2626" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
                   ) : (
                     /* Khung chọn phản hồi gọn nhẹ */
                     <View style={styles.compactForm}>
@@ -477,6 +548,24 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
                             </View>
                           </View>
 
+                          {/* Nút nổi bật mở trực tiếp trang nhập yêu cầu SOS */}
+                          <TouchableOpacity
+                            style={styles.openSosScreenCard}
+                            onPress={handleOpenSosScreen}
+                            activeOpacity={0.85}
+                          >
+                            <View style={styles.openSosIconCircle}>
+                              <Ionicons name="megaphone" size={18} color="#FFFFFF" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.openSosCardTitle}>Mở trang nhập yêu cầu SOS</Text>
+                              <Text style={styles.openSosCardSub}>
+                                Điền ảnh hiện trường, mức ngập &amp; gửi vị trí khẩn cấp
+                              </Text>
+                            </View>
+                            <Feather name="arrow-right" size={18} color="#DC2626" />
+                          </TouchableOpacity>
+
                           <TouchableOpacity
                             style={styles.sosCheckRow}
                             onPress={() => setCreateSosRequest(!createSosRequest)}
@@ -519,6 +608,17 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
                             disabled={submitting}
                           >
                             <Text style={styles.cancelEditBtnText}>Hủy</Text>
+                          </TouchableOpacity>
+                        )}
+
+                        {selectedStatus === 'NEED_HELP' && (
+                          <TouchableOpacity
+                            style={styles.openSosFooterBtn}
+                            onPress={handleOpenSosScreen}
+                            activeOpacity={0.85}
+                          >
+                            <Ionicons name="megaphone" size={15} color="#FFFFFF" />
+                            <Text style={styles.openSosFooterBtnText}>Mở trang SOS</Text>
                           </TouchableOpacity>
                         )}
 
@@ -923,6 +1023,57 @@ const styles = StyleSheet.create({
   submitBtnText: {
     color: '#FFFFFF',
     fontSize: 14,
+    fontWeight: '700',
+  },
+  openSosScreenCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#DC2626',
+    borderRadius: 11,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  openSosIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  openSosCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+  openSosCardSub: {
+    fontSize: 11,
+    color: '#7F1D1D',
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  openSosFooterBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 11,
+    backgroundColor: '#991B1B',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    justifyContent: 'center',
+  },
+  openSosFooterBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '700',
   },
 });

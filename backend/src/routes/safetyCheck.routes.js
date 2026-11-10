@@ -30,5 +30,8 @@ router.get('/:id/responses', authorize('ADMIN', 'LOCAL_AUTHORITY'), safetyCheckC
 // 7. Đóng đợt kiểm tra an toàn
 router.patch('/:id/close', authorize('ADMIN', 'LOCAL_AUTHORITY'), safetyCheckController.closeSafetyCheck);
 
+// 8. Xóa đợt kiểm tra an toàn
+router.delete('/:id', authorize('ADMIN', 'LOCAL_AUTHORITY'), safetyCheckController.deleteSafetyCheck);
+
 module.exports = router;
 

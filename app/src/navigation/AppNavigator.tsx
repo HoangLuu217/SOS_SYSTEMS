@@ -56,9 +56,19 @@ export function AuthenticatedApp() {
       setBloodDonationEventId(eid || undefined);
       setBloodDonationModalVisible(true);
     });
+    const subSos = DeviceEventEmitter.addListener('navigate:sos', (data: any) => {
+      setSafetyCheckModalVisible(false);
+      setActiveTab('sos');
+      if (data) {
+        setTimeout(() => {
+          DeviceEventEmitter.emit('sos:prefill', data);
+        }, 120);
+      }
+    });
     return () => {
       sub.remove();
       subBlood.remove();
+      subSos.remove();
     };
   }, []);
   const [configVisible, setConfigVisible] = useState(false);
@@ -213,6 +223,15 @@ export function AuthenticatedApp() {
       <SafetyCheckModal
         visible={safetyCheckModalVisible}
         safetyCheckId={safetyCheckId}
+        onNavigateToSos={(data) => {
+          setSafetyCheckModalVisible(false);
+          setActiveTab('sos');
+          if (data) {
+            setTimeout(() => {
+              DeviceEventEmitter.emit('sos:prefill', data);
+            }, 120);
+          }
+        }}
         onClose={() => {
           setSafetyCheckModalVisible(false);
           setSafetyCheckId(undefined);

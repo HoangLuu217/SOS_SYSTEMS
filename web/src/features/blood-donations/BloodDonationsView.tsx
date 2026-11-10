@@ -100,8 +100,6 @@ interface BloodDonationEvent {
   createdAt: string;
 }
 
-const BLOOD_TYPE_LIST = ['O+', 'A+', 'B+', 'AB+', 'O-', 'A-', 'B-', 'AB-', 'UNKNOWN'];
-
 const getStatusLabelText = (status: string) => {
   if (status === 'PENDING') return 'ĐK nhận thông báo đợt hiến';
   if (status === 'CONFIRMED' || status === 'COMPLETED') return 'Xác nhận tham gia';
@@ -223,7 +221,6 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
   );
 
   const provinceAreas = useMemo(() => areas.filter((a) => a.type === 'PROVINCE'), [areas]);
-  const wardAreas = useMemo(() => areas.filter((a) => a.type === 'WARD'), [areas]);
   const modalWardAreas = useMemo(
     () =>
       areas.filter(
@@ -1632,7 +1629,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                     Nhóm máu cần:{' '}
                     <b>
                       {!selectedEventDetail.neededBloodTypes ||
-                      selectedEventDetail.neededBloodTypes.includes('ALL')
+                        selectedEventDetail.neededBloodTypes.includes('ALL')
                         ? 'Tất cả'
                         : selectedEventDetail.neededBloodTypes.join(', ')}
                     </b>
@@ -2034,9 +2031,6 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                       </a>
                     )}
                   </div>
-                  <span style={{ fontSize: 11.5, color: '#64748b', marginTop: 3, display: 'block' }}>
-                    * Bắt buộc: Dán link Google Maps (hoặc tọa độ) vào đây, hoặc click trực tiếp lên bản đồ bên phải để chọn vị trí.
-                  </span>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr 90px', gap: 10 }}>

@@ -656,6 +656,31 @@ class NotificationService {
           console.warn('⚠️ Lỗi emit SSE notification_event:', sseErr.message);
         }
       }
+
+      // Phát sự kiện BROADCAST tới Dashboard và Socket.IO cho khu vực
+      try {
+        eventBus.emit('notification_event', {
+          action: 'BROADCAST',
+          areaId: targetAreaId ? targetAreaId.toString() : null,
+          broadcastId,
+          data: {
+            title: title.trim(),
+            content: content.trim(),
+            type: normalizedType,
+            priority: effectivePriority,
+            areaId: targetAreaId ? targetAreaId.toString() : null,
+            areaName: targetAreaName,
+            broadcastId,
+            imageUrl: resolvedImageUrl,
+            articleUrl: resolvedArticleUrl,
+            sourceName: resolvedSourceName,
+            createdAt: now.toISOString(),
+            ...pointDetails,
+          },
+        });
+      } catch (broadcastErr) {
+        console.warn('⚠️ Lỗi emit BROADCAST notification_event:', broadcastErr.message);
+      }
     }
 
     // Gửi Push Notification ra ngoài ứng dụng điện thoại (cho các thiết bị đã đăng ký Expo Push Token)
@@ -788,99 +813,6 @@ class NotificationService {
       throw new ApiError(403, 'Bạn không có quyền xem lịch sử phát thông báo.');
     }
 
-    // Đồng bộ các đợt Kiểm tra an toàn & Hiến máu đã tạo trước đó (nếu chưa có bản ghi trong Notification)
-    try {
-      const SafetyCheck = require('../models/SafetyCheck');
-      const BloodDonationEvent = require('../models/BloodDonationEvent');
-
-      const [existingSafetyChecks, existingBloodEvents, existingNotifs] = await Promise.all([
-        SafetyCheck.find().sort({ createdAt: -1 }).limit(50).lean(),
-        BloodDonationEvent.find().sort({ createdAt: -1 }).limit(50).lean(),
-        Notification.find({ type: { $in: ['SAFETY_CHECK', 'BLOOD_DONATION'] } })
-          .select('type title data.safetyCheckId data.eventId createdAt')
-          .lean(),
-      ]);
-
-      const syncedSafetyIds = new Set(
-        existingNotifs
-          .filter((n) => n.type === 'SAFETY_CHECK')
-          .map((n) => n.data?.safetyCheckId?.toString() || n.title)
-      );
-      const syncedBloodIds = new Set(
-        existingNotifs
-          .filter((n) => n.type === 'BLOOD_DONATION')
-          .map((n) => n.data?.eventId?.toString() || n.title)
-      );
-
-      const missingDocs = [];
-      for (const sc of existingSafetyChecks) {
-        const scId = sc._id.toString();
-        const scTitle = `🛡️ [Xác nhận an toàn] ${sc.title}`;
-        if (!syncedSafetyIds.has(scId) && !syncedSafetyIds.has(scTitle)) {
-          missingDocs.push({
-            userId: sc.createdBy || user._id,
-            createdBy: sc.createdBy || user._id,
-            areaId: sc.areaId || null,
-            areaName: sc.areaName || 'Toàn hệ thống',
-            type: 'SAFETY_CHECK',
-            title: scTitle,
-            content: sc.description || sc.title,
-            priority: 'CRITICAL',
-            actionUrl: 'safety_check',
-            data: {
-              isBroadcast: true,
-              broadcastId: scId,
-              isSafetyCheck: true,
-              safetyCheckId: scId,
-              areaName: sc.areaName || 'Toàn hệ thống',
-            },
-            isRead: true,
-            createdAt: sc.createdAt || new Date(),
-          });
-        }
-      }
-
-      for (const ev of existingBloodEvents) {
-        const evId = ev._id.toString();
-        const evTitle = `🩸 [Đợt Hiến Máu] ${ev.title}`;
-        if (!syncedBloodIds.has(evId) && !syncedBloodIds.has(evTitle)) {
-          const formattedDate = ev.eventDate
-            ? new Date(ev.eventDate).toLocaleDateString('vi-VN', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-              })
-            : '';
-          missingDocs.push({
-            userId: ev.createdBy || user._id,
-            createdBy: ev.createdBy || user._id,
-            areaId: ev.areaId || null,
-            areaName: ev.areaName || ev.provinceName || 'Toàn hệ thống',
-            type: 'BLOOD_DONATION',
-            title: evTitle,
-            content: `📍 Địa điểm: ${ev.locationName || ''} (${ev.address || ''})\n🕒 Thời gian: ${ev.startTime || ''} - ${ev.endTime || ''} ngày ${formattedDate}.`,
-            priority: 'CRITICAL',
-            actionUrl: 'blood_donation',
-            data: {
-              isBroadcast: true,
-              broadcastId: evId,
-              isBloodDonation: true,
-              eventId: evId,
-              areaName: ev.areaName || ev.provinceName || 'Toàn hệ thống',
-            },
-            isRead: true,
-            createdAt: ev.createdAt || new Date(),
-          });
-        }
-      }
-
-      if (missingDocs.length > 0) {
-        await Notification.insertMany(missingDocs);
-      }
-    } catch (syncErr) {
-      console.warn('[NotificationService] Sync safetyCheck/bloodDonation to notifications skipped:', syncErr.message);
-    }
-
     const andConditions = [
       {
         $or: [
@@ -961,33 +893,112 @@ class NotificationService {
 
   /**
    * Xóa một đợt phát thông báo theo tiêu đề và thời điểm tạo
+   * Đồng thời xóa sự kiện gốc (Hiến máu, Kiểm tra an toàn) để tránh tồn lưu và tải lại
    */
   async deleteBroadcast(user, broadcastId) {
-    if (!mongoose.Types.ObjectId.isValid(broadcastId)) {
+    if (!broadcastId) {
       throw new ApiError(400, 'Mã bản tin không hợp lệ.');
     }
 
-    const sample = await Notification.findById(broadcastId);
+    let sample = null;
+    if (mongoose.Types.ObjectId.isValid(broadcastId)) {
+      sample = await Notification.findById(broadcastId);
+    }
     if (!sample) {
-      throw new ApiError(404, 'Không tìm thấy thông báo cần xóa.');
+      sample = await Notification.findOne({
+        $or: [
+          { 'data.broadcastId': broadcastId },
+          { 'data.eventId': broadcastId },
+          { 'data.safetyCheckId': broadcastId },
+        ],
+      });
+    }
+
+    // Nếu thông báo đã bị xóa trước đó (ví dụ trong cùng đợt xóa hàng loạt), trả về thành công êm xuôi
+    if (!sample) {
+      return {
+        message: 'Thông báo đã được thu hồi trước đó.',
+        deletedCount: 0,
+      };
     }
 
     const isAdmin = Boolean(user.roles && user.roles.includes('ADMIN'));
-    if (!isAdmin && sample.createdBy?.toString() !== user._id.toString()) {
-      throw new ApiError(403, 'Bạn chỉ có thể xóa thông báo do chính mình phát.');
+    const isAuthority = Boolean(
+      user.roles && (user.roles.includes('LOCAL_AUTHORITY') || user.roles.includes('AUTHORITY'))
+    );
+    if (!isAdmin && !isAuthority) {
+      throw new ApiError(403, 'Bạn không có quyền thu hồi / xóa thông báo.');
     }
 
-    // Xóa tất cả các bản ghi cùng đợt phát
-    const deleteFilter = sample.data?.broadcastId
-      ? { 'data.broadcastId': sample.data.broadcastId }
-      : { title: sample.title, createdAt: sample.createdAt };
-    const result = await Notification.deleteMany(deleteFilter);
+    if (!isAdmin && sample.createdBy && sample.createdBy.toString() !== user._id.toString()) {
+      const authAreaId = user.authority?.areaId?.toString();
+      const sampleAreaId = sample.areaId?.toString();
+      if (!authAreaId || authAreaId !== sampleAreaId) {
+        throw new ApiError(403, 'Bạn chỉ có thể xóa thông báo do chính mình phát hoặc thuộc khu vực quản lý.');
+      }
+    }
+
+    const targetBroadcastId = sample.data?.broadcastId || broadcastId;
+    const eventId =
+      sample.data?.eventId || (sample.type === 'BLOOD_DONATION' ? targetBroadcastId : null);
+    const safetyCheckId =
+      sample.data?.safetyCheckId || (sample.type === 'SAFETY_CHECK' ? targetBroadcastId : null);
+
+    // 1. Nếu là đợt Hiến máu: Xóa vĩnh viễn sự kiện trong blood_donation_events và các đơn đăng ký liên quan
+    if (eventId && mongoose.Types.ObjectId.isValid(eventId)) {
+      try {
+        const BloodDonationEvent = require('../models/BloodDonationEvent');
+        const BloodDonationRegistration = require('../models/BloodDonationRegistration');
+        await BloodDonationEvent.findByIdAndDelete(eventId);
+        await BloodDonationRegistration.deleteMany({ eventId });
+      } catch (err) {
+        console.warn('⚠️ Lỗi xóa sự kiện hiến máu gốc:', err.message);
+      }
+    }
+
+    // 2. Nếu là đợt Kiểm tra an toàn: Xóa vĩnh viễn đợt kiểm tra trong safety_checks và các phản hồi
+    if (safetyCheckId && mongoose.Types.ObjectId.isValid(safetyCheckId)) {
+      try {
+        const SafetyCheck = require('../models/SafetyCheck');
+        const SafetyCheckResponse = require('../models/SafetyCheckResponse');
+        await SafetyCheck.findByIdAndDelete(safetyCheckId);
+        await SafetyCheckResponse.deleteMany({ safetyCheckId });
+      } catch (err) {
+        console.warn('⚠️ Lỗi xóa đợt kiểm tra an toàn gốc:', err.message);
+      }
+    }
+
+    // 3. Xóa toàn bộ các bản ghi thông báo cùng đợt phát
+    const orConditions = [{ _id: sample._id }];
+    if (targetBroadcastId) {
+      orConditions.push({ 'data.broadcastId': targetBroadcastId });
+    }
+    if (eventId) {
+      orConditions.push({ 'data.eventId': eventId });
+      orConditions.push({ 'data.broadcastId': eventId });
+    }
+    if (safetyCheckId) {
+      orConditions.push({ 'data.safetyCheckId': safetyCheckId });
+      orConditions.push({ 'data.broadcastId': safetyCheckId });
+    }
+    if (sample.title && sample.createdAt) {
+      orConditions.push({ title: sample.title, createdAt: sample.createdAt });
+    }
+
+    const result = await Notification.deleteMany({ $or: orConditions });
 
     try {
       eventBus.emit('notification_event', {
         action: 'DELETED',
-        broadcastId,
+        broadcastId: targetBroadcastId || broadcastId,
+        id: sample._id.toString(),
       });
+      if (eventId) {
+        eventBus.emit('blood_donation:deleted', { eventId });
+      }
+      if (safetyCheckId) {
+        eventBus.emit('safety_check:deleted', { safetyCheckId });
+      }
     } catch (_) {}
 
     return {

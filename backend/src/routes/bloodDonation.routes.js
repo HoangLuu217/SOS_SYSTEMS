@@ -44,6 +44,11 @@ router.patch(
   authorize('ADMIN', 'LOCAL_AUTHORITY', 'AUTHORITY'),
   bloodDonationController.updateEventStatus
 );
+router.delete(
+  '/events/:id',
+  authorize('ADMIN', 'LOCAL_AUTHORITY', 'AUTHORITY'),
+  bloodDonationController.deleteEvent
+);
 
 module.exports = router;
 

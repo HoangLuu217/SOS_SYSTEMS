@@ -129,14 +129,15 @@ export const BloodEventMapPicker: React.FC<BloodEventMapPickerProps> = ({
           .setPopupContent(
             `<div style="font-family:sans-serif;font-size:12px;font-weight:600;color:#0f172a;line-height:1.4;">
               📍 Vị trí đợt hiến máu<br/>
-              <span style="color:#64748b;font-weight:normal;">[${fixedLat.toFixed(5)}, ${fixedLng.toFixed(5)}]</span>
+              <span style="color:#64748b;font-weight:normal;">[${fixedLat.toFixed(6)}, ${fixedLng.toFixed(6)}]</span><br/>
+              <span style="color:#2563eb;font-weight:500;font-size:11px;">(Kéo thả ghim hoặc bấm bản đồ để chỉnh)</span>
             </div>`
           )
           .openPopup();
       }
 
       if (fly && mapRef.current) {
-        mapRef.current.flyTo([fixedLat, fixedLng], 16, { animate: true, duration: 0.8 });
+        mapRef.current.flyTo([fixedLat, fixedLng], 17, { animate: true, duration: 0.8 });
       }
 
       let detectedAddr = addressHint;
@@ -178,25 +179,25 @@ export const BloodEventMapPicker: React.FC<BloodEventMapPickerProps> = ({
     const customIcon = L.divIcon({
       html: `
         <div style="
-          width: 32px;
-          height: 32px;
+          width: 34px;
+          height: 34px;
           border-radius: 50%;
           background: #ef4444;
           border: 2.5px solid #ffffff;
-          box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.4);
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 15px;
-          cursor: pointer;
-        ">
+          font-size: 16px;
+          cursor: grab;
+        " title="Kéo thả ghim để chọn vị trí chính xác">
           🩸
         </div>
       `,
       className: '',
-      iconSize: [32, 32],
-      iconAnchor: [16, 32],
-      popupAnchor: [0, -32],
+      iconSize: [34, 34],
+      iconAnchor: [17, 34],
+      popupAnchor: [0, -34],
     });
 
     const marker = L.marker([initialPos.lat, initialPos.lng], {
@@ -208,7 +209,8 @@ export const BloodEventMapPicker: React.FC<BloodEventMapPickerProps> = ({
       .bindPopup(
         `<div style="font-family:sans-serif;font-size:12px;font-weight:600;color:#0f172a;line-height:1.4;">
           📍 Vị trí đợt hiến máu<br/>
-          <span style="color:#64748b;font-weight:normal;">[${initialPos.lat.toFixed(5)}, ${initialPos.lng.toFixed(5)}]</span>
+          <span style="color:#64748b;font-weight:normal;">[${initialPos.lat.toFixed(6)}, ${initialPos.lng.toFixed(6)}]</span><br/>
+          <span style="color:#2563eb;font-weight:500;font-size:11px;">(Kéo thả ghim hoặc bấm bản đồ để chỉnh)</span>
         </div>`
       )
       .openPopup();
@@ -265,7 +267,7 @@ export const BloodEventMapPicker: React.FC<BloodEventMapPickerProps> = ({
           )
           .openPopup();
       }
-      mapRef.current.flyTo([coords.lat, coords.lng], 16, { animate: true, duration: 0.8 });
+      mapRef.current.flyTo([coords.lat, coords.lng], 17, { animate: true, duration: 0.8 });
       void doReverseGeocode(coords.lat, coords.lng);
     }
   }, [mapUrl, currentCoords, doReverseGeocode]);

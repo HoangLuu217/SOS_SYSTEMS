@@ -869,6 +869,33 @@ class SafetyCheckService {
       myResponses,
     };
   }
+
+  /**
+   * Xóa đợt kiểm tra an toàn và các phản hồi, thông báo liên quan
+   */
+  async deleteSafetyCheck(user, safetyCheckId) {
+    if (!mongoose.Types.ObjectId.isValid(safetyCheckId)) {
+      throw new ApiError(400, 'Mã đợt kiểm tra không hợp lệ.');
+    }
+
+    const check = await SafetyCheck.findById(safetyCheckId);
+    if (!check) {
+      throw new ApiError(404, 'Không tìm thấy đợt kiểm tra an toàn.');
+    }
+
+    await SafetyCheck.findByIdAndDelete(safetyCheckId);
+    await SafetyCheckResponse.deleteMany({ safetyCheckId });
+    await Notification.deleteMany({
+      $or: [{ 'data.safetyCheckId': safetyCheckId }, { 'data.broadcastId': safetyCheckId }],
+    });
+
+    try {
+      eventBus.emit('safety_check_event', { action: 'DELETED', safetyCheckId });
+      eventBus.emit('notification_event', { action: 'DELETED', broadcastId: safetyCheckId });
+    } catch (_) {}
+
+    return { message: 'Đã xóa đợt kiểm tra an toàn thành công.' };
+  }
 }
 
 module.exports = new SafetyCheckService();
