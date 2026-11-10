@@ -77,7 +77,14 @@ class SSENotificationService {
               const jsonStr = trimmed.replace(/^data:\s*/, '');
               const payload = JSON.parse(jsonStr);
 
-              if (payload?.data?.type === 'SOS_SYNC' || payload?.data?.type === 'RELIEF_MISSION') {
+              if (
+                payload?.data?.type === 'SOS_SYNC' ||
+                payload?.data?.type === 'RELIEF_MISSION' ||
+                payload?.data?.action === 'ASSIGNED' ||
+                payload?.data?.action === 'CANCELLED' ||
+                payload?.data?.assignmentId ||
+                payload?.data?.sosId
+              ) {
                 console.log('⚡ [SSE_NOTIFICATION] Đồng bộ SOS realtime:', payload.data);
                 DeviceEventEmitter.emit('sos:sync', payload.data);
               }
