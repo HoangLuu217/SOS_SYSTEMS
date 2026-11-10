@@ -84,6 +84,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
   const dismissedMissionsRef = React.useRef<Set<string>>(new Set());
 
   const isFetchingRef = useRef(false);
+  const pendingRefetchRef = useRef(false);
   const prevCountRef = useRef<number>(-1);
   const hasLoadedRef = useRef(false);
 
@@ -95,7 +96,10 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
       const isUserPull = options?.isUserPull ?? false;
       const isSilent = options?.isSilent ?? false;
 
-      if (isFetchingRef.current) return;
+      if (isFetchingRef.current) {
+        pendingRefetchRef.current = true;
+        return;
+      }
       isFetchingRef.current = true;
 
       if (isUserPull) {
@@ -141,6 +145,12 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
         isFetchingRef.current = false;
         setLoading(false);
         setRefreshing(false);
+        if (pendingRefetchRef.current) {
+          pendingRefetchRef.current = false;
+          setTimeout(() => {
+            fetchMissions({ isSilent: true });
+          }, 150);
+        }
       }
     },
     [onMissionsCountChange, workspaceVisible]
@@ -154,10 +164,10 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     const sub = DeviceEventEmitter.addListener('sos:sync', () => {
       fetchMissions({ isSilent: true });
     });
-    // Polling dự phòng mỗi 30s (Đồng bộ ngầm yên lặng, không giật màn hình)
+    // Polling dự phòng mỗi 6s (Đồng bộ ngầm yên lặng, không giật màn hình)
     const interval = setInterval(() => {
       fetchMissions({ isSilent: true });
-    }, 30000);
+    }, 6000);
 
     return () => {
       sub.remove();
