@@ -2,7 +2,7 @@ const { File, SosRequest } = require('../models');
 const ApiError = require('../utils/apiError');
 
 const uploadFile = async (uploadedBy, fileData) => {
-  const { sosId, type, url, fileName, fileSize } = fileData;
+  const { sosId, type, url, fileName, fileSize, purpose } = fileData;
   const newFile = await File.create({
     sosId: sosId || null,
     uploadedBy,
@@ -14,9 +14,17 @@ const uploadFile = async (uploadedBy, fileData) => {
 
   if (sosId && url && SosRequest) {
     try {
-      await SosRequest.findByIdAndUpdate(sosId, {
-        $addToSet: { images: url }
-      });
+      if (purpose === 'PROOF') {
+        // Ảnh do đội cứu hộ chụp nghiệm thu / bàn giao -> lưu vào proofImages, không thêm vào images người dân
+        await SosRequest.findByIdAndUpdate(sosId, {
+          $addToSet: { proofImages: url },
+          $pull: { images: url },
+        });
+      } else {
+        await SosRequest.findByIdAndUpdate(sosId, {
+          $addToSet: { images: url }
+        });
+      }
     } catch (err) {
       console.warn('Lỗi cập nhật ảnh vào SosRequest:', err);
     }

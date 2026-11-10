@@ -3,6 +3,7 @@ const cloudinary = require('../config/cloudinary');
 
 const uploadFile = async (req, res, next) => {
   try {
+    const purpose = req.body.purpose || 'GENERAL';
     // 1. Nhận danh sách nhiều file base64 từ Mobile App
     if (Array.isArray(req.body.base64Files) && req.body.base64Files.length > 0) {
       const uploadPromises = req.body.base64Files.map(async (b64, idx) => {
@@ -16,6 +17,7 @@ const uploadFile = async (req, res, next) => {
           url: result.secure_url,
           fileName: `mobile_hazard_image_${Date.now()}_${idx + 1}.jpg`,
           fileSize: result.bytes || 0,
+          purpose,
         };
         const uploadedFile = await fileService.uploadFile(req.user._id, fileData);
         return uploadedFile;
@@ -40,6 +42,7 @@ const uploadFile = async (req, res, next) => {
         url: result.secure_url,
         fileName: req.body.fileName || `chat_image_${Date.now()}.jpg`,
         fileSize: result.bytes || 0,
+        purpose,
       };
       const uploadedFile = await fileService.uploadFile(req.user._id, fileData);
       return res.status(201).json({ success: true, data: uploadedFile, url: uploadedFile.url });
@@ -56,7 +59,8 @@ const uploadFile = async (req, res, next) => {
       type: req.file.mimetype.startsWith('video') ? 'VIDEO' : 'IMAGE',
       url: req.file.path, 
       fileName: req.file.originalname || req.file.filename,
-      fileSize: req.file.size || 0
+      fileSize: req.file.size || 0,
+      purpose,
     };
 
     const uploadedFile = await fileService.uploadFile(req.user._id, fileData);

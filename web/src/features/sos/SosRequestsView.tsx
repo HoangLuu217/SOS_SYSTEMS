@@ -25,7 +25,6 @@ import type { SosRequestItem, AdministrativeAreaItem, VehicleItem } from '@/type
 import {
   fetchSosRequests,
   createSosRequest,
-  completeSosRequest,
   fetchAdministrativeAreas,
   fetchVehicles,
   deleteSosRequestApi,
@@ -53,7 +52,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
   const [, setVehicles] = useState<VehicleItem[]>(() => memoryCachedVehicles || []);
 
   const [triageFilter, setTriageFilter] = useState<'ALL' | 'ACTIVE_ALL' | 'CRITICAL' | 'HIGH' | 'PENDING' | 'RESCUING' | 'COMPLETED' | 'CANCELLED'>('ALL');
-  const [completingId, setCompletingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
   const [selectedSosDetail, setSelectedSosDetail] = useState<SosRequestItem | null>(null);
@@ -312,29 +310,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
       return sos.assignment.vehicleName;
     }
     return null;
-  };
-
-  const handleCompleteSosFromPanel = async (sosId: string) => {
-    if (!sosId) return;
-    try {
-      setCompletingId(sosId);
-      const res = await completeSosRequest(sosId);
-      if (res.success) {
-        toast.success('Đã xác nhận hoàn tất ca cứu nạn thành công!', 'Hoàn thành nhiệm vụ');
-        setSosList((prev) =>
-          prev.map((s) => (s._id === sosId ? { ...s, status: 'COMPLETED' } : s))
-        );
-        if (selectedSosDetail?._id === sosId) {
-          setSelectedSosDetail((prev) => (prev ? { ...prev, status: 'COMPLETED' } : null));
-        }
-      } else {
-        toast.error('Không thể hoàn tất ca cứu nạn', 'Lỗi hoàn thành');
-      }
-    } catch (err: any) {
-      toast.error(err?.message || 'Có lỗi xảy ra khi hoàn tất cứu nạn', 'Lỗi');
-    } finally {
-      setCompletingId(null);
-    }
   };
 
   const renderStepper = (effectiveStatus: string) => {
@@ -1094,35 +1069,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
       </div>
 
       {/* ============================================================
-            MODAL PHÓNG TO ẢNH HIỆN TRƯỜNG NGẬP LỤT
-            ============================================================ */}
-      {previewPhoto && (
-        <div
-          className="executive-photo-lightbox-backdrop"
-          onClick={() => setPreviewPhoto(null)}
-        >
-          <div className="executive-photo-lightbox-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="executive-photo-lightbox-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Camera size={16} color="#0284C7" />
-                <strong>ẢNH HIỆN TRƯỜNG CỨU NẠN TỪ NGƯỜI DÂN</strong>
-              </div>
-              <button
-                type="button"
-                className="executive-photo-lightbox-close"
-                onClick={() => setPreviewPhoto(null)}
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="executive-photo-lightbox-body">
-              <img src={previewPhoto} alt="Hiện trường cứu nạn" />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================
           PANEL CHI TIẾT TOÀN DIỆN (CHIẾM 4/10 MÀN HÌNH BÊN PHẢI)
           ============================================================ */}
       {selectedSosDetail && (
@@ -1137,7 +1083,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
           <aside className="sos-detail-side-panel" onClick={(e) => e.stopPropagation()}>
             {/* Header Panel */}
             <div className="sos-panel-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span className="sos-panel-code">{selectedSosDetail.sosCode}</span>
 
                 {/* Badge phân biệt RESCUER hay CITIZEN */}
@@ -1150,10 +1096,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                       style={{
                         backgroundColor: isDetailRescuer ? '#2563eb' : '#16a34a',
                         color: '#ffffff',
-                        fontWeight: 800,
-                        fontSize: 10,
-                        padding: '2px 6px',
-                        borderRadius: 4,
                       }}
                     >
                       {isDetailRescuer ? 'RESCUER' : 'CITIZEN'}
@@ -1590,9 +1532,9 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                               </div>
                             ))}
                           </div>
-                          {selectedSosDetail.assignment?.actualRecipient && (
+                          {(selectedSosDetail.assignment?.actualRecipient || (selectedSosDetail as any).actualRecipient) && (
                             <div style={{ fontSize: 11.5, color: '#166534', marginTop: 4, fontWeight: 600 }}>
-                              ✓ Người tiếp nhận: <strong>{selectedSosDetail.assignment.actualRecipient}</strong>
+                              ✓ Người tiếp nhận: <strong>{selectedSosDetail.assignment?.actualRecipient || (selectedSosDetail as any).actualRecipient}</strong>
                             </div>
                           )}
                         </>
@@ -1684,65 +1626,24 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
               )}
             </div>
 
-            {/* Footer Quick Action Buttons */}
-            <div className="sos-panel-footer">
-              <span className="sos-panel-footer-meta">
-                ID: <code>{selectedSosDetail._id}</code>
-              </span>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {getEffectiveStatus(selectedSosDetail) !== 'COMPLETED' ? (
-                  <button
-                    type="button"
-                    className="btn-panel-action primary"
-                    onClick={() => {
-                      const targetId = selectedSosDetail._id;
-                      setSelectedSosDetail(null);
-                      onOpenMap(targetId);
-                    }}
-                    title="Mở ngay trên Bản đồ tác chiến"
-                  >
-                    <Compass size={15} />
-                    <span>Bản đồ tác chiến</span>
-                  </button>
-                ) : (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '8px 14px',
-                      borderRadius: 8,
-                      background: '#f0fdf4',
-                      border: '1px solid #bbf7d0',
-                      color: '#166534',
-                      fontSize: 12.5,
-                      fontWeight: 700,
-                    }}
-                  >
-                    <CheckCircle2 size={16} color="#16a34a" />
-                    <span>Đã hoàn tất &amp; Lưu trữ</span>
-                  </div>
-                )}
-
-                {getEffectiveStatus(selectedSosDetail) !== 'COMPLETED' && (
-                  <button
-                    type="button"
-                    className="btn-panel-action success"
-                    onClick={() => handleCompleteSosFromPanel(selectedSosDetail._id)}
-                    disabled={completingId === selectedSosDetail._id}
-                    title="Xác nhận hoàn tất ca cứu nạn"
-                  >
-                    {completingId === selectedSosDetail._id ? (
-                      <Loader2 size={15} className="animate-spin" />
-                    ) : (
-                      <CheckCircle2 size={15} />
-                    )}
-                    <span>Hoàn tất nhiệm vụ</span>
-                  </button>
-                )}
+            {/* Footer Quick Action Buttons: Chỉ hiện nút chuyển sang Bản đồ tác chiến cho ca đang xử lý, ẩn hoàn toàn khi đã xong để không tốn diện tích */}
+            {getEffectiveStatus(selectedSosDetail) !== 'COMPLETED' && (
+              <div className="sos-panel-footer" style={{ justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn-panel-action primary"
+                  onClick={() => {
+                    const targetId = selectedSosDetail._id;
+                    setSelectedSosDetail(null);
+                    onOpenMap(targetId);
+                  }}
+                  title="Mở ngay trên Bản đồ tác chiến"
+                >
+                  <Compass size={15} />
+                  <span>Bản đồ tác chiến</span>
+                </button>
               </div>
-            </div>
+            )}
           </aside>
         </>
       )}
@@ -1866,6 +1767,37 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          MODAL PHÓNG TO ẢNH HIỆN TRƯỜNG & NGHIỆM THU
+          (Được đặt ở cuối DOM với z-index 20000 để phủ lên toàn bộ màn hình, bao gồm cả side-panel bên phải)
+          ============================================================ */}
+      {previewPhoto && (
+        <div
+          className="executive-photo-lightbox-backdrop"
+          onClick={() => setPreviewPhoto(null)}
+        >
+          <div className="executive-photo-lightbox-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="executive-photo-lightbox-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Camera size={16} color="#0284C7" />
+                <strong style={{ letterSpacing: 0.3 }}>ẢNH HIỆN TRƯỜNG &amp; NGHIỆM THU CỨU NẠN</strong>
+              </div>
+              <button
+                type="button"
+                className="executive-photo-lightbox-close"
+                onClick={() => setPreviewPhoto(null)}
+                title="Đóng (Esc)"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="executive-photo-lightbox-body">
+              <img src={previewPhoto} alt="Hiện trường cứu nạn phóng to" />
+            </div>
           </div>
         </div>
       )}

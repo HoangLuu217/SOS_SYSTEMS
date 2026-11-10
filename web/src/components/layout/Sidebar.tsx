@@ -15,7 +15,14 @@ import {
   verifyPhoneOtp,
 } from '@/api';
 import { domainDService } from '@/services/domainDService';
-import { onRescuerApplicationSubmitted, onRescuerVerificationChanged } from '@/services/socketService';
+import {
+  onRescuerApplicationSubmitted,
+  onRescuerVerificationChanged,
+  onSosCreated,
+  onSosUpdated,
+  onSosDeleted,
+  onAssignmentUpdated,
+} from '@/services/socketService';
 import { getRolePrefix } from '@/services/appRouter';
 import {
   fetchProvincesV2,
@@ -124,8 +131,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isAdmin = Boolean(user?.roles?.includes('ADMIN'));
 
   // Trạng thái đếm số liệu thời gian thực từ database
-  const [sosCounts, setSosCounts] = useState<{ pending: number; active: number }>({
-    pending: 0,
+  const [sosCounts, setSosCounts] = useState<{ unassigned: number; active: number }>({
+    unassigned: 0,
     active: 0,
   });
   const [hazardCount, setHazardCount] = useState<number>(0);
@@ -153,20 +160,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
       const res = await fetchSosRequests(fetchParams);
       if (res.success && Array.isArray(res.data)) {
-        const pending = res.data.filter((s) => s.status === 'PENDING').length;
+        // Số ca chưa được điều phối (bao gồm PENDING mới gửi và VERIFIED đã xác minh nhưng chưa giao đội)
+        const unassigned = res.data.filter((s) => ['PENDING', 'VERIFIED'].includes(s.status)).length;
         const active = res.data.filter((s) =>
-          ['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status)
+          ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status)
         ).length;
-        setSosCounts({ pending, active });
+        setSosCounts({ unassigned, active });
       } else {
         const fallback = domainDService
           .getSosRequests()
           .filter((s) => !s.id?.startsWith('sos-89') && !s.id?.startsWith('sos-dn-'));
-        const pending = fallback.filter((s) => s.status === 'PENDING').length;
+        const unassigned = fallback.filter((s) => ['PENDING', 'VERIFIED'].includes(s.status)).length;
         const active = fallback.filter((s) =>
-          s.status === 'VERIFIED' || !!s.assignmentId || ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status as any)
+          ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status as any) || !!s.assignmentId
         ).length;
-        setSosCounts({ pending, active });
+        setSosCounts({ unassigned, active });
       }
     } catch {
       // Không ép fallback 6 vụ
@@ -298,12 +306,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     window.addEventListener('sos_chat_unread_updated', onDataUpdated);
 
     // Lắng nghe sự kiện hồ sơ cứu hộ mới / duyệt hồ sơ thời gian thực qua Socket.IO
-    const unsubApp = onRescuerApplicationSubmitted(() => {
-      fetchRealCounts();
-    });
-    const unsubVer = onRescuerVerificationChanged(() => {
-      fetchRealCounts();
-    });
+    const unsubApp = onRescuerApplicationSubmitted(() => fetchRealCounts());
+    const unsubVer = onRescuerVerificationChanged(() => fetchRealCounts());
+    const unsubSosCreated = onSosCreated(() => fetchRealCounts());
+    const unsubSosUpdated = onSosUpdated(() => fetchRealCounts());
+    const unsubSosDeleted = onSosDeleted(() => fetchRealCounts());
+    const unsubAssign = onAssignmentUpdated(() => fetchRealCounts());
 
     return () => {
       clearInterval(timer);
@@ -312,6 +320,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       window.removeEventListener('sos_chat_unread_updated', onDataUpdated);
       unsubApp();
       unsubVer();
+      unsubSosCreated();
+      unsubSosUpdated();
+      unsubSosDeleted();
+      unsubAssign();
     };
   }, [fetchRealCounts]);
 
@@ -427,9 +439,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           key: 'sos_requests',
-          label: 'Theo dõi & Điều phối SOS',
+          label: 'Điều phối SOS',
           icon: <Siren size={18} className="sos-nav-icon" />,
-          badge: sosCounts.pending > 0 ? `${sosCounts.pending} Mới` : sosCounts.active > 0 ? `${sosCounts.active} Vụ` : undefined,
+          badge: sosCounts.unassigned > 0
+            ? `${sosCounts.unassigned} chờ`
+            : sosCounts.active > 0
+            ? `${sosCounts.active} cứu`
+            : undefined,
           badgeType: 'danger',
         },
       ],
