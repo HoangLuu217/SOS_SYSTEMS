@@ -60,10 +60,14 @@ export function AuthenticatedApp() {
       setActiveTab('sos');
       DeviceEventEmitter.emit('sos:sync');
     });
+    const subChat = DeviceEventEmitter.addListener('open:local_authority_chat', () => {
+      setActiveTab('home');
+    });
     return () => {
       sub.remove();
       subBlood.remove();
       subMission.remove();
+      subChat.remove();
     };
   }, []);
   const [configVisible, setConfigVisible] = useState(false);

@@ -455,11 +455,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     const subBloodUpdate = DeviceEventEmitter.addListener('blood_donation:updated', () => {
       fetchBloodDonationStatus();
     });
+    const subChatOpen = DeviceEventEmitter.addListener('open:local_authority_chat', () => {
+      setShowChatModal(true);
+    });
     void fetchBloodDonationStatus();
     return () => {
       subOpen.remove();
       subUpdate.remove();
       subBloodUpdate.remove();
+      subChatOpen.remove();
     };
   }, [fetchActiveSafetyCheck, fetchBloodDonationStatus]);
 

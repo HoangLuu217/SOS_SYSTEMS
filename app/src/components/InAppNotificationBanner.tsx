@@ -87,6 +87,11 @@ export const InAppNotificationBanner: React.FC<Props> = ({ onNavigateToNews }) =
       latestEmergencyAlert?.actionUrl === 'blood_donation' ||
       latestEmergencyAlert?.data?.isBloodDonation;
 
+    const isChat =
+      latestEmergencyAlert?.type === 'CHAT' ||
+      latestEmergencyAlert?.actionUrl === 'chat' ||
+      latestEmergencyAlert?.data?.isChat;
+
     const isMissionDispatch =
       latestEmergencyAlert?.data?.action === 'ASSIGNED' ||
       latestEmergencyAlert?.data?.type === 'SOS_SYNC' ||
@@ -107,6 +112,11 @@ export const InAppNotificationBanner: React.FC<Props> = ({ onNavigateToNews }) =
       return;
     }
 
+    if (isChat) {
+      DeviceEventEmitter.emit('open:local_authority_chat', latestEmergencyAlert?.data || latestEmergencyAlert);
+      return;
+    }
+
     if (isMissionDispatch) {
       DeviceEventEmitter.emit('sos:sync');
       DeviceEventEmitter.emit('open:mission_tab');
@@ -122,11 +132,18 @@ export const InAppNotificationBanner: React.FC<Props> = ({ onNavigateToNews }) =
     return null;
   }
 
+  const isChat =
+    latestEmergencyAlert.type === 'CHAT' ||
+    latestEmergencyAlert.actionUrl === 'chat' ||
+    latestEmergencyAlert.data?.isChat;
+
   const isInstant =
-    latestEmergencyAlert.type === 'INSTANT' ||
-    latestEmergencyAlert.type === 'TIN_TUC_THOI' ||
-    latestEmergencyAlert.priority === 'CRITICAL' ||
-    latestEmergencyAlert.priority === 'HIGH';
+    !isChat && (
+      latestEmergencyAlert.type === 'INSTANT' ||
+      latestEmergencyAlert.type === 'TIN_TUC_THOI' ||
+      latestEmergencyAlert.priority === 'CRITICAL' ||
+      latestEmergencyAlert.priority === 'HIGH'
+    );
 
   return (
     <Animated.View
@@ -142,22 +159,42 @@ export const InAppNotificationBanner: React.FC<Props> = ({ onNavigateToNews }) =
       <TouchableOpacity
         style={[
           styles.bannerCard,
-          isInstant ? styles.instantCard : styles.systemCard,
+          isChat ? styles.chatCard : isInstant ? styles.instantCard : styles.systemCard,
         ]}
         onPress={handlePress}
         activeOpacity={0.92}
       >
         <View style={styles.topRow}>
           <View style={styles.badgeRow}>
-            <View style={[styles.iconBox, isInstant ? styles.instantIconBox : styles.systemIconBox]}>
-              {isInstant ? (
+            <View
+              style={[
+                styles.iconBox,
+                isChat ? styles.chatIconBox : isInstant ? styles.instantIconBox : styles.systemIconBox,
+              ]}
+            >
+              {isChat ? (
+                <Ionicons name="chatbubbles" size={16} color="#FFFFFF" />
+              ) : isInstant ? (
                 <MaterialCommunityIcons name="alert-decagram" size={18} color="#FFFFFF" />
               ) : (
                 <Ionicons name="megaphone" size={16} color="#FFFFFF" />
               )}
             </View>
-            <Text style={[styles.badgeText, isInstant ? styles.instantBadgeText : styles.systemBadgeText]}>
-              {isInstant ? '🚨 CẢNH BÁO KHẨN CẤP' : '📢 THÔNG BÁO HỆ THỐNG'}
+            <Text
+              style={[
+                styles.badgeText,
+                isChat
+                  ? styles.chatBadgeText
+                  : isInstant
+                  ? styles.instantBadgeText
+                  : styles.systemBadgeText,
+              ]}
+            >
+              {isChat
+                ? '💬 ĐỊA PHƯƠNG PHẢN HỒI'
+                : isInstant
+                ? '🚨 CẢNH BÁO KHẨN CẤP'
+                : '📢 THÔNG BÁO HỆ THỐNG'}
             </Text>
             {latestEmergencyAlert.areaName ? (
               <Text style={styles.areaTag} numberOfLines={1}>
@@ -188,8 +225,14 @@ export const InAppNotificationBanner: React.FC<Props> = ({ onNavigateToNews }) =
 
         <View style={styles.footerRow}>
           <View style={styles.actionBtn}>
-            <Text style={styles.actionBtnText}>Nhấp để xem chi tiết</Text>
-            <Ionicons name="arrow-forward" size={14} color="#0066FF" />
+            <Text style={[styles.actionBtnText, isChat && styles.chatActionBtnText]}>
+              {isChat ? 'Mở cuộc trò chuyện' : 'Nhấp để xem chi tiết'}
+            </Text>
+            <Ionicons
+              name={isChat ? 'chatbubble-ellipses-outline' : 'arrow-forward'}
+              size={14}
+              color={isChat ? '#0284C7' : '#0066FF'}
+            />
           </View>
           <Text style={styles.timeTag}>Vừa xong</Text>
         </View>
@@ -229,6 +272,10 @@ const styles = StyleSheet.create({
     borderColor: '#FCA5A5',
     backgroundColor: '#FFF8F8',
   },
+  chatCard: {
+    borderColor: '#7DD3FC',
+    backgroundColor: '#F0F9FF',
+  },
   systemCard: {
     borderColor: '#BFDBFE',
     backgroundColor: '#F8FAFC',
@@ -256,6 +303,9 @@ const styles = StyleSheet.create({
   instantIconBox: {
     backgroundColor: '#EF4444',
   },
+  chatIconBox: {
+    backgroundColor: '#0284C7',
+  },
   systemIconBox: {
     backgroundColor: '#2563EB',
   },
@@ -266,6 +316,9 @@ const styles = StyleSheet.create({
   },
   instantBadgeText: {
     color: '#DC2626',
+  },
+  chatBadgeText: {
+    color: '#0284C7',
   },
   systemBadgeText: {
     color: '#1D4ED8',
@@ -312,6 +365,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#0066FF',
+  },
+  chatActionBtnText: {
+    color: '#0284C7',
   },
   timeTag: {
     fontSize: 11,
