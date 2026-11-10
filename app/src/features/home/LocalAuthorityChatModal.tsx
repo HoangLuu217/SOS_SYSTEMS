@@ -739,7 +739,9 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
           {/* Tên cán bộ phản hồi */}
           {!isMe && (
             <Text style={styles.officerNameText}>
-              {item.senderName || localInfo?.authority?.name || 'Cán bộ trực ban'}
+              {item.senderRole === 'ADMIN' || (item.senderName && item.senderName.toLowerCase().includes('admin'))
+                ? (localInfo?.authority?.department || `Ban Chỉ Huy PCTT ${displayArea}`)
+                : (item.senderName || localInfo?.authority?.name || localInfo?.authority?.department || 'Cán bộ trực ban')}
             </Text>
           )}
 

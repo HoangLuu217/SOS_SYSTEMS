@@ -256,10 +256,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return;
     }
 
-    // 3. Phản hồi thiết bị: Rung cảnh báo khẩn cấp dồn dập (nếu bật vibration)
+    // 2b. Kiểm tra xem có phải tin nhắn trao đổi với cán bộ địa phương không
+    const isChat =
+      incoming.type === 'CHAT' ||
+      incoming.actionUrl === 'chat' ||
+      incoming.data?.isChat;
+
+    // 3. Phản hồi thiết bị: Rung nhẹ cho chat, rung dồn dập cho cảnh báo nguy cấp
     if (currentSettings.vibration) {
       try {
-        if (incoming.priority === 'CRITICAL' || incoming.type === 'INSTANT' || incoming.type === 'ALERT' || category === 'alert') {
+        if (isChat) {
+          Vibration.vibrate([0, 150, 80, 150]);
+        } else if (incoming.priority === 'CRITICAL' || incoming.type === 'INSTANT' || incoming.type === 'ALERT' || category === 'alert') {
           // Nhịp rung chuông báo động cứu nạn dồn dập
           Vibration.vibrate([0, 500, 150, 500, 150, 800, 200, 800]);
         } else {
@@ -268,28 +276,30 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       } catch (_) {}
     }
 
-    // 3b. Phát âm thanh chuông điều động tác chiến cứu hộ (nếu bật sound)
-    if (currentSettings.sound !== false) {
+    // 3b. Phát âm thanh chuông điều động tác chiến cứu hộ CHỈ KHI là nhiệm vụ hoặc cảnh báo SOS khẩn cấp (KHÔNG phát khi nhận chat)
+    if (!isChat && currentSettings.sound !== false && (incoming.priority === 'CRITICAL' || category === 'alert' || incoming.data?.action === 'ASSIGNED')) {
       playDispatchAlertSound().catch(() => {});
     }
 
     // 4. Kích hoạt thông báo hệ thống ra ngoài màn hình máy (Status bar & Lock screen) kèm âm thanh chuông
     triggerLocalNotification({
-      title: incoming.title || '🚨 LỆNH ĐIỀU ĐỘNG CỨU HỘ MỚI',
-      body: incoming.content || (incoming.data?.address ? `Vị trí ứng cứu: ${incoming.data.address}` : 'Có lệnh điều động khẩn cấp mới từ Ban chỉ huy!'),
-      priority: incoming.priority,
+      title: incoming.title || (isChat ? '💬 Tin nhắn từ cán bộ địa phương' : '🚨 LỆNH ĐIỀU ĐỘNG CỨU HỘ MỚI'),
+      body: incoming.content || (incoming.data?.address ? `Vị trí ứng cứu: ${incoming.data.address}` : (isChat ? 'Đã gửi phản hồi cho bạn' : 'Có lệnh điều động khẩn cấp mới từ Ban chỉ huy!')),
+      priority: isChat ? 'NORMAL' : incoming.priority,
       data: {
         notificationId: incoming._id,
         type: incoming.type,
         areaId: incoming.areaId,
         areaName: incoming.areaName,
         isLocalTrigger: true,
+        isChat: isChat || undefined,
+        channel: incoming.data?.channel,
         assignmentId: incoming.data?.assignmentId,
         sosId: incoming.data?.sosId,
       },
     }).catch(() => {});
 
-    // 5. Hiển thị Banner cảnh báo khẩn cấp nổi trong app
+    // 5. Hiển thị Banner cảnh báo / tin nhắn nổi trong app
     setLatestEmergencyAlert(incoming);
   }, [user?._id]);
 
@@ -391,6 +401,15 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         navigateHandlerRef.current?.('home');
         setTimeout(() => {
           DeviceEventEmitter.emit('open:blood_donation', notifData);
+        }, 350);
+      } else if (
+        notifData?.type === 'CHAT' ||
+        notifData?.actionUrl === 'chat' ||
+        notifData?.isChat
+      ) {
+        navigateHandlerRef.current?.('home');
+        setTimeout(() => {
+          DeviceEventEmitter.emit('open:local_authority_chat', notifData);
         }, 350);
       } else if (notifData?.type === 'SOS_SYNC' || notifData?.action === 'ASSIGNED' || notifData?.assignmentId || notifData?.sosId) {
         navigateHandlerRef.current?.('sos');
