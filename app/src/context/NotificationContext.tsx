@@ -196,14 +196,21 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const idsArray = Array.from(seenIdsRef.current).slice(-100);
     AsyncStorage.setItem(SEEN_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(idsArray)).catch(() => {});
 
-    // Bỏ qua các sự kiện đồng bộ thuần túy (không phải thông báo gửi người dùng)
-    if (incoming.type === 'SOS_SYNC' || incoming.data?.type === 'SOS_SYNC') {
+    // Đồng bộ nhiệm vụ tức thời nếu thông báo có liên quan tới SOS / Assignment
+    if (
+      incoming.type === 'SOS_SYNC' ||
+      incoming.data?.type === 'SOS_SYNC' ||
+      incoming.data?.type === 'RESCUE' ||
+      incoming.data?.action === 'ASSIGNED' ||
+      incoming.data?.action === 'CANCELLED' ||
+      incoming.data?.assignmentId ||
+      incoming.data?.sosId ||
+      (incoming as any).sosId
+    ) {
       DeviceEventEmitter.emit('sos:sync');
-      return;
-    }
-
-    if (incoming.data?.type === 'RESCUE' || incoming.data?.sosId) {
-      DeviceEventEmitter.emit('sos:sync');
+      if (incoming.type === 'SOS_SYNC' && !incoming.title) {
+        return;
+      }
     }
 
     if (incoming.data?.type === 'RESCUER_VERIFICATION' || incoming.data?.type === 'USER_SYNC') {

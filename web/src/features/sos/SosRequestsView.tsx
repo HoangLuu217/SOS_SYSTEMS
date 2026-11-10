@@ -76,8 +76,17 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
       if (!memoryCachedSosList) {
         setLoading(true);
       }
+      const isLocalAuthOnly =
+        (Boolean(user?.authority) ||
+          Boolean(user?.roles?.includes('LOCAL_AUTHORITY')) ||
+          Boolean(user?.roles?.includes('AUTHORITY'))) &&
+        !user?.roles?.includes('ADMIN');
+      const sosQueryParams: Record<string, string> = { limit: '100' };
+      if (isLocalAuthOnly && user?.authority?.areaId) {
+        sosQueryParams.areaId = String(user.authority.areaId);
+      }
       const [sosRes, areaRes, vehRes] = await Promise.allSettled([
-        fetchSosRequests({ limit: '100' }),
+        fetchSosRequests(sosQueryParams),
         fetchAdministrativeAreas(),
         fetchVehicles(),
       ]);
@@ -372,7 +381,118 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     );
   };
 
-  const displaySosList = sosList;
+  // Lọc các ca SOS đúng theo địa bàn quản lý của Cán bộ địa phương (LOCAL_AUTHORITY)
+  const displaySosList = React.useMemo(() => {
+    const isAdmin = Boolean(user?.roles?.includes('ADMIN'));
+    if (isAdmin || !user) return sosList;
+
+    const isLocalAuthority =
+      Boolean(user.authority) ||
+      Boolean(user.roles?.includes('LOCAL_AUTHORITY')) ||
+      Boolean(user.roles?.includes('AUTHORITY'));
+    if (!isLocalAuthority) return sosList;
+
+    const stripPrefix = (str?: string) =>
+      String(str || '')
+        .split(',')[0]
+        .split('(')[0]
+        .toLowerCase()
+        .replace(
+          /^(ban chỉ huy pctt\s*(&\s*tkcn)?\s*(quận|huyện|phường|xã|thị xã|tp\.?|thành phố)?\s*|ubnd\s*(quận|huyện|phường|xã)?\s*|đội cứu nạn cơ động\s*(phường|xã|quận)?\s*)?/i,
+          ''
+        )
+        .replace(/^(phường|xã|quận|huyện|thị trấn|thị xã|tp\.|thành phố|p\.|q\.)\s+/i, '')
+        .trim();
+
+    const rawOfficerArea =
+      user.authority?.areaName ||
+      (user.authority as any)?.jurisdictionAreaName ||
+      user.authority?.department ||
+      '';
+    const userAreaId = user.authority?.areaId ? String(user.authority.areaId) : '';
+
+    const matchedAreaDoc = userAreaId
+      ? areas.find((a) => String(a._id) === userAreaId || a.code === userAreaId)
+      : null;
+
+    let coreKw = stripPrefix(rawOfficerArea);
+    if (!coreKw && matchedAreaDoc && matchedAreaDoc.type !== 'PROVINCE') {
+      coreKw = stripPrefix(matchedAreaDoc.name);
+    }
+
+    const allowedAreaIds = new Set<string>();
+    const allowedKeywords = new Set<string>();
+
+    if (userAreaId && (!matchedAreaDoc || matchedAreaDoc.type !== 'PROVINCE')) {
+      allowedAreaIds.add(userAreaId);
+    }
+
+    if (coreKw && coreKw.length >= 2) {
+      allowedKeywords.add(coreKw);
+      if (coreKw.includes('điện bàn')) {
+        allowedKeywords.add('điện bàn');
+      }
+      if (coreKw.includes('ngũ hành sơn')) {
+        ['ngũ hành sơn', 'mỹ an', 'khuê mỹ', 'hòa quý', 'hòa hải'].forEach((k) => allowedKeywords.add(k));
+      } else if (coreKw.includes('liên chiểu')) {
+        ['liên chiểu', 'hòa khánh', 'hòa minh', 'hòa hiệp'].forEach((k) => allowedKeywords.add(k));
+      } else if (coreKw.includes('thanh khê')) {
+        ['thanh khê', 'an khê', 'xuân hà', 'thạc gián', 'chính gián', 'tân chính', 'vĩnh trung', 'tam thuận', 'hòa khê'].forEach((k) =>
+          allowedKeywords.add(k)
+        );
+      } else if (coreKw.includes('hải châu')) {
+        ['hải châu', 'hòa cường', 'thạch thang', 'phước ninh', 'bình hiên', 'bình thuận', 'nam dương', 'thuận phước', 'hòa thuận'].forEach((k) =>
+          allowedKeywords.add(k)
+        );
+      }
+
+      for (const a of areas) {
+        if (!a.name || a.type === 'PROVINCE') continue;
+        const cleanA = stripPrefix(a.name);
+        if (cleanA === coreKw || (coreKw.includes('điện bàn') && cleanA.includes('điện bàn'))) {
+          allowedAreaIds.add(String(a._id));
+        }
+      }
+    }
+
+    for (const a of areas) {
+      const parentIdStr = typeof a.parentId === 'object' && a.parentId ? String((a.parentId as any)._id || '') : String(a.parentId || '');
+      if (parentIdStr && allowedAreaIds.has(parentIdStr) && a.type !== 'PROVINCE') {
+        allowedAreaIds.add(String(a._id));
+        const childKw = stripPrefix(a.name);
+        if (childKw.length >= 3) allowedKeywords.add(childKw);
+      }
+    }
+
+    if (allowedAreaIds.size === 0 && allowedKeywords.size === 0) {
+      return sosList;
+    }
+
+    return sosList.filter((sos) => {
+      const sosAreaObj = typeof sos.areaId === 'object' && sos.areaId !== null ? (sos.areaId as any) : null;
+      const sosAreaId = sosAreaObj ? String(sosAreaObj._id || '') : String(sos.areaId || '');
+      const sosAreaName = sosAreaObj ? String(sosAreaObj.name || '') : '';
+      const isProvinceFallbackArea =
+        sosAreaName.toLowerCase().includes('thành phố đà nẵng') ||
+        sosAreaName.toLowerCase() === 'đà nẵng' ||
+        sosAreaObj?.type === 'PROVINCE';
+
+      if (sosAreaId && !isProvinceFallbackArea && allowedAreaIds.has(sosAreaId)) {
+        return true;
+      }
+
+      const addrLower = String(sos.address || '').toLowerCase();
+      const areaNameLower = isProvinceFallbackArea ? '' : sosAreaName.toLowerCase();
+
+      for (const kw of allowedKeywords) {
+        if (kw.length >= 2 && (addrLower.includes(kw) || (areaNameLower && areaNameLower.includes(kw)))) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+  }, [sosList, user, areas]);
 
   // Phân tách ca đang diễn ra (Active) và ca đã đóng (Completed / Cancelled)
   const activeSosList = displaySosList.filter((s) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status));

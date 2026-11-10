@@ -87,6 +87,14 @@ export const InAppNotificationBanner: React.FC<Props> = ({ onNavigateToNews }) =
       latestEmergencyAlert?.actionUrl === 'blood_donation' ||
       latestEmergencyAlert?.data?.isBloodDonation;
 
+    const isMissionDispatch =
+      latestEmergencyAlert?.data?.action === 'ASSIGNED' ||
+      latestEmergencyAlert?.data?.type === 'SOS_SYNC' ||
+      latestEmergencyAlert?.data?.assignmentId ||
+      latestEmergencyAlert?.data?.sosId ||
+      (latestEmergencyAlert as any)?.sosId ||
+      latestEmergencyAlert?.title?.includes('ĐIỀU ĐỘNG');
+
     handleDismiss();
 
     if (isSafety) {
@@ -96,6 +104,12 @@ export const InAppNotificationBanner: React.FC<Props> = ({ onNavigateToNews }) =
 
     if (isBloodDonation) {
       DeviceEventEmitter.emit('open:blood_donation', latestEmergencyAlert?.data || latestEmergencyAlert);
+      return;
+    }
+
+    if (isMissionDispatch) {
+      DeviceEventEmitter.emit('sos:sync');
+      DeviceEventEmitter.emit('open:mission_tab');
       return;
     }
 

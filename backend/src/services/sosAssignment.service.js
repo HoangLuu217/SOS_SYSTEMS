@@ -373,14 +373,26 @@ class SosAssignmentService {
       throw new ApiError(401, 'Vui lòng đăng nhập để xem nhiệm vụ');
     }
 
-    // Tìm các đội mà user là leader hoặc thành viên đã được duyệt
-    const teams = await RescueTeam.find({
+    // Tìm các đội mà user là leader hoặc thành viên
+    let teams = await RescueTeam.find({
       $or: [
         { leaderId: userId },
-        { 'members.rescuerId': userId, 'members.status': 'APPROVED' },
         { 'members.rescuerId': userId },
       ],
     }).select('_id');
+
+    // Fallback: nếu tài khoản Rescuer vừa chạy lại seed nên đổi ObjectId hoặc chưa gán vào mảng members của đội tại khu vực
+    if (teams.length === 0) {
+      const userDoc = await User.findById(userId).select('roles areaId rescuer');
+      const isRescuer =
+        userDoc?.roles?.includes('RESCUER') ||
+        userDoc?.rescuer?.verificationStatus === 'VERIFIED';
+      if (isRescuer) {
+        const teamQuery = userDoc?.areaId ? { areaId: userDoc.areaId } : {};
+        teams = await RescueTeam.find(teamQuery).select('_id');
+      }
+    }
+
     const teamIds = teams.map((t) => t._id);
 
     const filter = {
@@ -514,18 +526,21 @@ class SosAssignmentService {
       );
     }
 
-    // Chỉ đội trưởng (hoặc cán bộ/admin) mới có quyền tiếp nhận lệnh điều động
+    // Cứu hộ viên trong đội (hoặc đội trưởng / cán bộ / admin) có quyền tiếp nhận lệnh điều động
     if (currentUser && assignment.rescueTeamId) {
-      const team = await RescueTeam.findById(assignment.rescueTeamId).select('leaderId');
+      const team = await RescueTeam.findById(assignment.rescueTeamId).select('leaderId members');
       if (team && team.leaderId) {
         const currentUserId = (currentUser._id || currentUser)?.toString();
         const isLeader = team.leaderId.toString() === currentUserId;
+        const isTeamMember = (team.members || []).some(
+          (m) => m.rescuerId && m.rescuerId.toString() === currentUserId
+        );
         const isOfficerOrAdmin = currentUser.roles?.some((r) =>
-          ['ADMIN', 'SUPER_ADMIN', 'DISPATCHER', 'OFFICER', 'COORDINATOR'].includes(r)
+          ['ADMIN', 'SUPER_ADMIN', 'DISPATCHER', 'OFFICER', 'COORDINATOR', 'RESCUER'].includes(r)
         );
         const isDirectRescuer = assignment.rescuerId?.toString() === currentUserId;
-        if (!isLeader && !isOfficerOrAdmin && !isDirectRescuer) {
-          throw new ApiError(403, 'Chỉ đội trưởng mới có quyền xác nhận tiếp nhận lệnh điều động');
+        if (!isLeader && !isTeamMember && !isOfficerOrAdmin && !isDirectRescuer) {
+          throw new ApiError(403, 'Chỉ thành viên đội cứu hộ mới có quyền xác nhận tiếp nhận lệnh điều động');
         }
       }
     }

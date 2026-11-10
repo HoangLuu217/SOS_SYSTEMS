@@ -56,13 +56,13 @@ async function seedNguHanhSon() {
       console.log('✔ Đã có Quận Ngũ Hành Sơn:', districtNHS.name, `(${districtNHS.code})`);
     }
 
-    // Các phường của Ngũ Hành Sơn
+    // Các phường của Ngũ Hành Sơn (Giữ DAD-NHS-01 là Phường Ngũ Hành Sơn để đồng bộ với các tài khoản cán bộ hiện có)
     const wardsConfig = [
-      { name: 'Phường Mỹ An', code: 'DAD-NHS-01' },
+      { name: 'Phường Ngũ Hành Sơn', code: 'DAD-NHS-01' },
       { name: 'Phường Khuê Mỹ', code: 'DAD-NHS-02' },
       { name: 'Phường Hòa Quý', code: 'DAD-NHS-03' },
       { name: 'Phường Hòa Hải', code: 'DAD-NHS-04' },
-      { name: 'Phường Ngũ Hành Sơn', code: 'DAD-NHS-05' },
+      { name: 'Phường Mỹ An', code: 'DAD-NHS-05' },
     ];
 
     const wardDocs = {};
@@ -70,7 +70,7 @@ async function seedNguHanhSon() {
       let ward = await AdministrativeArea.findOne({
         $or: [
           { code: w.code },
-          { name: new RegExp(w.name, 'i'), parentId: districtNHS._id },
+          { name: new RegExp(`^${w.name}$`, 'i'), parentId: districtNHS._id },
         ],
       });
       if (!ward) {
@@ -92,10 +92,11 @@ async function seedNguHanhSon() {
       wardDocs[w.code] = ward;
     }
 
-    const wardMyAn = wardDocs['DAD-NHS-01'];
+    const wardNguHanhSon = wardDocs['DAD-NHS-01'];
     const wardKhueMy = wardDocs['DAD-NHS-02'];
     const wardHoaQuy = wardDocs['DAD-NHS-03'];
     const wardHoaHai = wardDocs['DAD-NHS-04'];
+    const wardMyAn = wardDocs['DAD-NHS-05'];
 
     // ========================================================
     // 2. TẠO CƠ QUAN QUẢN LÝ / BAN CHỈ HUY QUẬN NGŨ HÀNH SƠN
@@ -616,11 +617,21 @@ async function seedNguHanhSon() {
     // ========================================================
     console.log('\n--- 6. Tạo Yêu Cầu Cứu Nạn SOS Tại Ngũ Hành Sơn ---');
 
-    const seededSosCodes = ['SOS-74144', 'SOS-8924', 'SOS-5219', 'SOS-3382', 'SOS-6175'];
+    const seededSosCodes = ['SOS-74144', 'SOS-8924', 'SOS-5219', 'SOS-3382', 'SOS-6175', 'SOS-ITXS'];
 
-    // Xóa các ca SOS rác cũ ngoài các mã chuẩn để bảng điều phối hiển thị đúng danh mục thực tế
+    // Cập nhật đúng areaId cho các ca SOS thuộc Điện Bàn Đông nếu đang bị gán nhầm vào Thành phố Đà Nẵng
+    const dienBanArea = await AdministrativeArea.findOne({ name: /Điện Bàn/i, type: { $ne: 'PROVINCE' } });
+    if (dienBanArea) {
+      await SosRequest.updateMany(
+        { address: /Điện Bàn/i },
+        { $set: { areaId: dienBanArea._id } }
+      );
+    }
+
+    // Xóa các ca SOS rác cũ ngoài các mã chuẩn (giữ lại các ca của khu vực khác đã định danh đúng như Điện Bàn)
     await SosRequest.deleteMany({
       sosCode: { $nin: seededSosCodes },
+      address: { $not: /Điện Bàn/i },
     });
 
     // 6.1. Ca SOS-74144: Ngập sâu ven sông K48/12 Lê Văn Hiến, Khuê Mỹ (CRITICAL, ĐÃ PHÂN CÔNG ĐỘI 43-NHS-01)
@@ -629,7 +640,7 @@ async function seedNguHanhSon() {
       sos1 = await SosRequest.create({
         sosCode: 'SOS-74144',
         citizenId: citizen1._id,
-        areaId: districtNHS._id,
+        areaId: wardNguHanhSon._id,
         address: 'K48/12 Lê Văn Hiến, Phường Khuê Mỹ, Quận Ngũ Hành Sơn, TP Đà Nẵng',
         location: {
           type: 'Point',
