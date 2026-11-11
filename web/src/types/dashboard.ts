@@ -75,6 +75,26 @@ export interface AdminOverviewStats {
   generatedAt?: string;
 }
 
+export type VehicleType =
+  | 'BOAT'
+  | 'MOTORBOAT'
+  | 'COMPOSITE_BOAT'
+  | 'RUBBER_BOAT'
+  | 'INFLATABLE_BOAT'
+  | 'ROWBOAT'
+  | 'LIFE_RAFT'
+  | 'JET_SKI'
+  | 'PICKUP_4X4'
+  | 'PICKUP_TRUCK'
+  | 'TRUCK'
+  | 'HIGH_CLEARANCE_TRUCK'
+  | 'AMBULANCE'
+  | 'AMPHIBIOUS_VEHICLE'
+  | 'DRONE'
+  | 'MOTORBIKE'
+  | 'OTHER'
+  | string;
+
 export interface VehicleItem {
   _id: string;
   teamId?: {
@@ -94,7 +114,7 @@ export interface VehicleItem {
     };
     status?: string;
   } | string;
-  type: 'BOAT' | 'AMBULANCE' | 'TRUCK' | 'MOTORBIKE' | 'OTHER';
+  type: VehicleType;
   plateNumber: string;
   capacity: number;
   status: 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | 'INACTIVE';
@@ -159,6 +179,9 @@ export interface RescueTeamItem {
   vehicles?: VehicleItem[];
   description?: string;
   status: string;
+  phone?: string;
+  headquartersAddress?: string;
+  operationalStatus?: string;
   createdAt?: string;
   updatedAt?: string;
 }

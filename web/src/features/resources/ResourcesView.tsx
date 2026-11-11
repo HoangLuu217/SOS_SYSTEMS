@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Eye,
   Check,
+  CheckCircle2,
   MapPin,
   PlusCircle,
   Trash2,
@@ -28,8 +29,11 @@ import {
   Info,
   Phone,
   History,
+  Plane,
+  FilterX,
+  RotateCcw,
 } from 'lucide-react';
-import type { VehicleItem, RescueTeamItem, AdministrativeAreaItem } from '@/types/dashboard';
+import type { VehicleItem, VehicleType, RescueTeamItem, AdministrativeAreaItem } from '@/types/dashboard';
 import type { User } from '@/types/auth';
 import {
   fetchVehicles,
@@ -53,6 +57,7 @@ import 'leaflet/dist/leaflet.css';
 import { fetchSafeLocations } from '@/api/shelter.api';
 import { getAreaCoordinates } from '@/features/authorities/AreaPreviewMap';
 import { domainDService } from '@/services/domainDService';
+import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import { toast } from '@/components/common/toast';
 import '@/features/sos/SosRequestsView.css';
 import '@/features/rescuers/RescuerApprovalView.css';
@@ -116,7 +121,7 @@ export const getEquipmentCategoryName = (category?: string) => {
     FUEL: 'Xăng dầu & Nhiên liệu',
     HYGIENE: 'Nhu yếu phẩm & Vệ sinh',
   };
-  return (category && map[category]) || category || 'Khí tài tác chiến';
+  return (category && map[category]) || category || 'Thiết bị cứu hộ';
 };
 
 export const getVehicleStatusMeta = (status?: string) => {
@@ -160,6 +165,169 @@ export const getVehicleStatusMeta = (status?: string) => {
       };
   }
 };
+
+export interface VehicleTypeOption {
+  value: string;
+  label: string;
+  group: string;
+  defaultCapacity: number;
+  subLabel?: string;
+}
+
+export const STANDARD_VEHICLE_TYPES: VehicleTypeOption[] = [
+  { value: 'BOAT', label: 'Xuồng máy', group: 'Phương tiện thủy cứu nạn', defaultCapacity: 8, subLabel: 'Động cơ gắn ngoài' },
+  { value: 'COMPOSITE_BOAT', label: 'Xuồng composite gắn máy', group: 'Phương tiện thủy cứu nạn', defaultCapacity: 6, subLabel: 'Vỏ composite gia cường' },
+  { value: 'RUBBER_BOAT', label: 'Xuồng cao su cứu hộ', group: 'Phương tiện thủy cứu nạn', defaultCapacity: 6, subLabel: 'Bơm hơi đa khoang' },
+  { value: 'ROWBOAT', label: 'Thuyền chèo', group: 'Phương tiện thủy cứu nạn', defaultCapacity: 4, subLabel: 'Chèo tay tiếp cận ngõ sâu' },
+  { value: 'LIFE_RAFT', label: 'Phao bè cứu sinh', group: 'Phương tiện thủy cứu nạn', defaultCapacity: 10, subLabel: 'Bè cứu sinh tự bung' },
+  { value: 'JET_SKI', label: 'Mô tô nước', group: 'Phương tiện thủy cứu nạn', defaultCapacity: 2, subLabel: 'Cơ động siêu tốc vượt dòng xiết' },
+  { value: 'PICKUP_4X4', label: 'Xe bán tải 4x4', group: 'Xe cơ giới đường bộ & lội nước', defaultCapacity: 5, subLabel: 'Gầm nhấc dẫn động 2 cầu' },
+  { value: 'TRUCK', label: 'Xe tải gầm cao', group: 'Xe cơ giới đường bộ & lội nước', defaultCapacity: 12, subLabel: 'Xe tải tác chiến vượt lũ' },
+  { value: 'AMBULANCE', label: 'Xe cứu thương', group: 'Xe cơ giới đường bộ & lội nước', defaultCapacity: 4, subLabel: 'Cấp cứu y tế tiền phương' },
+  { value: 'AMPHIBIOUS_VEHICLE', label: 'Xe bọc thép lội nước', group: 'Xe cơ giới đường bộ & lội nước', defaultCapacity: 16, subLabel: 'Thiết giáp lội nước sâu' },
+  { value: 'DRONE', label: 'Drone vận chuyển', group: 'Thiết bị bay chuyên dụng', defaultCapacity: 1, subLabel: 'Tiếp tế hàng & thả phao từ trên cao' },
+  { value: 'MOTORBIKE', label: 'Xe máy cơ động', group: 'Xe cơ giới đường bộ & lội nước', defaultCapacity: 2, subLabel: 'Luồn lách ngõ hẻm đô thị' },
+  { value: 'OTHER', label: 'Phương tiện đặc chủng khác', group: 'Đặc chủng khác', defaultCapacity: 6, subLabel: 'Phương tiện cơ động chuyên dụng' },
+];
+
+export const getVehicleTypeLabel = (type?: string): string => {
+  if (!type) return 'Phương tiện đặc chủng';
+  const found = STANDARD_VEHICLE_TYPES.find((v) => v.value === type);
+  if (found) return found.label;
+
+  switch (type.toUpperCase()) {
+    case 'MOTORBOAT':
+      return 'Xuồng máy';
+    case 'INFLATABLE_BOAT':
+      return 'Xuồng cao su cứu hộ';
+    case 'PICKUP':
+    case 'PICKUP_TRUCK':
+      return 'Xe bán tải 4x4';
+    case 'HIGH_CLEARANCE_TRUCK':
+      return 'Xe tải gầm cao';
+    case 'ARMORED_CAR':
+      return 'Xe bọc thép lội nước';
+    case 'DELIVERY_DRONE':
+      return 'Drone vận chuyển';
+    default:
+      return 'Phương tiện đặc chủng khác';
+  }
+};
+
+export const getVehicleIcon = (type?: string, size = 15) => {
+  const t = (type || '').toUpperCase();
+  if (['BOAT', 'MOTORBOAT', 'COMPOSITE_BOAT', 'RUBBER_BOAT', 'INFLATABLE_BOAT', 'ROWBOAT', 'LIFE_RAFT', 'JET_SKI'].includes(t)) {
+    return <LifeBuoy size={size} />;
+  }
+  if (['DRONE', 'DELIVERY_DRONE'].includes(t)) {
+    return <Plane size={size} />;
+  }
+  if (t === 'MOTORBIKE') {
+    return <Bike size={size} />;
+  }
+  if (t === 'OTHER') {
+    return <Wrench size={size} />;
+  }
+  return <Truck size={size} />;
+};
+
+export const VIETNAM_PROVINCE_PLATE_CODES: Record<string, string[]> = {
+  'Hà Nội': ['29', '30', '31', '32', '33', '40', 'HN'],
+  'Hồ Chí Minh': ['50', '51', '52', '53', '54', '55', '56', '57', '58', '59', 'SG', 'HCM'],
+  'Đà Nẵng': ['43', 'ĐN', 'DN'],
+  'Hải Phòng': ['15', '16', 'HP'],
+  'Cần Thơ': ['65', 'CT'],
+  'An Giang': ['67'],
+  'Bà Rịa - Vũng Tàu': ['72', 'BRVT', 'VT'],
+  'Bắc Giang': ['98'],
+  'Bắc Kạn': ['97'],
+  'Bạc Liêu': ['94'],
+  'Bắc Ninh': ['99', 'BN'],
+  'Bến Tre': ['71'],
+  'Bình Định': ['77'],
+  'Bình Dương': ['61', 'BD'],
+  'Bình Phước': ['93'],
+  'Bình Thuận': ['86'],
+  'Cà Mau': ['69'],
+  'Cao Bằng': ['11'],
+  'Đắk Lắk': ['47'],
+  'Đắk Nông': ['48'],
+  'Điện Biên': ['27'],
+  'Đồng Nai': ['60', '39'],
+  'Đồng Tháp': ['66'],
+  'Gia Lai': ['81'],
+  'Hà Giang': ['23'],
+  'Hà Nam': ['90'],
+  'Hà Tĩnh': ['38'],
+  'Hải Dương': ['34'],
+  'Hậu Giang': ['95'],
+  'Hòa Bình': ['28'],
+  'Hưng Yên': ['89'],
+  'Khánh Hòa': ['79', 'KH'],
+  'Kiên Giang': ['68'],
+  'Kon Tum': ['82'],
+  'Lai Châu': ['25'],
+  'Lâm Đồng': ['49'],
+  'Lạng Sơn': ['12'],
+  'Lào Cai': ['24'],
+  'Long An': ['62'],
+  'Nam Định': ['18'],
+  'Nghệ An': ['37', 'NA'],
+  'Ninh Bình': ['35'],
+  'Ninh Thuận': ['85'],
+  'Phú Thọ': ['19'],
+  'Phú Yên': ['78'],
+  'Quảng Bình': ['73', 'QB'],
+  'Quảng Nam': ['92', 'QNA'],
+  'Quảng Ngãi': ['76', 'QNG'],
+  'Quảng Ninh': ['14', 'QN'],
+  'Quảng Trị': ['74', 'QT'],
+  'Sóc Trăng': ['83'],
+  'Sơn La': ['26'],
+  'Tây Ninh': ['70'],
+  'Thái Bình': ['17'],
+  'Thái Nguyên': ['20'],
+  'Thanh Hóa': ['36', 'TH'],
+  'Thừa Thiên Huế': ['75', 'TTH', 'HUE'],
+  'Tiền Giang': ['63'],
+  'Trà Vinh': ['84'],
+  'Tuyên Quang': ['22'],
+  'Vĩnh Long': ['64'],
+  'Vĩnh Phúc': ['88'],
+  'Yên Bái': ['21'],
+};
+
+export function isVehicleMatchingProvince(v: VehicleItem, provName: string): boolean {
+  if (!v || !provName || provName === 'ALL') return true;
+
+  const cleanProv = provName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/^(tỉnh|thành phố|tp\.?)\s+/i, '')
+    .trim();
+
+  // 1. Kiểm tra biển số / mô tả có chứa tên tỉnh
+  const text = `${v.plateNumber || ''} ${v.description || ''}`
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  if (cleanProv && text.includes(cleanProv)) return true;
+
+  // 2. Kiểm tra đầu biển số theo quy chuẩn mã vùng Việt Nam
+  const plateClean = (v.plateNumber || '').toUpperCase().trim();
+  for (const [pKey, codes] of Object.entries(VIETNAM_PROVINCE_PLATE_CODES)) {
+    const normKey = pKey
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    if (normKey === cleanProv || cleanProv.includes(normKey) || normKey.includes(cleanProv)) {
+      return codes.some((code) => plateClean.startsWith(code));
+    }
+  }
+
+  return false;
+}
 
 // Component Modal Ghim Vị Trí Trên Bản Đồ (Google Maps Tiles qua Leaflet, click chọn tọa độ chuẩn xác)
 const LocationMapPickerModal: React.FC<{
@@ -446,8 +614,6 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
   const [rescueTeams, setRescueTeams] = useState<RescueTeamItem[]>(propTeams);
   const [equipments, setEquipments] = useState<EquipmentItem[]>([]);
   const [equipmentsLoading, setEquipmentsLoading] = useState(false);
-  const [areas, setAreas] = useState<AdministrativeAreaItem[]>([]);
-  const [selectedAreaId, setSelectedAreaId] = useState<string>('ALL');
   const [resourceTab, setResourceTab] = useState<'VEHICLES' | 'SUPPLIES' | 'CONSUMABLES'>('VEHICLES');
   const [loading, setLoading] = useState<boolean>(false);
   const [refreshIndex, setRefreshIndex] = useState(0);
@@ -470,39 +636,33 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     activeOfficer?.jurisdictionAreaName ||
     '';
 
-  const managedArea = useMemo(() => {
-    if (isAdmin) return null;
-    if (userAreaId) {
-      const byId = areas.find((a) => a._id === userAreaId || a.code === userAreaId);
-      if (byId) return byId;
-    }
-    if (userAreaName) {
-      const cleanUser = userAreaName.toLowerCase().replace(/^(phường|xã|quận|huyện)\s+/i, '').trim();
-      const byName = areas.find((a) => {
-        const cleanArea = a.name.toLowerCase().replace(/^(phường|xã|quận|huyện)\s+/i, '').trim();
-        return cleanUser && (cleanArea.includes(cleanUser) || cleanUser.includes(cleanArea));
-      });
-      if (byName) return byName;
-    }
-    return null;
-  }, [areas, isAdmin, userAreaId, userAreaName]);
+  const {
+    provinces,
+    provincesLoading,
+    selectedProvince,
+    setSelectedProvince,
+    wards,
+    wardsLoading,
+    selectedAreaId,
+    setSelectedAreaId,
+    dbAreas: areas,
+    managedArea,
+    isTeamInTargetArea,
+  } = useAdministrativeFilter({
+    isAdmin,
+    userAreaId,
+    userAreaName,
+  });
 
   const effectiveAreaId = !isAdmin
     ? (managedArea?._id || userAreaId || (userAreaName ? userAreaName : 'ALL'))
     : selectedAreaId;
 
-  useEffect(() => {
-    if (!isAdmin && managedArea?._id) {
-      setSelectedAreaId(managedArea._id);
-    } else if (user?.authority?.areaId) {
-      setSelectedAreaId(user.authority.areaId);
-    }
-  }, [isAdmin, managedArea, user?.authority?.areaId]);
-
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
   const [vehicleTypeFilter, setVehicleTypeFilter] = useState<string>('ALL');
   const [vehicleTeamFilter, setVehicleTeamFilter] = useState<string>('ALL');
+  const [supplyTypeFilter, setSupplyTypeFilter] = useState<'ALL' | 'DURABLE' | 'CONSUMABLE'>('ALL');
   const [supplyCategoryFilter, setSupplyCategoryFilter] = useState<string>('ALL');
   const [supplyTeamFilter, setSupplyTeamFilter] = useState<string>('DEPOT');
   const [consumableCategoryFilter, setConsumableCategoryFilter] = useState<string>('ALL');
@@ -525,7 +685,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       if (tabParam === 'SUPPLIES' || tabParam === 'supplies' || path.includes('/supplies')) {
         setResourceTab('SUPPLIES');
       } else if (tabParam === 'CONSUMABLES' || tabParam === 'consumables' || path.includes('/consumables')) {
-        setResourceTab('CONSUMABLES');
+        setResourceTab('SUPPLIES');
+        setSupplyTypeFilter('CONSUMABLE');
       } else if (tabParam === 'VEHICLES' || tabParam === 'vehicles' || path.includes('/vehicles')) {
         setResourceTab('VEHICLES');
       }
@@ -536,8 +697,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
     const handleTabEvent = (e: any) => {
       const tab = e?.detail?.tab;
-      if (tab === 'VEHICLES' || tab === 'SUPPLIES' || tab === 'CONSUMABLES') {
+      if (tab === 'VEHICLES' || tab === 'SUPPLIES') {
         setResourceTab(tab);
+        setSearchQuery('');
+        setCurrentPage(1);
+      } else if (tab === 'CONSUMABLES') {
+        setResourceTab('SUPPLIES');
+        setSupplyTypeFilter('CONSUMABLE');
         setSearchQuery('');
         setCurrentPage(1);
       }
@@ -559,8 +725,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
   // New vehicle form state
   const [newPlate, setNewPlate] = useState('');
-  const [newType, setNewType] = useState<'BOAT' | 'AMBULANCE' | 'TRUCK' | 'MOTORBIKE' | 'OTHER'>('BOAT');
-  const [newCapacity, setNewCapacity] = useState<number>(6);
+  const [newType, setNewType] = useState<VehicleType>('BOAT');
+  const [newCapacity, setNewCapacity] = useState<number>(8);
   const [newTeamId, setNewTeamId] = useState<string>('');
   const [newDescription, setNewDescription] = useState('');
   const [isSubmittingVehicle, setIsSubmittingVehicle] = useState(false);
@@ -568,12 +734,27 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
   // Edit vehicle form state
   const [editVehicleTarget, setEditVehicleTarget] = useState<VehicleItem | null>(null);
   const [editVehiclePlate, setEditVehiclePlate] = useState('');
-  const [editVehicleType, setEditVehicleType] = useState<'BOAT' | 'AMBULANCE' | 'TRUCK' | 'MOTORBIKE' | 'OTHER'>('BOAT');
+  const [editVehicleType, setEditVehicleType] = useState<VehicleType>('BOAT');
   const [editVehicleCapacity, setEditVehicleCapacity] = useState<number>(6);
   const [editVehicleStatus, setEditVehicleStatus] = useState<'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | 'INACTIVE'>('AVAILABLE');
   const [editVehicleTeamId, setEditVehicleTeamId] = useState<string>('');
   const [editVehicleDescription, setEditVehicleDescription] = useState('');
   const [isUpdatingVehicle, setIsUpdatingVehicle] = useState(false);
+
+  // Batch Assign Vehicles to Team Modal State
+  const [isAssignVehicleModalOpen, setIsAssignVehicleModalOpen] = useState(false);
+  const [assignTargetTeamId, setAssignTargetTeamId] = useState<string>('');
+  const [selectedVehiclesToAssign, setSelectedVehiclesToAssign] = useState<string[]>([]);
+  const [assignVehicleNote, setAssignVehicleNote] = useState<string>('');
+  const [isAssigningVehicles, setIsAssigningVehicles] = useState(false);
+
+  // Batch Assign Equipment to Team Modal State
+  const [isAssignEquipmentModalOpen, setIsAssignEquipmentModalOpen] = useState(false);
+  const [assignEquipTargetTeamId, setAssignEquipTargetTeamId] = useState<string>('');
+  const [selectedEquipmentsToAssign, setSelectedEquipmentsToAssign] = useState<Record<string, number>>({});
+  const [assignEquipNote, setAssignEquipNote] = useState<string>('');
+  const [isAssigningEquipment, setIsAssigningEquipment] = useState(false);
+  const [assignEquipSupplyType, setAssignEquipSupplyType] = useState<'ALL' | 'DURABLE' | 'CONSUMABLE'>('ALL');
 
   // Equipment dispatch / create form state
   const [isCreateEquipmentOpen, setIsCreateEquipmentOpen] = useState(false);
@@ -614,6 +795,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
   const [isMapPickerOpen, setIsMapPickerOpen] = useState<boolean>(false);
   const [safeLocations, setSafeLocations] = useState<any[]>([]);
   const [isSubmittingBatchConsume, setIsSubmittingBatchConsume] = useState<boolean>(false);
+
+  // Multi-select mặt hàng từ Bảng kho chính (để tạo phiếu xuất kho nhanh)
+  const [selectedTableItemIds, setSelectedTableItemIds] = useState<string[]>([]);
 
   // Custom Action / Delete Confirmation Modal State
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{
@@ -702,9 +886,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         fetchAdministrativeAreas(),
       ]);
 
-      if (areasRes.status === 'fulfilled' && areasRes.value.success && Array.isArray(areasRes.value.data)) {
-        setAreas(areasRes.value.data);
-      }
+      // Khu vực hành chính đã được nạp và quản lý tập trung trong useAdministrativeFilter
       if (vehRes.status === 'fulfilled' && vehRes.value.success && Array.isArray(vehRes.value.data)) {
         setVehicles(vehRes.value.data);
       } else {
@@ -770,38 +952,10 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     });
   }, [rawVehicles, rescueTeams]);
 
-  // KPI Metrics
-  const boatsCount = useMemo(
-    () => rawVehicles.filter((v) => v.type === 'BOAT' || v.plateNumber.includes('SEA') || v.plateNumber.includes('CL')).length,
-    [rawVehicles]
-  );
-
-  const ambulancesCount = useMemo(
-    () => rawVehicles.filter((v) => v.type === 'AMBULANCE').length,
-    [rawVehicles]
-  );
-
-  const trucksCount = useMemo(
-    () => rawVehicles.filter((v) => v.type === 'TRUCK').length,
-    [rawVehicles]
-  );
-
-  const motorbikesCount = useMemo(
-    () => rawVehicles.filter((v) => v.type === 'MOTORBIKE').length,
-    [rawVehicles]
-  );
-
-  const othersCount = useMemo(
-    () =>
-      rawVehicles.filter(
-        (v) =>
-          v.type === 'OTHER' ||
-          (!['BOAT', 'AMBULANCE', 'TRUCK', 'MOTORBIKE'].includes(v.type) &&
-            !v.plateNumber.includes('SEA') &&
-            !v.plateNumber.includes('CL'))
-      ).length,
-    [rawVehicles]
-  );
+  // Danh sách phương tiện tại Kho Tổng / Chưa phân công cho đội nào
+  const unassignedVehicles = useMemo(() => {
+    return vehiclesWithTeam.filter((v) => !v.assignedTeam && !v.teamId);
+  }, [vehiclesWithTeam]);
 
   // Filtered vehicles
   const filteredVehicles = useMemo(() => {
@@ -840,18 +994,40 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         // Nếu không có đội (Kho tổng dự trữ / Chưa biên chế), luôn cho phép hiển thị để cán bộ địa phương thấy và điều chuyển
       }
 
-      // 2. Lọc theo loại phương tiện (Tất cả, Ca-nô/Xuồng, Xe cấp cứu, Xe tải 4x4, Xe máy, Khác)
+      // 1B. Lọc theo địa bàn khi là Admin và đang chọn Tỉnh/TP hoặc 1 địa bàn cụ thể
+      if (isAdmin && (selectedAreaId !== 'ALL' || selectedProvince !== 'ALL')) {
+        const team = v.assignedTeam;
+        const hasTeam = Boolean(team || v.teamId);
+        if (hasTeam) {
+          const t = team || { _id: typeof v.teamId === 'object' ? (v.teamId as any)?._id : v.teamId };
+          if (!isTeamInTargetArea(t)) return false;
+        } else {
+          // Phương tiện chưa phân công (Kho Tổng / Kho dự trữ)
+          // 1) Nếu chọn Xã/Phường cụ thể: Xe kho tổng không thuộc riêng xã/phường này -> Loại bỏ
+          if (selectedAreaId !== 'ALL') {
+            return false;
+          }
+          // 2) Nếu chọn Tỉnh/TP cụ thể: Chỉ hiển thị xe có đầu biển số hoặc địa bàn thuộc Tỉnh/TP đó
+          if (selectedProvince !== 'ALL') {
+            if (!isVehicleMatchingProvince(v, selectedProvince)) {
+              return false;
+            }
+          }
+        }
+      }
+
+      // 2. Lọc theo loại phương tiện
       if (vehicleTypeFilter !== 'ALL') {
         if (vehicleTypeFilter === 'BOAT') {
-          const isBoat = v.type === 'BOAT' || v.plateNumber.includes('SEA') || v.plateNumber.includes('CL');
+          const isBoat = v.type === 'BOAT' || v.type === 'MOTORBOAT' || Boolean(v.plateNumber && (v.plateNumber.includes('SEA') || v.plateNumber.includes('CL')));
           if (!isBoat) return false;
+        } else if (vehicleTypeFilter === 'PICKUP_4X4') {
+          if (v.type !== 'PICKUP_4X4' && v.type !== 'PICKUP_TRUCK' && v.type !== 'PICKUP') return false;
+        } else if (vehicleTypeFilter === 'TRUCK') {
+          if (v.type !== 'TRUCK' && v.type !== 'HIGH_CLEARANCE_TRUCK') return false;
         } else if (vehicleTypeFilter === 'OTHER') {
-          const isOther =
-            v.type === 'OTHER' ||
-            (!['BOAT', 'AMBULANCE', 'TRUCK', 'MOTORBIKE'].includes(v.type) &&
-              !v.plateNumber.includes('SEA') &&
-              !v.plateNumber.includes('CL'));
-          if (!isOther) return false;
+          const isStandard = STANDARD_VEHICLE_TYPES.some((st) => st.value === v.type && st.value !== 'OTHER');
+          if (isStandard) return false;
         } else if (v.type !== vehicleTypeFilter) {
           return false;
         }
@@ -876,7 +1052,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       }
       return true;
     });
-  }, [vehiclesWithTeam, vehicleTypeFilter, vehicleTeamFilter, searchQuery, isAdmin, managedArea, userAreaId, userAreaName]);
+  }, [vehiclesWithTeam, vehicleTypeFilter, vehicleTeamFilter, searchQuery, isAdmin, selectedAreaId, selectedProvince, managedArea, userAreaId, userAreaName, isTeamInTargetArea]);
 
 
   // Durable equipments (Khí tài tác chiến tái sử dụng)
@@ -884,14 +1060,65 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     return equipments.filter((eq) => eq.supplyType !== 'CONSUMABLE');
   }, [equipments]);
 
+  // Durable equipments in Kho Tổng (chưa giao cho đội nào và còn số lượng > 0)
+  const depotDurableEquipments = useMemo(() => {
+    return durableEquipments.filter((eq) => {
+      const tId = typeof eq.teamId === 'object' && eq.teamId ? (eq.teamId as any)._id : eq.teamId;
+      return !tId && eq.quantity > 0;
+    });
+  }, [durableEquipments]);
+
   // Consumable supplies (Vật tư tiêu hao / Cứu trợ)
   const consumableEquipments = useMemo(() => {
     return equipments.filter((eq) => eq.supplyType === 'CONSUMABLE');
   }, [equipments]);
 
-  // Filtered durable equipments
+  // Consumable supplies in Kho Tổng (chưa giao cho đội nào và còn số lượng > 0)
+  const depotConsumableEquipments = useMemo(() => {
+    return consumableEquipments.filter((eq) => {
+      const tId = typeof eq.teamId === 'object' && eq.teamId ? (eq.teamId as any)._id : eq.teamId;
+      return !tId && eq.quantity > 0;
+    });
+  }, [consumableEquipments]);
+
+  // All items in Kho Tổng (cả Thiết bị cứu hộ & Nhu yếu phẩm)
+  const depotAllEquipments = useMemo(() => {
+    return equipments.filter((eq) => {
+      const tId = typeof eq.teamId === 'object' && eq.teamId ? (eq.teamId as any)._id : eq.teamId;
+      return !tId && eq.quantity > 0;
+    });
+  }, [equipments]);
+
+  // Filtered equipments (Gộp chung Khí tài tác chiến & Vật tư cứu trợ tổng hợp)
   const filteredEquipments = useMemo(() => {
-    return durableEquipments.filter((eq) => {
+    return equipments.filter((eq) => {
+      // 0. Lọc theo Phân loại: Dùng bền (Khí tài) vs Tiêu hao (Nhu yếu phẩm)
+      if (supplyTypeFilter === 'DURABLE' && eq.supplyType === 'CONSUMABLE') return false;
+      if (supplyTypeFilter === 'CONSUMABLE' && eq.supplyType !== 'CONSUMABLE') return false;
+
+      // 0B. Lọc theo địa bàn khi là Admin và đang chọn Tỉnh/TP hoặc 1 địa bàn cụ thể
+      if (isAdmin && (selectedAreaId !== 'ALL' || selectedProvince !== 'ALL')) {
+        const tId = typeof eq.teamId === 'object' && eq.teamId ? (eq.teamId as any)._id : eq.teamId;
+        if (tId) {
+          const team = rescueTeams.find((t) => t._id === tId) || eq.teamId;
+          if (!isTeamInTargetArea(team)) return false;
+        } else {
+          // Hàng cứu trợ / Thiết bị tại Kho Tổng
+          // Nếu người dùng chủ động chọn xem "Kho Tổng / Dự Trữ" (supplyTeamFilter === 'DEPOT') thì luôn hiển thị
+          if (supplyTeamFilter !== 'DEPOT') {
+            if (selectedAreaId !== 'ALL') {
+              return false;
+            }
+            if (selectedProvince !== 'ALL') {
+              const cleanProv = selectedProvince.toLowerCase().replace(/^(tỉnh|thành phố|tp\.?)\s+/i, '').trim();
+              if (!cleanProv.includes('da nang') && !cleanProv.includes('đà nẵng')) {
+                return false;
+              }
+            }
+          }
+        }
+      }
+
       // 1. Lọc theo đơn vị biên chế (Kho tổng dự trữ hoặc theo đội)
       if (supplyTeamFilter !== 'ALL') {
         const tId = typeof eq.teamId === 'object' && eq.teamId ? (eq.teamId as any)._id : eq.teamId;
@@ -910,12 +1137,17 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       // 3. Tìm kiếm từ khóa
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const teamName = (typeof eq.teamId === 'object' && eq.teamId ? eq.teamId.name : '').toLowerCase();
-        return eq.name.toLowerCase().includes(q) || teamName.includes(q) || (eq.serialNumber || '').toLowerCase().includes(q);
+        const teamName = (typeof eq.teamId === 'object' && eq.teamId ? eq.teamId.name || '' : '').toLowerCase();
+        return (
+          (eq.name || '').toLowerCase().includes(q) ||
+          teamName.includes(q) ||
+          (eq.serialNumber || '').toLowerCase().includes(q) ||
+          (eq.note || '').toLowerCase().includes(q)
+        );
       }
       return true;
     });
-  }, [durableEquipments, supplyTeamFilter, supplyCategoryFilter, searchQuery]);
+  }, [equipments, supplyTypeFilter, supplyTeamFilter, supplyCategoryFilter, searchQuery, isAdmin, selectedAreaId, selectedProvince, rescueTeams, isTeamInTargetArea]);
 
   // Filtered consumable supplies
   const filteredConsumables = useMemo(() => {
@@ -938,9 +1170,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       // 3. Tìm kiếm
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const teamName = (typeof eq.teamId === 'object' && eq.teamId ? eq.teamId.name : '').toLowerCase();
+        const teamName = (typeof eq.teamId === 'object' && eq.teamId ? eq.teamId.name || '' : '').toLowerCase();
         return (
-          eq.name.toLowerCase().includes(q) ||
+          (eq.name || '').toLowerCase().includes(q) ||
           teamName.includes(q) ||
           (eq.serialNumber || '').toLowerCase().includes(q) ||
           (eq.note || '').toLowerCase().includes(q)
@@ -950,64 +1182,6 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     });
   }, [consumableEquipments, consumableTeamFilter, consumableCategoryFilter, searchQuery]);
 
-  // Kiểm tra đội cứu hộ có thuộc địa bàn quản lý / khu vực đang chọn không
-  const isTeamInTargetArea = useCallback((team: RescueTeamItem | any) => {
-    // 1. Nếu không phải Admin: Bắt buộc lọc theo địa bàn quản lý của cán bộ (managedArea / userAreaId / userAreaName)
-    if (!isAdmin && (managedArea || userAreaName || userAreaId)) {
-      const targetAreaId = managedArea?._id || userAreaId;
-      const targetAreaName = (userAreaName || managedArea?.name || '')
-        .toLowerCase()
-        .replace(/^(phường|xã|quận|huyện)\s+/i, '')
-        .trim();
-
-      const teamAreaObj = typeof team?.areaId === 'object' ? team.areaId : null;
-      const teamAreaId = teamAreaObj?._id || (typeof team?.areaId === 'string' ? team.areaId : null);
-      const teamAreaName = (teamAreaObj?.name || '').toLowerCase();
-      const teamNameLower = (team?.name || '').toLowerCase();
-
-      const matchId = targetAreaId && (teamAreaId === targetAreaId || teamAreaId === managedArea?.code);
-      const matchParentChild = Boolean(
-        ((teamAreaObj as any)?.parentId && ((teamAreaObj as any).parentId === targetAreaId || (teamAreaObj as any).parentId === managedArea?._id)) ||
-        (managedArea?.parentId && (managedArea.parentId === teamAreaId || managedArea.parentId === (teamAreaObj as any)?._id))
-      );
-      const matchName = Boolean(
-        targetAreaName &&
-        (teamAreaName.includes(targetAreaName) || teamNameLower.includes(targetAreaName))
-      );
-
-      return Boolean(matchId || matchParentChild || matchName);
-    }
-
-    // 2. Nếu là Admin và đang chọn một khu vực cụ thể (effectiveAreaId !== 'ALL')
-    if (effectiveAreaId && effectiveAreaId !== 'ALL') {
-      const teamAreaObj = typeof team?.areaId === 'object' ? team.areaId : null;
-      const teamAreaId = teamAreaObj?._id || (typeof team?.areaId === 'string' ? team.areaId : null);
-      const targetArea = areas.find((a) => a._id === effectiveAreaId || a.code === effectiveAreaId);
-      const targetAreaName = (targetArea?.name || '')
-        .toLowerCase()
-        .replace(/^(phường|xã|quận|huyện)\s+/i, '')
-        .trim();
-
-      const teamAreaName = (teamAreaObj?.name || '').toLowerCase();
-      const teamNameLower = (team?.name || '').toLowerCase();
-
-      const matchId = teamAreaId === effectiveAreaId || (targetArea && teamAreaId === targetArea.code);
-      const matchParentChild = Boolean(
-        targetArea &&
-        (((teamAreaObj as any)?.parentId && (teamAreaObj as any).parentId === targetArea._id) ||
-          (targetArea.parentId && targetArea.parentId === teamAreaId))
-      );
-      const matchName = Boolean(
-        targetAreaName &&
-        (teamAreaName.includes(targetAreaName) || teamNameLower.includes(targetAreaName))
-      );
-
-      return Boolean(matchId || matchParentChild || matchName);
-    }
-
-    return true;
-  }, [isAdmin, managedArea, userAreaName, userAreaId, effectiveAreaId, areas]);
-
   // Danh sách các Đội cứu hộ đang Hoạt động / Sẵn sàng (ACTIVE) VÀ thuộc khu vực quản lý
   const activeRescueTeams = useMemo(() => {
     return rescueTeams.filter((t) => {
@@ -1016,6 +1190,59 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       return isTeamInTargetArea(t);
     });
   }, [rescueTeams, isTeamInTargetArea]);
+
+  // Danh sách các Đội cứu hộ thuộc phạm vi địa bàn đang lọc
+  const scopedRescueTeams = useMemo(() => {
+    if (isAdmin && (selectedAreaId !== 'ALL' || selectedProvince !== 'ALL')) {
+      return rescueTeams.filter((t) => isTeamInTargetArea(t));
+    }
+    if (!isAdmin) {
+      return rescueTeams.filter((t) => isTeamInTargetArea(t));
+    }
+    return rescueTeams;
+  }, [rescueTeams, isAdmin, selectedAreaId, selectedProvince, isTeamInTargetArea]);
+
+  // Trạng thái và hàm xóa lọc cho Tab Phương tiện (VEHICLES)
+  const hasActiveVehicleFilters = Boolean(
+    (isAdmin && (selectedProvince !== 'ALL' || selectedAreaId !== 'ALL')) ||
+    (!isAdmin && selectedAreaId !== 'ALL') ||
+    vehicleTeamFilter !== 'ALL' ||
+    vehicleTypeFilter !== 'ALL' ||
+    searchQuery.trim() !== ''
+  );
+
+  const handleClearVehicleFilters = useCallback(() => {
+    if (isAdmin) {
+      setSelectedProvince('ALL');
+    }
+    setSelectedAreaId('ALL');
+    setVehicleTeamFilter('ALL');
+    setVehicleTypeFilter('ALL');
+    setSearchQuery('');
+    setCurrentPage(1);
+  }, [isAdmin, setSelectedProvince, setSelectedAreaId]);
+
+  // Trạng thái và hàm xóa lọc cho Tab Thiết bị & Hàng cứu trợ (SUPPLIES)
+  const hasActiveSupplyFilters = Boolean(
+    (isAdmin && (selectedProvince !== 'ALL' || selectedAreaId !== 'ALL')) ||
+    (!isAdmin && selectedAreaId !== 'ALL') ||
+    supplyTeamFilter !== 'DEPOT' ||
+    supplyTypeFilter !== 'ALL' ||
+    supplyCategoryFilter !== 'ALL' ||
+    searchQuery.trim() !== ''
+  );
+
+  const handleClearSupplyFilters = useCallback(() => {
+    if (isAdmin) {
+      setSelectedProvince('ALL');
+    }
+    setSelectedAreaId('ALL');
+    setSupplyTeamFilter('DEPOT');
+    setSupplyTypeFilter('ALL');
+    setSupplyCategoryFilter('ALL');
+    setSearchQuery('');
+    setCurrentPage(1);
+  }, [isAdmin, setSelectedProvince, setSelectedAreaId]);
 
   // Tự động chuyển batchTeamId sang đội ACTIVE hợp lệ nếu đội hiện tại không còn active hoặc không thuộc khu vực
   useEffect(() => {
@@ -1204,6 +1431,110 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     }
   };
 
+  // Xử lý biên chế một hoặc nhiều phương tiện từ Kho Tổng cho Đội cứu hộ
+  const handleConfirmAssignVehicles = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignTargetTeamId) {
+      toast.warning('Vui lòng chọn Đội cứu hộ tiếp nhận phương tiện');
+      return;
+    }
+    if (selectedVehiclesToAssign.length === 0) {
+      toast.warning('Vui lòng tích chọn ít nhất 1 phương tiện từ kho để biên chế');
+      return;
+    }
+
+    const targetTeamObj = rescueTeams.find((t) => t._id === assignTargetTeamId);
+
+    try {
+      setIsAssigningVehicles(true);
+      const updatePromises = selectedVehiclesToAssign.map((vId) =>
+        updateVehicle(vId, {
+          teamId: assignTargetTeamId,
+          description: assignVehicleNote.trim() || undefined,
+        })
+      );
+
+      const results = await Promise.all(updatePromises);
+      const updatedList = results.filter((r) => r.success && r.data).map((r) => r.data);
+
+      setVehicles((prev) =>
+        prev.map((v) => {
+          const updated = updatedList.find((u) => u._id === v._id);
+          if (updated) {
+            return {
+              ...updated,
+              assignedTeam: targetTeamObj,
+            };
+          }
+          if (selectedVehiclesToAssign.includes(v._id)) {
+            return {
+              ...v,
+              teamId: assignTargetTeamId,
+              assignedTeam: targetTeamObj,
+            };
+          }
+          return v;
+        })
+      );
+
+      toast.success(
+        `Đã biên chế thành công ${selectedVehiclesToAssign.length} phương tiện cho "${targetTeamObj?.name || 'Đội cứu hộ'}"!`
+      );
+      setIsAssignVehicleModalOpen(false);
+      setSelectedVehiclesToAssign([]);
+      setAssignVehicleNote('');
+    } catch (err: any) {
+      console.error('Lỗi khi biên chế phương tiện cho đội:', err);
+      toast.error('Có lỗi xảy ra khi biên chế phương tiện. Vui lòng thử lại!');
+    } finally {
+      setIsAssigningVehicles(false);
+    }
+  };
+
+  // Xử lý cấp một hoặc nhiều thiết bị / nhu yếu phẩm từ Kho Tổng cho Đội cứu hộ
+  const handleConfirmAssignEquipments = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assignEquipTargetTeamId) {
+      toast.warning('Vui lòng chọn Đội cứu hộ tiếp nhận bàn giao');
+      return;
+    }
+    const selectedIds = Object.keys(selectedEquipmentsToAssign).filter(
+      (id) => (selectedEquipmentsToAssign[id] || 0) > 0
+    );
+    if (selectedIds.length === 0) {
+      toast.warning('Vui lòng chọn số lượng ít nhất 1 mặt hàng từ kho để bàn giao');
+      return;
+    }
+
+    const targetTeamObj = rescueTeams.find((t) => t._id === assignEquipTargetTeamId);
+
+    try {
+      setIsAssigningEquipment(true);
+      await Promise.all(
+        selectedIds.map((eqId) =>
+          transferEquipment(eqId, {
+            targetTeamId: assignEquipTargetTeamId,
+            quantity: selectedEquipmentsToAssign[eqId],
+            note: assignEquipNote.trim() || undefined,
+          })
+        )
+      );
+
+      await loadData();
+      toast.success(
+        `Đã bàn giao thành công ${selectedIds.length} mặt hàng cho "${targetTeamObj?.name || 'Đội cứu hộ'}"!`
+      );
+      setIsAssignEquipmentModalOpen(false);
+      setSelectedEquipmentsToAssign({});
+      setAssignEquipNote('');
+    } catch (err: any) {
+      console.error('Lỗi khi bàn giao mặt hàng cho đội:', err);
+      toast.error('Có lỗi xảy ra khi bàn giao mặt hàng. Vui lòng thử lại!');
+    } finally {
+      setIsAssigningEquipment(false);
+    }
+  };
+
   // Handle Transfer / Reassign Vehicle
   const handleExecuteTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1347,10 +1678,15 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
   };
 
   // Mở modal Phiếu xuất cứu trợ tổng hợp (nhiều mặt hàng)
-  const handleOpenBatchConsumeModal = async () => {
-    const available = consumableEquipments.filter((e) => e.quantity > 0);
-    if (available.length === 0) {
-      toast.warning('Hiện không có mặt hàng cứu trợ nào còn tồn kho để xuất cấp');
+  const handleOpenBatchConsumeModal = async (preset?: { targetTeamId?: string } | any) => {
+    // Sẵn sàng xuất tất cả mặt hàng còn hàng trong Kho Tổng (cả Khí tài bền & Vật tư cứu trợ)
+    const available = equipments.filter((e) => {
+      const tId = typeof e.teamId === 'object' && e.teamId ? (e.teamId as any)._id : e.teamId;
+      return !tId && e.quantity > 0;
+    });
+    const pool = available.length > 0 ? available : equipments.filter((e) => e.quantity > 0);
+    if (pool.length === 0) {
+      toast.warning('Hiện không có mặt hàng nào còn tồn kho để lập phiếu xuất điều phối');
       return;
     }
     setBatchDestination('');
@@ -1377,27 +1713,58 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       }
     } catch (_) { }
 
-    const activeTeams = currentTeams.filter((t) => {
-      const isActive = t.status === 'ACTIVE' || (!t.status && t.status !== 'INACTIVE' && t.status !== 'SUSPENDED');
-      if (!isActive) return false;
-      return isTeamInTargetArea(t);
-    });
-    if (activeTeams.length > 0) {
-      setBatchTeamId(activeTeams[0]._id);
+    const targetId = preset && typeof preset === 'object' && 'targetTeamId' in preset ? preset.targetTeamId : null;
+
+    if (targetId) {
+      setBatchTeamId(targetId);
+      setBatchDispatchMode('ASSIGN_TEAM');
     } else {
-      setBatchTeamId('');
+      const activeTeams = currentTeams.filter((t) => {
+        const isActive = t.status === 'ACTIVE' || (!t.status && t.status !== 'INACTIVE' && t.status !== 'SUSPENDED');
+        if (!isActive) return false;
+        return isTeamInTargetArea(t);
+      });
+      if (activeTeams.length > 0) {
+        setBatchTeamId(activeTeams[0]._id);
+      } else {
+        setBatchTeamId('');
+      }
     }
-    setBatchItems([
-      {
-        equipmentId: available[0]._id,
-        quantity: Math.min(10, available[0].quantity),
-      },
-    ]);
+
+    // Khởi tạo danh sách mặt hàng đưa vào phiếu xuất (Chỉ lấy hàng tồn từ Kho Tổng / Dự Trữ):
+    if (selectedTableItemIds.length > 0) {
+      const chosenEquipments = equipments.filter((e) => {
+        const tId = typeof e.teamId === 'object' && e.teamId ? (e.teamId as any)._id : e.teamId;
+        return !tId && selectedTableItemIds.includes(e._id) && e.quantity > 0;
+      });
+      if (chosenEquipments.length > 0) {
+        setBatchItems(
+          chosenEquipments.map((eq) => ({
+            equipmentId: eq._id,
+            quantity: Math.min(10, eq.quantity),
+          }))
+        );
+      } else {
+        setBatchItems([]);
+      }
+    } else {
+      // Khi mở tự do chưa tích chọn trước từ bảng: để danh sách rỗng để người dùng tự chọn, không gán sẵn mặc định thiết bị
+      setBatchItems([]);
+    }
+
     setIsBatchConsumeOpen(true);
   };
 
   const handleAddBatchItem = () => {
-    const available = consumableEquipments.filter((e) => e.quantity > 0);
+    // Chỉ lấy các mặt hàng thuộc Kho Tổng / Dự Trữ
+    const available = equipments.filter((e) => {
+      const tId = typeof e.teamId === 'object' && e.teamId ? (e.teamId as any)._id : e.teamId;
+      return !tId && e.quantity > 0;
+    });
+    if (available.length === 0) {
+      toast.warning('Kho Tổng / Dự Trữ hiện không còn mặt hàng nào để xuất thêm');
+      return;
+    }
     const selectedIds = new Set(batchItems.map((bi) => bi.equipmentId));
     const nextItem = available.find((e) => !selectedIds.has(e._id)) || available[0];
     if (nextItem) {
@@ -1417,7 +1784,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       prev.map((item, idx) => {
         if (idx !== index) return item;
         const updated = { ...item, ...patch };
-        const eq = consumableEquipments.find((e) => e._id === updated.equipmentId);
+        const eq = equipments.find((e) => e._id === updated.equipmentId);
         if (eq) {
           updated.quantity = Math.min(eq.quantity, Math.max(1, Number(updated.quantity) || 1));
         }
@@ -1455,7 +1822,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
     for (let i = 0; i < batchItems.length; i++) {
       const bi = batchItems[i];
-      const eq = consumableEquipments.find((e) => e._id === bi.equipmentId);
+      const eq = equipments.find((e) => e._id === bi.equipmentId);
       if (!eq) {
         toast.warning('Có mặt hàng không hợp lệ trong danh sách');
         return;
@@ -1505,6 +1872,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         }
         setIsBatchConsumeOpen(false);
         setBatchItems([]);
+        setSelectedTableItemIds([]);
         setBatchDestination('');
         setBatchRecipientName('');
         setBatchNote('');
@@ -1920,10 +2288,96 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         </span>
       );
     }
+    if (s === 'DAMAGED' || s === 'BROKEN') {
+      return (
+        <span className="ra-status-badge rejected" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
+          <span className="live-dot" style={{ width: 6, height: 6, background: '#ef4444', borderRadius: '50%' }} />
+          Hỏng hóc
+        </span>
+      );
+    }
     return (
       <span className="ra-status-badge rejected" style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' }}>
         <span className="live-dot" style={{ width: 6, height: 6, background: '#94a3b8', borderRadius: '50%' }} />
         Ngừng hoạt động
+      </span>
+    );
+  };
+
+  const renderEquipmentStatusBadge = (eq: EquipmentItem) => {
+    const isDurable =
+      eq.supplyType === 'DURABLE' ||
+      eq.category === 'LIFE_VEST' ||
+      eq.category === 'COMMUNICATION' ||
+      eq.category === 'LIGHTING' ||
+      eq.category === 'ROPE_TOOL' ||
+      eq.category === 'TOOL' ||
+      eq.category === 'VEHICLE_ACCESSORY';
+
+    if (isDurable) {
+      const s = (eq.status || 'AVAILABLE').toUpperCase();
+      if (s === 'AVAILABLE' || s === 'READY') {
+        return (
+          <span className="ra-status-badge verified" style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0' }}>
+            <span className="live-dot" style={{ width: 6, height: 6, background: '#10b981', borderRadius: '50%' }} />
+            Sẵn sàng
+          </span>
+        );
+      }
+      if (s === 'IN_USE' || s === 'ASSIGNED' || s === 'BORROWED') {
+        return (
+          <span className="ra-status-badge in-review" style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+            <span className="live-dot" style={{ width: 6, height: 6, background: '#3b82f6', borderRadius: '50%' }} />
+            Đang sử dụng
+          </span>
+        );
+      }
+      if (s === 'MAINTENANCE') {
+        return (
+          <span className="ra-status-badge pending" style={{ background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }}>
+            <span className="live-dot" style={{ width: 6, height: 6, background: '#f59e0b', borderRadius: '50%' }} />
+            Bảo trì
+          </span>
+        );
+      }
+      if (s === 'DAMAGED' || s === 'BROKEN' || s === 'LOST') {
+        return (
+          <span className="ra-status-badge rejected" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
+            <span className="live-dot" style={{ width: 6, height: 6, background: '#ef4444', borderRadius: '50%' }} />
+            Hỏng hóc
+          </span>
+        );
+      }
+      if (s === 'EXPIRED') {
+        return (
+          <span className="ra-status-badge rejected" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
+            <span className="live-dot" style={{ width: 6, height: 6, background: '#ef4444', borderRadius: '50%' }} />
+            Hết hạn
+          </span>
+        );
+      }
+      return (
+        <span className="ra-status-badge rejected" style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' }}>
+          <span className="live-dot" style={{ width: 6, height: 6, background: '#94a3b8', borderRadius: '50%' }} />
+          {eq.status}
+        </span>
+      );
+    }
+
+    // Nhu yếu phẩm / Hàng cứu trợ tiêu hao (Consumable)
+    const isAvailable = (eq.quantity ?? 0) > 0 && eq.status !== 'EXPIRED';
+    if (isAvailable) {
+      return (
+        <span className="ra-status-badge verified" style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0' }}>
+          <span className="live-dot" style={{ width: 6, height: 6, background: '#10b981', borderRadius: '50%' }} />
+          Khả dụng
+        </span>
+      );
+    }
+    return (
+      <span className="ra-status-badge rejected" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
+        <span className="live-dot" style={{ width: 6, height: 6, background: '#ef4444', borderRadius: '50%' }} />
+        {eq.status === 'EXPIRED' ? 'Hết hạn' : 'Hết hàng'}
       </span>
     );
   };
@@ -2021,37 +2475,20 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   </p>
                 </div>
               </>
-            ) : resourceTab === 'SUPPLIES' ? (
-              <>
-                <div className="resources-context-icon supplies">
-                  <LifeBuoy size={18} />
-                </div>
-                <div className="resources-context-text">
-                  <div className="resources-context-title-row">
-                    <h2 className="resources-context-title">Kho Trang thiết bị tác chiến</h2>
-                    <span className="resources-context-stat supplies">
-                      {durableEquipments.length} danh mục
-                    </span>
-                  </div>
-                  <p className="resources-context-desc">
-                    Áo phao, bộ đàm, đèn pin dã chiến, máy phát điện và thiết bị cứu hộ chuyên dụng
-                  </p>
-                </div>
-              </>
             ) : (
               <>
-                <div className="resources-context-icon consumables">
+                <div className="resources-context-icon supplies" style={{ background: '#ecfdf5', color: '#16a34a' }}>
                   <Package size={18} />
                 </div>
                 <div className="resources-context-text">
                   <div className="resources-context-title-row">
-                    <h2 className="resources-context-title">Kho Vật tư cứu trợ &amp; Nhu yếu phẩm</h2>
-                    <span className="resources-context-stat consumables">
-                      {consumableEquipments.length} mặt hàng
+                    <h2 className="resources-context-title">Kho Thiết bị &amp; Hàng cứu trợ</h2>
+                    <span className="resources-context-stat supplies" style={{ background: '#dcfce7', color: '#15803d' }}>
+                      {equipments.length} mặt hàng
                     </span>
                   </div>
                   <p className="resources-context-desc">
-                    Lương thực khô, nước uống đóng chai, túi thuốc y tế và nhiên liệu dự trữ khẩn cấp
+                    Áo phao, bộ đàm, đèn pin dã chiến, máy phát điện, lương thực, nước sạch và thuốc men cứu trợ
                   </p>
                 </div>
               </>
@@ -2074,7 +2511,18 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
               <button
                 type="button"
                 className="coordination-action-btn primary"
-                onClick={() => setIsCreateVehicleOpen(true)}
+                onClick={() => {
+                  setNewPlate('');
+                  setNewType('BOAT');
+                  setNewCapacity(8);
+                  setNewTeamId(
+                    vehicleTeamFilter !== 'ALL' && vehicleTeamFilter !== 'UNASSIGNED'
+                      ? vehicleTeamFilter
+                      : ''
+                  );
+                  setNewDescription('');
+                  setIsCreateVehicleOpen(true);
+                }}
                 style={{
                   background: '#0284c7',
                   color: '#ffffff',
@@ -2094,83 +2542,78 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
               </button>
             )}
 
-            {resourceTab === 'SUPPLIES' && (
-              <button
-                type="button"
-                className="coordination-action-btn primary"
-                onClick={() => {
-                  setEqTeamId('');
-                  setEqSupplyType('DURABLE');
-                  setEqName(STANDARD_EQUIPMENT_CATALOG[0].name);
-                  setEqCategory(STANDARD_EQUIPMENT_CATALOG[0].category);
-                  setEqUnit(STANDARD_EQUIPMENT_CATALOG[0].unit);
-                  setCustomEqName('');
-                  setEqQuantity(1);
-                  setEqSerialNumber(generateRandomEquipmentSerial(STANDARD_EQUIPMENT_CATALOG[0].category));
-                  setEqNote('');
-                  setIsCreateEquipmentOpen(true);
-                }}
-                style={{
-                  background: '#16a34a',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 8,
-                  padding: '7px 14px',
-                  fontWeight: 600,
-                  fontSize: 13,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  cursor: 'pointer',
-                }}
-              >
-                <PlusCircle size={15} />
-                <span>+ Nhập trang thiết bị</span>
-              </button>
-            )}
-
-            {resourceTab === 'CONSUMABLES' && (
+            {resourceTab !== 'VEHICLES' && (
               <>
                 <button
                   type="button"
                   className="coordination-action-btn outline"
                   style={{
-                    borderColor: '#0284c7',
-                    color: '#0284c7',
-                    background: '#f0f9ff',
+                    borderColor: selectedTableItemIds.length > 0 ? '#0284c7' : '#0284c7',
+                    color: selectedTableItemIds.length > 0 ? '#ffffff' : '#0284c7',
+                    background: selectedTableItemIds.length > 0 ? '#0284c7' : '#f0f9ff',
                     borderRadius: 8,
                     padding: '7px 14px',
-                    fontWeight: 600,
+                    fontWeight: 700,
                     fontSize: 13,
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 6,
                     cursor: 'pointer',
+                    boxShadow: selectedTableItemIds.length > 0 ? '0 2px 6px rgba(2, 132, 199, 0.35)' : 'none',
+                    transition: 'all 0.15s ease',
                   }}
-                  onClick={handleOpenBatchConsumeModal}
-                  title="Xuất cùng lúc nhiều loại nhu yếu phẩm cho điểm sơ tán hoặc chuyến xe"
+                  onClick={() => handleOpenBatchConsumeModal()}
+                  title="Xuất cùng lúc nhiều loại thiết bị cứu hộ & nhu yếu phẩm cho điểm sơ tán hoặc chuyến xe"
                 >
                   <PackageCheck size={15} />
-                  <span>Tạo phiếu xuất cứu trợ</span>
+                  <span>
+                    {selectedTableItemIds.length > 0
+                      ? `🚚 Xuất kho & Điều phối (${selectedTableItemIds.length} mục đã chọn)`
+                      : '🚚 Tạo phiếu xuất kho & Điều phối'}
+                  </span>
                 </button>
+
+                {selectedTableItemIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTableItemIds([])}
+                    style={{
+                      background: '#f8fafc',
+                      border: '1px solid #cbd5e1',
+                      color: '#64748b',
+                      borderRadius: 8,
+                      padding: '7px 12px',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                    title="Bỏ tích chọn các mặt hàng"
+                  >
+                    <X size={13} />
+                    <span>Bỏ chọn</span>
+                  </button>
+                )}
 
                 <button
                   type="button"
                   className="coordination-action-btn primary"
                   onClick={() => {
                     setEqTeamId('');
-                    setEqSupplyType('CONSUMABLE');
-                    setEqName(STANDARD_CONSUMABLE_CATALOG[0].name);
-                    setEqCategory(STANDARD_CONSUMABLE_CATALOG[0].category);
-                    setEqUnit(STANDARD_CONSUMABLE_CATALOG[0].unit);
+                    setEqSupplyType('DURABLE');
+                    setEqName(STANDARD_EQUIPMENT_CATALOG[0].name);
+                    setEqCategory(STANDARD_EQUIPMENT_CATALOG[0].category);
+                    setEqUnit(STANDARD_EQUIPMENT_CATALOG[0].unit);
                     setCustomEqName('');
-                    setEqQuantity(10);
-                    setEqSerialNumber(generateRandomEquipmentSerial(STANDARD_CONSUMABLE_CATALOG[0].category));
+                    setEqQuantity(1);
+                    setEqSerialNumber(generateRandomEquipmentSerial(STANDARD_EQUIPMENT_CATALOG[0].category));
                     setEqNote('');
                     setIsCreateEquipmentOpen(true);
                   }}
                   style={{
-                    background: '#d97706',
+                    background: '#16a34a',
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: 8,
@@ -2182,9 +2625,10 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     gap: 6,
                     cursor: 'pointer',
                   }}
+                  title="Nhập kho thiết bị hoặc nhu yếu phẩm mới"
                 >
                   <PlusCircle size={15} />
-                  <span>+ Nhập kho nhu yếu phẩm</span>
+                  <span>+ Nhập kho mới</span>
                 </button>
               </>
             )}
@@ -2196,6 +2640,70 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
             {/* TOOLBAR PHƯƠNG TIỆN (ULTRA-COMPACT: TIÊU ĐỀ + BỘ LỌC + THAO TÁC TRÊN 1 HÀNG) */}
             <div className="ra-toolbar">
               <div className="ra-toolbar-controls">
+                {/* 0A. Lọc theo Tỉnh / Thành phố: Gọi API Open-API Việt Nam */}
+                {isAdmin && (
+                  <select
+                    className="ra-filter-select"
+                    value={selectedProvince}
+                    onChange={(e) => {
+                      setSelectedProvince(e.target.value);
+                      setVehicleTeamFilter('ALL');
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      minWidth: 175,
+                      fontWeight: 700,
+                      borderColor: selectedProvince !== 'ALL' ? '#0284c7' : undefined,
+                      background: selectedProvince !== 'ALL' ? '#f0f9ff' : undefined,
+                      color: selectedProvince !== 'ALL' ? '#0369a1' : undefined,
+                    }}
+                    title="Bước 1: Chọn Tỉnh / Thành phố (API)"
+                  >
+                    <option value="ALL">
+                      {provincesLoading ? '⏳ Đang tải Tỉnh / TP...' : `🌐 Tất cả Tỉnh / TP (${provinces.length})`}
+                    </option>
+                    {provinces.map((prov) => (
+                      <option key={prov.id || prov.name} value={prov.name}>
+                        🏙️ {prov.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {/* 0B. Lọc theo Quận / Huyện / Xã / Phường: Gọi API Wards của Tỉnh */}
+                {isAdmin && (
+                  <select
+                    className="ra-filter-select"
+                    value={selectedAreaId}
+                    onChange={(e) => {
+                      setSelectedAreaId(e.target.value);
+                      setVehicleTeamFilter('ALL');
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      minWidth: 185,
+                      fontWeight: 700,
+                      borderColor: selectedAreaId !== 'ALL' ? '#0284c7' : undefined,
+                      background: selectedAreaId !== 'ALL' ? '#f0f9ff' : undefined,
+                      color: selectedAreaId !== 'ALL' ? '#0369a1' : undefined,
+                    }}
+                    title="Bước 2: Chọn Quận / Huyện / Xã / Phường"
+                  >
+                    <option value="ALL">
+                      {wardsLoading
+                        ? '⏳ Đang tải xã, phường từ API...'
+                        : selectedProvince === 'ALL'
+                          ? `📍 Tất cả địa bàn (${wards.length})`
+                          : `📍 Tất cả xã / phường (${wards.length})`}
+                    </option>
+                    {wards.map((ward) => (
+                      <option key={ward.id} value={ward.id}>
+                        {ward.type === 'DISTRICT' ? '🏛️' : '📍'} {ward.name} {ward.code ? `(${ward.code})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
                 {/* 1. Chọn Đội quản lý / Kho Tổng */}
                 <select
                   className="ra-filter-select"
@@ -2207,19 +2715,21 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   style={{ minWidth: 210, fontWeight: 700 }}
                   title="Chọn Đội quản lý hoặc Kho tổng dự trữ"
                 >
-                  <option value="ALL">🏢 Tất cả Đội cứu hộ ({rawVehicles.length} xe)</option>
-                  <option value="UNASSIGNED">📦 Kho Tổng / Chưa phân công ({rawVehicles.filter(v => !v.assignedTeam && !v.teamId).length} xe)</option>
-                  {rescueTeams.map((team) => {
-                    const count = rawVehicles.filter(v => {
-                      const tId = typeof v.teamId === 'object' ? (v.teamId as any)?._id : v.teamId;
-                      return tId === team._id || v.assignedTeam?._id === team._id;
-                    }).length;
-                    return (
-                      <option key={team._id} value={team._id}>
-                        📍 {team.name} ({count} xe)
-                      </option>
-                    );
-                  })}
+                  <option value="ALL">🏢 Tất cả Đội cứu hộ ({filteredVehicles.length} xe)</option>
+                  <option value="UNASSIGNED">📦 Kho Tổng / Chưa phân công ({filteredVehicles.filter(v => !v.assignedTeam && !v.teamId).length} xe)</option>
+                      {
+                        scopedRescueTeams.map((team) => {
+                          const count = filteredVehicles.filter(v => {
+                            const tId = typeof v.teamId === 'object' ? (v.teamId as any)?._id : v.teamId;
+                            return tId === team._id || v.assignedTeam?._id === team._id;
+                          }).length;
+                          return (
+                            <option key={team._id} value={team._id}>
+                              📍 {team.name} ({count} xe)
+                            </option>
+                          );
+                        })
+                      }
                 </select>
 
                 {/* 2. Chọn loại phương tiện */}
@@ -2232,12 +2742,23 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   }}
                   title="Lọc theo chủng loại phương tiện"
                 >
-                  <option value="ALL">Tất cả loại phương tiện ({rawVehicles.length})</option>
-                  <option value="BOAT">Ca-nô / Xuồng lội nước ({boatsCount})</option>
-                  <option value="AMBULANCE">Xe cấp cứu ({ambulancesCount})</option>
-                  <option value="TRUCK">Xe tải 4x4 ({trucksCount})</option>
-                  <option value="MOTORBIKE">Xe máy cơ động ({motorbikesCount})</option>
-                  <option value="OTHER">Phương tiện khác ({othersCount})</option>
+                  <option value="ALL">Tất cả loại phương tiện ({filteredVehicles.length})</option>
+                  {STANDARD_VEHICLE_TYPES.map((t) => {
+                    const count = rawVehicles.filter((v) => {
+                      if (t.value === 'BOAT') return v.type === 'BOAT' || v.type === 'MOTORBOAT';
+                      if (t.value === 'PICKUP_4X4') return v.type === 'PICKUP_4X4' || v.type === 'PICKUP_TRUCK' || v.type === 'PICKUP';
+                      if (t.value === 'TRUCK') return v.type === 'TRUCK' || v.type === 'HIGH_CLEARANCE_TRUCK';
+                      if (t.value === 'OTHER') {
+                        return v.type === 'OTHER' || !STANDARD_VEHICLE_TYPES.some((st) => st.value === v.type && st.value !== 'OTHER');
+                      }
+                      return v.type === t.value;
+                    }).length;
+                    return (
+                      <option key={t.value} value={t.value}>
+                        {t.label} ({count})
+                      </option>
+                    );
+                  })}
                 </select>
 
                 {/* 3. Ô tìm kiếm */}
@@ -2264,6 +2785,34 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   )}
                 </div>
 
+                {/* 4. Nút xóa lọc nhanh */}
+                {hasActiveVehicleFilters && (
+                  <button
+                    type="button"
+                    className="ra-clear-filter-btn"
+                    onClick={handleClearVehicleFilters}
+                    title="Xóa toàn bộ bộ lọc phương tiện và đặt lại mặc định"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '7px 12px',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      color: '#dc2626',
+                      background: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <FilterX size={14} />
+                    <span>Xóa lọc</span>
+                  </button>
+                )}
+
               </div>
             </div>
 
@@ -2276,27 +2825,83 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   <div className="ra-skeleton-row" />
                 </div>
               ) : filteredVehicles.length === 0 ? (
-                <div className="ra-state-container">
-                  <div className="ra-state-icon empty">
-                    <Truck size={32} />
-                  </div>
-                  <h3 className="ra-state-title">Không tìm thấy phương tiện nào phù hợp</h3>
-                  <p className="ra-state-desc">
-                    Vui lòng thử điều chỉnh lại bộ lọc loại xe, đơn vị quản lý hoặc từ khóa tìm kiếm.
-                  </p>
-                  <button
-                    className="ra-btn ra-btn-secondary"
-                    style={{ marginTop: 14 }}
-                    onClick={() => {
-                      setSearchQuery('');
-                      setVehicleTypeFilter('ALL');
-                      setVehicleTeamFilter('ALL');
-                      setCurrentPage(1);
-                    }}
-                  >
-                    Đặt lại bộ lọc
-                  </button>
-                </div>
+                (() => {
+                  const isSpecificTeam = vehicleTeamFilter !== 'ALL' && vehicleTeamFilter !== 'UNASSIGNED';
+                  const filteredTeamObj = isSpecificTeam ? rescueTeams.find((t) => t._id === vehicleTeamFilter) : null;
+
+                  if (isSpecificTeam && filteredTeamObj) {
+                    return (
+                      <div className="ra-state-container" style={{ padding: '40px 20px', maxWidth: 540, margin: '0 auto', textAlign: 'center' }}>
+                        <div
+                          style={{
+                            width: 64,
+                            height: 64,
+                            borderRadius: '50%',
+                            background: '#eff6ff',
+                            color: '#0284c7',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 16px',
+                            border: '1px solid #bae6fd',
+                          }}
+                        >
+                          <Truck size={32} />
+                        </div>
+                        <h3 className="ra-state-title" style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>
+                          {filteredTeamObj.name} chưa có phương tiện
+                        </h3>
+                        <p className="ra-state-desc" style={{ fontSize: 13.5, color: '#64748b', lineHeight: 1.6, marginBottom: 20 }}>
+                          Đội cứu hộ này hiện chưa được biên chế phương tiện tác chiến nào. Bạn có thể cấp ngay phương tiện sẵn có từ Kho Tổng hoặc đăng ký mới cho đội.
+                        </p>
+                        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="coordination-action-btn primary"
+                            onClick={() => {
+                              setAssignTargetTeamId(filteredTeamObj._id);
+                              setSelectedVehiclesToAssign([]);
+                              setIsAssignVehicleModalOpen(true);
+                            }}
+                            style={{
+                              background: '#16a34a',
+                              borderColor: '#16a34a',
+                              padding: '9px 18px',
+                              fontSize: 13.5,
+                              fontWeight: 700,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <ArrowRightLeft size={16} />
+                            <span>Biên chế xe từ Kho Tổng ({unassignedVehicles.length} xe sẵn có)</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="ra-state-container">
+                      <div className="ra-state-icon empty">
+                        <Truck size={32} />
+                      </div>
+                      <h3 className="ra-state-title">Không tìm thấy phương tiện nào phù hợp</h3>
+                      <p className="ra-state-desc">
+                        Vui lòng thử điều chỉnh lại bộ lọc loại xe, đơn vị quản lý hoặc từ khóa tìm kiếm.
+                      </p>
+                      <button
+                        className="ra-btn ra-btn-secondary"
+                        style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        onClick={handleClearVehicleFilters}
+                      >
+                        <FilterX size={14} />
+                        <span>Xóa lọc</span>
+                      </button>
+                    </div>
+                  );
+                })()
               ) : (
                 <table className="ra-table">
                   <thead>
@@ -2316,121 +2921,104 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       const teamName = team?.name || 'Chưa phân công';
                       const areaName = typeof team?.areaId === 'object' && team?.areaId !== null
                         ? (team?.areaId as any)?.name
-                        : (isUnassigned ? 'Kho dự trữ địa phương' : 'Địa bàn phụ trách');
+                        : (isUnassigned ? 'Kho Tổng dự trữ' : 'Địa bàn phụ trách');
 
-                      const typeLabel =
-                        v.type === 'BOAT'
-                          ? 'Ca-nô / Xuồng lội nước'
-                          : v.type === 'AMBULANCE'
-                            ? 'Xe cấp cứu dã chiến'
-                            : v.type === 'TRUCK'
-                              ? 'Xe tải tác chiến 4x4'
-                              : v.type === 'MOTORBIKE'
-                                ? 'Xe máy cơ động ngõ hẻm'
-                                : 'Phương tiện đặc chủng khác';
+                    const typeLabel = getVehicleTypeLabel(v.type);
 
-                      return (
-                        <tr
-                          key={v._id}
+                    return (
+                    <tr
+                      key={v._id}
+                      onClick={() => setSelectedVehicle(v)}
+                      style={{ cursor: 'pointer' }}
+                      title="Bấm để xem hồ sơ kỹ thuật chi tiết phương tiện"
+                    >
+                      {/* Cột 1: Biển số & định danh */}
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{
+                            fontFamily: 'monospace',
+                            fontWeight: 800,
+                            fontSize: 13.5,
+                            color: '#0f172a',
+                            background: '#f8fafc',
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            border: '1px solid #cbd5e1'
+                          }}>
+                            {v.plateNumber}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Cột 2: Loại phương tiện */}
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 6,
+                            background: '#eff6ff',
+                            color: '#0284c7',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            {getVehicleIcon(v.type, 15)}
+                          </span>
+                          <span style={{ fontWeight: 600, color: '#0f172a', fontSize: 13 }}>
+                            {typeLabel}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Cột 3: Đội quản lý */}
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                          <span style={{
+                            fontWeight: 700,
+                            fontSize: 13,
+                            color: isUnassigned ? '#d97706' : '#0f172a'
+                          }}>
+                            {teamName}
+                          </span>
+                          <span style={{ fontSize: 11.5, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <MapPin size={11} color="#0284c7" />
+                            {areaName}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Cột 4: Sức chở / tải trọng */}
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span style={{ fontWeight: 700, color: '#0284c7', fontSize: 13 }}>
+                            {v.capacity} Người / Cứu hộ
+                          </span>
+                          <span style={{ fontSize: 11, color: '#64748b' }}>
+                            {v.type === 'BOAT' ? 'Động cơ thủy 60HP' : 'Dẫn động 4x4 vượt lũ'}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Cột 5: Trạng thái */}
+                      <td>
+                        {renderVehicleStatusBadge(v.status)}
+                      </td>
+
+                      {/* Cột 6: Thao tác */}
+                      <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
+                        <button
+                          type="button"
+                          className="ra-view-btn"
                           onClick={() => setSelectedVehicle(v)}
-                          style={{ cursor: 'pointer' }}
-                          title="Bấm để xem hồ sơ kỹ thuật chi tiết phương tiện"
+                          title="Xem hồ sơ chi tiết phương tiện"
                         >
-                          {/* Cột 1: Biển số & định danh */}
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{
-                                fontFamily: 'monospace',
-                                fontWeight: 800,
-                                fontSize: 13.5,
-                                color: '#0f172a',
-                                background: '#f8fafc',
-                                padding: '3px 8px',
-                                borderRadius: 6,
-                                border: '1px solid #cbd5e1'
-                              }}>
-                                {v.plateNumber}
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Cột 2: Loại phương tiện */}
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{
-                                width: 28,
-                                height: 28,
-                                borderRadius: 6,
-                                background: '#eff6ff',
-                                color: '#0284c7',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                              }}>
-                                {v.type === 'BOAT' ? (
-                                  <LifeBuoy size={15} />
-                                ) : v.type === 'MOTORBIKE' ? (
-                                  <Bike size={15} />
-                                ) : v.type === 'OTHER' ? (
-                                  <Wrench size={15} />
-                                ) : (
-                                  <Truck size={15} />
-                                )}
-                              </span>
-                              <span style={{ fontWeight: 600, color: '#0f172a', fontSize: 13 }}>
-                                {typeLabel}
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Cột 3: Đội quản lý */}
-                          <td>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                              <span style={{
-                                fontWeight: 700,
-                                fontSize: 13,
-                                color: isUnassigned ? '#d97706' : '#0f172a'
-                              }}>
-                                {teamName}
-                              </span>
-                              <span style={{ fontSize: 11.5, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <MapPin size={11} color="#0284c7" />
-                                {areaName}
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Cột 4: Sức chở / tải trọng */}
-                          <td>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                              <span style={{ fontWeight: 700, color: '#0284c7', fontSize: 13 }}>
-                                {v.capacity} Người / Cứu hộ
-                              </span>
-                              <span style={{ fontSize: 11, color: '#64748b' }}>
-                                {v.type === 'BOAT' ? 'Động cơ thủy 60HP' : 'Dẫn động 4x4 vượt lũ'}
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Cột 5: Trạng thái */}
-                          <td>
-                            {renderVehicleStatusBadge(v.status)}
-                          </td>
-
-                          {/* Cột 6: Thao tác */}
-                          <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
-                            <button
-                              type="button"
-                              className="ra-view-btn"
-                              onClick={() => setSelectedVehicle(v)}
-                              title="Xem hồ sơ chi tiết phương tiện"
-                            >
-                              <Eye size={13} />
-                              <span>Hồ sơ xe</span>
-                            </button>
-                          </td>
-                        </tr>
-                      );
+                          <Eye size={13} />
+                          <span>Hồ sơ xe</span>
+                        </button>
+                      </td>
+                    </tr>
+                    );
                     })}
                   </tbody>
                 </table>
@@ -2440,11 +3028,75 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
             {/* Phân trang phương tiện */}
             {renderPagination(filteredVehicles.length, totalVehiclePages, 'phương tiện')}
           </>
-        ) : resourceTab === 'SUPPLIES' ? (
+        ) : (
           <>
-            {/* TOOLBAR TRANG THIẾT BỊ (ULTRA-COMPACT: TIÊU ĐỀ + BỘ LỌC + THAO TÁC TRÊN 1 HÀNG) */}
+            {/* TOOLBAR THIẾT BỊ & HÀNG CỨU TRỢ (ULTRA-COMPACT: TIÊU ĐỀ + BỘ LỌC + THAO TÁC TRÊN 1 HÀNG) */}
             <div className="ra-toolbar">
               <div className="ra-toolbar-controls">
+                {/* 0A. Lọc theo Tỉnh / Thành phố: Gọi API Open-API Việt Nam */}
+                {isAdmin && (
+                  <select
+                    className="ra-filter-select"
+                    value={selectedProvince}
+                    onChange={(e) => {
+                      setSelectedProvince(e.target.value);
+                      setSupplyTeamFilter('DEPOT');
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      minWidth: 175,
+                      fontWeight: 700,
+                      borderColor: selectedProvince !== 'ALL' ? '#0284c7' : undefined,
+                      background: selectedProvince !== 'ALL' ? '#f0f9ff' : undefined,
+                      color: selectedProvince !== 'ALL' ? '#0369a1' : undefined,
+                    }}
+                    title="Bước 1: Chọn Tỉnh / Thành phố (API)"
+                  >
+                    <option value="ALL">
+                      {provincesLoading ? '⏳ Đang tải Tỉnh / TP...' : `🌐 Tất cả Tỉnh / TP (${provinces.length})`}
+                    </option>
+                    {provinces.map((prov) => (
+                      <option key={prov.id || prov.name} value={prov.name}>
+                        🏙️ {prov.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {/* 0B. Lọc theo Quận / Huyện / Xã / Phường: Gọi API Wards của Tỉnh */}
+                {isAdmin && (
+                  <select
+                    className="ra-filter-select"
+                    value={selectedAreaId}
+                    onChange={(e) => {
+                      setSelectedAreaId(e.target.value);
+                      setSupplyTeamFilter('DEPOT');
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      minWidth: 185,
+                      fontWeight: 700,
+                      borderColor: selectedAreaId !== 'ALL' ? '#0284c7' : undefined,
+                      background: selectedAreaId !== 'ALL' ? '#f0f9ff' : undefined,
+                      color: selectedAreaId !== 'ALL' ? '#0369a1' : undefined,
+                    }}
+                    title="Bước 2: Chọn Quận / Huyện / Xã / Phường"
+                  >
+                    <option value="ALL">
+                      {wardsLoading
+                        ? '⏳ Đang tải xã, phường từ API...'
+                        : selectedProvince === 'ALL'
+                          ? `📍 Tất cả địa bàn (${wards.length})`
+                          : `📍 Tất cả xã / phường (${wards.length})`}
+                    </option>
+                    {wards.map((ward) => (
+                      <option key={ward.id} value={ward.id}>
+                        {ward.type === 'DISTRICT' ? '🏛️' : '📍'} {ward.name} {ward.code ? `(${ward.code})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
                 {/* 1. Chọn Kho Tổng / Đơn vị quản lý */}
                 <select
                   className="ra-filter-select"
@@ -2456,22 +3108,43 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   style={{ minWidth: 210, fontWeight: 700 }}
                   title="Chọn Kho Tổng / Dự Trữ hoặc đơn vị quản lý"
                 >
-                  <option value="DEPOT">📦 Kho Tổng / Dự Trữ ({durableEquipments.filter(e => !e.teamId || (typeof e.teamId === 'object' && !(e.teamId as any)._id)).length} mục)</option>
-                  <option value="ALL">🏢 Toàn bộ đơn vị ({durableEquipments.length} mục)</option>
-                  {rescueTeams.map((team) => {
-                    const count = durableEquipments.filter(e => {
-                      const tId = typeof e.teamId === 'object' ? (e.teamId as any)?._id : e.teamId;
-                      return tId === team._id;
-                    }).length;
-                    return (
-                      <option key={team._id} value={team._id}>
-                        📍 {team.name} ({count} mục)
-                      </option>
-                    );
-                  })}
+                  <option value="DEPOT">📦 Kho Tổng / Dự Trữ</option>
+                  <option value="ALL">🏢 Toàn bộ đơn vị</option>
+                    {
+                      scopedRescueTeams.map((team) => (
+                        <option key={team._id} value={team._id}>
+                          📍 {team.name}
+                        </option>
+                      ))
+                    }
                 </select>
 
-                {/* 2. Chọn loại trang thiết bị */}
+                {/* 2. Lọc theo Phân loại: Dùng bền vs Tiêu hao */}
+                <select
+                  className="ra-filter-select"
+                  value={supplyTypeFilter}
+                  onChange={(e) => {
+                    const newType = e.target.value as any;
+                    setSupplyTypeFilter(newType);
+                    // Tự động reset danh mục con nếu không tương thích với phân loại mới
+                    const durableCats = ['LIFE_VEST', 'MEDICAL_KIT', 'COMMUNICATION', 'LIGHTING', 'ROPE_TOOL', 'TOOL'];
+                    const consumableCats = ['FOOD_WATER', 'WATER_PURIFICATION', 'MEDICAL_SUPPLY', 'FUEL', 'HYGIENE'];
+                    if (newType === 'DURABLE' && consumableCats.includes(supplyCategoryFilter)) {
+                      setSupplyCategoryFilter('ALL');
+                    } else if (newType === 'CONSUMABLE' && durableCats.includes(supplyCategoryFilter)) {
+                      setSupplyCategoryFilter('ALL');
+                    }
+                    setCurrentPage(1);
+                  }}
+                  style={{ minWidth: 165, fontWeight: 600 }}
+                  title="Lọc theo phân loại mặt hàng"
+                >
+                  <option value="ALL">📋 Tất cả mặt hàng</option>
+                  <option value="DURABLE">🛠️ Thiết bị cứu hộ</option>
+                  <option value="CONSUMABLE">📦 Nhu yếu phẩm</option>
+                </select>
+
+                {/* 3. Chọn danh mục chuẩn (tự động co giãn theo Phân loại mặt hàng) */}
                 <select
                   className="ra-filter-select"
                   value={supplyCategoryFilter}
@@ -2479,24 +3152,38 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     setSupplyCategoryFilter(e.target.value);
                     setCurrentPage(1);
                   }}
-                  title="Lọc theo chủng loại trang thiết bị"
+                  style={{ minWidth: 160 }}
+                  title="Lọc theo danh mục chuẩn"
                 >
-                  <option value="ALL">Tất cả trang thiết bị ({durableEquipments.length})</option>
-                  <option value="LIFE_VEST">Áo phao cứu sinh</option>
-                  <option value="MEDICAL_KIT">Túi sơ cứu y tế</option>
-                  <option value="COMMUNICATION">Bộ đàm vô tuyến</option>
-                  <option value="LIGHTING">Đèn pin cứu hộ</option>
-                  <option value="ROPE_TOOL">Dây thừng cứu hộ</option>
-                  <option value="TOOL">Máy cưa &amp; Công cụ</option>
+                  <option value="ALL">🏷️ Tất cả danh mục</option>
+                  {(supplyTypeFilter === 'ALL' || supplyTypeFilter === 'DURABLE') && (
+                    <optgroup label="🛠️ Thiết bị cứu hộ (Dùng lại)">
+                      <option value="LIFE_VEST">Áo phao cứu sinh</option>
+                      <option value="MEDICAL_KIT">Túi sơ cứu y tế</option>
+                      <option value="COMMUNICATION">Bộ đàm vô tuyến</option>
+                      <option value="LIGHTING">Đèn pin cứu hộ</option>
+                      <option value="ROPE_TOOL">Dây thừng cứu hộ</option>
+                      <option value="TOOL">Máy cưa &amp; Công cụ</option>
+                    </optgroup>
+                  )}
+                  {(supplyTypeFilter === 'ALL' || supplyTypeFilter === 'CONSUMABLE') && (
+                    <optgroup label="📦 Nhu yếu phẩm cứu trợ (Cấp phát)">
+                      <option value="FOOD_WATER">Lương thực &amp; Nước uống</option>
+                      <option value="WATER_PURIFICATION">Lọc nước &amp; Khử khuẩn</option>
+                      <option value="MEDICAL_SUPPLY">Y tế &amp; Dược phẩm</option>
+                      <option value="FUEL">Nhiên liệu dã chiến</option>
+                      <option value="HYGIENE">Vệ sinh &amp; Nhu yếu phẩm</option>
+                    </optgroup>
+                  )}
                 </select>
 
-                {/* 3. Ô tìm kiếm */}
+                {/* 4. Ô tìm kiếm */}
                 <div className="ra-search-box">
                   <Search size={15} className="ra-search-icon" />
                   <input
                     type="text"
                     className="ra-search-input"
-                    placeholder="Tìm theo tên thiết bị, mã lô hoặc vị trí..."
+                    placeholder="Tìm theo tên hàng, mã lô, số sê-ri..."
                     value={searchQuery}
                     onChange={(e) => {
                       setSearchQuery(e.target.value);
@@ -2514,10 +3201,38 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   )}
                 </div>
 
+                {/* 5. Nút xóa lọc nhanh */}
+                {hasActiveSupplyFilters && (
+                  <button
+                    type="button"
+                    className="ra-clear-filter-btn"
+                    onClick={handleClearSupplyFilters}
+                    title="Xóa toàn bộ bộ lọc vật tư và đặt lại danh sách ban đầu"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '7px 12px',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      color: '#dc2626',
+                      background: '#fef2f2',
+                      border: '1px solid #fecaca',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      transition: 'all 0.15s ease',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <FilterX size={14} />
+                    <span>Xóa lọc</span>
+                  </button>
+                )}
               </div>
             </div>
 
-            {/* BẢNG TRANG THIẾT BỊ */}
+            {/* BẢNG THIẾT BỊ & HÀNG CỨU TRỢ */}
             <div className="ra-table-wrap">
               {equipmentsLoading && filteredEquipments.length === 0 ? (
                 <div style={{ padding: '20px 0' }}>
@@ -2526,52 +3241,420 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   <div className="ra-skeleton-row" />
                 </div>
               ) : filteredEquipments.length === 0 ? (
-                <div className="ra-state-container">
-                  <div className="ra-state-icon empty">
-                    <LifeBuoy size={32} />
-                  </div>
-                  <h3 className="ra-state-title">Chưa có trang thiết bị nào phù hợp</h3>
-                  <p className="ra-state-desc">
-                    Vui lòng thử điều chỉnh lại bộ lọc phân loại hoặc từ khóa tìm kiếm.
-                  </p>
-                  <button
-                    className="ra-btn ra-btn-secondary"
-                    style={{ marginTop: 14 }}
-                    onClick={() => {
-                      setSearchQuery('');
-                      setSupplyCategoryFilter('ALL');
-                      setSupplyTeamFilter('DEPOT');
-                      setCurrentPage(1);
-                    }}
-                  >
-                    Đặt lại bộ lọc
-                  </button>
-                </div>
+                (() => {
+                  const isSpecificTeam = supplyTeamFilter !== 'ALL' && supplyTeamFilter !== 'DEPOT';
+                  const filteredTeamObj = isSpecificTeam ? rescueTeams.find((t) => String(t._id) === String(supplyTeamFilter)) : null;
+
+                  if (isSpecificTeam && filteredTeamObj) {
+                    const teamAllEquips = equipments.filter((e) => {
+                      const tId = typeof e.teamId === 'object' && e.teamId ? (e.teamId as any)._id : e.teamId;
+                      return String(tId) === String(filteredTeamObj._id);
+                    });
+                    const teamConsumables = teamAllEquips.filter((e) => e.supplyType === 'CONSUMABLE');
+                    const teamDurables = teamAllEquips.filter((e) => e.supplyType !== 'CONSUMABLE');
+
+                    const hasItemsOfThisType =
+                      supplyTypeFilter === 'CONSUMABLE'
+                        ? teamConsumables.length > 0
+                        : supplyTypeFilter === 'DURABLE'
+                          ? teamDurables.length > 0
+                          : teamAllEquips.length > 0;
+
+                    // Trường hợp đội thực sự có mặt hàng loại này nhưng bị ẩn do gõ tìm kiếm hoặc lọc danh mục
+                    if (hasItemsOfThisType && (searchQuery.trim() !== '' || supplyCategoryFilter !== 'ALL')) {
+                      return (
+                        <div className="ra-state-container" style={{ padding: '40px 20px', maxWidth: 540, margin: '0 auto', textAlign: 'center' }}>
+                          <div
+                            style={{
+                              width: 64,
+                              height: 64,
+                              borderRadius: '50%',
+                              background: '#f8fafc',
+                              color: '#64748b',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              margin: '0 auto 16px',
+                              border: '1px solid #e2e8f0',
+                            }}
+                          >
+                            <Search size={32} />
+                          </div>
+                          <h3 className="ra-state-title" style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>
+                            Không tìm thấy mặt hàng phù hợp của {filteredTeamObj.name}
+                          </h3>
+                          <p className="ra-state-desc" style={{ fontSize: 13.5, color: '#64748b', lineHeight: 1.6, marginBottom: 20 }}>
+                            Không có kết quả nào khớp với từ khóa tìm kiếm hoặc danh mục đã chọn trong biên chế của đội.
+                          </p>
+                          <button
+                            type="button"
+                            className="ra-btn ra-btn-secondary"
+                            onClick={() => {
+                              setSearchQuery('');
+                              setSupplyCategoryFilter('ALL');
+                            }}
+                          >
+                            Xóa điều kiện lọc
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    // Trường hợp lọc NHU YẾU PHẨM và đội chưa có nhu yếu phẩm nào
+                    if (supplyTypeFilter === 'CONSUMABLE') {
+                      return (
+                        <div className="ra-state-container" style={{ padding: '40px 20px', maxWidth: 580, margin: '0 auto', textAlign: 'center' }}>
+                          <div
+                            style={{
+                              width: 64,
+                              height: 64,
+                              borderRadius: '50%',
+                              background: '#fffbeb',
+                              color: '#d97706',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              margin: '0 auto 16px',
+                              border: '1px solid #fde68a',
+                            }}
+                          >
+                            <Package size={32} />
+                          </div>
+                          <h3 className="ra-state-title" style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>
+                            {filteredTeamObj.name} chưa có nhu yếu phẩm nào
+                          </h3>
+                          <p className="ra-state-desc" style={{ fontSize: 13.5, color: '#64748b', lineHeight: 1.6, marginBottom: 20 }}>
+                            Đội cứu hộ này hiện chưa được cấp hoặc lưu giữ nhu yếu phẩm cứu trợ nào. Bạn có thể cấp nhu yếu phẩm từ Kho Tổng cho đội hoặc tạo phiếu xuất điều phối tiếp tế ngay.
+                          </p>
+                          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="coordination-action-btn primary"
+                              onClick={() => {
+                                setAssignEquipTargetTeamId(filteredTeamObj._id);
+                                setSelectedEquipmentsToAssign({});
+                                setAssignEquipNote('');
+                                setAssignEquipSupplyType('CONSUMABLE');
+                                setIsAssignEquipmentModalOpen(true);
+                              }}
+                              style={{
+                                background: '#16a34a',
+                                borderColor: '#16a34a',
+                                padding: '9px 18px',
+                                fontSize: 13.5,
+                                fontWeight: 700,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                              }}
+                            >
+                              <ArrowRightLeft size={16} />
+                              <span>Cấp nhu yếu phẩm từ Kho Tổng ({depotConsumableEquipments.length} mặt hàng sẵn có)</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="coordination-action-btn outline"
+                              onClick={() => {
+                                handleOpenBatchConsumeModal({ targetTeamId: filteredTeamObj._id });
+                              }}
+                              style={{
+                                borderColor: '#0284c7',
+                                color: '#0284c7',
+                                background: '#f0f9ff',
+                                padding: '9px 18px',
+                                fontSize: 13.5,
+                                fontWeight: 700,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                              }}
+                            >
+                              <Truck size={16} />
+                              <span>Tạo phiếu xuất điều phối cho đội</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Trường hợp lọc THIẾT BỊ CỨU HỘ và đội chưa có thiết bị nào
+                    if (supplyTypeFilter === 'DURABLE') {
+                      return (
+                        <div className="ra-state-container" style={{ padding: '40px 20px', maxWidth: 540, margin: '0 auto', textAlign: 'center' }}>
+                          <div
+                            style={{
+                              width: 64,
+                              height: 64,
+                              borderRadius: '50%',
+                              background: '#ecfdf5',
+                              color: '#16a34a',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              margin: '0 auto 16px',
+                              border: '1px solid #bbf7d0',
+                            }}
+                          >
+                            <LifeBuoy size={32} />
+                          </div>
+                          <h3 className="ra-state-title" style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>
+                            {filteredTeamObj.name} chưa có thiết bị cứu hộ nào
+                          </h3>
+                          <p className="ra-state-desc" style={{ fontSize: 13.5, color: '#64748b', lineHeight: 1.6, marginBottom: 20 }}>
+                            Đội cứu hộ này hiện chưa được biên chế thiết bị cứu hộ nào. Bạn có thể cấp ngay trang thiết bị sẵn có từ Kho Tổng cho đội.
+                          </p>
+                          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="coordination-action-btn primary"
+                              onClick={() => {
+                                setAssignEquipTargetTeamId(filteredTeamObj._id);
+                                setSelectedEquipmentsToAssign({});
+                                setAssignEquipNote('');
+                                setAssignEquipSupplyType('DURABLE');
+                                setIsAssignEquipmentModalOpen(true);
+                              }}
+                              style={{
+                                background: '#16a34a',
+                                borderColor: '#16a34a',
+                                padding: '9px 18px',
+                                fontSize: 13.5,
+                                fontWeight: 700,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                              }}
+                            >
+                              <ArrowRightLeft size={16} />
+                              <span>Cấp thiết bị từ Kho Tổng ({depotDurableEquipments.length} mặt hàng sẵn có)</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Trường hợp lọc TẤT CẢ MẶT HÀNG và đội chưa có bất kỳ mặt hàng nào
+                    return (
+                      <div className="ra-state-container" style={{ padding: '40px 20px', maxWidth: 600, margin: '0 auto', textAlign: 'center' }}>
+                        <div
+                          style={{
+                            width: 64,
+                            height: 64,
+                            borderRadius: '50%',
+                            background: '#eff6ff',
+                            color: '#0284c7',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 16px',
+                            border: '1px solid #bae6fd',
+                          }}
+                        >
+                          <Package size={32} />
+                        </div>
+                        <h3 className="ra-state-title" style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', marginBottom: 8 }}>
+                          {filteredTeamObj.name} chưa có mặt hàng nào
+                        </h3>
+                        <p className="ra-state-desc" style={{ fontSize: 13.5, color: '#64748b', lineHeight: 1.6, marginBottom: 20 }}>
+                          Đội cứu hộ này hiện chưa được trang bị thiết bị cứu hộ hay lưu giữ nhu yếu phẩm nào. Bạn có thể cấp thiết bị hoặc nhu yếu phẩm từ Kho Tổng cho đội.
+                        </p>
+                        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="coordination-action-btn primary"
+                            onClick={() => {
+                              setAssignEquipTargetTeamId(filteredTeamObj._id);
+                              setSelectedEquipmentsToAssign({});
+                              setAssignEquipNote('');
+                              setAssignEquipSupplyType('DURABLE');
+                              setIsAssignEquipmentModalOpen(true);
+                            }}
+                            style={{
+                              background: '#16a34a',
+                              borderColor: '#16a34a',
+                              padding: '9px 16px',
+                              fontSize: 13,
+                              fontWeight: 700,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <LifeBuoy size={15} />
+                            <span>Cấp thiết bị ({depotDurableEquipments.length})</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="coordination-action-btn primary"
+                            onClick={() => {
+                              setAssignEquipTargetTeamId(filteredTeamObj._id);
+                              setSelectedEquipmentsToAssign({});
+                              setAssignEquipNote('');
+                              setAssignEquipSupplyType('CONSUMABLE');
+                              setIsAssignEquipmentModalOpen(true);
+                            }}
+                            style={{
+                              background: '#d97706',
+                              borderColor: '#d97706',
+                              color: '#ffffff',
+                              padding: '9px 16px',
+                              fontSize: 13,
+                              fontWeight: 700,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <Package size={15} />
+                            <span>Cấp nhu yếu phẩm ({depotConsumableEquipments.length})</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="coordination-action-btn outline"
+                            onClick={() => {
+                              handleOpenBatchConsumeModal({ targetTeamId: filteredTeamObj._id });
+                            }}
+                            style={{
+                              borderColor: '#0284c7',
+                              color: '#0284c7',
+                              background: '#f0f9ff',
+                              padding: '9px 16px',
+                              fontSize: 13,
+                              fontWeight: 700,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <Truck size={15} />
+                            <span>Tạo phiếu xuất</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="ra-state-container">
+                      <div className="ra-state-icon empty">
+                        <Package size={32} />
+                      </div>
+                      <h3 className="ra-state-title">Chưa có mặt hàng nào phù hợp</h3>
+                      <p className="ra-state-desc">
+                        Vui lòng thử điều chỉnh lại bộ lọc phân loại hoặc từ khóa tìm kiếm.
+                      </p>
+                      <button
+                        className="ra-btn ra-btn-secondary"
+                        style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        onClick={handleClearSupplyFilters}
+                      >
+                        <FilterX size={14} />
+                        <span>Xóa lọc</span>
+                      </button>
+                    </div>
+                  );
+                })()
               ) : (
                 <table className="ra-table">
                   <thead>
                     <tr>
-                      <th style={{ width: '24%' }}>TÊN TRANG THIẾT BỊ</th>
-                      <th style={{ width: '20%' }}>ĐƠN VỊ QUẢN LÝ</th>
-                      <th style={{ width: '16%' }}>SỐ LƯỢNG</th>
-                      <th style={{ width: '16%' }}>MÃ LÔ / ĐỢT NHẬP</th>
-                      <th style={{ width: '14%' }}>TRẠNG THÁI</th>
-                      <th style={{ width: '10%', textAlign: 'center' }}>THAO TÁC</th>
+                      <th style={{ width: '40px', textAlign: 'center', padding: '8px 4px' }}>
+                        <input
+                          type="checkbox"
+                          checked={(() => {
+                            const availableDepot = paginatedEquipments.filter((eq) => {
+                              const tId = typeof eq.teamId === 'object' && eq.teamId ? (eq.teamId as any)._id : eq.teamId;
+                              return !tId && eq.quantity > 0;
+                            });
+                            return (
+                              availableDepot.length > 0 &&
+                              availableDepot.every((eq) => selectedTableItemIds.includes(eq._id))
+                            );
+                          })()}
+                          onChange={(e) => {
+                            const availableDepot = paginatedEquipments.filter((eq) => {
+                              const tId = typeof eq.teamId === 'object' && eq.teamId ? (eq.teamId as any)._id : eq.teamId;
+                              return !tId && eq.quantity > 0;
+                            });
+                            if (e.target.checked) {
+                              const availableOnPage = availableDepot.map((eq) => eq._id);
+                              setSelectedTableItemIds((prev) => Array.from(new Set([...prev, ...availableOnPage])));
+                            } else {
+                              const onPageDepotIds = new Set(availableDepot.map((eq) => eq._id));
+                              setSelectedTableItemIds((prev) => prev.filter((id) => !onPageDepotIds.has(id)));
+                            }
+                          }}
+                          style={{ cursor: 'pointer', width: 16, height: 16, accentColor: '#0284c7' }}
+                          title="Chọn tất cả mặt hàng khả dụng tại Kho Tổng trên trang này"
+                        />
+                      </th>
+                      <th style={{ width: '22%' }}>TÊN THIẾT BỊ / NHU YẾU PHẨM</th>
+                      <th style={{ width: '13%' }}>PHÂN LOẠI</th>
+                      <th style={{ width: '18%' }}>ĐƠN VỊ QUẢN LÝ / VỊ TRÍ</th>
+                      <th style={{ width: '14%' }}>SỐ LƯỢNG TỒN</th>
+                      <th style={{ width: '14%' }}>MÃ LÔ / ĐỢT NHẬP</th>
+                      <th style={{ width: '11%' }}>TÌNH TRẠNG</th>
+                      <th style={{ width: '8%', textAlign: 'center' }}>THAO TÁC</th>
                     </tr>
                   </thead>
                   <tbody>
                     {paginatedEquipments.map((eq) => {
+                      const isDurable = eq.supplyType !== 'CONSUMABLE';
                       const teamObj = typeof eq.teamId === 'object' ? eq.teamId : null;
                       const teamName = teamObj?.name || '—';
+                      const tId = typeof eq.teamId === 'object' && eq.teamId ? (eq.teamId as any)._id : eq.teamId;
+                      const isDepotItem = !tId;
+                      const canSelect = isDepotItem && eq.quantity > 0;
+                      const minTh = eq.minThreshold || 10;
+                      const isLow = eq.quantity <= minTh * 0.3;
+                      const isWarning = eq.quantity <= minTh;
+                      const isSelected = selectedTableItemIds.includes(eq._id);
 
                       return (
                         <tr
                           key={eq._id}
                           onClick={() => setSelectedEquipment(eq)}
-                          style={{ cursor: 'pointer' }}
-                          title="Bấm để xem chi tiết trang thiết bị"
+                          style={{
+                            cursor: 'pointer',
+                            background: isSelected ? '#f0f9ff' : undefined,
+                            transition: 'background 0.15s ease',
+                          }}
+                          title="Bấm để xem chi tiết"
                         >
-                          {/* Cột 1: Tên trang thiết bị */}
+                          {/* Cột Checkbox chọn mặt hàng */}
+                          <td
+                            style={{ textAlign: 'center', padding: '8px 4px', width: '40px' }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <input
+                              type="checkbox"
+                              disabled={!canSelect}
+                              checked={isSelected}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                if (isSelected) {
+                                  setSelectedTableItemIds((prev) => prev.filter((id) => id !== eq._id));
+                                } else {
+                                  setSelectedTableItemIds((prev) => [...prev, eq._id]);
+                                }
+                              }}
+                              style={{
+                                cursor: !canSelect ? 'not-allowed' : 'pointer',
+                                width: 16,
+                                height: 16,
+                                accentColor: '#0284c7',
+                                opacity: !canSelect ? 0.35 : 1,
+                              }}
+                              title={
+                                !isDepotItem
+                                  ? 'Mặt hàng này đang do Đội quản lý, phiếu xuất kho chỉ cấp từ Kho Tổng'
+                                  : eq.quantity <= 0
+                                    ? 'Mặt hàng đã hết tồn kho'
+                                    : `Tích chọn để xuất "${eq.name}"`
+                              }
+                            />
+                          </td>
+                          {/* Cột 1: Tên mặt hàng */}
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                               <span style={{ fontWeight: 700, fontSize: 13.5, color: '#0f172a' }}>
@@ -2583,33 +3666,82 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             </div>
                           </td>
 
-                          {/* Cột 2: Đơn vị quản lý */}
+                          {/* Cột 2: Phân loại */}
+                          <td>
+                            {isDurable ? (
+                              <span
+                                style={{
+                                  background: '#ecfdf5',
+                                  color: '#15803d',
+                                  border: '1px solid #bbf7d0',
+                                  padding: '3px 8px',
+                                  borderRadius: 6,
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                <LifeBuoy size={11} />
+                                <span>Thiết bị cứu hộ</span>
+                              </span>
+                            ) : (
+                              <span
+                                style={{
+                                  background: '#fef3c7',
+                                  color: '#b45309',
+                                  border: '1px solid #fde68a',
+                                  padding: '3px 8px',
+                                  borderRadius: 6,
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                <Package size={11} />
+                                <span>Nhu yếu phẩm</span>
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Cột 3: Đơn vị quản lý / vị trí */}
                           <td>
                             <span style={{ fontSize: 12.5, color: teamObj ? '#0f172a' : '#b45309', fontWeight: 600 }}>
                               {teamObj ? teamName : '📦 Kho Tổng / Dự Trữ'}
                             </span>
                           </td>
 
-                          {/* Cột 3: Số lượng */}
+                          {/* Cột 4: Số lượng tồn */}
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                               <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 13.5 }}>
                                 {eq.quantity} {eq.unit === 'cai' ? 'cái' : eq.unit}
                               </span>
-                              <span style={{ fontSize: 11, color: '#059669', fontWeight: 600 }}>
-                                (Sẵn sàng: {eq.status === 'AVAILABLE' ? eq.quantity : 0})
-                              </span>
+                              {isDurable ? (
+                                <span style={{ fontSize: 11, color: '#059669', fontWeight: 600 }}>
+                                  (Sẵn sàng: {eq.status === 'AVAILABLE' ? eq.quantity : 0})
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 10.5, fontWeight: 700, color: isLow ? '#dc2626' : isWarning ? '#b45309' : '#15803d' }}>
+                                  {isLow ? '🔴 Cạn kho' : isWarning ? '🟡 Sắp hết' : '🟢 Dồi dào'}
+                                </span>
+                              )}
                             </div>
                           </td>
 
-                          {/* Cột 4: Mã lô / đợt nhập */}
+                          {/* Cột 5: Mã lô / Đợt nhập */}
                           <td>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                               <span style={{
                                 fontFamily: 'monospace',
                                 fontSize: 11.5,
                                 color: '#0f172a',
-                                fontWeight: 700
+                                fontWeight: 700,
                               }}>
                                 {eq.serialNumber || '—'}
                               </span>
@@ -2622,39 +3754,18 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             </div>
                           </td>
 
-                          {/* Cột 5: Trạng thái */}
+                          {/* Cột 6: Tình trạng / Trạng thái */}
                           <td>
-                            <select
-                              value={eq.status}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={(e) => handleQuickUpdateEquipmentStatus(eq._id, e.target.value)}
-                              style={{
-                                padding: '4px 8px',
-                                borderRadius: 6,
-                                fontSize: 11.5,
-                                fontWeight: 700,
-                                color: eq.status === 'AVAILABLE' ? '#059669' : eq.status === 'MAINTENANCE' ? '#d97706' : eq.status === 'DAMAGED' ? '#dc2626' : '#0284c7',
-                                background: '#f8fafc',
-                                border: '1px solid #cbd5e1',
-                                cursor: 'pointer',
-                                outline: 'none',
-                              }}
-                              title="Cập nhật nhanh tình trạng thiết bị"
-                            >
-                              <option value="AVAILABLE">🟢 Sẵn sàng</option>
-                              <option value="IN_USE">🔵 Đang sử dụng</option>
-                              <option value="MAINTENANCE">🟡 Bảo trì</option>
-                              <option value="DAMAGED">🔴 Hỏng / Cần thay</option>
-                            </select>
+                            {renderEquipmentStatusBadge(eq)}
                           </td>
 
-                          {/* Cột 6: Thao tác */}
+                          {/* Cột 7: Thao tác */}
                           <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
                             <button
                               type="button"
                               className="ra-view-btn"
                               onClick={() => setSelectedEquipment(eq)}
-                              title="Xem chi tiết trang thiết bị"
+                              title="Xem chi tiết"
                             >
                               <Eye size={13} />
                               <span>Chi tiết</span>
@@ -2668,240 +3779,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
               )}
             </div>
 
-            {/* Phân trang trang thiết bị */}
-            {renderPagination(filteredEquipments.length, totalEquipmentPages, 'trang thiết bị')}
-          </>
-        ) : (
-          <>
-            {/* TOOLBAR VẬT TƯ CỨU TRỢ (ULTRA-COMPACT: TIÊU ĐỀ + BỘ LỌC + THAO TÁC TRÊN 1 HÀNG) */}
-            <div className="ra-toolbar">
-              <div className="ra-toolbar-controls">
-                {/* 1. Chọn Kho Tổng / Vị trí lưu kho */}
-                <select
-                  className="ra-filter-select"
-                  value={consumableTeamFilter}
-                  onChange={(e) => {
-                    setConsumableTeamFilter(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  style={{ minWidth: 210, fontWeight: 700 }}
-                  title="Chọn Kho Tổng / Dự Trữ hoặc đơn vị lưu kho"
-                >
-                  <option value="DEPOT">📦 Kho Tổng / Dự Trữ ({consumableEquipments.filter(e => !e.teamId || (typeof e.teamId === 'object' && !(e.teamId as any)._id)).length} mục)</option>
-                  <option value="ALL">🏢 Toàn bộ đơn vị ({consumableEquipments.length} mục)</option>
-                  {rescueTeams.map((team) => (
-                    <option key={team._id} value={team._id}>
-                      📍 {team.name}
-                    </option>
-                  ))}
-                </select>
-
-                {/* 2. Chọn nhóm vật tư */}
-                <select
-                  className="ra-filter-select"
-                  value={consumableCategoryFilter}
-                  onChange={(e) => {
-                    setConsumableCategoryFilter(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  title="Lọc theo nhóm vật tư cứu trợ"
-                >
-                  <option value="ALL">Tất cả nhóm vật tư ({consumableEquipments.length})</option>
-                  <option value="FOOD_WATER">Lương thực &amp; Nước uống</option>
-                  <option value="WATER_PURIFICATION">Lọc nước &amp; Khử khuẩn</option>
-                  <option value="MEDICAL_SUPPLY">Y tế &amp; Dược phẩm</option>
-                  <option value="FUEL">Nhiên liệu dã chiến</option>
-                  <option value="HYGIENE">Vệ sinh &amp; Nhu yếu phẩm</option>
-                </select>
-
-                {/* 3. Ô tìm kiếm */}
-                <div className="ra-search-box">
-                  <Search size={15} className="ra-search-icon" />
-                  <input
-                    type="text"
-                    className="ra-search-input"
-                    placeholder="Tìm theo tên vật tư, mã lô, vị trí..."
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                  />
-                  {searchQuery && (
-                    <button
-                      className="ra-search-clear"
-                      onClick={() => { setSearchQuery(''); setCurrentPage(1); }}
-                      title="Xóa tìm kiếm"
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-
-              </div>
-            </div>
-
-            {/* BẢNG VẬT TƯ CỨU TRỢ */}
-            <div className="ra-table-wrap">
-              {equipmentsLoading && filteredConsumables.length === 0 ? (
-                <div style={{ padding: '20px 0' }}>
-                  <div className="ra-skeleton-row" />
-                  <div className="ra-skeleton-row" />
-                  <div className="ra-skeleton-row" />
-                </div>
-              ) : filteredConsumables.length === 0 ? (
-                <div className="ra-state-container">
-                  <div className="ra-state-icon empty">
-                    <Package size={32} />
-                  </div>
-                  <h3 className="ra-state-title">Chưa có vật tư cứu trợ nào trong kho</h3>
-                  <p className="ra-state-desc">
-                    Vui lòng bấm "+ Nhập kho vật tư cứu trợ" để bổ sung lương thực, nước uống, thuốc men cứu trợ.
-                  </p>
-                  <button
-                    className="ra-btn ra-btn-secondary"
-                    style={{ marginTop: 14 }}
-                    onClick={() => {
-                      setSearchQuery('');
-                      setConsumableCategoryFilter('ALL');
-                      setConsumableTeamFilter('DEPOT');
-                      setCurrentPage(1);
-                    }}
-                  >
-                    Đặt lại bộ lọc
-                  </button>
-                </div>
-              ) : (
-                <table className="ra-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: '26%' }}>NHU YẾU PHẨM / MẶT HÀNG</th>
-                      <th style={{ width: '20%' }}>VỊ TRÍ LƯU KHO</th>
-                      <th style={{ width: '24%' }}>TỒN KHO &amp; MỨC AN TOÀN</th>
-                      <th style={{ width: '18%' }}>MÃ LÔ NHẬP</th>
-                      <th style={{ width: '12%', textAlign: 'center' }}>THAO TÁC</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedConsumables.map((item) => {
-                      const teamObj = typeof item.teamId === 'object' ? item.teamId : null;
-                      const teamName = teamObj?.name || '—';
-                      const minTh = item.minThreshold || 20;
-                      const isLow = item.quantity <= minTh;
-                      const isWarning = !isLow && item.quantity <= minTh * 2;
-                      const percent = Math.min(100, Math.round((item.quantity / Math.max(item.quantity, minTh * 3)) * 100));
-
-                      const categoryBadge: Record<string, { label: string }> = {
-                        FOOD_WATER: { label: 'Lương thực & Nước uống' },
-                        WATER_PURIFICATION: { label: 'Lọc nước & Khử khuẩn' },
-                        MEDICAL_SUPPLY: { label: 'Y tế & Dược phẩm' },
-                        FUEL: { label: 'Nhiên liệu dã chiến' },
-                        HYGIENE: { label: 'Vệ sinh & Nhu yếu' },
-                      };
-                      const catInfo = categoryBadge[item.category] || { label: 'Vật tư cứu trợ' };
-
-                      return (
-                        <tr
-                          key={item._id}
-                          onClick={() => setSelectedEquipment(item)}
-                          style={{ cursor: 'pointer' }}
-                          title="Bấm để xem hồ sơ chi tiết vật tư"
-                        >
-                          {/* Cột 1: Nhu yếu phẩm / Mặt hàng */}
-                          <td>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                              <span style={{ fontWeight: 700, fontSize: 13.5, color: '#0f172a' }}>
-                                {item.name}
-                              </span>
-                              <span style={{ fontSize: 11, color: '#64748b' }}>
-                                Nhóm: <span style={{ color: '#0284c7', fontWeight: 600 }}>{catInfo.label}</span>
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Cột 2: Vị trí lưu kho */}
-                          <td>
-                            <span style={{ fontSize: 12.5, color: teamObj ? '#0f172a' : '#b45309', fontWeight: 600 }}>
-                              {teamObj ? teamName : '📦 Kho Tổng / Dự Trữ'}
-                            </span>
-                          </td>
-
-                          {/* Cột 3: Tồn kho & mức an toàn */}
-                          <td>
-                            <div className="stock-meter-wrap" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                                <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 13.5 }}>
-                                  {item.quantity} {item.unit}
-                                </span>
-                                <span className={'stock-status-pill ' + (isLow ? 'danger' : isWarning ? 'warning' : 'safe')} style={{
-                                  fontSize: 10.5,
-                                  fontWeight: 700,
-                                  padding: '2px 6px',
-                                  borderRadius: 4,
-                                  background: isLow ? '#fef2f2' : isWarning ? '#fffbeb' : '#f0fdf4',
-                                  color: isLow ? '#dc2626' : isWarning ? '#b45309' : '#15803d',
-                                  border: '1px solid ' + (isLow ? '#fecaca' : isWarning ? '#fde68a' : '#bbf7d0')
-                                }}>
-                                  {isLow ? '🔴 Cạn kho' : isWarning ? '🟡 Sắp hết' : '🟢 Dồi dào'}
-                                </span>
-                              </div>
-                              <div className="stock-meter-track" style={{
-                                width: '100%',
-                                height: 6,
-                                background: '#e2e8f0',
-                                borderRadius: 3,
-                                overflow: 'hidden'
-                              }}>
-                                <div
-                                  className={'stock-meter-fill ' + (isLow ? 'danger' : isWarning ? 'warning' : 'safe')}
-                                  style={{
-                                    width: `${Math.max(8, percent)}%`,
-                                    height: '100%',
-                                    background: isLow ? '#dc2626' : isWarning ? '#f59e0b' : '#10b981',
-                                    borderRadius: 3
-                                  }}
-                                />
-                              </div>
-                              <span style={{ fontSize: 10.5, color: '#64748b', fontWeight: 500 }}>
-                                Ngưỡng an toàn: ≥ {minTh} {item.unit}
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Cột 4: Mã lô nhập */}
-                          <td>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                              <span style={{ fontFamily: 'monospace', fontSize: 11.5, color: '#0f172a', fontWeight: 700 }}>
-                                {item.serialNumber || '—'}
-                              </span>
-                              <span style={{ fontSize: 10.5, color: '#64748b' }}>
-                                {item.receivedAt ? `Nhập: ${new Date(item.receivedAt).toLocaleDateString('vi-VN')}` : 'Đợt chuẩn'}
-                              </span>
-                            </div>
-                          </td>
-
-                          {/* Cột 5: Thao tác */}
-                          <td onClick={(e) => e.stopPropagation()} style={{ textAlign: 'center' }}>
-                            <button
-                              type="button"
-                              className="ra-view-btn"
-                              onClick={() => setSelectedEquipment(item)}
-                              title="Xem chi tiết vật tư cứu trợ"
-                            >
-                              <Eye size={13} />
-                              <span>Chi tiết</span>
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
-
-            {/* Phân trang vật tư cứu trợ */}
-            {renderPagination(filteredConsumables.length, totalConsumablePages, 'mặt hàng vật tư')}
+            {/* Phân trang thiết bị & hàng cứu trợ */}
+            {renderPagination(filteredEquipments.length, totalEquipmentPages, 'mặt hàng')}
           </>
         )}
       </section>
@@ -2962,27 +3841,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       flexShrink: 0,
                     }}
                   >
-                    {selectedVehicle.type === 'BOAT' ? (
-                      <LifeBuoy size={22} />
-                    ) : selectedVehicle.type === 'MOTORBIKE' ? (
-                      <Bike size={22} />
-                    ) : (
-                      <Truck size={22} />
-                    )}
+                    {getVehicleIcon(selectedVehicle.type, 22)}
                   </div>
 
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                       <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>
-                        {selectedVehicle.type === 'BOAT'
-                          ? 'Ca-nô / Xuồng lội nước'
-                          : selectedVehicle.type === 'AMBULANCE'
-                            ? 'Xe cấp cứu dã chiến'
-                            : selectedVehicle.type === 'TRUCK'
-                              ? 'Xe tải tác chiến 4x4'
-                              : selectedVehicle.type === 'MOTORBIKE'
-                                ? 'Xe máy cơ động ngõ hẻm'
-                                : 'Phương tiện đặc chủng'}
+                        {getVehicleTypeLabel(selectedVehicle.type)}
                       </h3>
                       <span
                         style={{
@@ -3051,15 +3916,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   <div className="rd-metric-cell">
                     <span className="rd-metric-label">Chủng loại</span>
                     <span className="rd-metric-val">
-                      {selectedVehicle.type === 'BOAT'
-                        ? 'Ca-nô / Xuồng'
-                        : selectedVehicle.type === 'AMBULANCE'
-                          ? 'Xe cứu thương'
-                          : selectedVehicle.type === 'TRUCK'
-                            ? 'Xe tải 4x4'
-                            : selectedVehicle.type === 'MOTORBIKE'
-                              ? 'Xe máy ngõ hẻm'
-                              : 'Đặc chủng'}
+                      {getVehicleTypeLabel(selectedVehicle.type)}
                     </span>
                     <span className="rd-metric-sub">Lội nước cơ động</span>
                   </div>
@@ -3087,8 +3944,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         title="Bấm để chuyển nhanh trạng thái trực chiến của phương tiện"
                       >
                         <option value="AVAILABLE">🟢 Sẵn sàng xuất kích</option>
-                        <option value="IN_USE">🟡 Đang làm nhiệm vụ</option>
-                        <option value="MAINTENANCE">🔴 Bảo dưỡng / Hỏng hóc</option>
+                        <option value="IN_USE">🔵 Đang làm nhiệm vụ</option>
+                        <option value="MAINTENANCE">🟡 Bảo dưỡng / Sửa chữa</option>
                         <option value="INACTIVE">⚪ Tạm ngưng hoạt động</option>
                       </select>
                     </div>
@@ -3184,7 +4041,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       <span className="rd-property-label">Khu vực phân vùng &amp; Bến đỗ</span>
                       <span className="rd-property-val" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <MapPin size={13} color="#0284c7" />
-                        <span>Địa bàn TP. Đà Nẵng</span>
+                        <span>
+                          {typeof selectedVehicle.assignedTeam?.areaId === 'object' && (selectedVehicle.assignedTeam.areaId as any)?.name
+                            ? (selectedVehicle.assignedTeam.areaId as any).name
+                            : (selectedVehicle.assignedTeam as any)?.areaName || (selectedVehicle.assignedTeam ? selectedVehicle.assignedTeam.name : 'Kho Tổng Dự Trữ Quốc Gia')}
+                        </span>
                       </span>
                       {onOpenMap && (
                         <div>
@@ -3385,11 +4246,26 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       value={editVehicleType}
                       onChange={(e) => setEditVehicleType(e.target.value as any)}
                     >
-                      <option value="BOAT">Ca-nô / Xuồng cứu nạn</option>
-                      <option value="AMBULANCE">Xe cấp cứu dã chiến</option>
-                      <option value="TRUCK">Xe tải lội nước 4x4</option>
-                      <option value="MOTORBIKE">Xe máy cơ động ngõ hẻm</option>
-                      <option value="OTHER">Phương tiện đặc chủng khác</option>
+                      <optgroup label="🚤 Phương tiện thủy cứu nạn">
+                        {STANDARD_VEHICLE_TYPES.filter((v) => v.group === 'Phương tiện thủy cứu nạn').map((v) => (
+                          <option key={v.value} value={v.value}>{v.label}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="🚛 Xe cơ giới đường bộ &amp; lội nước">
+                        {STANDARD_VEHICLE_TYPES.filter((v) => v.group === 'Xe cơ giới đường bộ & lội nước').map((v) => (
+                          <option key={v.value} value={v.value}>{v.label}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="🛸 Thiết bị bay chuyên dụng">
+                        {STANDARD_VEHICLE_TYPES.filter((v) => v.group === 'Thiết bị bay chuyên dụng').map((v) => (
+                          <option key={v.value} value={v.value}>{v.label}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="⚙️ Đặc chủng khác">
+                        {STANDARD_VEHICLE_TYPES.filter((v) => v.group === 'Đặc chủng khác').map((v) => (
+                          <option key={v.value} value={v.value}>{v.label}</option>
+                        ))}
+                      </optgroup>
                     </select>
                   </div>
 
@@ -3513,13 +4389,35 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     <select
                       className="executive-modal-select"
                       value={newType}
-                      onChange={(e) => setNewType(e.target.value as any)}
+                      onChange={(e) => {
+                        const nextType = e.target.value;
+                        setNewType(nextType as any);
+                        const matched = STANDARD_VEHICLE_TYPES.find((v) => v.value === nextType);
+                        if (matched) {
+                          setNewCapacity(matched.defaultCapacity);
+                        }
+                      }}
                     >
-                      <option value="BOAT">Ca-nô / Xuồng cứu nạn</option>
-                      <option value="AMBULANCE">Xe cấp cứu dã chiến</option>
-                      <option value="TRUCK">Xe tải lội nước 4x4</option>
-                      <option value="MOTORBIKE">Xe máy cơ động ngõ hẻm</option>
-                      <option value="OTHER">Phương tiện đặc chủng khác</option>
+                      <optgroup label="🚤 Phương tiện thủy cứu nạn">
+                        {STANDARD_VEHICLE_TYPES.filter((v) => v.group === 'Phương tiện thủy cứu nạn').map((v) => (
+                          <option key={v.value} value={v.value}>{v.label}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="🚛 Xe cơ giới đường bộ &amp; lội nước">
+                        {STANDARD_VEHICLE_TYPES.filter((v) => v.group === 'Xe cơ giới đường bộ & lội nước').map((v) => (
+                          <option key={v.value} value={v.value}>{v.label}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="🛸 Thiết bị bay chuyên dụng">
+                        {STANDARD_VEHICLE_TYPES.filter((v) => v.group === 'Thiết bị bay chuyên dụng').map((v) => (
+                          <option key={v.value} value={v.value}>{v.label}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="⚙️ Đặc chủng khác">
+                        {STANDARD_VEHICLE_TYPES.filter((v) => v.group === 'Đặc chủng khác').map((v) => (
+                          <option key={v.value} value={v.value}>{v.label}</option>
+                        ))}
+                      </optgroup>
                     </select>
                   </div>
 
@@ -3527,7 +4425,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     <label className="executive-modal-label">Sức chở tối đa (Người)</label>
                     <input
                       type="number"
-                      min={1}
+                      min={0}
                       max={50}
                       className="executive-modal-input"
                       value={newCapacity}
@@ -3596,12 +4494,12 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
             }}>
               <div>
                 <h3 className="executive-modal-title" style={{ color: '#0369a1' }}>
-                  {eqSupplyType === 'CONSUMABLE' ? '📦 Nhập Kho Vật Tư Cứu Trợ' : '🛡️ Thêm Trang Thiết Bị Mới'}
+                  {eqSupplyType === 'CONSUMABLE' ? '📦 Nhập Kho Nhu Yếu Phẩm' : '🛠️ Thêm Thiết Bị Cứu Hộ Mới'}
                 </h3>
                 <p style={{ margin: 0, fontSize: 12, color: '#0284c7' }}>
                   {eqSupplyType === 'CONSUMABLE'
-                    ? 'Nhập mới cơ số lương thực, nước sạch, dược phẩm, nhiên liệu phục vụ cứu trợ'
-                    : 'Nhập mới cơ số trang bị cứu hộ chuyên dụng cho Đội hoặc lưu Kho tổng dự trữ'}
+                    ? 'Nhập mới cơ số lương thực, nước sạch, dược phẩm, nhu yếu phẩm phục vụ cứu trợ'
+                    : 'Nhập mới trang thiết bị cứu hộ chuyên dụng cho Đội hoặc lưu Kho tổng dự trữ'}
                 </p>
               </div>
               <button
@@ -3615,6 +4513,82 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
             <form onSubmit={handleCreateEquipment}>
               <div className="executive-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {/* 0. Chuyển đổi phân loại mặt hàng nhập kho */}
+                <div style={{
+                  display: 'flex',
+                  background: '#f1f5f9',
+                  padding: 4,
+                  borderRadius: 10,
+                  gap: 6,
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEqSupplyType('DURABLE');
+                      setEqName(STANDARD_EQUIPMENT_CATALOG[0].name);
+                      setEqCategory(STANDARD_EQUIPMENT_CATALOG[0].category);
+                      setEqUnit(STANDARD_EQUIPMENT_CATALOG[0].unit);
+                      setCustomEqName('');
+                      setEqQuantity(1);
+                      setEqSerialNumber(generateRandomEquipmentSerial(STANDARD_EQUIPMENT_CATALOG[0].category));
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: 'none',
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      background: eqSupplyType !== 'CONSUMABLE' ? '#ffffff' : 'transparent',
+                      color: eqSupplyType !== 'CONSUMABLE' ? '#16a34a' : '#64748b',
+                      boxShadow: eqSupplyType !== 'CONSUMABLE' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <LifeBuoy size={14} />
+                    <span>🛠️ Thiết bị cứu hộ (Dùng lại)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEqSupplyType('CONSUMABLE');
+                      setEqName(STANDARD_CONSUMABLE_CATALOG[0].name);
+                      setEqCategory(STANDARD_CONSUMABLE_CATALOG[0].category);
+                      setEqUnit(STANDARD_CONSUMABLE_CATALOG[0].unit);
+                      setCustomEqName('');
+                      setEqQuantity(10);
+                      setEqMinThreshold(STANDARD_CONSUMABLE_CATALOG[0].minThreshold);
+                      setEqSerialNumber(`LÔ-VT-${Date.now().toString().slice(-4)}`);
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: 'none',
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      background: eqSupplyType === 'CONSUMABLE' ? '#ffffff' : 'transparent',
+                      color: eqSupplyType === 'CONSUMABLE' ? '#d97706' : '#64748b',
+                      boxShadow: eqSupplyType === 'CONSUMABLE' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <Package size={14} />
+                    <span>📦 Nhu yếu phẩm (Cấp phát)</span>
+                  </button>
+                </div>
+
                 {/* 1. Chọn đội tiếp nhận hoặc Kho tổng */}
                 <div className="executive-modal-field">
                   <label className="executive-modal-label">
@@ -3646,7 +4620,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                 {/* 2. Loại hàng hóa theo catalog chuẩn */}
                 <div className="executive-modal-field">
                   <label className="executive-modal-label" style={{ fontWeight: 700 }}>
-                    {eqSupplyType === 'CONSUMABLE' ? 'Danh mục vật tư cứu trợ chuẩn (*)' : 'Loại Trang Thiết Bị (*)'}
+                    {eqSupplyType === 'CONSUMABLE' ? 'Danh mục nhu yếu phẩm chuẩn (*)' : 'Loại Thiết Bị Cứu Hộ (*)'}
                   </label>
                   {eqSupplyType === 'CONSUMABLE' ? (
                     <select
@@ -3849,8 +4823,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     {isSubmittingEquipment
                       ? 'Đang nhập kho...'
                       : eqSupplyType === 'CONSUMABLE'
-                        ? 'Xác Nhận Nhập Kho Vật Tư Cứu Trợ'
-                        : 'Xác Nhận Thêm Trang Thiết Bị'}
+                        ? 'Xác Nhận Nhập Kho Nhu Yếu Phẩm'
+                        : 'Xác Nhận Nhập Thiết Bị Cứu Hộ'}
                   </span>
                 </button>
               </div>
@@ -4172,6 +5146,867 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         </div>
       )}
 
+      {/* MODAL 5B: BIÊN CHẾ PHƯƠNG TIỆN TỪ KHO TỔNG CHO ĐỘI CỨU HỘ */}
+      {isAssignVehicleModalOpen && (() => {
+        const allSelected = unassignedVehicles.length > 0 && selectedVehiclesToAssign.length === unassignedVehicles.length;
+
+        const toggleSelectAll = () => {
+          if (allSelected) {
+            setSelectedVehiclesToAssign([]);
+          } else {
+            setSelectedVehiclesToAssign(unassignedVehicles.map((v) => v._id));
+          }
+        };
+
+        const toggleSelectVehicle = (vId: string) => {
+          setSelectedVehiclesToAssign((prev) =>
+            prev.includes(vId) ? prev.filter((id) => id !== vId) : [...prev, vId]
+          );
+        };
+
+        return (
+          <div
+            className="executive-modal-backdrop"
+            onClick={() => !isAssigningVehicles && setIsAssignVehicleModalOpen(false)}
+          >
+            <div
+              className="executive-modal-card"
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: 640, borderRadius: 16 }}
+            >
+              <div
+                className="executive-modal-header"
+                style={{ borderBottom: '1px solid #bbf7d0', background: '#f0fdf4' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: '50%',
+                      background: '#dcfce7',
+                      border: '1px solid #bbf7d0',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#16a34a',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <ArrowRightLeft size={18} />
+                  </div>
+                  <div>
+                    <h3 className="executive-modal-title" style={{ color: '#166534', fontSize: 16 }}>
+                      Biên Chế Phương Tiện Cho Đội Cứu Hộ
+                    </h3>
+                    <p style={{ margin: 0, fontSize: 12, color: '#15803d' }}>
+                      Cấp phương tiện tác chiến sẵn có từ Kho Tổng Dự Trữ cho Đội cơ động
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="executive-modal-close"
+                  onClick={() => !isAssigningVehicles && setIsAssignVehicleModalOpen(false)}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleConfirmAssignVehicles} noValidate>
+                <div
+                  className="executive-modal-body"
+                  style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}
+                >
+                  {/* 1. Chọn Đội tiếp nhận */}
+                  <div className="executive-modal-field">
+                    <label className="executive-modal-label" style={{ fontWeight: 700, color: '#0f172a' }}>
+                      Đội cứu hộ tiếp nhận biên chế (*)
+                    </label>
+                    <select
+                      className="executive-modal-select"
+                      value={assignTargetTeamId}
+                      onChange={(e) => setAssignTargetTeamId(e.target.value)}
+                      style={{
+                        fontWeight: 700,
+                        borderColor: '#cbd5e1',
+                      }}
+                    >
+                      <option value="">-- Chọn đội cứu hộ tiếp nhận xe --</option>
+                      {rescueTeams.map((team) => (
+                        <option key={team._id} value={team._id}>
+                          🏢 {team.name} ({typeof team.areaId === 'object' && team.areaId ? (team.areaId as any).name : 'Toàn Tỉnh'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 2. Danh sách phương tiện tại Kho Tổng */}
+                  <div className="executive-modal-field">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <label className="executive-modal-label" style={{ fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                        Chọn phương tiện từ Kho Tổng / Dự Trữ ({unassignedVehicles.length} xe sẵn có)
+                      </label>
+                      {unassignedVehicles.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={toggleSelectAll}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#0284c7',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            padding: 0,
+                          }}
+                        >
+                          {allSelected ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                        </button>
+                      )}
+                    </div>
+
+                    {unassignedVehicles.length === 0 ? (
+                      <div
+                        style={{
+                          padding: '24px 16px',
+                          borderRadius: 10,
+                          background: '#fefce8',
+                          border: '1px solid #fef08a',
+                          textAlign: 'center',
+                          color: '#854d0e',
+                          fontSize: 13,
+                        }}
+                      >
+                        <p style={{ margin: 0, fontWeight: 700 }}>Kho Tổng hiện không còn phương tiện nào chưa phân công.</p>
+                        <p style={{ margin: '6px 0 12px', fontSize: 12, color: '#a16207' }}>
+                          Bạn có thể đăng ký phương tiện mới hoặc rút xe từ đội khác về kho trước khi biên chế.
+                        </p>
+                        <button
+                          type="button"
+                          className="coordination-action-btn primary"
+                          onClick={() => {
+                            setIsAssignVehicleModalOpen(false);
+                            setNewPlate('');
+                            setNewType('BOAT');
+                            setNewCapacity(8);
+                            setNewTeamId(assignTargetTeamId || '');
+                            setNewDescription('');
+                            setIsCreateVehicleOpen(true);
+                          }}
+                          style={{ margin: '0 auto', fontSize: 12.5 }}
+                        >
+                          <PlusCircle size={14} />
+                          <span>+ Đăng ký phương tiện mới</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          maxHeight: 250,
+                          overflowY: 'auto',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 10,
+                          padding: 6,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 6,
+                          background: '#f8fafc',
+                        }}
+                      >
+                        {unassignedVehicles.map((veh) => {
+                          const isSelected = selectedVehiclesToAssign.includes(veh._id);
+                          return (
+                            <div
+                              key={veh._id}
+                              onClick={() => toggleSelectVehicle(veh._id)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 12,
+                                padding: '10px 14px',
+                                borderRadius: 8,
+                                background: isSelected ? '#f0fdf4' : '#ffffff',
+                                border: isSelected ? '1.5px solid #86efac' : '1px solid #e2e8f0',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleSelectVehicle(veh._id)}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ width: 16, height: 16, accentColor: '#16a34a', cursor: 'pointer' }}
+                              />
+                              <div
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: 6,
+                                  background: isSelected ? '#dcfce7' : '#eff6ff',
+                                  color: isSelected ? '#16a34a' : '#0284c7',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {getVehicleIcon(veh.type, 15)}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                  <span
+                                    style={{
+                                      fontFamily: 'monospace',
+                                      fontWeight: 800,
+                                      fontSize: 13,
+                                      color: '#0f172a',
+                                      background: '#f1f5f9',
+                                      padding: '1px 6px',
+                                      borderRadius: 4,
+                                    }}
+                                  >
+                                    {veh.plateNumber}
+                                  </span>
+                                  <span style={{ fontWeight: 700, fontSize: 13, color: '#334155' }}>
+                                    {getVehicleTypeLabel(veh.type)}
+                                  </span>
+                                  <span style={{ fontSize: 12, color: '#64748b' }}>
+                                    • Sức chở: <strong style={{ color: '#0f172a' }}>{veh.capacity}</strong> người
+                                  </span>
+                                </div>
+                                {veh.description && (
+                                  <div
+                                    style={{
+                                      fontSize: 11.5,
+                                      color: '#64748b',
+                                      marginTop: 3,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {veh.description}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3. Ghi chú điều chuyển / biên chế */}
+                  <div className="executive-modal-field">
+                    <label className="executive-modal-label" style={{ fontWeight: 700, color: '#0f172a' }}>
+                      Lý do / Quyết định biên chế <span style={{ fontWeight: 400, color: '#94a3b8' }}>(tùy chọn)</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="executive-modal-input"
+                      placeholder="VD: Cấp tăng cường ứng phó lũ lụt, phục vụ cứu nạn tại chỗ..."
+                      value={assignVehicleNote}
+                      onChange={(e) => setAssignVehicleNote(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div
+                  className="executive-modal-footer"
+                  style={{ padding: '14px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}
+                >
+                  <button
+                    type="button"
+                    disabled={isAssigningVehicles}
+                    className="coordination-action-btn outline"
+                    onClick={() => setIsAssignVehicleModalOpen(false)}
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isAssigningVehicles || selectedVehiclesToAssign.length === 0 || !assignTargetTeamId}
+                    className="coordination-action-btn primary"
+                    style={{
+                      background: '#16a34a',
+                      borderColor: '#16a34a',
+                      cursor:
+                        isAssigningVehicles || selectedVehiclesToAssign.length === 0 || !assignTargetTeamId
+                          ? 'not-allowed'
+                          : 'pointer',
+                      opacity:
+                        isAssigningVehicles || selectedVehiclesToAssign.length === 0 || !assignTargetTeamId ? 0.6 : 1,
+                    }}
+                  >
+                    <Check size={14} />
+                    <span>
+                      {isAssigningVehicles
+                        ? 'Đang biên chế...'
+                        : `Xác Nhận Biên Chế (${selectedVehiclesToAssign.length} xe)`}
+                    </span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* MODAL 5C: CẤP TRANG THIẾT BỊ / NHU YẾU PHẨM TỪ KHO TỔNG CHO ĐỘI CỨU HỘ */}
+      {isAssignEquipmentModalOpen && (() => {
+        const activeDepotList =
+          assignEquipSupplyType === 'DURABLE'
+            ? depotDurableEquipments
+            : assignEquipSupplyType === 'CONSUMABLE'
+              ? depotConsumableEquipments
+              : depotAllEquipments;
+
+        const selectedIds = Object.keys(selectedEquipmentsToAssign).filter(
+          (id) => (selectedEquipmentsToAssign[id] || 0) > 0
+        );
+        const selectedCount = selectedIds.length;
+        const allSelected =
+          activeDepotList.length > 0 &&
+          activeDepotList.every((eq) => Boolean(selectedEquipmentsToAssign[eq._id] && selectedEquipmentsToAssign[eq._id] > 0));
+
+        const toggleSelectAll = () => {
+          if (allSelected) {
+            setSelectedEquipmentsToAssign((prev) => {
+              const next = { ...prev };
+              activeDepotList.forEach((eq) => {
+                delete next[eq._id];
+              });
+              return next;
+            });
+          } else {
+            setSelectedEquipmentsToAssign((prev) => {
+              const next = { ...prev };
+              activeDepotList.forEach((eq) => {
+                next[eq._id] = eq.quantity;
+              });
+              return next;
+            });
+          }
+        };
+
+        const toggleSelectEquipment = (eqItem: EquipmentItem) => {
+          setSelectedEquipmentsToAssign((prev) => {
+            const next = { ...prev };
+            if (next[eqItem._id]) {
+              delete next[eqItem._id];
+            } else {
+              next[eqItem._id] = eqItem.quantity;
+            }
+            return next;
+          });
+        };
+
+        const modalTitle =
+          assignEquipSupplyType === 'CONSUMABLE'
+            ? 'Cấp Nhu Yếu Phẩm Cho Đội Cứu Hộ'
+            : assignEquipSupplyType === 'DURABLE'
+              ? 'Cấp Thiết Bị Cho Đội Cứu Hộ'
+              : 'Cấp Mặt Hàng Cho Đội Cứu Hộ';
+
+        const modalSubtitle =
+          assignEquipSupplyType === 'CONSUMABLE'
+            ? 'Điều phối & bàn giao nhu yếu phẩm cứu trợ từ Kho Tổng cho Đội cơ động tiếp tế'
+            : assignEquipSupplyType === 'DURABLE'
+              ? 'Điều phối & bàn giao thiết bị cứu hộ sẵn có từ Kho Tổng cho Đội cơ động'
+              : 'Điều phối & bàn giao thiết bị hoặc nhu yếu phẩm từ Kho Tổng cho Đội cơ động';
+
+        const headerBg = assignEquipSupplyType === 'CONSUMABLE' ? '#fffbeb' : '#f0fdf4';
+        const headerBorder = assignEquipSupplyType === 'CONSUMABLE' ? '#fde68a' : '#bbf7d0';
+        const iconBg = assignEquipSupplyType === 'CONSUMABLE' ? '#fef3c7' : '#dcfce7';
+        const iconColor = assignEquipSupplyType === 'CONSUMABLE' ? '#d97706' : '#16a34a';
+        const titleColor = assignEquipSupplyType === 'CONSUMABLE' ? '#92400e' : '#166534';
+        const subtitleColor = assignEquipSupplyType === 'CONSUMABLE' ? '#b45309' : '#15803d';
+
+        return (
+          <div
+            className="executive-modal-backdrop"
+            onClick={() => !isAssigningEquipment && setIsAssignEquipmentModalOpen(false)}
+          >
+            <div
+              className="executive-modal-card"
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: 680, borderRadius: 16 }}
+            >
+              <div
+                className="executive-modal-header"
+                style={{ borderBottom: `1px solid ${headerBorder}`, background: headerBg }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: '50%',
+                      background: iconBg,
+                      border: `1px solid ${headerBorder}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: iconColor,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {assignEquipSupplyType === 'CONSUMABLE' ? (
+                      <Package size={18} />
+                    ) : assignEquipSupplyType === 'DURABLE' ? (
+                      <LifeBuoy size={18} />
+                    ) : (
+                      <ArrowRightLeft size={18} />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="executive-modal-title" style={{ color: titleColor, fontSize: 16 }}>
+                      {modalTitle}
+                    </h3>
+                    <p style={{ margin: 0, fontSize: 12, color: subtitleColor }}>
+                      {modalSubtitle}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="executive-modal-close"
+                  onClick={() => !isAssigningEquipment && setIsAssignEquipmentModalOpen(false)}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleConfirmAssignEquipments} noValidate>
+                <div
+                  className="executive-modal-body"
+                  style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}
+                >
+                  {/* 1. Chọn Đội tiếp nhận */}
+                  <div className="executive-modal-field">
+                    <label className="executive-modal-label" style={{ fontWeight: 700, color: '#0f172a' }}>
+                      Đội cứu hộ tiếp nhận bàn giao (*)
+                    </label>
+                    <select
+                      className="executive-modal-select"
+                      value={assignEquipTargetTeamId}
+                      onChange={(e) => setAssignEquipTargetTeamId(e.target.value)}
+                      style={{
+                        fontWeight: 700,
+                        borderColor: '#cbd5e1',
+                      }}
+                    >
+                      <option value="">-- Chọn đội cứu hộ tiếp nhận bàn giao --</option>
+                      {rescueTeams.map((team) => (
+                        <option key={team._id} value={team._id}>
+                          🏢 {team.name} ({typeof team.areaId === 'object' && team.areaId ? (team.areaId as any).name : 'Toàn Tỉnh'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 2. Bộ lọc phân loại nhanh trong Modal */}
+                  <div style={{ display: 'flex', gap: 6, background: '#f1f5f9', padding: 4, borderRadius: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setAssignEquipSupplyType('ALL')}
+                      style={{
+                        flex: 1,
+                        padding: '6px 10px',
+                        fontSize: 12,
+                        fontWeight: assignEquipSupplyType === 'ALL' ? 700 : 500,
+                        borderRadius: 6,
+                        border: 'none',
+                        background: assignEquipSupplyType === 'ALL' ? '#ffffff' : 'transparent',
+                        color: assignEquipSupplyType === 'ALL' ? '#0f172a' : '#64748b',
+                        boxShadow: assignEquipSupplyType === 'ALL' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 5,
+                      }}
+                    >
+                      <ArrowRightLeft size={13} />
+                      <span>Tất cả ({depotAllEquipments.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAssignEquipSupplyType('DURABLE')}
+                      style={{
+                        flex: 1,
+                        padding: '6px 10px',
+                        fontSize: 12,
+                        fontWeight: assignEquipSupplyType === 'DURABLE' ? 700 : 500,
+                        borderRadius: 6,
+                        border: 'none',
+                        background: assignEquipSupplyType === 'DURABLE' ? '#ffffff' : 'transparent',
+                        color: assignEquipSupplyType === 'DURABLE' ? '#166534' : '#64748b',
+                        boxShadow: assignEquipSupplyType === 'DURABLE' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 5,
+                      }}
+                    >
+                      <LifeBuoy size={13} />
+                      <span>Thiết bị cứu hộ ({depotDurableEquipments.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAssignEquipSupplyType('CONSUMABLE')}
+                      style={{
+                        flex: 1,
+                        padding: '6px 10px',
+                        fontSize: 12,
+                        fontWeight: assignEquipSupplyType === 'CONSUMABLE' ? 700 : 500,
+                        borderRadius: 6,
+                        border: 'none',
+                        background: assignEquipSupplyType === 'CONSUMABLE' ? '#ffffff' : 'transparent',
+                        color: assignEquipSupplyType === 'CONSUMABLE' ? '#b45309' : '#64748b',
+                        boxShadow: assignEquipSupplyType === 'CONSUMABLE' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 5,
+                      }}
+                    >
+                      <Package size={13} />
+                      <span>Nhu yếu phẩm ({depotConsumableEquipments.length})</span>
+                    </button>
+                  </div>
+
+                  {/* 3. Danh sách mặt hàng tại Kho Tổng */}
+                  <div className="executive-modal-field">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <label className="executive-modal-label" style={{ fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                        Chọn mặt hàng từ Kho Tổng ({activeDepotList.length} mặt hàng sẵn có)
+                      </label>
+                      {activeDepotList.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={toggleSelectAll}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#0284c7',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            padding: 0,
+                          }}
+                        >
+                          {allSelected ? 'Bỏ chọn trong mục này' : 'Chọn tất cả trong mục này'}
+                        </button>
+                      )}
+                    </div>
+
+                    {activeDepotList.length === 0 ? (
+                      <div
+                        style={{
+                          padding: '24px 16px',
+                          borderRadius: 10,
+                          background: '#fefce8',
+                          border: '1px solid #fef08a',
+                          textAlign: 'center',
+                          color: '#854d0e',
+                          fontSize: 13,
+                        }}
+                      >
+                        <p style={{ margin: 0, fontWeight: 700 }}>
+                          Kho Tổng hiện không còn {assignEquipSupplyType === 'CONSUMABLE' ? 'nhu yếu phẩm' : assignEquipSupplyType === 'DURABLE' ? 'thiết bị cứu hộ' : 'mặt hàng'} nào sẵn sàng bàn giao.
+                        </p>
+                        <p style={{ margin: '6px 0 0', fontSize: 12, color: '#a16207' }}>
+                          Bạn có thể chuyển phân loại khác ở trên hoặc nhập thêm hàng mới vào kho.
+                        </p>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          maxHeight: 280,
+                          overflowY: 'auto',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 10,
+                          padding: 8,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                          background: '#f8fafc',
+                        }}
+                      >
+                        {activeDepotList.map((eq) => {
+                          const isSelected = Boolean(selectedEquipmentsToAssign[eq._id] && selectedEquipmentsToAssign[eq._id] > 0);
+                          const currentQty = selectedEquipmentsToAssign[eq._id] || eq.quantity;
+                          const isConsumable = eq.supplyType === 'CONSUMABLE';
+
+                          return (
+                            <div
+                              key={eq._id}
+                              onClick={() => toggleSelectEquipment(eq)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 12,
+                                padding: '10px 14px',
+                                borderRadius: 8,
+                                background: isSelected ? (isConsumable ? '#fffbeb' : '#f0fdf4') : '#ffffff',
+                                border: isSelected ? (isConsumable ? '1.5px solid #fde68a' : '1.5px solid #86efac') : '1px solid #e2e8f0',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleSelectEquipment(eq)}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ width: 16, height: 16, accentColor: isConsumable ? '#d97706' : '#16a34a', cursor: 'pointer' }}
+                              />
+                              <div
+                                style={{
+                                  width: 32,
+                                  height: 32,
+                                  borderRadius: 6,
+                                  background: isSelected ? (isConsumable ? '#fef3c7' : '#dcfce7') : '#eff6ff',
+                                  color: isSelected ? (isConsumable ? '#d97706' : '#16a34a') : '#0284c7',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {isConsumable ? <Package size={16} /> : <LifeBuoy size={16} />}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                  <span style={{ fontWeight: 700, fontSize: 13.5, color: '#0f172a' }}>
+                                    {eq.name}
+                                  </span>
+                                  {isConsumable ? (
+                                    <span
+                                      style={{
+                                        fontSize: 10.5,
+                                        fontWeight: 700,
+                                        color: '#b45309',
+                                        background: '#fef3c7',
+                                        border: '1px solid #fde68a',
+                                        padding: '1px 6px',
+                                        borderRadius: 4,
+                                      }}
+                                    >
+                                      Nhu yếu phẩm
+                                    </span>
+                                  ) : (
+                                    <span
+                                      style={{
+                                        fontSize: 10.5,
+                                        fontWeight: 700,
+                                        color: '#15803d',
+                                        background: '#ecfdf5',
+                                        border: '1px solid #bbf7d0',
+                                        padding: '1px 6px',
+                                        borderRadius: 4,
+                                      }}
+                                    >
+                                      Thiết bị cứu hộ
+                                    </span>
+                                  )}
+                                  {eq.serialNumber && (
+                                    <span
+                                      style={{
+                                        fontFamily: 'monospace',
+                                        fontSize: 11.5,
+                                        color: '#475569',
+                                        background: '#f1f5f9',
+                                        padding: '1px 6px',
+                                        borderRadius: 4,
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      {eq.serialNumber}
+                                    </span>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                                  Kho sẵn có: <strong style={{ color: '#0284c7' }}>{eq.quantity} {eq.unit || 'chiếc'}</strong>
+                                  {' '}&bull; {getEquipmentCategoryName(eq.category)}
+                                </div>
+                              </div>
+
+                              {/* Quantity control when checked */}
+                              {isSelected && (
+                                <div
+                                  onClick={(e) => e.stopPropagation()}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    background: '#ffffff',
+                                    padding: '2px 4px',
+                                    borderRadius: 6,
+                                    border: '1px solid #cbd5e1',
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const nextVal = Math.max(1, currentQty - 1);
+                                      setSelectedEquipmentsToAssign((prev) => ({ ...prev, [eq._id]: nextVal }));
+                                    }}
+                                    style={{
+                                      width: 24,
+                                      height: 24,
+                                      borderRadius: 4,
+                                      border: '1px solid #e2e8f0',
+                                      background: '#f8fafc',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      color: '#475569',
+                                    }}
+                                    title="Giảm 1"
+                                  >
+                                    <Minus size={12} />
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={eq.quantity}
+                                    value={currentQty}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value, 10);
+                                      if (isNaN(val) || val <= 0) {
+                                        setSelectedEquipmentsToAssign((prev) => ({ ...prev, [eq._id]: 1 }));
+                                      } else {
+                                        setSelectedEquipmentsToAssign((prev) => ({
+                                          ...prev,
+                                          [eq._id]: Math.min(eq.quantity, val),
+                                        }));
+                                      }
+                                    }}
+                                    style={{
+                                      width: 44,
+                                      height: 24,
+                                      textAlign: 'center',
+                                      fontWeight: 800,
+                                      fontSize: 12.5,
+                                      border: 'none',
+                                      outline: 'none',
+                                      color: '#0f172a',
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const nextVal = Math.min(eq.quantity, currentQty + 1);
+                                      setSelectedEquipmentsToAssign((prev) => ({ ...prev, [eq._id]: nextVal }));
+                                    }}
+                                    style={{
+                                      width: 24,
+                                      height: 24,
+                                      borderRadius: 4,
+                                      border: '1px solid #e2e8f0',
+                                      background: '#f8fafc',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      color: '#475569',
+                                    }}
+                                    title="Tăng 1"
+                                  >
+                                    <Plus size={12} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedEquipmentsToAssign((prev) => ({ ...prev, [eq._id]: eq.quantity }));
+                                    }}
+                                    style={{
+                                      fontSize: 10.5,
+                                      fontWeight: 700,
+                                      color: '#0284c7',
+                                      background: '#eff6ff',
+                                      border: '1px solid #bfdbfe',
+                                      borderRadius: 4,
+                                      padding: '2px 5px',
+                                      cursor: 'pointer',
+                                      marginLeft: 2,
+                                    }}
+                                    title="Lấy tối đa"
+                                  >
+                                    Max
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 4. Ghi chú điều chuyển / bàn giao */}
+                  <div className="executive-modal-field">
+                    <label className="executive-modal-label" style={{ fontWeight: 700, color: '#0f172a' }}>
+                      Lý do / Quyết định bàn giao <span style={{ fontWeight: 400, color: '#94a3b8' }}>(tùy chọn)</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="executive-modal-input"
+                      placeholder="VD: Cấp bổ sung trang bị ứng phó bão lũ, phục vụ cứu nạn tại chỗ..."
+                      value={assignEquipNote}
+                      onChange={(e) => setAssignEquipNote(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div
+                  className="executive-modal-footer"
+                  style={{ padding: '14px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}
+                >
+                  <button
+                    type="button"
+                    disabled={isAssigningEquipment}
+                    className="coordination-action-btn outline"
+                    onClick={() => setIsAssignEquipmentModalOpen(false)}
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isAssigningEquipment || selectedCount === 0 || !assignEquipTargetTeamId}
+                    className="coordination-action-btn primary"
+                    style={{
+                      background: '#16a34a',
+                      borderColor: '#16a34a',
+                      cursor:
+                        isAssigningEquipment || selectedCount === 0 || !assignEquipTargetTeamId
+                          ? 'not-allowed'
+                          : 'pointer',
+                      opacity:
+                        isAssigningEquipment || selectedCount === 0 || !assignEquipTargetTeamId ? 0.6 : 1,
+                    }}
+                  >
+                    <Check size={14} />
+                    <span>
+                      {isAssigningEquipment
+                        ? 'Đang bàn giao...'
+                        : `Xác Nhận Bàn Giao (${selectedCount} mặt hàng)`}
+                    </span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ===================================================================
           6. DRAWER CHI TIẾT TRANG THIẾT BỊ & VẬT TƯ (SLIDE-OVER TỪ CẠNH MÀN HÌNH)
           =================================================================== */}
@@ -4254,51 +6089,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                      <span
-                        style={{
-                          fontSize: 11.5,
-                          fontWeight: 700,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          padding: '2px 8px',
-                          borderRadius: 12,
-                          background:
-                            selectedEquipment.status === 'AVAILABLE'
-                              ? '#dcfce7'
-                              : selectedEquipment.status === 'IN_USE'
-                                ? '#fef3c7'
-                                : '#fee2e2',
-                          color:
-                            selectedEquipment.status === 'AVAILABLE'
-                              ? '#15803d'
-                              : selectedEquipment.status === 'IN_USE'
-                                ? '#b45309'
-                                : '#b91c1c',
-                        }}
-                      >
-                        <span
-                          className="live-dot"
-                          style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: '50%',
-                            background:
-                              selectedEquipment.status === 'AVAILABLE'
-                                ? '#16a34a'
-                                : selectedEquipment.status === 'IN_USE'
-                                  ? '#d97706'
-                                  : '#ef4444',
-                          }}
-                        />
-                        <span>
-                          {selectedEquipment.status === 'AVAILABLE'
-                            ? 'Sẵn sàng trong kho'
-                            : selectedEquipment.status === 'IN_USE'
-                              ? 'Đang trực chiến'
-                              : 'Bảo dưỡng / Kiểm định'}
-                        </span>
-                      </span>
+                      {renderEquipmentStatusBadge(selectedEquipment)}
 
                       <span style={{ fontSize: 12, color: '#64748b' }}>
                         Phân loại: {selectedEquipment.supplyType === 'CONSUMABLE' ? 'Vật tư tiêu hao' : 'Trang thiết bị bền'}
@@ -4346,42 +6137,76 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   <div className="rd-metric-cell">
                     <span className="rd-metric-label">Tình trạng trực chiến</span>
                     <div style={{ marginTop: 2 }}>
-                      <select
-                        value={selectedEquipment.status || 'AVAILABLE'}
-                        onChange={(e) => handleQuickUpdateEquipmentStatus(selectedEquipment._id, e.target.value)}
-                        style={{
-                          padding: '3px 8px',
-                          fontSize: 12.5,
-                          fontWeight: 700,
-                          borderRadius: 6,
-                          border:
-                            selectedEquipment.status === 'AVAILABLE'
-                              ? '1px solid #86efac'
-                              : selectedEquipment.status === 'IN_USE'
-                                ? '1px solid #fde68a'
+                      {selectedEquipment.supplyType === 'CONSUMABLE' ? (
+                        <select
+                          value={selectedEquipment.status || 'AVAILABLE'}
+                          onChange={(e) => handleQuickUpdateEquipmentStatus(selectedEquipment._id, e.target.value)}
+                          style={{
+                            padding: '3px 8px',
+                            fontSize: 12.5,
+                            fontWeight: 700,
+                            borderRadius: 6,
+                            border:
+                              selectedEquipment.status === 'AVAILABLE'
+                                ? '1px solid #86efac'
                                 : '1px solid #fecaca',
-                          background:
-                            selectedEquipment.status === 'AVAILABLE'
-                              ? '#f0fdf4'
-                              : selectedEquipment.status === 'IN_USE'
-                                ? '#fffbeb'
+                            background:
+                              selectedEquipment.status === 'AVAILABLE'
+                                ? '#f0fdf4'
                                 : '#fef2f2',
-                          color:
-                            selectedEquipment.status === 'AVAILABLE'
-                              ? '#15803d'
-                              : selectedEquipment.status === 'IN_USE'
-                                ? '#b45309'
+                            color:
+                              selectedEquipment.status === 'AVAILABLE'
+                                ? '#15803d'
                                 : '#dc2626',
-                          cursor: 'pointer',
-                          outline: 'none',
-                          maxWidth: '100%',
-                        }}
-                        title="Bấm để đổi nhanh tình trạng trực chiến của vật tư"
-                      >
-                        <option value="AVAILABLE">🟢 Đạt chuẩn (Sẵn sàng)</option>
-                        <option value="IN_USE">🟡 Đang sử dụng</option>
-                        <option value="MAINTENANCE">🔴 Bảo dưỡng / Kiểm tra</option>
-                      </select>
+                            cursor: 'pointer',
+                            outline: 'none',
+                            maxWidth: '100%',
+                          }}
+                          title="Bấm để đổi nhanh trạng thái nhu yếu phẩm"
+                        >
+                          <option value="AVAILABLE">🟢 Đạt chuẩn (Khả dụng)</option>
+                          <option value="EXPIRED">🔴 Hết hạn sử dụng</option>
+                          <option value="DAMAGED">🔴 Hư hại / Hỏng hóc</option>
+                        </select>
+                      ) : (
+                        <select
+                          value={selectedEquipment.status || 'AVAILABLE'}
+                          onChange={(e) => handleQuickUpdateEquipmentStatus(selectedEquipment._id, e.target.value)}
+                          style={{
+                            padding: '3px 8px',
+                            fontSize: 12.5,
+                            fontWeight: 700,
+                            borderRadius: 6,
+                            border:
+                              selectedEquipment.status === 'AVAILABLE'
+                                ? '1px solid #86efac'
+                                : selectedEquipment.status === 'IN_USE'
+                                  ? '1px solid #fde68a'
+                                  : '1px solid #fecaca',
+                            background:
+                              selectedEquipment.status === 'AVAILABLE'
+                                ? '#f0fdf4'
+                                : selectedEquipment.status === 'IN_USE'
+                                  ? '#fffbeb'
+                                  : '#fef2f2',
+                            color:
+                              selectedEquipment.status === 'AVAILABLE'
+                                ? '#15803d'
+                                : selectedEquipment.status === 'IN_USE'
+                                  ? '#b45309'
+                                  : '#dc2626',
+                            cursor: 'pointer',
+                            outline: 'none',
+                            maxWidth: '100%',
+                          }}
+                          title="Bấm để đổi nhanh tình trạng trực chiến của thiết bị"
+                        >
+                          <option value="AVAILABLE">🟢 Đạt chuẩn (Sẵn sàng)</option>
+                          <option value="IN_USE">🔵 Đang sử dụng</option>
+                          <option value="MAINTENANCE">🟡 Bảo dưỡng / Kiểm tra</option>
+                          <option value="DAMAGED">🔴 Hỏng hóc</option>
+                        </select>
+                      )}
                     </div>
                     <span className="rd-metric-sub">Bấm để đổi nhanh</span>
                   </div>
@@ -4621,8 +6446,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       style={{ color: '#0284c7', borderColor: '#bae6fd' }}
                       title={
                         selectedEquipment.teamId
-                          ? 'Điều chuyển khí tài sang đội cứu hộ khác'
-                          : 'Bàn giao / Biên chế khí tài cho Đội cứu hộ tiếp nhận'
+                          ? 'Điều chuyển thiết bị sang đội cứu hộ khác'
+                          : 'Bàn giao / Biên chế thiết bị cho Đội cứu hộ tiếp nhận'
                       }
                     >
                       <ArrowRightLeft size={14} />
@@ -4645,7 +6470,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         });
                       }}
                       style={{ color: '#d97706', borderColor: '#fde68a' }}
-                      title="Hoàn trả khí tài về Kho Tổng Cứu Trợ SOS khi kết thúc chiến dịch hoặc đến hạn kiểm định"
+                      title="Hoàn trả thiết bị về Kho Tổng khi kết thúc chiến dịch hoặc đến hạn bảo trì"
                     >
                       <LogOut size={14} />
                       <span>Rút Về Kho Tổng</span>
@@ -5917,20 +7742,98 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
           </div>
         );
       })()}
-      {/* MODAL 10: PHIẾU XUẤT CẤP CỨU TRỢ TỔNG HỢP (XUẤT NHIỀU MẶT HÀNG CÙNG LÚC) */}
+
+      {/* THANH TÁC VỤ NỔI KHI CÓ MẶT HÀNG ĐƯỢC TÍCH CHỌN TỪ BẢNG */}
+      {selectedTableItemIds.length > 0 && !isBatchConsumeOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 990,
+            background: '#0f172a',
+            color: '#ffffff',
+            padding: '10px 18px',
+            borderRadius: 50,
+            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            border: '1px solid #334155',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}>
+            <CheckCircle2 size={16} color="#38bdf8" />
+            <span>
+              Đã tích chọn <strong style={{ color: '#38bdf8' }}>{selectedTableItemIds.length}</strong> mặt hàng
+            </span>
+          </div>
+          <div style={{ width: 1, height: 18, background: '#334155' }} />
+          <button
+            type="button"
+            onClick={() => handleOpenBatchConsumeModal()}
+            style={{
+              background: '#0284c7',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: 20,
+              padding: '7px 16px',
+              fontSize: 12.5,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              boxShadow: '0 2px 8px rgba(2, 132, 199, 0.4)',
+            }}
+          >
+            <PackageCheck size={15} />
+            <span>Lập lệnh điều phối &amp; Xuất kho ngay</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedTableItemIds([])}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#94a3b8',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              padding: '4px 6px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+            }}
+            title="Hủy bỏ tích chọn"
+          >
+            <X size={12} />
+            <span>Hủy chọn</span>
+          </button>
+        </div>
+      )}
+
+      {/* MODAL 10: PHIẾU XUẤT CẤP CỨU TRỢ TỔNG HỢP (XUẤT NHIỀU MẶT HÀNG CÙNG LÚC TỪ KHO TỔNG) */}
       {isBatchConsumeOpen && (() => {
-        const availableConsumables = consumableEquipments.filter((e) => e.quantity > 0);
+        // Chỉ lấy các mặt hàng còn tồn kho tại KHO TỔNG / DỰ TRỮ (không lấy hàng đã giao cho các Đội)
+        const availableSupplies = equipments.filter((e) => {
+          const tId = typeof e.teamId === 'object' && e.teamId ? (e.teamId as any)._id : e.teamId;
+          return !tId && e.quantity > 0;
+        });
+        const totalItemsCount = batchItems.length;
+        const totalUnitsCount = batchItems.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
 
         return (
           <div className="executive-modal-backdrop" onClick={() => !isSubmittingBatchConsume && setIsBatchConsumeOpen(false)}>
-            <div className="executive-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 720, width: '95%', borderRadius: 16 }}>
-              <div className="executive-modal-header" style={{ borderBottom: '1px solid #bae6fd', background: '#f0f9ff' }}>
+            <div className="executive-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760, width: '96%', borderRadius: 16 }}>
+              <div className="executive-modal-header" style={{ borderBottom: '1px solid #bae6fd', background: '#f0f9ff', padding: '14px 22px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div
                     style={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: '50%',
+                      width: 36,
+                      height: 36,
+                      borderRadius: 10,
                       background: '#e0f2fe',
                       border: '1px solid #bae6fd',
                       display: 'flex',
@@ -5940,14 +7843,14 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       flexShrink: 0,
                     }}
                   >
-                    <PackageCheck size={19} />
+                    <PackageCheck size={18} />
                   </div>
                   <div>
                     <h3 className="executive-modal-title" style={{ color: '#0369a1', fontSize: 16 }}>
-                      Phiếu Xuất Cấp Cứu Trợ Tổng Hợp
+                      Phiếu Xuất Kho &amp; Lệnh Điều Phối Tiếp Tế
                     </h3>
                     <p style={{ margin: 0, fontSize: 12, color: '#0284c7' }}>
-                      Xuất cùng lúc nhiều loại nhu yếu phẩm cho chuyến xe cứu trợ hoặc điểm sơ tán
+                      Xuất cấp từ <strong>Kho Tổng / Dự Trữ</strong> cho Đội cứu hộ hoặc cấp trực tiếp tại kho
                     </p>
                   </div>
                 </div>
@@ -5961,510 +7864,426 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
               </div>
 
               <form onSubmit={handleConfirmBatchConsume}>
-                <div className="executive-modal-body" style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '72vh', overflowY: 'auto', overflowX: 'hidden' }}>
-                  {/* 1. Chọn phương thức xuất cấp (Top-level Decision) */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12, width: '100%', boxSizing: 'border-box' }}>
-                    <div
+                <div className="executive-modal-body" style={{ padding: '16px 22px', display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '72vh', overflowY: 'auto', overflowX: 'hidden' }}>
+                  {/* 1. Chọn phương thức xuất cấp (Segmented Switcher 1 hàng siêu gọn) */}
+                  <div style={{
+                    display: 'flex',
+                    background: '#f1f5f9',
+                    padding: 3,
+                    borderRadius: 10,
+                    border: '1px solid #e2e8f0',
+                    gap: 4,
+                  }}>
+                    <button
+                      type="button"
                       onClick={() => setBatchDispatchMode('ASSIGN_TEAM')}
                       style={{
-                        padding: '12px 14px',
-                        borderRadius: 12,
-                        border: batchDispatchMode === 'ASSIGN_TEAM' ? '2px solid #0284c7' : '1px solid #e2e8f0',
-                        background: batchDispatchMode === 'ASSIGN_TEAM' ? '#f0f9ff' : '#ffffff',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 12,
-                        minWidth: 0,
-                        width: '100%',
-                        boxSizing: 'border-box',
-                        transition: 'all 0.15s ease',
-                        boxShadow: batchDispatchMode === 'ASSIGN_TEAM' ? '0 2px 6px rgba(2, 132, 199, 0.12)' : 'none',
-                      }}
-                    >
-                      <div style={{
-                        width: 38,
-                        height: 38,
-                        borderRadius: 10,
-                        background: batchDispatchMode === 'ASSIGN_TEAM' ? '#0284c7' : '#f1f5f9',
-                        color: batchDispatchMode === 'ASSIGN_TEAM' ? '#ffffff' : '#64748b',
+                        flex: 1,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        flexShrink: 0,
-                      }}>
-                        <Truck size={19} />
-                      </div>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: batchDispatchMode === 'ASSIGN_TEAM' ? '#0369a1' : '#0f172a' }}>
-                          Điều động Đội cứu hộ tiếp tế
-                        </div>
-                        <div style={{ fontSize: 11.5, color: batchDispatchMode === 'ASSIGN_TEAM' ? '#0284c7' : '#64748b', marginTop: 2, lineHeight: 1.35 }}>
-                          Đội cơ động chuyển hàng đến điểm ngập, theo dõi trên bản đồ
-                        </div>
-                      </div>
-                    </div>
-
-                    <div
+                        gap: 8,
+                        padding: '8px 14px',
+                        borderRadius: 8,
+                        border: 'none',
+                        background: batchDispatchMode === 'ASSIGN_TEAM' ? '#ffffff' : 'transparent',
+                        color: batchDispatchMode === 'ASSIGN_TEAM' ? '#0369a1' : '#64748b',
+                        fontWeight: batchDispatchMode === 'ASSIGN_TEAM' ? 700 : 500,
+                        fontSize: 13,
+                        boxShadow: batchDispatchMode === 'ASSIGN_TEAM' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <Truck size={15} color={batchDispatchMode === 'ASSIGN_TEAM' ? '#0284c7' : '#64748b'} />
+                      <span>1. Điều động Đội cứu hộ tiếp tế</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setBatchDispatchMode('DIRECT')}
                       style={{
-                        padding: '12px 14px',
-                        borderRadius: 12,
-                        border: batchDispatchMode === 'DIRECT' ? '2px solid #0284c7' : '1px solid #e2e8f0',
-                        background: batchDispatchMode === 'DIRECT' ? '#f0f9ff' : '#ffffff',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 12,
-                        minWidth: 0,
-                        width: '100%',
-                        boxSizing: 'border-box',
-                        transition: 'all 0.15s ease',
-                        boxShadow: batchDispatchMode === 'DIRECT' ? '0 2px 6px rgba(2, 132, 199, 0.12)' : 'none',
-                      }}
-                    >
-                      <div style={{
-                        width: 38,
-                        height: 38,
-                        borderRadius: 10,
-                        background: batchDispatchMode === 'DIRECT' ? '#0284c7' : '#f1f5f9',
-                        color: batchDispatchMode === 'DIRECT' ? '#ffffff' : '#64748b',
+                        flex: 1,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        flexShrink: 0,
-                      }}>
-                        <PackageCheck size={19} />
-                      </div>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: batchDispatchMode === 'DIRECT' ? '#0369a1' : '#0f172a' }}>
-                          Xuất cấp trực tiếp tại kho
-                        </div>
-                        <div style={{ fontSize: 11.5, color: batchDispatchMode === 'DIRECT' ? '#0284c7' : '#64748b', marginTop: 2, lineHeight: 1.35 }}>
-                          Người dân hoặc đoàn xe bên ngoài tự đến nhận tại kho
-                        </div>
-                      </div>
-                    </div>
+                        gap: 8,
+                        padding: '8px 14px',
+                        borderRadius: 8,
+                        border: 'none',
+                        background: batchDispatchMode === 'DIRECT' ? '#ffffff' : 'transparent',
+                        color: batchDispatchMode === 'DIRECT' ? '#0369a1' : '#64748b',
+                        fontWeight: batchDispatchMode === 'DIRECT' ? 700 : 500,
+                        fontSize: 13,
+                        boxShadow: batchDispatchMode === 'DIRECT' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <PackageCheck size={15} color={batchDispatchMode === 'DIRECT' ? '#0284c7' : '#64748b'} />
+                      <span>2. Xuất cấp trực tiếp tại kho</span>
+                    </button>
                   </div>
 
-                  {/* 2. Thông tin tiếp nhận & Điều phối chi tiết */}
+                  {/* 2. Thông tin tiếp nhận & Địa điểm (Gọn gàng trong 1 container bo góc) */}
                   {batchDispatchMode === 'ASSIGN_TEAM' ? (
                     <div style={{
-                      padding: '16px',
+                      padding: '12px 14px',
                       borderRadius: 12,
                       background: '#f8fafc',
                       border: '1px solid #e2e8f0',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: 12,
+                      gap: 10,
                       width: '100%',
                       boxSizing: 'border-box',
                     }}>
-                      {/* Hàng 1: Đội cứu hộ */}
-                      <div className="executive-modal-field">
-                        <label className="executive-modal-label" style={{ fontWeight: 700, fontSize: 12.5, color: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span>Đội cứu hộ tiếp nhận nhiệm vụ <span style={{ color: '#ef4444' }}>*</span></span>
-                          {activeRescueTeams.length > 0 && (
-                            <span style={{ fontSize: 11, fontWeight: 500, color: '#0284c7' }}>
-                              {activeRescueTeams.length} đội sẵn sàng trong địa bàn
-                            </span>
-                          )}
-                        </label>
-                        <select
-                          required
-                          className="executive-modal-select"
-                          value={batchTeamId}
-                          onChange={(e) => setBatchTeamId(e.target.value)}
-                          style={{
-                            background: '#ffffff',
-                            fontWeight: 600,
-                            width: '100%',
-                            fontSize: 13,
-                            color: '#0f172a',
-                            border: '1px solid #cbd5e1',
-                            borderRadius: 10,
-                            padding: '9px 12px',
-                          }}
-                        >
-                          <option value="">-- Chọn Đội cứu hộ nhận lệnh tiếp tế --</option>
-                          {activeRescueTeams.length === 0 ? (
-                            <option value="" disabled>⚠️ Không có đội cứu hộ nào đang Sẵn sàng (ACTIVE) trong khu vực này</option>
-                          ) : (
-                            activeRescueTeams.map((t) => (
-                              <option key={t._id} value={t._id}>
-                                🛡️ {t.name}
-                              </option>
-                            ))
-                          )}
-                        </select>
+                      {/* Hàng 1: Đội nhận & Địa điểm (2 cột cân xứng) */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%', boxSizing: 'border-box', alignItems: 'start' }}>
+                        {/* Cột 1: Đội cứu hộ */}
+                        <div className="executive-modal-field">
+                          <div style={{ height: 26, display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: 0 }}>
+                            <label style={{ fontWeight: 700, fontSize: 12, color: '#0f172a', margin: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <span>Đội cứu hộ nhận lệnh</span>
+                              <span style={{ color: '#ef4444' }}>*</span>
+                            </label>
+                            {activeRescueTeams.length > 0 && (
+                              <span style={{
+                                fontSize: 11,
+                                fontWeight: 600,
+                                color: '#0284c7',
+                                background: '#e0f2fe',
+                                padding: '2px 8px',
+                                borderRadius: 12,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                height: 22,
+                                boxSizing: 'border-box',
+                                lineHeight: '18px',
+                              }}>
+                                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#0284c7' }} />
+                                {activeRescueTeams.length} đội sẵn sàng
+                              </span>
+                            )}
+                          </div>
+                          <select
+                            required
+                            className="executive-modal-select"
+                            value={batchTeamId}
+                            onChange={(e) => setBatchTeamId(e.target.value)}
+                            style={{
+                              background: '#ffffff',
+                              fontWeight: 600,
+                              width: '100%',
+                              height: 38,
+                              minHeight: 38,
+                              maxHeight: 38,
+                              boxSizing: 'border-box',
+                              fontSize: 12.5,
+                              color: '#0f172a',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: 8,
+                              padding: '0 10px',
+                            }}
+                          >
+                            <option value="">-- Chọn Đội nhận lệnh tiếp tế --</option>
+                            {activeRescueTeams.length === 0 ? (
+                              <option value="" disabled>⚠️ Không có đội cứu hộ nào đang Sẵn sàng (ACTIVE)</option>
+                            ) : (
+                              activeRescueTeams.map((t) => (
+                                <option key={t._id} value={t._id}>
+                                  🛡️ {t.name}
+                                </option>
+                              ))
+                            )}
+                          </select>
 
-                        {/* Thẻ thông tin Đội trưởng & Trạng thái tác chiến trực tiếp */}
-                        {batchTeamId && (() => {
-                          const chosenTeam = activeRescueTeams.find((t) => t._id === batchTeamId) || rescueTeams.find((t) => t._id === batchTeamId);
-                          if (!chosenTeam) return null;
-                          let lName = '';
-                          let lPhone = '';
-                          if (typeof chosenTeam.leaderId === 'object' && chosenTeam.leaderId) {
-                            lName = (chosenTeam.leaderId as any).fullName || (chosenTeam.leaderId as any).name || '';
-                            lPhone = (chosenTeam.leaderId as any).phone || '';
-                          } else if (Array.isArray(chosenTeam.members) && chosenTeam.members.length > 0) {
-                            const leaderMember = chosenTeam.members.find((m) => m.role === 'LEADER') || chosenTeam.members[0];
-                            const rescuerObj = typeof leaderMember?.rescuerId === 'object' ? (leaderMember.rescuerId as any) : null;
-                            lName = rescuerObj?.fullName || rescuerObj?.name || '';
-                            lPhone = rescuerObj?.phone || '';
-                          }
+                          {/* Dòng tóm tắt Đội trưởng thông minh (inline sub-bar) */}
+                          {batchTeamId && (() => {
+                            const chosenTeam = activeRescueTeams.find((t) => t._id === batchTeamId) || rescueTeams.find((t) => t._id === batchTeamId);
+                            if (!chosenTeam) return null;
+                            let lName = '';
+                            let lPhone = '';
+                            if (typeof chosenTeam.leaderId === 'object' && chosenTeam.leaderId) {
+                              lName = (chosenTeam.leaderId as any).fullName || (chosenTeam.leaderId as any).name || '';
+                              lPhone = (chosenTeam.leaderId as any).phone || '';
+                            } else if (Array.isArray(chosenTeam.members) && chosenTeam.members.length > 0) {
+                              const leaderMember = chosenTeam.members.find((m) => m.role === 'LEADER') || chosenTeam.members[0];
+                              const rescuerObj = typeof leaderMember?.rescuerId === 'object' ? (leaderMember.rescuerId as any) : null;
+                              lName = rescuerObj?.fullName || rescuerObj?.name || '';
+                              lPhone = rescuerObj?.phone || '';
+                            }
 
-                          const memberIds = new Set();
-                          if (chosenTeam.leaderId) {
-                            const lId = typeof chosenTeam.leaderId === 'object' ? (chosenTeam.leaderId as any)._id : chosenTeam.leaderId;
-                            if (lId) memberIds.add(String(lId));
-                          }
-                          if (Array.isArray(chosenTeam.members)) {
-                            chosenTeam.members.forEach((m: any) => {
-                              if (m && (m.status === 'APPROVED' || !m.status) && m.rescuerId) {
-                                memberIds.add((m.rescuerId._id || m.rescuerId).toString());
-                              }
-                            });
-                          }
-                          const memberCount = memberIds.size;
-                          const initials = lName
-                            ? lName.trim().split(/\s+/).slice(-2).map((w: string) => w[0]).join('').toUpperCase()
-                            : 'ĐH';
-                          const isInactive = chosenTeam.status && chosenTeam.status !== 'ACTIVE';
+                            const memberIds = new Set();
+                            if (chosenTeam.leaderId) {
+                              const lId = typeof chosenTeam.leaderId === 'object' ? (chosenTeam.leaderId as any)._id : chosenTeam.leaderId;
+                              if (lId) memberIds.add(String(lId));
+                            }
+                            if (Array.isArray(chosenTeam.members)) {
+                              chosenTeam.members.forEach((m: any) => {
+                                if (m && (m.status === 'APPROVED' || !m.status) && m.rescuerId) {
+                                  memberIds.add((m.rescuerId._id || m.rescuerId).toString());
+                                }
+                              });
+                            }
+                            const memberCount = memberIds.size;
+                            const isInactive = chosenTeam.status && chosenTeam.status !== 'ACTIVE';
 
-                          return (
-                            <div style={{
-                              marginTop: 10,
-                              padding: '10px 14px',
-                              background: isInactive ? '#fef2f2' : '#f0f9ff',
-                              border: isInactive ? '1px solid #fecaca' : '1px solid #bae6fd',
-                              borderRadius: 10,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              gap: 12,
-                              flexWrap: 'wrap',
-                            }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                                <div style={{
-                                  width: 36,
-                                  height: 36,
-                                  borderRadius: 10,
-                                  background: isInactive ? '#dc2626' : '#0284c7',
-                                  color: '#ffffff',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontWeight: 700,
-                                  fontSize: 12.5,
-                                  flexShrink: 0,
-                                  letterSpacing: 0.5,
-                                }}>
-                                  {initials}
+                            return (
+                              <div style={{
+                                marginTop: 4,
+                                padding: '5px 8px',
+                                background: isInactive ? '#fef2f2' : '#f0f9ff',
+                                border: isInactive ? '1px solid #fecaca' : '1px solid #bae6fd',
+                                borderRadius: 7,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                fontSize: 11,
+                                color: '#334155',
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  <span style={{ fontWeight: 700, color: '#0369a1' }}>👤 {lName || 'Chưa chỉ định'}</span>
+                                  {lPhone && (
+                                    <a href={`tel:${lPhone}`} style={{ color: '#0284c7', textDecoration: 'none', fontWeight: 600 }}>
+                                      ({lPhone})
+                                    </a>
+                                  )}
                                 </div>
-                                <div style={{ minWidth: 0 }}>
-                                  <div style={{ fontSize: 11, color: isInactive ? '#991b1b' : '#0369a1', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>
-                                    Đội trưởng tiếp nhận
-                                  </div>
-                                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                    <span>{lName || 'Chưa chỉ định'}</span>
-                                    {lPhone && (
-                                      <a
-                                        href={`tel:${lPhone}`}
-                                        style={{
-                                          fontSize: 11.5,
-                                          fontWeight: 600,
-                                          color: '#0284c7',
-                                          textDecoration: 'none',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: 4,
-                                          background: '#ffffff',
-                                          padding: '2px 8px',
-                                          borderRadius: 6,
-                                          border: '1px solid #bae6fd',
-                                        }}
-                                      >
-                                        📞 {lPhone}
-                                      </a>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                                {memberCount > 0 && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                                  {memberCount > 0 && <span style={{ color: '#64748b' }}>👥 {memberCount} QS</span>}
                                   <span style={{
-                                    fontSize: 11.5,
-                                    fontWeight: 600,
-                                    color: '#0369a1',
-                                    background: '#e0f2fe',
-                                    padding: '3px 8px',
-                                    borderRadius: 6,
+                                    fontWeight: 700,
+                                    fontSize: 10,
+                                    color: isInactive ? '#dc2626' : '#16a34a',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 3,
                                   }}>
-                                    👥 {memberCount} quân số
+                                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: isInactive ? '#dc2626' : '#16a34a' }} />
+                                    {isInactive ? 'Tạm dừng' : 'Sẵn sàng'}
                                   </span>
-                                )}
-                                <span style={{
-                                  fontSize: 11.5,
-                                  fontWeight: 700,
-                                  color: isInactive ? '#dc2626' : '#16a34a',
-                                  background: isInactive ? '#fee2e2' : '#dcfce7',
-                                  padding: '3px 8px',
-                                  borderRadius: 6,
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 5,
-                                }}>
-                                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: isInactive ? '#dc2626' : '#16a34a' }} />
-                                  {isInactive ? (chosenTeam.status === 'INACTIVE' ? 'Tạm dừng' : chosenTeam.status) : 'Sẵn sàng'}
-                                </span>
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
+                            );
+                          })()}
+                        </div>
 
-                      {/* Hàng 2: Địa điểm tiếp tế / Khu vực ngập lụt */}
-                      <div className="executive-modal-field">
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <label className="executive-modal-label" style={{ fontWeight: 700, fontSize: 12.5, color: '#0f172a', margin: 0 }}>
-                            Địa điểm tiếp tế / Khu vực ngập lụt <span style={{ color: '#ef4444' }}>*</span>
-                          </label>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            {batchCoordinates && (
+                        {/* Cột 2: Địa điểm tiếp tế / Vùng ngập */}
+                        <div className="executive-modal-field">
+                          <div style={{ height: 26, display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: 0 }}>
+                            <label style={{ fontWeight: 700, fontSize: 12, color: '#0f172a', margin: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <span>Địa điểm tiếp tế / Vùng ngập</span>
+                              <span style={{ color: '#ef4444' }}>*</span>
+                            </label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              {batchCoordinates && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setBatchCoordinates(null);
+                                    toast.info('Đã hủy ghim GPS');
+                                  }}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 3,
+                                    padding: '0 6px',
+                                    height: 22,
+                                    boxSizing: 'border-box',
+                                    fontSize: 10.5,
+                                    fontWeight: 600,
+                                    color: '#dc2626',
+                                    background: '#fef2f2',
+                                    border: '1px solid #fecaca',
+                                    borderRadius: 6,
+                                    cursor: 'pointer',
+                                  }}
+                                  title="Hủy ghim tọa độ"
+                                >
+                                  <X size={10} />
+                                  <span>Bỏ ghim</span>
+                                </button>
+                              )}
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setBatchCoordinates(null);
-                                  toast.info('Đã hủy ghim tọa độ GPS');
-                                }}
+                                onClick={() => setIsMapPickerOpen(true)}
                                 style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   gap: 4,
-                                  padding: '3px 8px',
+                                  padding: '0 8px',
+                                  height: 22,
+                                  boxSizing: 'border-box',
                                   fontSize: 11,
                                   fontWeight: 600,
-                                  color: '#dc2626',
-                                  background: '#fef2f2',
-                                  border: '1px solid #fecaca',
-                                  borderRadius: 7,
+                                  color: batchCoordinates ? '#0284c7' : '#0369a1',
+                                  background: batchCoordinates ? '#e0f2fe' : '#f0f9ff',
+                                  border: batchCoordinates ? '1px solid #7dd3fc' : '1px solid #bae6fd',
+                                  borderRadius: 6,
                                   cursor: 'pointer',
-                                  transition: 'all 0.15s ease',
                                 }}
-                                title="Hủy bỏ ghim tọa độ GPS"
+                                title="Ghim vị trí trên bản đồ"
                               >
-                                <X size={12} />
-                                <span>Bỏ ghim</span>
+                                <MapPin size={11} color={batchCoordinates ? '#0284c7' : '#0369a1'} />
+                                <span>{batchCoordinates ? 'GPS đã ghim' : 'Ghim bản đồ'}</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          <div style={{ position: 'relative', width: '100%', height: 38 }}>
+                            <input
+                              type="text"
+                              required
+                              className="executive-modal-input"
+                              placeholder="VD: Trường THCS Nguyễn Du, Thôn An Trạch..."
+                              value={batchDestination}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setBatchDestination(val);
+                                if (!val.trim() && batchCoordinates) {
+                                  setBatchCoordinates(null);
+                                }
+                              }}
+                              style={{
+                                background: '#ffffff',
+                                width: '100%',
+                                height: 38,
+                                minHeight: 38,
+                                maxHeight: 38,
+                                borderRadius: 8,
+                                border: '1px solid #cbd5e1',
+                                padding: '0 28px 0 10px',
+                                fontSize: 12.5,
+                                boxSizing: 'border-box',
+                              }}
+                            />
+                            {batchDestination && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setBatchDestination('');
+                                  setBatchCoordinates(null);
+                                }}
+                                style={{
+                                  position: 'absolute',
+                                  right: 6,
+                                  top: '50%',
+                                  transform: 'translateY(-50%)',
+                                  border: 'none',
+                                  background: '#f1f5f9',
+                                  borderRadius: '50%',
+                                  width: 18,
+                                  height: 18,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  cursor: 'pointer',
+                                  color: '#64748b',
+                                }}
+                                title="Xóa địa điểm"
+                              >
+                                <X size={11} />
                               </button>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => setIsMapPickerOpen(true)}
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 5,
-                                padding: '3px 10px',
-                                fontSize: 11.5,
-                                fontWeight: 600,
-                                color: batchCoordinates ? '#0284c7' : '#0369a1',
-                                background: batchCoordinates ? '#e0f2fe' : '#f0f9ff',
-                                border: batchCoordinates ? '1px solid #7dd3fc' : '1px solid #bae6fd',
-                                borderRadius: 7,
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease',
-                              }}
-                              title="Mở bản đồ vệ tinh/giao thông để ghim hoặc thay đổi tọa độ GPS"
-                            >
-                              <MapPin size={13} color={batchCoordinates ? '#0284c7' : '#0369a1'} />
-                              <span>
-                                {batchCoordinates
-                                  ? `Đổi vị trí GPS [${batchCoordinates[1].toFixed(4)}, ${batchCoordinates[0].toFixed(4)}]`
-                                  : '📍 Ghim trên bản đồ'}
-                              </span>
-                            </button>
                           </div>
-                        </div>
 
-                        <div style={{ position: 'relative', width: '100%' }}>
-                          <input
-                            type="text"
-                            required
-                            className="executive-modal-input"
-                            placeholder="VD: Điểm sơ tán Trường THCS Nguyễn Du, Thôn An Trạch hoặc chọn bên dưới..."
-                            value={batchDestination}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setBatchDestination(val);
-                              if (!val.trim() && batchCoordinates) {
-                                setBatchCoordinates(null);
-                              }
-                            }}
-                            style={{
-                              background: '#ffffff',
-                              width: '100%',
-                              borderRadius: 10,
-                              border: '1px solid #cbd5e1',
-                              padding: '9px 34px 9px 12px',
-                              fontSize: 13,
-                              boxSizing: 'border-box',
-                            }}
-                          />
-                          {batchDestination && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setBatchDestination('');
-                                setBatchCoordinates(null);
-                              }}
-                              style={{
-                                position: 'absolute',
-                                right: 8,
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                border: 'none',
-                                background: '#f1f5f9',
-                                borderRadius: '50%',
-                                width: 20,
-                                height: 20,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                cursor: 'pointer',
-                                color: '#64748b',
-                              }}
-                              title="Xóa nhanh địa điểm"
-                            >
-                              <X size={12} />
-                            </button>
+                          {/* Gợi ý điểm sơ tán an toàn (nếu có điểm hợp lệ) */}
+                          {suggestedSafeLocations.filter((l: any) => l.name && l.name.trim().length >= 3 && !['iui', 'ok', 'test', 'abc'].includes(l.name.trim().toLowerCase())).length > 0 && (
+                            <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>Gợi ý:</span>
+                              {suggestedSafeLocations
+                                .filter((l: any) => l.name && l.name.trim().length >= 3 && !['iui', 'ok', 'test', 'abc'].includes(l.name.trim().toLowerCase()))
+                                .slice(0, 4)
+                                .map((loc: any) => {
+                                  const isSelected = Boolean(
+                                    batchDestination && (batchDestination === loc.name || batchDestination.startsWith(loc.name + ' ('))
+                                  );
+
+                                  return (
+                                    <button
+                                      key={loc._id}
+                                      type="button"
+                                      onClick={() => {
+                                        if (isSelected) {
+                                          setBatchDestination('');
+                                          setBatchCoordinates(null);
+                                        } else {
+                                          setBatchDestination(loc.name + (loc.address ? ` (${loc.address})` : ''));
+                                          if (loc.location?.coordinates && loc.location.coordinates.length === 2) {
+                                            setBatchCoordinates([loc.location.coordinates[0], loc.location.coordinates[1]]);
+                                          }
+                                        }
+                                      }}
+                                      style={{
+                                        fontSize: 10,
+                                        padding: '2px 6px',
+                                        borderRadius: 5,
+                                        background: isSelected ? '#e0f2fe' : '#ffffff',
+                                        border: isSelected ? '1px solid #0284c7' : '1px solid #cbd5e1',
+                                        color: isSelected ? '#0369a1' : '#334155',
+                                        fontWeight: isSelected ? 700 : 500,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 3,
+                                      }}
+                                    >
+                                      <span>{loc.type === 'HOSPITAL' ? '🏥' : '🏫'}</span>
+                                      <span>{loc.name}</span>
+                                      {isSelected && <Check size={9} color="#0284c7" strokeWidth={3} />}
+                                    </button>
+                                  );
+                                })}
+                            </div>
                           )}
                         </div>
-
-                        {/* Gợi ý nhanh các điểm an toàn / điểm sơ tán của xã */}
-                        {suggestedSafeLocations.length > 0 && (
-                          <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Gợi ý điểm sơ tán:</span>
-                            {suggestedSafeLocations.slice(0, 6).map((loc: any) => {
-                              const isSelected = Boolean(
-                                (batchCoordinates &&
-                                  loc.location?.coordinates &&
-                                  loc.location.coordinates.length === 2 &&
-                                  Math.abs(loc.location.coordinates[0] - batchCoordinates[0]) < 0.0001 &&
-                                  Math.abs(loc.location.coordinates[1] - batchCoordinates[1]) < 0.0001) ||
-                                (batchDestination && (batchDestination === loc.name || batchDestination.startsWith(loc.name + ' (')))
-                              );
-
-                              return (
-                                <button
-                                  key={loc._id}
-                                  type="button"
-                                  onClick={() => {
-                                    if (isSelected) {
-                                      // Hủy chọn
-                                      setBatchDestination('');
-                                      setBatchCoordinates(null);
-                                      toast.info(`Đã bỏ chọn: ${loc.name}`);
-                                    } else {
-                                      // Chọn điểm này
-                                      setBatchDestination(loc.name + (loc.address ? ` (${loc.address})` : ''));
-                                      if (loc.location?.coordinates && loc.location.coordinates.length === 2) {
-                                        setBatchCoordinates([loc.location.coordinates[0], loc.location.coordinates[1]]);
-                                        toast.info(`Đã chọn & ghim tọa độ: ${loc.name}`);
-                                      } else {
-                                        setBatchCoordinates(null);
-                                        toast.info(`Đã chọn: ${loc.name}`);
-                                      }
-                                    }
-                                  }}
-                                  style={{
-                                    fontSize: 11,
-                                    padding: '3px 9px',
-                                    borderRadius: 6,
-                                    background: isSelected ? '#e0f2fe' : '#f8fafc',
-                                    border: isSelected ? '1.5px solid #0284c7' : '1px solid #cbd5e1',
-                                    color: isSelected ? '#0369a1' : '#0f172a',
-                                    fontWeight: isSelected ? 700 : 500,
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 5,
-                                    boxShadow: isSelected ? '0 1px 3px rgba(2, 132, 199, 0.2)' : 'none',
-                                    transition: 'all 0.15s ease',
-                                  }}
-                                  title={isSelected ? `Đang chọn: ${loc.name} (Bấm lại để hủy chọn)` : `Chọn: ${loc.name} (${loc.address || ''})`}
-                                >
-                                  <span>{loc.type === 'HOSPITAL' ? '🏥' : loc.type === 'EVACUATION_CENTER' ? '🏫' : '📍'}</span>
-                                  <span>{loc.name}</span>
-                                  {isSelected && <Check size={12} color="#0284c7" strokeWidth={3} />}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
                       </div>
 
-                      {/* Hàng 3: 2 cột cân đối: Người liên hệ | Ghi chú phương tiện */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%', boxSizing: 'border-box' }}>
-                        <div className="executive-modal-field">
-                          <label className="executive-modal-label" style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>
-                            Người liên hệ / SĐT <span style={{ color: '#94a3b8', fontWeight: 400 }}>(tùy chọn)</span>
+                      {/* Hàng 2: Người liên hệ / SĐT tại điểm ngập */}
+                      <div className="executive-modal-field">
+                        <div style={{ height: 20, display: 'flex', alignItems: 'center', margin: 0 }}>
+                          <label style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', margin: 0 }}>
+                            Người liên hệ / SĐT tại điểm ngập <span style={{ color: '#94a3b8', fontWeight: 400 }}>(tùy chọn)</span>
                           </label>
-                          <input
-                            type="text"
-                            className="executive-modal-input"
-                            placeholder="VD: Thầy Trần Văn B - 0912.xxx.xxx"
-                            value={batchRecipientName}
-                            onChange={(e) => setBatchRecipientName(e.target.value)}
-                            style={{
-                              background: '#ffffff',
-                              width: '100%',
-                              borderRadius: 10,
-                              border: '1px solid #cbd5e1',
-                              padding: '9px 12px',
-                              fontSize: 13,
-                            }}
-                          />
                         </div>
-
-                        <div className="executive-modal-field">
-                          <label className="executive-modal-label" style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>
-                            Phương tiện / Ghi chú xe <span style={{ color: '#94a3b8', fontWeight: 400 }}>(tùy chọn)</span>
-                          </label>
-                          <input
-                            type="text"
-                            className="executive-modal-input"
-                            placeholder="VD: Ca nô 02 / Xe tải 2.5T đợt 1..."
-                            value={batchNote}
-                            onChange={(e) => setBatchNote(e.target.value)}
-                            style={{
-                              background: '#ffffff',
-                              width: '100%',
-                              borderRadius: 10,
-                              border: '1px solid #cbd5e1',
-                              padding: '9px 12px',
-                              fontSize: 13,
-                            }}
-                          />
-                        </div>
+                        <input
+                          type="text"
+                          className="executive-modal-input"
+                          placeholder="VD: Thầy Trần Văn B - 0912.xxx.xxx (để Đội cứu hộ liên lạc khi tiếp cận điểm ngập)"
+                          value={batchRecipientName}
+                          onChange={(e) => setBatchRecipientName(e.target.value)}
+                          style={{
+                            background: '#ffffff',
+                            width: '100%',
+                            height: 36,
+                            minHeight: 36,
+                            maxHeight: 36,
+                            borderRadius: 8,
+                            border: '1px solid #cbd5e1',
+                            padding: '0 10px',
+                            fontSize: 12,
+                            boxSizing: 'border-box',
+                          }}
+                        />
                       </div>
                     </div>
                   ) : (
+                    /* Chế độ 2: Xuất trực tiếp tại kho */
                     <div style={{
-                      padding: '16px',
+                      padding: '12px 14px',
                       borderRadius: 12,
                       background: '#f8fafc',
                       border: '1px solid #e2e8f0',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: 12,
+                      gap: 10,
                       width: '100%',
                       boxSizing: 'border-box',
                     }}>
                       <div className="executive-modal-field">
-                        <label className="executive-modal-label" style={{ fontWeight: 700, fontSize: 12.5, color: '#0f172a' }}>
-                          Địa bàn / Điểm cần tiếp nhận cứu trợ (*)
+                        <label className="executive-modal-label" style={{ fontWeight: 700, fontSize: 12, color: '#0f172a', marginBottom: 4 }}>
+                          Địa bàn / Điểm cần tiếp nhận cứu trợ <span style={{ color: '#ef4444' }}>*</span>
                         </label>
                         <input
                           type="text"
@@ -6473,13 +8292,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           placeholder="VD: Thôn An Trạch, xã Hòa Tiến (hoặc Đoàn cứu trợ Tỉnh bạn)..."
                           value={batchDestination}
                           onChange={(e) => setBatchDestination(e.target.value)}
-                          style={{ background: '#ffffff', width: '100%' }}
+                          style={{ background: '#ffffff', width: '100%', borderRadius: 8, border: '1px solid #cbd5e1', padding: '8px 10px', fontSize: 12.5 }}
                         />
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%', boxSizing: 'border-box' }}>
                         <div className="executive-modal-field">
-                          <label className="executive-modal-label" style={{ fontSize: 12 }}>
+                          <label className="executive-modal-label" style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 2 }}>
                             Người đại diện nhận hàng <span style={{ color: '#94a3b8' }}>(tùy chọn)</span>
                           </label>
                           <input
@@ -6488,41 +8307,46 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             placeholder="VD: Nguyễn Văn A (Trưởng thôn)..."
                             value={batchRecipientName}
                             onChange={(e) => setBatchRecipientName(e.target.value)}
-                            style={{ background: '#ffffff', width: '100%' }}
+                            style={{ background: '#ffffff', width: '100%', borderRadius: 8, border: '1px solid #cbd5e1', padding: '7px 10px', fontSize: 12 }}
                           />
                         </div>
 
                         <div className="executive-modal-field">
-                          <label className="executive-modal-label" style={{ fontSize: 12 }}>
-                            Số điện thoại / Biển số xe nhận <span style={{ color: '#94a3b8' }}>(tùy chọn)</span>
+                          <label className="executive-modal-label" style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 2 }}>
+                            Số điện thoại liên hệ <span style={{ color: '#94a3b8' }}>(tùy chọn)</span>
                           </label>
                           <input
                             type="text"
                             className="executive-modal-input"
-                            placeholder="VD: 0912.xxx.xxx hoặc Xe 43C-123.45..."
+                            placeholder="VD: 0912.xxx.xxx..."
                             value={batchNote}
                             onChange={(e) => setBatchNote(e.target.value)}
-                            style={{ background: '#ffffff', width: '100%' }}
+                            style={{ background: '#ffffff', width: '100%', borderRadius: 8, border: '1px solid #cbd5e1', padding: '7px 10px', fontSize: 12 }}
                           />
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* 3. Danh mục các mặt hàng xuất cấp */}
+                  {/* 3. Danh mục các mặt hàng xuất cấp (Thiết kế 1 hàng ngang / Mini Data Table) */}
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                      <span style={{ fontWeight: 700, fontSize: 13.5, color: '#0f172a' }}>
-                        Danh mục vật tư xuất kho ({batchItems.length} loại mặt hàng)
-                      </span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: '#0f172a' }}>
+                          Danh mục mặt hàng xuất kho ({totalItemsCount})
+                        </span>
+                        <span style={{ fontSize: 11, color: '#64748b' }}>
+                          (Cả Thiết bị cứu hộ &amp; Nhu yếu phẩm)
+                        </span>
+                      </div>
                       <button
                         type="button"
                         onClick={handleAddBatchItem}
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: 5,
-                          fontSize: 12,
+                          gap: 4,
+                          fontSize: 11.5,
                           fontWeight: 700,
                           color: '#0284c7',
                           background: '#e0f2fe',
@@ -6530,274 +8354,370 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                           padding: '4px 10px',
                           borderRadius: 6,
                           cursor: 'pointer',
+                          transition: 'all 0.15s ease',
                         }}
                       >
-                        <Plus size={13} />
+                        <Plus size={12} />
                         <span>Thêm mặt hàng</span>
                       </button>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {batchItems.map((bi, idx) => {
-                        const currentEq = consumableEquipments.find((e) => e._id === bi.equipmentId);
-                        const maxStock = currentEq ? currentEq.quantity : 0;
-                        const unitName = currentEq ? currentEq.unit : 'đơn vị';
-                        const teamObj = typeof currentEq?.teamId === 'object' && currentEq?.teamId ? (currentEq.teamId as any).name : null;
-                        const locText = teamObj ? teamObj : 'Kho Tổng';
+                    {batchItems.length === 0 ? (
+                      <div
+                        style={{
+                          padding: '28px 16px',
+                          textAlign: 'center',
+                          background: '#ffffff',
+                          borderRadius: 10,
+                          border: '1.5px dashed #cbd5e1',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        <Package size={32} color="#94a3b8" />
+                        <span style={{ fontWeight: 700, fontSize: 13, color: '#334155' }}>
+                          Chưa có mặt hàng nào trong phiếu xuất
+                        </span>
+                        <span style={{ fontSize: 11.5, color: '#64748b' }}>
+                          Bấm nút <strong>"+ Thêm mặt hàng"</strong> ở trên, hoặc đóng phiếu để <strong>tích chọn nhanh từ bảng kho</strong> bên ngoài.
+                        </span>
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 10,
+                          overflow: 'hidden',
+                          background: '#ffffff',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                        }}
+                      >
+                        {/* Hàng Tiêu Đề Cột Cố Định (Fixed Table Header) */}
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '26px 1fr 95px 85px 135px 28px',
+                            gap: 8,
+                            alignItems: 'center',
+                            padding: '8px 12px',
+                            background: '#f8fafc',
+                            borderBottom: '1px solid #e2e8f0',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: '#64748b',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.03em',
+                          }}
+                        >
+                          <span style={{ textAlign: 'center' }}>#</span>
+                          <span>Mặt hàng xuất kho</span>
+                          <span style={{ textAlign: 'center' }}>Phân loại</span>
+                          <span style={{ textAlign: 'center' }}>Tồn kho</span>
+                          <span style={{ textAlign: 'center' }}>Số lượng xuất</span>
+                          <span></span>
+                        </div>
 
-                        return (
-                          <div
-                            key={idx}
-                            style={{
-                              background: '#ffffff',
-                              border: '1px solid #e2e8f0',
-                              borderRadius: 12,
-                              padding: '10px 14px',
-                              boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: 8,
-                              width: '100%',
-                              boxSizing: 'border-box',
-                            }}
-                          >
-                            {/* Hàng 1: Số thứ tự + Chọn mặt hàng vật tư + Nút xóa */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
-                              <span style={{
-                                width: 24,
-                                height: 24,
-                                borderRadius: 6,
-                                background: '#e0f2fe',
-                                color: '#0369a1',
-                                fontSize: 11.5,
-                                fontWeight: 800,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexShrink: 0,
-                              }}>
-                                {idx + 1}
-                              </span>
+                        {/* Danh sách các mặt hàng cuộn mượt */}
+                        <div style={{ maxHeight: 270, overflowY: 'auto' }}>
+                          {batchItems.map((bi, idx) => {
+                            const currentEq = equipments.find((e) => e._id === bi.equipmentId);
+                            const isDurable = currentEq?.supplyType !== 'CONSUMABLE';
+                            const maxStock = currentEq ? currentEq.quantity : 0;
+                            const unitName = currentEq ? (currentEq.unit || 'đơn vị') : 'đơn vị';
 
-                              {/* Dropdown chọn mặt hàng */}
-                              <select
-                                value={bi.equipmentId}
-                                onChange={(e) => handleUpdateBatchItem(idx, { equipmentId: e.target.value })}
+                            return (
+                              <div
+                                key={idx}
                                 style={{
-                                  flex: 1,
-                                  minWidth: 0,
-                                  height: 38,
-                                  borderRadius: 8,
-                                  border: '1px solid #cbd5e1',
-                                  background: '#f8fafc',
-                                  padding: '0 10px',
-                                  fontSize: 13,
-                                  fontWeight: 600,
-                                  color: '#0f172a',
-                                  outline: 'none',
-                                  cursor: 'pointer',
+                                  display: 'grid',
+                                  gridTemplateColumns: '26px 1fr 95px 85px 135px 28px',
+                                  gap: 8,
+                                  alignItems: 'center',
+                                  padding: '7px 12px',
+                                  background: idx % 2 === 0 ? '#ffffff' : '#fafafa',
+                                  borderBottom: idx === batchItems.length - 1 ? 'none' : '1px solid #f1f5f9',
+                                  transition: 'background 0.15s ease',
                                 }}
                               >
-                                {availableConsumables.map((eq) => {
-                                  const eqTeam = typeof eq.teamId === 'object' && eq.teamId ? (eq.teamId as any).name : null;
-                                  const eqLoc = eqTeam ? eqTeam : 'Kho Tổng';
-                                  return (
-                                    <option key={eq._id} value={eq._id}>
-                                      {eq.name} — (Tồn: {eq.quantity} {eq.unit} • {eqLoc})
-                                    </option>
-                                  );
-                                })}
-                              </select>
-
-                              {/* Nút xóa dòng */}
-                              <button
-                                type="button"
-                                disabled={batchItems.length <= 1}
-                                onClick={() => handleRemoveBatchItem(idx)}
-                                style={{
-                                  width: 34,
-                                  height: 34,
-                                  borderRadius: 8,
-                                  border: batchItems.length <= 1 ? '1px solid #e2e8f0' : '1px solid #fee2e2',
-                                  background: batchItems.length <= 1 ? '#f8fafc' : '#fef2f2',
-                                  color: batchItems.length <= 1 ? '#94a3b8' : '#dc2626',
-                                  cursor: batchItems.length <= 1 ? 'not-allowed' : 'pointer',
+                                {/* Cột 1: STT (cố định 26px) */}
+                                <span style={{
+                                  width: 22,
+                                  height: 22,
+                                  borderRadius: 5,
+                                  background: '#f1f5f9',
+                                  color: '#475569',
+                                  fontSize: 11,
+                                  fontWeight: 800,
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
-                                  flexShrink: 0,
-                                  opacity: batchItems.length <= 1 ? 0.35 : 1,
-                                }}
-                                title={batchItems.length <= 1 ? 'Phiếu xuất cần ít nhất 1 mặt hàng' : 'Xóa mặt hàng này khỏi phiếu'}
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-
-                            {/* Hàng 2: Tồn kho & Vị trí | Bộ chọn số lượng xuất */}
-                            <div style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              paddingLeft: 34,
-                              flexWrap: 'wrap',
-                              gap: 10,
-                            }}>
-                              {/* Thông tin tồn kho */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#64748b' }}>
-                                <span style={{
-                                  background: '#f0fdf4',
-                                  color: '#15803d',
-                                  border: '1px solid #bbf7d0',
-                                  padding: '2px 8px',
-                                  borderRadius: 6,
-                                  fontWeight: 700,
-                                  fontSize: 11.5,
+                                  margin: '0 auto',
                                 }}>
-                                  Tồn kho: {maxStock} {unitName}
+                                  {idx + 1}
                                 </span>
-                                <span>•</span>
-                                <span>Vị trí: <strong style={{ color: '#334155' }}>{locText}</strong></span>
-                              </div>
 
-                              {/* Bộ điều khiển số lượng */}
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>Số lượng xuất:</span>
-                                <div
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    border: '1px solid #cbd5e1',
-                                    borderRadius: 8,
-                                    background: '#ffffff',
-                                    height: 32,
-                                    padding: '0 4px',
-                                    gap: 2,
-                                  }}
-                                >
-                                  <button
-                                    type="button"
-                                    disabled={bi.quantity <= 1}
-                                    onClick={() => handleUpdateBatchItem(idx, { quantity: Math.max(1, bi.quantity - 1) })}
+                                {/* Cột 2: Select mặt hàng (co giãn 1fr ~300px rộng rãi) */}
+                                <div style={{ width: '100%', minWidth: 0 }}>
+                                  <select
+                                    value={bi.equipmentId}
+                                    onChange={(e) => handleUpdateBatchItem(idx, { equipmentId: e.target.value })}
                                     style={{
-                                      width: 24,
-                                      height: 24,
-                                      borderRadius: 4,
-                                      border: 'none',
-                                      background: bi.quantity <= 1 ? 'transparent' : '#f1f5f9',
-                                      color: bi.quantity <= 1 ? '#cbd5e1' : '#334155',
-                                      cursor: bi.quantity <= 1 ? 'not-allowed' : 'pointer',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                    }}
-                                  >
-                                    <Minus size={11} />
-                                  </button>
-
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    max={maxStock}
-                                    value={bi.quantity}
-                                    onChange={(e) => {
-                                      const val = parseInt(e.target.value, 10);
-                                      handleUpdateBatchItem(idx, { quantity: isNaN(val) ? 1 : Math.min(maxStock, Math.max(1, val)) });
-                                    }}
-                                    style={{
-                                      width: 48,
-                                      border: 'none',
-                                      outline: 'none',
-                                      textAlign: 'center',
-                                      fontWeight: 800,
-                                      fontSize: 13,
+                                      width: '100%',
+                                      height: 33,
+                                      borderRadius: 6,
+                                      border: '1px solid #cbd5e1',
+                                      background: '#ffffff',
+                                      padding: '0 8px',
+                                      fontSize: 12.5,
+                                      fontWeight: 600,
                                       color: '#0f172a',
-                                      background: 'transparent',
-                                    }}
-                                  />
-
-                                  <button
-                                    type="button"
-                                    disabled={bi.quantity >= maxStock}
-                                    onClick={() => handleUpdateBatchItem(idx, { quantity: Math.min(maxStock, bi.quantity + 1) })}
-                                    style={{
-                                      width: 24,
-                                      height: 24,
-                                      borderRadius: 4,
-                                      border: 'none',
-                                      background: bi.quantity >= maxStock ? 'transparent' : '#f1f5f9',
-                                      color: bi.quantity >= maxStock ? '#cbd5e1' : '#334155',
-                                      cursor: bi.quantity >= maxStock ? 'not-allowed' : 'pointer',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
+                                      outline: 'none',
+                                      cursor: 'pointer',
+                                      boxSizing: 'border-box',
                                     }}
                                   >
-                                    <Plus size={11} />
-                                  </button>
+                                    <optgroup label="🛠️ Thiết bị cứu hộ (Kho Tổng / Dự Trữ)">
+                                      {availableSupplies
+                                        .filter((eq) => eq.supplyType !== 'CONSUMABLE')
+                                        .map((eq) => (
+                                          <option key={eq._id} value={eq._id}>
+                                            🛠️ {eq.name} — (Tồn: {eq.quantity} {eq.unit || 'cái'})
+                                          </option>
+                                        ))}
+                                    </optgroup>
+                                    <optgroup label="📦 Nhu yếu phẩm cứu trợ (Kho Tổng / Dự Trữ)">
+                                      {availableSupplies
+                                        .filter((eq) => eq.supplyType === 'CONSUMABLE')
+                                        .map((eq) => (
+                                          <option key={eq._id} value={eq._id}>
+                                            📦 {eq.name} — (Tồn: {eq.quantity} {eq.unit || 'phần'})
+                                          </option>
+                                        ))}
+                                    </optgroup>
+                                  </select>
                                 </div>
 
-                                <span style={{ fontSize: 12.5, fontWeight: 700, color: '#0369a1' }}>
-                                  {unitName}
-                                </span>
+                                {/* Cột 3: Tag phân loại (cố định 95px) */}
+                                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                  <span style={{
+                                    width: '100%',
+                                    textAlign: 'center',
+                                    fontSize: 10.5,
+                                    fontWeight: 700,
+                                    color: isDurable ? '#15803d' : '#b45309',
+                                    background: isDurable ? '#ecfdf5' : '#fef3c7',
+                                    border: '1px solid ' + (isDurable ? '#bbf7d0' : '#fde68a'),
+                                    padding: '3px 0',
+                                    borderRadius: 5,
+                                    whiteSpace: 'nowrap',
+                                    display: 'block',
+                                    boxSizing: 'border-box',
+                                  }}>
+                                    {isDurable ? 'Thiết bị' : 'Nhu yếu phẩm'}
+                                  </span>
+                                </div>
 
-                                {maxStock > 1 && (
+                                {/* Cột 4: Tồn khả dụng (cố định 85px) */}
+                                <div
+                                  style={{
+                                    textAlign: 'center',
+                                    fontSize: 11.5,
+                                    color: '#0f172a',
+                                    fontWeight: 600,
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                  }}
+                                  title={`${maxStock} ${unitName}`}
+                                >
+                                  <strong style={{ color: '#0284c7' }}>{maxStock}</strong>{' '}
+                                  <span style={{ color: '#64748b', fontSize: 11 }}>{unitName}</span>
+                                </div>
+
+                                {/* Cột 5: Bộ điều khiển số lượng xuất (cố định 135px) */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      border: '1px solid #cbd5e1',
+                                      borderRadius: 6,
+                                      background: '#ffffff',
+                                      height: 29,
+                                      padding: '0 2px',
+                                      boxSizing: 'border-box',
+                                    }}
+                                  >
+                                    <button
+                                      type="button"
+                                      disabled={bi.quantity <= 1}
+                                      onClick={() => handleUpdateBatchItem(idx, { quantity: Math.max(1, bi.quantity - 1) })}
+                                      style={{
+                                        width: 20,
+                                        height: 21,
+                                        borderRadius: 4,
+                                        border: 'none',
+                                        background: bi.quantity <= 1 ? 'transparent' : '#f1f5f9',
+                                        color: bi.quantity <= 1 ? '#cbd5e1' : '#334155',
+                                        cursor: bi.quantity <= 1 ? 'not-allowed' : 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                      }}
+                                    >
+                                      <Minus size={10} />
+                                    </button>
+
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      max={maxStock}
+                                      value={bi.quantity}
+                                      onChange={(e) => {
+                                        const val = parseInt(e.target.value, 10);
+                                        handleUpdateBatchItem(idx, { quantity: isNaN(val) ? 1 : Math.min(maxStock, Math.max(1, val)) });
+                                      }}
+                                      style={{
+                                        width: 38,
+                                        border: 'none',
+                                        outline: 'none',
+                                        textAlign: 'center',
+                                        fontWeight: 800,
+                                        fontSize: 12,
+                                        color: '#0f172a',
+                                        background: 'transparent',
+                                        padding: 0,
+                                      }}
+                                    />
+
+                                    <button
+                                      type="button"
+                                      disabled={bi.quantity >= maxStock}
+                                      onClick={() => handleUpdateBatchItem(idx, { quantity: Math.min(maxStock, bi.quantity + 1) })}
+                                      style={{
+                                        width: 20,
+                                        height: 21,
+                                        borderRadius: 4,
+                                        border: 'none',
+                                        background: bi.quantity >= maxStock ? 'transparent' : '#f1f5f9',
+                                        color: bi.quantity >= maxStock ? '#cbd5e1' : '#334155',
+                                        cursor: bi.quantity >= maxStock ? 'not-allowed' : 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                      }}
+                                    >
+                                      <Plus size={10} />
+                                    </button>
+                                  </div>
+
+                                  {maxStock > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateBatchItem(idx, { quantity: maxStock })}
+                                      style={{
+                                        fontSize: 10,
+                                        fontWeight: 700,
+                                        color: bi.quantity === maxStock ? '#15803d' : '#0284c7',
+                                        background: bi.quantity === maxStock ? '#dcfce7' : '#f0f9ff',
+                                        border: bi.quantity === maxStock ? '1px solid #86efac' : '1px solid #bae6fd',
+                                        borderRadius: 5,
+                                        padding: '0 6px',
+                                        height: 27,
+                                        cursor: 'pointer',
+                                        boxSizing: 'border-box',
+                                      }}
+                                      title="Xuất tối đa tồn kho"
+                                    >
+                                      Max
+                                    </button>
+                                  )}
+                                </div>
+
+                                {/* Cột 6: Nút xóa dòng (cố định 28px) */}
+                                <div style={{ display: 'flex', justifyContent: 'center' }}>
                                   <button
                                     type="button"
-                                    onClick={() => handleUpdateBatchItem(idx, { quantity: maxStock })}
+                                    onClick={() => handleRemoveBatchItem(idx)}
                                     style={{
-                                      fontSize: 11,
-                                      fontWeight: 700,
-                                      color: bi.quantity === maxStock ? '#15803d' : '#0284c7',
-                                      background: bi.quantity === maxStock ? '#dcfce7' : '#f0f9ff',
-                                      border: bi.quantity === maxStock ? '1px solid #86efac' : '1px solid #bae6fd',
+                                      border: 'none',
+                                      background: '#fee2e2',
+                                      color: '#dc2626',
                                       borderRadius: 6,
-                                      padding: '2px 8px',
+                                      width: 26,
+                                      height: 26,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
                                       cursor: 'pointer',
-                                      marginLeft: 2,
+                                      transition: 'all 0.15s ease',
                                     }}
-                                    title="Chọn xuất toàn bộ tồn kho hiện có"
+                                    title="Xóa mặt hàng khỏi phiếu xuất"
                                   >
-                                    Tối đa
+                                    <Trash2 size={12} />
                                   </button>
-                                )}
+                                </div>
                               </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="executive-modal-footer" style={{ padding: '14px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
-                  <button
-                    type="button"
-                    disabled={isSubmittingBatchConsume}
-                    className="coordination-action-btn outline"
-                    onClick={() => setIsBatchConsumeOpen(false)}
-                  >
-                    Hủy bỏ
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmittingBatchConsume}
-                    className="coordination-action-btn primary"
-                    style={{ background: '#0284c7', borderColor: '#0284c7', cursor: isSubmittingBatchConsume ? 'not-allowed' : 'pointer' }}
-                  >
-                    <PackageCheck size={15} />
-                    <span>
-                      {isSubmittingBatchConsume
-                        ? 'Đang xử lý...'
-                        : batchDispatchMode === 'ASSIGN_TEAM'
-                          ? `Lập Lệnh Điều Phối & Xuất Kho (${batchItems.length} mặt hàng)`
-                          : `Xác Nhận Xuất Cấp Tại Kho (${batchItems.length} mặt hàng)`}
-                    </span>
-                  </button>
+                {/* Footer với Tóm tắt số lượng & Nút hành động */}
+                <div className="executive-modal-footer" style={{
+                  padding: '12px 22px',
+                  background: '#f8fafc',
+                  borderTop: '1px solid #e2e8f0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#475569' }}>
+                    <span>Tổng xuất:</span>
+                    <strong style={{ color: '#0369a1' }}>{totalItemsCount} mặt hàng</strong>
+                    <span>•</span>
+                    <strong style={{ color: '#16a34a' }}>{totalUnitsCount.toLocaleString('vi-VN')} đơn vị</strong>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      type="button"
+                      disabled={isSubmittingBatchConsume}
+                      className="coordination-action-btn outline"
+                      onClick={() => setIsBatchConsumeOpen(false)}
+                      style={{ padding: '8px 16px', fontSize: 13 }}
+                    >
+                      Hủy bỏ
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmittingBatchConsume || batchItems.length === 0}
+                      className="coordination-action-btn primary"
+                      style={{
+                        background: '#0284c7',
+                        borderColor: '#0284c7',
+                        cursor: isSubmittingBatchConsume || batchItems.length === 0 ? 'not-allowed' : 'pointer',
+                        padding: '8px 18px',
+                        fontWeight: 700,
+                        fontSize: 13,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <Send size={14} />
+                      <span>{isSubmittingBatchConsume ? 'Đang xuất kho...' : `Lập Lệnh Điều Phối & Xuất Kho (${totalItemsCount} mặt hàng)`}</span>
+                    </button>
+                  </div>
                 </div>
               </form>
-            </div>
-          </div>
+            </div >
+          </div >
         );
       })()}
 
@@ -6823,7 +8743,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         }
         }
       />
-    </div>
+    </div >
   );
 };
 
