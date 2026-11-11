@@ -440,24 +440,15 @@ const getSosRequestById = async (id) => {
 };
 
 
-const changeStatus = async (id, newStatus, changedBy, note = '', extraData = {}) => {
+const changeStatus = async (id, newStatus, changedBy, note = '') => {
   const sos = await SosRequest.findById(id);
   if (!sos) throw new ApiError(404, 'Không tìm thấy yêu cầu SOS');
 
   const oldStatus = sos.status;
-  const finalProofImages = Array.isArray(extraData?.proofImages) ? extraData.proofImages.filter(Boolean) : [];
   
-  if (oldStatus === newStatus && finalProofImages.length === 0) return sos;
+  if (oldStatus === newStatus) return sos;
 
   const updateFields = { status: newStatus };
-  const updateOps = { $set: updateFields };
-
-  if (finalProofImages.length > 0) {
-    updateOps.$addToSet = { proofImages: { $each: finalProofImages } };
-    // Đảm bảo ảnh đội cứu hộ không nằm trong mục ảnh của người dân
-    updateOps.$pull = { images: { $in: finalProofImages } };
-  }
-
   if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(newStatus)) {
     updateFields.resolvedAt = new Date();
     if (sos.shoreHandoff?.assignedVehicleId && mongoose.isValidObjectId(sos.shoreHandoff.assignedVehicleId)) {
@@ -467,38 +458,26 @@ const changeStatus = async (id, newStatus, changedBy, note = '', extraData = {})
     // Tự động đóng tất cả các phân công của ca SOS này để giải phóng trạng thái bận cho các đội
     try {
       const targetAssignStatus = newStatus === 'COMPLETED' ? 'COMPLETED' : 'CANCELLED';
-      const assignSetFields = {
-        status: targetAssignStatus,
-        ...(newStatus === 'COMPLETED' ? { completedAt: new Date() } : { cancelledAt: new Date() }),
-      };
-      if (extraData?.actualRecipient) {
-        assignSetFields.actualRecipient = String(extraData.actualRecipient).trim();
-      }
-
-      const assignOps = { $set: assignSetFields };
-      if (finalProofImages.length > 0) {
-        assignOps.$addToSet = { proofImages: { $each: finalProofImages } };
-      }
-
       await SosAssignment.updateMany(
         {
           $or: [{ sosRequestId: id }, { sosId: id }],
           status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
         },
-        assignOps
+        {
+          $set: {
+            status: targetAssignStatus,
+            ...(newStatus === 'COMPLETED' ? { completedAt: new Date() } : { cancelledAt: new Date() }),
+          },
+        }
       );
     } catch (assignSyncErr) {
       console.warn('Sync assign status on SOS status change error:', assignSyncErr);
     }
   }
   // Cập nhật trạng thái không re-validate các trường dữ liệu test cũ (tránh lỗi 0123456789)
-  await SosRequest.updateOne({ _id: id }, updateOps);
+  await SosRequest.updateOne({ _id: id }, { $set: updateFields });
   sos.status = newStatus;
   if (updateFields.resolvedAt) sos.resolvedAt = updateFields.resolvedAt;
-  if (finalProofImages.length > 0) {
-    sos.proofImages = [...new Set([...(sos.proofImages || []), ...finalProofImages])];
-    sos.images = (sos.images || []).filter((img) => !finalProofImages.includes(img));
-  }
 
   await SosStatusHistory.create({
     sosId: sos._id,

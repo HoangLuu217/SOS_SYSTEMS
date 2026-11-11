@@ -285,6 +285,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [showSOSMap, setShowSOSMap] = useState(false);
   const [showHazardModal, setShowHazardModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
+  const [chatInitialSos, setChatInitialSos] = useState<any | null>(null);
   const [showSafetyCheckModal, setShowSafetyCheckModal] = useState(false);
   const [activeSafetyCheckId, setActiveSafetyCheckId] = useState<string | undefined>(undefined);
   const [activeSafetyCheck, setActiveSafetyCheck] = useState<SafetyCheckItem | null>(null);
@@ -455,7 +456,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     const subBloodUpdate = DeviceEventEmitter.addListener('blood_donation:updated', () => {
       fetchBloodDonationStatus();
     });
-    const subChatOpen = DeviceEventEmitter.addListener('open:local_authority_chat', () => {
+    const subChatOpen = DeviceEventEmitter.addListener('open:local_authority_chat', (data) => {
+      if (data && (data._id || data.sosId || data.sosCode)) {
+        setChatInitialSos(data);
+      }
       setShowChatModal(true);
     });
     void fetchBloodDonationStatus();
@@ -1243,7 +1247,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Modal Chat trực tuyến thời gian thực với Ban chỉ huy địa phương */}
       <LocalAuthorityChatModal
         visible={showChatModal}
-        onClose={() => setShowChatModal(false)}
+        onClose={() => {
+          setShowChatModal(false);
+          setChatInitialSos(null);
+        }}
+        initialSosData={chatInitialSos}
       />
 
       {/* Modal Xác nhận Tùy chỉnh (Thay thế hoàn toàn Alert.alert) */}

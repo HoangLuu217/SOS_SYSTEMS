@@ -146,39 +146,8 @@ const cancelSos = async (req, res, next) => {
 
 const completeSos = async (req, res, next) => {
   try {
-    // Địa phương không được thay đổi trạng thái hoàn tất của nhiệm vụ cứu nạn đã được phân công
-    const hasActiveAssignment = await SosAssignment.findOne({
-      $or: [{ sosRequestId: req.params.id }, { sosId: req.params.id }],
-      status: { $nin: ['CANCELLED', 'REJECTED'] },
-    });
-    if (hasActiveAssignment) {
-      const userRoles = req.user?.roles || [];
-      const isLocalAuthority = userRoles.some((r) =>
-        ['LOCAL_AUTHORITY', 'OFFICER', 'DISPATCHER', 'COORDINATOR'].includes(r)
-      );
-      const isRescuer = userRoles.includes('RESCUER');
-      if (isLocalAuthority && !isRescuer) {
-        throw new ApiError(
-          403,
-          'Địa phương không được thay đổi trạng thái hoàn tất của nhiệm vụ. Nhiệm vụ chỉ được Đội trưởng đội cứu hộ thay đổi và hoàn thành!'
-        );
-      }
-    }
-
-    const note = req.body.note || req.body.notes || 'Đã hoàn thành cứu nạn';
-    const proofImages = Array.isArray(req.body.proofImages)
-      ? req.body.proofImages
-      : req.body.proofImages
-      ? [req.body.proofImages]
-      : Array.isArray(req.body.images)
-      ? req.body.images
-      : [];
-    const actualRecipient = req.body.actualRecipient;
-
-    const updatedSos = await sosService.changeStatus(req.params.id, 'COMPLETED', req.user._id, note, {
-      proofImages,
-      actualRecipient,
-    });
+    const note = req.body.note || 'Đã hoàn thành cứu nạn';
+    const updatedSos = await sosService.changeStatus(req.params.id, 'COMPLETED', req.user._id, note);
 
     await auditService.log({
       actorId: req.user._id,
@@ -187,7 +156,7 @@ const completeSos = async (req, res, next) => {
       entityType: 'SosRequest',
       entityId: req.params.id,
       areaId: updatedSos?.areaId || null,
-      metadata: { note, status: 'COMPLETED', proofImagesCount: proofImages.length, actualRecipient },
+      metadata: { note, status: 'COMPLETED' },
     });
 
     emitSosUpdated(updatedSos);
