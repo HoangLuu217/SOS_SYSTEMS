@@ -273,28 +273,6 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
           if (id) entry[String(id)] = st;
           if (code) entry[String(code)] = st;
           updateSosStatusMap(entry);
-
-          // Cập nhật tức thời mảng tin nhắn để FlatList re-render bóng tin nhắn ngay lập tức
-          setMessages((prev) =>
-            prev.map((m) => {
-              const isThisSos =
-                (id && (String(m.sosRequestId) === String(id) || (m.sosData && String(m.sosData._id) === String(id)))) ||
-                (code && ((m.sosData && m.sosData.sosCode === code) || (m.content && m.content.includes(code))));
-              if (isThisSos) {
-                return {
-                  ...m,
-                  sosData: m.sosData ? { ...m.sosData, status: st } : { status: st, sosCode: code },
-                  content: m.content
-                    ? m.content.replace(
-                        /Trạng thái hiện tại:\s*[^\n]+/i,
-                        `Trạng thái hiện tại: ${st === 'CANCELLED' ? 'Đã hủy' : st}`
-                      )
-                    : m.content,
-                };
-              }
-              return m;
-            })
-          );
         }
         if (['COMPLETED', 'RESOLVED', 'CANCELLED', 'REJECTED'].includes(st)) {
           setActiveSos((prev: any) => {
@@ -435,31 +413,6 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
         });
         updateSosStatusMap(statusMap);
 
-        // Đồng bộ trực tiếp vào danh sách tin nhắn hiện có để toàn bộ thẻ SOS cập nhật trạng thái mới nhất
-        setMessages((prev) =>
-          prev.map((m) => {
-            const mId = m.sosRequestId || m.sosData?._id;
-            const mCodeMatch = m.content?.match(/Mã cứu trợ:\s*(SOS-[A-Z0-9\-]+)/i);
-            const mCode = m.sosData?.sosCode || (mCodeMatch ? mCodeMatch[1].trim() : null);
-            const liveSt =
-              (mId ? statusMap[String(mId)] : null) ||
-              (mCode ? statusMap[String(mCode)] : null);
-            if (liveSt && m.sosData?.status !== liveSt) {
-              return {
-                ...m,
-                sosData: m.sosData ? { ...m.sosData, status: liveSt } : { status: liveSt, sosCode: mCode },
-                content: m.content
-                  ? m.content.replace(
-                      /Trạng thái hiện tại:\s*[^\n]+/i,
-                      `Trạng thái hiện tại: ${liveSt === 'CANCELLED' ? 'Đã hủy' : liveSt}`
-                    )
-                  : m.content,
-              };
-            }
-            return m;
-          })
-        );
-
         // Tìm các ca SOS chưa hoàn thành hoặc chưa hủy
         const activeList = res.data.filter((item: any) =>
           !['COMPLETED', 'RESOLVED', 'CANCELLED', 'REJECTED'].includes(item.status)
@@ -515,28 +468,6 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
           if (id) entry[String(id)] = st;
           if (code) entry[String(code)] = st;
           updateSosStatusMap(entry);
-
-          // Cập nhật tức thời mảng tin nhắn để FlatList re-render bóng tin nhắn ngay lập tức
-          setMessages((prev) =>
-            prev.map((m) => {
-              const isThisSos =
-                (id && (String(m.sosRequestId) === String(id) || (m.sosData && String(m.sosData._id) === String(id)))) ||
-                (code && ((m.sosData && m.sosData.sosCode === code) || (m.content && m.content.includes(code))));
-              if (isThisSos) {
-                return {
-                  ...m,
-                  sosData: m.sosData ? { ...m.sosData, status: st } : { status: st, sosCode: code },
-                  content: m.content
-                    ? m.content.replace(
-                        /Trạng thái hiện tại:\s*[^\n]+/i,
-                        `Trạng thái hiện tại: ${st === 'CANCELLED' ? 'Đã hủy' : st}`
-                      )
-                    : m.content,
-                };
-              }
-              return m;
-            })
-          );
         }
         if (['COMPLETED', 'RESOLVED', 'CANCELLED', 'REJECTED'].includes(st)) {
           setActiveSos((prev: any) => {
@@ -1125,197 +1056,28 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
 
   // Mở modal chi tiết yêu cầu SOS và đồng bộ ngay trạng thái mới nhất từ backend
   const handlePressSosCard = async (sos: any) => {
-    // 1. Luôn ưu tiên trạng thái thời gian thực mới nhất từ sosStatusMap
-    const liveStatus =
-      (sos.sosId
-        ? sosStatusMapRef.current[String(sos.sosId)] || sosStatusMap[String(sos.sosId)]
-        : null) ||
-      (sos.sosCode
-        ? sosStatusMapRef.current[String(sos.sosCode)] || sosStatusMap[String(sos.sosCode)]
-        : null);
-    const initialStatus = liveStatus || sos.status || 'PENDING';
-    setSelectedSosDetail({ ...sos, status: initialStatus });
-
-    // 2. Tra cứu trực tiếp từ backend (hỗ trợ cả sosId và sosCode) để luôn khớp 100%
-    try {
-      let freshStatus: string | null = null;
-      let freshSosData: any = null;
-
-      if (sos.sosId) {
+    setSelectedSosDetail(sos);
+    if (sos.sosId) {
+      try {
         const res = await backendApi.get(`/sos/${sos.sosId}`);
-        if (res && res.success && res.data) {
-          freshStatus = res.data.status;
-          freshSosData = res.data;
+        if (res && res.success && res.data?.status) {
+          const liveStatus = res.data.status;
+          updateSosStatusMap({
+            [String(sos.sosId)]: liveStatus,
+            ...(res.data.sosCode ? { [String(res.data.sosCode)]: liveStatus } : {}),
+          });
+          setSelectedSosDetail((prev: any) =>
+            prev && String(prev.sosId) === String(sos.sosId)
+              ? { ...prev, status: liveStatus }
+              : prev
+          );
         }
-      } else if (sos.sosCode) {
-        const res = await backendApi.get(`/sos?sosCode=${sos.sosCode}`);
-        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
-          freshStatus = res.data[0].status;
-          freshSosData = res.data[0];
-        }
+      } catch {
+        // Fallback giữ nguyên dữ liệu đã parse
       }
-
-      if (freshStatus) {
-        const entry: Record<string, string> = {};
-        if (freshSosData?._id) entry[String(freshSosData._id)] = freshStatus;
-        if (freshSosData?.sosCode) entry[String(freshSosData.sosCode)] = freshStatus;
-        updateSosStatusMap(entry);
-
-        setSelectedSosDetail((prev: any) =>
-          prev
-            ? {
-                ...prev,
-                status: freshStatus,
-                sosId: prev.sosId || freshSosData?._id,
-              }
-            : prev
-        );
-
-        // Cập nhật luôn mảng messages
-        setMessages((prev) =>
-          prev.map((m) => {
-            const isMatch =
-              (freshSosData?._id &&
-                (String(m.sosRequestId) === String(freshSosData._id) ||
-                  (m.sosData && String(m.sosData._id) === String(freshSosData._id)))) ||
-              (freshSosData?.sosCode &&
-                ((m.sosData && m.sosData.sosCode === freshSosData.sosCode) ||
-                  (m.content && m.content.includes(freshSosData.sosCode))));
-            if (isMatch) {
-              return {
-                ...m,
-                sosData: m.sosData
-                  ? { ...m.sosData, status: freshStatus }
-                  : { status: freshStatus, sosCode: freshSosData?.sosCode },
-                content: m.content
-                  ? m.content.replace(
-                      /Trạng thái hiện tại:\s*[^\n]+/i,
-                      `Trạng thái hiện tại: ${freshStatus === 'CANCELLED' ? 'Đã hủy' : freshStatus}`
-                    )
-                  : m.content,
-              };
-            }
-            return m;
-          })
-        );
-      }
-    } catch {
-      // Fallback giữ nguyên dữ liệu đã parse
     }
   };
 
-  // Người dân hủy yêu cầu cứu hộ trực tiếp từ modal chi tiết trong chat
-  const handleCancelFromChat = (sosItem: any) => {
-    if (!sosItem) return;
-    Alert.alert(
-      'Hủy yêu cầu cứu nạn',
-      'Bạn có chắc chắn muốn hủy yêu cầu cứu nạn này? (Chỉ hủy khi bạn đã tự di chuyển an toàn)',
-      [
-        { text: 'Không hủy', style: 'cancel' },
-        {
-          text: 'Xác nhận hủy',
-          style: 'destructive',
-          onPress: async () => {
-            const targetId = sosItem.sosId;
-            const targetCode = sosItem.sosCode;
-            try {
-              let cancelId = targetId;
-              if (!cancelId && targetCode) {
-                const listRes = await backendApi.get(`/sos?sosCode=${targetCode}`);
-                if (listRes?.success && Array.isArray(listRes.data) && listRes.data.length > 0) {
-                  cancelId = listRes.data[0]._id;
-                }
-              }
-
-              if (!cancelId) {
-                Alert.alert('Không thể hủy', 'Không tìm thấy mã ca cứu nạn trên hệ thống.');
-                return;
-              }
-
-              const res = await backendApi.post(`/sos/${cancelId}/cancel`, {
-                cancelReason: 'Người dân tự thoát hiểm an toàn (Hủy qua Chat)',
-              });
-
-              if (res && res.success) {
-                const updated = {
-                  _id: cancelId,
-                  sosCode: targetCode,
-                  status: 'CANCELLED',
-                };
-                updateSosStatusMap({
-                  [String(cancelId)]: 'CANCELLED',
-                  ...(targetCode ? { [String(targetCode)]: 'CANCELLED' } : {}),
-                });
-                setSelectedSosDetail((prev: any) =>
-                  prev ? { ...prev, status: 'CANCELLED' } : null
-                );
-                setActiveSos((prev: any) =>
-                  prev && (String(prev._id) === String(cancelId) || prev.sosCode === targetCode)
-                    ? null
-                    : prev
-                );
-                setShowSosPopup(false);
-
-                // Đồng bộ vào tin nhắn trong chat ngay
-                setMessages((prev) =>
-                  prev.map((m) => {
-                    const isMatch =
-                      (cancelId &&
-                        (String(m.sosRequestId) === String(cancelId) ||
-                          (m.sosData && String(m.sosData._id) === String(cancelId)))) ||
-                      (targetCode &&
-                        ((m.sosData && m.sosData.sosCode === targetCode) ||
-                          (m.content && m.content.includes(targetCode))));
-                    if (isMatch) {
-                      return {
-                        ...m,
-                        sosData: m.sosData
-                          ? { ...m.sosData, status: 'CANCELLED' }
-                          : { status: 'CANCELLED', sosCode: targetCode },
-                        content: m.content
-                          ? m.content.replace(
-                              /Trạng thái hiện tại:\s*[^\n]+/i,
-                              'Trạng thái hiện tại: Đã hủy'
-                            )
-                          : m.content,
-                      };
-                    }
-                    return m;
-                  })
-                );
-
-                // Phát sự kiện toàn hệ thống cho Tab SOS và các màn hình khác
-                DeviceEventEmitter.emit('sos:sync', updated);
-                Alert.alert('Đã hủy', 'Yêu cầu cứu nạn đã được hủy thành công.');
-              } else {
-                Alert.alert('Lỗi', res?.message || 'Không thể hủy ca cứu nạn.');
-              }
-            } catch (err: any) {
-              Alert.alert('Lỗi', err.message || 'Không thể gửi lệnh hủy.');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  // Mở modal theo dõi tiến trình cứu hộ (chặn nếu ca SOS đã hủy hoặc từ chối)
-  const handleOpenTracking = (sosId?: string | null, status?: string) => {
-    if (!sosId) return;
-    const currentStatus =
-      status ||
-      sosStatusMapRef.current[String(sosId)] ||
-      sosStatusMap[String(sosId)];
-    if (currentStatus === 'CANCELLED' || currentStatus === 'REJECTED') {
-      Alert.alert(
-        'Yêu cầu đã hủy',
-        'Yêu cầu cứu nạn này đã được hủy bỏ nên không còn tiến trình cứu hộ.'
-      );
-      return;
-    }
-    setSelectedSosDetail(null);
-    setTrackingSosId(String(sosId));
-  };
 
   // Lấy tên cán bộ hiển thị bên trên tin nhắn của cán bộ địa phương (ưu tiên tên cụ thể như Lê Trọng Phúc)
   const getOfficerDisplayName = (msg: ChatMessageItem) => {
@@ -2092,9 +1854,9 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
                     ) : null}
                   </ScrollView>
 
-                  {/* Nút thao tác dưới chân modal (Ẩn bản đồ và tiến độ khi ca SOS đã hủy) */}
-                  <View style={styles.sosDetailModalFooter}>
-                    {selectedSosDetail.status === 'CANCELLED' || selectedSosDetail.status === 'REJECTED' ? (
+                  {/* Banner trạng thái nếu ca đã hủy hoặc từ chối */}
+                  {(selectedSosDetail.status === 'CANCELLED' || selectedSosDetail.status === 'REJECTED') && (
+                    <View style={styles.sosDetailModalFooter}>
                       <View style={styles.sosCancelledBanner}>
                         <Ionicons name="close-circle" size={18} color="#DC2626" style={{ marginRight: 6 }} />
                         <Text style={styles.sosCancelledBannerText}>
@@ -2103,52 +1865,8 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
                             : 'Yêu cầu cứu nạn này đã bị từ chối'}
                         </Text>
                       </View>
-                    ) : (
-                      <>
-                        <TouchableOpacity
-                          style={styles.sosCardCancelActionBtn}
-                          onPress={() => handleCancelFromChat(selectedSosDetail)}
-                          activeOpacity={0.8}
-                        >
-                          <Feather name="x-circle" size={13} color="#DC2626" style={{ marginRight: 4 }} />
-                          <Text style={styles.sosCardCancelActionText}>Hủy yêu cầu</Text>
-                        </TouchableOpacity>
-
-                        {typeof selectedSosDetail.lat === 'number' && typeof selectedSosDetail.lng === 'number' ? (
-                          <TouchableOpacity
-                            style={styles.sosCardMapBtn}
-                            onPress={() => {
-                              const mapUrl = Platform.select({
-                                ios: `maps:0,0?q=${selectedSosDetail.lat},${selectedSosDetail.lng}`,
-                                android: `geo:0,0?q=${selectedSosDetail.lat},${selectedSosDetail.lng}`,
-                              });
-                              Linking.openURL(mapUrl!).catch(() => {});
-                            }}
-                            activeOpacity={0.8}
-                          >
-                            <Feather name="map" size={13} color="#0066FF" style={{ marginRight: 4 }} />
-                            <Text style={styles.sosCardMapBtnText}>Xem bản đồ</Text>
-                          </TouchableOpacity>
-                        ) : null}
-
-                        {selectedSosDetail.sosId ? (
-                          <TouchableOpacity
-                            style={styles.sosCardTrackBtn}
-                            onPress={() =>
-                              handleOpenTracking(
-                                String(selectedSosDetail.sosId),
-                                selectedSosDetail.status
-                              )
-                            }
-                            activeOpacity={0.8}
-                          >
-                            <Ionicons name="pulse" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                            <Text style={styles.sosCardTrackBtnText}>Tiến độ cứu hộ</Text>
-                          </TouchableOpacity>
-                        ) : null}
-                      </>
-                    )}
-                  </View>
+                    </View>
+                  )}
                 </>
               )}
             </TouchableOpacity>
@@ -3268,58 +2986,6 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
   },
-  sosCardActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 0.8,
-    borderTopColor: '#FEE2E2',
-  },
-  sosCardCancelActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF2F2',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 7,
-    borderWidth: 1,
-    borderColor: '#FECDD3',
-  },
-  sosCardCancelActionText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
-  sosCardMapBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 7,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  sosCardMapBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0066FF',
-  },
-  sosCardTrackBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E11D48',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 7,
-  },
-  sosCardTrackBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
 
   // --- COMPACT SOS CARD IN CHAT STREAM ---
   sosCardCompact: {
@@ -3482,7 +3148,7 @@ const styles = StyleSheet.create({
   sosDetailModalFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     gap: 8,
     paddingTop: 10,
     borderTopWidth: 1,
