@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  X,
+  UserCheck,
+  Phone,
+  MapPin,
+  AlertTriangle,
+  FileCheck,
+  Users,
+} from 'lucide-react';
 import type { User } from '@/types/auth';
-import type { ChatMessageItem, ChatConversationItem } from '@/types/chat';
+import type { ChatMessageItem, ChatConversationItem, CitizenProfileInfo } from '@/types/chat';
 import {
   fetchChatConversations,
   fetchChatMessages,
@@ -8,6 +17,7 @@ import {
   uploadChatImage,
   markChatMessagesRead,
   markAllChatMessagesRead,
+  fetchCitizenInfo,
 } from '@/api';
 import {
   subscribeSocketChatEvents,
@@ -23,6 +33,120 @@ interface TacticalChatViewProps {
 
 const cleanChatName = (name: string) =>
   name.replace(/tác chiến\s*/gi, '').replace(/\s+/g, ' ').trim();
+
+export const SOS_TYPE_LABELS: Record<string, string> = {
+  MEDICAL: 'Cấp cứu y tế / Bị thương',
+  FIRE: 'Hỏa hoạn / Cháy nổ',
+  FLOOD: 'Cứu hộ ngập lụt / Mắc kẹt',
+  LANDSLIDE: 'Sạt lở đất / Đổ sập',
+  STORM: 'Bão lốc / Cây đổ',
+  ACCIDENT: 'Tai nạn khẩn cấp',
+  MISSING_PERSON: 'Tìm kiếm người mất tích',
+  RESCUE: 'Cứu hộ khẩn cấp',
+  FOOD: 'Cứu trợ lương thực',
+  EVACUATION: 'Sơ tán khẩn cấp',
+  OTHER: 'Cứu nạn khẩn cấp khác',
+};
+
+export const SOS_STATUS_CONFIG: Record<
+  string,
+  { label: string; color: string; bgColor: string }
+> = {
+  PENDING: { label: 'Chờ tiếp nhận', color: '#D97706', bgColor: '#FEF3C7' },
+  VERIFIED: { label: 'Đã xác minh', color: '#0284C7', bgColor: '#E0F2FE' },
+  ASSIGNED: { label: 'Đã phân công', color: '#7C3AED', bgColor: '#EDE9FE' },
+  ACCEPTED: { label: 'Đội đã nhận lệnh', color: '#7C3AED', bgColor: '#EDE9FE' },
+  ON_THE_WAY: { label: 'Đang di chuyển tới', color: '#2563EB', bgColor: '#EFF6FF' },
+  EN_ROUTE: { label: 'Đang di chuyển tới', color: '#2563EB', bgColor: '#EFF6FF' },
+  ARRIVED: { label: 'Đã tiếp cận hiện trường', color: '#059669', bgColor: '#D1FAE5' },
+  IN_PROGRESS: { label: 'Đang cứu hộ', color: '#2563EB', bgColor: '#EFF6FF' },
+  RESCUING: { label: 'Đang cứu nạn', color: '#DC2626', bgColor: '#FEE2E2' },
+  COMPLETED: { label: 'Hoàn thành', color: '#16A34A', bgColor: '#DCFCE7' },
+  RESOLVED: { label: 'Đã giải quyết', color: '#16A34A', bgColor: '#DCFCE7' },
+  CANCELLED: { label: 'Đã hủy', color: '#64748B', bgColor: '#F1F5F9' },
+};
+
+// Trích xuất thông tin SOS từ tin nhắn
+const parseSosMessage = (msg: ChatMessageItem) => {
+  const isSos =
+    Boolean(msg.sosRequestId) ||
+    Boolean(msg.sosData) ||
+    (typeof msg.content === 'string' &&
+      (msg.content.includes('[YÊU CẦU CỨU NẠN KHẨN CẤP]') ||
+        msg.content.includes('🆘 [YÊU CẦU CỨU NẠN') ||
+        msg.content.includes('Mã cứu trợ: SOS-')));
+
+  if (!isSos) return null;
+
+  if (msg.sosData && typeof msg.sosData === 'object') {
+    const s = msg.sosData;
+    const typeLabel =
+      SOS_TYPE_LABELS[s.emergencyType] ||
+      (Array.isArray(s.emergencyTypes) && s.emergencyTypes.length > 0
+        ? s.emergencyTypes.map((t: string) => SOS_TYPE_LABELS[t] || t).join(', ')
+        : s.emergencyType || 'Cứu hộ khẩn cấp');
+    const coords = s.location?.coordinates;
+    const lat = typeof coords?.[1] === 'number' ? coords[1] : undefined;
+    const lng = typeof coords?.[0] === 'number' ? coords[0] : undefined;
+    const statusCfg = SOS_STATUS_CONFIG[s.status] || SOS_STATUS_CONFIG['PENDING'];
+
+    return {
+      sosId: s._id || msg.sosRequestId,
+      sosCode: s.sosCode || 'SOS',
+      typeLabel,
+      people: s.people || 1,
+      address: s.address || '',
+      phone: s.contactPhone || '',
+      description: s.description || '',
+      status: s.status || 'PENDING',
+      statusLabel: statusCfg.label,
+      statusColor: statusCfg.color,
+      statusBgColor: statusCfg.bgColor,
+      coords: typeof lat === 'number' && typeof lng === 'number' ? { lat, lng } : null,
+      images: Array.isArray(s.images)
+        ? s.images
+        : Array.isArray(msg.attachments)
+        ? msg.attachments.map((a) => a.url).filter(Boolean)
+        : [],
+    };
+  }
+
+  const content = msg.content || '';
+  const codeMatch = content.match(/Mã cứu trợ:\s*(SOS-[A-Z0-9\-]+)/i);
+  const typeMatch = content.match(/Loại yêu cầu:\s*([^\n]+)/i);
+  const peopleMatch = content.match(/Số người gặp nạn:\s*([0-9]+)/i);
+  const addrMatch = content.match(/Địa chỉ:\s*([^\n]+)/i);
+  const gpsMatch = content.match(/Tọa độ GPS:\s*([0-9]+\.[0-9]+),\s*([0-9]+\.[0-9]+)/i);
+  const phoneMatch = content.match(/Số điện thoại:\s*([0-9\+\s]+)/i);
+  const descMatch = content.match(/Tình trạng:\s*([^\n]+)/i);
+  const statusMatch = content.match(/Trạng thái hiện tại:\s*([^\n]+)/i);
+
+  const rawStatus = statusMatch ? statusMatch[1].trim() : 'PENDING';
+  const matchedKey =
+    Object.keys(SOS_STATUS_CONFIG).find(
+      (k) => SOS_STATUS_CONFIG[k].label.toLowerCase() === rawStatus.toLowerCase()
+    ) || 'PENDING';
+  const statusCfg = SOS_STATUS_CONFIG[matchedKey] || SOS_STATUS_CONFIG['PENDING'];
+
+  return {
+    sosId: msg.sosRequestId || undefined,
+    sosCode: codeMatch ? codeMatch[1].trim() : 'SOS',
+    typeLabel: typeMatch ? typeMatch[1].trim() : 'Cứu hộ khẩn cấp',
+    people: peopleMatch ? parseInt(peopleMatch[1], 10) : 1,
+    address: addrMatch ? addrMatch[1].trim() : '',
+    phone: phoneMatch ? phoneMatch[1].trim() : '',
+    description: descMatch ? descMatch[1].trim() : '',
+    status: matchedKey,
+    statusLabel: statusCfg.label,
+    statusColor: statusCfg.color,
+    statusBgColor: statusCfg.bgColor,
+    coords:
+      gpsMatch
+        ? { lat: parseFloat(gpsMatch[1]), lng: parseFloat(gpsMatch[2]) }
+        : null,
+    images: Array.isArray(msg.attachments) ? msg.attachments.map((a) => a.url).filter(Boolean) : [],
+  };
+};
 
 // Tách tọa độ GPS và địa chỉ gần từ tin nhắn
 const parseGpsContent = (content: string) => {
@@ -54,6 +178,13 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
   const [filterRole, setFilterRole] = useState<'ALL' | 'CITIZEN' | 'LOCAL_AUTHORITY' | 'ADMIN'>('ALL');
   const [realtimeConnected, setRealtimeConnected] = useState(true);
   const [mobileShowChat, setMobileShowChat] = useState(false);
+
+  // Xem chi tiết thông tin người dân (SĐT, Địa chỉ, Người thân, Ca SOS)
+  const [citizenModalData, setCitizenModalData] = useState<CitizenProfileInfo | null>(null);
+  const [loadingCitizenModal, setLoadingCitizenModal] = useState(false);
+  const [isDrawerClosing, setIsDrawerClosing] = useState(false);
+  const [copiedPhoneText, setCopiedPhoneText] = useState(false);
+  const [showDropdownMenu, setShowDropdownMenu] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -184,6 +315,88 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
       window.dispatchEvent(new CustomEvent('sos_highlight_chat_location', { detail }));
     }, 250);
   };
+
+  // Chuyển sang Tab Quản lý ca SOS của Ban chỉ huy
+  const handleNavigateToSosRequests = (sosCode?: string) => {
+    window.dispatchEvent(
+      new CustomEvent('sos_navigate_tab', {
+        detail: { key: 'sos_requests', subPath: sosCode },
+      })
+    );
+  };
+
+  // Mở modal xem chi tiết thông tin người dân (Họ tên, SĐT, Địa chỉ, Người thân, Ca SOS)
+  const handleOpenCitizenInfo = async (userId?: string, fallbackInfo?: any) => {
+    setShowDropdownMenu(false);
+
+    // Dùng dữ liệu fallback hiển thị ngay lập tức (không delay)
+    const initialFallback: CitizenProfileInfo = {
+      _id: userId || fallbackInfo?.partnerId || fallbackInfo?._id || '',
+      fullName: fallbackInfo?.fullName || fallbackInfo?.name || fallbackInfo?.senderName || 'Người dân',
+      phone: fallbackInfo?.phone || fallbackInfo?.senderId?.phone || activeConv?.phone || '',
+      address: fallbackInfo?.address || fallbackInfo?.senderId?.address || activeConv?.address || activeConv?.areaName || '',
+      email: fallbackInfo?.email || fallbackInfo?.senderId?.email || activeConv?.email || '',
+      roles: fallbackInfo?.roles || fallbackInfo?.senderId?.roles || ['CITIZEN'],
+      avatarUrl: fallbackInfo?.avatarUrl || fallbackInfo?.senderId?.avatarUrl || activeConv?.avatarUrl,
+      emergencyContact:
+        fallbackInfo?.emergencyContact ||
+        fallbackInfo?.partnerUser?.emergencyContact ||
+        fallbackInfo?.senderId?.citizen?.emergencyContact ||
+        null,
+      emergencyContacts:
+        fallbackInfo?.emergencyContacts ||
+        fallbackInfo?.partnerUser?.emergencyContacts ||
+        fallbackInfo?.senderId?.citizen?.emergencyContacts ||
+        [],
+      latestSos: fallbackInfo?.latestSos || null,
+    };
+
+    setCitizenModalData(initialFallback);
+
+    const targetUserId = userId || activeConv?.partnerId;
+    if (targetUserId && typeof targetUserId === 'string' && targetUserId.length === 24) {
+      setLoadingCitizenModal(true);
+      try {
+        const res = await fetchCitizenInfo(targetUserId);
+        if (res.success && res.data) {
+          setCitizenModalData((prev) => ({
+            ...prev,
+            ...res.data,
+          }));
+        }
+      } catch (err) {
+        console.warn('Lỗi lấy thông tin người dân:', err);
+      } finally {
+        setLoadingCitizenModal(false);
+      }
+    }
+  };
+
+  const handleCopyPhone = (phone?: string) => {
+    if (!phone) return;
+    navigator.clipboard.writeText(phone).then(() => {
+      setCopiedPhoneText(true);
+      setTimeout(() => setCopiedPhoneText(false), 2000);
+    });
+  };
+
+  const handleCloseCitizenDrawer = useCallback(() => {
+    setIsDrawerClosing(true);
+    setTimeout(() => {
+      setCitizenModalData(null);
+      setIsDrawerClosing(false);
+    }, 200);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && citizenModalData) {
+        handleCloseCitizenDrawer();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [citizenModalData, handleCloseCitizenDrawer]);
 
   const totalUnreadCount = conversations.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
 
@@ -627,9 +840,19 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                     )}
                   </div>
 
-                  <div className="sos-chat-partner-text">
+                  <div
+                    className={`sos-chat-partner-text ${activeConv.role === 'CITIZEN' ? 'clickable' : ''}`}
+                    onClick={() => {
+                      if (activeConv.role === 'CITIZEN') {
+                        handleOpenCitizenInfo(activeConv.partnerId, activeConv);
+                      }
+                    }}
+                    title={activeConv.role === 'CITIZEN' ? 'Nhấn để xem số điện thoại và địa chỉ người dân' : undefined}
+                  >
                     <div className="sos-chat-main-title">
-                      <span>{cleanChatName(activeConv.name)}</span>
+                      <span className={activeConv.role === 'CITIZEN' ? 'sos-chat-partner-name-link' : ''}>
+                        {cleanChatName(activeConv.name)}
+                      </span>
                       {activeConv.role === 'CITIZEN' ? (
                         <span className="sos-role-pill citizen">NGƯỜI DÂN &bull; ĐỊA BÀN</span>
                       ) : activeConv.type === 'CHANNEL' ? (
@@ -639,12 +862,32 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                       ) : (
                         <span className="sos-role-pill authority">CHÍNH QUYỀN</span>
                       )}
+
+                      {/* Nút xem nhanh thông tin người dân */}
+                      {activeConv.role === 'CITIZEN' && (
+                        <button
+                          type="button"
+                          className="sos-chat-quick-info-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenCitizenInfo(activeConv.partnerId, activeConv);
+                          }}
+                          title="Xem hồ sơ, số điện thoại và địa chỉ người dân"
+                        >
+                          <i className="bi bi-person-lines-fill" /> Xem thông tin
+                        </button>
+                      )}
                     </div>
                     <div className="sos-chat-main-subtitle">
                       {activeConv.role === 'CITIZEN' ? (
                         <span>
                           <i className="bi bi-geo-alt" style={{ marginRight: '4px' }} />
-                          {activeConv.areaName || 'Cứu trợ người dân địa bàn'}
+                          {activeConv.address || activeConv.areaName || 'Cứu trợ người dân địa bàn'}
+                          {activeConv.phone && (
+                            <span className="sos-chat-header-phone-badge">
+                              &bull; <i className="bi bi-telephone-fill" /> SĐT: {activeConv.phone}
+                            </span>
+                          )}
                         </span>
                       ) : activeConv.type === 'CHANNEL' ? (
                         <span>Tất cả ban chỉ huy và cán bộ địa phương</span>
@@ -669,14 +912,63 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                     <span className={`sos-chat-conn-dot ${realtimeConnected ? 'connected' : 'connecting'}`} />
                     <span>{realtimeConnected ? 'Đã kết nối' : 'Đang kết nối...'}</span>
                   </div>
-                  <button
-                    type="button"
-                    className="sos-chat-menu-btn"
-                    aria-label="Tùy chọn cuộc hội thoại"
-                    title="Tùy chọn"
-                  >
-                    <i className="bi bi-three-dots" aria-hidden="true" />
-                  </button>
+
+                  {activeConv.role === 'CITIZEN' && (
+                    <button
+                      type="button"
+                      className="sos-chat-header-citizen-btn"
+                      onClick={() => handleOpenCitizenInfo(activeConv.partnerId, activeConv)}
+                      title="Xem số điện thoại, địa chỉ và thông tin người dân"
+                    >
+                      <i className="bi bi-person-vcard" />
+                      <span>Hồ sơ người dân</span>
+                    </button>
+                  )}
+
+                  <div className="sos-chat-menu-wrap">
+                    <button
+                      type="button"
+                      className="sos-chat-menu-btn"
+                      onClick={() => setShowDropdownMenu(!showDropdownMenu)}
+                      aria-label="Tùy chọn cuộc hội thoại"
+                      title="Tùy chọn"
+                    >
+                      <i className="bi bi-three-dots" aria-hidden="true" />
+                    </button>
+
+                    {showDropdownMenu && (
+                      <div className="sos-chat-dropdown-menu">
+                        {activeConv.role === 'CITIZEN' && (
+                          <button
+                            type="button"
+                            className="sos-chat-dropdown-item"
+                            onClick={() => handleOpenCitizenInfo(activeConv.partnerId, activeConv)}
+                          >
+                            <i className="bi bi-person-badge" /> Xem thông tin người dân
+                          </button>
+                        )}
+                        {activeConv.phone && (
+                          <a
+                            href={`tel:${activeConv.phone}`}
+                            className="sos-chat-dropdown-item"
+                            onClick={() => setShowDropdownMenu(false)}
+                          >
+                            <i className="bi bi-telephone-outbound" /> Gọi điện: {activeConv.phone}
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          className="sos-chat-dropdown-item"
+                          onClick={() => {
+                            setShowDropdownMenu(false);
+                            loadMessages(activeConv);
+                          }}
+                        >
+                          <i className="bi bi-arrow-clockwise" /> Tải lại tin nhắn
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -721,7 +1013,32 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                         <div className="sos-chat-msg-bubble">
                           {!isOwn && (
                             <div className="sos-chat-msg-meta">
-                              <span className="sos-chat-msg-sender">{msg.senderName}</span>
+                              <span
+                                className={`sos-chat-msg-sender ${isCitizen ? 'clickable' : ''}`}
+                                onClick={() => {
+                                  if (isCitizen) {
+                                    const uId =
+                                      typeof msg.senderId === 'object' && msg.senderId !== null
+                                        ? msg.senderId._id
+                                        : msg.senderId;
+                                    handleOpenCitizenInfo(uId, {
+                                      fullName: msg.senderName,
+                                      phone: (typeof msg.senderId === 'object' && msg.senderId?.phone) || activeConv?.phone,
+                                      address: (typeof msg.senderId === 'object' && msg.senderId?.address) || activeConv?.address || activeConv?.areaName,
+                                      email: typeof msg.senderId === 'object' ? msg.senderId?.email : undefined,
+                                      avatarUrl: typeof msg.senderId === 'object' ? msg.senderId?.avatarUrl : undefined,
+                                      emergencyContact: typeof msg.senderId === 'object' ? msg.senderId?.citizen?.emergencyContact : undefined,
+                                      emergencyContacts: typeof msg.senderId === 'object' ? msg.senderId?.citizen?.emergencyContacts : undefined,
+                                    });
+                                  }
+                                }}
+                                title={isCitizen ? 'Nhấn để xem số điện thoại và địa chỉ của người dân' : undefined}
+                              >
+                                {msg.senderName}
+                                {isCitizen && (
+                                  <i className="bi bi-info-circle-fill" style={{ marginLeft: 4, fontSize: '11px', color: '#0284c7' }} />
+                                )}
+                              </span>
                               <span className={`sos-role-pill-sm ${isSenderAdmin ? 'admin' : isCitizen ? 'citizen' : 'authority'}`}>
                                 {isSenderAdmin ? 'Ban chỉ huy' : isCitizen ? 'Người dân' : 'Chính quyền'}
                               </span>
@@ -730,6 +1047,107 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
 
                           <div className="sos-chat-msg-card">
                             {(() => {
+                              const sos = parseSosMessage(msg);
+                              if (sos) {
+                                return (
+                                  <div className="sos-chat-sos-card">
+                                    <div className="sos-chat-sos-header">
+                                      <div className="sos-chat-sos-badge">
+                                        <span className="sos-chat-sos-pulse-dot" />
+                                        <i className="bi bi-exclamation-octagon-fill" />
+                                        <span>YÊU CẦU CỨU NẠN KHẨN CẤP</span>
+                                      </div>
+                                      <span
+                                        className="sos-chat-sos-status-pill"
+                                        style={{ backgroundColor: sos.statusBgColor, color: sos.statusColor }}
+                                      >
+                                        {sos.statusLabel}
+                                      </span>
+                                    </div>
+
+                                    <div className="sos-chat-sos-code-row">
+                                      <span className="sos-chat-sos-code">{sos.sosCode}</span>
+                                      <span className="sos-chat-sos-type-tag">{sos.typeLabel}</span>
+                                    </div>
+
+                                    <div className="sos-chat-sos-details-grid">
+                                      <div className="sos-chat-sos-detail-row">
+                                        <span className="sos-sos-label"><i className="bi bi-people-fill" /> Số người:</span>
+                                        <span className="sos-sos-val-bold">{sos.people} người gặp nạn</span>
+                                      </div>
+                                      {sos.address && (
+                                        <div className="sos-chat-sos-detail-row">
+                                          <span className="sos-sos-label"><i className="bi bi-geo-alt-fill" /> Địa chỉ:</span>
+                                          <span className="sos-sos-val">{sos.address}</span>
+                                        </div>
+                                      )}
+                                      {sos.coords && (
+                                        <div className="sos-chat-sos-detail-row">
+                                          <span className="sos-sos-label"><i className="bi bi-compass-fill" /> GPS:</span>
+                                          <span className="sos-sos-val-mono">{sos.coords.lat.toFixed(6)}, {sos.coords.lng.toFixed(6)}</span>
+                                        </div>
+                                      )}
+                                      {sos.phone && (
+                                        <div className="sos-chat-sos-detail-row">
+                                          <span className="sos-sos-label"><i className="bi bi-telephone-fill" /> Liên hệ:</span>
+                                          <a href={`tel:${sos.phone}`} className="sos-sos-phone-link">
+                                            {sos.phone} <i className="bi bi-box-arrow-up-right" />
+                                          </a>
+                                        </div>
+                                      )}
+                                      {sos.description && (
+                                        <div className="sos-chat-sos-desc-box">
+                                          <i className="bi bi-chat-left-quote-fill" /> {sos.description}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {sos.images && sos.images.length > 0 && (
+                                      <div className="sos-chat-sos-gallery">
+                                        {sos.images.map((imgUrl: string, imgIdx: number) => (
+                                          <div
+                                            key={`sos_img_${imgIdx}`}
+                                            className="sos-chat-sos-img-thumb"
+                                            onClick={() => setLightboxImg(imgUrl)}
+                                            title="Nhấn để phóng to ảnh"
+                                          >
+                                            <img src={imgUrl} alt={`Ảnh hiện trường ${imgIdx + 1}`} />
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {sos.status === 'CANCELLED' ? (
+                                      <div className="sos-chat-cancelled-banner">
+                                        <i className="bi bi-x-circle-fill text-danger me-1" />
+                                        <span>Yêu cầu cứu nạn này đã được hủy bỏ</span>
+                                      </div>
+                                    ) : (
+                                      <div className="sos-chat-sos-actions">
+                                        {sos.coords && (
+                                          <button
+                                            type="button"
+                                            className="sos-chat-gps-btn-primary"
+                                            onClick={() => handleViewOnRescueMap(sos.coords!.lat, sos.coords!.lng, msg.senderName, sos.address)}
+                                            title="Chuyển sang Bản đồ tác chiến và định vị ngay"
+                                          >
+                                            <i className="bi bi-map-fill" /> Xem trên Bản đồ cứu hộ
+                                          </button>
+                                        )}
+                                        <button
+                                          type="button"
+                                          className="sos-chat-sos-btn-view"
+                                          onClick={() => handleNavigateToSosRequests(sos.sosCode)}
+                                          title="Chuyển sang Quản lý ca SOS"
+                                        >
+                                          <i className="bi bi-clipboard2-pulse-fill" /> Quản lý ca SOS
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              }
+
                               const gps = parseGpsContent(msg.content);
                               if (gps) {
                                 return (
@@ -946,6 +1364,305 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
               >
                 <i className="bi bi-box-arrow-up-right" /> Mở trong tab mới
               </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          SLIDE-OVER DRAWER CHI TIẾT HỒ SƠ CÔNG DÂN (740px - MATCHING RESCUER APPROVAL VIEW)
+         ======================================================== */}
+      {citizenModalData && (
+        <div className="ra-drawer-backdrop" onClick={handleCloseCitizenDrawer}>
+          <div
+            className={`ra-drawer ${isDrawerClosing ? 'closing' : ''}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header Drawer */}
+            <div className="ra-drawer-header">
+              <div className="ra-drawer-title-wrap">
+                <h3 className="ra-drawer-title">CHI TIẾT HỒ SƠ NGƯỜI DÂN</h3>
+                <span className="ra-status-badge pending">
+                  {citizenModalData.latestSos ? 'Cần hỗ trợ khẩn cấp' : 'Người dân • Địa bàn'}
+                </span>
+                {citizenModalData.totalSosCount !== undefined && citizenModalData.totalSosCount > 0 && (
+                  <span className="ra-status-badge in_review">
+                    <i className="bi bi-life-preserver" /> {citizenModalData.totalSosCount} ca SOS
+                  </span>
+                )}
+              </div>
+
+              <button
+                className="ra-drawer-close-btn"
+                onClick={handleCloseCitizenDrawer}
+                title="Đóng (ESC)"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body Drawer */}
+            <div className="ra-drawer-body">
+              {loadingCitizenModal && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: '#eff6ff', borderRadius: 8, color: '#0284c7', fontSize: 13, fontWeight: 600 }}>
+                  <div className="spinner-border spinner-border-sm" role="status" />
+                  <span>Đang tải thêm dữ liệu xác thực của người dân...</span>
+                </div>
+              )}
+
+              {/* Nhóm A: Thông tin cá nhân & Nơi cư trú */}
+              <div className="ra-drawer-section">
+                <div className="ra-section-header">
+                  <UserCheck size={16} />
+                  <span>A. THÔNG TIN CÁ NHÂN</span>
+                </div>
+                <div className="ra-section-body">
+                  {/* Thông tin đại diện & Họ tên */}
+                  <div className="ra-profile-inline-bar">
+                    <div className="ra-profile-avatar">
+                      {citizenModalData.avatarUrl ? (
+                        <img src={citizenModalData.avatarUrl} alt={citizenModalData.fullName} />
+                      ) : (
+                        <span>{(citizenModalData.fullName || 'CD').slice(0, 2).toUpperCase()}</span>
+                      )}
+                    </div>
+                    <div className="ra-profile-info">
+                      <div className="ra-profile-name-row">
+                        <h4 className="ra-profile-name">{citizenModalData.fullName}</h4>
+                        <span className="ra-profile-badge">
+                          {citizenModalData.latestSos ? 'Công Dân Cần Hỗ Trợ' : 'Người dân địa phương'}
+                        </span>
+                      </div>
+                      <span className="ra-profile-sub">
+                        {citizenModalData.gender === 'MALE' ? 'Nam' : citizenModalData.gender === 'FEMALE' ? 'Nữ' : (citizenModalData.gender || 'Nam')}
+                        {' • '}
+                        {citizenModalData.dateOfBirth || 'Chưa cung cấp ngày sinh'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="ra-kv-grid">
+                    <div className="ra-kv-item">
+                      <span className="ra-kv-label">Số điện thoại liên lạc</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span className="ra-kv-value phone">{citizenModalData.phone || 'Chưa cung cấp'}</span>
+                        {citizenModalData.phone && (
+                          <button
+                            type="button"
+                            className="sos-citizen-copy-btn"
+                            onClick={() => handleCopyPhone(citizenModalData.phone)}
+                            title="Sao chép số"
+                          >
+                            <i className={copiedPhoneText ? 'bi bi-check-lg' : 'bi bi-clipboard'} />
+                            <span>{copiedPhoneText ? 'Đã sao chép' : 'Sao chép'}</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="ra-kv-item">
+                      <span className="ra-kv-label">Địa chỉ Email</span>
+                      <span className="ra-kv-value">{citizenModalData.email || 'Chưa cung cấp'}</span>
+                    </div>
+                  </div>
+
+                  <div className="ra-address-box">
+                    <div className="ra-kv-item">
+                      <span className="ra-kv-label">Nơi cư trú thường trú</span>
+                      <span className="ra-kv-value" style={{ marginTop: 2, fontSize: 13.5 }}>
+                        {citizenModalData.address || activeConv?.address || 'Chưa cung cấp địa chỉ chi tiết'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="ra-address-box highlight-area">
+                    <div className="ra-kv-item">
+                      <span className="ra-kv-label">Địa bàn kết nối / Phụ trách cứu hộ</span>
+                      <span className="ra-kv-value area-text" style={{ marginTop: 2, fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <MapPin size={14} />
+                        <span>{activeConv?.areaName || 'Phường Thanh Khê'}</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Nhóm B: Người liên hệ khẩn cấp (Người thân) */}
+              <div className="ra-drawer-section">
+                <div className="ra-section-header">
+                  <Users size={16} />
+                  <span>B. THÔNG TIN LIÊN HỆ KHẨN CẤP (NGƯỜI THÂN)</span>
+                </div>
+                <div className="ra-section-body">
+                  {citizenModalData.emergencyContact?.name ||
+                  (citizenModalData.emergencyContacts && citizenModalData.emergencyContacts.length > 0) ? (
+                    <>
+                      <div className="ra-kv-grid">
+                        <div className="ra-kv-item">
+                          <span className="ra-kv-label">Họ và tên người thân</span>
+                          <span className="ra-kv-value" style={{ fontWeight: 700, color: '#9a3412' }}>
+                            {citizenModalData.emergencyContact?.name || citizenModalData.emergencyContacts?.[0]?.name}
+                          </span>
+                        </div>
+                        <div className="ra-kv-item">
+                          <span className="ra-kv-label">Mối quan hệ</span>
+                          <span className="ra-kv-value">
+                            {citizenModalData.emergencyContact?.relation || citizenModalData.emergencyContacts?.[0]?.relation || 'Người thân'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="ra-kv-grid">
+                        <div className="ra-kv-item">
+                          <span className="ra-kv-label">Số điện thoại người thân</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span className="ra-kv-value phone" style={{ color: '#15803d', fontWeight: 700 }}>
+                              {citizenModalData.emergencyContact?.phone || citizenModalData.emergencyContacts?.[0]?.phone}
+                            </span>
+                            {(citizenModalData.emergencyContact?.phone || citizenModalData.emergencyContacts?.[0]?.phone) && (
+                              <a
+                                href={`tel:${citizenModalData.emergencyContact?.phone || citizenModalData.emergencyContacts?.[0]?.phone}`}
+                                className="sos-citizen-call-mini-btn"
+                                title="Gọi cho người thân"
+                              >
+                                <Phone size={12} /> Gọi ngay
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                        <div className="ra-kv-item">
+                          <span className="ra-kv-label">Địa chỉ liên lạc người thân</span>
+                          <span className="ra-kv-value">
+                            {citizenModalData.emergencyContact?.address || citizenModalData.address || 'Cùng địa chỉ cư trú'}
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="sos-citizen-empty-hint">
+                      <i className="bi bi-shield-slash" /> Người dân chưa khai báo thông tin người liên hệ khẩn cấp trong hồ sơ cá nhân.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Nhóm C: Tình trạng & Yêu cầu cứu nạn SOS */}
+              <div className="ra-drawer-section">
+                <div className="ra-section-header">
+                  <AlertTriangle size={16} />
+                  <span>C. TÌNH TRẠNG & YÊU CẦU CỨU NẠN SOS</span>
+                </div>
+                <div className="ra-section-body">
+                  <div className="ra-kv-grid">
+                    <div className="ra-kv-item">
+                      <span className="ra-kv-label">Tổng số ca SOS đã tạo</span>
+                      <span className="ra-kv-value highlight">
+                        {citizenModalData.totalSosCount || (citizenModalData.latestSos ? 1 : 0)} ca cứu hộ
+                      </span>
+                    </div>
+                    <div className="ra-kv-item">
+                      <span className="ra-kv-label">Trạng thái hiện tại</span>
+                      <span className="ra-kv-value">
+                        {citizenModalData.latestSos ? (
+                          <span className="ra-status-badge requires_update">
+                            {SOS_STATUS_CONFIG[citizenModalData.latestSos.status]?.label || citizenModalData.latestSos.status}
+                          </span>
+                        ) : (
+                          <span className="ra-status-badge verified">An toàn / Chưa kích hoạt SOS</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  {citizenModalData.latestSos && (
+                    <div className="sos-citizen-latest-sos-box" style={{ marginTop: 6 }}>
+                      <div className="sos-citizen-latest-sos-header">
+                        <span className="sos-citizen-sos-code">{citizenModalData.latestSos.sosCode}</span>
+                        <span className="ra-status-badge pending">
+                          {SOS_STATUS_CONFIG[citizenModalData.latestSos.status]?.label || citizenModalData.latestSos.status}
+                        </span>
+                      </div>
+                      <div className="sos-citizen-sos-desc">
+                        <div>
+                          <strong>Loại khẩn cấp:</strong>{' '}
+                          {SOS_TYPE_LABELS[citizenModalData.latestSos.emergencyType] || citizenModalData.latestSos.emergencyType} &bull;{' '}
+                          <strong>Số người:</strong> {citizenModalData.latestSos.people || 1} người
+                        </div>
+                        <div>
+                          <strong>Địa chỉ SOS:</strong> {citizenModalData.latestSos.address}
+                        </div>
+                        {citizenModalData.latestSos.description && (
+                          <div style={{ color: '#b91c1c', marginTop: 4 }}>
+                            <em>"{citizenModalData.latestSos.description}"</em>
+                          </div>
+                        )}
+                      </div>
+                      <div className="sos-citizen-sos-actions">
+                        {citizenModalData.latestSos.location?.coordinates && (
+                          <button
+                            type="button"
+                            className="sos-chat-gps-btn-primary"
+                            onClick={() => {
+                              const [lng, lat] = citizenModalData.latestSos!.location!.coordinates;
+                              handleViewOnRescueMap(lat, lng, citizenModalData.fullName, citizenModalData.latestSos!.address);
+                              handleCloseCitizenDrawer();
+                            }}
+                          >
+                            <MapPin size={13} /> Xem trên Bản đồ cứu hộ
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="sos-chat-sos-btn-view"
+                          onClick={() => {
+                            handleNavigateToSosRequests(citizenModalData.latestSos!.sosCode);
+                            handleCloseCitizenDrawer();
+                          }}
+                        >
+                          <FileCheck size={13} /> Quản lý ca SOS
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Drawer */}
+            <div className="ra-drawer-footer">
+              <div className="ra-actions-row">
+                {citizenModalData.phone && (
+                  <a
+                    href={`tel:${citizenModalData.phone}`}
+                    className="ra-btn ra-btn-primary"
+                    style={{ textDecoration: 'none' }}
+                  >
+                    <Phone size={14} /> Gọi điện thoại
+                  </a>
+                )}
+                <button
+                  type="button"
+                  className="ra-btn ra-btn-map"
+                  onClick={() => {
+                    const gps = parseGpsContent(messages.find((m) => m.content.includes('[Tọa độ GPS'))?.content || '');
+                    if (gps) {
+                      handleViewOnRescueMap(gps.lat, gps.lng, citizenModalData.fullName, citizenModalData.address);
+                    } else {
+                      window.dispatchEvent(new CustomEvent('sos_navigate_tab', { detail: { key: 'map' } }));
+                    }
+                    handleCloseCitizenDrawer();
+                  }}
+                  title="Định vị địa chỉ trên bản đồ tác chiến"
+                >
+                  <MapPin size={14} /> Xem trên bản đồ
+                </button>
+                <button
+                  type="button"
+                  className="ra-btn ra-btn-secondary"
+                  onClick={handleCloseCitizenDrawer}
+                >
+                  <X size={14} /> Đóng
+                </button>
+              </div>
             </div>
           </div>
         </div>

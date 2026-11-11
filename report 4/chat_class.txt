@@ -1,0 +1,75 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#ffffff', 'primaryBorderColor': '#000000', 'primaryTextColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff'}}}%%
+classDiagram
+    direction TB
+    classDef default fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000;
+
+    %% 1. TẦNG CONTROLLER
+    class ChatController {
+        +getConversations()
+        +getMessages(channel, limit)
+        +sendMessage(messageDto)
+        +markAsRead(markDto)
+        +streamChatEvents()
+    }
+
+    %% 2. TẦNG SERVICE
+    class ChatService {
+        +getConversations(currentUser)
+        +getMessages(filterDto)
+        +sendMessage(senderUser, data)
+        +markAsRead(currentUser, data)
+        +emitRealtimeMessage(channel, msg)
+    }
+
+    %% 3. TẦNG MONGOOSE MODELS / SCHEMAS (KHÔNG DÙNG REPOSITORY TRUNG GIAN)
+    class ChatMessage {
+        +messageId
+        +senderId
+        +senderName
+        +senderRole
+        +recipientId
+        +channel
+        +content
+        +attachments
+        +readBy
+        +createdAt
+    }
+
+    class User {
+        +userId
+        +fullName
+        +phone
+        +roles
+        +authority
+        +avatarUrl
+    }
+
+    %% 4. CỤM TỔ CHỨC / ĐỘI CỨU HỘ
+    class AuthorityOrganization {
+        +orgId
+        +name
+        +code
+        +type
+    }
+
+    class RescueTeam {
+        +teamId
+        +teamName
+        +leaderId
+        +status
+    }
+
+    %% ================= QUAN HỆ KIẾN TRÚC NODE.JS =================
+    %% Controller gọi Service
+    ChatController ..> ChatService : uses
+
+    %% Service thao tác trực tiếp với Mongoose Models
+    ChatService ..> ChatMessage : manages
+    ChatService ..> User : queries
+
+    %% Quan hệ giữa các Models trong Database
+    User "1" -- "0..*" ChatMessage : sends
+    User "1" -- "0..*" ChatMessage : receives
+
+    AuthorityOrganization ..> RescueTeam : manages
+    RescueTeam "1" -- "1" User : member of

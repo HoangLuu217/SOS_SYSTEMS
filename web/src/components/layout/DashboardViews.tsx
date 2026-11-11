@@ -151,7 +151,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     // 15. Nhật ký tác chiến & hệ thống
     case 'audit_logs':
     case 'operation_logs':
-      return <AuditLogsView />;
+      return <AuditLogsView user={user} />;
 
     // 16. Kênh chat realtime tác chiến
     case 'chat':

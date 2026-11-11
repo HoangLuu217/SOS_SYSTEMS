@@ -1,0 +1,102 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#ffffff', 'primaryBorderColor': '#000000', 'primaryTextColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff'}}}%%
+classDiagram
+    direction TB
+    classDef default fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000;
+
+    %% 1. TẦNG MOBILE CLIENT (OFFLINE HANDLER)
+    class OfflineSosManager {
+        +checkConnectivity(): boolean
+        +generateSmsPayload(sosData): string
+        +triggerNativeSms(hotlinePhone, message): void
+        +cachePendingSosOffline(sosData): void
+    }
+
+    class SosMobileUI {
+        +renderEmergencyForm()
+        +onNetworkErrorFallback()
+        +promptSmsDispatchConfirmation()
+    }
+
+    %% 2. TẦNG HARDWARE / GATEWAY NGOÀI (TEXTBEE ANDROID GATEWAY)
+    class TextBeeGateway {
+        +receiveSmsViaPhysicalSim()
+        +forwardToWebhook(endpoint, payload)
+        +dispatchOutgoingSms(deviceId, recipients, message)
+    }
+
+    %% 3. TẦNG CONTROLLER
+    class SosController {
+        +createSosRequest(req, res)
+        +handleTextBeeWebhook(req, res)
+        +retryOfflineQueue(req, res)
+    }
+
+    %% 4. TẦNG SERVICE
+    class SosService {
+        +createSos(sosData, user)
+        +processInboundSmsSos(smsPayload)
+        +parseSmsContent(messageText)
+        +resolveAreaByCoordinates(lat, lng)
+        +sendSmsConfirmation(phone, sosCode)
+    }
+
+    class TextBeeService {
+        -apiKey: string
+        -deviceId: string
+        +formatPhone(phone): string
+        +sendSms(phone, message): Promise
+        +sendOtp(phone, otpCode): Promise
+    }
+
+    %% 5. TẦNG MONGOOSE MODELS / SCHEMAS (KHÔNG DÙNG REPOSITORY TRUNG GIAN)
+    class SosRequest {
+        +sosCode: string
+        +citizenId: ObjectId
+        +contactPhone: string
+        +secondaryPhone: string
+        +emergencyType: string
+        +priority: string
+        +people: number
+        +location: PointLocation
+        +address: string
+        +status: string
+        +sourceChannel: string
+        +repeatCount: number
+        +description: string
+        +createdAt: Date
+    }
+
+    class User {
+        +userId: ObjectId
+        +phone: string
+        +fullName: string
+        +roles: Array
+        +citizenProfile: Object
+    }
+
+    class AdministrativeArea {
+        +areaId: ObjectId
+        +name: string
+        +code: string
+        +type: string
+        +boundaries: Polygon
+    }
+
+    %% ================= QUAN HỆ KIẾN TRÚC =================
+    SosMobileUI ..> OfflineSosManager : uses
+    OfflineSosManager ..> TextBeeGateway : sends SMS via cellular network
+
+    TextBeeGateway ..> SosController : triggers Webhook (HTTP POST)
+    SosController ..> SosService : uses
+    SosService ..> TextBeeService : uses for reply/alerting
+    TextBeeService ..> TextBeeGateway : calls REST API (/send-sms)
+
+    %% Service thao tác trực tiếp với Mongoose Models
+    SosService ..> SosRequest : creates & manages
+    SosService ..> User : queries citizen by phone
+    SosService ..> AdministrativeArea : matches location
+
+    %% Quan hệ giữa các Models trong Database
+    SosRequest "1" -- "1" User : reported by
+    SosRequest "1" -- "1" AdministrativeArea : located in
+

@@ -1,0 +1,83 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#ffffff', 'primaryBorderColor': '#000000', 'primaryTextColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff'}}}%%
+classDiagram
+    direction TB
+    classDef default fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000;
+
+    %% 1. TẦNG CONTROLLER
+    class UserController {
+        +getMe()
+        +updateMe(updateProfileDto)
+        +updateAvatar(avatarDto)
+        +getCitizen()
+        +updateEmergencyContact(contactDto)
+    }
+
+    %% 2. TẦNG SERVICE
+    class UserService {
+        +getMe(userId)
+        +updateMe(userId, updateData)
+        +updateAvatar(userId, avatarUrl)
+        +getCitizen(userId)
+        +updateEmergencyContact(userId, contactData)
+    }
+
+    %% 3. TẦNG MONGOOSE MODELS / SCHEMAS (KHÔNG DÙNG REPOSITORY TRUNG GIAN)
+    class EmergencyContact {
+        +contactId
+        +name
+        +phone
+        +relation
+        +address
+    }
+
+    class User {
+        +userId
+        +fullName
+        +phone
+        +email
+        +dateOfBirth
+        +gender
+        +address
+        +avatarUrl
+        +citizen
+        +authority
+        +toSafeObject()
+    }
+
+    class AdministrativeArea {
+        +areaId
+        +name
+        +code
+        +type
+        +parentCode
+    }
+
+    %% 4. CỤM TỔ CHỨC / ĐỘI CỨU HỘ
+    class AuthorityOrganization {
+        +orgId
+        +name
+        +code
+        +type
+    }
+
+    class RescueTeam {
+        +teamId
+        +teamName
+        +leaderId
+        +status
+    }
+
+    %% ================= QUAN HỆ KIẾN TRÚC NODE.JS =================
+    %% Controller gọi Service
+    UserController ..> UserService : uses
+
+    %% Service thao tác trực tiếp với Mongoose Models
+    UserService ..> User : manages
+    UserService ..> AdministrativeArea : queries
+
+    %% Quan hệ giữa các Models trong Database
+    User "1" *-- "0..*" EmergencyContact : contains
+    User "1..*" -- "1" AdministrativeArea : resides in
+
+    AuthorityOrganization ..> RescueTeam : manages
+    RescueTeam "1" -- "1" AdministrativeArea : operates in

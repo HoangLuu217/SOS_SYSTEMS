@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { ChatMessage, User } = require('../models');
+const { ChatMessage, User, SosRequest } = require('../models');
 const eventBus = require('./eventBus');
 const ApiError = require('../utils/apiError');
 
@@ -83,9 +83,9 @@ class ChatService {
    * Gửi tin nhắn mới
    */
   async sendMessage(senderUser, data) {
-    const { recipientId, content, attachments = [] } = data;
+    const { recipientId, content, attachments = [], sosRequestId = null, sosData = null } = data;
 
-    if ((!content || !content.trim()) && (!attachments || attachments.length === 0)) {
+    if ((!content || !content.trim()) && (!attachments || attachments.length === 0) && !sosRequestId && !sosData) {
       throw new ApiError(400, 'Nội dung tin nhắn hoặc tệp đính kèm không được để trống');
     }
 
@@ -145,9 +145,9 @@ class ChatService {
       : (senderUser.roles?.[0] || 'CITIZEN');
 
     let senderName = senderUser.fullName || senderUser.phone || senderUser.email || 'Người dân';
-    // Trong kênh cứu hộ người dân - địa phương (area_), nếu Admin gửi phản hồi thì hiển thị danh nghĩa Ban Chỉ Huy PCTT
-    if (channel.startsWith('area_') && (senderRole === 'ADMIN' || senderName.toLowerCase().includes('admin'))) {
-      senderName = 'Ban Chỉ Huy Điều Hành PCTT';
+    // Trong kênh cứu hộ người dân - địa phương (area_), ưu tiên tên cán bộ thực tế (ví dụ: Lê Trọng Phúc). Chỉ fallback nếu không có tên
+    if (channel.startsWith('area_') && (!senderUser.fullName || senderUser.fullName.toLowerCase() === 'admin')) {
+      senderName = 'Cán bộ trực ban PCTT';
     }
 
     const message = await ChatMessage.create({
@@ -156,14 +156,17 @@ class ChatService {
       senderRole,
       recipientId: recipientObjectId,
       channel,
-      content: (content && content.trim()) || (attachments && attachments.length > 0 ? '[Hình ảnh]' : ''),
+      content: (content && content.trim()) || (attachments && attachments.length > 0 ? '[Hình ảnh]' : '[Yêu cầu cứu nạn SOS]'),
       attachments,
+      sosRequestId: sosRequestId && mongoose.Types.ObjectId.isValid(sosRequestId) ? sosRequestId : null,
+      sosData: sosData || null,
       readBy: [senderUser._id],
     });
 
     const populated = await ChatMessage.findById(message._id)
-      .populate('senderId', 'fullName phone email roles authority avatarUrl')
-      .populate('recipientId', 'fullName phone email roles authority avatarUrl');
+      .populate('senderId', 'fullName phone email roles authority avatarUrl address citizen')
+      .populate('recipientId', 'fullName phone email roles authority avatarUrl address citizen')
+      .populate('sosRequestId');
 
     // Kích hoạt sự kiện thời gian thực qua Socket.IO & EventBus
     try {
@@ -245,8 +248,9 @@ class ChatService {
 
     // Lấy tin nhắn theo đúng kênh riêng biệt của từng tài khoản
     const messages = await ChatMessage.find({ channel: targetChannel })
-      .populate('senderId', 'fullName phone email roles authority avatarUrl')
-      .populate('recipientId', 'fullName phone email roles authority avatarUrl')
+      .populate('senderId', 'fullName phone email roles authority avatarUrl address citizen')
+      .populate('recipientId', 'fullName phone email roles authority avatarUrl address citizen')
+      .populate('sosRequestId')
       .sort({ createdAt: 1 })
       .limit(Math.min(limit, 300));
 
@@ -347,7 +351,7 @@ class ChatService {
       let partnerUser = null;
 
       if (possibleUserId && mongoose.Types.ObjectId.isValid(possibleUserId)) {
-        partnerUser = await User.findById(possibleUserId).select('fullName phone email roles avatarUrl authority address');
+        partnerUser = await User.findById(possibleUserId).select('fullName phone email roles avatarUrl authority address citizen');
       }
 
       if (!partnerUser && areaLatest && areaLatest.senderId) {
@@ -386,6 +390,19 @@ class ChatService {
         avatarUrl: partnerUser?.avatarUrl,
         phone: partnerUser?.phone,
         areaName: channelAreaName,
+        address: partnerUser?.address || channelAreaName,
+        partnerUser: partnerUser
+          ? {
+              _id: partnerUser._id,
+              fullName: partnerUser.fullName,
+              phone: partnerUser.phone,
+              email: partnerUser.email,
+              address: partnerUser.address,
+              roles: partnerUser.roles,
+              emergencyContact: partnerUser.citizen?.emergencyContact || null,
+              emergencyContacts: partnerUser.citizen?.emergencyContacts || [],
+            }
+          : null,
         unreadCount: areaUnread,
         latestMessage: {
           content: areaLatest.content,
@@ -1214,6 +1231,64 @@ class ChatService {
     } catch (notifErr) {
       console.warn('[Chat Notification Error]:', notifErr.message);
     }
+  }
+
+  /**
+   * Lấy thông tin chi tiết của người dân (SĐT, Địa chỉ, Người liên hệ khẩn cấp, Ca SOS)
+   */
+  async getCitizenInfo(userId) {
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      throw new ApiError(400, 'ID người dùng không hợp lệ');
+    }
+
+    const user = await User.findById(userId)
+      .select('fullName phone email address roles avatarUrl citizen gender dateOfBirth status createdAt');
+
+    if (!user) {
+      throw new ApiError(404, 'Không tìm thấy thông tin người dùng');
+    }
+
+    // Tra cứu yêu cầu SOS gần nhất của người dùng này nếu có
+    const latestSos = await SosRequest.findOne({ citizenId: userId })
+      .sort({ createdAt: -1 })
+      .select('sosCode status emergencyType emergencyTypes priority people address location contactPhone secondaryPhone description images createdAt');
+
+    // Thống kê tổng số ca SOS của người dân
+    const totalSosCount = await SosRequest.countDocuments({ citizenId: userId });
+
+    return {
+      _id: user._id,
+      fullName: user.fullName,
+      phone: user.phone || 'Chưa cập nhật',
+      email: user.email || '',
+      address: user.address || 'Chưa cập nhật địa chỉ',
+      avatarUrl: user.avatarUrl,
+      roles: user.roles,
+      gender: user.gender,
+      dateOfBirth: user.dateOfBirth,
+      createdAt: user.createdAt,
+      totalSosCount,
+      emergencyContact: user.citizen?.emergencyContact || null,
+      emergencyContacts: user.citizen?.emergencyContacts || [],
+      latestSos: latestSos
+        ? {
+            _id: latestSos._id,
+            sosCode: latestSos.sosCode,
+            status: latestSos.status,
+            emergencyType: latestSos.emergencyType,
+            emergencyTypes: latestSos.emergencyTypes,
+            priority: latestSos.priority,
+            people: latestSos.people,
+            address: latestSos.address,
+            location: latestSos.location,
+            contactPhone: latestSos.contactPhone,
+            secondaryPhone: latestSos.secondaryPhone,
+            description: latestSos.description,
+            images: latestSos.images,
+            createdAt: latestSos.createdAt,
+          }
+        : null,
+    };
   }
 }
 

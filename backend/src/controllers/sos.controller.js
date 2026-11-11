@@ -137,6 +137,27 @@ const cancelSos = async (req, res, next) => {
       metadata: { note, status: 'CANCELLED' },
     });
 
+    // Đồng bộ cập nhật toàn bộ tin nhắn chat có gắn với ca SOS này sang trạng thái CANCELLED
+    try {
+      const ChatMessage = require('../models/ChatMessage');
+      await ChatMessage.updateMany(
+        {
+          $or: [
+            { sosRequestId: req.params.id },
+            { 'sosData._id': req.params.id },
+            ...(updatedSos?.sosCode ? [{ 'sosData.sosCode': updatedSos.sosCode }] : []),
+          ],
+        },
+        {
+          $set: {
+            'sosData.status': 'CANCELLED',
+          },
+        }
+      );
+    } catch (chatSyncErr) {
+      console.warn('Sync chat message status on cancel error:', chatSyncErr);
+    }
+
     emitSosUpdated(updatedSos);
     res.status(200).json({ success: true, data: updatedSos });
   } catch (error) {

@@ -16,6 +16,7 @@ import {
   Image,
   ScrollView,
   Keyboard,
+  DeviceEventEmitter,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -29,6 +30,40 @@ import * as ImagePicker from 'expo-image-picker';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '@/context/AuthContext';
 import { backendApi, ChatMessageItem, LocalAuthorityInfo } from '@/api';
+import { CitizenSosTrackingModal } from '../profile';
+
+export const SOS_TYPE_LABELS: Record<string, string> = {
+  MEDICAL: 'Cấp cứu y tế / Bị thương',
+  FIRE: 'Hỏa hoạn / Cháy nổ',
+  FLOOD: 'Cứu hộ ngập lụt / Mắc kẹt',
+  LANDSLIDE: 'Sạt lở đất / Đổ sập',
+  STORM: 'Bão lốc / Cây đổ',
+  ACCIDENT: 'Tai nạn khẩn cấp',
+  MISSING_PERSON: 'Tìm kiếm người mất tích',
+  RESCUE: 'Cứu hộ khẩn cấp',
+  FOOD: 'Cứu trợ lương thực',
+  EVACUATION: 'Sơ tán khẩn cấp',
+  OTHER: 'Cứu nạn khẩn cấp khác',
+};
+
+export const SOS_STATUS_CONFIG: Record<
+  string,
+  { label: string; color: string; bgColor: string }
+> = {
+  PENDING: { label: 'Chờ tiếp nhận', color: '#D97706', bgColor: '#FEF3C7' },
+  VERIFIED: { label: 'Đã xác minh', color: '#0284C7', bgColor: '#E0F2FE' },
+  ASSIGNED: { label: 'Đã phân công', color: '#7C3AED', bgColor: '#EDE9FE' },
+  ACCEPTED: { label: 'Đội đã nhận lệnh', color: '#7C3AED', bgColor: '#EDE9FE' },
+  ON_THE_WAY: { label: 'Đang di chuyển tới', color: '#2563EB', bgColor: '#EFF6FF' },
+  EN_ROUTE: { label: 'Đang di chuyển tới', color: '#2563EB', bgColor: '#EFF6FF' },
+  ARRIVED: { label: 'Đã tiếp cận hiện trường', color: '#059669', bgColor: '#D1FAE5' },
+  IN_PROGRESS: { label: 'Đang cứu hộ', color: '#2563EB', bgColor: '#EFF6FF' },
+  RESCUING: { label: 'Đang cứu nạn', color: '#DC2626', bgColor: '#FEE2E2' },
+  COMPLETED: { label: 'Hoàn thành', color: '#16A34A', bgColor: '#DCFCE7' },
+  RESOLVED: { label: 'Đã giải quyết', color: '#16A34A', bgColor: '#DCFCE7' },
+  CANCELLED: { label: 'Đã hủy', color: '#DC2626', bgColor: '#FEE2E2' },
+  REJECTED: { label: 'Từ chối', color: '#DC2626', bgColor: '#FEE2E2' },
+};
 
 export interface WardOption {
   ward: string;
@@ -84,11 +119,13 @@ const POPULAR_WARDS: WardOption[] = [
 interface LocalAuthorityChatModalProps {
   visible: boolean;
   onClose: () => void;
+  initialSosData?: any;
 }
 
 export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = ({
   visible,
   onClose,
+  initialSosData,
 }) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -116,6 +153,37 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
   const [uploadingImage, setUploadingImage] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+
+  // Trạng thái yêu cầu SOS đang hoạt động của người dân
+  const [activeSos, setActiveSos] = useState<any | null>(null);
+  const [showSosPopup, setShowSosPopup] = useState(false);
+  const [sendingSos, setSendingSos] = useState(false);
+  const [trackingSosId, setTrackingSosId] = useState<string | null>(null);
+  const [sosStatusMap, setSosStatusMap] = useState<Record<string, string>>({});
+  const sosStatusMapRef = useRef<Record<string, string>>({});
+  sosStatusMapRef.current = sosStatusMap;
+
+  const updateSosStatusMap = useCallback((newEntries: Record<string, string>) => {
+    setSosStatusMap((prev) => {
+      const next = { ...prev, ...newEntries };
+      sosStatusMapRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const [selectedSosDetail, setSelectedSosDetail] = useState<{
+    sosId?: any;
+    sosCode: string;
+    typeLabel: string;
+    people: number;
+    address: string;
+    phone: string;
+    description: string;
+    status: string;
+    lat?: number;
+    lng?: number;
+    images: string[];
+  } | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -193,6 +261,63 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
           }, 100);
         }
       });
+
+      // Lắng nghe cập nhật trạng thái SOS từ Socket.IO hệ thống
+      const handleSocketSosUpdate = (sosData: any) => {
+        if (!sosData) return;
+        const id = sosData._id || sosData.id;
+        const code = sosData.sosCode;
+        const st = sosData.status;
+        if (id || code) {
+          const entry: Record<string, string> = {};
+          if (id) entry[String(id)] = st;
+          if (code) entry[String(code)] = st;
+          updateSosStatusMap(entry);
+
+          // Cập nhật tức thời mảng tin nhắn để FlatList re-render bóng tin nhắn ngay lập tức
+          setMessages((prev) =>
+            prev.map((m) => {
+              const isThisSos =
+                (id && (String(m.sosRequestId) === String(id) || (m.sosData && String(m.sosData._id) === String(id)))) ||
+                (code && ((m.sosData && m.sosData.sosCode === code) || (m.content && m.content.includes(code))));
+              if (isThisSos) {
+                return {
+                  ...m,
+                  sosData: m.sosData ? { ...m.sosData, status: st } : { status: st, sosCode: code },
+                  content: m.content
+                    ? m.content.replace(
+                        /Trạng thái hiện tại:\s*[^\n]+/i,
+                        `Trạng thái hiện tại: ${st === 'CANCELLED' ? 'Đã hủy' : st}`
+                      )
+                    : m.content,
+                };
+              }
+              return m;
+            })
+          );
+        }
+        if (['COMPLETED', 'RESOLVED', 'CANCELLED', 'REJECTED'].includes(st)) {
+          setActiveSos((prev: any) => {
+            if (!prev) return null;
+            const prevId = String(prev._id || prev.id || '');
+            if (prevId === String(id) || (code && prev.sosCode === code)) {
+              return null;
+            }
+            return prev;
+          });
+          setShowSosPopup(false);
+          setSelectedSosDetail((prev: any) => {
+            if (!prev) return null;
+            if (String(prev.sosId) === String(id) || (code && prev.sosCode === code)) {
+              return { ...prev, status: st };
+            }
+            return prev;
+          });
+        }
+      };
+
+      socket.on('sos:updated', handleSocketSosUpdate);
+      socket.on('sos:status_changed', handleSocketSosUpdate);
     } catch (err) {
       console.warn('[Socket Init Error]:', err);
     }
@@ -297,11 +422,74 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
     }
   }, [user?._id, user?.address]);
 
+  // Tự động kiểm tra xem người dân có yêu cầu cứu nạn SOS đang hoạt động không & đồng bộ trạng thái thực tế
+  const fetchActiveSosRequest = useCallback(async () => {
+    try {
+      const res = await backendApi.get('/sos');
+      if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+        // Đồng bộ danh mục trạng thái thực tế mới nhất của tất cả các ca SOS
+        const statusMap: Record<string, string> = {};
+        res.data.forEach((item: any) => {
+          if (item._id) statusMap[String(item._id)] = item.status;
+          if (item.sosCode) statusMap[String(item.sosCode)] = item.status;
+        });
+        updateSosStatusMap(statusMap);
+
+        // Đồng bộ trực tiếp vào danh sách tin nhắn hiện có để toàn bộ thẻ SOS cập nhật trạng thái mới nhất
+        setMessages((prev) =>
+          prev.map((m) => {
+            const mId = m.sosRequestId || m.sosData?._id;
+            const mCodeMatch = m.content?.match(/Mã cứu trợ:\s*(SOS-[A-Z0-9\-]+)/i);
+            const mCode = m.sosData?.sosCode || (mCodeMatch ? mCodeMatch[1].trim() : null);
+            const liveSt =
+              (mId ? statusMap[String(mId)] : null) ||
+              (mCode ? statusMap[String(mCode)] : null);
+            if (liveSt && m.sosData?.status !== liveSt) {
+              return {
+                ...m,
+                sosData: m.sosData ? { ...m.sosData, status: liveSt } : { status: liveSt, sosCode: mCode },
+                content: m.content
+                  ? m.content.replace(
+                      /Trạng thái hiện tại:\s*[^\n]+/i,
+                      `Trạng thái hiện tại: ${liveSt === 'CANCELLED' ? 'Đã hủy' : liveSt}`
+                    )
+                  : m.content,
+              };
+            }
+            return m;
+          })
+        );
+
+        // Tìm các ca SOS chưa hoàn thành hoặc chưa hủy
+        const activeList = res.data.filter((item: any) =>
+          !['COMPLETED', 'RESOLVED', 'CANCELLED', 'REJECTED'].includes(item.status)
+        );
+        if (activeList.length > 0) {
+          activeList.sort(
+            (a: any, b: any) =>
+              new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+          );
+          setActiveSos(activeList[0]);
+          setShowSosPopup(true);
+          return;
+        }
+      }
+      if (!initialSosData) {
+        setActiveSos(null);
+        setShowSosPopup(false);
+      }
+    } catch (err) {
+      console.warn('[Fetch Active SOS Error]:', err);
+    }
+  }, [initialSosData, updateSosStatusMap]);
+
   // Khởi động phân giải khi mở modal
   useEffect(() => {
     if (!visible) {
       setMessages([]);
       setSelectedCustomWard(null);
+      setActiveSos(null);
+      setShowSosPopup(false);
       return;
     }
 
@@ -310,13 +498,84 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
       resolveAreaAndAuthority();
     }
 
+    if (initialSosData) {
+      setActiveSos(initialSosData);
+      setShowSosPopup(true);
+    }
+    fetchActiveSosRequest();
+
+    // Lắng nghe sự kiện tạo mới, cập nhật hoặc hủy SOS từ thiết bị (ví dụ SOSMapScreen vừa gửi hoặc hủy)
+    const subSosSync = DeviceEventEmitter.addListener('sos:sync', (updatedSos) => {
+      if (updatedSos && typeof updatedSos === 'object') {
+        const id = updatedSos._id || updatedSos.id;
+        const code = updatedSos.sosCode;
+        const st = updatedSos.status;
+        if (id || code) {
+          const entry: Record<string, string> = {};
+          if (id) entry[String(id)] = st;
+          if (code) entry[String(code)] = st;
+          updateSosStatusMap(entry);
+
+          // Cập nhật tức thời mảng tin nhắn để FlatList re-render bóng tin nhắn ngay lập tức
+          setMessages((prev) =>
+            prev.map((m) => {
+              const isThisSos =
+                (id && (String(m.sosRequestId) === String(id) || (m.sosData && String(m.sosData._id) === String(id)))) ||
+                (code && ((m.sosData && m.sosData.sosCode === code) || (m.content && m.content.includes(code))));
+              if (isThisSos) {
+                return {
+                  ...m,
+                  sosData: m.sosData ? { ...m.sosData, status: st } : { status: st, sosCode: code },
+                  content: m.content
+                    ? m.content.replace(
+                        /Trạng thái hiện tại:\s*[^\n]+/i,
+                        `Trạng thái hiện tại: ${st === 'CANCELLED' ? 'Đã hủy' : st}`
+                      )
+                    : m.content,
+                };
+              }
+              return m;
+            })
+          );
+        }
+        if (['COMPLETED', 'RESOLVED', 'CANCELLED', 'REJECTED'].includes(st)) {
+          setActiveSos((prev: any) => {
+            if (!prev) return null;
+            const prevId = String(prev._id || prev.id || '');
+            if (prevId === String(id) || (code && prev.sosCode === code)) {
+              return null;
+            }
+            return prev;
+          });
+          setShowSosPopup(false);
+          setSelectedSosDetail((prev: any) => {
+            if (!prev) return null;
+            if (String(prev.sosId) === String(id) || (code && prev.sosCode === code)) {
+              return { ...prev, status: st };
+            }
+            return prev;
+          });
+        } else if (st) {
+          setActiveSos(updatedSos);
+          setShowSosPopup(true);
+        }
+      }
+      fetchActiveSosRequest();
+    });
+
+    const subSosDeleted = DeviceEventEmitter.addListener('sos:deleted', () => {
+      fetchActiveSosRequest();
+    });
+
     return () => {
+      subSosSync.remove();
+      subSosDeleted.remove();
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
     };
-  }, [visible, resolveAreaAndAuthority]);
+  }, [visible, resolveAreaAndAuthority, initialSosData, fetchActiveSosRequest, updateSosStatusMap]);
 
   // Xử lý chuyển kênh chat sang một Phường/Xã được người dân tự chọn
   const handleSelectWard = async (wardItem: WardOption | null) => {
@@ -432,6 +691,98 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
       Alert.alert('Không thể gửi', err.message || 'Lỗi gửi tin nhắn đến địa phương.');
     } finally {
       setSending(false);
+    }
+  };
+
+  // Gửi trực tiếp yêu cầu cứu nạn SOS của người dân vào cuộc trò chuyện với địa phương
+  const handleSendSosRequest = async (sosItem: any) => {
+    if (!sosItem || sendingSos || !localInfo?.channel) return;
+
+    setSendingSos(true);
+    try {
+      const typeLabel =
+        SOS_TYPE_LABELS[sosItem.emergencyType] ||
+        (Array.isArray(sosItem.emergencyTypes) && sosItem.emergencyTypes.length > 0
+          ? sosItem.emergencyTypes.map((t: string) => SOS_TYPE_LABELS[t] || t).join(', ')
+          : sosItem.emergencyType || 'Cứu hộ khẩn cấp');
+
+      const coords = sosItem.location?.coordinates;
+      const lng = coords?.[0];
+      const lat = coords?.[1];
+      const coordsText =
+        typeof lat === 'number' && typeof lng === 'number'
+          ? `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+          : '';
+
+      const contentLines = [
+        `🆘 [YÊU CẦU CỨU NẠN KHẨN CẤP]`,
+        `• Mã cứu trợ: ${sosItem.sosCode || 'SOS-' + (sosItem._id || '').slice(-6).toUpperCase()}`,
+        `• Loại yêu cầu: ${typeLabel}`,
+        `• Số người gặp nạn: ${sosItem.people || 1} người`,
+        `• Địa chỉ: ${sosItem.address || userLocationName || 'Vị trí hiện tại'}`,
+        coordsText ? `• Tọa độ GPS: ${coordsText}` : '',
+        sosItem.contactPhone ? `• Số điện thoại: ${sosItem.contactPhone}` : '',
+        sosItem.description ? `• Tình trạng: ${sosItem.description}` : '',
+        `• Trạng thái hiện tại: ${SOS_STATUS_CONFIG[sosItem.status]?.label || sosItem.status || 'Chờ tiếp nhận'}`,
+      ].filter(Boolean);
+
+      const content = contentLines.join('\n');
+
+      const attachments =
+        Array.isArray(sosItem.images) && sosItem.images.length > 0
+          ? sosItem.images.map((url: string, idx: number) => ({
+              url,
+              fileType: 'IMAGE',
+              fileName: `sos_img_${idx + 1}.jpg`,
+            }))
+          : undefined;
+
+      const tempId = `temp_sos_${Date.now()}`;
+      const optimisticMsg: ChatMessageItem = {
+        _id: tempId,
+        senderId: user?._id || 'me',
+        senderName: user?.fullName || 'Tôi',
+        senderRole: (user?.roles || []).includes('RESCUER') ? 'RESCUER' : (user?.roles?.[0] || 'CITIZEN'),
+        channel: localInfo.channel,
+        content,
+        attachments,
+        sosRequestId: sosItem._id,
+        sosData: sosItem,
+        createdAt: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, optimisticMsg]);
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+
+      const res = await backendApi.sendChatMessage({
+        content,
+        channel: localInfo.channel,
+        recipientId: localInfo.authority?.id || undefined,
+        attachments,
+        sosRequestId: sosItem._id,
+        sosData: sosItem,
+      } as any);
+
+      if (res.success && res.data) {
+        const confirmedMsg = res.data;
+        setMessages((prev) => {
+          const already = prev.some((m) => m._id === confirmedMsg._id);
+          if (already) {
+            return prev.filter((m) => m._id !== tempId);
+          }
+          return prev.map((m) => (m._id === tempId ? confirmedMsg : m));
+        });
+      }
+
+      setShowSosPopup(false);
+      Alert.alert(
+        'Đã gửi yêu cầu SOS',
+        `Thông tin yêu cầu cứu nạn [${sosItem.sosCode || 'SOS'}] đã được gửi trực tiếp đến cán bộ trực ban địa phương.`
+      );
+    } catch (err: any) {
+      Alert.alert('Lỗi', err.message || 'Không thể gửi yêu cầu SOS vào cuộc trò chuyện.');
+    } finally {
+      setSendingSos(false);
     }
   };
 
@@ -691,6 +1042,397 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
     );
   };
 
+  // Kiểm tra tin nhắn có phải thẻ SOS hay không
+  const isSosMessage = (item: ChatMessageItem) => {
+    return (
+      Boolean(item.sosRequestId) ||
+      Boolean(item.sosData) ||
+      (typeof item.content === 'string' &&
+        (item.content.includes('[YÊU CẦU CỨU NẠN KHẨN CẤP]') ||
+          item.content.includes('🆘 [YÊU CẦU CỨU NẠN') ||
+          item.content.includes('Mã cứu trợ: SOS-')))
+    );
+  };
+
+  // Trích xuất dữ liệu chi tiết của yêu cầu SOS từ tin nhắn
+  const parseSosMessageData = (item: ChatMessageItem) => {
+    let baseData: any = null;
+    if (item.sosData && typeof item.sosData === 'object') {
+      const s = item.sosData;
+      const typeLabel =
+        SOS_TYPE_LABELS[s.emergencyType] ||
+        (Array.isArray(s.emergencyTypes) && s.emergencyTypes.length > 0
+          ? s.emergencyTypes.map((t: string) => SOS_TYPE_LABELS[t] || t).join(', ')
+          : s.emergencyType || 'Cứu hộ khẩn cấp');
+      const coords = s.location?.coordinates;
+      baseData = {
+        sosId: s._id || item.sosRequestId,
+        sosCode: s.sosCode || 'SOS',
+        typeLabel,
+        people: s.people || 1,
+        address: s.address || '',
+        phone: s.contactPhone || '',
+        description: s.description || '',
+        status: s.status || 'PENDING',
+        lat: typeof coords?.[1] === 'number' ? coords[1] : undefined,
+        lng: typeof coords?.[0] === 'number' ? coords[0] : undefined,
+        images: Array.isArray(s.images)
+          ? s.images
+          : Array.isArray(item.attachments)
+          ? item.attachments.map((a) => a.url).filter(Boolean)
+          : [],
+      };
+    } else {
+      const content = item.content || '';
+      const codeMatch = content.match(/Mã cứu trợ:\s*(SOS-[A-Z0-9\-]+)/i);
+      const typeMatch = content.match(/Loại yêu cầu:\s*([^\n]+)/i);
+      const peopleMatch = content.match(/Số người gặp nạn:\s*([0-9]+)/i);
+      const addrMatch = content.match(/Địa chỉ:\s*([^\n]+)/i);
+      const gpsMatch = content.match(/Tọa độ GPS:\s*([0-9]+\.[0-9]+),\s*([0-9]+\.[0-9]+)/i);
+      const phoneMatch = content.match(/Số điện thoại:\s*([0-9\+\s]+)/i);
+      const descMatch = content.match(/Tình trạng:\s*([^\n]+)/i);
+      const statusMatch = content.match(/Trạng thái hiện tại:\s*([^\n]+)/i);
+
+      baseData = {
+        sosId: item.sosRequestId || undefined,
+        sosCode: codeMatch ? codeMatch[1].trim() : 'SOS',
+        typeLabel: typeMatch ? typeMatch[1].trim() : 'Cứu hộ khẩn cấp',
+        people: peopleMatch ? parseInt(peopleMatch[1], 10) : 1,
+        address: addrMatch ? addrMatch[1].trim() : '',
+        phone: phoneMatch ? phoneMatch[1].trim() : '',
+        description: descMatch ? descMatch[1].trim() : '',
+        status: statusMatch ? statusMatch[1].trim() : 'PENDING',
+        lat: gpsMatch ? parseFloat(gpsMatch[1]) : undefined,
+        lng: gpsMatch ? parseFloat(gpsMatch[2]) : undefined,
+        images: Array.isArray(item.attachments) ? item.attachments.map((a) => a.url).filter(Boolean) : [],
+      };
+    }
+
+    // Ghi đè trạng thái thực tế mới nhất từ sosStatusMap nếu có
+    const liveStatus =
+      (baseData.sosId
+        ? sosStatusMapRef.current[String(baseData.sosId)] || sosStatusMap[String(baseData.sosId)]
+        : null) ||
+      (baseData.sosCode
+        ? sosStatusMapRef.current[String(baseData.sosCode)] || sosStatusMap[String(baseData.sosCode)]
+        : null);
+    if (liveStatus) {
+      baseData.status = liveStatus;
+    }
+
+    return baseData;
+  };
+
+  // Mở modal chi tiết yêu cầu SOS và đồng bộ ngay trạng thái mới nhất từ backend
+  const handlePressSosCard = async (sos: any) => {
+    // 1. Luôn ưu tiên trạng thái thời gian thực mới nhất từ sosStatusMap
+    const liveStatus =
+      (sos.sosId
+        ? sosStatusMapRef.current[String(sos.sosId)] || sosStatusMap[String(sos.sosId)]
+        : null) ||
+      (sos.sosCode
+        ? sosStatusMapRef.current[String(sos.sosCode)] || sosStatusMap[String(sos.sosCode)]
+        : null);
+    const initialStatus = liveStatus || sos.status || 'PENDING';
+    setSelectedSosDetail({ ...sos, status: initialStatus });
+
+    // 2. Tra cứu trực tiếp từ backend (hỗ trợ cả sosId và sosCode) để luôn khớp 100%
+    try {
+      let freshStatus: string | null = null;
+      let freshSosData: any = null;
+
+      if (sos.sosId) {
+        const res = await backendApi.get(`/sos/${sos.sosId}`);
+        if (res && res.success && res.data) {
+          freshStatus = res.data.status;
+          freshSosData = res.data;
+        }
+      } else if (sos.sosCode) {
+        const res = await backendApi.get(`/sos?sosCode=${sos.sosCode}`);
+        if (res && res.success && Array.isArray(res.data) && res.data.length > 0) {
+          freshStatus = res.data[0].status;
+          freshSosData = res.data[0];
+        }
+      }
+
+      if (freshStatus) {
+        const entry: Record<string, string> = {};
+        if (freshSosData?._id) entry[String(freshSosData._id)] = freshStatus;
+        if (freshSosData?.sosCode) entry[String(freshSosData.sosCode)] = freshStatus;
+        updateSosStatusMap(entry);
+
+        setSelectedSosDetail((prev: any) =>
+          prev
+            ? {
+                ...prev,
+                status: freshStatus,
+                sosId: prev.sosId || freshSosData?._id,
+              }
+            : prev
+        );
+
+        // Cập nhật luôn mảng messages
+        setMessages((prev) =>
+          prev.map((m) => {
+            const isMatch =
+              (freshSosData?._id &&
+                (String(m.sosRequestId) === String(freshSosData._id) ||
+                  (m.sosData && String(m.sosData._id) === String(freshSosData._id)))) ||
+              (freshSosData?.sosCode &&
+                ((m.sosData && m.sosData.sosCode === freshSosData.sosCode) ||
+                  (m.content && m.content.includes(freshSosData.sosCode))));
+            if (isMatch) {
+              return {
+                ...m,
+                sosData: m.sosData
+                  ? { ...m.sosData, status: freshStatus }
+                  : { status: freshStatus, sosCode: freshSosData?.sosCode },
+                content: m.content
+                  ? m.content.replace(
+                      /Trạng thái hiện tại:\s*[^\n]+/i,
+                      `Trạng thái hiện tại: ${freshStatus === 'CANCELLED' ? 'Đã hủy' : freshStatus}`
+                    )
+                  : m.content,
+              };
+            }
+            return m;
+          })
+        );
+      }
+    } catch {
+      // Fallback giữ nguyên dữ liệu đã parse
+    }
+  };
+
+  // Người dân hủy yêu cầu cứu hộ trực tiếp từ modal chi tiết trong chat
+  const handleCancelFromChat = (sosItem: any) => {
+    if (!sosItem) return;
+    Alert.alert(
+      'Hủy yêu cầu cứu nạn',
+      'Bạn có chắc chắn muốn hủy yêu cầu cứu nạn này? (Chỉ hủy khi bạn đã tự di chuyển an toàn)',
+      [
+        { text: 'Không hủy', style: 'cancel' },
+        {
+          text: 'Xác nhận hủy',
+          style: 'destructive',
+          onPress: async () => {
+            const targetId = sosItem.sosId;
+            const targetCode = sosItem.sosCode;
+            try {
+              let cancelId = targetId;
+              if (!cancelId && targetCode) {
+                const listRes = await backendApi.get(`/sos?sosCode=${targetCode}`);
+                if (listRes?.success && Array.isArray(listRes.data) && listRes.data.length > 0) {
+                  cancelId = listRes.data[0]._id;
+                }
+              }
+
+              if (!cancelId) {
+                Alert.alert('Không thể hủy', 'Không tìm thấy mã ca cứu nạn trên hệ thống.');
+                return;
+              }
+
+              const res = await backendApi.post(`/sos/${cancelId}/cancel`, {
+                cancelReason: 'Người dân tự thoát hiểm an toàn (Hủy qua Chat)',
+              });
+
+              if (res && res.success) {
+                const updated = {
+                  _id: cancelId,
+                  sosCode: targetCode,
+                  status: 'CANCELLED',
+                };
+                updateSosStatusMap({
+                  [String(cancelId)]: 'CANCELLED',
+                  ...(targetCode ? { [String(targetCode)]: 'CANCELLED' } : {}),
+                });
+                setSelectedSosDetail((prev: any) =>
+                  prev ? { ...prev, status: 'CANCELLED' } : null
+                );
+                setActiveSos((prev: any) =>
+                  prev && (String(prev._id) === String(cancelId) || prev.sosCode === targetCode)
+                    ? null
+                    : prev
+                );
+                setShowSosPopup(false);
+
+                // Đồng bộ vào tin nhắn trong chat ngay
+                setMessages((prev) =>
+                  prev.map((m) => {
+                    const isMatch =
+                      (cancelId &&
+                        (String(m.sosRequestId) === String(cancelId) ||
+                          (m.sosData && String(m.sosData._id) === String(cancelId)))) ||
+                      (targetCode &&
+                        ((m.sosData && m.sosData.sosCode === targetCode) ||
+                          (m.content && m.content.includes(targetCode))));
+                    if (isMatch) {
+                      return {
+                        ...m,
+                        sosData: m.sosData
+                          ? { ...m.sosData, status: 'CANCELLED' }
+                          : { status: 'CANCELLED', sosCode: targetCode },
+                        content: m.content
+                          ? m.content.replace(
+                              /Trạng thái hiện tại:\s*[^\n]+/i,
+                              'Trạng thái hiện tại: Đã hủy'
+                            )
+                          : m.content,
+                      };
+                    }
+                    return m;
+                  })
+                );
+
+                // Phát sự kiện toàn hệ thống cho Tab SOS và các màn hình khác
+                DeviceEventEmitter.emit('sos:sync', updated);
+                Alert.alert('Đã hủy', 'Yêu cầu cứu nạn đã được hủy thành công.');
+              } else {
+                Alert.alert('Lỗi', res?.message || 'Không thể hủy ca cứu nạn.');
+              }
+            } catch (err: any) {
+              Alert.alert('Lỗi', err.message || 'Không thể gửi lệnh hủy.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Mở modal theo dõi tiến trình cứu hộ (chặn nếu ca SOS đã hủy hoặc từ chối)
+  const handleOpenTracking = (sosId?: string | null, status?: string) => {
+    if (!sosId) return;
+    const currentStatus =
+      status ||
+      sosStatusMapRef.current[String(sosId)] ||
+      sosStatusMap[String(sosId)];
+    if (currentStatus === 'CANCELLED' || currentStatus === 'REJECTED') {
+      Alert.alert(
+        'Yêu cầu đã hủy',
+        'Yêu cầu cứu nạn này đã được hủy bỏ nên không còn tiến trình cứu hộ.'
+      );
+      return;
+    }
+    setSelectedSosDetail(null);
+    setTrackingSosId(String(sosId));
+  };
+
+  // Lấy tên cán bộ hiển thị bên trên tin nhắn của cán bộ địa phương (ưu tiên tên cụ thể như Lê Trọng Phúc)
+  const getOfficerDisplayName = (msg: ChatMessageItem) => {
+    // 1. Tên cán bộ từ senderId populated (ví dụ: Lê Trọng Phúc)
+    if (typeof msg.senderId === 'object' && msg.senderId?.fullName) {
+      const fn = msg.senderId.fullName.trim();
+      if (!fn.toLowerCase().includes('ban chỉ huy') && fn.toLowerCase() !== 'admin') {
+        return fn;
+      }
+    }
+
+    // 2. Tên cán bộ từ senderName trong tin nhắn (nếu không phải chuỗi 'Ban Chỉ Huy...')
+    if (msg.senderName && typeof msg.senderName === 'string') {
+      const sn = msg.senderName.trim();
+      if (!sn.toLowerCase().includes('ban chỉ huy') && sn.toLowerCase() !== 'admin') {
+        return sn;
+      }
+    }
+
+    // 3. Tên cán bộ trực ban phụ trách địa bàn (hình 3: localInfo.authority.name = "Lê Trọng Phúc")
+    if (localInfo?.authority?.name && !localInfo.authority.name.toLowerCase().includes('ban chỉ huy')) {
+      return localInfo.authority.name;
+    }
+
+    return 'Cán bộ trực ban';
+  };
+
+  // Render thẻ hiển thị yêu cầu cứu hộ SOS (PHIÊN BẢN NGẮN GỌN TRONG CHAT, BẤM VÀO ĐỂ XEM CHI TIẾT)
+  const renderSosCard = (item: ChatMessageItem, isMe: boolean) => {
+    const sos = parseSosMessageData(item);
+    const isCancelled = sos.status === 'CANCELLED';
+    const isRejected = sos.status === 'REJECTED';
+    const isClosed = isCancelled || isRejected;
+    const statusCfg = SOS_STATUS_CONFIG[sos.status] || SOS_STATUS_CONFIG['PENDING'];
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.sosCardCompact,
+          isMe ? styles.sosCardCompactMe : styles.sosCardCompactOther,
+          isCancelled && styles.sosCardCompactCancelled,
+        ]}
+        onPress={() => handlePressSosCard(sos)}
+        activeOpacity={0.82}
+      >
+        {/* Header rút gọn: Badge cảnh báo & Trạng thái (được căn chỉnh chống đè chữ) */}
+        <View style={styles.sosCompactTopRow}>
+          <View style={styles.sosCompactBadge}>
+            <Ionicons
+              name={isCancelled ? 'close-circle' : 'warning'}
+              size={13}
+              color={isCancelled ? '#DC2626' : '#EF4444'}
+            />
+            <Text
+              style={[styles.sosCompactBadgeText, isCancelled && { color: '#DC2626' }]}
+              numberOfLines={1}
+            >
+              YÊU CẦU CỨU NẠN
+            </Text>
+          </View>
+          <View style={[styles.sosCompactStatusPill, { backgroundColor: statusCfg.bgColor }]}>
+            <Text
+              style={[styles.sosCompactStatusText, { color: statusCfg.color }]}
+              numberOfLines={1}
+            >
+              {statusCfg.label}
+            </Text>
+          </View>
+        </View>
+
+        {/* Dòng chính: Mã SOS & Loại khẩn cấp */}
+        <View style={styles.sosCompactMainRow}>
+          <Text
+            style={[styles.sosCompactCodeText, isCancelled && styles.sosCompactCodeTextCancelled]}
+          >
+            {sos.sosCode}
+          </Text>
+          <Text style={styles.sosCompactTypeText} numberOfLines={1}>
+            {sos.typeLabel}
+          </Text>
+        </View>
+
+        {/* Địa chỉ tóm tắt (1 dòng) */}
+        {sos.address ? (
+          <View style={styles.sosCompactAddrRow}>
+            <Feather name="map-pin" size={12} color="#64748B" style={{ marginRight: 4 }} />
+            <Text style={styles.sosCompactAddrText} numberOfLines={1}>
+              {sos.address}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Footer: Số lượng nạn nhân & Gợi ý ấn xem chi tiết */}
+        <View style={styles.sosCompactFooterRow}>
+          <Text style={styles.sosCompactVictimsText}>
+            <Feather name="users" size={11} color="#64748B" /> {sos.people} người gặp nạn
+          </Text>
+          <View style={styles.sosCompactTapHint}>
+            <Text
+              style={[
+                styles.sosCompactTapHintText,
+                isClosed && { color: '#DC2626' },
+              ]}
+            >
+              {isCancelled ? 'Đã hủy (Chi tiết)' : 'Ấn xem chi tiết'}
+            </Text>
+            <Feather
+              name="chevron-right"
+              size={13}
+              color={isClosed ? '#DC2626' : '#0066FF'}
+            />
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   // Render từng bóng tin nhắn
   const renderMessageItem = ({ item }: { item: ChatMessageItem }) => {
     const senderIdStr =
@@ -739,14 +1481,14 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
           {/* Tên cán bộ phản hồi */}
           {!isMe && (
             <Text style={styles.officerNameText}>
-              {item.senderRole === 'ADMIN' || (item.senderName && item.senderName.toLowerCase().includes('admin'))
-                ? (localInfo?.authority?.department || `Ban Chỉ Huy PCTT ${displayArea}`)
-                : (item.senderName || localInfo?.authority?.name || localInfo?.authority?.department || 'Cán bộ trực ban')}
+              {getOfficerDisplayName(item)}
             </Text>
           )}
 
           {hasGps ? (
             renderGpsCard(item.content, isMe)
+          ) : isSosMessage(item) ? (
+            renderSosCard(item, isMe)
           ) : (
             <View
               style={[
@@ -1025,6 +1767,64 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
           )}
 
           {/* ========================================================
+              POPUP NHỎ GỬI THẲNG YÊU CẦU SOS ĐANG TẠO / HOẠT ĐỘNG
+             ======================================================== */}
+          {showSosPopup && activeSos && (
+            <View style={styles.sosPopupWrapper}>
+              <View style={styles.sosPopupCard}>
+                <View style={styles.sosPopupHeader}>
+                  <View style={styles.sosPopupBadge}>
+                    <View style={styles.sosPulseDot} />
+                    <Ionicons name="alert-circle" size={15} color="#DC2626" />
+                    <Text style={styles.sosPopupBadgeText}>
+                      BẠN ĐANG CÓ YÊU CẦU CỨU NẠN KHẨN CẤP
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.sosPopupCloseBtn}
+                    onPress={() => setShowSosPopup(false)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="close" size={16} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.sosPopupBody}>
+                  <View style={styles.sosPopupInfoLeft}>
+                    <View style={styles.sosPopupCodeLine}>
+                      <Text style={styles.sosPopupCodeBadge}>
+                        {activeSos.sosCode || 'SOS'}
+                      </Text>
+                      <Text style={styles.sosPopupTypeLabel} numberOfLines={1}>
+                        {SOS_TYPE_LABELS[activeSos.emergencyType] || activeSos.emergencyType || 'Cứu hộ khẩn cấp'}
+                      </Text>
+                    </View>
+                    <Text style={styles.sosPopupAddress} numberOfLines={1}>
+                      📍 {activeSos.address || 'Vị trí hiện tại'} &bull; {activeSos.people || 1} người
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.sosPopupSendActionBtn}
+                    onPress={() => handleSendSosRequest(activeSos)}
+                    disabled={sendingSos}
+                    activeOpacity={0.8}
+                  >
+                    {sendingSos ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="paper-plane" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.sosPopupSendActionText}>Gửi cho địa phương</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* ========================================================
               3. THANH NHẬP TIN NHẮN AN TOÀN TRÊN IPHONE (SAFE BOTTOM)
              ======================================================== */}
           <View
@@ -1033,6 +1833,28 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
               { paddingBottom: Math.max(insets.bottom, 12) },
             ]}
           >
+            {/* Nút bật/mở popup gửi SOS nếu người dân đang có ca SOS hoạt động */}
+            {activeSos && (
+              <TouchableOpacity
+                style={[
+                  styles.attachBtn,
+                  styles.attachBtnSos,
+                  showSosPopup && styles.attachBtnSosActive,
+                ]}
+                onPress={() => setShowSosPopup(!showSosPopup)}
+                disabled={sendingSos}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Đính kèm yêu cầu SOS"
+              >
+                <MaterialCommunityIcons
+                  name="shield-alert"
+                  size={20}
+                  color={showSosPopup ? '#DC2626' : '#EF4444'}
+                />
+              </TouchableOpacity>
+            )}
+
             {/* Nút gửi nhanh tọa độ GPS */}
             <TouchableOpacity
               style={styles.attachBtn}
@@ -1126,6 +1948,222 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
           </View>
         </Modal>
 
+        {/* Modal Chi Tiết Ca SOS Khẩn Cấp (Hiện ra khi ấn vào thẻ SOS ngắn gọn) */}
+        <Modal
+          visible={Boolean(selectedSosDetail)}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSelectedSosDetail(null)}
+        >
+          <TouchableOpacity
+            style={styles.sosDetailModalBackdrop}
+            activeOpacity={1}
+            onPress={() => setSelectedSosDetail(null)}
+          >
+            <TouchableOpacity
+              style={styles.sosDetailModalCard}
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+              {selectedSosDetail && (
+                <>
+                  {/* Header chi tiết */}
+                  <View style={styles.sosDetailModalHeader}>
+                    <View style={styles.sosCardHeaderBadge}>
+                      <Ionicons name="warning" size={16} color="#EF4444" />
+                      <Text style={styles.sosCardHeaderTitle}>YÊU CẦU CỨU NẠN KHẨN CẤP</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.sosDetailModalCloseBtn}
+                      onPress={() => setSelectedSosDetail(null)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="close" size={20} color="#64748B" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <ScrollView style={styles.sosDetailModalBody} showsVerticalScrollIndicator={false}>
+                    {/* Trạng thái & Mã */}
+                    <View style={styles.sosCardCodeRow}>
+                      <Text style={styles.sosCardCodeText}>{selectedSosDetail.sosCode}</Text>
+                      <View
+                        style={[
+                          styles.sosCardStatusPill,
+                          {
+                            backgroundColor:
+                              (SOS_STATUS_CONFIG[selectedSosDetail.status] || SOS_STATUS_CONFIG['PENDING']).bgColor,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.sosCardStatusText,
+                            {
+                              color:
+                                (SOS_STATUS_CONFIG[selectedSosDetail.status] || SOS_STATUS_CONFIG['PENDING']).color,
+                            },
+                          ]}
+                        >
+                          {(SOS_STATUS_CONFIG[selectedSosDetail.status] || SOS_STATUS_CONFIG['PENDING']).label}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text style={[styles.sosCardTypeTag, { alignSelf: 'flex-start', marginTop: 4, marginBottom: 12 }]}>
+                      {selectedSosDetail.typeLabel}
+                    </Text>
+
+                    {/* Chi tiết người gặp nạn & địa chỉ */}
+                    <View style={styles.sosCardDetailsBox}>
+                      <View style={styles.sosCardDetailItem}>
+                        <Feather name="users" size={14} color="#64748B" style={styles.sosDetailIcon} />
+                        <Text style={styles.sosDetailText}>
+                          <Text style={styles.sosDetailLabel}>Số người: </Text>
+                          <Text style={styles.sosDetailValueBold}>{selectedSosDetail.people} người gặp nạn</Text>
+                        </Text>
+                      </View>
+
+                      {selectedSosDetail.address ? (
+                        <View style={styles.sosCardDetailItem}>
+                          <Feather name="map-pin" size={14} color="#64748B" style={styles.sosDetailIcon} />
+                          <Text style={styles.sosDetailText}>
+                            <Text style={styles.sosDetailLabel}>Địa chỉ: </Text>
+                            <Text style={styles.sosDetailValue}>{selectedSosDetail.address}</Text>
+                          </Text>
+                        </View>
+                      ) : null}
+
+                      {typeof selectedSosDetail.lat === 'number' && typeof selectedSosDetail.lng === 'number' ? (
+                        <View style={styles.sosCardDetailItem}>
+                          <Feather name="crosshair" size={14} color="#64748B" style={styles.sosDetailIcon} />
+                          <Text style={styles.sosDetailText}>
+                            <Text style={styles.sosDetailLabel}>GPS: </Text>
+                            <Text style={styles.sosDetailValueMono}>
+                              {selectedSosDetail.lat.toFixed(6)}, {selectedSosDetail.lng.toFixed(6)}
+                            </Text>
+                          </Text>
+                        </View>
+                      ) : null}
+
+                      {selectedSosDetail.phone ? (
+                        <View style={styles.sosCardDetailItem}>
+                          <Feather name="phone" size={14} color="#64748B" style={styles.sosDetailIcon} />
+                          <Text style={styles.sosDetailText}>
+                            <Text style={styles.sosDetailLabel}>SĐT: </Text>
+                            <Text style={[styles.sosDetailValue, { color: '#0066FF', fontWeight: '700' }]}>
+                              {selectedSosDetail.phone}
+                            </Text>
+                          </Text>
+                        </View>
+                      ) : null}
+
+                      {selectedSosDetail.description ? (
+                        <View style={styles.sosCardDetailItem}>
+                          <Feather name="alert-circle" size={14} color="#E11D48" style={styles.sosDetailIcon} />
+                          <Text style={styles.sosDetailText}>
+                            <Text style={styles.sosDetailLabel}>Tình trạng: </Text>
+                            <Text style={[styles.sosDetailValue, { color: '#B91C1C' }]}>
+                              {selectedSosDetail.description}
+                            </Text>
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+
+                    {/* Thư viện ảnh đính kèm (nếu có) */}
+                    {selectedSosDetail.images && selectedSosDetail.images.length > 0 ? (
+                      <View style={{ marginTop: 12 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B', marginBottom: 6 }}>
+                          HÌNH ẢNH HIỆN TRƯỜNG:
+                        </Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sosCardGallery}>
+                          {selectedSosDetail.images.map((imgUrl: string, imgIdx: number) => (
+                            <TouchableOpacity
+                              key={`sos_img_modal_${imgIdx}`}
+                              activeOpacity={0.88}
+                              onPress={() => setPreviewImageUrl(imgUrl)}
+                              style={styles.sosCardImageThumbWrap}
+                            >
+                              <Image source={{ uri: imgUrl }} style={styles.sosCardImageThumb} resizeMode="cover" />
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                    ) : null}
+                  </ScrollView>
+
+                  {/* Nút thao tác dưới chân modal (Ẩn bản đồ và tiến độ khi ca SOS đã hủy) */}
+                  <View style={styles.sosDetailModalFooter}>
+                    {selectedSosDetail.status === 'CANCELLED' || selectedSosDetail.status === 'REJECTED' ? (
+                      <View style={styles.sosCancelledBanner}>
+                        <Ionicons name="close-circle" size={18} color="#DC2626" style={{ marginRight: 6 }} />
+                        <Text style={styles.sosCancelledBannerText}>
+                          {selectedSosDetail.status === 'CANCELLED'
+                            ? 'Yêu cầu cứu nạn này đã được hủy bỏ'
+                            : 'Yêu cầu cứu nạn này đã bị từ chối'}
+                        </Text>
+                      </View>
+                    ) : (
+                      <>
+                        <TouchableOpacity
+                          style={styles.sosCardCancelActionBtn}
+                          onPress={() => handleCancelFromChat(selectedSosDetail)}
+                          activeOpacity={0.8}
+                        >
+                          <Feather name="x-circle" size={13} color="#DC2626" style={{ marginRight: 4 }} />
+                          <Text style={styles.sosCardCancelActionText}>Hủy yêu cầu</Text>
+                        </TouchableOpacity>
+
+                        {typeof selectedSosDetail.lat === 'number' && typeof selectedSosDetail.lng === 'number' ? (
+                          <TouchableOpacity
+                            style={styles.sosCardMapBtn}
+                            onPress={() => {
+                              const mapUrl = Platform.select({
+                                ios: `maps:0,0?q=${selectedSosDetail.lat},${selectedSosDetail.lng}`,
+                                android: `geo:0,0?q=${selectedSosDetail.lat},${selectedSosDetail.lng}`,
+                              });
+                              Linking.openURL(mapUrl!).catch(() => {});
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Feather name="map" size={13} color="#0066FF" style={{ marginRight: 4 }} />
+                            <Text style={styles.sosCardMapBtnText}>Xem bản đồ</Text>
+                          </TouchableOpacity>
+                        ) : null}
+
+                        {selectedSosDetail.sosId ? (
+                          <TouchableOpacity
+                            style={styles.sosCardTrackBtn}
+                            onPress={() =>
+                              handleOpenTracking(
+                                String(selectedSosDetail.sosId),
+                                selectedSosDetail.status
+                              )
+                            }
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="pulse" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                            <Text style={styles.sosCardTrackBtnText}>Tiến độ cứu hộ</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </>
+                    )}
+                  </View>
+                </>
+              )}
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Modal theo dõi tiến độ SOS trực tiếp khi bấm vào thẻ SOS trong chat */}
+        {trackingSosId ? (
+          <CitizenSosTrackingModal
+            visible={!!trackingSosId}
+            sosId={trackingSosId}
+            onClose={() => setTrackingSosId(null)}
+          />
+        ) : null}
+
         {/* Modal Chọn Phường / Xã để kết nối cứu hộ */}
         <Modal
           visible={showWardPicker}
@@ -1142,7 +2180,7 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
           >
             {/* Vùng mờ bấm ngoài để đóng và ẩn bàn phím */}
             <TouchableOpacity
-              style={StyleSheet.absoluteFillObject}
+              style={StyleSheet.absoluteFill}
               activeOpacity={1}
               onPress={() => {
                 Keyboard.dismiss();
@@ -1994,5 +3032,477 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     color: '#94A3B8',
     marginTop: 6,
+  },
+
+  // --- SOS POPUP BANNER STYLES ---
+  sosPopupWrapper: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
+    backgroundColor: 'transparent',
+  },
+  sosPopupCard: {
+    backgroundColor: '#FFF1F2',
+    borderRadius: 14,
+    borderWidth: 1.2,
+    borderColor: '#FECDD3',
+    borderLeftWidth: 4,
+    borderLeftColor: '#E11D48',
+    padding: 10,
+    shadowColor: '#E11D48',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  sosPopupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  sosPopupBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sosPulseDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#E11D48',
+    marginRight: 6,
+  },
+  sosPopupBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#9F1239',
+    letterSpacing: 0.4,
+    marginLeft: 3,
+  },
+  sosPopupCloseBtn: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFE4E6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sosPopupBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sosPopupInfoLeft: {
+    flex: 1,
+    marginRight: 8,
+  },
+  sosPopupCodeLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  sosPopupCodeBadge: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#E11D48',
+    backgroundColor: '#FFE4E6',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  sosPopupTypeLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1E293B',
+    flex: 1,
+  },
+  sosPopupAddress: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  sosPopupSendActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E11D48',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    shadowColor: '#E11D48',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  sosPopupSendActionText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  attachBtnSos: {
+    backgroundColor: '#FFF1F2',
+    borderColor: '#FECDD3',
+    borderWidth: 1,
+  },
+  attachBtnSosActive: {
+    backgroundColor: '#FFE4E6',
+    borderColor: '#E11D48',
+  },
+
+  // --- SOS MESSAGE CARD STYLES ---
+  sosCardContainer: {
+    width: '100%',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1.2,
+    marginVertical: 2,
+  },
+  sosCardMe: {
+    backgroundColor: '#FFF8F8',
+    borderColor: '#FECDD3',
+    borderLeftWidth: 4,
+    borderLeftColor: '#E11D48',
+  },
+  sosCardOther: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
+    borderLeftWidth: 4,
+    borderLeftColor: '#E11D48',
+  },
+  sosCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 6,
+    borderBottomWidth: 0.8,
+    borderBottomColor: '#FEE2E2',
+    marginBottom: 6,
+  },
+  sosCardHeaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  sosCardHeaderTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#E11D48',
+    marginLeft: 5,
+    letterSpacing: 0.3,
+  },
+  sosCardStatusPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  sosCardStatusText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  sosCardCodeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  sosCardCodeText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#9F1239',
+    marginRight: 8,
+  },
+  sosCardTypeTag: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#1E293B',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  sosCardDetailsBox: {
+    gap: 4,
+    marginVertical: 4,
+  },
+  sosCardDetailItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  sosDetailIcon: {
+    marginTop: 2,
+    marginRight: 6,
+  },
+  sosDetailText: {
+    fontSize: 12,
+    color: '#334155',
+    flex: 1,
+    lineHeight: 16,
+  },
+  sosDetailLabel: {
+    color: '#64748B',
+  },
+  sosDetailValue: {
+    color: '#1E293B',
+  },
+  sosDetailValueBold: {
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  sosDetailValueMono: {
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: '#0284C7',
+    fontWeight: '600',
+  },
+  sosCardGallery: {
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  sosCardImageThumbWrap: {
+    marginRight: 6,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  sosCardImageThumb: {
+    width: 68,
+    height: 68,
+  },
+  sosCardActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 0.8,
+    borderTopColor: '#FEE2E2',
+  },
+  sosCardCancelActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+  },
+  sosCardCancelActionText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  sosCardMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  sosCardMapBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0066FF',
+  },
+  sosCardTrackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E11D48',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 7,
+  },
+  sosCardTrackBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  // --- COMPACT SOS CARD IN CHAT STREAM ---
+  sosCardCompact: {
+    width: 270,
+    maxWidth: '100%',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1.2,
+    marginVertical: 2,
+  },
+  sosCardCompactMe: {
+    backgroundColor: '#FFF8F8',
+    borderColor: '#FECDD3',
+    borderLeftWidth: 4,
+    borderLeftColor: '#E11D48',
+  },
+  sosCardCompactOther: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
+    borderLeftWidth: 4,
+    borderLeftColor: '#E11D48',
+  },
+  sosCardCompactCancelled: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    borderLeftWidth: 4,
+    borderLeftColor: '#94A3B8',
+  },
+  sosCompactTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+    gap: 6,
+  },
+  sosCompactBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+    marginRight: 6,
+  },
+  sosCompactBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#E11D48',
+    marginLeft: 4,
+    letterSpacing: 0.2,
+    flexShrink: 1,
+  },
+  sosCompactStatusPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+    flexShrink: 0,
+    alignSelf: 'center',
+  },
+  sosCompactStatusText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+  },
+  sosCompactMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  sosCompactCodeText: {
+    fontSize: 13.5,
+    fontWeight: '900',
+    color: '#9F1239',
+    marginRight: 6,
+  },
+  sosCompactCodeTextCancelled: {
+    color: '#94A3B8',
+    textDecorationLine: 'line-through',
+  },
+  sosCompactTypeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1E293B',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    flexShrink: 1,
+  },
+  sosCompactAddrRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  sosCompactAddrText: {
+    fontSize: 11.5,
+    color: '#475569',
+    flex: 1,
+  },
+  sosCompactFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 5,
+    borderTopWidth: 0.8,
+    borderTopColor: '#FEE2E2',
+    marginTop: 2,
+  },
+  sosCompactVictimsText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  sosCompactTapHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  sosCompactTapHintText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0066FF',
+  },
+
+  // --- DETAIL MODAL STYLES (OPENED ON TAP) ---
+  sosDetailModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  sosDetailModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '85%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  sosDetailModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 12,
+  },
+  sosDetailModalCloseBtn: {
+    padding: 4,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+  },
+  sosDetailModalBody: {
+    flexGrow: 0,
+    marginBottom: 14,
+  },
+  sosDetailModalFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  sosCancelledBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FEE2E2',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    width: '100%',
+  },
+  sosCancelledBannerText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#DC2626',
   },
 });

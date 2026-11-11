@@ -1,0 +1,111 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#ffffff', 'primaryBorderColor': '#000000', 'primaryTextColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff'}}}%%
+classDiagram
+    classDef default fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000;
+
+    class PrescriptionController {
+        +getAllPrescriptions()
+        +getPrescriptionById(id)
+        +createPrescription(requestDto)
+        +updatePrescription(id, requestDto)
+    }
+
+    class PrescriptionService {
+        +createPrescription()
+        +addPrescriptionItem()
+        +finalizePrescription()
+    }
+
+    class MedicineRepository {
+        <<interface>>
+        +findAll()
+        +findById()
+    }
+
+    class PrescriptionItemRepository {
+        <<interface>>
+        +save()
+        +findByPrescription()
+    }
+
+    class PrescriptionRepository {
+        <<interface>>
+        +save()
+        +findByMedicalRecord()
+    }
+
+    class Medicine {
+        +medicineId
+        +name
+        +strength
+        +unitPrice
+    }
+
+    class PrescriptionItem {
+        +itemId
+        +dosage
+        +frequency
+        +duration
+        +quantity
+    }
+
+    class Prescription {
+        +prescriptionId
+        +status
+        +note
+        +createdAt
+    }
+
+    class MedicalRecordController {
+        +getAllMedicalRecords()
+        +getMedicalRecordById(id)
+        +createMedicalRecord(requestDto)
+        +updateMedicalRecord(id, requestDto)
+    }
+
+    class MedicalRecordService {
+        +createMedicalRecord()
+        +findMedicalHistory()
+        +updateMedicalRecord()
+    }
+
+    class MedicalRecordRepository {
+        <<interface>>
+        +save()
+        +findById()
+        +findByPatientId()
+    }
+
+    class Appointment {
+        +appointmentId
+        +startTime
+        +endTime
+        +status
+    }
+
+    class MedicalRecord {
+        +recordId
+        +diagnosis
+        +advice
+        +createdAt
+    }
+
+    PrescriptionController ..> PrescriptionService : uses
+    MedicalRecordController ..> MedicalRecordService : uses
+
+    PrescriptionService ..> MedicineRepository
+    PrescriptionService ..> PrescriptionItemRepository
+    PrescriptionService ..> PrescriptionRepository
+    PrescriptionService ..> MedicalRecordRepository : uses
+
+    MedicalRecordService ..> MedicalRecordRepository
+
+    MedicineRepository ..> Medicine : manages
+    PrescriptionItemRepository ..> PrescriptionItem : manages
+    PrescriptionRepository ..> Prescription : manages
+    MedicalRecordRepository ..> MedicalRecord : manages
+
+    Appointment --> MedicalRecord : generates
+    MedicalRecord "1" *-- "1" Prescription
+    Prescription "1" *-- "1..*" PrescriptionItem
+    PrescriptionItem "0..*" --> "1" Medicine
+

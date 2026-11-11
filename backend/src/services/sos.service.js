@@ -217,6 +217,7 @@ const getSosRequests = async (query = {}, user = null) => {
   if (query.status) filter.status = query.status;
   if (query.priority) filter.priority = query.priority;
   if (query.emergencyType) filter.emergencyType = query.emergencyType;
+  if (query.sosCode) filter.sosCode = String(query.sosCode).trim();
   if (query._id) filter._id = query._id;
   if (query.$or) filter.$or = query.$or;
 

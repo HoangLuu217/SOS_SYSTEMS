@@ -1,0 +1,37 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#ffffff', 'primaryBorderColor': '#000000', 'primaryTextColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff', 'actorBkg': '#ffffff', 'actorBorder': '#000000', 'actorTextColor': '#000000', 'signalColor': '#000000', 'signalTextColor': '#000000', 'labelBoxBkgColor': '#ffffff', 'labelBoxBorderColor': '#000000', 'labelTextColor': '#000000'}}}%%
+sequenceDiagram
+    autonumber off
+    actor User as User
+    participant UI as :ChatConversationUI
+    participant Controller as :ChatController
+    participant Service as :ChatService
+    participant MsgModel as :ChatMessage
+    participant UserModel as :User
+    participant DB as :MongoDB
+
+    User->>UI: 1: Open "Mission Chat / Conversations" tab
+    UI->>Controller: 1.1: getConversations()
+    Controller->>Service: 1.1.1: getConversations(currentUser)
+
+    %% 1. Truy vấn tin nhắn mới nhất trong kênh chỉ huy tác chiến chung
+    Service->>MsgModel: 1.1.1.1: findOne({ channel: 'COMMAND_GENERAL' }).sort({ createdAt: -1 })
+    MsgModel->>DB: 1.1.1.1.1: db.chat_messages.findOne(...)
+    DB-->>MsgModel: return generalLatestMsg
+    MsgModel-->>Service: return generalSummary
+
+    %% 2. Truy vấn danh sách các kênh cứu hộ nhiệm vụ & người chat trực tiếp
+    Service->>MsgModel: 1.1.1.2: aggregate([ { $match: ... }, { $group: { _id: '$channel' } } ])
+    MsgModel->>DB: 1.1.1.2.1: db.chat_messages.aggregate(...)
+    DB-->>MsgModel: return channelList
+    MsgModel-->>Service: return channelList
+
+    %% 3. Nạp thông tin người tham gia hội thoại (Avatar, tên cán bộ/đội cứu hộ)
+    Service->>UserModel: 1.1.1.3: find({ _id: { $in: participantIds } })
+    UserModel->>DB: 1.1.1.3.1: db.users.find({ _id: { $in: ... } })
+    DB-->>UserModel: return participantsData
+    UserModel-->>Service: return participantsData
+
+    Service->>Service: 1.1.1.4: formatConversationList(channelList, participantsData)
+    Service-->>Controller: return conversationsDto (list of channels, unread counts, latest messages)
+    Controller-->>UI: return 200 OK (conversationsDto)
+    UI-->>User: 1.2: Render conversation list with unread badges, last message preview and timestamps

@@ -1,0 +1,83 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#ffffff', 'primaryBorderColor': '#000000', 'primaryTextColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff', 'actorBkg': '#ffffff', 'actorBorder': '#000000', 'actorTextColor': '#000000', 'signalColor': '#000000', 'signalTextColor': '#000000', 'labelBoxBkgColor': '#ffffff', 'labelBoxBorderColor': '#000000', 'labelTextColor': '#000000'}}}%%
+sequenceDiagram
+    autonumber off
+    actor Admin as Admin / Authority
+    participant UI as :AuditLogsView
+    participant Auth as :AuthMiddleware
+    participant Role as :RoleMiddleware
+    participant Controller as :AuditController
+    participant Service as :AuditService
+    participant AuditModel as :AuditLog
+    participant AreaModel as :AdministrativeArea
+    participant DB as :MongoDB
+
+    Admin->>UI: 1: Navigate to "Nhật ký hệ thống" page
+    UI->>UI: 1.1: Set filters (roleFilter, searchTerm, dateRange)
+
+    UI->>Auth: 1.2: GET /api/audit-logs?page=1&limit=20&from=...&to=...&actorRole=...
+    activate Auth
+    Auth->>Auth: 1.2.1: Verify JWT access token
+    Auth->>Role: 1.2.2: Check role in [ADMIN, LOCAL_AUTHORITY]
+
+    alt [Unauthorized / Forbidden]
+        Role-->>UI: return 401/403 Unauthorized
+        UI-->>Admin: Display "Access Denied" notification
+    else [Authorized]
+        Role->>Controller: Forward authenticated request
+        deactivate Auth
+        activate Controller
+
+        Controller->>Service: 1.2.3: getAuditLogs(query, currentUser)
+        activate Service
+
+        Service->>Service: 1.2.3.1: Build filter (actorId, actorRole, action, entityType, from/to date range)
+
+        alt [Role = LOCAL_AUTHORITY (Multi-tenancy Scope)]
+            Service->>AreaModel: 1.2.3.2: find({ parentId: userAreaId, status: "ACTIVE" })
+            activate AreaModel
+            AreaModel->>DB: 1.2.3.2.1: db.administrative_areas.find({ parentId, status })
+            activate DB
+            DB-->>AreaModel: return childAreas
+            deactivate DB
+
+            AreaModel->>DB: 1.2.3.2.2: db.administrative_areas.find({ parentId: { $in: childIds } })
+            activate DB
+            DB-->>AreaModel: return grandChildAreas
+            deactivate DB
+            AreaModel-->>Service: return descendantAreaIds
+            deactivate AreaModel
+
+            Service->>Service: 1.2.3.3: Add $or filter [areaId in allowedAreaIds, actorId = currentUser._id]
+        else [Role = ADMIN]
+            Service->>Service: 1.2.3.3: No area restriction (full system access)
+        end
+
+        Service->>AuditModel: 1.2.3.4: find(filter).populate("actorId", "fullName phone email roles authority").populate("areaId", "name code type").sort({ createdAt: -1 }).skip(skip).limit(limit)
+        activate AuditModel
+        AuditModel->>DB: 1.2.3.4.1: db.audit_logs.aggregate([{ $match: filter }, { $lookup: "users" }, { $lookup: "administrative_areas" }, { $sort }, { $skip }, { $limit }])
+        activate DB
+        DB-->>AuditModel: return auditLogDocuments[]
+        deactivate DB
+        AuditModel-->>Service: return logs[]
+        deactivate AuditModel
+
+        Service->>AuditModel: 1.2.3.5: countDocuments(filter)
+        activate AuditModel
+        AuditModel->>DB: 1.2.3.5.1: db.audit_logs.countDocuments(filter)
+        activate DB
+        DB-->>AuditModel: return totalCount
+        deactivate DB
+        AuditModel-->>Service: return total
+        deactivate AuditModel
+
+        Service-->>Controller: return { logs, pagination: { page, limit, total, totalPages } }
+        deactivate Service
+
+        Controller-->>UI: return 200 OK ({ data: logs, pagination })
+        deactivate Controller
+
+        UI->>UI: 1.3: Apply client-side filters (roleFilter, searchTerm)
+        UI->>UI: 1.4: Render audit log cards with actor info, action badge, metadata details, timestamp
+        UI-->>Admin: 1.5: Display paginated audit log timeline
+    end
+

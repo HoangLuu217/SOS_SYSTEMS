@@ -1,0 +1,28 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#ffffff', 'primaryBorderColor': '#000000', 'primaryTextColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff', 'actorBkg': '#ffffff', 'actorBorder': '#000000', 'actorTextColor': '#000000', 'signalColor': '#000000', 'signalTextColor': '#000000', 'labelBoxBkgColor': '#ffffff', 'labelBoxBorderColor': '#000000', 'labelTextColor': '#000000'}}}%%
+sequenceDiagram
+    autonumber off
+    actor User as User
+    participant UI as :LogoutUI
+    participant Controller as :AuthController
+    participant Service as :AuthService
+    participant UserModel as :User
+    participant DB as :MongoDB
+
+    User->>UI: 1: Click "Log out" button
+    UI->>Controller: 1.1: logout(refreshToken)
+    Controller->>Service: 1.1.1: logout(userId, refreshToken)
+
+    alt [No Refresh Token Provided]
+        Service-->>Controller: return success (session already invalid)
+    else [Valid Refresh Token]
+        Service->>Service: 1.1.1.1: hashToken(refreshToken)
+        Service->>UserModel: 1.1.1.2: updateOne({ _id: userId }, { $pull: { sessions: { refreshTokenHash } } })
+        UserModel->>DB: 1.1.1.2.1: db.users.updateOne({ $pull: { sessions } })
+        DB-->>UserModel: confirm session removed
+        UserModel-->>Service: confirm update
+    end
+
+    Service-->>Controller: return success message
+    Controller-->>UI: return 200 OK (clear cookies)
+    UI->>UI: 1.2: Clear tokens from LocalStorage/AsyncStorage
+    UI-->>User: 1.3: Display notification "Logged out successfully" & Redirect to Login Screen

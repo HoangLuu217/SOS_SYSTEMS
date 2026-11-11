@@ -281,7 +281,7 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
             cancelReason: 'Người dân tự thoát hiểm an toàn',
           });
           if (res.success) {
-            const updated = { ...sos, status: 'CANCELLED' };
+            const updated = { ...sos, _id: sos._id, sosCode: sos.sosCode, status: 'CANCELLED' };
             setSos(updated);
             DeviceEventEmitter.emit('sos:sync', updated);
             onSosCompleted?.(updated);
@@ -292,7 +292,10 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
               message: 'Yêu cầu cứu nạn đã được hủy thành công.',
               confirmText: 'Đóng',
               confirmStyle: 'primary',
-              onConfirm: () => setInAppAlert(null),
+              onConfirm: () => {
+                setInAppAlert(null);
+                onClose?.();
+              },
             });
           } else {
             setInAppAlert({

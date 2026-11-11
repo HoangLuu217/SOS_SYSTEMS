@@ -31,6 +31,12 @@ router.use(authenticate);
 router.get('/conversations', chatController.getConversations);
 
 /**
+ * @route   GET /chat/citizen-info/:userId
+ * @desc    Lấy thông tin người dân đang nhắn (SĐT, Địa chỉ, Người liên hệ khẩn cấp, Ca SOS)
+ */
+router.get('/citizen-info/:userId', chatController.getCitizenInfo);
+
+/**
  * @route   GET /chat/messages
  * @desc    Lấy lịch sử tin nhắn của một kênh hoặc người nhận
  */

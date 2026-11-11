@@ -1,0 +1,74 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#ffffff', 'primaryBorderColor': '#000000', 'primaryTextColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff', 'actorBkg': '#ffffff', 'actorBorder': '#000000', 'actorTextColor': '#000000', 'signalColor': '#000000', 'signalTextColor': '#000000', 'labelBoxBkgColor': '#ffffff', 'labelBoxBorderColor': '#000000', 'labelTextColor': '#000000'}}}%%
+sequenceDiagram
+    autonumber off
+    actor Citizen as Citizen
+    participant UI as :SosMobileUI
+    participant ClientMgr as :OfflineSosManager
+    participant NativeSMS as :DeviceSMSApp
+    participant Gateway as :TextBeeGateway
+    participant Controller as :SosController
+    participant Service as :SosService
+    participant TextBee as :TextBeeService
+    participant SosModel as :SosRequest
+    participant DB as :MongoDB
+    participant Socket as :SocketIOServer
+
+    Citizen->>UI: 1: Press "Emergency SOS" button (Offline / No Network)
+    UI->>ClientMgr: 1.1: checkConnectivity()
+    ClientMgr-->>UI: return false (No Internet / Network Failure)
+
+    UI->>UI: 1.2: Display "Switch to SMS Fallback Mode" modal
+    Citizen->>UI: 1.3: Confirm send via SMS
+    
+    UI->>ClientMgr: 1.4: generateSmsPayload(sosData)
+    ClientMgr->>ClientMgr: Format syntax: "SOS [Phone] [Lat,Lng] [Type] [People] [Note]"
+    
+    ClientMgr->>NativeSMS: 1.5: triggerNativeSms(gatewayHotline, payload)
+    NativeSMS-->>Citizen: Open native SMS messenger pre-filled with payload
+    Citizen->>NativeSMS: 1.6: Click "Send SMS"
+    
+    NativeSMS->>Gateway: 1.7: Send SMS via Cellular Network (SIM to SIM)
+    activate Gateway
+    Gateway->>Gateway: 1.8: Android TextBee Agent receives SMS on physical SIM
+    
+    Gateway->>Controller: 1.9: POST /api/sos/sms-fallback-webhook (senderPhone, messageText, timestamp)
+    deactivate Gateway
+    activate Controller
+
+    Controller->>Service: 1.9.1: processInboundSmsSos(smsPayload)
+    activate Service
+
+    Service->>Service: 1.9.1.1: parseSmsContent(messageText) -> { coordinates, emergencyType, people, notes }
+    Service->>Service: 1.9.1.2: resolveAreaByCoordinates(lat, lng)
+
+    Service->>SosModel: 1.9.1.3: create({ sosCode, contactPhone, location, emergencyType, priority: "CRITICAL", sourceChannel: "SMS_FALLBACK" })
+    activate SosModel
+    SosModel->>DB: 1.9.1.3.1: db.sos_requests.insertOne(...)
+    activate DB
+    DB-->>SosModel: return savedSosDoc
+    deactivate DB
+    SosModel-->>Service: return createdSosRequest
+    deactivate SosModel
+
+    %% Gửi SMS xác nhận ngược lại cho người dân qua TextBee API
+    Service->>TextBee: 1.9.1.4: sendSms(senderPhone, confirmationMessage)
+    activate TextBee
+    TextBee->>Gateway: 1.9.1.4.1: POST /devices/{deviceId}/send-sms (recipient, message)
+    activate Gateway
+    Gateway->>NativeSMS: 1.9.1.4.2: Deliver confirmation SMS to Citizen phone
+    NativeSMS-->>Citizen: "SOS SYSTEMS: Đã nhận yêu cầu cứu hộ [Mã SOS]! Đội cứu nạn đang xuất phát."
+    Gateway-->>TextBee: return { success: true, smsBatchId }
+    deactivate Gateway
+    TextBee-->>Service: return { success: true }
+    deactivate TextBee
+
+    %% Đồng bộ thời gian thực lên bản đồ tác chiến Trung tâm chỉ huy
+    Service->>Socket: 1.9.1.5: emit("new_sos_request", createdSosRequest)
+    Socket-->>UI: Real-time broadcast to Command Center Tactical Map
+
+    Service-->>Controller: return { success: true, sosCode }
+    deactivate Service
+
+    Controller-->>Gateway: return 200 OK (Webhook received)
+    deactivate Controller
+

@@ -337,6 +337,71 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
     };
   }, []);
 
+  // Lắng nghe sự kiện đồng bộ và hủy ca SOS từ Chat hoặc Màn hình theo dõi
+  useEffect(() => {
+    const handleSosSync = (updatedSos: any) => {
+      if (updatedSos && typeof updatedSos === 'object') {
+        const id = updatedSos._id || updatedSos.id;
+        const code = updatedSos.sosCode;
+        const isCancelled = ['CANCELLED', 'COMPLETED', 'RESOLVED', 'REJECTED'].includes(updatedSos.status);
+
+        if (isCancelled) {
+          // 1. Nếu ca vừa hủy là ca đang hiển thị ở màn hình thành công thì xóa ngay
+          setSuccessData((prev) => {
+            if (!prev) return null;
+            if (
+              (id && String(prev.sosId) === String(id)) ||
+              (code && prev.sosCode === code)
+            ) {
+              return null;
+            }
+            return prev;
+          });
+
+          // 2. Tắt modal theo dõi nếu đang mở cho ca này
+          setTrackingSosId((prev) => {
+            if (prev && id && String(prev) === String(id)) {
+              setShowTrackingModal(false);
+              return null;
+            }
+            return prev;
+          });
+
+          // 3. Xóa cảnh báo trùng vị trí nếu ca cũ đã hủy
+          setNearbyAlertData((prev) => {
+            if (!prev) return null;
+            if (
+              (id && String(prev.sosId) === String(id)) ||
+              (code && prev.sosCode === code)
+            ) {
+              return null;
+            }
+            return prev;
+          });
+
+          // 4. Xóa khỏi danh sách cảnh báo giới hạn 3 ca nếu ca này đã hủy
+          setLimitAlertData((prev) => {
+            if (!prev || !prev.activeSosList) return null;
+            const filteredList = prev.activeSosList.filter(
+              (item) => String(item._id) !== String(id) && item.sosCode !== code
+            );
+            if (filteredList.length === 0) return null;
+            return {
+              ...prev,
+              activeCount: filteredList.length,
+              activeSosList: filteredList,
+            };
+          });
+        }
+      }
+    };
+
+    const sub = DeviceEventEmitter.addListener('sos:sync', handleSosSync);
+    return () => {
+      sub.remove();
+    };
+  }, []);
+
   // Tự động tải lại danh bạ khi mở Modal Bản đồ
   useEffect(() => {
     if (showMapPickerModal) {
@@ -1127,6 +1192,12 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
               setShowTrackingModal(false);
               setSuccessData(null);
               onClose?.();
+            }}
+            onSosCompleted={(updatedSos) => {
+              if (updatedSos?.status === 'CANCELLED') {
+                setShowTrackingModal(false);
+                setSuccessData(null);
+              }
             }}
           />
         ) : null}
@@ -2082,6 +2153,12 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
           onClose={() => {
             setShowTrackingModal(false);
             setTrackingSosId(null);
+          }}
+          onSosCompleted={(updatedSos) => {
+            if (updatedSos?.status === 'CANCELLED') {
+              setShowTrackingModal(false);
+              setTrackingSosId(null);
+            }
           }}
         />
       ) : null}

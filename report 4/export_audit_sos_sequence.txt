@@ -1,0 +1,102 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#ffffff', 'primaryBorderColor': '#000000', 'primaryTextColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff', 'actorBkg': '#ffffff', 'actorBorder': '#000000', 'actorTextColor': '#000000', 'signalColor': '#000000', 'signalTextColor': '#000000', 'labelBoxBkgColor': '#ffffff', 'labelBoxBorderColor': '#000000', 'labelTextColor': '#000000'}}}%%
+sequenceDiagram
+    autonumber off
+    actor Admin as Admin / Authority
+    participant UI as :ReportsView
+    participant Controller as :AuditController
+    participant SosCtrl as :SosController
+    participant AdminCtrl as :AdminController
+    participant Service as :AuditService
+    participant SosService as :SosService
+    participant AuditModel as :AuditLog
+    participant SosModel as :SosRequest
+    participant DB as :MongoDB
+    participant Exporter as :ExportReportsExcel
+    participant Browser as :BrowserDownloadAPI
+
+    Admin->>UI: 1: Navigate to "Báo cáo & Thống kê" page
+    Admin->>UI: 1.1: Select time range and scope filters
+    Admin->>UI: 1.2: Click "Xuất CSV" or "Xuất Excel (.xlsx)"
+
+    alt [Export CSV - Lightweight Single-Table]
+        UI->>Controller: 1.3a: GET /api/audit-logs?from=...&to=...&limit=200
+        activate Controller
+        Controller->>Service: 1.3a.1: getAuditLogs(query, currentUser)
+        activate Service
+        Service->>AuditModel: 1.3a.1.1: find(filter).populate("actorId").populate("areaId").sort({ createdAt: -1 }).limit(200)
+        activate AuditModel
+        AuditModel->>DB: 1.3a.1.1.1: db.audit_logs.find(...)
+        activate DB
+        DB-->>AuditModel: return auditLogDocuments[]
+        deactivate DB
+        AuditModel-->>Service: return logs[]
+        deactivate AuditModel
+        Service-->>Controller: return { logs, pagination }
+        deactivate Service
+        Controller-->>UI: return 200 OK (logs[])
+        deactivate Controller
+
+        UI->>UI: 1.4a: Build CSV rows from logs (escapeCsvCell for each field)
+        UI->>UI: 1.4a.1: headers = ["Thoi gian", "Nguoi thuc hien", "Vai tro", "Hanh dong", "Thuc the", "Khu vuc", "Chi tiet"]
+        UI->>UI: 1.4a.2: rows = logs.map(log => [formatDateTime, actorName, roleBadge, action, entityType, areaName, metadata])
+        UI->>Browser: 1.5a: new Blob([csvContent], { type: "text/csv" })
+        Browser->>Browser: 1.5a.1: URL.createObjectURL(blob)
+        Browser-->>Admin: 1.6a: Trigger download "Nhat_ky_he_thong_YYYY-MM-DD.csv"
+
+    else [Export Excel (.xlsx) - Multi-Sheet Comprehensive Report]
+        par [Fetch Audit Logs]
+            UI->>Controller: 1.3b.1: GET /api/audit-logs?from=...&to=...&limit=200
+            activate Controller
+            Controller->>Service: getAuditLogs(query, currentUser)
+            activate Service
+            Service->>AuditModel: find(filter).populate(...).sort(...).limit(200)
+            activate AuditModel
+            AuditModel->>DB: db.audit_logs.find(...)
+            activate DB
+            DB-->>AuditModel: return logs[]
+            deactivate DB
+            AuditModel-->>Service: return logs[]
+            deactivate AuditModel
+            Service-->>Controller: return { logs }
+            deactivate Service
+            Controller-->>UI: return auditLogs[]
+            deactivate Controller
+        and [Fetch SOS Requests]
+            UI->>SosCtrl: 1.3b.2: GET /api/sos?from=...&to=...
+            activate SosCtrl
+            SosCtrl->>SosService: getSosRequests(query, user)
+            activate SosService
+            SosService->>SosModel: find(filter).populate("citizenId").sort({ createdAt: -1 })
+            activate SosModel
+            SosModel->>DB: db.sos_requests.find(...)
+            activate DB
+            DB-->>SosModel: return sosDocuments[]
+            deactivate DB
+            SosModel-->>SosService: return sosList[]
+            deactivate SosModel
+            SosService-->>SosCtrl: return sosList[]
+            deactivate SosService
+            SosCtrl-->>UI: return sosList[]
+            deactivate SosCtrl
+        and [Fetch Dashboard Statistics]
+            UI->>AdminCtrl: 1.3b.3: GET /api/admin/statistics
+            activate AdminCtrl
+            AdminCtrl-->>UI: return stats{}
+            deactivate AdminCtrl
+        end
+
+        UI->>Exporter: 1.4b: exportDashboardWorkbook({ stats, sosList, auditLogs, rescueTeams, ... })
+        activate Exporter
+        Exporter->>Exporter: 1.4b.1: buildAllSheets(rawData) -> SheetSpec[] (multi-sheet: Tong Hop, SOS, Audit Logs, Doi Cuu Ho, ...)
+        Exporter->>Exporter: 1.4b.2: buildWorksheetXml(sheet) for each sheet
+        Exporter->>Exporter: 1.4b.3: buildStylesXml() (header styles, colors, borders, number formats)
+        Exporter->>Exporter: 1.4b.4: createZipArchive(xmlFiles) -> Uint8Array (.xlsx = ZIP of XML)
+
+        Exporter->>Browser: 1.5b: new Blob([zipBytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+        deactivate Exporter
+        Browser->>Browser: 1.5b.1: URL.createObjectURL(blob)
+        Browser-->>Admin: 1.6b: Trigger download "Bao_Cao_Thong_Ke_SOS_YYYY-MM-DD.xlsx"
+    end
+
+    Admin->>Admin: 1.7: Open downloaded file in Excel / Google Sheets / LibreOffice
+
