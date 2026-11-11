@@ -1,8 +1,9 @@
 import React from 'react';
 import { Sidebar, type NavItemKey } from './Sidebar';
-import { MapPin } from 'lucide-react';
+import { MapPin, Globe } from 'lucide-react';
 import { AuthorPortal, AdminPortal } from '@/features/map-operation';
 import { NAV_TITLES } from '@/constants/navConfig';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import type { User } from '@/types/auth';
 
 export interface DashboardLayoutProps {
@@ -91,7 +92,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               </div>
 
               {/* Huy hiệu khu vực địa bàn phụ trách ở góc phải header */}
-              {isAuthority && (
+              {isAuthority ? (
                 <div
                   style={{
                     display: 'inline-flex',
@@ -117,6 +118,26 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                         : `${userAreaName}, Thành phố Đà Nẵng`
                       : 'Xã Xuân Phú, Thành phố Đà Nẵng'}
                   </span>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    background: '#f0f9ff',
+                    border: '1px solid #bae6fd',
+                    borderRadius: 8,
+                    padding: '6px 14px',
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: '#0369a1',
+                    boxShadow: '0 1px 2px rgba(2, 132, 199, 0.05)',
+                  }}
+                  title="Quyền Quản trị viên hệ thống - Giám sát & Điều phối tác chiến cứu hộ Toàn quốc"
+                >
+                  <Globe size={14} style={{ color: '#0284c7' }} />
+                  <span>Phạm vi: Toàn quốc (Toàn hệ thống)</span>
                 </div>
               )}
             </header>
@@ -145,7 +166,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               }}
             >
               <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                {children}
+                <ErrorBoundary fallbackTitle={`Đã xảy ra sự cố khi tải dữ liệu ${currentMeta.title}`}>
+                  {children}
+                </ErrorBoundary>
               </div>
             </div>
           </>

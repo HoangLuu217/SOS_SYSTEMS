@@ -256,7 +256,7 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
               cursor: 'pointer',
               color: '#334155',
             }}
-            title="Đưa về trung tâm TP Đà Nẵng"
+            title="Đưa về trung tâm bản đồ tác chiến Toàn quốc"
           >
             <RotateCcw size={15} />
           </button>

@@ -20,11 +20,13 @@ import {
   ZoomIn,
   Calendar,
   Compass,
+  FilterX,
 } from 'lucide-react';
 import type { User } from '@/types/auth';
 import type { AdministrativeAreaItem } from '@/types/dashboard';
 import { fetchAdminUsers, verifyRescuer, fetchAdministrativeAreas } from '@/api';
 import { domainDService } from '@/services/domainDService';
+import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import { toast } from '@/components/common/toast';
 import { onRescuerApplicationSubmitted, onRescuerVerificationChanged } from '@/services/socketService';
 import './RescuerApprovalView.css';
@@ -101,9 +103,15 @@ const SKILL_LABELS: Record<string, string> = {
 };
 
 const SPECIALIZATION_LABELS: Record<string, string> = {
-  FLOOD_RESCUE: 'Thủy bộ vượt lũ',
-  SEARCH_RESCUE: 'Tìm kiếm & Cứu nạn',
-  MEDICAL_RESCUE: 'Sơ cấp cứu y tế',
+  WATER_RESCUE: 'Đội cứu hộ đường thủy',
+  EVACUATION: 'Đội sơ tán dân',
+  MEDICAL_RESCUE: 'Đội y tế',
+  LOGISTICS: 'Đội hậu cần',
+  SEARCH_RESCUE: 'Đội tìm kiếm cứu nạn',
+  COMMUNICATION: 'Đội thông tin liên lạc',
+  SECURITY: 'Đội an ninh',
+  // Tương thích ngược
+  FLOOD_RESCUE: 'Đội cứu hộ đường thủy',
   FIRE_RESCUE: 'PCCC & Cứu sập',
   VEHICLE_OP: 'Vận hành phương tiện',
   OTHER: 'Cứu hộ tổng hợp',
@@ -114,16 +122,16 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
   // 1. Phân quyền và Địa bàn Local Authority vs Admin
   const activeOfficer = domainDService.getActiveOfficer();
 
-  const isAuthority = Boolean(
+  const isAdmin = Boolean(
+    user?.roles?.includes('ADMIN') ||
+    (user as any)?.role === 'ADMIN'
+  );
+
+  const isAuthority = !isAdmin && Boolean(
     user?.roles?.includes('LOCAL_AUTHORITY') ||
     user?.roles?.includes('AUTHORITY') ||
     Boolean(user?.authority?.areaId || user?.authority?.areaName)
   );
-
-  const isAdmin = Boolean(
-    user?.roles?.includes('ADMIN') ||
-    (user as any)?.role === 'ADMIN'
-  ) && !isAuthority;
 
   const userAreaId =
     user?.authority?.areaId ||
@@ -151,13 +159,46 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
   const [applicants, setApplicants] = useState<RescuerApplicant[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshSpin, setRefreshSpin] = useState(false);
-  const [_areas, setAreas] = useState<AdministrativeAreaItem[]>([]);
+  // Hook bộ lọc hành chính toàn quốc từ API
+  const {
+    provinces,
+    provincesLoading,
+    selectedProvince,
+    setSelectedProvince,
+    wards,
+    wardsLoading,
+    selectedAreaId: areaFilter,
+    setSelectedAreaId: setAreaFilter,
+    isApplicantInTargetArea,
+  } = useAdministrativeFilter({
+    isAdmin,
+    userAreaId,
+    userAreaName,
+  });
 
   // 3. States bộ lọc
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [areaFilter, setAreaFilter] = useState<string>('ALL');
   const [specFilter, setSpecFilter] = useState<string>('ALL');
+
+  const hasActiveFilters = Boolean(
+    (isAdmin && (selectedProvince !== 'ALL' || areaFilter !== 'ALL')) ||
+    (!isAdmin && areaFilter !== 'ALL') ||
+    statusFilter !== 'ALL' ||
+    specFilter !== 'ALL' ||
+    searchQuery.trim() !== ''
+  );
+
+  const handleClearFilters = useCallback(() => {
+    if (isAdmin) {
+      setSelectedProvince('ALL');
+    }
+    setAreaFilter('ALL');
+    setStatusFilter('ALL');
+    setSpecFilter('ALL');
+    setSearchQuery('');
+    setCurrentPage(1);
+  }, [isAdmin, setSelectedProvince, setAreaFilter]);
 
   // 4. Phân trang
   const [currentPage, setCurrentPage] = useState(1);
@@ -236,9 +277,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
         fetchAdministrativeAreas(),
       ]);
 
-      if (areasRes.status === 'fulfilled' && areasRes.value.success && Array.isArray(areasRes.value.data)) {
-        setAreas(areasRes.value.data);
-      }
+      // Dữ liệu khu vực hành chính được quản lý tập trung qua useAdministrativeFilter
 
       let dbUsers: any[] = [];
       if (usersRes.status === 'fulfilled') {
@@ -383,7 +422,6 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
   // - Nếu là Admin (isAdmin): Giữ nguyên xem toàn bộ hồ sơ trên toàn hệ thống
   const authorizedApplicants = useMemo(() => {
     if (isAdmin) return applicants;
-    if (!cleanLocalCommune) return applicants;
 
     const targetAreaId = userAreaId ? String(userAreaId) : '';
     const targetCommune = (localCommuneName || userAreaName || '')
@@ -398,28 +436,29 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
     const normTarget = normalizeStr(targetCommune);
 
     return applicants.filter((app) => {
-      if (userAreaId && app.areaId === userAreaId) return true;
-      const appLocation = `${app.communeName || ''} ${app.areaName || ''} ${app.address || ''}`.toLowerCase();
-      return appLocation.includes(cleanLocalCommune);
       // 1. Khớp theo ID địa bàn
       if (targetAreaId && app.areaId && String(app.areaId) === targetAreaId) {
         return true;
       }
 
       // 2. Khớp theo tên xã/phường phụ trách (hỗ trợ cả có dấu và không dấu Unicode)
-      if (targetCommune) {
-        const appLocation = `${app.communeName || ''} ${app.areaName || ''} ${app.address || ''}`.toLowerCase();
-        if (appLocation.includes(targetCommune)) return true;
+      const appLocation = `${app.communeName || ''} ${app.areaName || ''} ${app.address || ''}`.toLowerCase();
+      if (cleanLocalCommune && appLocation.includes(cleanLocalCommune)) {
+        return true;
+      }
 
-        if (normTarget) {
-          const normApp = normalizeStr(appLocation);
-          if (normApp.includes(normTarget)) return true;
-        }
+      if (targetCommune && appLocation.includes(targetCommune)) {
+        return true;
+      }
+
+      if (normTarget) {
+        const normApp = normalizeStr(appLocation);
+        if (normApp.includes(normTarget)) return true;
       }
 
       return false;
     });
-  }, [applicants, isAdmin, localCommuneName, userAreaName, userAreaId]);
+  }, [applicants, isAdmin, cleanLocalCommune, localCommuneName, userAreaName, userAreaId]);
 
   // Thống kê KPI trên danh sách hồ sơ được phân quyền
   const stats = useMemo(() => {
@@ -439,10 +478,10 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
         // Tìm kiếm
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase().trim();
-          const matchName = app.fullName.toLowerCase().includes(q);
-          const matchPhone = app.phone.includes(q);
-          const matchCccd = app.idNumber.toLowerCase().includes(q);
-          const matchEmail = app.email.toLowerCase().includes(q);
+          const matchName = (app.fullName || '').toLowerCase().includes(q);
+          const matchPhone = (app.phone || '').includes(q);
+          const matchCccd = (app.idNumber || '').toLowerCase().includes(q);
+          const matchEmail = (app.email || '').toLowerCase().includes(q);
           if (!matchName && !matchPhone && !matchCccd && !matchEmail) return false;
         }
 
@@ -466,17 +505,8 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
           return false;
         }
 
-        // Bộ lọc địa bàn
-        if (areaFilter !== 'ALL') {
-          const cleanArea = areaFilter.toLowerCase();
-          const appArea = `${app.communeName || ''} ${app.areaName || ''} ${app.address || ''}`.toLowerCase();
-          if (!appArea.includes(cleanArea)) return false;
-          const normalizeStr = (s: string) =>
-            s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-          if (!appArea.includes(cleanArea) && !normalizeStr(appArea).includes(normalizeStr(cleanArea))) {
-            return false;
-          }
-        }
+        // Bộ lọc địa bàn (hỗ trợ phân cấp Tỉnh/TP -> Xã/Phường từ API)
+        if (!isApplicantInTargetArea(app)) return false;
 
         return true;
       })
@@ -496,7 +526,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
         // Nếu cùng trạng thái, hồ sơ mới gửi hoặc chờ lâu sắp xếp theo thời gian
         return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
       });
-  }, [authorizedApplicants, searchQuery, statusFilter, specFilter, areaFilter]);
+  }, [authorizedApplicants, searchQuery, statusFilter, specFilter, isApplicantInTargetArea]);
 
   // Phân trang
   const totalPages = Math.ceil(filteredApplicants.length / pageSize) || 1;
@@ -789,29 +819,69 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
         {/* Toolbar */}
         <div className="ra-toolbar">
           <div className="ra-toolbar-controls">
-            {/* Ô tìm kiếm */}
-            <div className="ra-search-box">
-              <Search size={15} className="ra-search-icon" />
-              <input
-                type="text"
-                className="ra-search-input"
-                placeholder="Tìm theo họ tên, số điện thoại, CCCD..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setCurrentPage(1);
-                }}
-              />
-              {searchQuery && (
-                <button
-                  className="ra-search-clear"
-                  onClick={() => setSearchQuery('')}
-                  title="Xóa tìm kiếm"
+            {/* Bộ lọc địa bàn: Dành riêng cho Quản trị viên (Admin) chọn phân cấp Tỉnh/TP -> Xã/Phường */}
+            {isAdmin && (
+              <>
+                {/* 0A. Lọc theo Tỉnh / Thành phố: Dành cho Admin quản lý Toàn quốc */}
+                {/* 0A. Lọc theo Tỉnh / Thành phố: Gọi từ API Open-API Việt Nam */}
+                <select
+                  className="ra-filter-select"
+                  value={selectedProvince}
+                  onChange={(e) => {
+                    setSelectedProvince(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    minWidth: 175,
+                    fontWeight: 700,
+                    borderColor: selectedProvince !== 'ALL' ? '#0284c7' : undefined,
+                    background: selectedProvince !== 'ALL' ? '#f0f9ff' : undefined,
+                    color: selectedProvince !== 'ALL' ? '#0369a1' : undefined,
+                  }}
+                  title="Bước 1: Chọn Tỉnh / Thành phố (API)"
                 >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
+                  <option value="ALL">
+                    {provincesLoading ? '⏳ Đang tải Tỉnh / TP...' : `🌐 Tất cả Tỉnh / TP (${provinces.length})`}
+                  </option>
+                  {provinces.map((prov) => (
+                    <option key={prov.id || prov.name} value={prov.name}>
+                      🏙️ {prov.name}
+                    </option>
+                  ))}
+                </select>
+
+                {/* 0B. Lọc theo Quận / Huyện / Xã / Phường: Gọi từ API Wards */}
+                <select
+                  className="ra-filter-select"
+                  value={areaFilter}
+                  onChange={(e) => {
+                    setAreaFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    minWidth: 185,
+                    fontWeight: 700,
+                    borderColor: areaFilter !== 'ALL' ? '#0284c7' : undefined,
+                    background: areaFilter !== 'ALL' ? '#f0f9ff' : undefined,
+                    color: areaFilter !== 'ALL' ? '#0369a1' : undefined,
+                  }}
+                  title="Bước 2: Chọn Quận / Huyện / Xã / Phường"
+                >
+                  <option value="ALL">
+                    {wardsLoading
+                      ? '⏳ Đang tải xã, phường từ API...'
+                      : selectedProvince === 'ALL'
+                      ? `📍 Tất cả địa bàn (${wards.length})`
+                      : `📍 Tất cả xã / phường (${wards.length})`}
+                  </option>
+                  {wards.map((ward) => (
+                    <option key={ward.id} value={ward.id}>
+                      {ward.type === 'DISTRICT' ? '🏛️' : '📍'} {ward.name} {ward.code ? `(${ward.code})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
 
             {/* Bộ lọc trạng thái */}
             <select
@@ -848,31 +918,60 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
               <option value="OTHER">Chuyên môn khác</option>
             </select>
 
-            {/* Bộ lọc địa bàn: Phân quyền theo vai trò đăng nhập hoàn toàn từ DB thật */}
-            <select
-              className="ra-filter-select"
-              value={areaFilter}
-              onChange={(e) => {
-                setAreaFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-            >
-              {isAdmin ? (
-                <>
-                  <option value="ALL">Tất cả địa bàn</option>
-                  {Array.from(new Set(applicants.map((a) => a.communeName || a.areaName).filter(Boolean))).map((area) => (
-                    <option key={area} value={area}>{area}</option>
-                  ))}
-                </>
-              ) : (
-                <>
-                  <option value="ALL">Địa bàn: {localCommuneName || 'Địa phương'}</option>
-                  {Array.from(new Set(authorizedApplicants.map((a) => a.address).filter(Boolean))).map((addr) => (
-                    <option key={addr} value={addr}>{addr}</option>
-                  ))}
-                </>
+            {/* Ô tìm kiếm */}
+            <div className="ra-search-box">
+              <Search size={15} className="ra-search-icon" />
+              <input
+                type="text"
+                className="ra-search-input"
+                placeholder="Tìm theo họ tên, số điện thoại, CCCD..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+              {searchQuery && (
+                <button
+                  className="ra-search-clear"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setCurrentPage(1);
+                  }}
+                  title="Xóa tìm kiếm"
+                >
+                  <X size={14} />
+                </button>
               )}
-            </select>
+            </div>
+
+            {/* Nút xóa lọc nhanh */}
+            {hasActiveFilters && (
+              <button
+                type="button"
+                className="ra-clear-filter-btn"
+                onClick={handleClearFilters}
+                title="Xóa toàn bộ bộ lọc hồ sơ và đặt lại ban đầu"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '7px 12px',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  color: '#dc2626',
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <FilterX size={14} />
+                <span>Xóa lọc</span>
+              </button>
+            )}
 
             <button
               className="ra-refresh-btn"
@@ -920,15 +1019,11 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                   </p>
                   <button
                     className="ra-btn ra-btn-secondary"
-                    style={{ marginTop: 14 }}
-                    onClick={() => {
-                      setSearchQuery('');
-                      setStatusFilter('ALL');
-                      setSpecFilter('ALL');
-                      setAreaFilter('ALL');
-                    }}
+                    style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    onClick={handleClearFilters}
                   >
-                    Đặt lại bộ lọc
+                    <FilterX size={14} />
+                    <span>Xóa lọc</span>
                   </button>
                 </>
               )}
@@ -975,7 +1070,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                               </span>
                               {app.email && (
                                 <span title={app.email}>
-                                  <Mail size={11} /> {app.email.split('@')[0]}
+                                  <Mail size={11} /> {app.email.includes('@') ? app.email.split('@')[0] : app.email}
                                 </span>
                               )}
                             </div>
@@ -1005,7 +1100,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                       <td>
                         <div className="ra-area-cell">
                           <span className="ra-area-commune">
-                            {app.communeName || app.areaName.split(',')[0]}
+                            {app.communeName || (app.areaName ? app.areaName.split(',')[0] : '') || 'Địa bàn cư trú'}
                           </span>
                           <span className="ra-area-district">
                             {app.districtName || 'Thành phố Đà Nẵng'}
