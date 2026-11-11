@@ -13,6 +13,7 @@ import {
   Image,
   Linking,
   Alert,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -221,6 +222,16 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
 
   // Mở xem chi tiết
   const handleOpenDetail = async (item: NotificationItem) => {
+    const isChat = item.type === 'CHAT' || item.actionUrl === 'chat' || item.data?.isChat;
+    if (isChat) {
+      if (!item.isRead) {
+        await markAsRead(item._id);
+      }
+      if (onNavigateToTab) onNavigateToTab('home');
+      DeviceEventEmitter.emit('open:local_authority_chat', item.data || item);
+      return;
+    }
+
     setSelectedNotif(item);
     setDetailVisible(true);
 
@@ -286,7 +297,7 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle="dark-content" {...({ backgroundColor: '#FFFFFF' } as any)} />
 
       {/* ==================== 1. TOP HEADER ==================== */}
       <View style={styles.header}>
@@ -504,9 +515,21 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
           }
         >
           {filteredList.map((item) => {
+            const isChat = item.type === 'CHAT' || item.actionUrl === 'chat' || item.data?.isChat;
             const cat = classifyNotification(item);
-            const meta = NOTIFICATION_CATEGORIES[cat] || NOTIFICATION_CATEGORIES.systemNotification;
-            const isCritical = item.priority === 'CRITICAL' || item.priority === 'HIGH';
+            const defaultMeta = NOTIFICATION_CATEGORIES[cat] || NOTIFICATION_CATEGORIES.systemNotification;
+            const meta = isChat
+              ? {
+                  ...defaultMeta,
+                  badgeLabel: 'ĐỊA PHƯƠNG PHẢN HỒI',
+                  badgeBg: '#E0F2FE',
+                  badgeTextColor: '#0284C7',
+                  bgColor: '#F0F9FF',
+                  color: '#0284C7',
+                  iconName: 'chatbubble-ellipses',
+                }
+              : defaultMeta;
+            const isCritical = !isChat && (item.priority === 'CRITICAL' || item.priority === 'HIGH');
             const imageUrl = item.imageUrl || item.data?.imageUrl;
             const articleUrl = item.articleUrl || item.data?.articleUrl || item.data?.url;
             const sourceName = item.sourceName || item.data?.sourceName;
@@ -601,7 +624,9 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
                     <View style={styles.senderWrap}>
                       <Ionicons name="person-circle-outline" size={13} color="#94A3B8" />
                       <Text style={styles.senderText} numberOfLines={1}>
-                        {sourceName || item.createdBy?.fullName || item.data?.senderName || 'Ban chỉ huy SOS'}
+                        {isChat
+                          ? (item.data?.department || (item.data?.senderName && !item.data.senderName.toLowerCase().includes('admin') ? item.data.senderName : 'Ban Chỉ Huy PCTT'))
+                          : (sourceName || item.createdBy?.fullName || item.data?.senderName || 'Ban chỉ huy SOS')}
                       </Text>
                     </View>
 
@@ -763,27 +788,82 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
 
             {/* Các nút hành động */}
             <View style={styles.detailActionsRow}>
-              <TouchableOpacity
-                style={styles.testPushBtn}
-                onPress={() => selectedNotif && handleTestPush(selectedNotif)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="notifications-outline" size={16} color="#0066FF" />
-                <Text style={styles.testPushText}>Thử báo ra máy</Text>
-              </TouchableOpacity>
-
-              {onNavigateToTab && (
+              {Boolean(
+                selectedNotif?.type === 'SAFETY_CHECK' ||
+                selectedNotif?.actionUrl === 'safety_check' ||
+                selectedNotif?.data?.isSafetyCheck
+              ) ? (
                 <TouchableOpacity
-                  style={styles.actionBtnPrimary}
+                  style={[styles.actionBtnPrimary, { backgroundColor: '#16A34A', flex: 1, paddingVertical: 14 }]}
                   onPress={() => {
                     setDetailVisible(false);
-                    onNavigateToTab('map');
+                    const sid = selectedNotif?.data?.safetyCheckId || (selectedNotif as any)?.safetyCheckId || selectedNotif?._id;
+                    DeviceEventEmitter.emit('open:safety_check', { safetyCheckId: sid });
                   }}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="map-outline" size={16} color="#FFFFFF" />
-                  <Text style={styles.actionBtnPrimaryText}>Xem trên bản đồ</Text>
+                  <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={[styles.actionBtnPrimaryText, { fontWeight: '700' }]}>Xác nhận an toàn ngay</Text>
                 </TouchableOpacity>
+              ) : Boolean(
+                selectedNotif?.type === 'CHAT' ||
+                selectedNotif?.actionUrl === 'chat' ||
+                selectedNotif?.data?.isChat
+              ) ? (
+                <TouchableOpacity
+                  style={[styles.actionBtnPrimary, { backgroundColor: '#0284C7', flex: 1, paddingVertical: 14 }]}
+                  onPress={() => {
+                    setDetailVisible(false);
+                    if (onNavigateToTab) onNavigateToTab('home');
+                    DeviceEventEmitter.emit('open:local_authority_chat', selectedNotif?.data || selectedNotif);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="chatbubbles" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={[styles.actionBtnPrimaryText, { fontWeight: '700' }]}>Mở cuộc trò chuyện ngay</Text>
+                </TouchableOpacity>
+              ) : Boolean(
+                selectedNotif?.type === 'BLOOD_DONATION' ||
+                selectedNotif?.actionUrl === 'blood_donation' ||
+                selectedNotif?.data?.isBloodDonation
+              ) ? (
+                <TouchableOpacity
+                  style={[styles.actionBtnPrimary, { backgroundColor: '#DC2626', flex: 1, paddingVertical: 14 }]}
+                  onPress={() => {
+                    setDetailVisible(false);
+                    const eid = selectedNotif?.data?.eventId || (selectedNotif as any)?.eventId;
+                    DeviceEventEmitter.emit('open:blood_donation', { eventId: eid });
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="water" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={[styles.actionBtnPrimaryText, { fontWeight: '700' }]}>Xem & Xác nhận đăng ký hiến máu</Text>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={styles.testPushBtn}
+                    onPress={() => selectedNotif && handleTestPush(selectedNotif)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="notifications-outline" size={16} color="#0066FF" />
+                    <Text style={styles.testPushText}>Thử báo ra máy</Text>
+                  </TouchableOpacity>
+
+                  {onNavigateToTab && (
+                    <TouchableOpacity
+                      style={styles.actionBtnPrimary}
+                      onPress={() => {
+                        setDetailVisible(false);
+                        onNavigateToTab('map');
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="map-outline" size={16} color="#FFFFFF" />
+                      <Text style={styles.actionBtnPrimaryText}>Xem trên bản đồ</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
               )}
             </View>
           </View>

@@ -8,6 +8,7 @@ import {
   Polygon,
   Polyline,
   useMap,
+  useMapEvents,
 } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -27,7 +28,6 @@ import type {
 } from '@/types/domainD';
 import {
   isSosInOfficerJurisdiction,
-  isTeamInOfficerJurisdiction,
   GOOGLE_MAP_TILES,
   WARD_CENTROIDS,
   getAreaCentroid,
@@ -41,7 +41,7 @@ interface Props {
   activeOfficer?: AuthorityOfficer;
   areas?: AdministrativeArea[];
   sosRequests?: SosRequest[];
-  onSelectSos?: (sos: SosRequest) => void;
+  onSelectSos?: (sos: SosRequest | null) => void;
   previewTeamIds?: string[];
   rescueTeams?: RescueTeam[];
   vehicles?: Vehicle[];
@@ -54,17 +54,20 @@ const LeafletMapController = ({
   onMount,
   boundaryPositions,
   selectedSosId,
+  previewCoords,
 }: {
   center: [number, number];
   zoom?: number;
   onMount?: (map: L.Map) => void;
   boundaryPositions?: [number, number][] | null;
   selectedSosId?: string;
+  previewCoords?: [number, number][];
 }) => {
   const map = useMap();
   const hasInitializedRef = useRef(false);
   const prevSosIdRef = useRef<string | undefined>(selectedSosId);
   const prevBoundaryKeyRef = useRef<string>('');
+  const prevPreviewKeyRef = useRef<string>('');
 
   useEffect(() => {
     if (onMount) onMount(map);
@@ -92,6 +95,39 @@ const LeafletMapController = ({
     }
   }, [selectedSosId, center, map]);
 
+  // Khi người dùng click chọn đội cứu hộ (previewCoords thay đổi):
+  // Ghim lại gần đội đó (focus cận cảnh mức zoom 16.5-17 để thấy rõ vị trí GPS từng thành viên và xe)
+  useEffect(() => {
+    if (!previewCoords || previewCoords.length === 0) {
+      if (prevPreviewKeyRef.current !== '') {
+        prevPreviewKeyRef.current = '';
+        map.flyTo(center, Math.max(map.getZoom(), 15), { duration: 0.8 });
+      }
+      return;
+    }
+    const key = previewCoords.map((c) => `${c[0].toFixed(4)},${c[1].toFixed(4)}`).join(';');
+    if (key !== prevPreviewKeyRef.current) {
+      prevPreviewKeyRef.current = key;
+      // Ghim sát lại gần đội cứu hộ được chọn (không zoom xa theo ca SOS)
+      if (previewCoords.length === 1) {
+        map.flyTo(previewCoords[0], 16.5, { duration: 0.8 });
+      } else {
+        const teamBounds = L.latLngBounds(previewCoords);
+        map.fitBounds(teamBounds, { padding: [75, 75], maxZoom: 17, duration: 0.8 });
+      }
+    }
+  }, [previewCoords, center, map]);
+
+  return null;
+};
+
+// Lắng nghe sự kiện click vào nền bản đồ (click ra ngoài khoảng trống) để bỏ chọn ca SOS
+const MapClickDeselectHandler = ({ onDeselect }: { onDeselect?: () => void }) => {
+  useMapEvents({
+    click: () => {
+      onDeselect?.();
+    },
+  });
   return null;
 };
 
@@ -156,7 +192,7 @@ const RescueRoadRoute = ({
   startLng,
   endLat,
   endLng,
-  routeColor = '#2563eb',
+  routeColor = '#38bdf8',
 }: {
   startLat: number;
   startLng: number;
@@ -176,51 +212,15 @@ const RescueRoadRoute = ({
     };
   }, [startLat, startLng, endLat, endLng]);
 
-  const fallbackLine: [number, number][] = [
-    [startLat, startLng],
-    [endLat, endLng],
-  ];
-
-  // Nếu chưa tải xong hoặc mạng lỗi: Vẽ đường đứt nét tạm thời
+  // Nếu chưa có lộ trình đường bộ: Tuyệt đối không vẽ đường nối thẳng chim bay cắt xuyên biển
   if (!roadPath || roadPath.length < 2) {
-    return (
-      <Polyline
-        positions={fallbackLine}
-        pathOptions={{
-          color: routeColor,
-          weight: 3,
-          dashArray: '6, 8',
-          opacity: 0.7,
-        }}
-      />
-    );
+    return null;
   }
 
-  // Tuyến đường uốn lượn chính xác theo mạng lưới giao thông (Dual-layer Grab style)
-  const startConnector: [number, number][] = [
-    [startLat, startLng],
-    roadPath[0],
-  ];
-  const endConnector: [number, number][] = [
-    roadPath[roadPath.length - 1],
-    [endLat, endLng],
-  ];
-
+  // Chỉ vẽ lộ trình thực bám sát mạng lưới đường bộ (Dual-layer Grab style), loại bỏ hoàn toàn các vạch nối thẳng đứt nét
   return (
     <>
-      {/* 1. Đường chấm chấm nối điểm đầu (Vị trí xuất phát -> Điểm đầu đường bộ OSRM) */}
-      <Polyline
-        positions={startConnector}
-        pathOptions={{
-          color: '#0284c7',
-          weight: 2,
-          dashArray: '3, 5',
-          lineCap: 'round',
-          opacity: 0.85,
-        }}
-      />
-
-      {/* 2. Outer border/casing: 8px, #1e40af */}
+      {/* 1. Outer border/casing: 8px, #1e40af */}
       <Polyline
         positions={roadPath}
         pathOptions={{
@@ -231,27 +231,15 @@ const RescueRoadRoute = ({
           opacity: 0.9,
         }}
       />
-      {/* 3. Inner core line: 4px, #38bdf8 */}
+      {/* 2. Inner core line: 4px, #38bdf8 */}
       <Polyline
         positions={roadPath}
         pathOptions={{
-          color: '#38bdf8',
+          color: routeColor,
           weight: 4,
           lineCap: 'round',
           lineJoin: 'round',
           opacity: 1,
-        }}
-      />
-
-      {/* 4. Đường chấm chấm nối điểm cuối (Điểm cuối đường bộ OSRM -> Vị trí Nạn nhân) */}
-      <Polyline
-        positions={endConnector}
-        pathOptions={{
-          color: '#dc2626',
-          weight: 2,
-          dashArray: '3, 5',
-          lineCap: 'round',
-          opacity: 0.85,
         }}
       />
     </>
@@ -286,103 +274,182 @@ export const TacticalMap = ({
   const sosLng = selectedSos?.coordinates?.lng ?? areaCentroid[0];
   const sosLat = selectedSos?.coordinates?.lat ?? areaCentroid[1];
 
-  // Active selected teams for live GPS member visualization & dispatch (Chỉ hiện khi ấn chọn team và phải thuộc khu vực quản lý)
+  // Rescuer location fallback (hướng tiếp cận dã chiến mặc định gần ca SOS)
+  const defaultRescuerLat = sosLat + 0.0045;
+  const defaultRescuerLng = sosLng + 0.0035;
+
+  // Active selected teams for live GPS member visualization & dispatch (Tự động hiển thị khi cán bộ click chọn đội)
   const activePreviewTeams = useMemo(() => {
     if (!previewTeamIds || previewTeamIds.length === 0) return [];
-    const matched = rescueTeams.filter((t) => previewTeamIds.includes(t.id));
-    if (!activeOfficer || activeOfficer.role === 'ADMIN') return matched;
-    return matched.filter((t) => isTeamInOfficerJurisdiction(t, activeOfficer, managedWard));
-  }, [previewTeamIds, rescueTeams, activeOfficer, managedWard]);
-
-  // Operational base coordinate calculation per team
-  const getTeamBaseCoord = (teamId: string, teamIdx: number): { lat: number; lng: number } => {
-    const knownOffsets: Record<string, { lat: number; lng: number }> = {
-      'team-cl-01': { lat: 0.0052, lng: -0.0058 }, // Hòa Xuân / Cẩm Lệ (~650m NW)
-      'team-cl-02': { lat: -0.0045, lng: 0.0062 }, // Cẩm Lệ (~650m SE)
-      'team-hc-htd': { lat: -0.0058, lng: -0.0048 }, // Hòa Cường (~700m SW)
-      'team-water-alpha': { lat: 0.0065, lng: 0.0048 }, // Hải Châu (~750m NE)
-      'team-qr-bravo': { lat: 0.0035, lng: 0.0072 }, // PCCC Hải Châu (~750m E)
-      'team-sea-delta': { lat: -0.0028, lng: -0.0075 }, // Sơn Trà (~780m W)
-      'team-nhs-01': { lat: -0.0068, lng: 0.0038 },
-      'team-lc-01': { lat: 0.0045, lng: 0.0035 },
-      '43-lc-01': { lat: 0.0045, lng: 0.0035 },
-      'team-hv-01': { lat: -0.0072, lng: -0.0060 },
-    };
-
-    if (knownOffsets[teamId]) {
-      return {
-        lat: sosLat + knownOffsets[teamId].lat,
-        lng: sosLng + knownOffsets[teamId].lng,
-      };
-    }
-
-    const angle = (teamIdx * 1.35 + 0.4) * Math.PI;
-    const dist = 0.0055 + (teamIdx % 3) * 0.0012;
-    return {
-      lat: sosLat + Math.sin(angle) * dist,
-      lng: sosLng + Math.cos(angle) * dist,
-    };
-  };
+    return rescueTeams.filter((t) => previewTeamIds.includes(t.id));
+  }, [previewTeamIds, rescueTeams]);
 
   // Lưu trữ tọa độ GPS thời gian thực của từng cứu hộ viên nhận qua Socket.IO Telemetry
   const [liveRescuerLocations, setLiveRescuerLocations] = useState<Record<string, { lat: number; lng: number }>>({});
 
   useEffect(() => {
-    const unsubscribe = onRescuerLocationUpdate((data) => {
-      if (data?.rescuerId && data?.coords?.lat && data?.coords?.lng) {
+    const unsubscribe = onRescuerLocationUpdate((data: any) => {
+      const lat = data?.coords?.lat ?? data?.location?.lat ?? data?.lat;
+      const lng = data?.coords?.lng ?? data?.location?.lng ?? data?.lng;
+      const rescuerId = data?.rescuerId || data?.userId;
+      if (rescuerId && typeof lat === 'number' && typeof lng === 'number') {
         setLiveRescuerLocations((prev) => ({
           ...prev,
-          [data.rescuerId]: { lat: data.coords.lat, lng: data.coords.lng },
+          [rescuerId]: { lat, lng },
         }));
       }
     });
     return () => unsubscribe();
   }, []);
 
-  // Tọa độ GPS thành viên: Lấy chính xác theo từng user trong team (không lấy bừa)
+  // Vị trí ghim khẩn cấp được gửi từ Chat người dân
+  const [chatGpsPin, setChatGpsPin] = useState<{
+    lat: number;
+    lng: number;
+    senderName?: string;
+    address?: string;
+  } | null>(() => {
+    try {
+      const saved = sessionStorage.getItem('sos_highlight_chat_location');
+      if (saved) {
+        sessionStorage.removeItem('sos_highlight_chat_location');
+        return JSON.parse(saved);
+      }
+    } catch {}
+    return null;
+  });
+
+  useEffect(() => {
+    const handleCustomLocation = (e: any) => {
+      const detail = e?.detail;
+      if (detail && typeof detail.lat === 'number' && typeof detail.lng === 'number') {
+        setChatGpsPin(detail);
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.flyTo([detail.lat, detail.lng], 17, { duration: 1.2 });
+        }
+      }
+    };
+    window.addEventListener('sos_highlight_chat_location', handleCustomLocation);
+    return () => window.removeEventListener('sos_highlight_chat_location', handleCustomLocation);
+  }, []);
+
+  useEffect(() => {
+    if (chatGpsPin && mapInstanceRef.current) {
+      setTimeout(() => {
+        mapInstanceRef.current?.flyTo([chatGpsPin.lat, chatGpsPin.lng], 17, { duration: 1.2 });
+      }, 350);
+    }
+  }, [chatGpsPin]);
+
+  // Operational base coordinate calculation per team (Phương tiện & Đội cứu hộ)
+  const getTeamBaseCoord = (teamId: string, _teamIdx: number): { lat: number; lng: number } => {
+    const teamObj = rescueTeams.find((t) => t.id === teamId);
+    if (teamObj && Array.isArray(teamObj.rescuers) && teamObj.rescuers.length > 0) {
+      // 1. Ưu tiên kiểm tra tọa độ GPS Live nhận từ Mobile App qua Socket.IO Telemetry
+      for (const r of teamObj.rescuers) {
+        const live = liveRescuerLocations[r.id];
+        if (live && typeof live.lat === 'number' && typeof live.lng === 'number') {
+          return { lat: live.lat, lng: live.lng };
+        }
+        const cleanPhone = r.phone ? r.phone.replace(/[^0-9]/g, '') : '';
+        if (cleanPhone && liveRescuerLocations[cleanPhone]) {
+          return liveRescuerLocations[cleanPhone];
+        }
+      }
+      // 2. Kiểm tra tọa độ GPS cá nhân thực tế của Đội trưởng hoặc thành viên
+      const leader = teamObj.rescuers.find((r) => r.role?.toLowerCase().includes('trưởng') || r.role === 'LEADER') || teamObj.rescuers[0];
+      if (leader?.coordinates && typeof leader.coordinates.lat === 'number' && typeof leader.coordinates.lng === 'number') {
+        return { lat: leader.coordinates.lat, lng: leader.coordinates.lng };
+      }
+      for (const r of teamObj.rescuers) {
+        if (r.coordinates && typeof r.coordinates.lat === 'number' && typeof r.coordinates.lng === 'number') {
+          return { lat: r.coordinates.lat, lng: r.coordinates.lng };
+        }
+      }
+    }
+
+    return {
+      lat: typeof defaultRescuerLat === 'number' && !isNaN(defaultRescuerLat) ? defaultRescuerLat : 16.035,
+      lng: typeof defaultRescuerLng === 'number' && !isNaN(defaultRescuerLng) ? defaultRescuerLng : 108.245,
+    };
+  };
+
+  // Tọa độ GPS thành viên: Lấy chính xác theo từng user trong team (ưu tiên Socket Telemetry -> GPS Profile -> Tự động tỏa đều để KHÔNG BAO GIỜ bị đè lên nhau)
   const getRescuerLiveCoord = (
     rescuer: RescuerProfile,
     teamBase: { lat: number; lng: number },
     rescuerIdx: number,
-    _totalRescuers?: number
+    totalRescuers?: number
   ): { lat: number; lng: number } => {
+    let rawCoord: { lat: number; lng: number } | null = null;
+
     // 1. Tọa độ Telemetry Live nhận từ thiết bị Mobile App của cứu hộ viên qua Socket
     if (liveRescuerLocations[rescuer.id]) {
-      return liveRescuerLocations[rescuer.id];
+      rawCoord = liveRescuerLocations[rescuer.id];
+    } else {
+      const cleanPhone = rescuer.phone ? rescuer.phone.replace(/[^0-9]/g, '') : '';
+      if (cleanPhone && liveRescuerLocations[cleanPhone]) {
+        rawCoord = liveRescuerLocations[cleanPhone];
+      } else if (
+        rescuer.coordinates &&
+        typeof rescuer.coordinates.lat === 'number' &&
+        typeof rescuer.coordinates.lng === 'number'
+      ) {
+        rawCoord = { lat: rescuer.coordinates.lat, lng: rescuer.coordinates.lng };
+      }
     }
-    // 2. Tọa độ GPS cá nhân thực tế của chính user trong team
-    if (
-      rescuer.coordinates &&
-      typeof rescuer.coordinates.lat === 'number' &&
-      typeof rescuer.coordinates.lng === 'number'
-    ) {
-      return { lat: rescuer.coordinates.lat, lng: rescuer.coordinates.lng };
+
+    // Góc và bán kính tỏa đội hình tối ưu (~75m - 95m)
+    // Phân bổ đều theo 4 góc phần tư xung quanh phương tiện trung tâm
+    const count = totalRescuers && totalRescuers > 0 ? totalRescuers : 4;
+    const angle = (rescuerIdx * (2 * Math.PI)) / count + 0.45;
+    const offsetRadius = 0.00075 + (rescuerIdx % 2) * 0.00018;
+
+    // Nếu không có tọa độ, HOẶC tọa độ trùng/quá gần xe (dưới 40m làm đè marker lên xe):
+    // Tự động phân bổ ra góc riêng biệt xung quanh xe để thông tin tách bạch rõ ràng!
+    if (!rawCoord) {
+      return {
+        lat: Number((teamBase.lat + Math.sin(angle) * offsetRadius).toFixed(6)),
+        lng: Number((teamBase.lng + Math.cos(angle) * offsetRadius * 1.05).toFixed(6)),
+      };
     }
-    // 3. Dự phòng phân bố nhẹ quanh xe nếu user chưa cấp quyền GPS
-    const angles = [
-      0,                  // 0: Bắc (North)
-      Math.PI / 2,        // 1: Đông (East)
-      Math.PI,            // 2: Nam (South)
-      (3 * Math.PI) / 2,  // 3: Tây (West)
-      Math.PI / 4,        // 4: Đông Bắc
-      (3 * Math.PI) / 4,  // 5: Đông Nam
-      (5 * Math.PI) / 4,  // 6: Tây Nam
-      (7 * Math.PI) / 4,  // 7: Tây Bắc
-    ];
-    const angle = angles[rescuerIdx % angles.length];
-    const distLat = 0.0018;
-    const distLng = 0.0026;
-    return {
-      lat: teamBase.lat + Math.cos(angle) * distLat,
-      lng: teamBase.lng + Math.sin(angle) * distLng,
-    };
+
+    const dLat = Math.abs(rawCoord.lat - teamBase.lat);
+    const dLng = Math.abs(rawCoord.lng - teamBase.lng);
+    const isTooCloseToVehicle = dLat < 0.0004 && dLng < 0.0004;
+
+    if (isTooCloseToVehicle) {
+      return {
+        lat: Number((teamBase.lat + Math.sin(angle) * offsetRadius).toFixed(6)),
+        lng: Number((teamBase.lng + Math.cos(angle) * offsetRadius * 1.05).toFixed(6)),
+      };
+    }
+
+    return rawCoord;
   };
 
-  // Marker Gộp Trung Tâm Đội & Phương Tiện Cứu Hộ (Mặc định hiển thị gọn gàng, bấm để bung GPS)
+  // Tổng hợp tọa độ của toàn bộ đội và thành viên được chọn để tự động zoom bao quát
+  const previewAllCoords = useMemo(() => {
+    const coords: [number, number][] = [];
+    activePreviewTeams.forEach((team, tIdx) => {
+      const base = getTeamBaseCoord(team.id, tIdx);
+      if (base) {
+        coords.push([base.lat, base.lng]);
+        team.rescuers.forEach((r, rIdx) => {
+          const rc = getRescuerLiveCoord(r, base, rIdx, team.rescuers.length);
+          coords.push([rc.lat, rc.lng]);
+        });
+      }
+    });
+    return coords;
+  }, [activePreviewTeams, rescueTeams, vehicles, liveRescuerLocations]);
+
+  // Marker Gộp Trung Tâm Đội & Phương Tiện Cứu Hộ (Gọn gàng, thoáng đãng, không bị đè chữ)
   const createUnifiedTeamDivIcon = (
     team: RescueTeam,
     vehicle?: Vehicle,
-    isExpanded: boolean = false
+    _isExpanded: boolean = false,
+    teamBase?: { lat: number; lng: number }
   ) => {
     const plate = vehicle?.plate || '43B-098.21';
     const isBoat =
@@ -395,7 +462,7 @@ export const TacticalMap = ({
       className: 'tactical-unified-team-beacon',
       html: `
         <div style="display: flex; flex-direction: column; align-items: center; cursor: pointer; user-select: none;">
-          <!-- Header Badge: Biển số & Tên Đội Cứu Hộ -->
+          <!-- 1. Header Badge: Biển số & Tên Đội Cứu Hộ -->
           <div style="
             background: #0f172a;
             color: #ffffff;
@@ -404,65 +471,65 @@ export const TacticalMap = ({
             padding: 3px 8px;
             border-radius: 6px;
             border: 1.5px solid #38bdf8;
-            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.45);
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.45);
             white-space: nowrap;
             display: flex;
             align-items: center;
             gap: 5px;
-            letter-spacing: 0.2px;
-            margin-bottom: 2px;
+            margin-bottom: 3px;
           ">
             <span style="font-size: 11px;">${vIcon}</span>
             <span style="color: #38bdf8; font-weight: 900;">${plate}</span>
             <span style="color: #64748b;">•</span>
-            <span style="max-width: 145px; overflow: hidden; text-overflow: ellipsis;">${team.name}</span>
+            <span style="max-width: 150px; overflow: hidden; text-overflow: ellipsis;">${team.name}</span>
           </div>
 
-          <!-- Sub Badge: Số lượng chiến sĩ & Trạng thái mở rộng -->
+          <!-- 2. Status & GPS Info Pill (Gộp 1 dòng gọn gàng, tuyệt đối không đè nhau) -->
           <div style="
-            background: ${isExpanded ? '#fef3c7' : '#ffffff'};
-            color: ${isExpanded ? '#92400e' : '#0284c7'};
-            font-size: 9px;
+            background: #ffffff;
+            color: #0f172a;
+            font-size: 9.5px;
             font-weight: 700;
-            padding: 1.5px 7px;
+            padding: 2px 7px;
             border-radius: 9999px;
-            border: 1px solid ${isExpanded ? '#f59e0b' : '#bae6fd'};
-            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            border: 1px solid #cbd5e1;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.12);
             white-space: nowrap;
             display: flex;
             align-items: center;
-            gap: 4px;
-            margin-bottom: 2px;
+            gap: 5px;
+            margin-bottom: 4px;
           ">
-            <span>👥 ${team.rescuers.length} chiến sĩ</span>
-            <span style="font-size: 8px; color: ${isExpanded ? '#b45309' : '#0369a1'};">
-              ${isExpanded ? '(Bấm để thu gọn)' : '(Bấm để bung GPS)'}
-            </span>
+            <span style="color: #0284c7;">👥 ${team.rescuers.length} chiến sĩ</span>
+            ${teamBase ? `
+              <span style="color: #cbd5e1;">•</span>
+              <span style="color: #16a34a; font-family: monospace; font-weight: 800;">📍 ${teamBase.lat.toFixed(4)}, ${teamBase.lng.toFixed(4)}</span>
+            ` : ''}
           </div>
 
-          <!-- Biểu tượng phương tiện trung tâm với hiệu ứng lan toả -->
-          <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;">
+          <!-- 3. Biểu tượng phương tiện trung tâm với hiệu ứng radar -->
+          <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 34px; height: 34px;">
             <div style="
               position: absolute;
-              width: 30px;
-              height: 30px;
-              border-radius: 8px;
+              width: 32px;
+              height: 32px;
+              border-radius: 9px;
               background: rgba(2, 132, 199, 0.25);
               border: 1.5px solid #0284c7;
               animation: pulse-beacon 1.6s infinite ease-out;
             "></div>
             <div style="
               position: relative;
-              width: 26px;
-              height: 26px;
+              width: 28px;
+              height: 28px;
               background: #0284c7;
-              border-radius: 7px;
+              border-radius: 8px;
               border: 2px solid #ffffff;
               box-shadow: 0 3px 10px rgba(2, 132, 199, 0.6);
               display: flex;
               align-items: center;
               justify-content: center;
-              font-size: 13.5px;
+              font-size: 14px;
               z-index: 5;
             ">
               ${vIcon}
@@ -470,13 +537,13 @@ export const TacticalMap = ({
           </div>
         </div>
       `,
-      iconSize: [200, 68],
-      iconAnchor: [100, 58],
+      iconSize: [220, 84],
+      iconAnchor: [110, 68],
     });
   };
 
   // Rescuer Marker Icon generator
-  const createRescuerDivIcon = (rescuer: RescuerProfile, index: number) => {
+  const createRescuerDivIcon = (rescuer: RescuerProfile, index: number, coord?: { lat: number; lng: number }) => {
     const isLeader =
       rescuer.role.toLowerCase().includes('trưởng') ||
       rescuer.role.toLowerCase().includes('chỉ huy') ||
@@ -500,25 +567,33 @@ export const TacticalMap = ({
       className: 'tactical-rescuer-member-beacon',
       html: `
         <div style="display: flex; flex-direction: column; align-items: center; cursor: pointer; user-select: none;">
-          <!-- Rescuer Name Badge with GPS LIVE Indicator -->
+          <!-- Rescuer Name Badge with GPS LIVE Indicator & Coordinates -->
           <div style="
             background: #ffffff;
             color: #0f172a;
             font-size: 10px;
             font-weight: 700;
-            padding: 2px 6px;
-            border-radius: 5px;
+            padding: 2.5px 7px;
+            border-radius: 6px;
             border: 1.5px solid ${badgeColor};
-            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.22);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
             white-space: nowrap;
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 4px;
+            gap: 1.5px;
             margin-bottom: 2px;
           ">
-            <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #16a34a; box-shadow: 0 0 6px #22c55e;"></span>
-            <span>${rescuer.name}</span>
-            <span style="font-size: 8.5px; color: ${badgeColor}; font-weight: 800;">[${rescuer.role.split(' ')[0]}]</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #16a34a; box-shadow: 0 0 6px #22c55e;"></span>
+              <span style="font-weight: 800;">${rescuer.name}</span>
+              <span style="font-size: 8.5px; color: ${badgeColor}; font-weight: 800;">[${rescuer.role.split(' ')[0]}]</span>
+            </div>
+            ${coord ? `
+              <div style="font-size: 8.5px; color: #15803d; font-weight: 700; font-family: monospace;">
+                📍 ${coord.lat.toFixed(4)}, ${coord.lng.toFixed(4)}
+              </div>
+            ` : ''}
           </div>
 
           <!-- Pulsing GPS Marker -->
@@ -552,8 +627,8 @@ export const TacticalMap = ({
           </div>
         </div>
       `,
-      iconSize: [110, 48],
-      iconAnchor: [55, 38],
+      iconSize: [125, 58],
+      iconAnchor: [62, 46],
     });
   };
 
@@ -572,7 +647,7 @@ export const TacticalMap = ({
     return sosRequests.filter(
       (s) =>
         s.id !== selectedSos?.id &&
-        !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status) &&
+!['COMPLETED', 'RESOLVED', 'CANCELLED', 'REJECTED'].includes(String(s.status || '').toUpperCase()) &&
         isSosInOfficerJurisdiction(s, activeOfficer, managedWard)
     );
   }, [sosRequests, selectedSos?.id, activeOfficer, managedWard]);
@@ -636,6 +711,45 @@ export const TacticalMap = ({
       iconAnchor: [40, 48],
     });
   }, [selectedSos?.sosCode]);
+
+  // Icon Điểm Hẹn Bến Cập Bờ (Tiếp vận Thủy - Bộ)
+  const landingPointIcon = useMemo(() => {
+    return L.divIcon({
+      className: 'tactical-landing-handoff-beacon',
+      html: `
+        <div style="position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+          <div style="
+            position: absolute;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: rgba(234, 88, 12, 0.25);
+            border: 1.5px solid #ea580c;
+            animation: pulse-beacon 1.8s infinite ease-out;
+          "></div>
+          <div style="
+            position: relative;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
+            border: 2px solid #ffffff;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            line-height: 1;
+            z-index: 10;
+          ">
+            🚗
+          </div>
+        </div>
+      `,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
+    });
+  }, []);
 
   // Icon cho các ca SOS khác trên địa bàn (Chỉ hiện chấm đỏ gọn gàng, không hiện mã text để tránh che khuất)
   const otherSosIcon = useMemo(() => {
@@ -749,9 +863,7 @@ export const TacticalMap = ({
     return list;
   }, [areas]);
 
-  // Rescuer location fallback (hướng Nguyễn Lương Bằng nằm gọn bên trong Phường Liên Chiểu)
-  const defaultRescuerLat = sosLat + 0.0045;
-  const defaultRescuerLng = sosLng + 0.0035;
+// Fallback coordinates already initialized above
 
   const typeIconMap: Record<string, string> = {
     MEDICAL: '🚑 Y Tế',
@@ -805,7 +917,7 @@ export const TacticalMap = ({
           70% { transform: scale(1.6); opacity: 0; }
           100% { transform: scale(1.8); opacity: 0; }
         }
-        .tactical-main-sos-beacon, .tactical-other-sos-beacon, .tactical-rescuer-beacon, .tactical-rescuer-member-beacon, .tactical-vehicle-beacon {
+        .tactical-main-sos-beacon, .tactical-other-sos-beacon, .tactical-rescuer-beacon, .tactical-rescuer-member-beacon, .tactical-vehicle-beacon, .tactical-landing-handoff-beacon, .tactical-chat-gps-marker {
           background: transparent !important;
           border: none !important;
         }
@@ -833,11 +945,18 @@ export const TacticalMap = ({
           maxZoom={20}
         />
 
+        <MapClickDeselectHandler
+          onDeselect={() => {
+            if (onSelectSos) onSelectSos(null);
+          }}
+        />
+
         <LeafletMapController
           center={[sosLat, sosLng]}
           zoom={15}
           selectedSosId={selectedSos?.id}
           boundaryPositions={primaryBoundaryPositions}
+          previewCoords={previewAllCoords}
           onMount={(m) => {
             mapInstanceRef.current = m;
           }}
@@ -848,6 +967,7 @@ export const TacticalMap = ({
           <Polygon
             key={`ward-poly-${w.id}-google-dots`}
             positions={w.positions}
+            interactive={false}
             pathOptions={{
               color: '#dc2626',
               fillColor: '#ef4444',
@@ -863,8 +983,20 @@ export const TacticalMap = ({
         {/* 2. Tuyến đường di chuyển cứu hộ thực tế được vẽ bởi RescueRoadRoute (bám đường giao thông OSRM, loại bỏ đường thẳng chim bay cắt chéo nhà dân) */}
 
         {/* 3. Marker Điểm SOS Chính Đang Chọn (Kèm Radar & Popup chi tiết) */}
-        {selectedSos && isSelectedInJurisdiction && (
-          <Marker position={[sosLat, sosLng]} icon={mainSosIcon}>
+        {selectedSos &&
+          isSelectedInJurisdiction &&
+          String(selectedSos.status || '').toUpperCase() !== 'COMPLETED' &&
+          String(selectedSos.status || '').toUpperCase() !== 'RESOLVED' &&
+          String(assignment?.status || '').toUpperCase() !== 'COMPLETED' && (
+          <Marker
+            position={[sosLat, sosLng]}
+            icon={mainSosIcon}
+            eventHandlers={{
+              click: (e) => {
+                L.DomEvent.stopPropagation(e as any);
+              },
+            }}
+          >
             <Popup autoPan={false}>
               <div style={{ fontFamily: 'inherit', padding: '2px', minWidth: '200px' }}>
                 <div style={{ fontWeight: 800, fontSize: '13px', color: '#dc2626', marginBottom: '2px' }}>
@@ -874,7 +1006,7 @@ export const TacticalMap = ({
                   👤 {selectedSos.citizenName} ({selectedSos.citizenPhone})
                 </div>
                 <div style={{ fontSize: '12px', color: '#b91c1c', fontWeight: 700, marginTop: '2px' }}>
-                  ⚠️ {selectedSos.affectedPeople} người gặp nạn [{selectedSos.priority}]
+                  ⚠️ {selectedSos.affectedPeople} người gặp nạn [{selectedSos.priority === 'CRITICAL' ? 'Nguy cấp' : selectedSos.priority === 'HIGH' ? 'Khẩn cấp' : selectedSos.priority === 'LOW' ? 'Thấp' : 'Trung bình'}]
                 </div>
                 {selectedSos.description && (
                   <div style={{ fontSize: '11px', color: '#475569', marginTop: '4px', fontStyle: 'italic', lineHeight: '1.3' }}>
@@ -895,6 +1027,41 @@ export const TacticalMap = ({
           </Marker>
         )}
 
+        {/* 3B. Marker Điểm Hẹn Bến Cập Bờ Tiếp Vận (Relay Landing Point) */}
+        {selectedSos?.shoreHandoff &&
+          selectedSos.shoreHandoff.status !== 'NONE' &&
+          selectedSos.shoreHandoff.landingPoint?.coordinates && (
+            <Marker
+              position={[
+                selectedSos.shoreHandoff.landingPoint.coordinates[1],
+                selectedSos.shoreHandoff.landingPoint.coordinates[0],
+              ]}
+              icon={landingPointIcon}
+            >
+              <Popup>
+                <div style={{ minWidth: 220, padding: '4px 2px' }}>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: '#b45309', marginBottom: 3 }}>
+                    🚗 {selectedSos.shoreHandoff.landingPoint.name || 'Điểm Hẹn Đón Tiếp Vận'}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: '#475569', marginBottom: 6 }}>
+                    {selectedSos.shoreHandoff.landingPoint.address || 'Mép nước chuyển tiếp nạn nhân lên xe đường bộ'}
+                  </div>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: '#0f172a' }}>
+                    • Cần đón: <span style={{ color: '#ea580c' }}>{selectedSos.shoreHandoff.vehicleTypeNeeded === 'AMBULANCE' ? 'Xe Cứu Thương 115' : 'Xe Tải Cứu Hộ'}</span> ({selectedSos.shoreHandoff.peopleCount} người)
+                  </div>
+                  <div style={{ fontSize: 11, marginTop: 4, fontWeight: 800, color: selectedSos.shoreHandoff.status === 'ASSIGNED' ? '#15803d' : '#d97706' }}>
+                    Trạng thái: {selectedSos.shoreHandoff.status === 'ASSIGNED' ? `✓ ĐÃ ĐIỀU XE (${selectedSos.shoreHandoff.assignedVehiclePlate || selectedSos.shoreHandoff.assignedVehicleName || 'Đã phân bổ'})` : '⏳ ĐANG CHỜ BAN CHỈ HUY ĐIỀU XE'}
+                  </div>
+                </div>
+              </Popup>
+              <Tooltip direction="top" offset={[0, -14]} opacity={0.95} permanent>
+                <span style={{ fontWeight: 800, fontSize: '11px', color: '#b45309', background: '#fffbeb', padding: '2px 6px', borderRadius: 4, border: '1px solid #fcd34d' }}>
+                  🚗 {selectedSos.shoreHandoff.landingPoint.name}
+                </span>
+              </Tooltip>
+            </Marker>
+          )}
+
         {/* 4. Các điểm SOS khác trong khu vực (Chỉ hiện chấm đỏ, khi click sẽ chọn và nổi ID lên) */}
         {otherSosList.map((sos) => {
           const lat = sos.coordinates?.lat ?? defaultLat;
@@ -905,7 +1072,8 @@ export const TacticalMap = ({
               position={[lat, lng]}
               icon={otherSosIcon}
               eventHandlers={{
-                click: () => {
+                click: (e) => {
+                  L.DomEvent.stopPropagation(e as any);
                   if (onSelectSos) onSelectSos(sos);
                 },
               }}
@@ -917,11 +1085,93 @@ export const TacticalMap = ({
           );
         })}
 
+        {/* 4B. Marker Tọa độ GPS khẩn cấp nhận từ Chat người dân */}
+        {chatGpsPin && (
+          <Marker
+            position={[chatGpsPin.lat, chatGpsPin.lng]}
+            icon={L.divIcon({
+              className: 'tactical-chat-gps-marker',
+              iconSize: [48, 48],
+              iconAnchor: [24, 48],
+              popupAnchor: [0, -48],
+              html: `
+                <div style="position: relative; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                  <div style="position: absolute; width: 44px; height: 44px; border-radius: 50%; background: rgba(220, 38, 38, 0.35); animation: ping 1.2s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+                  <div style="position: absolute; width: 32px; height: 32px; border-radius: 50%; background: #dc2626; border: 3px solid #ffffff; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.7); display: flex; align-items: center; justify-content: center; font-size: 16px; color: #ffffff;">
+                    📍
+                  </div>
+                </div>
+              `,
+            })}
+          >
+            <Popup autoPan={true}>
+              <div style={{ fontFamily: 'inherit', padding: '4px 2px', minWidth: '220px' }}>
+                <div style={{ fontWeight: 800, fontSize: '13.5px', color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6, marginBottom: '4px' }}>
+                  <span>📍 Vị trí khẩn cấp (từ Chat)</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#0f172a', fontWeight: 700, marginBottom: '2px' }}>
+                  Người gửi: {chatGpsPin.senderName || 'Người dân'}
+                </div>
+                {chatGpsPin.address && (
+                  <div style={{ fontSize: '11.5px', color: '#475569', marginBottom: '4px', lineHeight: 1.3 }}>
+                    {chatGpsPin.address}
+                  </div>
+                )}
+                <div style={{ fontSize: '11px', color: '#dc2626', fontWeight: 700, background: '#fef2f2', padding: '3px 6px', borderRadius: 4, display: 'inline-block', marginBottom: '8px', border: '1px solid #fecdd3' }}>
+                  GPS: {chatGpsPin.lat.toFixed(6)}, {chatGpsPin.lng.toFixed(6)}
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  <a
+                    href={`https://www.google.com/maps?q=${chatGpsPin.lat},${chatGpsPin.lng}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      flex: 1,
+                      padding: '5px 8px',
+                      background: '#0284c7',
+                      color: '#ffffff',
+                      borderRadius: 6,
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      textAlign: 'center',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    Google Maps ↗
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setChatGpsPin(null)}
+                    style={{
+                      padding: '5px 8px',
+                      background: '#f1f5f9',
+                      color: '#64748b',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: 6,
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Đóng ghim
+                  </button>
+                </div>
+              </div>
+            </Popup>
+            <Tooltip direction="top" offset={[0, -46]} opacity={0.95} permanent>
+              <span style={{ fontWeight: 800, fontSize: '11.5px', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fecdd3', padding: '2px 8px', borderRadius: 4, boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
+                📍 {chatGpsPin.senderName || 'Vị trí từ Chat'}
+              </span>
+            </Tooltip>
+          </Marker>
+        )}
+
         {/* 5. Render Tuyến đường Road-snapped OSRM & GPS của các đội được chọn */}
         {activePreviewTeams.map((team, tIdx) => {
           const teamBase = getTeamBaseCoord(team.id, tIdx);
+          if (!teamBase) return null;
           const teamVeh = vehicles.find((v) => v.teamId === team.id);
-          const isTeamExpanded = Boolean(expandedTeamIds[team.id]);
+          const isTeamExpanded = expandedTeamIds[team.id] !== false;
 
           return (
             <Fragment key={`preview-team-${team.id}`}>
@@ -938,9 +1188,10 @@ export const TacticalMap = ({
               {/* Marker Trung tâm Đội & Phương tiện Cứu hộ (Gộp chung mặc định gọn gàng, bấm để bung GPS) */}
               <Marker
                 position={[teamBase.lat, teamBase.lng]}
-                icon={createUnifiedTeamDivIcon(team, teamVeh, isTeamExpanded)}
+                icon={createUnifiedTeamDivIcon(team, teamVeh, isTeamExpanded, teamBase)}
                 eventHandlers={{
-                  click: () => {
+                  click: (e) => {
+                    L.DomEvent.stopPropagation(e as any);
                     setExpandedTeamIds((prev) => ({
                       ...prev,
                       [team.id]: !prev[team.id],
@@ -1081,28 +1332,16 @@ export const TacticalMap = ({
                 </Popup>
               </Marker>
 
-              {/* Chỉ khi người dùng bấm mở rộng / bung đội hình: hiển thị GPS từng thành viên fanned out không bị đè */}
+              {/* Tự động hiển thị GPS từng thành viên trong đội khi bấm chọn đội (Không vẽ đường nối thẳng cắt qua bản đồ) */}
               {isTeamExpanded &&
                 team.rescuers.map((rescuer, rIdx) => {
                   const rCoord = getRescuerLiveCoord(rescuer, teamBase, rIdx, team.rescuers.length);
                   return (
                     <Fragment key={`rescuer-${team.id}-${rescuer.id}`}>
-                      {/* Đường nối liên lạc từ xe chỉ huy tới vị trí chiến sĩ */}
-                      <Polyline
-                        positions={[
-                          [teamBase.lat, teamBase.lng],
-                          [rCoord.lat, rCoord.lng],
-                        ]}
-                        pathOptions={{
-                          color: '#0284c7',
-                          weight: 1.5,
-                          dashArray: '3, 4',
-                          opacity: 0.5,
-                        }}
-                      />
                       <Marker
                         position={[rCoord.lat, rCoord.lng]}
-                        icon={createRescuerDivIcon(rescuer, rIdx)}
+                        icon={createRescuerDivIcon(rescuer, rIdx, rCoord)}
+                        zIndexOffset={1200 + rIdx}
                       >
                         <Popup>
                           <div style={{ fontFamily: 'inherit', padding: '2px', minWidth: '190px' }}>
@@ -1130,7 +1369,12 @@ export const TacticalMap = ({
         })}
 
         {/* 6. Tuyến đường và Marker Đội Cứu Hộ Đang Xuất Kích (khi không có preview cụ thể) */}
-        {isSelectedInJurisdiction && assignment && assignment.status !== 'CANCELLED' && activePreviewTeams.length === 0 && (
+        {isSelectedInJurisdiction &&
+          assignment &&
+          assignment.status !== 'CANCELLED' &&
+          assignment.status !== 'COMPLETED' &&
+          String(selectedSos?.status || '').toUpperCase() !== 'COMPLETED' &&
+          activePreviewTeams.length === 0 && (
           <>
             <RescueRoadRoute
               startLat={assignment.rescuerLocation?.lat ?? defaultRescuerLat}
@@ -1235,25 +1479,7 @@ export const TacticalMap = ({
         </button>
       </div>
 
-      {/* Watermark Biển đảo Việt Nam (Đảm bảo chủ quyền Hoàng Sa & Trường Sa) */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 6,
-          left: 10,
-          zIndex: 1000,
-          fontSize: '11px',
-          fontWeight: 600,
-          color: '#475569',
-          background: 'rgba(255, 255, 255, 0.85)',
-          padding: '2px 8px',
-          borderRadius: 4,
-          backdropFilter: 'blur(4px)',
-          border: '1px solid rgba(226, 232, 240, 0.8)',
-        }}
-      >
-        🇻🇳 Bản đồ Google Maps • Toàn vẹn chủ quyền lãnh thổ Việt Nam
-      </div>
+
     </div>
   );
 };

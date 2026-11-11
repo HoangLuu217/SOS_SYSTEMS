@@ -10,6 +10,7 @@ import {
   TouchableWithoutFeedback,
   RefreshControl,
   Animated,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -172,6 +173,12 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     if (!item.isRead) {
       handleMarkAsRead(item);
     }
+    const isChat = item.type === 'CHAT' || item.actionUrl === 'chat' || item.data?.isChat;
+    if (isChat) {
+      if (onNavigateToTab) onNavigateToTab('home');
+      DeviceEventEmitter.emit('open:local_authority_chat', item.data || item);
+      return;
+    }
     setSelectedNotif({ ...item, isRead: true });
     setActionMenuVisible(false);
     setDetailModalVisible(true);
@@ -202,7 +209,28 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
   // Xử lý nút hành động trong modal chi tiết
   const handleDetailAction = (item: NotificationItem) => {
     setDetailModalVisible(false);
-    if (item.actionUrl === 'sos_detail' || item.actionUrl === 'tracking') {
+    if (
+      item.actionUrl === 'safety_check' ||
+      item.type === 'SAFETY_CHECK' ||
+      item.data?.isSafetyCheck
+    ) {
+      const sid = item.data?.safetyCheckId || (item as any).safetyCheckId || item._id;
+      DeviceEventEmitter.emit('open:safety_check', { safetyCheckId: sid });
+    } else if (
+      item.actionUrl === 'blood_donation' ||
+      item.type === 'BLOOD_DONATION' ||
+      item.data?.isBloodDonation
+    ) {
+      const eid = item.data?.eventId || (item as any).eventId;
+      DeviceEventEmitter.emit('open:blood_donation', { eventId: eid });
+    } else if (
+      item.actionUrl === 'chat' ||
+      item.type === 'CHAT' ||
+      item.data?.isChat
+    ) {
+      if (onNavigateToTab) onNavigateToTab('home');
+      DeviceEventEmitter.emit('open:local_authority_chat', item.data || item);
+    } else if (item.actionUrl === 'sos_detail' || item.actionUrl === 'tracking') {
       if (onNavigateToTab) onNavigateToTab('sos');
     } else if (item.actionUrl === 'profile') {
       if (onNavigateToProfile) onNavigateToProfile();
@@ -272,6 +300,12 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
             <Feather name="map-pin" size={20} color="#16A34A" />
           </View>
         );
+      case 'CHAT':
+        return (
+          <View style={[styles.typeIconBox, { backgroundColor: '#E0F2FE' }]}>
+            <Feather name="message-square" size={20} color="#0284C7" />
+          </View>
+        );
       case 'SYSTEM':
       default:
         return (
@@ -284,7 +318,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor={PROFILE_THEME.colors.background} />
+      <StatusBar barStyle="dark-content" {...({ backgroundColor: PROFILE_THEME.colors.background } as any)} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -725,7 +759,11 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
                   >
                     <Feather
                       name={
-                        selectedNotif.actionUrl === 'sos_detail'
+                        selectedNotif.actionUrl === 'safety_check' || selectedNotif.type === 'SAFETY_CHECK'
+                          ? 'shield'
+                          : selectedNotif.actionUrl === 'chat' || selectedNotif.type === 'CHAT'
+                          ? 'message-circle'
+                          : selectedNotif.actionUrl === 'sos_detail'
                           ? 'navigation'
                           : selectedNotif.actionUrl === 'map'
                           ? 'map'
@@ -736,7 +774,13 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
                       style={{ marginRight: 6 }}
                     />
                     <Text style={styles.detailActionText}>
-                      {selectedNotif.actionUrl === 'sos_detail'
+                      {selectedNotif.actionUrl === 'safety_check' || selectedNotif.type === 'SAFETY_CHECK'
+                        ? 'Đánh dấu an toàn ngay'
+                        : selectedNotif.actionUrl === 'chat' || selectedNotif.type === 'CHAT'
+                        ? 'Mở cuộc trò chuyện ngay'
+                        : selectedNotif.actionUrl === 'blood_donation' || selectedNotif.type === 'BLOOD_DONATION'
+                        ? 'Xem & Xác nhận đăng ký hiến máu'
+                        : selectedNotif.actionUrl === 'sos_detail'
                         ? 'Xem tiến trình cứu trợ'
                         : selectedNotif.actionUrl === 'map'
                         ? 'Xem bản đồ cảnh báo'

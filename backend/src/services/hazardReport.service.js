@@ -44,14 +44,24 @@ class HazardReportService {
       throw new ApiError(400, 'Địa chỉ cụ thể (address) là bắt buộc');
     }
 
-    // 1. Tự động xác định khu vực hành chính (areaId) chính xác thông qua tọa độ GPS
+    // 1. Nếu người tạo (Admin / Authority) chọn trực tiếp areaId hợp lệ từ DB, ưu tiên gán khu vực đó
     let targetAreaId = null;
-    const geoMatchedArea = await findAreaByCoordinates([lng, lat], AdministrativeArea);
-    if (geoMatchedArea) {
-      targetAreaId = geoMatchedArea._id;
+    if (areaId && mongoose.Types.ObjectId.isValid(areaId)) {
+      const explicitArea = await AdministrativeArea.findById(areaId).select('_id').lean();
+      if (explicitArea) {
+        targetAreaId = explicitArea._id;
+      }
     }
 
-    // 2. Nếu GPS chưa rơi vào ranh giới cụ thể, fallback qua areaId gửi lên hoặc từ khóa địa chỉ
+    // 2. Tự động xác định khu vực hành chính (areaId) thông qua tọa độ GPS nếu chưa có
+    if (!targetAreaId) {
+      const geoMatchedArea = await findAreaByCoordinates([lng, lat], AdministrativeArea);
+      if (geoMatchedArea) {
+        targetAreaId = geoMatchedArea._id;
+      }
+    }
+
+    // 3. Nếu GPS chưa rơi vào ranh giới cụ thể, fallback qua mã/tên areaId gửi lên hoặc từ khóa địa chỉ
     if (!targetAreaId && areaId) {
       targetAreaId = areaId;
       if (targetAreaId && !mongoose.Types.ObjectId.isValid(targetAreaId)) {
@@ -164,6 +174,35 @@ class HazardReportService {
 
     // Bắn sự kiện realtime cho Web và các bên liên quan
     eventBus.emit('hazard_event', { action: 'CREATED', data: populated });
+
+    // Tự động phát thông báo theo GPS trong khu vực mục tiêu khi tạo điểm nguy hiểm đã được duyệt (APPROVED)
+    if (isApproved && creatorUser) {
+      try {
+        const notificationService = require('./notification.service');
+        const notifyAreaId = isLocalAuthorityOnly
+          ? (creatorUser.authority?.areaId || targetAreaId)
+          : (data.notifyAreaId || data.areaId || targetAreaId);
+        const areaName = populated.areaId?.name || 'khu vực quản lý';
+        const sevMap = {
+          CRITICAL: 'URGENT',
+          HIGH: 'HIGH',
+          MEDIUM: 'HIGH',
+          LOW: 'NORMAL',
+        };
+        await notificationService.broadcastNotification(creatorUser, {
+          title: `Cảnh báo điểm nguy hiểm mới: ${populated.title}`,
+          content: `${populated.description} (Vị trí: ${populated.address || areaName}). Người dân trong khu vực chú ý phòng tránh an toàn!`,
+          type: 'HAZARD',
+          priority: sevMap[populated.severity] || 'HIGH',
+          areaId: notifyAreaId ? notifyAreaId.toString() : undefined,
+          data: {
+            hazardReportId: populated._id.toString(),
+          },
+        });
+      } catch (notifyErr) {
+        console.error('[HazardReportService] Auto broadcast notification failed on create:', notifyErr.message);
+      }
+    }
 
     return populated;
   }
@@ -398,10 +437,17 @@ class HazardReportService {
         coordinates: newCoords,
       };
 
-      // Tự động đồng bộ lại areaId theo tọa độ GPS mới nếu tìm thấy
-      const newMatchedArea = await findAreaByCoordinates(newCoords, AdministrativeArea);
-      if (newMatchedArea) {
-        report.areaId = newMatchedArea._id;
+      // Nếu có truyền areaId hợp lệ trực tiếp từ DB thì ưu tiên, ngược lại đồng bộ theo tọa độ GPS
+      if (data.areaId && mongoose.Types.ObjectId.isValid(data.areaId)) {
+        const explicitArea = await AdministrativeArea.findById(data.areaId).select('_id').lean();
+        if (explicitArea) {
+          report.areaId = explicitArea._id;
+        }
+      } else {
+        const newMatchedArea = await findAreaByCoordinates(newCoords, AdministrativeArea);
+        if (newMatchedArea) {
+          report.areaId = newMatchedArea._id;
+        }
       }
     }
 
@@ -415,6 +461,37 @@ class HazardReportService {
 
     // Bắn sự kiện realtime cập nhật kết quả duyệt
     eventBus.emit('hazard_event', { action: 'REVIEWED', data: populated });
+
+    // Tự động phát thông báo theo GPS trong khu vực mục tiêu khi duyệt điểm nguy hiểm (APPROVED)
+    if (status === 'APPROVED' && authorityUser) {
+      try {
+        const notificationService = require('./notification.service');
+        const userRoles = authorityUser.roles || [];
+        const isLocalAuthOnly = userRoles.includes('LOCAL_AUTHORITY') && !userRoles.includes('ADMIN');
+        const notifyAreaId = isLocalAuthOnly
+          ? (authorityUser.authority?.areaId || populated.areaId?._id || populated.areaId)
+          : (data.notifyAreaId || data.areaId || populated.areaId?._id || populated.areaId);
+        const areaName = populated.areaId?.name || 'khu vực quản lý';
+        const sevMap = {
+          CRITICAL: 'URGENT',
+          HIGH: 'HIGH',
+          MEDIUM: 'HIGH',
+          LOW: 'NORMAL',
+        };
+        await notificationService.broadcastNotification(authorityUser, {
+          title: `Cảnh báo điểm nguy hiểm: ${populated.title}`,
+          content: `${populated.description} (Vị trí: ${populated.address || areaName}). Người dân trong khu vực chú ý phòng tránh an toàn!`,
+          type: 'HAZARD',
+          priority: sevMap[populated.severity] || 'HIGH',
+          areaId: notifyAreaId ? notifyAreaId.toString() : undefined,
+          data: {
+            hazardReportId: populated._id.toString(),
+          },
+        });
+      } catch (notifyErr) {
+        console.error('[HazardReportService] Auto broadcast notification failed on review:', notifyErr.message);
+      }
+    }
 
     return populated;
   }

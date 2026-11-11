@@ -80,32 +80,47 @@ class EquipmentService {
       filter.name = { $regex: query.name.trim(), $options: 'i' };
     }
 
-    // Loc theo khu vuc (areaId) -> tim cac doi trong khu vuc do
+    // Loc theo khu vuc (areaId) -> tim tat ca cac doi va vat tu trong dia ban
     if (query.areaId && query.areaId !== 'ALL') {
-      let targetArea = null;
+      const areaMatches = [];
       if (mongoose.Types.ObjectId.isValid(query.areaId)) {
-        targetArea = await AdministrativeArea.findById(query.areaId);
+        const byId = await AdministrativeArea.findById(query.areaId);
+        if (byId) areaMatches.push(byId);
       }
-      if (!targetArea) {
-        targetArea = await AdministrativeArea.findOne({
-          $or: [{ code: query.areaId }, { name: new RegExp(query.areaId, 'i') }],
-        });
-      }
+      const byOther = await AdministrativeArea.find({
+        $or: [{ code: query.areaId }, { name: new RegExp(String(query.areaId).trim(), 'i') }],
+      });
+      byOther.forEach((a) => {
+        if (!areaMatches.some((m) => String(m._id) === String(a._id))) areaMatches.push(a);
+      });
 
-      if (targetArea) {
-        const relevantAreaIds = [targetArea._id];
-        const childWards = await AdministrativeArea.find({ parentId: targetArea._id }).select('_id');
-        childWards.forEach((w) => relevantAreaIds.push(w._id));
-        if (targetArea.parentId) relevantAreaIds.push(targetArea.parentId);
+      if (areaMatches.length > 0) {
+        const relevantAreaIds = new Set();
+        const cleanNames = [];
 
-        const cleanName = (targetArea.name || '')
-          .replace(/^(phường|xã|quận|huyện|thành phố|thị xã)\s+/i, '')
-          .trim();
+        for (const a of areaMatches) {
+          relevantAreaIds.add(String(a._id));
+          if (a.parentId) {
+            relevantAreaIds.add(String(a.parentId));
+            const parent = await AdministrativeArea.findById(a.parentId);
+            if (parent?.name) {
+              const pName = parent.name.replace(/^(phường|xã|quận|huyện|thành phố|thị xã)\s+/i, '').trim();
+              if (pName.length >= 3) cleanNames.push(pName);
+            }
+          }
+          const children = await AdministrativeArea.find({ parentId: a._id }).select('_id name');
+          children.forEach((c) => relevantAreaIds.add(String(c._id)));
 
-        const areaConditions = [{ areaId: { $in: relevantAreaIds } }];
-        if (cleanName.length >= 3) {
-          areaConditions.push({ name: new RegExp(cleanName, 'i') });
+          const cName = (a.name || '').replace(/^(phường|xã|quận|huyện|thành phố|thị xã)\s+/i, '').trim();
+          if (cName.length >= 3) cleanNames.push(cName);
         }
+
+        const areaConditions = [
+          { areaId: { $in: Array.from(relevantAreaIds).map((id) => new mongoose.Types.ObjectId(id)) } },
+        ];
+        cleanNames.forEach((cn) => {
+          if (cn.length >= 3) areaConditions.push({ name: new RegExp(cn, 'i') });
+        });
 
         const teamsInArea = await RescueTeam.find({ $or: areaConditions }).select('_id');
         const teamIds = teamsInArea.map((t) => t._id);
@@ -391,7 +406,15 @@ class EquipmentService {
    * Xuat cap cuu tro / Tieu hao vat tu (giam so luong kho)
    */
   async consumeEquipment(id, { quantity, destination, note }) {
-    const equipment = await Equipment.findById(id);
+    let equipment = null;
+    if (id && mongoose.Types.ObjectId.isValid(id)) {
+      equipment = await Equipment.findById(id);
+    }
+    if (!equipment && id) {
+      equipment = await Equipment.findOne({
+        $or: [{ serialNumber: String(id).trim().toUpperCase() }, { name: new RegExp(String(id).trim(), 'i') }],
+      });
+    }
     if (!equipment) throw new ApiError(404, 'Không tìm thấy vật tư cần xuất cấp');
 
     const consumeQty = parseInt(quantity, 10);
@@ -468,16 +491,34 @@ class EquipmentService {
     for (const item of items) {
       const eqId = item.equipmentId || item._id;
       const qty = parseInt(item.quantity, 10);
-      if (!eqId) {
+      if (!eqId && !item.name) {
         throw new ApiError(400, 'Thiếu thông tin vật tư cần xuất');
       }
       if (!qty || qty <= 0) {
         throw new ApiError(400, 'Số lượng xuất của mỗi mặt hàng phải lớn hơn 0');
       }
 
-      const eq = await Equipment.findById(eqId);
+      let eq = null;
+      if (eqId && mongoose.Types.ObjectId.isValid(eqId)) {
+        eq = await Equipment.findById(eqId);
+      }
+      // Fallback: nếu không tìm thấy theo ID (do db vừa được re-seed và client giữ ID cũ), tìm theo tên hoặc serialNumber
+      if (!eq && item.name) {
+        eq = await Equipment.findOne({
+          name: new RegExp(`^${item.name.trim()}$`, 'i'),
+        });
+      }
+      if (!eq && eqId) {
+        eq = await Equipment.findOne({
+          $or: [
+            { serialNumber: String(eqId).trim().toUpperCase() },
+            { name: new RegExp(String(eqId).trim(), 'i') },
+          ],
+        });
+      }
+
       if (!eq) {
-        throw new ApiError(404, `Không tìm thấy vật tư có mã: ${eqId}`);
+        throw new ApiError(404, `Không tìm thấy vật tư có mã hoặc tên: ${eqId || item.name}`);
       }
       if (qty > eq.quantity) {
         throw new ApiError(400, `Vật tư "${eq.name}" chỉ còn tồn kho ${eq.quantity} ${eq.unit}, không đủ để xuất ${qty} ${eq.unit}`);

@@ -535,7 +535,7 @@ export const LoginPage = ({
             {resetStep === 'PASSWORD' && 'Thiết Lập Mật Khẩu Mới'}
           </h2>
           <p style={{ margin: 0, fontSize: '12.5px', color: '#64748b' }}>
-            {resetStep === 'EMAIL' && 'Nhập Gmail cán bộ địa bàn để nhận mã xác thực OTP qua Resend'}
+            {resetStep === 'EMAIL' && 'Nhập Gmail cán bộ địa bàn để nhận mã xác thực OTP'}
             {resetStep === 'OTP' && 'Nhập mã OTP 6 chữ số vừa được gửi đến hòm thư Gmail của cán bộ'}
             {resetStep === 'PASSWORD' && 'Thiết lập mật khẩu mới bảo mật cao cho tài khoản của bạn'}
           </p>

@@ -19,6 +19,7 @@ export function getAreaCoordinates(areaName: string, department?: string): { lat
   if (name.includes('tây hồ') || dept.includes('tây hồ')) return { lat: 21.0708, lng: 105.8211 };
   if (name.includes('long biên') || dept.includes('long biên')) return { lat: 21.0362, lng: 105.8943 };
   if (name.includes('nam từ liêm') || name.includes('bắc từ liêm')) return { lat: 21.0373, lng: 105.7656 };
+  if (name.includes('chương mỹ') || dept.includes('chương mỹ')) return { lat: 20.8853, lng: 105.6621 };
   if (dept.includes('hà nội') || dept.includes('ha noi')) return { lat: 21.0285, lng: 105.8542 };
 
   // Đà Nẵng

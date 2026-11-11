@@ -41,6 +41,31 @@
   overflow-x: auto !important;
 }
 
+/* Table Rows in Coordination View: con trỏ chuột bình thường (default), không đổi thành click pointer */
+.coordination-executive-container .executive-table tbody tr,
+.coordination-executive-container .executive-table tbody tr.executive-table-row {
+  cursor: default !important;
+}
+
+.coordination-executive-container .executive-table tbody tr td,
+.coordination-executive-container .executive-table tbody tr.executive-table-row td {
+  cursor: default !important;
+}
+
+.coordination-executive-container .executive-table tbody tr:hover td,
+.coordination-executive-container .executive-table tbody tr.executive-table-row:hover td {
+  background: #f8fafc !important;
+  cursor: default !important;
+}
+
+/* Các phần tử bấm tương tác vẫn giữ chuột click */
+.coordination-executive-container .coordination-action-btn,
+.coordination-executive-container .citizen-phone-pill,
+.coordination-executive-container .triage-btn,
+.coordination-executive-container .clear-search-btn {
+  cursor: pointer !important;
+}
+
 /* Highlighting key table elements */
 .code-mono-bold {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;

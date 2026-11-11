@@ -274,6 +274,58 @@ class SosAssignmentController {
       next(error);
     }
   }
+
+  /**
+   * POST /supplies/request hoặc POST /assignments/:id/supplies/request
+   */
+  async requestSupplies(req, res, next) {
+    try {
+      const assignmentId = req.params.id || req.body.assignmentId;
+      const { sosId, items, urgency, note } = req.body;
+      const result = await sosAssignmentService.requestSupplies(req.user?._id, {
+        assignmentId,
+        sosId,
+        items,
+        urgency,
+        note,
+      });
+      return sendSuccess(res, 201, 'Gửi yêu cầu chi viện vật tư thành công', result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /assignments/:id/supplies/approve
+   */
+  async approveSupplies(req, res, next) {
+    try {
+      const { note } = req.body;
+      const result = await sosAssignmentService.approveSupplies(req.params.id, {
+        note,
+        officerId: req.user?._id,
+      });
+      return sendSuccess(res, 200, 'Phê duyệt chi viện vật tư thành công', result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /assignments/:id/supplies/reject
+   */
+  async rejectSupplies(req, res, next) {
+    try {
+      const { note } = req.body;
+      const result = await sosAssignmentService.rejectSupplies(req.params.id, {
+        note,
+        officerId: req.user?._id,
+      });
+      return sendSuccess(res, 200, 'Từ chối yêu cầu chi viện vật tư', result);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new SosAssignmentController();

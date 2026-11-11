@@ -66,29 +66,10 @@ class DomainDService {
   constructor() {
     this.areas = this.load(STORAGE_AREAS, INITIAL_AREAS);
     this.authorities = this.load(STORAGE_AUTHORITIES, INITIAL_AUTHORITIES);
-    const loadedSos = this.load(STORAGE_SOS, [] as SosRequest[]);
-    // Sanitize any invalid/mock SOS requests
-    this.sosRequests = (loadedSos.length > 0 ? loadedSos : INITIAL_SOS_REQUESTS).filter(
-      (s) =>
-        !s.id?.startsWith('sos-88') &&
-        !s.id?.startsWith('sos-89') &&
-        !s.id?.startsWith('sos-dn-') &&
-        !s.sosCode?.includes('8898') &&
-        !s.sosCode?.includes('8924') &&
-        !s.sosCode?.includes('8927') &&
-        !s.sosCode?.includes('8938') &&
-        !s.locationName?.includes('Nam Kỳ Khởi Nghĩa')
-    );
+    this.sosRequests = [];
     this.rescueTeams = INITIAL_RESCUE_TEAMS;
     this.vehicles = INITIAL_VEHICLES;
-    const loadedAssignments = this.load<Record<string, SosAssignment>>(STORAGE_ASSIGNMENTS, {});
-    const cleanAssignments: Record<string, SosAssignment> = {};
-    for (const [k, v] of Object.entries(loadedAssignments)) {
-      if (!k.startsWith('assign-89') && !v?.id?.startsWith('assign-89') && !v?.sosRequestId?.startsWith('sos-89')) {
-        cleanAssignments[k] = v;
-      }
-    }
-    this.assignments = cleanAssignments;
+    this.assignments = {};
     this.officers = SAMPLE_OFFICERS;
     this.activeOfficerId = this.load(STORAGE_ACTIVE_OFFICER, SAMPLE_OFFICERS[0].id);
   }
@@ -258,12 +239,54 @@ class DomainDService {
     return [...this.vehicles];
   }
 
+  getAssignments(): SosAssignment[] {
+    return Object.values(this.assignments);
+  }
+
   getAssignmentBySosId(sosId: string): SosAssignment | null {
     const req = this.sosRequests.find((s) => s.id === sosId);
-    if (!req || !req.assignmentId) return null;
-    const assign = this.assignments[req.assignmentId];
-    if (!assign || assign.status === 'CANCELLED') return null;
-    return assign;
+    if (req?.assignmentId && this.assignments[req.assignmentId]) {
+      const assign = this.assignments[req.assignmentId];
+      if (assign && assign.status !== 'CANCELLED') return assign;
+    }
+    const found = Object.values(this.assignments).find(
+      (a) => a.sosRequestId === sosId && a.status !== 'CANCELLED'
+    );
+    return found || null;
+  }
+
+  /**
+   * Kiểm tra một đội cứu hộ có đang bận thực hiện nhiệm vụ khác hay không
+   * Quy tắc tác chiến: 1 nhóm chỉ được phép làm 1 nhiệm vụ tại một thời điểm
+   */
+  getActiveAssignmentForTeam(teamId: string, currentSosId?: string): SosAssignment | null {
+    if (!teamId) return null;
+    const busyStatuses = ['PENDING', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'RESCUING', 'IN_PROGRESS', 'ASSIGNED'];
+    const activeAssign = Object.values(this.assignments).find((a) => {
+      if (!busyStatuses.includes(a.status)) return false;
+      if (currentSosId && a.sosRequestId === currentSosId) return false;
+
+      // Nếu ca SOS tương ứng đã HOÀN THÀNH hoặc ĐÃ HỦY thì đội không còn bận nữa!
+      const relatedSos = this.sosRequests.find((s) => s.id === a.sosRequestId);
+      if (relatedSos && ['COMPLETED', 'CANCELLED', 'REJECTED', 'RESOLVED'].includes(relatedSos.status)) {
+        return false;
+      }
+
+      const teamIds = a.rescueTeamId ? a.rescueTeamId.split(',').map((id) => id.trim()) : [];
+      return teamIds.includes(teamId) || a.rescueTeamId === teamId;
+    });
+    return activeAssign || null;
+  }
+
+  updateSosStatus(sosId: string, nextStatus: any): void {
+    const sosIdx = this.sosRequests.findIndex((s) => s.id === sosId);
+    if (sosIdx !== -1) {
+      this.sosRequests[sosIdx] = {
+        ...this.sosRequests[sosIdx],
+        status: nextStatus,
+      };
+      this.save(STORAGE_SOS, this.sosRequests);
+    }
   }
 
   assignSos(
@@ -291,8 +314,8 @@ class DomainDService {
     const rescuerLoc = {
       lat: sos.coordinates.lat + 0.0045,
       lng: sos.coordinates.lng + 0.0035,
-      svgX: Math.max(100, Math.min(750, sos.coordinates.svgX + 40)),
-      svgY: Math.max(80, Math.min(500, sos.coordinates.svgY - 40)),
+      svgX: Math.max(100, Math.min(750, (sos.coordinates.svgX ?? 0) + 40)),
+      svgY: Math.max(80, Math.min(500, (sos.coordinates.svgY ?? 0) - 40)),
     };
 
     const assignment: SosAssignment = {
@@ -420,23 +443,32 @@ class DomainDService {
     return updated;
   }
 
-  cancelAssignment(assignmentId: string, reason: string): { assignment: SosAssignment; sos: SosRequest } {
-    const assign = this.assignments[assignmentId];
-    if (!assign) throw new Error('Assignment not found');
+  cancelAssignment(assignmentId: string, reason: string): { assignment?: SosAssignment; sos?: SosRequest } {
+    let assign: SosAssignment | undefined = this.assignments[assignmentId];
+    if (!assign) {
+      assign = Object.values(this.assignments).find(
+        (a) => a.id === assignmentId || a.sosRequestId === assignmentId
+      );
+    }
 
-    assign.status = 'CANCELLED';
-    assign.cancelledAt = new Date().toISOString();
-    assign.cancelReason = reason;
+    if (assign) {
+      assign.status = 'CANCELLED';
+      assign.cancelledAt = new Date().toISOString();
+      assign.cancelReason = reason;
+      this.assignments[assign.id] = { ...assign };
+      this.save(STORAGE_ASSIGNMENTS, this.assignments);
+    }
 
-    this.assignments[assignmentId] = { ...assign };
-    this.save(STORAGE_ASSIGNMENTS, this.assignments);
-
-    const sosIdx = this.sosRequests.findIndex((s) => s.id === assign.sosRequestId);
-    let updatedSos = this.sosRequests[sosIdx];
+    // Luôn reset ca SOS tương ứng về trạng thái VERIFIED và assignmentId = null
+    const targetSosId = assign?.sosRequestId || assignmentId;
+    const sosIdx = this.sosRequests.findIndex(
+      (s) => s.id === targetSosId || s.assignmentId === assignmentId || (assign && s.id === assign.sosRequestId)
+    );
+    let updatedSos: SosRequest | undefined;
     if (sosIdx !== -1) {
       this.sosRequests[sosIdx] = {
         ...this.sosRequests[sosIdx],
-        status: 'VERIFIED', // Reset to verified so it can be redispatched
+        status: 'VERIFIED',
         assignmentId: null,
       };
       updatedSos = this.sosRequests[sosIdx];
@@ -533,9 +565,14 @@ class DomainDService {
     }
 
     const cfg = jurKey ? JURISDICTION_CONFIGS[jurKey] : null;
-    const finalAreaId = userAreaId || cfg?.areaId || (userAreaName ? `area-${slugifyVietnamese(userAreaName)}` : 'area-default');
-    const finalAreaName = userAreaName || cfg?.name || user.authority?.department || 'Địa Bàn Phụ Trách';
-    const finalDistrictName = userDistrict || cfg?.district || '';
+    const rawAreaStr = `${areaName} ${userAreaName || ''} ${userDistrict || ''}`.toLowerCase();
+    const isNhsOfficer = rawAreaStr.includes('ngũ hành sơn') || rawAreaStr.includes('mỹ an') || rawAreaStr.includes('khuê mỹ');
+    const isLcOfficer = rawAreaStr.includes('liên chiểu') || rawAreaStr.includes('hòa khánh');
+
+    const defaultAreaId = isNhsOfficer ? 'area-nhs' : isLcOfficer ? 'area-lc' : (userAreaName ? `area-${slugifyVietnamese(userAreaName)}` : 'area-default');
+    const finalAreaId = userAreaId || (isNhsOfficer ? 'area-nhs' : (cfg?.areaId || defaultAreaId));
+    const finalAreaName = userAreaName || (isNhsOfficer ? 'Quận Ngũ Hành Sơn' : cfg?.name || user.authority?.department || 'Địa Bàn Phụ Trách');
+    const finalDistrictName = userDistrict || (isNhsOfficer ? 'Quận Ngũ Hành Sơn' : cfg?.district || '');
 
     // Check if matching officer already exists
     const matched = this.officers.find(
@@ -654,11 +691,6 @@ class DomainDService {
       }
     } catch (err) {
       console.warn('Lỗi load boundary cho cán bộ:', err);
-    }
-
-    // Fallback centroid cho Hòa Cường nếu chưa có boundary
-    if (isDanang && (officer.jurisdictionAreaName?.toLowerCase().includes('hòa cường') || officer.jurisdictionAreaId === 'area-htd')) {
-      GEOAPIFY_CENTROIDS[officer.jurisdictionAreaId] = [108.2175, 16.0416];
     }
 
     return area;

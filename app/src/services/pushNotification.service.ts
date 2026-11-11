@@ -25,7 +25,6 @@ Notifications.setNotificationHandler({
       // Nếu người dùng đã tắt nhóm thông báo này trong Cài đặt
       if (settings[category] === false) {
         return {
-          shouldShowAlert: false,
           shouldPlaySound: false,
           shouldSetBadge: false,
           shouldShowBanner: false,
@@ -34,15 +33,13 @@ Notifications.setNotificationHandler({
       }
 
       return {
-        shouldShowAlert: true,
-        shouldPlaySound: settings.sound,
+        shouldPlaySound: settings.sound !== false,
         shouldSetBadge: true,
         shouldShowBanner: true,
         shouldShowList: true,
       };
     } catch {
       return {
-        shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
         shouldShowBanner: true,
@@ -71,7 +68,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
           enableVibrate: true,
           showBadge: true,
           lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-          bypassDnd: true,
+          bypassDnd: false,
         });
       } catch (channelErr) {
         // Trong Expo Go từ SDK 53+, Android không hỗ trợ NotificationsChannelsProvider
@@ -169,12 +166,12 @@ export async function triggerLocalNotification(options: {
       return;
     }
 
-    // Rung nếu bật vibration
-    if (settings.vibration) {
+    // Rung nếu bật vibration (nhịp rung báo động SOS dồn dập cho nhiệm vụ khẩn cấp)
+    if (settings.vibration !== false) {
       if (options.priority === 'CRITICAL' || options.priority === 'HIGH' || category === 'alert') {
-        Vibration.vibrate([0, 500, 200, 500]);
+        Vibration.vibrate([0, 500, 150, 500, 150, 800, 200, 800]);
       } else {
-        Vibration.vibrate(300);
+        Vibration.vibrate(350);
       }
     }
 
@@ -191,7 +188,7 @@ export async function triggerLocalNotification(options: {
           enableVibrate: settings.vibration,
           showBadge: true,
           lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-          bypassDnd: true,
+          bypassDnd: false,
         });
         channelIdToUse = 'emergency-alerts';
       } catch (_) {
@@ -204,7 +201,7 @@ export async function triggerLocalNotification(options: {
       title: options.title,
       body: options.body,
       data: options.data || {},
-      sound: settings.sound ? 'default' : undefined,
+      sound: settings.sound !== false ? 'default' : undefined,
       badge: 1,
       priority:
         options.priority === 'CRITICAL' || options.priority === 'HIGH'

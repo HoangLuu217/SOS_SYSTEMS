@@ -7,6 +7,7 @@ import {
   registerForPushNotificationsAsync,
   triggerLocalNotification,
   sseNotificationService,
+  playDispatchAlertSound,
 } from '@/services';
 import {
   NotificationSettings,
@@ -120,6 +121,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       } catch (_) {}
     }
 
+    // 1b. Phát âm thanh điều động tác chiến nếu bật chuông
+    if (current.sound !== false) {
+      playDispatchAlertSound().catch(() => {});
+    }
+
     // 2. Kích hoạt Local Notification hiển thị ra ngoài hệ điều hành (thanh trạng thái / màn hình khóa)
     triggerLocalNotification({
       title: testItem.title,
@@ -156,14 +162,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const verificationStatus =
       incoming.data?.verificationStatus || (incoming as any).verificationStatus || 'VERIFIED';
 
+    const safetyCheckId = incoming.data?.safetyCheckId || (incoming as any).safetyCheckId;
     const broadcastKey =
       incoming.data?.broadcastId ||
       `${incoming.title?.trim()}_${incoming.content?.trim()}_${incoming.createdAt?.slice(0, 16)}`;
+      (safetyCheckId ? `safety_${safetyCheckId}` : null) ||
+      `${incoming.title?.trim()}_${incoming.content?.trim()}`;
 
     // Bỏ qua nếu đã từng hiển thị thông báo này (Deduplicate)
     if (
       seenIdsRef.current.has(incoming._id) ||
       (incoming.data?.broadcastId && seenIdsRef.current.has(incoming.data.broadcastId)) ||
+      (safetyCheckId && seenIdsRef.current.has(`safety_${safetyCheckId}`)) ||
       seenIdsRef.current.has(broadcastKey) ||
       (isRescuerVerification && seenIdsRef.current.has(`rescuer_ver_${verificationStatus}`))
     ) {
@@ -174,6 +184,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (incoming.data?.broadcastId) {
       seenIdsRef.current.add(incoming.data.broadcastId);
     }
+    if (safetyCheckId) {
+      seenIdsRef.current.add(`safety_${safetyCheckId}`);
+    }
     seenIdsRef.current.add(broadcastKey);
     if (isRescuerVerification) {
       seenIdsRef.current.add(`rescuer_ver_${verificationStatus}`);
@@ -183,13 +196,42 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const idsArray = Array.from(seenIdsRef.current).slice(-100);
     AsyncStorage.setItem(SEEN_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(idsArray)).catch(() => {});
 
-    if (incoming.data?.type === 'SOS_SYNC' || incoming.data?.type === 'RESCUE' || incoming.data?.sosId) {
+    // Đồng bộ nhiệm vụ tức thời nếu thông báo có liên quan tới SOS / Assignment
+    if (
+      incoming.type === 'SOS_SYNC' ||
+      incoming.data?.type === 'SOS_SYNC' ||
+      incoming.data?.type === 'RESCUE' ||
+      incoming.data?.action === 'ASSIGNED' ||
+      incoming.data?.action === 'CANCELLED' ||
+      incoming.data?.assignmentId ||
+      incoming.data?.sosId ||
+      (incoming as any).sosId
+    ) {
       DeviceEventEmitter.emit('sos:sync');
+      if (incoming.type === 'SOS_SYNC' && !incoming.title) {
+        return;
+      }
     }
 
     if (incoming.data?.type === 'RESCUER_VERIFICATION' || incoming.data?.type === 'USER_SYNC') {
       DeviceEventEmitter.emit('rescuer:verification_status_changed', incoming.data);
       DeviceEventEmitter.emit('user:profile_updated', incoming.data);
+    }
+
+    // Kiểm tra tính xác thực người nhận: nếu thông báo có đích danh userId hoặc targetUserIds
+    const myUserId = (user?._id || (user as any)?.id)?.toString();
+    const targetUserId = ((incoming as any).userId || incoming.data?.userId)?.toString();
+    if (targetUserId && myUserId && targetUserId !== myUserId) {
+      // Thông báo chỉ định user khác -> không hiển thị banner/chuông cho tôi
+      return;
+    }
+
+    const targetUserIds: string[] = Array.isArray(incoming.data?.targetUserIds)
+      ? incoming.data.targetUserIds.map((u: any) => (u?._id || u)?.toString())
+      : [];
+    if (targetUserIds.length > 0 && myUserId && !targetUserIds.includes(myUserId)) {
+      // Thông báo chỉ định danh sách user khác -> không hiển thị banner/chuông cho tôi
+      return;
     }
 
     // 1. Chèn thông báo mới vào đầu danh sách ngay lập tức
@@ -214,34 +256,52 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return;
     }
 
-    // 3. Phản hồi thiết bị: Rung (nếu bật vibration)
+    // 2b. Kiểm tra xem có phải tin nhắn trao đổi với cán bộ địa phương không
+    const isChat =
+      incoming.type === 'CHAT' ||
+      incoming.actionUrl === 'chat' ||
+      incoming.data?.isChat;
+
+    // 3. Phản hồi thiết bị: Rung nhẹ cho chat, rung dồn dập cho cảnh báo nguy cấp
     if (currentSettings.vibration) {
       try {
-        if (incoming.priority === 'CRITICAL' || incoming.type === 'INSTANT' || category === 'alert') {
-          Vibration.vibrate([0, 500, 200, 500]);
+        if (isChat) {
+          Vibration.vibrate([0, 150, 80, 150]);
+        } else if (incoming.priority === 'CRITICAL' || incoming.type === 'INSTANT' || incoming.type === 'ALERT' || category === 'alert') {
+          // Nhịp rung chuông báo động cứu nạn dồn dập
+          Vibration.vibrate([0, 500, 150, 500, 150, 800, 200, 800]);
         } else {
           Vibration.vibrate(300);
         }
       } catch (_) {}
     }
 
-    // 4. Kích hoạt thông báo hệ thống ra ngoài màn hình máy (Status bar & Lock screen)
+    // 3b. Phát âm thanh chuông điều động tác chiến cứu hộ CHỈ KHI là nhiệm vụ hoặc cảnh báo SOS khẩn cấp (KHÔNG phát khi nhận chat)
+    if (!isChat && currentSettings.sound !== false && (incoming.priority === 'CRITICAL' || category === 'alert' || incoming.data?.action === 'ASSIGNED')) {
+      playDispatchAlertSound().catch(() => {});
+    }
+
+    // 4. Kích hoạt thông báo hệ thống ra ngoài màn hình máy (Status bar & Lock screen) kèm âm thanh chuông
     triggerLocalNotification({
-      title: incoming.title,
-      body: incoming.content,
-      priority: incoming.priority,
+      title: incoming.title || (isChat ? '💬 Tin nhắn từ cán bộ địa phương' : '🚨 LỆNH ĐIỀU ĐỘNG CỨU HỘ MỚI'),
+      body: incoming.content || (incoming.data?.address ? `Vị trí ứng cứu: ${incoming.data.address}` : (isChat ? 'Đã gửi phản hồi cho bạn' : 'Có lệnh điều động khẩn cấp mới từ Ban chỉ huy!')),
+      priority: isChat ? 'NORMAL' : incoming.priority,
       data: {
         notificationId: incoming._id,
         type: incoming.type,
         areaId: incoming.areaId,
         areaName: incoming.areaName,
         isLocalTrigger: true,
+        isChat: isChat || undefined,
+        channel: incoming.data?.channel,
+        assignmentId: incoming.data?.assignmentId,
+        sosId: incoming.data?.sosId,
       },
     }).catch(() => {});
 
-    // 5. Hiển thị Banner cảnh báo khẩn cấp nổi trong app
+    // 5. Hiển thị Banner cảnh báo / tin nhắn nổi trong app
     setLatestEmergencyAlert(incoming);
-  }, []);
+  }, [user?._id]);
 
   // Tải danh sách thông báo và đối chiếu tin mới
   const syncNotifications = useCallback(async () => {
@@ -308,10 +368,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
       const item: NotificationItem = {
         _id: String(data.notificationId || data.broadcastId || notification.request.identifier),
-        title: content.title || 'Thông báo mới',
-        content: String(data.content || content.body || ''),
-        type: String(data.type || 'SYSTEM'),
-        priority: String(data.priority || 'NORMAL'),
+        title: content.title || data.title || '🚨 LỆNH ĐIỀU ĐỘNG CỨU HỘ MỚI',
+        content: String(content.body || data.content || data.body || ''),
+        type: String(data.type || 'ALERT'),
+        priority: String(data.priority || 'CRITICAL'),
         areaId: data.areaId,
         areaName: data.areaName,
         data,
@@ -321,9 +381,41 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       processIncomingAlert(item);
     });
 
-    const responseSub = Notifications.addNotificationResponseReceivedListener(() => {
+    const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
       syncNotifications();
-      navigateHandlerRef.current?.('news');
+      const notifData = response?.notification?.request?.content?.data as Record<string, any> | undefined;
+      if (
+        notifData?.type === 'SAFETY_CHECK' ||
+        notifData?.actionUrl === 'safety_check' ||
+        notifData?.isSafetyCheck
+      ) {
+        navigateHandlerRef.current?.('home');
+        setTimeout(() => {
+          DeviceEventEmitter.emit('open:safety_check', notifData);
+        }, 350);
+      } else if (
+        notifData?.type === 'BLOOD_DONATION' ||
+        notifData?.actionUrl === 'blood_donation' ||
+        notifData?.isBloodDonation
+      ) {
+        navigateHandlerRef.current?.('home');
+        setTimeout(() => {
+          DeviceEventEmitter.emit('open:blood_donation', notifData);
+        }, 350);
+      } else if (
+        notifData?.type === 'CHAT' ||
+        notifData?.actionUrl === 'chat' ||
+        notifData?.isChat
+      ) {
+        navigateHandlerRef.current?.('home');
+        setTimeout(() => {
+          DeviceEventEmitter.emit('open:local_authority_chat', notifData);
+        }, 350);
+      } else if (notifData?.type === 'SOS_SYNC' || notifData?.action === 'ASSIGNED' || notifData?.assignmentId || notifData?.sosId) {
+        navigateHandlerRef.current?.('sos');
+      } else {
+        navigateHandlerRef.current?.('news');
+      }
     });
 
     AsyncStorage.getItem(SEEN_NOTIFICATIONS_STORAGE_KEY).then((raw) => {

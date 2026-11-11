@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Phone, X } from 'lucide-react';
+import { Users, Phone, X, MapPin } from 'lucide-react';
 import type { RescueTeam } from '@/types/domainD';
 
 interface Props {
@@ -34,20 +34,21 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
         style={{
           background: '#ffffff',
           borderRadius: 12,
-          maxWidth: 620,
-          width: '100%',
+          maxWidth: 880,
+          width: '95%',
           boxShadow: '0 20px 40px -15px rgba(0,0,0,0.3)',
           border: '1px solid #e2e8f0',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
-          maxHeight: '90vh',
+          maxHeight: '88vh',
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
         <div
           style={{
+            flexShrink: 0,
             padding: '16px 20px',
             borderBottom: '1px solid #e2e8f0',
             background: '#f8fafc',
@@ -103,10 +104,11 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
         </div>
 
         {/* Modal Body */}
-        <div style={{ padding: '16px 20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ flex: 1, minHeight: 0, padding: '16px 20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Team Overview Card */}
           <div
             style={{
+              flexShrink: 0,
               display: 'grid',
               gridTemplateColumns: 'repeat(3, 1fr)',
               gap: 10,
@@ -137,20 +139,21 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
           </div>
 
           {/* Member Table */}
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <div style={{ flexShrink: 0, fontSize: 13, fontWeight: 800, color: '#0f172a', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
               Danh sách cán bộ chiến sĩ trong đội ({totalMembers})
             </div>
 
-            <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12.5 }}>
+            <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflowX: 'auto', background: '#ffffff' }}>
+              <table style={{ width: '100%', minWidth: 760, borderCollapse: 'collapse', textAlign: 'left', fontSize: 12.5 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: 11.5, fontWeight: 700 }}>
-                    <th style={{ padding: '8px 12px', width: 45 }}>STT</th>
-                    <th style={{ padding: '8px 12px' }}>Họ và tên</th>
-                    <th style={{ padding: '8px 12px' }}>Nhiệm vụ / Vai trò</th>
-                    <th style={{ padding: '8px 12px' }}>Điện thoại liên hệ</th>
-                    <th style={{ padding: '8px 12px', width: 95 }}>Trạng thái</th>
+                    <th style={{ padding: '9px 12px', width: 45, textAlign: 'center', whiteSpace: 'nowrap' }}>STT</th>
+                    <th style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>Họ và tên</th>
+                    <th style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>Nhiệm vụ / Vai trò</th>
+                    <th style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>Điện thoại liên hệ</th>
+                    <th style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>Vị trí GPS / Tọa độ</th>
+                    <th style={{ padding: '9px 12px', width: 115, textAlign: 'center', whiteSpace: 'nowrap' }}>Trạng thái</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -169,12 +172,12 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
                             background: isLeader ? 'rgba(2, 132, 199, 0.03)' : '#ffffff',
                           }}
                         >
-                          <td style={{ padding: '10px 12px', color: '#94a3b8', fontWeight: 600 }}>
+                          <td style={{ padding: '10px 12px', color: '#94a3b8', fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap' }}>
                             #{idx + 1}
                           </td>
-                          <td style={{ padding: '10px 12px' }}>
+                          <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <strong style={{ color: '#0f172a', fontSize: 13 }}>{rescuer.name}</strong>
+                              <strong style={{ color: '#0f172a', fontSize: 13, whiteSpace: 'nowrap' }}>{rescuer.name}</strong>
                               {isLeader && (
                                 <span
                                   style={{
@@ -184,6 +187,7 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
                                     background: 'rgba(2, 132, 199, 0.1)',
                                     padding: '1px 5px',
                                     borderRadius: 4,
+                                    whiteSpace: 'nowrap',
                                   }}
                                 >
                                   CHỈ HUY
@@ -191,10 +195,10 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
                               )}
                             </div>
                           </td>
-                          <td style={{ padding: '10px 12px', color: '#475569', fontWeight: 500 }}>
+                          <td style={{ padding: '10px 12px', color: '#475569', fontWeight: 500, whiteSpace: 'nowrap' }}>
                             {rescuer.role}
                           </td>
-                          <td style={{ padding: '10px 12px' }}>
+                          <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                             <a
                               href={`tel:${rescuer.phone}`}
                               style={{
@@ -208,20 +212,66 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
                                 padding: '3px 8px',
                                 borderRadius: 4,
                                 fontSize: 12,
+                                whiteSpace: 'nowrap',
                               }}
                             >
                               <Phone size={12} />
                               <span>{rescuer.phone}</span>
                             </a>
                           </td>
-                          <td style={{ padding: '10px 12px' }}>
+                          <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                            {rescuer.coordinates ? (
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  background: '#f0fdf4',
+                                  border: '1px solid #bbf7d0',
+                                  padding: '2.5px 7px',
+                                  borderRadius: 5,
+                                  fontSize: 11,
+                                  color: '#15803d',
+                                  fontWeight: 700,
+                                  fontFamily: 'monospace',
+                                }}
+                                title={`Tọa độ GPS: ${rescuer.coordinates.lat.toFixed(5)}, ${rescuer.coordinates.lng.toFixed(5)}`}
+                              >
+                                <MapPin size={11} color="#16a34a" />
+                                <span>{rescuer.coordinates.lat.toFixed(4)}, {rescuer.coordinates.lng.toFixed(4)}</span>
+                              </div>
+                            ) : (
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  background: '#f8fafc',
+                                  border: '1px solid #e2e8f0',
+                                  padding: '2.5px 7px',
+                                  borderRadius: 5,
+                                  fontSize: 11,
+                                  color: '#64748b',
+                                  fontWeight: 600,
+                                }}
+                              >
+                                <MapPin size={11} color="#94a3b8" />
+                                <span>Trực chiến tại xe</span>
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                             <span
                               style={{
-                                display: 'inline-block',
-                                padding: '2px 7px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 4,
+                                padding: '3px 8px',
                                 borderRadius: 4,
                                 fontSize: 11,
                                 fontWeight: 700,
+                                whiteSpace: 'nowrap',
                                 color: rescuer.status === 'Online' ? '#15803d' : '#475569',
                                 background: rescuer.status === 'Online' ? '#dcfce7' : '#f1f5f9',
                                 border: `1px solid ${rescuer.status === 'Online' ? '#bbf7d0' : '#e2e8f0'}`,
@@ -235,7 +285,7 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={5} style={{ padding: 16, textAlign: 'center', color: '#94a3b8' }}>
+                      <td colSpan={6} style={{ padding: 16, textAlign: 'center', color: '#94a3b8' }}>
                         Chưa có danh sách thành viên chi tiết
                       </td>
                     </tr>
@@ -249,18 +299,23 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
         {/* Modal Footer */}
         <div
           style={{
+            flexShrink: 0,
             padding: '12px 20px',
             borderTop: '1px solid #e2e8f0',
             background: '#f8fafc',
             display: 'flex',
-            justifyContent: 'flex-end',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
+          <div style={{ fontSize: 12, color: '#64748b' }}>
+            Tổng số: <strong style={{ color: '#0f172a' }}>{totalMembers}</strong> thành viên trực chiến
+          </div>
           <button
             type="button"
             onClick={onClose}
             style={{
-              padding: '8px 18px',
+              padding: '8px 20px',
               background: '#0f172a',
               color: '#ffffff',
               border: 'none',

@@ -1,5 +1,5 @@
 import { fetchWithAuth, API_BASE } from './client';
-import type { ChatMessageItem, ChatConversationItem, ChatSSEPayload } from '@/types/chat';
+import type { ChatMessageItem, ChatConversationItem, ChatSSEPayload, ChatAttachment } from '@/types/chat';
 
 export async function fetchChatConversations(): Promise<{ success: boolean; data: ChatConversationItem[] }> {
   return fetchWithAuth<{ success: boolean; data: ChatConversationItem[] }>('/chat/conversations', {
@@ -24,10 +24,35 @@ export async function sendChatMessage(payload: {
   content: string;
   recipientId?: string;
   channel?: string;
+  attachments?: ChatAttachment[];
+  sosRequestId?: string;
+  sosData?: any;
 }): Promise<{ success: boolean; data: ChatMessageItem }> {
   return fetchWithAuth('/chat/messages', {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Upload tệp/ảnh lên Cloudinary
+ */
+export async function uploadChatImage(fileOrBase64: File | string, fileName?: string): Promise<{ success: boolean; url: string; data?: any }> {
+  if (typeof fileOrBase64 === 'string') {
+    return fetchWithAuth<{ success: boolean; url: string; data?: any }>('/files', {
+      method: 'POST',
+      body: JSON.stringify({
+        base64File: fileOrBase64,
+        fileName: fileName || `web_chat_${Date.now()}.jpg`,
+      }),
+    });
+  }
+
+  const formData = new FormData();
+  formData.append('file', fileOrBase64);
+  return fetchWithAuth<{ success: boolean; url: string; data?: any }>('/files', {
+    method: 'POST',
+    body: formData,
   });
 }
 
@@ -45,6 +70,13 @@ export async function markAllChatMessagesRead(): Promise<{ success: boolean; dat
   return fetchWithAuth('/chat/read-all', {
     method: 'PATCH',
   });
+}
+
+/**
+ * Lấy hồ sơ thông tin chi tiết của người dân (SĐT, Địa chỉ, Người thân, Ca SOS)
+ */
+export async function fetchCitizenInfo(userId: string): Promise<{ success: boolean; data: any }> {
+  return fetchWithAuth(`/chat/citizen-info/${userId}`);
 }
 
 /**

@@ -148,6 +148,10 @@ const sosRequestSchema = new mongoose.Schema(
       type: String,
       trim: true,
     }],
+    proofImages: [{
+      type: String,
+      trim: true,
+    }],
     status: {
       type: String,
       required: [true, 'Trạng thái cứu hộ là bắt buộc'],
@@ -191,6 +195,38 @@ const sosRequestSchema = new mongoose.Schema(
     resolvedAt: {
       type: Date,
       default: null,
+    },
+    // Luồng cứu hộ 2 giai đoạn: Ca-nô đón nước -> Bến cập bờ -> Xe đường bộ chở viện/trú ẩn
+    shoreHandoff: {
+      status: {
+        type: String,
+        enum: ['NONE', 'REQUESTED', 'ASSIGNED', 'COMPLETED', 'CANCELLED'],
+        default: 'NONE',
+      },
+      requestedAt: { type: Date, default: null },
+      requestedByRescuerName: { type: String, default: null },
+      rescueTeamName: { type: String, default: null },
+      rescueTeamId: { type: mongoose.Schema.Types.ObjectId, ref: 'RescueTeam', default: null },
+      landingPoint: {
+        name: { type: String, default: null },
+        address: { type: String, default: null },
+        coordinates: { type: [Number], default: null }, // [longitude, latitude]
+      },
+      vehicleTypeNeeded: {
+        type: String,
+        enum: ['AMBULANCE', 'TRUCK', 'ANY'],
+        default: 'AMBULANCE',
+      },
+      peopleCount: { type: Number, default: 1 },
+      notes: { type: String, default: null },
+      assignedVehicleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle', default: null },
+      assignedVehicleName: { type: String, default: null },
+      assignedVehiclePlate: { type: String, default: null },
+      assignedRoadTeamName: { type: String, default: null },
+      assignedDriverName: { type: String, default: null },
+      assignedDriverPhone: { type: String, default: null },
+      assignedAt: { type: Date, default: null },
+      completedAt: { type: Date, default: null },
     },
   },
   {

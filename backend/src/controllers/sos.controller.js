@@ -47,24 +47,45 @@ const getSosRequests = async (req, res, next) => {
     const userRoles = req.user?.roles || [];
     const userId = req.user?._id;
     
-    // Nếu user không phải ADMIN và không phải LOCAL_AUTHORITY (như CITIZEN, RESCUER...)
-    // Họ chỉ xem được danh sách các ca báo nạn do chính tài khoản của họ gửi
+    // Phân quyền tra cứu danh sách SOS:
+    // - ADMIN / LOCAL_AUTHORITY: Xem toàn bộ hoặc theo địa bàn
+    // - RESCUER / LEADER: Xem các ca do mình gửi HOẶC các ca được phân công cho mình / đội cứu hộ
+    // - CITIZEN: Chỉ xem các ca do chính tài khoản của mình gửi
     const isDispatchAuthority = userRoles.some(r => ['ADMIN', 'LOCAL_AUTHORITY'].includes(r));
     if (!isDispatchAuthority) {
-      query.citizenId = userId;
+      if (userRoles.includes('RESCUER') || userRoles.includes('LEADER')) {
+        const teams = await RescueTeam.find({
+          $or: [
+            { leaderId: userId },
+            { 'members.rescuerId': userId, 'members.status': 'APPROVED' },
+            { 'members.rescuerId': userId },
+          ],
+        }).select('_id');
+        const teamIds = teams.map((t) => t._id);
+
+        const myAssignments = await SosAssignment.find({
+          $or: [
+            { rescuerId: userId },
+            { rescueTeamId: { $in: teamIds } },
+            { teamId: { $in: teamIds } },
+          ],
+        }).select('sosRequestId sosId');
+
+        const assignedSosIds = myAssignments
+          .map((a) => a.sosRequestId || a.sosId)
+          .filter(Boolean);
+
+        query.$or = [{ citizenId: userId }, { _id: { $in: assignedSosIds } }];
+      } else {
+        query.citizenId = userId;
+      }
     }
 
-    // Cán bộ địa phương (LOCAL_AUTHORITY) xem các ca thuộc địa bàn của mình và các ca chưa phân bổ khu vực
-    const isLocalAuthorityOnly = userRoles.includes('LOCAL_AUTHORITY') && !userRoles.includes('ADMIN');
-    if (isLocalAuthorityOnly && req.user?.authority?.areaId) {
-      query.$or = [
-        { areaId: req.user.authority.areaId },
-        { areaId: null },
-      ];
+    if (query.areaId === 'ALL') {
       delete query.areaId;
     }
     
-    const list = await sosService.getSosRequests(query);
+    const list = await sosService.getSosRequests(query, req.user);
     res.status(200).json({ success: true, count: list.length, data: list });
   } catch (error) {
     next(error);
@@ -196,6 +217,7 @@ const getSosFiles = async (req, res, next) => {
   }
 };
 
+
 const deleteSos = async (req, res, next) => {
   try {
     const deletedSos = await sosService.deleteSos(req.params.id, req.user);
@@ -216,6 +238,26 @@ const deleteSos = async (req, res, next) => {
     next(error);
   }
 };
+
+const requestShoreHandoff = async (req, res, next) => {
+  try {
+    const updatedSos = await sosService.requestShoreHandoff(req.params.id, req.body, req.user);
+    emitSosUpdated(updatedSos);
+    const io = require('../socket').getIO();
+    if (io) {
+      io.emit('sos:shore_handoff_requested', {
+        sosId: updatedSos._id,
+        sosCode: updatedSos.sosCode,
+        shoreHandoff: updatedSos.shoreHandoff,
+      });
+    }
+    res.status(200).json({ success: true, data: updatedSos });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
 
 const clearCancelledSos = async (req, res, next) => {
   try {
@@ -240,6 +282,62 @@ const clearCancelledSos = async (req, res, next) => {
   }
 };
 
+const assignShoreHandoff = async (req, res, next) => {
+  try {
+    const updatedSos = await sosService.assignShoreHandoff(req.params.id, req.body, req.user);
+    emitSosUpdated(updatedSos);
+    const io = require('../socket').getIO();
+    if (io) {
+      io.emit('sos:shore_handoff_assigned', {
+        sosId: updatedSos._id,
+        sosCode: updatedSos.sosCode,
+        shoreHandoff: updatedSos.shoreHandoff,
+      });
+    }
+    res.status(200).json({ success: true, data: updatedSos });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const cancelShoreHandoff = async (req, res, next) => {
+  try {
+    const updatedSos = await sosService.cancelShoreHandoff(req.params.id, req.user);
+    emitSosUpdated(updatedSos);
+    const io = require('../socket').getIO();
+    if (io) {
+      io.emit('sos:shore_handoff_cancelled', {
+        sosId: updatedSos._id,
+        sosCode: updatedSos.sosCode,
+        shoreHandoff: updatedSos.shoreHandoff,
+      });
+    }
+    res.status(200).json({ success: true, data: updatedSos });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const completeShoreHandoff = async (req, res, next) => {
+  try {
+    const { proofImages } = req.body || {};
+    const updatedSos = await sosService.completeShoreHandoff(req.params.id, req.user, proofImages);
+    emitSosUpdated(updatedSos);
+    const io = require('../socket').getIO();
+    if (io) {
+      io.emit('sos:shore_handoff_completed', {
+        sosId: updatedSos._id,
+        sosCode: updatedSos.sosCode,
+        shoreHandoff: updatedSos.shoreHandoff,
+      });
+    }
+    res.status(200).json({ success: true, data: updatedSos });
+
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createSos,
   getSosRequests,
@@ -250,6 +348,14 @@ module.exports = {
   getSosHistory,
   verifySos,
   getSosFiles,
+
+  requestShoreHandoff,
+  assignShoreHandoff,
+  cancelShoreHandoff,
+  completeShoreHandoff,
+
+
   deleteSos,
   clearCancelledSos,
+
 };

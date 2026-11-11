@@ -106,9 +106,17 @@ function MainRouter() {
       }
     };
 
+    const handleNavigateTab = (e: any) => {
+      const { key, subPath } = e?.detail || {};
+      if (key) {
+        handleNavSelect(key, subPath);
+      }
+    };
+
     window.addEventListener('popstate', handlePopState);
     window.addEventListener('storage', checkRouteAccess);
     window.addEventListener('sos_user_profile_updated', handleProfileUpdated);
+    window.addEventListener('sos_navigate_tab', handleNavigateTab);
 
     // Initial check: Nếu đang ở luồng reset mật khẩu từ email thì không auto-redirect vào dashboard
     if (checkIsResetPasswordFlow()) {
@@ -138,6 +146,7 @@ function MainRouter() {
       window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('storage', checkRouteAccess);
       window.removeEventListener('sos_user_profile_updated', handleProfileUpdated);
+      window.removeEventListener('sos_navigate_tab', handleNavigateTab);
     };
   }, [checkRouteAccess]);
 

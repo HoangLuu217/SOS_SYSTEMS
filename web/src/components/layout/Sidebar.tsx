@@ -7,14 +7,22 @@ import {
   fetchHazardReports,
   fetchSafeLocations,
   fetchChatConversations,
-
+  fetchSafetyChecksApi,
+  fetchWithAuth,
   updateUserProfile,
   updateUserAvatar,
   sendPhoneOtp,
   verifyPhoneOtp,
 } from '@/api';
 import { domainDService } from '@/services/domainDService';
-import { onRescuerApplicationSubmitted, onRescuerVerificationChanged } from '@/services/socketService';
+import {
+  onRescuerApplicationSubmitted,
+  onRescuerVerificationChanged,
+  onSosCreated,
+  onSosUpdated,
+  onSosDeleted,
+  onAssignmentUpdated,
+} from '@/services/socketService';
 import { getRolePrefix } from '@/services/appRouter';
 import {
   fetchProvincesV2,
@@ -25,7 +33,6 @@ import {
 import {
   Map,
   Siren,
-  GitMerge,
   LifeBuoy,
   Package,
   Truck,
@@ -48,6 +55,8 @@ import {
   Camera,
   X,
   CloudSun,
+  ShieldCheck,
+  Droplet,
 } from 'lucide-react';
 
 import './Sidebar.css';
@@ -67,6 +76,8 @@ export type NavItemKey =
   | 'notifications'
   | 'alerts'
   | 'weather'
+  | 'safety_checks'
+  | 'blood_donations'
   | 'shelters'
   | 'hazard_reports'
   | 'reports'
@@ -120,12 +131,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isAdmin = Boolean(user?.roles?.includes('ADMIN'));
 
   // Trạng thái đếm số liệu thời gian thực từ database
-  const [sosCounts, setSosCounts] = useState<{ pending: number; active: number }>({
-    pending: 0,
+  const [sosCounts, setSosCounts] = useState<{ unassigned: number; active: number }>({
+    unassigned: 0,
     active: 0,
   });
   const [hazardCount, setHazardCount] = useState<number>(0);
   const [shelterCount, setShelterCount] = useState<number>(0);
+  const [safetyCheckCount, setSafetyCheckCount] = useState<number>(0);
+  const [bloodDonationCount, setBloodDonationCount] = useState<number>(0);
   const [pendingRescuersCount, setPendingRescuersCount] = useState<number>(0);
   const [chatUnreadCount, setChatUnreadCount] = useState<number>(0);
 
@@ -147,20 +160,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
       const res = await fetchSosRequests(fetchParams);
       if (res.success && Array.isArray(res.data)) {
-        const pending = res.data.filter((s) => s.status === 'PENDING').length;
+        // Số ca chưa được điều phối (bao gồm PENDING mới gửi và VERIFIED đã xác minh nhưng chưa giao đội)
+        const unassigned = res.data.filter((s) => ['PENDING', 'VERIFIED'].includes(s.status)).length;
         const active = res.data.filter((s) =>
-          ['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status)
+          ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status)
         ).length;
-        setSosCounts({ pending, active });
+        setSosCounts({ unassigned, active });
       } else {
         const fallback = domainDService
           .getSosRequests()
           .filter((s) => !s.id?.startsWith('sos-89') && !s.id?.startsWith('sos-dn-'));
-        const pending = fallback.filter((s) => s.status === 'PENDING').length;
+        const unassigned = fallback.filter((s) => ['PENDING', 'VERIFIED'].includes(s.status)).length;
         const active = fallback.filter((s) =>
-          s.status === 'VERIFIED' || !!s.assignmentId || ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status as any)
+          ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status as any) || !!s.assignmentId
         ).length;
-        setSosCounts({ pending, active });
+        setSosCounts({ unassigned, active });
       }
     } catch {
       // Không ép fallback 6 vụ
@@ -179,6 +193,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const shelterRes = await fetchSafeLocations();
       if (shelterRes.success && Array.isArray(shelterRes.data)) {
         setShelterCount(shelterRes.data.length);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const scRes = await fetchSafetyChecksApi({ status: 'ACTIVE', limit: 100 });
+      if (scRes?.success && scRes.data) {
+        const list = Array.isArray(scRes.data)
+          ? scRes.data
+          : Array.isArray((scRes.data as any).safetyChecks)
+            ? (scRes.data as any).safetyChecks
+            : Array.isArray((scRes.data as any).items)
+              ? (scRes.data as any).items
+              : [];
+        const activeItems = list.filter((i: any) => i.status === 'ACTIVE').length;
+        setSafetyCheckCount(activeItems);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const bdRes = await fetchWithAuth<any>('/blood-donations/events?status=ACTIVE&limit=100');
+      if (bdRes?.success && Array.isArray(bdRes.data)) {
+        const activeEvs = bdRes.data.filter((e: any) => e.status === 'ACTIVE').length;
+        setBloodDonationCount(activeEvs);
       }
     } catch {
       // ignore
@@ -265,12 +306,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     window.addEventListener('sos_chat_unread_updated', onDataUpdated);
 
     // Lắng nghe sự kiện hồ sơ cứu hộ mới / duyệt hồ sơ thời gian thực qua Socket.IO
-    const unsubApp = onRescuerApplicationSubmitted(() => {
-      fetchRealCounts();
-    });
-    const unsubVer = onRescuerVerificationChanged(() => {
-      fetchRealCounts();
-    });
+    const unsubApp = onRescuerApplicationSubmitted(() => fetchRealCounts());
+    const unsubVer = onRescuerVerificationChanged(() => fetchRealCounts());
+    const unsubSosCreated = onSosCreated(() => fetchRealCounts());
+    const unsubSosUpdated = onSosUpdated(() => fetchRealCounts());
+    const unsubSosDeleted = onSosDeleted(() => fetchRealCounts());
+    const unsubAssign = onAssignmentUpdated(() => fetchRealCounts());
 
     return () => {
       clearInterval(timer);
@@ -279,6 +320,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       window.removeEventListener('sos_chat_unread_updated', onDataUpdated);
       unsubApp();
       unsubVer();
+      unsubSosCreated();
+      unsubSosUpdated();
+      unsubSosDeleted();
+      unsubAssign();
     };
   }, [fetchRealCounts]);
 
@@ -388,21 +433,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           key: 'map',
-          label: 'Bản đồ cứu hộ SOS',
+          label: 'Bản đồ cứu hộ',
           icon: <Map size={18} className="sos-nav-icon" />,
         },
         {
           key: 'sos_requests',
-          label: 'Theo dõi SOS',
+          label: 'Điều phối SOS',
           icon: <Siren size={18} className="sos-nav-icon" />,
-          badge: sosCounts.pending > 0 ? `${sosCounts.pending} Mới` : undefined,
-          badgeType: 'danger',
-        },
-        {
-          key: 'coordination',
-          label: 'Điều phối nhiệm vụ',
-          icon: <GitMerge size={18} className="sos-nav-icon" />,
-          badge: sosCounts.active > 0 ? `${sosCounts.active} Vụ` : undefined,
+          badge: sosCounts.unassigned > 0
+            ? `${sosCounts.unassigned} chờ`
+            : sosCounts.active > 0
+            ? `${sosCounts.active} cứu`
+            : undefined,
           badgeType: 'danger',
         },
       ],
@@ -425,25 +467,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
     // NHÓM 2: LỰC LƯỢNG & NGUỒN LỰC
     {
       title: 'LỰC LƯỢNG & NGUỒN LỰC',
-      items: [{
-        key: 'rescuers_approval',
-        label: 'Duyệt hồ sơ cứu hộ',
-        icon: <UserCheck size={18} className="sos-nav-icon" />,
-        badge: pendingRescuersCount > 0 ? `${pendingRescuersCount} duyệt` : undefined,
-        badgeType: 'warning',
-      },
-      {
-        key: 'rescuers',
-        label: 'Đội cứu hộ địa phương',
-        icon: <LifeBuoy size={18} className="sos-nav-icon" />,
-      },
-      {
-        key: 'resources',
-        label: 'Phương tiện & Vật tư',
-        icon: <Package size={18} className="sos-nav-icon" />,
-
-
-      },
+      items: [
+        {
+          key: 'rescuers_approval',
+          label: 'Duyệt hồ sơ cứu hộ',
+          icon: <UserCheck size={18} className="sos-nav-icon" />,
+          badge: pendingRescuersCount > 0 ? `${pendingRescuersCount} duyệt` : undefined,
+          badgeType: 'warning',
+        },
+        {
+          key: 'rescuers',
+          label: 'Đội cứu hộ địa phương',
+          icon: <LifeBuoy size={18} className="sos-nav-icon" />,
+        },
+        {
+          key: 'resources',
+          label: 'Phương tiện & Vật tư',
+          icon: <Package size={18} className="sos-nav-icon" />,
+        },
       ],
     },
 
@@ -451,23 +492,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       title: 'THÔNG BÁO & CỘNG ĐỒNG',
       items: [
+        ...(isAdmin
+          ? [
+              {
+                key: 'notifications' as NavItemKey,
+                label: 'Gửi thông báo',
+                icon: <Bell size={18} className="sos-nav-icon" />,
+              },
+            ]
+          : []),
         {
-          key: 'notifications',
-          label: 'Gửi thông báo',
-          icon: <Bell size={18} className="sos-nav-icon" />,
+          key: 'safety_checks',
+          label: 'Kiểm tra an toàn',
+          icon: <ShieldCheck size={18} className="sos-nav-icon" />,
+          badge: safetyCheckCount > 0 ? `${safetyCheckCount}` : undefined,
+          badgeType: 'info',
+        },
+        {
+          key: 'blood_donations',
+          label: 'Hiến máu',
+          icon: <Droplet size={18} className="sos-nav-icon" />,
+          badge: bloodDonationCount > 0 ? `${bloodDonationCount}` : undefined,
+          badgeType: 'info',
         },
         ...(isAdmin
           ? [
-            {
-              key: 'weather' as NavItemKey,
-              label: 'Bản tin thời tiết',
-              icon: <CloudSun size={18} className="sos-nav-icon" />,
-            },
-          ]
+              {
+                key: 'weather' as NavItemKey,
+                label: 'Bản tin thời tiết',
+                icon: <CloudSun size={18} className="sos-nav-icon" />,
+              },
+            ]
           : []),
         {
           key: 'shelters',
-          label: 'Điểm trú ẩn & Trạm an toàn',
+          label: 'Điểm trú ẩn',
           useCase: 'UC-L12',
           icon: <Home size={18} className="sos-nav-icon" />,
           badge: shelterCount > 0 ? `${shelterCount}` : undefined,
@@ -476,7 +535,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         },
         {
           key: 'hazard_reports',
-          label: 'Quản lý điểm nguy hiểm',
+          label: 'Điểm nguy hiểm',
           useCase: 'UC-L15',
           icon: <AlertTriangle size={18} className="sos-nav-icon" />,
           badge: hazardCount > 0 ? `${hazardCount}` : undefined,
@@ -514,17 +573,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         {
           key: 'admin_overview',
-          label: 'Tổng quan hệ thống',
+          label: 'Tổng quan',
           icon: <LayoutDashboard size={18} className="sos-nav-icon" />,
         },
         {
           key: 'citizens',
-          label: 'Quản lý Người dân',
+          label: 'Người dân',
           icon: <Users size={18} className="sos-nav-icon" />,
         },
         {
           key: 'rescuers_admin',
-          label: 'Xác minh Đội cứu nạn',
+          label: 'Xác minh cứu hộ',
           icon: <UserCheck size={18} className="sos-nav-icon" />,
           badge: pendingRescuersCount > 0 ? `${pendingRescuersCount}` : undefined,
           badgeType: 'warning',
@@ -984,7 +1043,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const rawUserName = localProfile.fullName || user?.fullName || (isAdmin ? 'Quản trị viên' : 'Cán bộ điều phối');
   // Loại bỏ các phần chú thích trong ngoặc đơn như (PCTT Liên Chiểu) để họ tên hiển thị gọn gàng, trọn vẹn
-  const displayUserName = rawUserName.replace(/\s*\([^\)]*\)/g, '').trim() || rawUserName;
+  const displayUserName = rawUserName.replace(/\s*\([^)]*\)/g, '').trim() || rawUserName;
   const displayUserRole = localProfile.position || user?.authority?.position || (isAdmin ? 'Quản trị viên' : 'Chỉ huy cứu hộ');
   const displayAvatar = localProfile.avatarUrl || user?.avatarUrl || '';
   const userInitial = (displayUserName || 'U').trim().charAt(0).toUpperCase() || 'U';
@@ -998,7 +1057,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           1. HEADER / LOGO: SOS SYSTEMS & NÚT THU GỌN
           =================================================================== */}
       <div className="sos-sidebar-header">
-        <div className="sos-brand" title="SOS SYSTEMS - Rescue Operations">
+        <div className="sos-brand" title="Hỗ Trợ Cứu Nạn">
           <div className="sos-brand-logo-wrap">
             <img src="/logoSOS.png" alt="SOS Logo" className="sos-brand-logo" />
             <span className="sos-brand-pulse" />
@@ -1006,10 +1065,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {!collapsed && (
             <div className="sos-brand-info">
-              <span className="sos-brand-title">SOS SYSTEMS</span>
-              <span className="sos-brand-subtitle">
-                {isAdmin ? 'Quản Trị Hệ Thống' : 'Hỗ Trợ Cứu Nạn'}
-              </span>
+              <span className="sos-brand-title">Hỗ Trợ Cứu Nạn</span>
             </div>
           )}
         </div>

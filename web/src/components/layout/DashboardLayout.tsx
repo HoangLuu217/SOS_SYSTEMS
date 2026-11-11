@@ -54,7 +54,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         className="sos-main-content"
         style={{
           overflow:
-            (activeNavKey === 'map' && isAuthority) ||
+            activeNavKey === 'map' ||
+            activeNavKey === 'coordination' ||
             activeNavKey === 'hazard_reports' ||
             activeNavKey === 'shelters' ||
             activeNavKey === 'notifications' ||
@@ -62,6 +63,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               ? 'hidden'
               : 'auto',
           height: '100vh',
+          maxHeight: '100vh',
+          minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
         }}

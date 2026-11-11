@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { ChatMessage, User } = require('../models');
+const { ChatMessage, User, SosRequest } = require('../models');
 const eventBus = require('./eventBus');
 const ApiError = require('../utils/apiError');
 
@@ -83,10 +83,10 @@ class ChatService {
    * Gửi tin nhắn mới
    */
   async sendMessage(senderUser, data) {
-    const { recipientId, content, attachments = [] } = data;
+    const { recipientId, content, attachments = [], sosRequestId = null, sosData = null } = data;
 
-    if (!content || !content.trim()) {
-      throw new ApiError(400, 'Nội dung tin nhắn không được để trống');
+    if ((!content || !content.trim()) && (!attachments || attachments.length === 0) && !sosRequestId && !sosData) {
+      throw new ApiError(400, 'Nội dung tin nhắn hoặc tệp đính kèm không được để trống');
     }
 
     let channel = 'COMMAND_GENERAL';
@@ -144,7 +144,11 @@ class ChatService {
       ? 'RESCUER'
       : (senderUser.roles?.[0] || 'CITIZEN');
 
-    const senderName = senderUser.fullName || senderUser.phone || senderUser.email || 'Người dân';
+    let senderName = senderUser.fullName || senderUser.phone || senderUser.email || 'Người dân';
+    // Trong kênh cứu hộ người dân - địa phương (area_), ưu tiên tên cán bộ thực tế (ví dụ: Lê Trọng Phúc). Chỉ fallback nếu không có tên
+    if (channel.startsWith('area_') && (!senderUser.fullName || senderUser.fullName.toLowerCase() === 'admin')) {
+      senderName = 'Cán bộ trực ban PCTT';
+    }
 
     const message = await ChatMessage.create({
       senderId: senderUser._id,
@@ -152,14 +156,17 @@ class ChatService {
       senderRole,
       recipientId: recipientObjectId,
       channel,
-      content: content.trim(),
+      content: (content && content.trim()) || (attachments && attachments.length > 0 ? '[Hình ảnh]' : '[Yêu cầu cứu nạn SOS]'),
       attachments,
+      sosRequestId: sosRequestId && mongoose.Types.ObjectId.isValid(sosRequestId) ? sosRequestId : null,
+      sosData: sosData || null,
       readBy: [senderUser._id],
     });
 
     const populated = await ChatMessage.findById(message._id)
-      .populate('senderId', 'fullName phone email roles authority avatarUrl')
-      .populate('recipientId', 'fullName phone email roles authority avatarUrl');
+      .populate('senderId', 'fullName phone email roles authority avatarUrl address citizen')
+      .populate('recipientId', 'fullName phone email roles authority avatarUrl address citizen')
+      .populate('sosRequestId');
 
     // Kích hoạt sự kiện thời gian thực qua Socket.IO & EventBus
     try {
@@ -216,6 +223,14 @@ class ChatService {
       data: populated,
     });
 
+    // Đẩy thông báo ra ngoài app và lưu notification vào hệ thống
+    this.sendChatNotification({
+      message: populated,
+      senderUser,
+      channel,
+      recipientObjectId,
+    }).catch((err) => console.warn('[Send Chat Notification Error]:', err.message));
+
     return populated;
   }
 
@@ -233,8 +248,9 @@ class ChatService {
 
     // Lấy tin nhắn theo đúng kênh riêng biệt của từng tài khoản
     const messages = await ChatMessage.find({ channel: targetChannel })
-      .populate('senderId', 'fullName phone email roles authority avatarUrl')
-      .populate('recipientId', 'fullName phone email roles authority avatarUrl')
+      .populate('senderId', 'fullName phone email roles authority avatarUrl address citizen')
+      .populate('recipientId', 'fullName phone email roles authority avatarUrl address citizen')
+      .populate('sosRequestId')
       .sort({ createdAt: 1 })
       .limit(Math.min(limit, 300));
 
@@ -335,7 +351,7 @@ class ChatService {
       let partnerUser = null;
 
       if (possibleUserId && mongoose.Types.ObjectId.isValid(possibleUserId)) {
-        partnerUser = await User.findById(possibleUserId).select('fullName phone email roles avatarUrl authority address');
+        partnerUser = await User.findById(possibleUserId).select('fullName phone email roles avatarUrl authority address citizen');
       }
 
       if (!partnerUser && areaLatest && areaLatest.senderId) {
@@ -374,6 +390,19 @@ class ChatService {
         avatarUrl: partnerUser?.avatarUrl,
         phone: partnerUser?.phone,
         areaName: channelAreaName,
+        address: partnerUser?.address || channelAreaName,
+        partnerUser: partnerUser
+          ? {
+              _id: partnerUser._id,
+              fullName: partnerUser.fullName,
+              phone: partnerUser.phone,
+              email: partnerUser.email,
+              address: partnerUser.address,
+              roles: partnerUser.roles,
+              emergencyContact: partnerUser.citizen?.emergencyContact || null,
+              emergencyContacts: partnerUser.citizen?.emergencyContacts || [],
+            }
+          : null,
         unreadCount: areaUnread,
         latestMessage: {
           content: areaLatest.content,
@@ -1016,6 +1045,250 @@ class ChatService {
     }
 
     return filtered;
+  }
+
+  /**
+   * Đẩy thông báo ra ngoài app (Expo Push Notification) và lưu vào bảng Notification
+   * khi cán bộ địa phương gửi tin nhắn cho người dân (hoặc ngược lại)
+   */
+  async sendChatNotification({ message, senderUser, channel, recipientObjectId }) {
+    try {
+      const { User, Notification } = require('../models');
+      const { sendExpoPushNotification } = require('../utils/expoPush');
+      const eventBus = require('./eventBus');
+
+      const senderRole = senderUser.roles?.includes('ADMIN')
+        ? 'ADMIN'
+        : senderUser.roles?.includes('LOCAL_AUTHORITY')
+        ? 'LOCAL_AUTHORITY'
+        : senderUser.roles?.includes('RESCUER')
+        ? 'RESCUER'
+        : (senderUser.roles?.[0] || 'CITIZEN');
+
+      const senderName = senderUser.fullName || senderUser.phone || 'Cán bộ trực ban';
+      const isFromAuthority = senderRole === 'LOCAL_AUTHORITY' || senderRole === 'ADMIN';
+
+      // 1. Xác định danh sách người nhận thông báo
+      let recipientUserIds = [];
+
+      if (recipientObjectId && String(recipientObjectId) !== String(senderUser._id)) {
+        recipientUserIds.push(recipientObjectId);
+      }
+
+      // Nếu là kênh area_ (vd: area_phuong_hai_chau_..._6ad...)
+      if (channel && channel.startsWith('area_')) {
+        const parts = channel.replace(/^area_/, '').split('_');
+        const lastPart = parts[parts.length - 1];
+
+        // Nếu người gửi là Cán bộ địa phương hoặc Admin => Người nhận là Người dân (citizen) ở cuối tên kênh
+        if (isFromAuthority) {
+          if (mongoose.Types.ObjectId.isValid(lastPart) && String(lastPart) !== String(senderUser._id)) {
+            const citizenId = new mongoose.Types.ObjectId(lastPart);
+            if (!recipientUserIds.some((id) => String(id) === String(citizenId))) {
+              recipientUserIds.push(citizenId);
+            }
+          }
+        } else {
+          // Nếu người gửi là Người dân => Gửi thông báo đến Cán bộ địa phương phụ trách địa bàn đó
+          const staffUsers = await User.find({
+            roles: { $in: ['LOCAL_AUTHORITY', 'ADMIN'] },
+            status: { $ne: 'SUSPENDED' },
+          }).select('_id authority roles');
+
+          const chClean = channel.replace(/^area_/, '');
+          for (const u of staffUsers) {
+            if (String(u._id) === String(senderUser._id)) continue;
+            const { specificSlug, broadSlug } = this.extractAuthorityScope(u.authority);
+            const isMatched = specificSlug
+              ? chClean.includes(specificSlug)
+              : broadSlug
+              ? chClean.includes(broadSlug)
+              : false;
+
+            if (isMatched && !recipientUserIds.some((id) => String(id) === String(u._id))) {
+              recipientUserIds.push(u._id);
+            }
+          }
+        }
+      }
+
+      if (recipientUserIds.length === 0) return;
+
+      // 2. Chuẩn bị tiêu đề & nội dung thông báo
+      let notifTitle = '';
+      const authorityDept = senderUser.authority?.department || senderUser.authority?.areaName || 'Ban Chỉ Huy PCTT Địa Phương';
+      if (isFromAuthority) {
+        notifTitle = `💬 ${authorityDept} đã nhắn lại cho bạn`;
+      } else {
+        notifTitle = `💬 Tin nhắn từ người dân: ${senderName}`;
+      }
+
+      let notifBody = message.content && message.content.trim() ? message.content.trim() : '';
+      if (!notifBody && message.attachments && message.attachments.length > 0) {
+        notifBody = '[Đã gửi một hình ảnh]';
+      }
+      if (!notifBody) {
+        notifBody = 'Đã gửi một tin nhắn mới cho bạn';
+      }
+
+      if (notifBody.length > 150) {
+        notifBody = notifBody.substring(0, 147) + '...';
+      }
+
+      // 3. Lấy thông tin các người nhận (bao gồm pushToken)
+      const recipientUsers = await User.find({
+        _id: { $in: recipientUserIds },
+        status: { $ne: 'SUSPENDED' },
+      }).select('_id fullName pushToken citizen.pushToken');
+
+      const pushTokens = [];
+      const notifDocsToInsert = [];
+
+      const effectiveSenderName = (senderRole === 'ADMIN' || senderName.toLowerCase().includes('admin'))
+        ? authorityDept
+        : senderName;
+
+      for (const recUser of recipientUsers) {
+        // Thu thập push token của thiết bị
+        const tokens = [recUser.pushToken, recUser.citizen?.pushToken]
+          .filter((t) => typeof t === 'string' && (t.startsWith('ExponentPushToken[') || t.startsWith('ExpoPushToken[')));
+        pushTokens.push(...tokens);
+
+        // Tạo bản ghi Notification trong DB để người dùng xem trong app
+        // Ưu tiên mức NORMAL để tránh bị hệ thống nhầm với Cảnh báo khẩn cấp (Emergency Alert)
+        notifDocsToInsert.push({
+          userId: recUser._id,
+          createdBy: senderUser._id,
+          type: 'CHAT',
+          title: notifTitle,
+          content: notifBody,
+          priority: 'NORMAL',
+          areaName: senderUser.authority?.areaName || null,
+          data: {
+            type: 'CHAT',
+            actionUrl: 'chat',
+            isChat: true,
+            channel,
+            messageId: String(message._id),
+            senderId: String(senderUser._id),
+            senderName: effectiveSenderName,
+            senderRole,
+            department: authorityDept,
+            areaName: senderUser.authority?.areaName || '',
+            content: notifBody,
+          },
+          isRead: false,
+          createdAt: new Date(),
+        });
+      }
+
+      // 4. Lưu vào Database (Notification collection)
+      if (notifDocsToInsert.length > 0) {
+        const createdNotifications = await Notification.insertMany(notifDocsToInsert);
+
+        // Bắn sự kiện realtime qua EventBus & Socket.IO
+        try {
+          const { getIO } = require('../socket');
+          const io = getIO();
+
+          for (const notif of createdNotifications) {
+            try {
+              eventBus.emit('notification_event', {
+                action: 'USER',
+                userId: String(notif.userId),
+                data: notif,
+              });
+              if (io) {
+                io.to(`user_${notif.userId}`).emit('new_notification', notif);
+              }
+            } catch (_) {}
+          }
+        } catch (_) {}
+      }
+
+      // 5. Gửi thông báo đẩy ra ngoài ứng dụng (Expo Push Notification)
+      const uniquePushTokens = [...new Set(pushTokens)];
+      if (uniquePushTokens.length > 0) {
+        await sendExpoPushNotification({
+          tokens: uniquePushTokens,
+          title: notifTitle,
+          body: notifBody,
+          priority: 'NORMAL',
+          data: {
+            type: 'CHAT',
+            actionUrl: 'chat',
+            isChat: true,
+            channel,
+            messageId: String(message._id),
+            senderId: String(senderUser._id),
+            senderName: effectiveSenderName,
+            senderRole,
+            department: authorityDept,
+            areaName: senderUser.authority?.areaName || '',
+          },
+        });
+      }
+    } catch (notifErr) {
+      console.warn('[Chat Notification Error]:', notifErr.message);
+    }
+  }
+
+  /**
+   * Lấy thông tin chi tiết của người dân (SĐT, Địa chỉ, Người liên hệ khẩn cấp, Ca SOS)
+   */
+  async getCitizenInfo(userId) {
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      throw new ApiError(400, 'ID người dùng không hợp lệ');
+    }
+
+    const user = await User.findById(userId)
+      .select('fullName phone email address roles avatarUrl citizen gender dateOfBirth status createdAt');
+
+    if (!user) {
+      throw new ApiError(404, 'Không tìm thấy thông tin người dùng');
+    }
+
+    // Tra cứu yêu cầu SOS gần nhất của người dùng này nếu có
+    const latestSos = await SosRequest.findOne({ citizenId: userId })
+      .sort({ createdAt: -1 })
+      .select('sosCode status emergencyType emergencyTypes priority people address location contactPhone secondaryPhone description images createdAt');
+
+    // Thống kê tổng số ca SOS của người dân
+    const totalSosCount = await SosRequest.countDocuments({ citizenId: userId });
+
+    return {
+      _id: user._id,
+      fullName: user.fullName,
+      phone: user.phone || 'Chưa cập nhật',
+      email: user.email || '',
+      address: user.address || 'Chưa cập nhật địa chỉ',
+      avatarUrl: user.avatarUrl,
+      roles: user.roles,
+      gender: user.gender,
+      dateOfBirth: user.dateOfBirth,
+      createdAt: user.createdAt,
+      totalSosCount,
+      emergencyContact: user.citizen?.emergencyContact || null,
+      emergencyContacts: user.citizen?.emergencyContacts || [],
+      latestSos: latestSos
+        ? {
+            _id: latestSos._id,
+            sosCode: latestSos.sosCode,
+            status: latestSos.status,
+            emergencyType: latestSos.emergencyType,
+            emergencyTypes: latestSos.emergencyTypes,
+            priority: latestSos.priority,
+            people: latestSos.people,
+            address: latestSos.address,
+            location: latestSos.location,
+            contactPhone: latestSos.contactPhone,
+            secondaryPhone: latestSos.secondaryPhone,
+            description: latestSos.description,
+            images: latestSos.images,
+            createdAt: latestSos.createdAt,
+          }
+        : null,
+    };
   }
 }
 

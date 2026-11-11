@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -6,6 +6,7 @@ import {
   ImageBackground,
   Keyboard,
   LogBox,
+  DeviceEventEmitter,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '@/context/AuthContext';
@@ -19,6 +20,10 @@ import { ProfileScreen, MandatoryOnboardingModal } from '@/features/profile';
 import { RescuerMissionScreen } from '@/features/mission';
 import { backendApi } from '@/api';
 import { AlertModal, BottomNav, LogoSOS, InAppNotificationBanner } from '@/components';
+import { SafetyCheckModal } from '@/features/home/SafetyCheckModal';
+import { BloodDonationModal } from '@/features/home/BloodDonationModal';
+import { io } from 'socket.io-client';
+import { ENV } from '@/config/env';
 import { MapFilterType, TabName } from '@/types';
 import { BACKGROUND_APP_SOURCE } from '@/constants/backgroundBase64';
 
@@ -34,6 +39,37 @@ LogBox.ignoreLogs([
 export function AuthenticatedApp() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabName>('home');
+  const [safetyCheckModalVisible, setSafetyCheckModalVisible] = useState(false);
+  const [safetyCheckId, setSafetyCheckId] = useState<string | undefined>(undefined);
+  const [bloodDonationModalVisible, setBloodDonationModalVisible] = useState(false);
+  const [bloodDonationEventId, setBloodDonationEventId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('open:safety_check', (data: any) => {
+      const sid = data?.safetyCheckId || data?._id;
+      setSafetyCheckId(sid || undefined);
+      setSafetyCheckModalVisible(true);
+    });
+    const subBlood = DeviceEventEmitter.addListener('open:blood_donation', (data: any) => {
+      const eid = data?.eventId || data?.bloodDonationEventId || data?._id;
+      setActiveTab('home');
+      setBloodDonationEventId(eid || undefined);
+      setBloodDonationModalVisible(true);
+    });
+    const subMission = DeviceEventEmitter.addListener('open:mission_tab', () => {
+      setActiveTab('sos');
+      DeviceEventEmitter.emit('sos:sync');
+    });
+    const subChat = DeviceEventEmitter.addListener('open:local_authority_chat', () => {
+      setActiveTab('home');
+    });
+    return () => {
+      sub.remove();
+      subBlood.remove();
+      subMission.remove();
+      subChat.remove();
+    };
+  }, []);
   const [configVisible, setConfigVisible] = useState(false);
   const [mapFilter, setMapFilter] = useState<MapFilterType>('ALL');
   const [mapNavKey, setMapNavKey] = useState(0);
@@ -43,11 +79,12 @@ export function AuthenticatedApp() {
   const roles = Array.isArray(user?.roles) ? user.roles : [];
   const isRescuer =
     roles.includes('LEADER') ||
-    (roles.includes('RESCUER') && user?.rescuer?.verificationStatus === 'VERIFIED');
+    (roles.includes('RESCUER') && user?.rescuer?.verificationStatus !== 'REJECTED');
 
   const { unreadCount, setNavigateHandler } = useNotifications();
 
-  // Tải số lượng nhiệm vụ đang xử lý cho Cứu hộ viên
+  // Tải số lượng nhiệm vụ đang xử lý cho Cứu hộ viên & tự động điều hướng sang tab SOS tác chiến
+  const hasAutoSwitchedToSosRef = React.useRef(false);
   React.useEffect(() => {
     if (!isRescuer) return;
     const loadMissionsCount = async () => {
@@ -56,18 +93,54 @@ export function AuthenticatedApp() {
         if (res.success && Array.isArray(res.data)) {
           const active = res.data.filter(
             (m) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(m.status)
-          ).length;
-          setActiveMissionsCount(active);
+          );
+          setActiveMissionsCount(active.length);
+          if (active.length > 0 && !hasAutoSwitchedToSosRef.current) {
+            hasAutoSwitchedToSosRef.current = true;
+            setActiveTab('sos');
+          }
         }
       } catch {
         // ignore
       }
     };
     loadMissionsCount();
-  }, [isRescuer]);
+    const sub = DeviceEventEmitter.addListener('sos:sync', () => {
+      loadMissionsCount();
+    });
+
+    const socketUrl = ENV.API_BASE_URL.replace(/\/api\/?$/, '');
+    const s = io(socketUrl, { transports: ['websocket', 'polling'] });
+    if (user?._id) {
+      s.on('connect', () => {
+        s.emit('register_user', user._id);
+      });
+    }
+
+    const onSignal = () => {
+      loadMissionsCount();
+    };
+
+    s.on('assignment:new', onSignal);
+    s.on('assignment:created', onSignal);
+    s.on('assignment:assigned', onSignal);
+    s.on('assignment:cancelled', onSignal);
+    s.on('assignment:deleted', onSignal);
+    s.on('assignment:updated', onSignal);
+    s.on('sos:updated', onSignal);
+    s.on('sos:sync', onSignal);
+
+    return () => {
+      sub.remove();
+      s.disconnect();
+    };
+  }, [isRescuer, user?._id]);
 
   const handleNavigateToTab = React.useCallback((tab: TabName, options?: { filter?: MapFilterType; areaId?: string }) => {
     setActiveTab(tab);
+    if (tab === 'sos') {
+      DeviceEventEmitter.emit('sos:sync');
+    }
     if (tab === 'map') {
       if (options?.filter) {
         setMapFilter(options.filter);
@@ -75,6 +148,12 @@ export function AuthenticatedApp() {
       setMapNavKey(prev => prev + 1);
     }
   }, []);
+
+  React.useEffect(() => {
+    if (activeTab === 'sos') {
+      DeviceEventEmitter.emit('sos:sync');
+    }
+  }, [activeTab]);
 
   const handleNavigateToHome = React.useCallback(() => {
     setActiveTab('home');
@@ -147,6 +226,26 @@ export function AuthenticatedApp() {
           activeMissionsCount={activeMissionsCount}
         />
       </View>
+
+      {/* Modal Kiểm tra & Xác nhận An toàn Toàn cục (Safety Check) */}
+      <SafetyCheckModal
+        visible={safetyCheckModalVisible}
+        safetyCheckId={safetyCheckId}
+        onClose={() => {
+          setSafetyCheckModalVisible(false);
+          setSafetyCheckId(undefined);
+        }}
+      />
+
+      {/* Modal Đăng ký & Sự kiện Hiến máu Toàn cục */}
+      <BloodDonationModal
+        visible={bloodDonationModalVisible}
+        initialEventId={bloodDonationEventId}
+        onClose={() => {
+          setBloodDonationModalVisible(false);
+          setBloodDonationEventId(undefined);
+        }}
+      />
 
       <ConfigModal
         visible={configVisible}
@@ -287,6 +386,8 @@ export function AppNavigator() {
         message={toast.message}
         onClose={() => setToast(prev => ({ ...prev, visible: false }))}
       />
+
+
 
       {/* Banner thông báo khẩn cấp khi người dùng chưa đăng nhập */}
       {!user && <InAppNotificationBanner onNavigateToNews={() => {}} />}

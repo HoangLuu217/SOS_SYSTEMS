@@ -16,13 +16,13 @@ export {
 
 // Feature Views
 import { SosRequestsView } from '@/features/sos';
-import { CoordinationView } from '@/features/coordination';
 import { RescuersView, RescuerApprovalView } from '@/features/rescuers';
 import { ResourcesView } from '@/features/resources';
-import { AlertsView } from '@/features/alerts';
+import { AlertsView, SafetyCheckView } from '@/features/alerts';
 import { WeatherView } from '@/features/weather';
 import { SheltersView } from '@/features/shelters';
 import { HazardReportsView } from '@/features/hazards';
+import { BloodDonationsView } from '@/features/blood-donations';
 import {
   ReportsView,
   AdminOverviewView,
@@ -55,9 +55,9 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     case 'sos_requests':
       return <SosRequestsView onOpenMap={onOpenMap} user={user} />;
 
-    // 2. Điều phối & Phân công
+    // 2. Điều phối & Phân công (Đã gộp vào Theo dõi & Điều phối SOS)
     case 'coordination':
-      return <CoordinationView onOpenMap={onOpenMap} />;
+      return <SosRequestsView onOpenMap={onOpenMap} user={user} />;
 
     // 3. Đội cứu hộ địa phương
     case 'rescuers':
@@ -71,10 +71,30 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     case 'resources':
       return <ResourcesView user={user} />;
 
-    // 5. Phát thông báo & Cảnh báo thiên tai
+    // 5. Phát thông báo & Cảnh báo thiên tai (Chỉ dành riêng cho ADMIN)
     case 'notifications':
-    case 'alerts':
+    case 'alerts': {
+      const isAdmin = Boolean(user?.roles?.includes('ADMIN'));
+      if (!isAdmin) {
+        return (
+          <div className="sos-views-container" style={{ padding: 24, textAlign: 'center' }}>
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 32 }}>
+              <h3 style={{ color: '#ef4444', marginBottom: 8, fontWeight: 700 }}>Không có quyền truy cập</h3>
+              <p style={{ color: '#64748b', margin: 0 }}>Chức năng Gửi thông báo chỉ dành riêng cho Quản trị viên hệ thống (Admin).</p>
+            </div>
+          </div>
+        );
+      }
       return <AlertsView user={user} />;
+    }
+
+    // 5.2. Kiểm tra an toàn (Safety Check)
+    case 'safety_checks':
+      return <SafetyCheckView user={user} />;
+
+    // 5.3. Đăng ký & Sự kiện hiến máu
+    case 'blood_donations':
+      return <BloodDonationsView user={user} />;
 
     // 5.1. Bản tin & Cảnh báo thời tiết (Chỉ dành riêng cho ADMIN)
     case 'weather': {
@@ -102,7 +122,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
     // 8. Báo cáo thống kê
     case 'reports':
-      return <ReportsView />;
+      return <ReportsView user={user} onOpenMap={onOpenMap} />;
 
     // 9. Tổng quan & Giám sát quản trị
     case 'admin_overview':
@@ -131,7 +151,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
     // 15. Nhật ký tác chiến & hệ thống
     case 'audit_logs':
     case 'operation_logs':
-      return <AuditLogsView />;
+      return <AuditLogsView user={user} />;
 
     // 16. Kênh chat realtime tác chiến
     case 'chat':

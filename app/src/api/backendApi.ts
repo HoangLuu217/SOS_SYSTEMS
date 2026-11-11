@@ -226,6 +226,17 @@ class BackendApiService {
   markChatAsRead = (params: Parameters<typeof chatApi.markAsRead>[0]) =>
     chatApi.markAsRead(params);
 
+  // Upload File / Ảnh lên Cloudinary
+  uploadFile = (base64OrFormData: string | FormData, fileName?: string) => {
+    if (typeof base64OrFormData === 'string') {
+      return apiClient.post<{ url: string; data: any }>('/files', {
+        base64File: base64OrFormData,
+        fileName,
+      });
+    }
+    return apiClient.postFormData<{ url: string; data: any }>('/files', base64OrFormData);
+  };
+
   // Sos Assignment / Mission API for Rescuers
   getMyAssignments = () =>
     assignmentApi.getMyAssignments() as Promise<ApiResponse<import('../types').SosAssignmentData[]>>;
@@ -255,6 +266,20 @@ class BackendApiService {
     });
 
   getAvailableSosRequests = () => assignmentApi.getAvailableSosRequests();
+
+  requestShoreHandoff = (
+    sosId: string,
+    data: {
+      landingPoint: { name: string; address?: string; coordinates: [number, number] };
+      vehicleTypeNeeded: 'AMBULANCE' | 'TRUCK' | 'ANY';
+      peopleCount: number;
+      notes?: string;
+      rescueTeamName?: string;
+      rescueTeamId?: string;
+    }
+  ) => assignmentApi.requestShoreHandoff(sosId, data);
+
+  completeShoreHandoff = (sosId: string, data?: { proofImages?: string[] }) => assignmentApi.completeShoreHandoff(sosId, data);
 
   // Storage helpers
   saveTokens = (accessToken: string, refreshToken?: string) =>

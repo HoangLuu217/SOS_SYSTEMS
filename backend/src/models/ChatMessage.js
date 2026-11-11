@@ -30,8 +30,8 @@ const chatMessageSchema = new mongoose.Schema(
     },
     content: {
       type: String,
-      required: [true, 'Nội dung tin nhắn không được để trống'],
       trim: true,
+      default: '',
     },
     attachments: [
       {
@@ -40,6 +40,16 @@ const chatMessageSchema = new mongoose.Schema(
         fileName: { type: String, trim: true },
       },
     ],
+    sosRequestId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SosRequest',
+      default: null,
+      index: true,
+    },
+    sosData: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
     readBy: [
       {
         type: mongoose.Schema.Types.ObjectId,

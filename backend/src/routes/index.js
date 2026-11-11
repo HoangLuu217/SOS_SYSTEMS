@@ -24,6 +24,8 @@ const configRoutes = require('./config.routes');
 const hazardReportRoutes = require('./hazardReport.routes');
 const chatRoutes = require('./chat.routes');
 const weatherNotificationRoutes = require('./weatherNotification.routes');
+const safetyCheckRoutes = require('./safetyCheck.routes');
+const bloodDonationRoutes = require('./bloodDonation.routes');
 
 // Mount routes theo đúng đặc tả API Nhóm A và các nhóm khác
 router.use('/auth', authRoutes);
@@ -32,6 +34,8 @@ router.use('/users', userRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/weather-notifications', weatherNotificationRoutes);
 router.use('/weather-articles', weatherNotificationRoutes);
+router.use('/safety-checks', safetyCheckRoutes);
+router.use('/blood-donations', bloodDonationRoutes);
 router.use('/rescuer', rescuerRoutes);
 router.use('/rescue-teams', rescueTeamRoutes);
 router.use('/vehicles', vehicleRoutes);

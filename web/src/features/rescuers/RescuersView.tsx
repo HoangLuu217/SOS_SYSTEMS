@@ -2,9 +2,9 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Shield,
   Search,
+  RefreshCw,
   Users,
   Truck,
-  RefreshCw,
   MapPin,
   CheckCircle2,
   X,
@@ -262,7 +262,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>([]);
   const [selectedAreaId, setSelectedAreaId] = useState<string>('ALL');
   const [loading, setLoading] = useState(false);
-  const [refreshIndex, setRefreshIndex] = useState(0);
+  const [, setRefreshIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [specFilter, setSpecFilter] = useState<string>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
@@ -730,12 +730,14 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
     }
   }, [isAdmin, managedArea, user?.authority?.areaId]);
 
+
   const refreshData = () => {
     setLoading(true);
     setRefreshIndex((p) => p + 1);
   };
 
   // Nạp dữ liệu từ backend hoặc fallback
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -750,11 +752,13 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
         setAreas(areasRes.value.data);
       }
 
-      if (teamsRes.status === 'fulfilled' && teamsRes.value.success && Array.isArray(teamsRes.value.data)) {
-        setRawTeams(teamsRes.value.data);
-      } else {
-        setRawTeams([]);
-      }
+      const rawTeams =
+        teamsRes.status === 'fulfilled' && teamsRes.value.success
+          ? Array.isArray(teamsRes.value.data)
+            ? teamsRes.value.data
+            : (teamsRes.value.data as any)?.teams || []
+          : [];
+      setRawTeams(rawTeams);
 
       if (rescuersRes.status === 'fulfilled' && rescuersRes.value.success && rescuersRes.value.data?.users) {
         setRescuers(rescuersRes.value.data.users);
@@ -769,7 +773,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
   useEffect(() => {
     loadData();
-  }, [loadData, refreshIndex]);
+  }, [loadData]);
 
   // Realtime Socket.IO events
   useEffect(() => {
@@ -1075,6 +1079,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
     }
   }, [enrichedTeams, selectedTeamDetail?._id]);
 
+
   // Danh sách cứu hộ viên hợp lệ để kết nạp vào đội đang mở drawer
   const availableRescuersToAdd = useMemo(() => {
     if (!selectedTeamDetail) return [];
@@ -1083,6 +1088,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
     );
     return leaderCandidates.filter((cand) => !currentMemberIds.has(String(cand.id)));
   }, [selectedTeamDetail, leaderCandidates]);
+
 
   // Danh sách các đội cứu hộ thuộc phạm vi phụ trách của cán bộ địa phương (hoặc tất cả nếu là Admin)
   const authorizedTeams = useMemo(() => {
@@ -1494,6 +1500,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
   return (
     <div className="rescuers-executive-container oceanic-executive-theme">
+
       {currentMode === 'operations' ? (
         <>
           {/* ======================================================== */}
@@ -1949,16 +1956,6 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
-
-              <button
-                type="button"
-                className="coordination-action-btn outline"
-                onClick={refreshData}
-                title="Cập nhật danh sách mới nhất"
-              >
-                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-                <span>Làm mới</span>
-              </button>
             </div>
           </div>
 
@@ -2457,7 +2454,9 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                                 </div>
                               </div>
                             </div>
+
                           ))}
+
                       </div>
                     </div>
                   )}

@@ -3,6 +3,7 @@ const cloudinary = require('../config/cloudinary');
 
 const uploadFile = async (req, res, next) => {
   try {
+    const purpose = req.body.purpose || 'GENERAL';
     // 1. Nhận danh sách nhiều file base64 từ Mobile App
     if (Array.isArray(req.body.base64Files) && req.body.base64Files.length > 0) {
       const uploadPromises = req.body.base64Files.map(async (b64, idx) => {
@@ -16,6 +17,7 @@ const uploadFile = async (req, res, next) => {
           url: result.secure_url,
           fileName: `mobile_hazard_image_${Date.now()}_${idx + 1}.jpg`,
           fileSize: result.bytes || 0,
+          purpose,
         };
         const uploadedFile = await fileService.uploadFile(req.user._id, fileData);
         return uploadedFile;
@@ -26,9 +28,11 @@ const uploadFile = async (req, res, next) => {
       return res.status(201).json({ success: true, data: uploadedFiles, urls });
     }
 
-    // 2. Nhận 1 file base64 từ Mobile App
+    // 2. Nhận 1 file base64 từ Mobile App hoặc Web
     if (req.body.base64File) {
-      const result = await cloudinary.uploader.upload(`data:image/jpeg;base64,${req.body.base64File}`, {
+      const b64 = String(req.body.base64File).trim();
+      const dataUri = b64.startsWith('data:') ? b64 : `data:image/jpeg;base64,${b64}`;
+      const result = await cloudinary.uploader.upload(dataUri, {
         folder: 'sos_systems',
         resource_type: 'image',
       });
@@ -36,14 +40,15 @@ const uploadFile = async (req, res, next) => {
         sosId: req.body.sosId || null,
         type: 'IMAGE',
         url: result.secure_url,
-        fileName: `mobile_hazard_image_${Date.now()}.jpg`,
+        fileName: req.body.fileName || `chat_image_${Date.now()}.jpg`,
         fileSize: result.bytes || 0,
+        purpose,
       };
       const uploadedFile = await fileService.uploadFile(req.user._id, fileData);
       return res.status(201).json({ success: true, data: uploadedFile, url: uploadedFile.url });
     }
 
-    // 2. Dự phòng cho FormData thông thường
+    // 3. Dự phòng cho FormData thông thường
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'Vui lòng đính kèm một file' });
     }
@@ -54,11 +59,12 @@ const uploadFile = async (req, res, next) => {
       type: req.file.mimetype.startsWith('video') ? 'VIDEO' : 'IMAGE',
       url: req.file.path, 
       fileName: req.file.originalname || req.file.filename,
-      fileSize: req.file.size || 0
+      fileSize: req.file.size || 0,
+      purpose,
     };
 
     const uploadedFile = await fileService.uploadFile(req.user._id, fileData);
-    res.status(201).json({ success: true, data: uploadedFile });
+    res.status(201).json({ success: true, data: uploadedFile, url: uploadedFile.url });
   } catch (error) {
     next(error);
   }

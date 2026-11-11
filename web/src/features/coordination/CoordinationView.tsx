@@ -9,52 +9,60 @@ import {
   CheckCircle2,
   X,
   Loader2,
-  RefreshCw,
   Compass,
   LifeBuoy,
+  XCircle,
+  Camera,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import type { SosRequestItem } from '@/types/dashboard';
-import { fetchSosRequests, completeSosRequest } from '@/api';
-import { FALLBACK_SOS_LIST } from '@/constants';
+import { fetchSosRequests, approveSuppliesApi, rejectSuppliesApi } from '@/api';
+import { getSocket } from '@/services/socketService';
 import { onSosCreated, onSosUpdated, onAssignmentUpdated } from '@/services/socketService';
-import { toast } from '@/components/common/toast';
 import '@/features/sos/SosRequestsView.css';
 import './CoordinationView.css';
 
 export interface CoordinationViewProps {
   sosList?: SosRequestItem[];
   onOpenMap: (sosId?: any) => void;
+  user?: import('@/types/auth').User;
 }
 
 export const CoordinationView: React.FC<CoordinationViewProps> = ({
   sosList: propSosList,
   onOpenMap,
+  user: _user,
 }) => {
   const [sosList, setSosList] = useState<SosRequestItem[]>(propSosList || []);
   const [loading, setLoading] = useState(false);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'CRITICAL' | 'EN_ROUTE' | 'ON_SCENE' | 'COMPLETED'>('ALL');
-  const [selectedSosDetail, setSelectedSosDetail] = useState<SosRequestItem | null>(null);
-  const [completingId, setCompletingId] = useState<string | null>(null);
+  const [previewPhotos, setPreviewPhotos] = useState<{
+    images: string[];
+    activeIndex: number;
+    title: string;
+  } | null>(null);
 
   const refreshData = () => setRefreshIndex((p) => p + 1);
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [sosRes] = await Promise.allSettled([
-        fetchSosRequests({ limit: '100' }),
-      ]);
-
-      if (sosRes.status === 'fulfilled' && sosRes.value.success && Array.isArray(sosRes.value.data)) {
-        setSosList(sosRes.value.data);
-      } else if (!propSosList || propSosList.length === 0) {
-        setSosList(FALLBACK_SOS_LIST);
+      const sosRes = await fetchSosRequests({ limit: '100' });
+      if (sosRes.success && Array.isArray(sosRes.data)) {
+        setSosList(sosRes.data);
+      } else if (propSosList && propSosList.length > 0) {
+        setSosList(propSosList);
+      } else {
+        setSosList([]);
       }
     } catch {
-      if (!propSosList || propSosList.length === 0) {
-        setSosList(FALLBACK_SOS_LIST);
+      if (propSosList && propSosList.length > 0) {
+        setSosList(propSosList);
+      } else {
+        setSosList([]);
       }
     } finally {
       setLoading(false);
@@ -79,20 +87,17 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
 
     const unsubUpdated = (updatedSos: any) => {
       if (updatedSos && (updatedSos._id || updatedSos.id)) {
-        const targetId = updatedSos._id || updatedSos.id;
+        const targetId = String(updatedSos._id || updatedSos.id);
         setSosList((prev) =>
-          prev.map((s) =>
-            s._id === targetId || (s as any).id === targetId
-              ? { ...s, ...updatedSos, status: updatedSos.status }
-              : s
-          )
+          prev.map((s) => {
+            const sId = String(s._id || (s as any).id || '');
+            if (sId === targetId) {
+              const updatedAssignment = updatedSos.assignment || s.assignment;
+              return { ...s, ...updatedSos, assignment: updatedAssignment, status: updatedSos.status };
+            }
+            return s;
+          })
         );
-        setSelectedSosDetail((prev) => {
-          if (prev && (prev._id === targetId || (prev as any).id === targetId)) {
-            return { ...prev, ...updatedSos, status: updatedSos.status };
-          }
-          return prev;
-        });
       }
       loadData();
     };
@@ -101,54 +106,61 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
     // Lắng nghe trực tiếp khi Cứu hộ viên cập nhật trạng thái phân công / tiến trình cứu nạn
     const unsubAssignment = onAssignmentUpdated((assignmentData: any) => {
       if (!assignmentData) return;
-      const targetSosId = assignmentData.sosRequestId || assignmentData.sosId;
-      const newStatus = assignmentData.status;
+      const targetSosId = String(
+        assignmentData.sosRequestId ||
+        assignmentData.sosId ||
+        (assignmentData.sosRequest && (assignmentData.sosRequest._id || assignmentData.sosRequest.id)) ||
+        ''
+      );
+      const targetAssignmentId = String(assignmentData._id || assignmentData.id || '');
+      const newStatus = String(assignmentData.status || '').toUpperCase();
 
-      if (targetSosId) {
-        const mappedSosStatus =
-          newStatus === 'ACCEPTED'
-            ? 'ACCEPTED'
-            : ['EN_ROUTE', 'ON_THE_WAY', 'DISPATCHED'].includes(newStatus)
-            ? 'ON_THE_WAY'
-            : newStatus === 'ARRIVED'
-            ? 'ARRIVED'
-            : ['IN_PROGRESS', 'RESCUING'].includes(newStatus)
-            ? 'RESCUING'
-            : ['COMPLETED', 'RESOLVED'].includes(newStatus)
-            ? 'COMPLETED'
-            : undefined;
+      const mappedSosStatus =
+        newStatus === 'ACCEPTED'
+          ? 'ACCEPTED'
+          : ['EN_ROUTE', 'ON_THE_WAY', 'DISPATCHED'].includes(newStatus)
+          ? 'ON_THE_WAY'
+          : newStatus === 'ARRIVED'
+          ? 'ARRIVED'
+          : ['IN_PROGRESS', 'RESCUING'].includes(newStatus)
+          ? 'RESCUING'
+          : ['COMPLETED', 'RESOLVED'].includes(newStatus)
+          ? 'COMPLETED'
+          : newStatus === 'REJECTED'
+          ? 'REJECTED'
+          : undefined;
 
-        setSosList((prev) =>
-          prev.map((s) => {
-            const matches = s._id === targetSosId || (s as any).id === targetSosId;
-            if (matches) {
-              const updatedAssignment = s.assignment ? { ...s.assignment, ...assignmentData } : assignmentData;
-              return {
-                ...s,
-                assignment: updatedAssignment,
-                ...(mappedSosStatus ? { status: mappedSosStatus as any } : {}),
-              };
-            }
-            return s;
-          })
-        );
+      setSosList((prev) =>
+        prev.map((s) => {
+          const sId = String(s._id || (s as any).id || '');
+          const sAssignmentId = String(s.assignmentId || s.assignment?._id || (s.assignment as any)?.id || '');
+          const matches =
+            (targetSosId && sId === targetSosId) ||
+            (targetAssignmentId && sAssignmentId === targetAssignmentId);
 
-        setSelectedSosDetail((prev) => {
-          if (prev && (prev._id === targetSosId || (prev as any).id === targetSosId)) {
-            const updatedAssignment = prev.assignment ? { ...prev.assignment, ...assignmentData } : assignmentData;
+          if (matches) {
+            const updatedAssignment = s.assignment
+              ? { ...s.assignment, ...assignmentData, status: newStatus }
+              : { ...assignmentData, status: newStatus };
             return {
-              ...prev,
+              ...s,
               assignment: updatedAssignment,
               ...(mappedSosStatus ? { status: mappedSosStatus as any } : {}),
             };
           }
-          return prev;
-        });
-      }
+          return s;
+        })
+      );
 
       // Nạp dữ liệu đồng bộ với server
       loadData();
     });
+
+    const socket = getSocket();
+    const handleSupplyEvt = () => loadData();
+    socket.on('assignment:supply_requested', handleSupplyEvt);
+    socket.on('assignment:supply_approved', handleSupplyEvt);
+    socket.on('assignment:supply_rejected', handleSupplyEvt);
 
     // Polling heartbeat định kỳ 5s dự phòng rớt mạng/mất gói tin socket
     const heartbeat = setInterval(() => {
@@ -159,78 +171,76 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
       unsubCreated();
       unsubUpdatedSocket();
       unsubAssignment();
+      socket.off('assignment:supply_requested', handleSupplyEvt);
+      socket.off('assignment:supply_approved', handleSupplyEvt);
+      socket.off('assignment:supply_rejected', handleSupplyEvt);
       clearInterval(heartbeat);
     };
   }, [loadData]);
 
-  const handleCompleteSos = async (e: React.MouseEvent, sosId: string) => {
-    e.stopPropagation();
-    if (!window.confirm('Xác nhận hoàn thành nhiệm vụ cứu nạn này?')) return;
-    try {
-      setCompletingId(sosId);
-      if (sosId.startsWith('sos-dn-')) {
-        setSosList((prev) =>
-          prev.map((s) => (s._id === sosId ? { ...s, status: 'COMPLETED' } : s))
-        );
-      } else {
-        await completeSosRequest(sosId);
-        refreshData();
-      }
-      toast.success('Đã hoàn thành và đóng yêu cầu cứu hộ!', 'Nhiệm vụ hoàn tất');
-      window.dispatchEvent(new CustomEvent('sos_data_updated'));
-      if (selectedSosDetail?._id === sosId) {
-        setSelectedSosDetail((prev) => (prev ? { ...prev, status: 'COMPLETED' } : null));
-      }
-    } catch (err: any) {
-      toast.error(err?.message || 'Không thể cập nhật trạng thái nhiệm vụ', 'Lỗi điều phối');
-    } finally {
-      setCompletingId(null);
-    }
+  // Helper chuẩn hóa trọng số tiến trình cứu hộ (để luôn lấy trạng thái tiến xa nhất giữa SOS và Assignment)
+  const normalizeStatusRank = (status?: string): number => {
+    if (!status) return 0;
+    const s = String(status).toUpperCase();
+    if (['COMPLETED', 'RESOLVED'].includes(s)) return 6;
+    if (['RESCUING', 'IN_PROGRESS'].includes(s)) return 5;
+    if (['ARRIVED', 'ON_SCENE'].includes(s)) return 4;
+    if (['ON_THE_WAY', 'EN_ROUTE', 'DISPATCHED'].includes(s)) return 3;
+    if (s === 'ACCEPTED') return 2;
+    if (['ASSIGNED', 'PENDING_RESCUER'].includes(s)) return 1;
+    if (['REJECTED', 'CANCELLED'].includes(s)) return -1;
+    return 0; // PENDING, VERIFIED
   };
 
   // Hàm tính toán trạng thái thực tế nhất dựa trên cả SOS và Assignment của Cứu Hộ Viên
   const getEffectiveStatus = useCallback((sos?: SosRequestItem | null): string => {
     if (!sos) return 'PENDING';
-    if (sos.status === 'COMPLETED' || (sos as any).status === 'RESOLVED') return 'COMPLETED';
 
-    const assignmentStatus = sos.assignment?.status;
-    if (assignmentStatus) {
-      if (['COMPLETED', 'RESOLVED'].includes(assignmentStatus)) return 'COMPLETED';
-      if (['IN_PROGRESS', 'RESCUING'].includes(assignmentStatus)) return 'RESCUING';
-      if (assignmentStatus === 'ARRIVED') return 'ARRIVED';
-      if (['EN_ROUTE', 'ON_THE_WAY', 'DISPATCHED'].includes(assignmentStatus)) return 'ON_THE_WAY';
-      if (assignmentStatus === 'ACCEPTED') return 'ACCEPTED';
-      if (assignmentStatus === 'PENDING') return 'ASSIGNED';
+    const sRank = normalizeStatusRank(sos.status);
+    const aRank = normalizeStatusRank(sos.assignment?.status);
+
+    if (sRank === -1 && aRank === -1) return 'REJECTED';
+    if (aRank === -1 && sRank <= 1) return 'REJECTED';
+
+    const maxRank = Math.max(sRank, aRank);
+    switch (maxRank) {
+      case 6:
+        return 'COMPLETED';
+      case 5:
+        return 'RESCUING';
+      case 4:
+        return 'ARRIVED';
+      case 3:
+        return 'ON_THE_WAY';
+      case 2:
+        return 'ACCEPTED';
+      case 1:
+        return 'ASSIGNED';
+      default:
+        return sos.status || 'PENDING';
     }
-
-    if (['COMPLETED', 'RESOLVED'].includes(sos.status)) return 'COMPLETED';
-    if (['RESCUING', 'IN_PROGRESS'].includes(sos.status)) return 'RESCUING';
-    if (sos.status === 'ARRIVED') return 'ARRIVED';
-    if (['ON_THE_WAY', 'EN_ROUTE', 'DISPATCHED'].includes(sos.status)) return 'ON_THE_WAY';
-    if (sos.status === 'ACCEPTED') return 'ACCEPTED';
-    return sos.status || 'PENDING';
   }, []);
 
   // Tính toán KPI số liệu
-  const baseSos = sosList.length > 0 ? sosList : FALLBACK_SOS_LIST;
+  const baseSos: SosRequestItem[] = sosList;
 
   const activeMissions = useMemo(() => {
-    return baseSos.filter((s) =>
+    return baseSos.filter((s: SosRequestItem) =>
       ['VERIFIED', 'ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(getEffectiveStatus(s))
     );
   }, [baseSos, getEffectiveStatus]);
 
   const criticalMissions = useMemo(() => {
-    return activeMissions.filter((m) => m.priority === 'CRITICAL');
+    return activeMissions.filter((m: SosRequestItem) => m.priority === 'CRITICAL');
   }, [activeMissions]);
 
   const completedMissions = useMemo(() => {
-    return baseSos.filter((s) => getEffectiveStatus(s) === 'COMPLETED');
+    return baseSos.filter((s: SosRequestItem) => getEffectiveStatus(s) === 'COMPLETED');
   }, [baseSos, getEffectiveStatus]);
 
   // Lọc dữ liệu theo tab và thanh tìm kiếm
   const filteredMissions = useMemo(() => {
-    return baseSos.filter((sos) => {
+    return baseSos.filter((sos: SosRequestItem) => {
       const effStatus = getEffectiveStatus(sos);
       // Bộ lọc trạng thái
       if (statusFilter === 'CRITICAL') {
@@ -327,6 +337,18 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
             </span>
           </div>
         );
+      case 'REJECTED':
+      case 'CANCELLED':
+        return (
+          <div>
+            <span
+              className="coordination-status-pill rejected"
+              style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fca5a5' }}
+            >
+              <XCircle size={12} /> Đội Từ Chối
+            </span>
+          </div>
+        );
       default:
         return (
           <div>
@@ -354,41 +376,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
 
   return (
     <div className="coordination-executive-container oceanic-executive-theme">
-      {/* 1. HEADER CARD TỔNG QUAN TÁC CHIẾN (CHUẨN OCEANIC EXECUTIVE) */}
-      <div className="executive-overview-container">
-        <div className="executive-overview-header" style={{ marginBottom: 0 }}>
-          <div className="executive-header-left">
-            <span className="executive-live-pill">
-              <span className="live-dot" />
-              Trực ban chỉ huy tác chiến 24/7
-            </span>
-          </div>
-
-          <div className="executive-header-right">
-            <button
-              type="button"
-              className="coordination-action-btn outline"
-              onClick={refreshData}
-              title="Cập nhật dữ liệu mới nhất"
-            >
-              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              <span>Làm mới</span>
-            </button>
-
-            <button
-              type="button"
-              className="coordination-action-btn primary"
-              onClick={() => onOpenMap()}
-              title="Xem vị trí tất cả các đội và yêu cầu cứu hộ trên bản đồ tác chiến"
-            >
-              <MapPin size={15} />
-              <span>Mở Bản Đồ Realtime</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. BẢNG DỮ LIỆU ĐIỀU PHỐI (CHUẨN EXECUTIVE TABLE CARD) */}
+      {/* BẢNG DỮ LIỆU ĐIỀU PHỐI (CHUẨN EXECUTIVE TABLE CARD) */}
       <div className="executive-table-card">
         {/* Toolbar: Bộ lọc tab + Ô tìm kiếm */}
         <div className="executive-table-toolbar">
@@ -416,7 +404,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
               onClick={() => setStatusFilter('EN_ROUTE')}
             >
               <span className="dot-mini blue" />
-              Đang di chuyển ({baseSos.filter((s) => ['ACCEPTED', 'ON_THE_WAY', 'EN_ROUTE', 'DISPATCHED'].includes(getEffectiveStatus(s))).length})
+              Đang di chuyển ({baseSos.filter((s: SosRequestItem) => ['ACCEPTED', 'ON_THE_WAY', 'EN_ROUTE', 'DISPATCHED'].includes(getEffectiveStatus(s))).length})
             </button>
 
             <button
@@ -425,7 +413,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
               onClick={() => setStatusFilter('ON_SCENE')}
             >
               <span className="dot-mini yellow" />
-              Tại hiện trường ({baseSos.filter((s) => ['ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(getEffectiveStatus(s))).length})
+              Tại hiện trường ({baseSos.filter((s: SosRequestItem) => ['ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(getEffectiveStatus(s))).length})
             </button>
 
             <button
@@ -490,22 +478,15 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredMissions.map((sos) => {
+                filteredMissions.map((sos: SosRequestItem) => {
                   const citizenInfo = typeof sos.citizenId === 'object' && sos.citizenId !== null ? (sos.citizenId as any) : null;
                   const citizenName = citizenInfo?.fullName || 'Người dân';
                   const citizenPhone = citizenInfo?.phone || 'Chưa có SĐT';
                   const isCritical = sos.priority === 'CRITICAL';
                   const effStatus = getEffectiveStatus(sos);
-                  const isCompleted = effStatus === 'COMPLETED';
 
                   return (
-                    <tr
-                      key={sos._id}
-                      className="executive-table-row"
-                      onClick={() => setSelectedSosDetail(sos)}
-                      style={{ cursor: 'pointer' }}
-                      title="Nhấp để xem chi tiết lộ trình tác chiến ca này"
-                    >
+                    <tr key={sos._id} className="executive-table-row">
                       {/* Cột 1: Mã sự cố */}
                       <td>
                         <div className="table-code-cell">
@@ -521,7 +502,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                         </div>
                       </td>
 
-                      {/* Cột 2: Hiện trường / Địa chỉ */}
+                      {/* Cột 2: Hiện trường / Địa chỉ & Ảnh chụp từ người dân */}
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
@@ -535,6 +516,174 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                               {sos.description}
                             </span>
                           )}
+
+                          {/* Yêu Cầu Chi Viện Vật Tư Khẩn Cấp - Thao tác trực tiếp */}
+                          {(() => {
+                            const reqs = (sos.assignment as any)?.requestedSupplies || [];
+                            const pending = reqs.filter((r: any) => r.status === 'PENDING');
+                            if (pending.length === 0) return null;
+                            const assignId = (sos.assignment as any)?._id || (sos as any).assignmentId;
+
+                            return (
+                              <div
+                                style={{
+                                  marginLeft: 21,
+                                  marginTop: 6,
+                                  padding: '6px 10px',
+                                  background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+                                  border: '1.2px solid #f59e0b',
+                                  borderRadius: 7,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  gap: 8,
+                                }}
+                              >
+                                <div style={{ fontSize: 11.5, fontWeight: 700, color: '#92400e', display: 'flex', alignItems: 'center', gap: 5 }}>
+                                  <span>📦</span>
+                                  <span>Cần chi viện: <strong>{pending.map((p: any) => `${p.name} (${p.quantity})`).join(', ')}</strong></span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                  <button
+                                    type="button"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (!assignId) return;
+                                      try {
+                                        await approveSuppliesApi(assignId);
+                                        refreshData();
+                                        window.dispatchEvent(new CustomEvent('sos_data_updated'));
+                                      } catch (err: any) {
+                                        alert('Lỗi duyệt: ' + (err?.message || 'Thử lại'));
+                                      }
+                                    }}
+                                    style={{
+                                      padding: '3px 9px',
+                                      background: '#16a34a',
+                                      border: 'none',
+                                      borderRadius: 4,
+                                      color: '#ffffff',
+                                      fontSize: 11,
+                                      fontWeight: 800,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    Duyệt
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (!assignId) return;
+                                      if (!window.confirm('Từ chối yêu cầu chi viện vật tư này?')) return;
+                                      try {
+                                        await rejectSuppliesApi(assignId);
+                                        refreshData();
+                                        window.dispatchEvent(new CustomEvent('sos_data_updated'));
+                                      } catch (err: any) {
+                                        alert('Lỗi từ chối: ' + (err?.message || 'Thử lại'));
+                                      }
+                                    }}
+                                    style={{
+                                      padding: '3px 8px',
+                                      background: '#fee2e2',
+                                      border: '1px solid #fca5a5',
+                                      borderRadius: 4,
+                                      color: '#dc2626',
+                                      fontSize: 11,
+                                      fontWeight: 800,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    Từ chối
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {/* Ảnh hiện trường người dân gửi lên */}
+                          {(() => {
+                            const citizenImages: string[] = Array.isArray(sos.images) && sos.images.length > 0
+                              ? sos.images
+                              : (sos.imageUrl ? [sos.imageUrl] : []);
+
+                            if (citizenImages.length === 0) return null;
+
+                            return (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 21, marginTop: 4 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  {citizenImages.slice(0, 3).map((imgUrl, imgIdx) => (
+                                    <div
+                                      key={imgIdx}
+                                      style={{
+                                        position: 'relative',
+                                        width: 38,
+                                        height: 38,
+                                        borderRadius: 6,
+                                        overflow: 'hidden',
+                                        border: '1.5px solid #CBD5E1',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                                        flexShrink: 0,
+                                        transition: 'transform 0.15s ease',
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setPreviewPhotos({
+                                          images: citizenImages,
+                                          activeIndex: imgIdx,
+                                          title: `${sos.sosCode || 'SOS'} • ${sos.address || 'Hiện trường'}`,
+                                        });
+                                      }}
+                                      title="Bấm để phóng to xem ảnh hiện trường"
+                                    >
+                                      <img
+                                        src={imgUrl}
+                                        alt={`Hiện trường ${imgIdx + 1}`}
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                      />
+                                      {imgIdx === 2 && citizenImages.length > 3 && (
+                                        <div
+                                          style={{
+                                            position: 'absolute',
+                                            inset: 0,
+                                            background: 'rgba(15, 23, 42, 0.65)',
+                                            color: '#ffffff',
+                                            fontSize: 10,
+                                            fontWeight: 800,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                          }}
+                                        >
+                                          +{citizenImages.length - 2}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+
+                                <button
+                                  type="button"
+                                  className="photo-preview-chip"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPreviewPhotos({
+                                      images: citizenImages,
+                                      activeIndex: 0,
+                                      title: `${sos.sosCode || 'SOS'} • ${sos.address || 'Hiện trường'}`,
+                                    });
+                                  }}
+                                  title="Xem toàn bộ ảnh chụp hiện trường từ người dân"
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, height: 26 }}
+                                >
+                                  <Camera size={12} color="#0284C7" />
+                                  <span>{citizenImages.length} ảnh hiện trường</span>
+                                </button>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </td>
 
@@ -563,7 +712,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                       {/* Cột 4: Mức độ */}
                       <td>
                         <span className={`sos-badge ${sos.priority ? sos.priority.toLowerCase() : 'medium'}`}>
-                          {sos.priority === 'CRITICAL' ? 'Cực kỳ khẩn cấp' : sos.priority === 'HIGH' ? 'Khẩn cấp' : sos.priority || 'Bình thường'}
+                          {sos.priority === 'CRITICAL' ? 'Cực kỳ khẩn cấp' : sos.priority === 'HIGH' ? 'Khẩn cấp' : sos.priority === 'LOW' ? 'Thấp' : 'Trung bình'}
                         </span>
                       </td>
 
@@ -573,7 +722,7 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                       </td>
 
                       {/* Cột 6: Thao tác */}
-                      <td onClick={(e) => e.stopPropagation()}>
+                      <td>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                           <button
                             type="button"
@@ -584,23 +733,6 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                             <MapPin size={12} />
                             <span>Bản đồ</span>
                           </button>
-
-                          {!isCompleted && (
-                            <button
-                              type="button"
-                              className="coordination-action-btn success"
-                              onClick={(e) => handleCompleteSos(e, sos._id)}
-                              disabled={completingId === sos._id}
-                              title="Xác nhận hoàn thành cứu nạn"
-                            >
-                              {completingId === sos._id ? (
-                                <Loader2 size={12} className="animate-spin" />
-                              ) : (
-                                <CheckCircle2 size={12} />
-                              )}
-                              <span>Xong</span>
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -612,144 +744,205 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
         </div>
       </div>
 
-      {/* 4. MODAL CHI TIẾT ĐIỀU PHỐI NHIỆM VỤ */}
-      {selectedSosDetail && (
-        <div className="executive-modal-backdrop" onClick={() => setSelectedSosDetail(null)}>
+      {/* Lightbox Modal: Phóng to ảnh chụp hiện trường từ người dân */}
+      {previewPhotos && previewPhotos.images.length > 0 && (
+        <div
+          className="executive-photo-lightbox-backdrop"
+          onClick={() => setPreviewPhotos(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.82)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: 20,
+          }}
+        >
           <div
-            className="executive-modal-card"
-            style={{ maxWidth: 620, width: '92%' }}
+            className="executive-photo-lightbox-modal"
             onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 750,
+              width: '100%',
+              background: '#FFFFFF',
+              borderRadius: 16,
+              overflow: 'hidden',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
           >
-            <div className="executive-modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div className="executive-icon-squircle">
-                  <Compass size={18} />
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
-                    Chi Tiết Ca Tác Chiến: {selectedSosDetail.sosCode}
-                  </h3>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>
-                    Khởi tạo {formatTimeAgo(selectedSosDetail.createdAt)} • Trạng thái: {getEffectiveStatus(selectedSosDetail)}
-                  </p>
-                </div>
+            <div
+              className="executive-photo-lightbox-header"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 18px',
+                borderBottom: '1px solid #E2E8F0',
+                background: '#F8FAFC',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Camera size={18} color="#0284C7" />
+                <span style={{ fontWeight: 800, fontSize: 13.5, color: '#0F172A' }}>
+                  ẢNH HIỆN TRƯỜNG TỪ NGƯỜI DÂN
+                </span>
+                <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>
+                  ({previewPhotos.activeIndex + 1}/{previewPhotos.images.length})
+                </span>
+                <span style={{ fontSize: 12, color: '#0284C7', fontWeight: 600, marginLeft: 6 }}>
+                  • {previewPhotos.title}
+                </span>
               </div>
-
               <button
                 type="button"
-                className="executive-toggle-btn"
-                onClick={() => setSelectedSosDetail(null)}
+                className="executive-photo-lightbox-close"
+                onClick={() => setPreviewPhotos(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 4,
+                  borderRadius: 6,
+                  color: '#64748B',
+                }}
               >
-                <X size={15} />
+                <X size={20} />
               </button>
-            </div>
-
-            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* Hiện trường */}
-              <div style={{ background: '#F8FAFC', padding: 14, borderRadius: 10, border: '1px solid #E2E8F0' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
-                  Địa Điểm &amp; Tọa Độ Hiện Trường
-                </span>
-                <p style={{ margin: '6px 0 0', fontWeight: 600, color: '#0F172A', fontSize: 14 }}>
-                  {selectedSosDetail.address}
-                </p>
-                {selectedSosDetail.location?.coordinates && (
-                  <p style={{ margin: '4px 0 0', fontSize: 12, color: '#0284C7', fontFamily: 'monospace' }}>
-                    GPS: [{selectedSosDetail.location.coordinates[1]?.toFixed(5)}, {selectedSosDetail.location.coordinates[0]?.toFixed(5)}]
-                  </p>
-                )}
-              </div>
-
-              {/* Thông tin người dân */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div style={{ background: '#F8FAFC', padding: 12, borderRadius: 8, border: '1px solid #E2E8F0' }}>
-                  <span style={{ fontSize: 11, color: '#64748B' }}>Người cần cứu hộ:</span>
-                  <p style={{ margin: '4px 0 0', fontWeight: 700, color: '#0F172A' }}>
-                    {(selectedSosDetail.citizenId as any)?.fullName || 'Người dân'}
-                  </p>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>
-                    {(selectedSosDetail.citizenId as any)?.phone || 'Chưa cung cấp SĐT'}
-                  </p>
-                </div>
-
-                <div style={{ background: '#F8FAFC', padding: 12, borderRadius: 8, border: '1px solid #E2E8F0' }}>
-                  <span style={{ fontSize: 11, color: '#64748B' }}>Số người &amp; Mức độ:</span>
-                  <p style={{ margin: '4px 0 0', fontWeight: 700, color: '#0F172A' }}>
-                    {selectedSosDetail.people || 1} người gặp nạn
-                  </p>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#DC2626', fontWeight: 600 }}>
-                    Ưu tiên: {selectedSosDetail.priority}
-                  </p>
-                </div>
-              </div>
-
-              {/* Nội dung mô tả */}
-              {selectedSosDetail.description && (
-                <div style={{ background: '#FFFBEB', border: '1px solid #FEF3C7', padding: 12, borderRadius: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#B45309' }}>Ghi chú tình huống:</span>
-                  <p style={{ margin: '4px 0 0', fontSize: 13, color: '#78350F' }}>
-                    {selectedSosDetail.description}
-                  </p>
-                </div>
-              )}
-
-              {/* Tiến trình tác chiến */}
-              <div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>
-                  Tiến Trình Cứu Nạn
-                </span>
-                <div style={{ marginTop: 8 }}>
-                  {renderProgressStep(getEffectiveStatus(selectedSosDetail))}
-                </div>
-              </div>
             </div>
 
             <div
               style={{
-                padding: '14px 24px',
-                borderTop: '1px solid #E2E8F0',
-                background: '#F8FAFC',
+                position: 'relative',
                 display: 'flex',
-                justifyContent: 'space-between',
                 alignItems: 'center',
-                borderBottomLeftRadius: 16,
-                borderBottomRightRadius: 16,
+                justifyContent: 'center',
+                backgroundColor: '#0F172A',
+                height: 440,
+                overflow: 'hidden',
               }}
             >
-              <button
-                type="button"
-                className="coordination-action-btn outline"
-                onClick={() => setSelectedSosDetail(null)}
-              >
-                Đóng
-              </button>
+              <img
+                src={previewPhotos.images[previewPhotos.activeIndex]}
+                alt="Hiện trường cứu nạn"
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  objectFit: 'contain',
+                }}
+              />
 
-              <div style={{ display: 'flex', gap: 8 }}>
+              {/* Nút lùi ảnh */}
+              {previewPhotos.images.length > 1 && previewPhotos.activeIndex > 0 && (
                 <button
                   type="button"
-                  className="coordination-action-btn primary"
-                  onClick={() => {
-                    const id = selectedSosDetail._id;
-                    setSelectedSosDetail(null);
-                    onOpenMap(id);
+                  onClick={() =>
+                    setPreviewPhotos((prev) =>
+                      prev ? { ...prev, activeIndex: prev.activeIndex - 1 } : null
+                    )
+                  }
+                  style={{
+                    position: 'absolute',
+                    left: 14,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'rgba(255, 255, 255, 0.3)',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: 38,
+                    height: 38,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: '#FFFFFF',
                   }}
+                  title="Ảnh trước"
                 >
-                  <MapPin size={14} />
-                  <span>Xem trên bản đồ</span>
+                  <ChevronLeft size={24} />
                 </button>
+              )}
 
-                {getEffectiveStatus(selectedSosDetail) !== 'COMPLETED' && (
+              {/* Nút tiến ảnh */}
+              {previewPhotos.images.length > 1 &&
+                previewPhotos.activeIndex < previewPhotos.images.length - 1 && (
                   <button
                     type="button"
-                    className="coordination-action-btn success"
-                    onClick={(e) => handleCompleteSos(e, selectedSosDetail._id)}
+                    onClick={() =>
+                      setPreviewPhotos((prev) =>
+                        prev ? { ...prev, activeIndex: prev.activeIndex + 1 } : null
+                      )
+                    }
+                    style={{
+                      position: 'absolute',
+                      right: 14,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'rgba(255, 255, 255, 0.3)',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: 38,
+                      height: 38,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      color: '#FFFFFF',
+                    }}
+                    title="Ảnh tiếp theo"
                   >
-                    <CheckCircle2 size={14} />
-                    <span>Xác nhận hoàn thành</span>
+                    <ChevronRight size={24} />
                   </button>
                 )}
-              </div>
             </div>
+
+            {/* Dải thumbnail xem nhanh bên dưới nếu nhiều ảnh */}
+            {previewPhotos.images.length > 1 && (
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 8,
+                  padding: '10px 16px',
+                  background: '#F1F5F9',
+                  borderTop: '1px solid #E2E8F0',
+                  overflowX: 'auto',
+                }}
+              >
+                {previewPhotos.images.map((img, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() =>
+                      setPreviewPhotos((prev) => (prev ? { ...prev, activeIndex: i } : null))
+                    }
+                    style={{
+                      width: 50,
+                      height: 50,
+                      borderRadius: 6,
+                      overflow: 'hidden',
+                      padding: 0,
+                      border:
+                        i === previewPhotos.activeIndex
+                          ? '2.5px solid #0284C7'
+                          : '1px solid #CBD5E1',
+                      opacity: i === previewPhotos.activeIndex ? 1 : 0.6,
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <img
+                      src={img}
+                      alt={`Thumb ${i + 1}`}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
