@@ -56,16 +56,22 @@ const rescueTeamSchema = new mongoose.Schema(
       required: [true, 'Loại đội cứu hộ là bắt buộc'],
       enum: {
         values: [
+          'WATER_RESCUE',     // Đội cứu hộ đường thủy (Water Rescue)
+          'EVACUATION',       // Đội sơ tán dân (Evacuation)
+          'MEDICAL_RESCUE',   // Đội y tế (Medical Rescue)
+          'LOGISTICS',        // Đội hậu cần (Logistics)
+          'SEARCH_RESCUE',    // Đội tìm kiếm cứu nạn (Search & Rescue)
+          'COMMUNICATION',    // Đội thông tin liên lạc (Communication)
+          'SECURITY',         // Đội an ninh (Security)
+          // Tương thích ngược với dữ liệu cũ
           'FLOOD_RESCUE',
           'FIRE_RESCUE',
-          'MEDICAL_RESCUE',
-          'SEARCH_RESCUE',
           'GENERAL_RESCUE',
           'OTHER',
         ],
         message: 'Loại đội cứu hộ {VALUE} không hợp lệ',
       },
-      default: 'GENERAL_RESCUE',
+      default: 'WATER_RESCUE',
     },
     leaderId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -90,6 +96,24 @@ const rescueTeamSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: null,
+    },
+    phone: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    headquartersAddress: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    operationalStatus: {
+      type: String,
+      enum: {
+        values: ['READY', 'ON_MISSION', 'LIMITED', 'INACTIVE'],
+        message: 'Trạng thái vận hành {VALUE} không hợp lệ',
+      },
+      default: 'READY',
     },
     status: {
       type: String,

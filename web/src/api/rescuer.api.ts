@@ -106,6 +106,27 @@ export async function deleteRescueTeam(
   return fetchWithAuth(`/rescue-teams/${id}`, { method: 'DELETE' });
 }
 
+export async function updateRescueTeam(
+  id: string,
+  payload: {
+    name?: string;
+    type?: string;
+    description?: string;
+    phone?: string;
+    headquartersAddress?: string;
+    status?: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+    operationalStatus?: 'READY' | 'ON_MISSION' | 'LIMITED' | 'INACTIVE';
+    leaderId?: string;
+    areaId?: string;
+    authorityId?: string;
+  }
+): Promise<{ success: boolean; data?: any; message?: string }> {
+  return fetchWithAuth(`/rescue-teams/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function updateRescueTeamStatus(
   id: string,
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING'

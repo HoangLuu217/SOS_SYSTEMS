@@ -489,15 +489,66 @@ class EquipmentService {
     const updatedEquipments = [];
     const teamLog = team ? ` [Đội vận chuyển: ${team.name}]` : ' [Xuất trực tiếp tại kho]';
     for (const { doc: equipment, consumeQty } of equipmentDocs) {
-      equipment.quantity -= consumeQty;
-      const consumeLog = `[Phiếu xuất cứu trợ tổng hợp: ${consumeQty} ${equipment.unit} -> ${destText}${recipText}${teamLog}${noteText}]`;
-      equipment.note = equipment.note ? `${equipment.note} | ${consumeLog}` : consumeLog;
+      if (equipment.supplyType === 'DURABLE' && team) {
+        // Khí tài tác chiến dùng bền: Trừ ở kho xuất và tạm cấp cho Đội cứu hộ tác chiến (IN_USE)
+        equipment.quantity -= consumeQty;
+        const dispatchLog = `[Điều động tác chiến: ${consumeQty} ${equipment.unit} -> Đội ${team.name} đi ${destText}${noteText}]`;
+        equipment.note = equipment.note ? `${equipment.note} | ${dispatchLog}` : dispatchLog;
+        if (equipment.quantity === 0) {
+          equipment.status = 'DAMAGED'; // Đánh dấu đã hết tồn kho tại nguồn
+        }
+        await equipment.save();
 
-      if (equipment.quantity === 0) {
-        equipment.status = 'DAMAGED'; // Đánh dấu đã hết tồn kho
+        const existingInTeam = await Equipment.findOne({
+          teamId: team._id,
+          category: equipment.category,
+          name: { $regex: new RegExp(`^${equipment.name.trim()}$`, 'i') },
+        });
+
+        if (existingInTeam) {
+          existingInTeam.quantity += consumeQty;
+          existingInTeam.status = 'IN_USE';
+          existingInTeam.note = existingInTeam.note ? `${existingInTeam.note} | ${dispatchLog}` : dispatchLog;
+          await existingInTeam.save();
+          await existingInTeam.populate([
+            { path: 'teamId', select: 'name type areaId status leaderId', populate: { path: 'areaId', select: 'name code' } },
+            { path: 'providedBy', select: 'name shortName type' },
+          ]);
+          updatedEquipments.push(existingInTeam);
+        } else {
+          const newTeamEquipment = await Equipment.create({
+            teamId: team._id,
+            providedBy: equipment.providedBy,
+            receivedAt: new Date(),
+            name: equipment.name,
+            category: equipment.category,
+            supplyType: 'DURABLE',
+            minThreshold: equipment.minThreshold || 10,
+            serialNumber: equipment.serialNumber || null,
+            quantity: consumeQty,
+            unit: equipment.unit || 'cái',
+            status: 'IN_USE',
+            note: dispatchLog,
+          });
+          await newTeamEquipment.populate([
+            { path: 'teamId', select: 'name type areaId status leaderId', populate: { path: 'areaId', select: 'name code' } },
+            { path: 'providedBy', select: 'name shortName type' },
+          ]);
+          updatedEquipments.push(newTeamEquipment);
+        }
+      } else {
+        // Hàng tiêu hao hoặc xuất trực tiếp tại kho: Trừ kho vĩnh viễn
+        equipment.quantity -= consumeQty;
+        const consumeLog = `[Phiếu xuất cứu trợ tổng hợp: ${consumeQty} ${equipment.unit} -> ${destText}${recipText}${teamLog}${noteText}]`;
+        equipment.note = equipment.note ? `${equipment.note} | ${consumeLog}` : consumeLog;
+
+        if (equipment.quantity === 0) {
+          equipment.status = 'DAMAGED'; // Đánh dấu đã hết tồn kho
+        }
+
+        await equipment.save();
       }
 
-      await equipment.save();
       await equipment.populate([
         { path: 'teamId', select: 'name type areaId status leaderId', populate: { path: 'areaId', select: 'name code' } },
         { path: 'providedBy', select: 'name shortName type' },
