@@ -34,20 +34,21 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
         style={{
           background: '#ffffff',
           borderRadius: 12,
-          maxWidth: 680,
-          width: '100%',
+          maxWidth: 880,
+          width: '95%',
           boxShadow: '0 20px 40px -15px rgba(0,0,0,0.3)',
           border: '1px solid #e2e8f0',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
-          maxHeight: '90vh',
+          maxHeight: '88vh',
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
         <div
           style={{
+            flexShrink: 0,
             padding: '16px 20px',
             borderBottom: '1px solid #e2e8f0',
             background: '#f8fafc',
@@ -103,10 +104,11 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
         </div>
 
         {/* Modal Body */}
-        <div style={{ padding: '16px 20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ flex: 1, minHeight: 0, padding: '16px 20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Team Overview Card */}
           <div
             style={{
+              flexShrink: 0,
               display: 'grid',
               gridTemplateColumns: 'repeat(3, 1fr)',
               gap: 10,
@@ -137,13 +139,13 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
           </div>
 
           {/* Member Table */}
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <div style={{ flexShrink: 0, fontSize: 13, fontWeight: 800, color: '#0f172a', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
               Danh sách cán bộ chiến sĩ trong đội ({totalMembers})
             </div>
 
-            <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12.5 }}>
+            <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflowX: 'auto', background: '#ffffff' }}>
+              <table style={{ width: '100%', minWidth: 760, borderCollapse: 'collapse', textAlign: 'left', fontSize: 12.5 }}>
                 <thead>
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b', fontSize: 11.5, fontWeight: 700 }}>
                     <th style={{ padding: '9px 12px', width: 45, textAlign: 'center', whiteSpace: 'nowrap' }}>STT</th>
@@ -297,18 +299,23 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
         {/* Modal Footer */}
         <div
           style={{
+            flexShrink: 0,
             padding: '12px 20px',
             borderTop: '1px solid #e2e8f0',
             background: '#f8fafc',
             display: 'flex',
-            justifyContent: 'flex-end',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
+          <div style={{ fontSize: 12, color: '#64748b' }}>
+            Tổng số: <strong style={{ color: '#0f172a' }}>{totalMembers}</strong> thành viên trực chiến
+          </div>
           <button
             type="button"
             onClick={onClose}
             style={{
-              padding: '8px 18px',
+              padding: '8px 20px',
               background: '#0f172a',
               color: '#ffffff',
               border: 'none',

@@ -17,10 +17,9 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import type { SosRequestItem } from '@/types/dashboard';
-import { fetchSosRequests, completeSosRequest, approveSuppliesApi, rejectSuppliesApi } from '@/api';
+import { fetchSosRequests, approveSuppliesApi, rejectSuppliesApi } from '@/api';
 import { getSocket } from '@/services/socketService';
 import { onSosCreated, onSosUpdated, onAssignmentUpdated } from '@/services/socketService';
-import { toast } from '@/components/common/toast';
 import '@/features/sos/SosRequestsView.css';
 import './CoordinationView.css';
 
@@ -40,7 +39,6 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
   const [refreshIndex, setRefreshIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'CRITICAL' | 'EN_ROUTE' | 'ON_SCENE' | 'COMPLETED'>('ALL');
-  const [completingId, setCompletingId] = useState<string | null>(null);
   const [previewPhotos, setPreviewPhotos] = useState<{
     images: string[];
     activeIndex: number;
@@ -179,28 +177,6 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
       clearInterval(heartbeat);
     };
   }, [loadData]);
-
-  const handleCompleteSos = async (e: React.MouseEvent, sosId: string) => {
-    e.stopPropagation();
-    if (!window.confirm('Xác nhận hoàn thành nhiệm vụ cứu nạn này?')) return;
-    try {
-      setCompletingId(sosId);
-      if (sosId.startsWith('sos-dn-')) {
-        setSosList((prev) =>
-          prev.map((s) => (s._id === sosId ? { ...s, status: 'COMPLETED' } : s))
-        );
-      } else {
-        await completeSosRequest(sosId);
-        refreshData();
-      }
-      toast.success('Đã hoàn thành và đóng yêu cầu cứu hộ!', 'Nhiệm vụ hoàn tất');
-      window.dispatchEvent(new CustomEvent('sos_data_updated'));
-    } catch (err: any) {
-      toast.error(err?.message || 'Không thể cập nhật trạng thái nhiệm vụ', 'Lỗi điều phối');
-    } finally {
-      setCompletingId(null);
-    }
-  };
 
   // Helper chuẩn hóa trọng số tiến trình cứu hộ (để luôn lấy trạng thái tiến xa nhất giữa SOS và Assignment)
   const normalizeStatusRank = (status?: string): number => {
@@ -508,7 +484,6 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                   const citizenPhone = citizenInfo?.phone || 'Chưa có SĐT';
                   const isCritical = sos.priority === 'CRITICAL';
                   const effStatus = getEffectiveStatus(sos);
-                  const isCompleted = effStatus === 'COMPLETED';
 
                   return (
                     <tr key={sos._id} className="executive-table-row">
@@ -758,23 +733,6 @@ export const CoordinationView: React.FC<CoordinationViewProps> = ({
                             <MapPin size={12} />
                             <span>Bản đồ</span>
                           </button>
-
-                          {!isCompleted && (
-                            <button
-                              type="button"
-                              className="coordination-action-btn success"
-                              onClick={(e) => handleCompleteSos(e, sos._id)}
-                              disabled={completingId === sos._id}
-                              title="Xác nhận hoàn thành cứu nạn"
-                            >
-                              {completingId === sos._id ? (
-                                <Loader2 size={12} className="animate-spin" />
-                              ) : (
-                                <CheckCircle2 size={12} />
-                              )}
-                              <span>Xong</span>
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>

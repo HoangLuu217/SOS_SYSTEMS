@@ -526,21 +526,29 @@ class SosAssignmentService {
       );
     }
 
-    // Cứu hộ viên trong đội (hoặc đội trưởng / cán bộ / admin) có quyền tiếp nhận lệnh điều động
+    // Chỉ Đội trưởng đội cứu hộ mới có quyền tiếp nhận lệnh điều động
     if (currentUser && assignment.rescueTeamId) {
       const team = await RescueTeam.findById(assignment.rescueTeamId).select('leaderId members');
       if (team && team.leaderId) {
         const currentUserId = (currentUser._id || currentUser)?.toString();
         const isLeader = team.leaderId.toString() === currentUserId;
-        const isTeamMember = (team.members || []).some(
-          (m) => m.rescuerId && m.rescuerId.toString() === currentUserId
-        );
-        const isOfficerOrAdmin = currentUser.roles?.some((r) =>
-          ['ADMIN', 'SUPER_ADMIN', 'DISPATCHER', 'OFFICER', 'COORDINATOR', 'RESCUER'].includes(r)
-        );
         const isDirectRescuer = assignment.rescuerId?.toString() === currentUserId;
-        if (!isLeader && !isTeamMember && !isOfficerOrAdmin && !isDirectRescuer) {
-          throw new ApiError(403, 'Chỉ thành viên đội cứu hộ mới có quyền xác nhận tiếp nhận lệnh điều động');
+        const isAdmin = currentUser.roles?.some((r) => ['ADMIN', 'SUPER_ADMIN'].includes(r));
+
+        if (!isLeader && !isDirectRescuer && !isAdmin) {
+          const isTeamMember = (team.members || []).some(
+            (m) => m.rescuerId && m.rescuerId.toString() === currentUserId
+          );
+          if (isTeamMember) {
+            throw new ApiError(
+              403,
+              'Thành viên đội cứu hộ chỉ được xem nhiệm vụ, không có quyền xác nhận tiếp nhận lệnh điều động. Chỉ Đội trưởng mới có quyền này!'
+            );
+          }
+          throw new ApiError(
+            403,
+            'Địa phương hoặc người dùng không có quyền tiếp nhận nhiệm vụ. Nhiệm vụ chỉ do Đội trưởng đội cứu hộ tiếp nhận!'
+          );
         }
       }
     }
@@ -649,7 +657,7 @@ class SosAssignmentService {
 
     // Định nghĩa các luồng chuyển trạng thái hợp lệ
     const VALID_TRANSITIONS = {
-      PENDING: ['ACCEPTED', 'REJECTED', 'CANCELLED'],
+      PENDING: ['ACCEPTED', 'DISPATCHED', 'EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'RESCUING', 'COMPLETED', 'REJECTED', 'CANCELLED'],
       ACCEPTED: ['DISPATCHED', 'EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'RESCUING', 'COMPLETED', 'CANCELLED'],
       DISPATCHED: ['EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'RESCUING', 'COMPLETED', 'CANCELLED'],
       EN_ROUTE: ['ARRIVED', 'IN_PROGRESS', 'RESCUING', 'COMPLETED', 'CANCELLED'],
@@ -691,20 +699,28 @@ class SosAssignmentService {
       );
     }
 
-    // Kiểm tra quyền hạn: Chỉ đội trưởng mới được nhận lệnh (ACCEPTED) hoặc từ chối (REJECTED)
-    if (['ACCEPTED', 'REJECTED'].includes(targetStatus) && currentUser && assignment.rescueTeamId) {
-      const team = await RescueTeam.findById(assignment.rescueTeamId).select('leaderId');
+    // Kiểm tra quyền hạn: Chỉ Đội trưởng đội cứu hộ mới có quyền thay đổi trạng thái tác chiến hoặc hoàn thành nhiệm vụ
+    if (currentUser && assignment.rescueTeamId) {
+      const team = await RescueTeam.findById(assignment.rescueTeamId).select('leaderId members');
       if (team && team.leaderId) {
         const currentUserId = (currentUser._id || currentUser)?.toString();
         const isLeader = team.leaderId.toString() === currentUserId;
-        const isOfficerOrAdmin = currentUser.roles?.some((r) =>
-          ['ADMIN', 'SUPER_ADMIN', 'DISPATCHER', 'OFFICER', 'COORDINATOR'].includes(r)
-        );
         const isDirectRescuer = assignment.rescuerId?.toString() === currentUserId;
-        if (!isLeader && !isOfficerOrAdmin && !isDirectRescuer) {
+        const isAdmin = currentUser.roles?.some((r) => ['ADMIN', 'SUPER_ADMIN'].includes(r));
+
+        if (!isLeader && !isDirectRescuer && !isAdmin) {
+          const isTeamMember = (team.members || []).some(
+            (m) => m.rescuerId && m.rescuerId.toString() === currentUserId
+          );
+          if (isTeamMember) {
+            throw new ApiError(
+              403,
+              'Thành viên đội cứu hộ chỉ được xem nhiệm vụ, không có quyền thay đổi trạng thái hoặc hoàn thành nhiệm vụ. Chỉ Đội trưởng mới có quyền này!'
+            );
+          }
           throw new ApiError(
             403,
-            `Chỉ đội trưởng mới có quyền ${targetStatus === 'ACCEPTED' ? 'xác nhận tiếp nhận' : 'từ chối'} lệnh điều động`
+            'Địa phương hoặc người dùng không có quyền thay đổi trạng thái nhiệm vụ. Nhiệm vụ chỉ do Đội trưởng đội cứu hộ phụ trách và hoàn thành!'
           );
         }
       }
@@ -820,6 +836,7 @@ class SosAssignmentService {
             sos.proofImages = [
               ...new Set([...(sos.proofImages || []), ...extraData.proofImages]),
             ];
+            sos.images = (sos.images || []).filter((img) => !extraData.proofImages.includes(img));
           }
           await sos.save();
 
@@ -1139,9 +1156,10 @@ class SosAssignmentService {
         sos.resolvedAt = new Date();
       }
       if (extraData?.proofImages && Array.isArray(extraData.proofImages) && extraData.proofImages.length > 0) {
-        sos.images = [
-          ...new Set([...(sos.images || []), ...extraData.proofImages]),
+        sos.proofImages = [
+          ...new Set([...(sos.proofImages || []), ...extraData.proofImages]),
         ];
+        sos.images = (sos.images || []).filter((img) => !extraData.proofImages.includes(img));
       }
       await sos.save();
 
