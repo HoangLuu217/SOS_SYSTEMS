@@ -1,8 +1,9 @@
-import { Platform, Linking } from 'react-native';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
+import * as Linking from 'expo-linking';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { ENV } from './env';
 
