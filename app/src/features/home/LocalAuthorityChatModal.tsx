@@ -1105,7 +1105,7 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
     return 'Cán bộ trực ban';
   };
 
-  // Render thẻ hiển thị yêu cầu cứu hộ SOS (PHIÊN BẢN NGẮN GỌN TRONG CHAT, BẤM VÀO ĐỂ XEM CHI TIẾT)
+  // Render thẻ hiển thị yêu cầu cứu hộ SOS (PHIÊN BẢN 1 - 2 DÒNG SIÊU GỌN TRONG CHAT, BẤM VÀO ĐỂ XEM CHI TIẾT)
   const renderSosCard = (item: ChatMessageItem, isMe: boolean) => {
     const sos = parseSosMessageData(item);
     const isCancelled = sos.status === 'CANCELLED';
@@ -1123,7 +1123,7 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
         onPress={() => handlePressSosCard(sos)}
         activeOpacity={0.82}
       >
-        {/* Header rút gọn: Badge cảnh báo & Trạng thái (được căn chỉnh chống đè chữ) */}
+        {/* Dòng 1: Mã SOS & Loại khẩn cấp (trái) + Badge trạng thái (phải) */}
         <View style={styles.sosCompactTopRow}>
           <View style={styles.sosCompactBadge}>
             <Ionicons
@@ -1132,10 +1132,12 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
               color={isCancelled ? '#DC2626' : '#EF4444'}
             />
             <Text
-              style={[styles.sosCompactBadgeText, isCancelled && { color: '#DC2626' }]}
-              numberOfLines={1}
+              style={[styles.sosCompactCodeText, isCancelled && styles.sosCompactCodeTextCancelled]}
             >
-              YÊU CẦU CỨU NẠN
+              {sos.sosCode}
+            </Text>
+            <Text style={styles.sosCompactTypeText} numberOfLines={1}>
+              {sos.typeLabel}
             </Text>
           </View>
           <View style={[styles.sosCompactStatusPill, { backgroundColor: statusCfg.bgColor }]}>
@@ -1148,33 +1150,14 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
           </View>
         </View>
 
-        {/* Dòng chính: Mã SOS & Loại khẩn cấp */}
-        <View style={styles.sosCompactMainRow}>
-          <Text
-            style={[styles.sosCompactCodeText, isCancelled && styles.sosCompactCodeTextCancelled]}
-          >
-            {sos.sosCode}
-          </Text>
-          <Text style={styles.sosCompactTypeText} numberOfLines={1}>
-            {sos.typeLabel}
-          </Text>
-        </View>
-
-        {/* Địa chỉ tóm tắt (1 dòng) */}
-        {sos.address ? (
-          <View style={styles.sosCompactAddrRow}>
-            <Feather name="map-pin" size={12} color="#64748B" style={{ marginRight: 4 }} />
+        {/* Dòng 2: Địa chỉ & Số người (trái) + Gợi ý xem chi tiết (phải) */}
+        <View style={styles.sosCompactSecondRow}>
+          <View style={styles.sosCompactAddrWrap}>
+            <Feather name="map-pin" size={11} color="#64748B" style={{ marginRight: 3 }} />
             <Text style={styles.sosCompactAddrText} numberOfLines={1}>
-              {sos.address}
+              {sos.address ? `${sos.address} • ` : ''}{sos.people} người
             </Text>
           </View>
-        ) : null}
-
-        {/* Footer: Số lượng nạn nhân & Gợi ý ấn xem chi tiết */}
-        <View style={styles.sosCompactFooterRow}>
-          <Text style={styles.sosCompactVictimsText}>
-            <Feather name="users" size={11} color="#64748B" /> {sos.people} người gặp nạn
-          </Text>
           <View style={styles.sosCompactTapHint}>
             <Text
               style={[
@@ -1182,11 +1165,11 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
                 isClosed && { color: '#DC2626' },
               ]}
             >
-              {isCancelled ? 'Đã hủy (Chi tiết)' : 'Ấn xem chi tiết'}
+              {isCancelled ? 'Đã hủy' : 'Chi tiết'}
             </Text>
             <Feather
               name="chevron-right"
-              size={13}
+              size={11}
               color={isClosed ? '#DC2626' : '#0066FF'}
             />
           </View>
@@ -2762,10 +2745,8 @@ const styles = StyleSheet.create({
   sosPopupCard: {
     backgroundColor: '#FFF1F2',
     borderRadius: 14,
-    borderWidth: 1.2,
+    borderWidth: 1,
     borderColor: '#FECDD3',
-    borderLeftWidth: 4,
-    borderLeftColor: '#E11D48',
     padding: 10,
     shadowColor: '#E11D48',
     shadowOffset: { width: 0, height: 3 },
@@ -2877,16 +2858,12 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   sosCardMe: {
-    backgroundColor: '#FFF8F8',
-    borderColor: '#FECDD3',
-    borderLeftWidth: 4,
-    borderLeftColor: '#E11D48',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
   },
   sosCardOther: {
     backgroundColor: '#FFFFFF',
     borderColor: '#E2E8F0',
-    borderLeftWidth: 4,
-    borderLeftColor: '#E11D48',
   },
   sosCardHeader: {
     flexDirection: 'row',
@@ -2987,57 +2964,63 @@ const styles = StyleSheet.create({
     height: 68,
   },
 
-  // --- COMPACT SOS CARD IN CHAT STREAM ---
+  // --- COMPACT SOS CARD IN CHAT STREAM (1 - 2 DÒNG SIÊU GỌN) ---
   sosCardCompact: {
     width: 270,
     maxWidth: '100%',
     borderRadius: 12,
-    padding: 10,
-    borderWidth: 1.2,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderWidth: 1,
     marginVertical: 2,
   },
   sosCardCompactMe: {
-    backgroundColor: '#FFF8F8',
-    borderColor: '#FECDD3',
-    borderLeftWidth: 4,
-    borderLeftColor: '#E11D48',
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
   },
   sosCardCompactOther: {
     backgroundColor: '#FFFFFF',
     borderColor: '#E2E8F0',
-    borderLeftWidth: 4,
-    borderLeftColor: '#E11D48',
   },
   sosCardCompactCancelled: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     borderColor: '#E2E8F0',
-    borderLeftWidth: 4,
-    borderLeftColor: '#94A3B8',
   },
   sosCompactTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
     gap: 6,
   },
   sosCompactBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     flexShrink: 1,
-    marginRight: 6,
+    marginRight: 4,
+    gap: 4,
   },
-  sosCompactBadgeText: {
+  sosCompactCodeText: {
+    fontSize: 12.5,
+    fontWeight: '900',
+    color: '#9F1239',
+  },
+  sosCompactCodeTextCancelled: {
+    color: '#94A3B8',
+    textDecorationLine: 'line-through',
+  },
+  sosCompactTypeText: {
     fontSize: 10.5,
-    fontWeight: '800',
-    color: '#E11D48',
-    marginLeft: 4,
-    letterSpacing: 0.2,
+    fontWeight: '700',
+    color: '#1E293B',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
     flexShrink: 1,
   },
   sosCompactStatusPill: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
     borderRadius: 5,
     flexShrink: 0,
     alignSelf: 'center',
@@ -3046,62 +3029,32 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     fontWeight: '700',
   },
-  sosCompactMainRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 3,
-  },
-  sosCompactCodeText: {
-    fontSize: 13.5,
-    fontWeight: '900',
-    color: '#9F1239',
-    marginRight: 6,
-  },
-  sosCompactCodeTextCancelled: {
-    color: '#94A3B8',
-    textDecorationLine: 'line-through',
-  },
-  sosCompactTypeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1E293B',
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 4,
-    flexShrink: 1,
-  },
-  sosCompactAddrRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-  sosCompactAddrText: {
-    fontSize: 11.5,
-    color: '#475569',
-    flex: 1,
-  },
-  sosCompactFooterRow: {
+  sosCompactSecondRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 5,
-    borderTopWidth: 0.8,
-    borderTopColor: '#FEE2E2',
-    marginTop: 2,
+    gap: 6,
+    marginTop: 5,
   },
-  sosCompactVictimsText: {
+  sosCompactAddrWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 6,
+  },
+  sosCompactAddrText: {
     fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
+    color: '#475569',
+    flex: 1,
   },
   sosCompactTapHint: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 1,
+    flexShrink: 0,
   },
   sosCompactTapHintText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
     color: '#0066FF',
   },
