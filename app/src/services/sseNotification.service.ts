@@ -78,6 +78,14 @@ class SSENotificationService {
               const payload = JSON.parse(jsonStr);
 
               if (
+                payload?.action === 'WEATHER_ARTICLES_UPDATED' ||
+                payload?.data?.type === 'WEATHER_ARTICLES_SYNC'
+              ) {
+                console.log('⚡ [SSE_NOTIFICATION] Đồng bộ tin tức thời tiết realtime');
+                DeviceEventEmitter.emit('weather:articles_updated', payload);
+              }
+
+              if (
                 payload?.data?.type === 'SOS_SYNC' ||
                 payload?.data?.type === 'RELIEF_MISSION' ||
                 payload?.data?.action === 'ASSIGNED' ||
@@ -111,39 +119,67 @@ class SSENotificationService {
 
               if (payload && (payload.action === 'BROADCAST' || payload.action === 'USER')) {
                 const eventType = payload?.data?.type || payload?.type;
-                const sourceData = payload.data || payload.notification || {};
-                const rawTitle = String(sourceData?.title || payload.title || '').trim();
+                if (eventType === 'RESCUER_APPLICATION') {
+                  continue;
+                }
+
+                const source =
+                  (payload.notification && typeof payload.notification === 'object'
+                    ? payload.notification
+                    : null) ||
+                  (payload.data && typeof payload.data === 'object' ? payload.data : null) ||
+                  payload;
+                const rawNested =
+                  source.data && typeof source.data === 'object'
+                    ? source.data
+                    : payload.data && typeof payload.data === 'object' && source !== payload.data
+                    ? payload.data
+                    : source !== payload
+                    ? source
+                    : {};
+                const nestedData = {
+                  ...(payload.broadcastId ? { broadcastId: payload.broadcastId } : {}),
+                  ...rawNested,
+                };
+                const rawTitle = String(
+                  source.title || payload.title || nestedData.title || ''
+                ).trim();
                 const rawContent = String(
-                  sourceData?.content ||
+                  source.content ||
                     payload.content ||
-                    sourceData?.body ||
+                    source.body ||
                     payload.body ||
-                    sourceData?.message ||
+                    source.message ||
                     payload.message ||
+                    nestedData.content ||
+                    nestedData.body ||
                     ''
                 ).trim();
 
-                // Bỏ qua tín hiệu đồng bộ nội bộ (VD: RESCUER_APPLICATION) hoặc event rỗng tiêu đề/nội dung
-                // để không bị fallback nhầm thành cảnh báo điều động khẩn cấp.
-                if (eventType !== 'RESCUER_APPLICATION' && (rawTitle || rawContent)) {
-                  const combinedData = {
-                    ...(payload || {}),
-                    ...sourceData,
-                    title: rawTitle || undefined,
-                    content: rawContent,
-                    priority: sourceData?.priority || payload.priority || 'HIGH',
-                    type: sourceData?.type || payload.type || 'ALERT',
-                  };
-                  const item = this.normalizeNotification(combinedData);
-                  console.log(`📢 [SSE_NOTIFICATION] Nhận thông báo mới: "${item.title}"`);
-                  this.notificationListeners.forEach((fn) => {
-                    try {
-                      fn(item);
-                    } catch (e) {
-                      console.error('Lỗi listener SSE notification:', e);
-                    }
-                  });
+                // Chỉ phát tiếp nếu gói SSE thực sự mang tiêu đề hoặc nội dung hiển thị,
+                // tránh biến tín hiệu đồng bộ ngầm thành thông báo khẩn cấp giả
+                if (!rawTitle && !rawContent) {
+                  continue;
                 }
+
+                const combinedData = {
+                  ...(payload || {}),
+                  ...(source || {}),
+                  title: rawTitle,
+                  content: rawContent,
+                  priority: source.priority || payload.priority || nestedData.priority || 'HIGH',
+                  type: source.type || payload.type || nestedData.type || 'ALERT',
+                  data: nestedData,
+                };
+                const item = this.normalizeNotification(combinedData);
+                console.log(`📢 [SSE_NOTIFICATION] Nhận thông báo mới: "${item.title}"`);
+                this.notificationListeners.forEach((fn) => {
+                  try {
+                    fn(item);
+                  } catch (e) {
+                    console.error('Lỗi listener SSE notification:', e);
+                  }
+                });
               }
             } catch {
               // Dữ liệu heartbeat hoặc kết nối ban đầu

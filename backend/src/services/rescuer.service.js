@@ -435,10 +435,14 @@ class RescuerService {
 
       // 4. Push Notification tới điện thoại
       try {
-        if (user.pushToken) {
-          const { sendExpoPushNotification } = require('../utils/expoPush');
+        const {
+          sendExpoPushNotification,
+          extractUserExpoTokens,
+        } = require('../utils/expoPush');
+        const userTokens = extractUserExpoTokens(user);
+        if (userTokens.length > 0) {
           await sendExpoPushNotification({
-            to: user.pushToken,
+            tokens: userTokens,
             title: isApproved ? '🎉 Hồ sơ cứu hộ đã được phê duyệt!' : 'Hồ sơ cứu hộ',
             body: isApproved
               ? 'Hồ sơ Cứu hộ viên của bạn đã được phê duyệt thành công.'

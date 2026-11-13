@@ -7,14 +7,13 @@ import {
   updateWeatherArticleApi,
   deleteWeatherArticleApi,
   executeWeatherWorkflowApi,
-  cleanupExpiredWeatherArticlesApi,
   subscribeWeatherArticleUpdates,
   type WeatherArticleItem,
   type CreateWeatherPayload,
   type WeatherPaginationCounts,
 } from '@/api/weather.api';
 import { broadcastNotificationApi } from '@/api/alert.api';
-import { fetchAdministrativeAreas } from '@/api/area.api';
+import { fetchAdministrativeAreas, getDaNangAreaScope } from '@/api/area.api';
 import { toast } from '@/components/common/toast';
 import { useGlobalModals } from '@/hooks/useGlobalModals';
 import {
@@ -51,6 +50,7 @@ import {
   Send,
   Smartphone,
   Download,
+  PlusCircle,
 } from 'lucide-react';
 import './WeatherView.css';
 
@@ -175,41 +175,19 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     priority: 'HIGH',
     areaId: 'ALL',
   });
-  const [selectedProvinceId, setSelectedProvinceId] = useState<string>('ALL');
   const [broadcasting, setBroadcasting] = useState<boolean>(false);
   const [administrativeAreas, setAdministrativeAreas] = useState<AdministrativeAreaItem[]>([]);
 
-  const areaById = useMemo(
-    () => new Map(administrativeAreas.map((area) => [area._id, area])),
+  const { areaById, daNangProvince, daNangProvinceId, daNangWards } = useMemo(
+    () => getDaNangAreaScope(administrativeAreas),
     [administrativeAreas]
   );
 
-  const getProvinceId = useCallback(
-    (area?: AdministrativeAreaItem): string | null => {
-      let current = area;
-      while (current) {
-        if (current.type === 'PROVINCE') return current._id;
-        const parentId =
-          typeof current.parentId === 'string' ? current.parentId : current.parentId?._id;
-        current = parentId ? areaById.get(parentId) : undefined;
-      }
-      return null;
-    },
-    [areaById]
-  );
-
-  const provinceAreas = useMemo(
-    () => administrativeAreas.filter((area) => area.type === 'PROVINCE'),
-    [administrativeAreas]
-  );
-
-  const wardAreas = useMemo(
-    () =>
-      administrativeAreas.filter(
-        (area) => area.type === 'WARD' && getProvinceId(area) === selectedProvinceId
-      ),
-    [administrativeAreas, getProvinceId, selectedProvinceId]
-  );
+  useEffect(() => {
+    if (broadcastModalItem && daNangProvinceId && (!broadcastForm.areaId || broadcastForm.areaId === 'ALL')) {
+      setBroadcastForm((prev) => ({ ...prev, areaId: daNangProvinceId }));
+    }
+  }, [broadcastModalItem, daNangProvinceId, broadcastForm.areaId]);
 
   // Form values
   const [formValues, setFormValues] = useState<CreateWeatherPayload>({
@@ -227,7 +205,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     status: 'ACTIVE',
   });
 
-  const canManage = Boolean(user?.roles?.includes('ADMIN'));
+  const canManage = Boolean(user?.roles?.some((r) => ['ADMIN', 'LOCAL_AUTHORITY', 'MANAGER'].includes(r)));
   const canRunWorkflow = Boolean(user?.roles?.includes('ADMIN'));
 
   // Fetch articles from API
@@ -241,10 +219,10 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
           activeTab === 'approved'
             ? 'approved'
             : activeTab === 'pending'
-            ? 'pending'
-            : activeTab === 'archived'
-            ? 'archived'
-            : undefined;
+              ? 'pending'
+              : activeTab === 'archived'
+                ? 'archived'
+                : undefined;
 
         const res = await fetchWeatherArticlesApi({
           search: searchTerm.trim() || undefined,
@@ -323,10 +301,10 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
 
   // Realtime updates from n8n / backend SSE
   useEffect(() => {
-    const unsubscribe = subscribeWeatherArticleUpdates(async () => {
+    const unsubscribe = subscribeWeatherArticleUpdates(async (payload) => {
       if (document.visibilityState === 'visible') {
         const refreshed = await fetchArticles({ silent: true });
-        if (refreshed && !runningWorkflow) {
+        if (refreshed && !runningWorkflow && (!payload?.source || payload.source === 'workflow')) {
           toast.success('Dữ liệu thời tiết vừa được cập nhật từ crawler!');
         }
       }
@@ -360,31 +338,23 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     }
   };
 
-  const [cleaningExpired, setCleaningExpired] = useState<boolean>(false);
-
-  const handleCleanupExpired = () => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Xác nhận dọn dẹp bản tin quá hạn',
-      message:
-        'Hệ thống sẽ quét và xóa các bản tin CHƯA DUYỆT (pending) có ngày xuất bản quá 2 ngày so với hiện tại. Các bản tin đã duyệt sẽ được giữ an toàn tuyệt đối. Bạn có muốn tiếp tục?',
-      type: 'warning',
-      confirmText: 'Xác nhận dọn dẹp',
-      cancelText: 'Hủy bỏ',
-      onConfirm: async () => {
-        try {
-          setCleaningExpired(true);
-          const res = await cleanupExpiredWeatherArticlesApi(2);
-          const count = res.data?.deletedCount ?? 0;
-          toast.success(res.message || `Đã dọn dẹp thành công ${count} bản tin quá hạn!`);
-          fetchArticles();
-        } catch (err: any) {
-          toast.error(err.message || 'Không thể dọn dẹp bản tin quá hạn');
-        } finally {
-          setCleaningExpired(false);
-        }
-      },
+  const handleOpenCreateModal = () => {
+    setEditingItem(null);
+    setFormValues({
+      title: '',
+      content: '',
+      summary: '',
+      category: 'mua_lu',
+      score: 80,
+      area: '',
+      imageUrl: '',
+      articleUrl: '',
+      articleTitle: '',
+      sourceName: user?.fullName ? `Ban Chỉ Huy PCTT (${user.fullName})` : 'Ban Chỉ Huy PCTT',
+      publishedAt: toDateInputValue(new Date().toISOString()),
+      status: 'ACTIVE',
     });
+    setIsFormOpen(true);
   };
 
   const handleOpenEditModal = (item: WeatherArticleItem) => {
@@ -446,25 +416,14 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
       initialPriority = 'HIGH';
     }
 
-    const defaultAreaId =
+    const rawAreaId =
       typeof item.areaId === 'object' && item.areaId?._id
         ? item.areaId._id
         : typeof item.areaId === 'string' && item.areaId
-        ? item.areaId
-        : 'ALL';
-
-    if (defaultAreaId !== 'ALL') {
-      const matchedArea = areaById.get(defaultAreaId);
-      if (matchedArea?.type === 'WARD') {
-        setSelectedProvinceId(getProvinceId(matchedArea) || 'ALL');
-      } else if (matchedArea?.type === 'PROVINCE') {
-        setSelectedProvinceId(matchedArea._id);
-      } else {
-        setSelectedProvinceId('ALL');
-      }
-    } else {
-      setSelectedProvinceId('ALL');
-    }
+          ? item.areaId
+          : '';
+    const isDaNangWard = rawAreaId ? daNangWards.some((w) => w._id === rawAreaId) : false;
+    const defaultAreaId = isDaNangWard ? rawAreaId : daNangProvinceId || 'ALL';
 
     setBroadcastForm({
       title: item.title || '',
@@ -504,7 +463,10 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
       const imageUrl = broadcastModalItem.imageUrl || broadcastModalItem.image_url;
       const articleUrl = broadcastModalItem.articleUrl || broadcastModalItem.source_url;
       const sourceName = broadcastModalItem.sourceName || broadcastModalItem.source_name;
-      const targetAreaId = broadcastForm.areaId === 'ALL' ? undefined : broadcastForm.areaId;
+      const targetAreaId =
+        broadcastForm.areaId && broadcastForm.areaId !== 'ALL'
+          ? broadcastForm.areaId
+          : daNangProvinceId || undefined;
 
       await broadcastNotificationApi({
         title: broadcastForm.title.trim(),
@@ -576,12 +538,12 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     }
   };
 
-  // Lưu trữ hoặc từ chối bản tin
+  // Lưu trữ hoặc từ chối bản tin (Chỉ lưu tối đa 2 ngày, sau đó hệ thống tự xóa vĩnh viễn)
   const handleArchive = (item: WeatherArticleItem) => {
     setConfirmModal({
       isOpen: true,
       title: 'Xác nhận lưu trữ bản tin',
-      message: `Bạn có chắc chắn muốn chuyển bản tin này vào kho lưu trữ? Sau khi lưu trữ, bản tin sẽ không còn hiển thị công khai trên ứng dụng.`,
+      message: `Bạn có chắc chắn muốn chuyển bản tin này vào kho lưu trữ? Bản tin sẽ được lưu trữ tối đa trong 2 ngày, sau đó hệ thống sẽ tự động dọn dẹp và xóa vĩnh viễn khỏi CSDL.`,
       type: 'warning',
       confirmText: 'Xác nhận lưu trữ',
       cancelText: 'Hủy bỏ',
@@ -593,13 +555,41 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
       onConfirm: async () => {
         try {
           await deleteWeatherArticleApi(item._id);
-          toast.success('Đã chuyển bản tin vào lưu trữ');
+          toast.success('Đã chuyển bản tin vào lưu trữ (hệ thống tự động xóa sau 2 ngày)');
           if (detailItem?._id === item._id) {
             setDetailItem(null);
           }
           fetchArticles();
         } catch (err: any) {
           toast.error(err.message || 'Không thể lưu trữ bản tin');
+        }
+      },
+    });
+  };
+
+  // Xóa vĩnh viễn bản tin ngay lập tức (không chờ 2 ngày)
+  const handleDeletePermanent = (item: WeatherArticleItem) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Xác nhận xóa vĩnh viễn bản tin',
+      message: `Bản tin này đang nằm trong kho lưu trữ. Bạn có muốn xóa vĩnh viễn ngay lập tức khỏi cơ sở dữ liệu thay vì chờ tự động dọn sau 2 ngày?`,
+      type: 'danger',
+      confirmText: 'Xóa vĩnh viễn',
+      cancelText: 'Hủy bỏ',
+      details: [
+        { label: 'Tiêu đề', value: item.title },
+        { label: 'Khu vực', value: item.area || 'Toàn quốc' },
+      ],
+      onConfirm: async () => {
+        try {
+          await deleteWeatherArticleApi(item._id, { permanent: true });
+          toast.success('Đã xóa vĩnh viễn bản tin thời tiết khỏi hệ thống');
+          if (detailItem?._id === item._id) {
+            setDetailItem(null);
+          }
+          fetchArticles();
+        } catch (err: any) {
+          toast.error(err.message || 'Không thể xóa vĩnh viễn bản tin');
         }
       },
     });
@@ -633,6 +623,44 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
           fetchArticles();
         } catch (err: any) {
           toast.error(err.message || 'Lỗi khi duyệt hàng loạt');
+        } finally {
+          setBatchLoading(false);
+        }
+      },
+    });
+  };
+
+  // Batch action: Xóa đồng loạt nhiều bài viết đã chọn
+  const handleBatchDelete = () => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    setConfirmModal({
+      isOpen: true,
+      title: `Xác nhận xóa ${count} bản tin đã chọn`,
+      message: `Bạn có chắc chắn muốn xóa/lưu trữ đồng loạt ${count} bản tin đã chọn? Sau khi xóa, các bản tin này sẽ không còn hiển thị và bị gỡ bỏ khỏi ứng dụng di động.`,
+      type: 'danger',
+      confirmText: `Xóa ${count} bản tin`,
+      cancelText: 'Hủy bỏ',
+      onConfirm: async () => {
+        try {
+          setBatchLoading(true);
+          const ids = Array.from(selectedIds);
+          let successCount = 0;
+          await Promise.all(
+            ids.map(async (id) => {
+              try {
+                await deleteWeatherArticleApi(id);
+                successCount++;
+              } catch (e) {
+                console.error(`Lỗi xóa ID ${id}:`, e);
+              }
+            })
+          );
+          toast.success(`Đã xóa thành công ${successCount}/${ids.length} bản tin đã chọn!`);
+          setSelectedIds(new Set());
+          fetchArticles();
+        } catch (err: any) {
+          toast.error(err.message || 'Lỗi khi xóa đồng loạt bản tin');
         } finally {
           setBatchLoading(false);
         }
@@ -751,9 +779,20 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
         </div>
 
         <div className="weather-header-actions">
+          {canManage && (
+            <button
+              className="btn-primary-weather btn-create-weather"
+              onClick={handleOpenCreateModal}
+              title="Tạo thủ công bài tin tức / cảnh báo thời tiết mới"
+            >
+              <PlusCircle size={16} />
+              <span>Tạo bài tin tức thủ công</span>
+            </button>
+          )}
+
           {canRunWorkflow && (
             <button
-              className="btn-primary-weather"
+              className="btn-secondary-weather"
               onClick={handleRunWorkflow}
               disabled={runningWorkflow}
               title="Chạy workflow thu thập và phân loại bản tin thời tiết trên n8n"
@@ -762,17 +801,14 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
               {runningWorkflow ? 'Đang chạy workflow...' : 'Chạy thu thập ngay'}
             </button>
           )}
-          {canManage && (
-            <button
-              className="btn-secondary-weather"
-              onClick={handleCleanupExpired}
-              disabled={cleaningExpired}
-              title="Quét và xóa các bản tin chờ duyệt có ngày xuất bản quá 2 ngày so với hiện tại"
-            >
-              <Trash2 size={15} color="#dc2626" />
-              {cleaningExpired ? 'Đang dọn dẹp...' : 'Dọn tin cũ (>2 ngày)'}
-            </button>
-          )}
+
+          <div
+            className="weather-autoclean-tag"
+            title="Hệ thống chạy ngầm tự động xóa vĩnh viễn các bản tin lưu trữ (ARCHIVED) & tin pending cũ quá 2 ngày định kỳ mỗi 30 phút mà không cần thao tác nút nhấn."
+          >
+            <Sparkles size={13} color="#10b981" />
+            <span>Tự động dọn rác lưu trữ 2 ngày</span>
+          </div>
           <button
             className="btn-secondary-weather"
             onClick={handleExportWeatherCsv}
@@ -907,23 +943,44 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Batch Actions Bar for Pending Tab Table */}
-      {activeTab === 'pending' && selectedIds.size > 0 && (
+      {/* Thông báo chính sách dọn dẹp kho lưu trữ sau 2 ngày */}
+      {activeTab === 'archived' && (
+        <div className="weather-archive-notice-bar">
+          <Clock size={16} color="#d97706" />
+          <span>
+            <strong>Chính sách lưu trữ 2 ngày:</strong> Bản tin trong kho lưu trữ chỉ được giữ tối đa trong <strong>2 ngày</strong>. Hệ thống chạy tiến trình tự động ngầm quét và xóa vĩnh viễn khỏi CSDL sau 2 ngày mà không cần bấm nút dọn rác thủ công.
+          </span>
+        </div>
+      )}
+
+      {/* Batch Actions Bar for Selected Articles */}
+      {selectedIds.size > 0 && (
         <div className="weather-batch-bar">
           <div className="weather-batch-info">
             <CheckCheck size={18} color="#0284c7" />
             <span>
-              Đã chọn <strong>{selectedIds.size}</strong> bản tin chờ duyệt
+              Đã chọn <strong>{selectedIds.size}</strong> bản tin
+              {activeTab === 'pending' ? ' chờ duyệt' : ''}
             </span>
           </div>
           <div className="weather-batch-buttons">
+            {activeTab === 'pending' && (
+              <button
+                className="btn-batch-approve"
+                onClick={handleBatchApprove}
+                disabled={batchLoading}
+              >
+                <CheckCircle2 size={16} />
+                {batchLoading ? 'Đang duyệt...' : `Duyệt nhanh ${selectedIds.size} bản tin đã chọn`}
+              </button>
+            )}
             <button
-              className="btn-batch-approve"
-              onClick={handleBatchApprove}
+              className="btn-batch-delete"
+              onClick={handleBatchDelete}
               disabled={batchLoading}
             >
-              <CheckCircle2 size={16} />
-              {batchLoading ? 'Đang duyệt...' : `Duyệt nhanh ${selectedIds.size} bản tin đã chọn`}
+              <Trash2 size={15} />
+              {batchLoading ? 'Đang xóa...' : `Xóa ${selectedIds.size} bản tin đã chọn`}
             </button>
             <button className="btn-batch-clear" onClick={() => setSelectedIds(new Set())}>
               Bỏ chọn
@@ -946,8 +1003,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
             {activeTab === 'approved'
               ? 'Chưa có bản tin nào được phê duyệt. Hãy chuyển sang tab "Chờ kiểm duyệt" để duyệt các bản tin cào về!'
               : activeTab === 'pending'
-              ? 'Tất cả bản tin cào về đã được duyệt sạch sẽ! Nhấn "Chạy thu thập ngay" để AI cào thêm tin mới.'
-              : 'Không tìm thấy kết quả phù hợp với bộ lọc hiện tại.'}
+                ? 'Tất cả bản tin cào về đã được duyệt sạch sẽ! Nhấn "Chạy thu thập ngay" để AI cào thêm tin mới.'
+                : 'Không tìm thấy kết quả phù hợp với bộ lọc hiện tại.'}
           </p>
           {activeTab === 'approved' && globalCounts.pending > 0 && (
             <button
@@ -967,7 +1024,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
             <table className="weather-table">
               <thead>
                 <tr>
-                  {canManage && activeTab === 'pending' && (
+                  {canManage && (
                     <th style={{ width: 40, textAlign: 'center' }}>
                       <input
                         type="checkbox"
@@ -1000,11 +1057,10 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                   return (
                     <tr
                       key={item._id}
-                      className={`${isSelected ? 'row-selected' : ''} ${
-                        isPending ? 'row-pending' : ''
-                      }`}
+                      className={`${isSelected ? 'row-selected' : ''} ${isPending ? 'row-pending' : ''
+                        }`}
                     >
-                      {canManage && activeTab === 'pending' && (
+                      {canManage && (
                         <td style={{ textAlign: 'center' }}>
                           <input
                             type="checkbox"
@@ -1056,17 +1112,15 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                       <td style={{ textAlign: 'center' }}>
                         <div className="weather-score-cell">
                           <span
-                            className={`weather-score-tag ${
-                              score >= 80 ? 'high' : score >= 50 ? 'med' : 'low'
-                            }`}
+                            className={`weather-score-tag ${score >= 80 ? 'high' : score >= 50 ? 'med' : 'low'
+                              }`}
                           >
                             {score}/100
                           </span>
                           <div className="weather-score-bar">
                             <div
-                              className={`weather-score-bar-fill ${
-                                score >= 80 ? 'high' : score >= 50 ? 'med' : 'low'
-                              }`}
+                              className={`weather-score-bar-fill ${score >= 80 ? 'high' : score >= 50 ? 'med' : 'low'
+                                }`}
                               style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
                             />
                           </div>
@@ -1153,13 +1207,34 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                               >
                                 <Edit2 size={13} />
                               </button>
-                              <button
-                                className="btn-tbl-action btn-delete"
-                                onClick={() => handleArchive(item)}
-                                title="Lưu trữ / Từ chối bản tin"
-                              >
-                                <Trash2 size={13} />
-                              </button>
+                              {item.status === 'ARCHIVED' || item.status === 'rejected' ? (
+                                <>
+                                  <button
+                                    className="btn-tbl-action btn-revert"
+                                    onClick={() => handleRevertToPending(item)}
+                                    title="Khôi phục về Chờ duyệt"
+                                  >
+                                    <RotateCcw size={13} />
+                                    <span>Khôi phục</span>
+                                  </button>
+                                  <button
+                                    className="btn-tbl-action btn-delete"
+                                    onClick={() => handleDeletePermanent(item)}
+                                    title="Xóa vĩnh viễn khỏi CSDL ngay"
+                                    style={{ color: '#dc2626' }}
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  className="btn-tbl-action btn-delete"
+                                  onClick={() => handleArchive(item)}
+                                  title="Lưu trữ bản tin (tự động xóa sau 2 ngày)"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
                             </>
                           )}
                         </div>
@@ -1318,13 +1393,33 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                       >
                         <Edit2 size={14} />
                       </button>
-                      <button
-                        className="weather-btn-action delete"
-                        onClick={() => handleArchive(item)}
-                        title="Lưu trữ bản tin"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {item.status === 'ARCHIVED' || item.status === 'rejected' ? (
+                        <>
+                          <button
+                            className="weather-btn-action"
+                            onClick={() => handleRevertToPending(item)}
+                            title="Khôi phục về Chờ duyệt"
+                            style={{ color: '#0284c7' }}
+                          >
+                            <RotateCcw size={14} />
+                          </button>
+                          <button
+                            className="weather-btn-action delete"
+                            onClick={() => handleDeletePermanent(item)}
+                            title="Xóa vĩnh viễn khỏi CSDL ngay"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="weather-btn-action delete"
+                          onClick={() => handleArchive(item)}
+                          title="Lưu trữ bản tin (tự động xóa sau 2 ngày)"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1429,9 +1524,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
               {/* Dải nhãn thông tin quan trọng */}
               <div className="weather-detail-tags-strip">
                 <span
-                  className={`weather-badge-category ${
-                    CATEGORY_MAP[detailItem.category]?.colorClass || 'khac'
-                  }`}
+                  className={`weather-badge-category ${CATEGORY_MAP[detailItem.category]?.colorClass || 'khac'
+                    }`}
                 >
                   {CATEGORY_MAP[detailItem.category]?.icon}
                   {CATEGORY_MAP[detailItem.category]?.label || 'Thời tiết'}
@@ -1620,7 +1714,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
             <div className="weather-modal-header">
               <h3>
                 <CloudSun size={20} color="#0284c7" />
-                {editingItem ? 'CHỈNH SỬA BẢN TIN THỜI TIẾT' : 'TẠO MỚI BẢN TIN THỜI TIẾT'}
+                {editingItem ? 'CHỈNH SỬA BẢN TIN THỜI TIẾT' : 'TẠO BẢN TIN THỜI TIẾT THỦ CÔNG'}
               </h3>
               <button
                 className="weather-modal-close"
@@ -1673,18 +1767,36 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
 
                   <div className="weather-form-group">
                     <label className="weather-form-label">
-                      Khu vực cảnh báo <span className="required">*</span>
+                      Khu vực cảnh báo (Đà Nẵng) <span className="required">*</span>
                     </label>
                     <input
                       type="text"
                       required
-                      placeholder="VD: Quận Hải Châu, Đà Nẵng"
+                      list="weather-area-suggestions"
+                      placeholder="VD: Thành phố Đà Nẵng, Phường Hải Châu, Xã Hòa Vang..."
                       className="weather-form-input"
                       value={formValues.area}
-                      onChange={(e) =>
-                        setFormValues({ ...formValues, area: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const daNangOptions = daNangProvince ? [daNangProvince, ...daNangWards] : daNangWards;
+                        const matched = daNangOptions.find(
+                          (a) => a.name.toLowerCase() === val.trim().toLowerCase()
+                        );
+                        setFormValues({
+                          ...formValues,
+                          area: val,
+                          areaId: matched ? matched._id : formValues.areaId || daNangProvinceId || undefined,
+                        });
+                      }}
                     />
+                    <datalist id="weather-area-suggestions">
+                      {(daNangProvince ? [daNangProvince, ...daNangWards] : daNangWards).map((area) => (
+                        <option key={area._id} value={area.name}>
+                          {area.type === 'PROVINCE' ? '[Toàn TP Đà Nẵng] ' : '[Phường/Xã] '}
+                          {area.name}
+                        </option>
+                      ))}
+                    </datalist>
                   </div>
                 </div>
 
@@ -1822,7 +1934,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                   className="btn-primary-weather"
                   disabled={submitting}
                 >
-                  {submitting ? 'Đang lưu...' : 'Lưu cập nhật'}
+                  {submitting ? 'Đang lưu...' : editingItem ? 'Lưu cập nhật' : 'Tạo bản tin thủ công'}
                 </button>
               </div>
             </form>
@@ -1853,8 +1965,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                       broadcastForm.priority === 'CRITICAL'
                         ? '#fee2e2'
                         : broadcastForm.priority === 'HIGH'
-                        ? '#ffedd5'
-                        : '#e0f2fe',
+                          ? '#ffedd5'
+                          : '#e0f2fe',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -1862,8 +1974,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                       broadcastForm.priority === 'CRITICAL'
                         ? '#dc2626'
                         : broadcastForm.priority === 'HIGH'
-                        ? '#ea580c'
-                        : '#0284c7',
+                          ? '#ea580c'
+                          : '#0284c7',
                     flexShrink: 0,
                   }}
                 >
@@ -1935,9 +2047,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
                     <span
-                      className={`weather-badge-category ${
-                        CATEGORY_MAP[broadcastModalItem.category]?.colorClass || 'khac'
-                      }`}
+                      className={`weather-badge-category ${CATEGORY_MAP[broadcastModalItem.category]?.colorClass || 'khac'
+                        }`}
                       style={{ fontSize: '11px', padding: '2px 7px' }}
                     >
                       {CATEGORY_MAP[broadcastModalItem.category]?.label || 'Tin thời tiết'}
@@ -2072,54 +2183,35 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                 </div>
               </div>
 
-              {/* Phạm vi thông báo */}
+              {/* Phạm vi thông báo (Khu vực Đà Nẵng) */}
               <div className="weather-form-group" style={{ margin: 0 }}>
-                <label className="weather-form-label">Phạm vi phát thông báo (Khu vực nhận tin)</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <select
-                    className="weather-form-input"
-                    value={selectedProvinceId}
-                    onChange={(e) => {
-                      const provId = e.target.value || 'ALL';
-                      setSelectedProvinceId(provId);
-                      setBroadcastForm((prev) => ({ ...prev, areaId: provId }));
-                    }}
-                    disabled={broadcasting}
-                    aria-label="Chọn tỉnh thành"
-                  >
-                    <option value="ALL">Tất cả tỉnh/thành (Toàn quốc)</option>
-                    {provinceAreas.map((prov) => (
-                      <option key={prov._id} value={prov._id}>
-                        {prov.name} ({prov.code})
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    className="weather-form-input"
-                    value={areaById.get(broadcastForm.areaId)?.type === 'WARD' ? broadcastForm.areaId : ''}
-                    disabled={broadcasting || selectedProvinceId === 'ALL'}
-                    onChange={(e) => {
-                      const wardId = e.target.value;
-                      setBroadcastForm((prev) => ({
-                        ...prev,
-                        areaId: wardId || selectedProvinceId,
-                      }));
-                    }}
-                    aria-label="Chọn xã phường"
-                    style={{
-                      background: selectedProvinceId === 'ALL' ? '#f8fafc' : '#ffffff',
-                      color: selectedProvinceId === 'ALL' ? '#94a3b8' : '#0f172a',
-                    }}
-                  >
-                    <option value="">Tất cả xã/phường</option>
-                    {wardAreas.map((ward) => (
-                      <option key={ward._id} value={ward._id}>
-                        {ward.name} ({ward.code})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <label className="weather-form-label">
+                  Phạm vi phát thông báo — Phường / Xã ({daNangProvince?.name || 'Thành phố Đà Nẵng'})
+                </label>
+                <select
+                  className="weather-form-input"
+                  value={areaById.get(broadcastForm.areaId)?.type === 'WARD' ? broadcastForm.areaId : ''}
+                  disabled={broadcasting}
+                  onChange={(e) => {
+                    const wardId = e.target.value;
+                    setBroadcastForm((prev) => ({
+                      ...prev,
+                      areaId: wardId || daNangProvinceId || 'ALL',
+                    }));
+                  }}
+                  aria-label="Chọn xã phường"
+                  style={{
+                    background: '#ffffff',
+                    color: '#0f172a',
+                  }}
+                >
+                  <option value="">Tất cả Phường/Xã tại Đà Nẵng ({daNangWards.length})</option>
+                  {daNangWards.map((ward) => (
+                    <option key={ward._id} value={ward._id}>
+                      {ward.name} ({ward.code})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Live Preview trên điện thoại (Nền trắng đồng bộ) */}
@@ -2147,20 +2239,20 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                         broadcastForm.priority === 'CRITICAL'
                           ? '#fef2f2'
                           : broadcastForm.priority === 'HIGH'
-                          ? '#fff7ed'
-                          : '#f0f9ff',
+                            ? '#fff7ed'
+                            : '#f0f9ff',
                       color:
                         broadcastForm.priority === 'CRITICAL'
                           ? '#dc2626'
                           : broadcastForm.priority === 'HIGH'
-                          ? '#ea580c'
-                          : '#0284c7',
+                            ? '#ea580c'
+                            : '#0284c7',
                       border:
                         broadcastForm.priority === 'CRITICAL'
                           ? '1px solid #fecaca'
                           : broadcastForm.priority === 'HIGH'
-                          ? '1px solid #fed7aa'
-                          : '1px solid #bae6fd',
+                            ? '1px solid #fed7aa'
+                            : '1px solid #bae6fd',
                     }}
                   >
                     {broadcastForm.priority}
@@ -2181,8 +2273,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                     </div>
                     <span style={{ fontSize: '11px', color: '#475569', fontWeight: 600 }}>
                       {broadcastForm.areaId === 'ALL'
-                        ? 'Toàn quốc'
-                        : areaById.get(broadcastForm.areaId)?.name || 'Toàn quốc'}
+                        ? daNangProvince?.name || 'Thành phố Đà Nẵng'
+                        : areaById.get(broadcastForm.areaId)?.name || daNangProvince?.name || 'Thành phố Đà Nẵng'}
                     </span>
                   </div>
                   <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0f172a', marginBottom: '4px', lineHeight: 1.4 }}>
@@ -2251,8 +2343,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                     {broadcasting
                       ? 'Đang xử lý...'
                       : broadcastModalItem.status === 'pending'
-                      ? 'Duyệt & Đăng thông báo ngay'
-                      : 'Đăng thông báo ngay'}
+                        ? 'Duyệt & Đăng thông báo ngay'
+                        : 'Đăng thông báo ngay'}
                   </span>
                 </button>
               </div>

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   MapPin,
   Search,
-  Navigation,
   CheckCircle2,
   AlertTriangle,
   X,
@@ -28,16 +27,16 @@ import {
   deleteHazardReport,
   subscribeHazardEvents,
   fetchAdministrativeAreas,
-  fetchProvincesV2,
-  type ProvinceV2,
+  getDaNangAreaScope,
 } from '@/api';
-import { resolveGoogleMapsInput } from '@/utils/mapLinkParser';
+import { LocationSearchMapPicker } from '@/components/common/LocationSearchMapPicker';
 import { domainDService, JURISDICTION_CONFIGS, type JurisdictionConfig } from '@/services/domainDService';
 import { useGlobalModals } from '@/hooks/useGlobalModals';
 import {
   HAZARD_TYPE_OPTIONS,
   HazardTypeIcon,
   HazardMiniMap,
+  getHazardMarkerHtml,
 } from './hazardConstants';
 import './HazardReportsView.css';
 
@@ -71,7 +70,6 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
   const [hazardFilter, setHazardFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('ALL');
   const [managementScope, setManagementScope] = useState<'LOCAL' | 'CITY'>('LOCAL');
   const [selectedAdminProvince, setSelectedAdminProvince] = useState<string>('ALL');
-  const [allProvinces, setAllProvinces] = useState<ProvinceV2[]>([]);
   const [hazardSearchText, setHazardSearchText] = useState('');
   const [hazardPage, setHazardPage] = useState<number>(1);
   const [hazardSortField, setHazardSortField] = useState<'createdAt' | 'severity' | 'title' | 'district' | 'address' | 'status'>('createdAt');
@@ -96,9 +94,6 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
   const [editDescription, setEditDescription] = useState('');
   const [editReviewNote, setEditReviewNote] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
-  const [editMapLinkInput, setEditMapLinkInput] = useState('');
-  const [resolvingEditMapLink, setResolvingEditMapLink] = useState(false);
-  const [editMapLinkStatus, setEditMapLinkStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [editErrors, setEditErrors] = useState<{
     title?: string;
     address?: string;
@@ -122,9 +117,6 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
   const [createStatus, setCreateStatus] = useState<'APPROVED' | 'PENDING'>('APPROVED');
   const [createReviewNote, setCreateReviewNote] = useState('');
   const [submittingCreate, setSubmittingCreate] = useState(false);
-  const [createMapLinkInput, setCreateMapLinkInput] = useState('');
-  const [resolvingCreateMapLink, setResolvingCreateMapLink] = useState(false);
-  const [createMapLinkStatus, setCreateMapLinkStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [createErrors, setCreateErrors] = useState<{
     title?: string;
     address?: string;
@@ -199,13 +191,10 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
     }
   }, [propAreas.length]);
 
-  useEffect(() => {
-    fetchProvincesV2().then((list) => {
-      if (Array.isArray(list) && list.length > 0) {
-        setAllProvinces(list);
-      }
-    });
-  }, []);
+  const { daNangProvince, daNangProvinceId, daNangWards } = useMemo(
+    () => getDaNangAreaScope(areas),
+    [areas]
+  );
 
   domainDService.syncFromStoredAuthUser();
   const authUserStr = typeof localStorage !== 'undefined' ? localStorage.getItem('sos_auth_user') : null;
@@ -530,13 +519,19 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       return 'TP Đà Nẵng';
     };
 
-    // Hàm xác định điểm nguy hiểm có thuộc Tỉnh / Thành phố được chọn (cho Admin)
-    const isHazardInProvince = (r: HazardReportItem, provinceName: string): boolean => {
-      if (!provinceName || provinceName === 'ALL') return true;
-      const targetClean = provinceName
+    // Hàm xác định điểm nguy hiểm có thuộc Phường / Xã Đà Nẵng được chọn (cho Admin)
+    const isHazardInProvince = (r: HazardReportItem, selectedAreaName: string): boolean => {
+      if (!selectedAreaName || selectedAreaName === 'ALL') return true;
+      const targetClean = selectedAreaName
         .toLowerCase()
-        .replace(/^(tỉnh|thành phố|tp\.?)\s+/i, '')
+        .replace(/^(tỉnh|thành phố|tp\.?|phường|xã|thị trấn)\s+/i, '')
         .trim();
+
+      const itemAreaId = typeof r.areaId === 'object' ? (r.areaId as any)?._id : r.areaId;
+      const matchedWard = daNangWards.find((w) => w.name === selectedAreaName);
+      if (matchedWard && itemAreaId && String(itemAreaId) === String(matchedWard._id)) {
+        return true;
+      }
 
       const addr = (r.address || '').toLowerCase();
       const title = (r.title || '').toLowerCase();
@@ -557,50 +552,13 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
         }
       }
 
-      if (targetClean.includes('đà nẵng') || targetClean.includes('da nang')) {
-        const daNangDistricts = ['ngũ hành sơn', 'hải châu', 'sơn trà', 'thanh khê', 'cẩm lệ', 'liên chiểu', 'hòa vang', 'hoàng sa'];
-        if (daNangDistricts.some((d) => fullText.includes(d) || removeAccents(fullText).includes(removeAccents(d)))) {
-          return true;
-        }
-        const coords = r.location?.coordinates;
-        if (Array.isArray(coords) && coords.length === 2) {
-          const lng = Number(coords[0]);
-          const lat = Number(coords[1]);
-          if (lat >= 15.9 && lat <= 16.3 && lng >= 107.9 && lng <= 108.4) return true;
-        }
-      }
-
       return false;
     };
-
-    // Danh sách Tỉnh/Thành cho Admin kèm số lượng điểm nguy hiểm thực tế (không mock)
-    const adminProvinceOptions = useMemo(() => {
-      if (!isAdmin) return [];
-      const countsMap = new Map<string, number>();
-
-      allProvinces.forEach((p) => {
-        const c = hazardReports.filter((r) => isHazardInProvince(r, p.name)).length;
-        countsMap.set(p.name, c);
-      });
-
-      return [...allProvinces]
-        .map((p) => ({
-          code: p.code,
-          name: p.name,
-          count: countsMap.get(p.name) || 0,
-        }))
-        .sort((a, b) => {
-          if (a.count > 0 && b.count === 0) return -1;
-          if (a.count === 0 && b.count > 0) return 1;
-          if (b.count !== a.count) return b.count - a.count;
-          return a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' });
-        });
-    }, [isAdmin, allProvinces, hazardReports]);
 
     // 4. TẬP DỮ LIỆU ĐỊA PHƯƠNG & THÀNH PHỐ QUẢN LÝ
     const localReports = hazardReports.filter((r) => isHazardInOfficerJurisdiction(r));
 
-    // Lọc theo Cấp quản lý: Admin lọc theo 1 tab và chọn Tỉnh/Thành phố (Toàn quốc hoặc Tỉnh cụ thể), Cán bộ lọc theo Địa phương vs Tổng Tỉnh/Thành
+    // Lọc theo Cấp quản lý: Admin lọc khu vực Đà Nẵng (toàn Đà Nẵng hoặc theo Phường/Xã), Cán bộ lọc theo Địa phương vs Tổng khu vực
     const baseScopedReports = isAdmin
       ? (selectedAdminProvince === 'ALL'
           ? hazardReports
@@ -844,8 +802,6 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
             ? 'Đã thẩm định thông tin và phê duyệt đưa lên bản đồ tác chiến'
             : 'Đã xác minh và chuẩn hóa thông tin cảnh báo')
       );
-      setEditMapLinkInput('');
-      setEditMapLinkStatus(null);
       setEditErrors({});
     };
 
@@ -864,15 +820,15 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       let initAreaId = '';
       if (isAdmin) {
         if (selectedAdminProvince !== 'ALL') {
-          const matched = areas.find(
+          const matched = daNangWards.find(
             (a) =>
               String(a._id) === selectedAdminProvince ||
               a.name.toLowerCase().includes(selectedAdminProvince.toLowerCase()) ||
               selectedAdminProvince.toLowerCase().includes(a.name.toLowerCase())
           );
-          initAreaId = matched ? String(matched._id) : (areas[0] ? String(areas[0]._id) : '');
-        } else if (areas.length > 0) {
-          initAreaId = String(areas[0]._id);
+          initAreaId = matched ? String(matched._id) : daNangProvinceId || (areas[0] ? String(areas[0]._id) : '');
+        } else {
+          initAreaId = daNangProvinceId || (areas[0] ? String(areas[0]._id) : '');
         }
       } else {
         initAreaId = (validAreaById?._id as string) || (foundAreaByName?._id as string) || accountAreaId || '';
@@ -881,7 +837,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       setCreateHazardAreaId(initAreaId);
       setCreateAddress(
         isAdmin
-          ? selectedInitArea?.name || (selectedAdminProvince !== 'ALL' ? selectedAdminProvince : '')
+          ? selectedInitArea?.name || (selectedAdminProvince !== 'ALL' ? selectedAdminProvince : daNangProvince?.name || 'Thành phố Đà Nẵng')
           : accountAreaWithCity || accountAreaDisplayName
       );
       setCreateLat(defaultLat);
@@ -889,72 +845,24 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
       setCreateDescription('');
       setCreateStatus('APPROVED');
       setCreateReviewNote(isAdmin ? 'Điểm nguy hiểm được thiết lập bởi Quản Trị Viên Hệ Thống SOS' : `Điểm nguy hiểm được thiết lập bởi Cán bộ ${localTabLabel}`);
-      setCreateMapLinkInput('');
-      setCreateMapLinkStatus(null);
       setCreateErrors({});
       setIsCreateHazardOpen(true);
     };
 
-    // Chuyển đổi liên kết Google Maps sang tọa độ khi chỉnh sửa
-    const handleConvertEditMapLink = async (customText?: string) => {
-      const textToResolve = (typeof customText === 'string' ? customText : editMapLinkInput).trim();
-      if (!textToResolve) return;
-
-      setResolvingEditMapLink(true);
-      setEditMapLinkStatus(null);
-
-      try {
-        const res = await resolveGoogleMapsInput(textToResolve);
-        setEditLat(res.lat);
-        setEditLng(res.lng);
-        setEditErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-        if (res.placeName && (!editAddress || editAddress.trim().length <= 3)) {
-          setEditAddress(res.placeName);
-          setEditErrors((prev) => ({ ...prev, address: undefined }));
-        }
-        setEditMapLinkStatus({
-          type: 'success',
-          message: `Đã ghim tọa độ: [${res.lat}, ${res.lng}]${res.placeName ? ` - ${res.placeName}` : ''}`,
-        });
-      } catch (err: any) {
-        setEditMapLinkStatus({
-          type: 'error',
-          message: err.message || 'Không thể nhận diện tọa độ từ liên kết này.',
-        });
-      } finally {
-        setResolvingEditMapLink(false);
-      }
-    };
-
-    // Chuyển đổi liên kết Google Maps sang tọa độ khi tạo mới
-    const handleConvertCreateMapLink = async (customText?: string) => {
-      const textToResolve = (typeof customText === 'string' ? customText : createMapLinkInput).trim();
-      if (!textToResolve) return;
-
-      setResolvingCreateMapLink(true);
-      setCreateMapLinkStatus(null);
-
-      try {
-        const res = await resolveGoogleMapsInput(textToResolve);
-        setCreateLat(res.lat);
-        setCreateLng(res.lng);
-        setCreateErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-        if (res.placeName && (!createAddress || createAddress === (accountAreaWithCity || accountAreaDisplayName) || createAddress === localTabLabel)) {
-          setCreateAddress(res.placeName);
-          setCreateErrors((prev) => ({ ...prev, address: undefined }));
-        }
-        setCreateMapLinkStatus({
-          type: 'success',
-          message: `Đã ghim tọa độ: [${res.lat}, ${res.lng}]${res.placeName ? ` - ${res.placeName}` : ''}`,
-        });
-      } catch (err: any) {
-        setCreateMapLinkStatus({
-          type: 'error',
-          message: err.message || 'Không thể nhận diện tọa độ từ liên kết này.',
-        });
-      } finally {
-        setResolvingCreateMapLink(false);
-      }
+    const isPlaceholderHazardAddress = (value: string): boolean => {
+      const trimmed = value.trim();
+      if (!trimmed || trimmed.length <= 3) return true;
+      const placeholders = [
+        daNangProvince?.name,
+        'Thành phố Đà Nẵng',
+        accountAreaWithCity,
+        accountAreaDisplayName,
+        localTabLabel,
+      ].filter(Boolean);
+      return (
+        placeholders.includes(trimmed) ||
+        daNangWards.some((w) => w.name.trim() === trimmed)
+      );
     };
 
     // Gửi yêu cầu Tạo Điểm Nguy Hiểm Mới lên server
@@ -1031,6 +939,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
           createHazardAreaId ||
           (validAreaById?._id as string) ||
           (foundAreaByName?._id as string) ||
+          daNangProvinceId ||
           (areas[0]?._id as string) ||
           accountAreaId;
 
@@ -1460,7 +1369,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
               {isAdmin ? 'Phạm vi quản trị:' : 'Địa bàn phụ trách:'}
             </span>
             <strong style={{ color: '#0f172a', fontWeight: 700, fontSize: '14px' }}>
-              {isAdmin ? 'Toàn quốc' : accountAreaWithCity}
+              {isAdmin ? daNangProvince?.name || 'Thành phố Đà Nẵng' : accountAreaWithCity}
             </strong>
           </div>
 
@@ -1528,15 +1437,15 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                   setSelectedAdminProvince('ALL');
                   setHazardPage(1);
                 }}
-                title="Hiển thị tất cả điểm nguy hiểm trên toàn quốc"
+                title="Hiển thị tất cả điểm nguy hiểm tại Đà Nẵng"
               >
-                <span>{selectedAdminProvince === 'ALL' ? 'Toàn quốc' : selectedAdminProvince}</span>
+                <span>{selectedAdminProvince === 'ALL' ? 'Toàn Đà Nẵng' : selectedAdminProvince}</span>
                 <span className="sos-scope-badge">{baseScopedReports.length}</span>
               </button>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '4px' }}>
                 <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500 }}>
-                  Lọc theo Khu vực / Tỉnh thành:
+                  Lọc theo Phường / Xã (Đà Nẵng):
                 </span>
                 <select
                   value={selectedAdminProvince}
@@ -1558,36 +1467,12 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                   }}
                 >
-                  <option value="ALL">-- Tất cả Khu vực / Tỉnh thành (Toàn quốc) --</option>
-                  {areas.filter((a) => a.type === 'PROVINCE').length > 0 && (
-                    <optgroup label="Tỉnh / Thành phố (Trong CSDL Area)">
-                      {areas
-                        .filter((a) => a.type === 'PROVINCE')
-                        .map((a) => (
-                          <option key={`hf-prov-${a._id}`} value={a.name}>
-                            {a.name} {a.code ? `[${a.code}]` : ''}
-                          </option>
-                        ))}
-                    </optgroup>
-                  )}
-                  {areas.filter((a) => a.type === 'WARD').length > 0 && (
-                    <optgroup label="Phường / Xã (Trong CSDL Area)">
-                      {areas
-                        .filter((a) => a.type === 'WARD')
-                        .map((a) => (
-                          <option key={`hf-ward-${a._id}`} value={a.name}>
-                            {a.name} {a.code ? `[${a.code}]` : ''}
-                          </option>
-                        ))}
-                    </optgroup>
-                  )}
-                  <optgroup label="Danh mục Tỉnh / Thành phố">
-                    {adminProvinceOptions.map((p: { code?: number; name: string; count: number }) => (
-                      <option key={p.code || p.name} value={p.name}>
-                        {p.name} {p.count > 0 ? `(${p.count})` : ''}
-                      </option>
-                    ))}
-                  </optgroup>
+                  <option value="ALL">-- Tất cả Phường / Xã Đà Nẵng ({daNangWards.length}) --</option>
+                  {daNangWards.map((a) => (
+                    <option key={`hf-ward-${a._id}`} value={a.name}>
+                      {a.name} {a.code ? `[${a.code}]` : ''}
+                    </option>
+                  ))}
                 </select>
 
                 {selectedAdminProvince !== 'ALL' && (
@@ -1597,7 +1482,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                       setSelectedAdminProvince('ALL');
                       setHazardPage(1);
                     }}
-                    title="Quay lại xem Toàn quốc"
+                    title="Quay lại xem Toàn Đà Nẵng"
                     style={{
                       padding: '5px 10px',
                       fontSize: '12px',
@@ -1609,7 +1494,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                       fontWeight: 600,
                     }}
                   >
-                    ✕ Xem Toàn quốc
+                    ✕ Xem Toàn Đà Nẵng
                   </button>
                 )}
               </div>
@@ -3181,280 +3066,28 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     </div>
                   </div>
 
-                  {/* CỘT PHẢI: TỌA ĐỘ GPS, BẢN ĐỒ MINI & GHI CHÚ */}
+                  {/* CỘT PHẢI: TỌA ĐỘ GPS, BẢN ĐỒ TÌM KIẾM & GHI CHÚ */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    {/* Nhập link Google Maps hoặc tọa độ */}
-                    <div
-                      style={{
-                        background: '#f8fafc',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '8px',
-                        padding: '10px 12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '7px',
+                    <LocationSearchMapPicker
+                      lat={editLat}
+                      lng={editLng}
+                      markerHtml={getHazardMarkerHtml(editHazardType)}
+                      selectedAreaName={daNangProvince?.name || 'Thành phố Đà Nẵng'}
+                      accentColor="#dc2626"
+                      mapHeight={250}
+                      error={editErrors.coordinates}
+                      onLocationSelected={(newLat, newLng, detectedAddress) => {
+                        setEditLat(Number(newLat.toFixed(5)));
+                        setEditLng(Number(newLng.toFixed(5)));
+                        if (editErrors.coordinates) {
+                          setEditErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
+                        }
+                        if (detectedAddress && isPlaceholderHazardAddress(editAddress)) {
+                          setEditAddress(detectedAddress);
+                          setEditErrors((prev) => ({ ...prev, address: undefined, general: undefined }));
+                        }
                       }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <label
-                          style={{
-                            fontSize: '12.5px',
-                            fontWeight: 600,
-                            color: '#1e293b',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            margin: 0,
-                          }}
-                        >
-                          <MapPin size={14} color="#0284c7" />
-                          <span>Link Google Map - Tọa độ</span>
-                        </label>
-                        <span style={{ fontSize: '11px', color: '#64748b' }}>
-                          Hỗ trợ cả link rút gọn (maps.app.goo.gl)
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <div style={{ position: 'relative', flex: 1 }}>
-                          <input
-                            type="text"
-                            value={editMapLinkInput}
-                            onChange={(e) => {
-                              setEditMapLinkInput(e.target.value);
-                              if (editMapLinkStatus) setEditMapLinkStatus(null);
-                            }}
-                            onPaste={(e) => {
-                              const pastedText = e.clipboardData.getData('text');
-                              if (
-                                pastedText &&
-                                (pastedText.includes('google') ||
-                                  pastedText.includes('goo.gl') ||
-                                  pastedText.includes('http') ||
-                                  pastedText.includes(',') ||
-                                  pastedText.includes('°'))
-                              ) {
-                                setTimeout(() => handleConvertEditMapLink(pastedText), 50);
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleConvertEditMapLink();
-                              }
-                            }}
-                            placeholder="Dán link Google Maps hoặc tọa độ (ví dụ 16.0605, 108.2170)..."
-                            style={{
-                              width: '100%',
-                              padding: '7px 10px',
-                              paddingRight: editMapLinkInput ? '28px' : '10px',
-                              borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              fontSize: '12px',
-                              color: '#0f172a',
-                              background: '#ffffff',
-                              boxSizing: 'border-box',
-                            }}
-                          />
-                          {editMapLinkInput && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditMapLinkInput('');
-                                setEditMapLinkStatus(null);
-                              }}
-                              style={{
-                                position: 'absolute',
-                                right: '6px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                background: 'none',
-                                border: 'none',
-                                color: '#94a3b8',
-                                cursor: 'pointer',
-                                padding: '2px',
-                                display: 'flex',
-                                alignItems: 'center',
-                              }}
-                              title="Xóa nội dung"
-                            >
-                              <X size={13} />
-                            </button>
-                          )}
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleConvertEditMapLink()}
-                          disabled={resolvingEditMapLink || !editMapLinkInput.trim()}
-                          className="sos-btn-flat"
-                          style={{
-                            padding: '6px 12px',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            background: resolvingEditMapLink ? '#f1f5f9' : '#0284c7',
-                            color: resolvingEditMapLink ? '#94a3b8' : '#ffffff',
-                            borderColor: resolvingEditMapLink ? '#cbd5e1' : '#0284c7',
-                            cursor: resolvingEditMapLink || !editMapLinkInput.trim() ? 'not-allowed' : 'pointer',
-                            whiteSpace: 'nowrap',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                          }}
-                        >
-                          {resolvingEditMapLink ? (
-                            <>
-                              <Loader2 size={13} className="animate-spin" />
-                              <span>Đang xử lý...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Navigation size={13} />
-                              <span>Ghim vị trí</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      {editMapLinkStatus && (
-                        <div
-                          style={{
-                            fontSize: '11px',
-                            padding: '5px 8px',
-                            borderRadius: '5px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            background: editMapLinkStatus.type === 'success' ? '#f0fdf4' : '#fef2f2',
-                            color: editMapLinkStatus.type === 'success' ? '#166534' : '#991b1b',
-                            border: `1px solid ${editMapLinkStatus.type === 'success' ? '#bbf7d0' : '#fecaca'}`,
-                          }}
-                        >
-                          {editMapLinkStatus.type === 'success' ? (
-                            <CheckCircle2 size={12} style={{ flexShrink: 0 }} />
-                          ) : (
-                            <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                          )}
-                          <span>{editMapLinkStatus.message}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Tọa độ GPS */}
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
-                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', margin: 0 }}>
-                          Tọa độ GPS [Vĩ độ, Kinh độ]
-                        </label>
-                        <span style={{ fontSize: '11px', color: '#64748b' }}>
-                          Kéo ghim hoặc click trên bản đồ
-                        </span>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                        <div>
-                          <input
-                            type="number"
-                            step="0.00001"
-                            value={editLat}
-                            onChange={(e) => {
-                              setEditLat(parseFloat(e.target.value) || 0);
-                              if (editErrors.coordinates) {
-                                setEditErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-                              }
-                            }}
-                            onPaste={(e) => {
-                              const text = e.clipboardData.getData('text');
-                              if (
-                                text &&
-                                (text.includes('http') ||
-                                  text.includes('google') ||
-                                  text.includes(',') ||
-                                  text.includes('°'))
-                              ) {
-                                e.preventDefault();
-                                setEditMapLinkInput(text);
-                                handleConvertEditMapLink(text);
-                              }
-                            }}
-                            title="Vĩ độ (Latitude) - Có thể dán link Google Maps vào đây"
-                            style={{
-                              width: '100%',
-                              padding: '7px 10px',
-                              borderRadius: '6px',
-                              border: editErrors.coordinates ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                              background: editErrors.coordinates ? '#fff5f5' : '#ffffff',
-                              fontSize: '12.5px',
-                              color: '#0f172a',
-                              boxSizing: 'border-box',
-                              outline: 'none',
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <input
-                            type="number"
-                            step="0.00001"
-                            value={editLng}
-                            onChange={(e) => {
-                              setEditLng(parseFloat(e.target.value) || 0);
-                              if (editErrors.coordinates) {
-                                setEditErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-                              }
-                            }}
-                            onPaste={(e) => {
-                              const text = e.clipboardData.getData('text');
-                              if (
-                                text &&
-                                (text.includes('http') ||
-                                  text.includes('google') ||
-                                  text.includes(',') ||
-                                  text.includes('°'))
-                              ) {
-                                e.preventDefault();
-                                setEditMapLinkInput(text);
-                                handleConvertEditMapLink(text);
-                              }
-                            }}
-                            title="Kinh độ (Longitude) - Có thể dán link Google Maps vào đây"
-                            style={{
-                              width: '100%',
-                              padding: '7px 10px',
-                              borderRadius: '6px',
-                              border: editErrors.coordinates ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                              background: editErrors.coordinates ? '#fff5f5' : '#ffffff',
-                              fontSize: '12.5px',
-                              color: '#0f172a',
-                              boxSizing: 'border-box',
-                              outline: 'none',
-                            }}
-                          />
-                        </div>
-                      </div>
-                      {editErrors.coordinates && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
-                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                          <span>{editErrors.coordinates}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Bản đồ mini tương tác */}
-                    <div style={{ flex: 1, minHeight: '220px' }}>
-                      <HazardMiniMap
-                        lat={editLat}
-                        lng={editLng}
-                        title={editTitle || 'Vị trí điểm nguy hiểm'}
-                        hazardType={editHazardType}
-                        interactive={true}
-                        onLocationChange={(newLat, newLng) => {
-                          setEditLat(Number(newLat.toFixed(5)));
-                          setEditLng(Number(newLng.toFixed(5)));
-                          if (editErrors.coordinates) {
-                            setEditErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-                          }
-                        }}
-                      />
-                    </div>
+                    />
 
                     {/* Ghi chú chính quyền */}
                     <div>
@@ -3803,97 +3436,44 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                       </label>
                       {isAdmin ? (
                         (() => {
-                          const provinces = areas.filter((a) => a.type === 'PROVINCE');
                           const currentArea = areas.find((a) => String(a._id) === String(createHazardAreaId));
-                          const selectedProvId =
-                            currentArea?.type === 'PROVINCE'
-                              ? String(currentArea._id)
-                              : currentArea?.parentId
-                                ? String((currentArea.parentId as any)?._id || currentArea.parentId)
-                                : '';
-                          const childWards = selectedProvId
-                            ? areas.filter(
-                                (a) =>
-                                  a.type === 'WARD' &&
-                                  String((a.parentId as any)?._id || a.parentId) === selectedProvId
-                              )
-                            : [];
-                          const selectedProvObj = provinces.find((p) => String(p._id) === selectedProvId);
 
                           return (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              <div style={{ display: 'grid', gridTemplateColumns: selectedProvId ? '1fr 1fr' : '1fr', gap: '8px' }}>
-                                <div>
-                                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
-                                    1. Tỉnh / Thành phố
-                                  </div>
-                                  <select
-                                    value={selectedProvId}
-                                    onChange={(e) => {
-                                      const provId = e.target.value;
-                                      setCreateHazardAreaId(provId);
-                                      const found = areas.find((a) => String(a._id) === provId);
-                                      if (found && (!createAddress || areas.some((a) => a.name === createAddress))) {
-                                        setCreateAddress(found.name);
-                                      }
-                                    }}
-                                    style={{
-                                      width: '100%',
-                                      padding: '8px 10px',
-                                      borderRadius: '6px',
-                                      border: '1px solid #cbd5e1',
-                                      fontSize: '12.5px',
-                                      color: '#0f172a',
-                                      background: '#ffffff',
-                                      boxSizing: 'border-box',
-                                    }}
-                                  >
-                                    <option value="">-- Chọn Tỉnh / Thành phố (hoặc tự động theo GPS) --</option>
-                                    {provinces.map((p) => (
-                                      <option key={`h-prov-${p._id}`} value={p._id}>
-                                        {p.name}
-                                      </option>
-                                    ))}
-                                  </select>
+                              <div>
+                                <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
+                                  Phường / Xã ({daNangProvince?.name || 'Thành phố Đà Nẵng'})
                                 </div>
-
-                                {selectedProvId && (
-                                  <div>
-                                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
-                                      2. Phường / Xã nhận thông báo
-                                    </div>
-                                    <select
-                                      value={createHazardAreaId}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        setCreateHazardAreaId(val);
-                                        const found = areas.find((a) => String(a._id) === val);
-                                        if (found && (!createAddress || areas.some((a) => a.name === createAddress))) {
-                                          setCreateAddress(found.name);
-                                        }
-                                      }}
-                                      style={{
-                                        width: '100%',
-                                        padding: '8px 10px',
-                                        borderRadius: '6px',
-                                        border: '1px solid #cbd5e1',
-                                        fontSize: '12.5px',
-                                        color: '#0f172a',
-                                        background: '#ffffff',
-                                        boxSizing: 'border-box',
-                                      }}
-                                    >
-                                      <option value={selectedProvId}>
-                                        Toàn {selectedProvObj?.name || 'Tỉnh / Thành phố'}
-                                      </option>
-                                      {childWards.map((w) => (
-                                        <option key={`h-ward-${w._id}`} value={w._id}>
-                                          {w.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                )}
+                                <select
+                                  value={createHazardAreaId || daNangProvinceId}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setCreateHazardAreaId(val);
+                                    const found = areas.find((a) => String(a._id) === val);
+                                    if (found && (!createAddress || areas.some((a) => a.name === createAddress))) {
+                                      setCreateAddress(found.name);
+                                    }
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    padding: '8px 10px',
+                                    borderRadius: '6px',
+                                    border: '1px solid #cbd5e1',
+                                    fontSize: '12.5px',
+                                    color: '#0f172a',
+                                    background: '#ffffff',
+                                    boxSizing: 'border-box',
+                                  }}
+                                >
+                                  <option value={daNangProvinceId}>
+                                    Toàn {daNangProvince?.name || 'Thành phố Đà Nẵng'} ({daNangWards.length} Phường/Xã — hoặc tự động theo GPS)
+                                  </option>
+                                  {daNangWards.map((w) => (
+                                    <option key={`h-ward-${w._id}`} value={w._id}>
+                                      {w.name}
+                                    </option>
+                                  ))}
+                                </select>
                               </div>
 
                               <div
@@ -3907,7 +3487,7 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                                 }}
                               >
                                 Hệ thống sẽ tự động gửi thông báo đẩy theo tọa độ GPS cho toàn bộ người dân (Citizen) đang có mặt trong{' '}
-                                <strong>{currentArea?.name || 'khu vực mục tiêu được chọn'}</strong>.
+                                <strong>{currentArea?.name || daNangProvince?.name || 'Thành phố Đà Nẵng'}</strong>.
                               </div>
                             </div>
                           );
@@ -4022,304 +3602,28 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     </div>
                   </div>
 
-                  {/* CỘT PHẢI */}
+                  {/* CỘT PHẢI: TÌM KIẾM ĐỊA ĐIỂM, TỌA ĐỘ & BẢN ĐỒ */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    {/* Nhập link Google Maps hoặc tọa độ */}
-                    <div
-                      style={{
-                        background: '#f8fafc',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '8px',
-                        padding: '10px 12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '7px',
+                    <LocationSearchMapPicker
+                      lat={createLat}
+                      lng={createLng}
+                      markerHtml={getHazardMarkerHtml(createHazardType)}
+                      selectedAreaName={daNangProvince?.name || 'Thành phố Đà Nẵng'}
+                      accentColor="#dc2626"
+                      mapHeight={250}
+                      error={createErrors.coordinates}
+                      onLocationSelected={(newLat, newLng, detectedAddress) => {
+                        setCreateLat(Number(newLat.toFixed(5)));
+                        setCreateLng(Number(newLng.toFixed(5)));
+                        if (createErrors.coordinates) {
+                          setCreateErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
+                        }
+                        if (detectedAddress && isPlaceholderHazardAddress(createAddress)) {
+                          setCreateAddress(detectedAddress);
+                          setCreateErrors((prev) => ({ ...prev, address: undefined, general: undefined }));
+                        }
                       }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <label
-                          style={{
-                            fontSize: '12.5px',
-                            fontWeight: 600,
-                            color: '#1e293b',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            margin: 0,
-                          }}
-                        >
-                          <MapPin size={14} color="#0284c7" />
-                          <span>Link Google Map - Tọa độ</span>
-                        </label>
-                        <span style={{ fontSize: '11px', color: '#64748b' }}>
-                          Hỗ trợ cả link rút gọn (maps.app.goo.gl)
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <div style={{ position: 'relative', flex: 1 }}>
-                          <input
-                            type="text"
-                            value={createMapLinkInput}
-                            onChange={(e) => {
-                              setCreateMapLinkInput(e.target.value);
-                              if (createMapLinkStatus) setCreateMapLinkStatus(null);
-                            }}
-                            onPaste={(e) => {
-                              const pastedText = e.clipboardData.getData('text');
-                              if (
-                                pastedText &&
-                                (pastedText.includes('google') ||
-                                  pastedText.includes('goo.gl') ||
-                                  pastedText.includes('http') ||
-                                  pastedText.includes(',') ||
-                                  pastedText.includes('°'))
-                              ) {
-                                setTimeout(() => handleConvertCreateMapLink(pastedText), 50);
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleConvertCreateMapLink();
-                              }
-                            }}
-                            placeholder="Dán link Google Maps hoặc tọa độ (ví dụ 16.0605, 108.2170)..."
-                            style={{
-                              width: '100%',
-                              padding: '7px 10px',
-                              paddingRight: createMapLinkInput ? '28px' : '10px',
-                              borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              fontSize: '12px',
-                              color: '#0f172a',
-                              background: '#ffffff',
-                              boxSizing: 'border-box',
-                            }}
-                          />
-                          {createMapLinkInput && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCreateMapLinkInput('');
-                                setCreateMapLinkStatus(null);
-                              }}
-                              style={{
-                                position: 'absolute',
-                                right: '6px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                background: 'none',
-                                border: 'none',
-                                color: '#94a3b8',
-                                cursor: 'pointer',
-                                padding: '2px',
-                                display: 'flex',
-                                alignItems: 'center',
-                              }}
-                              title="Xóa nội dung"
-                            >
-                              <X size={13} />
-                            </button>
-                          )}
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleConvertCreateMapLink()}
-                          disabled={resolvingCreateMapLink || !createMapLinkInput.trim()}
-                          className="sos-btn-flat"
-                          style={{
-                            padding: '6px 12px',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            background: resolvingCreateMapLink ? '#f1f5f9' : '#0284c7',
-                            color: resolvingCreateMapLink ? '#94a3b8' : '#ffffff',
-                            borderColor: resolvingCreateMapLink ? '#cbd5e1' : '#0284c7',
-                            cursor: resolvingCreateMapLink || !createMapLinkInput.trim() ? 'not-allowed' : 'pointer',
-                            whiteSpace: 'nowrap',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                          }}
-                        >
-                          {resolvingCreateMapLink ? (
-                            <>
-                              <Loader2 size={13} className="animate-spin" />
-                              <span>Đang xử lý...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Navigation size={13} />
-                              <span>Ghim vị trí</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      {createMapLinkStatus && (
-                        <div
-                          style={{
-                            fontSize: '11px',
-                            padding: '5px 8px',
-                            borderRadius: '5px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            background: createMapLinkStatus.type === 'success' ? '#f0fdf4' : '#fef2f2',
-                            color: createMapLinkStatus.type === 'success' ? '#166534' : '#991b1b',
-                            border: `1px solid ${createMapLinkStatus.type === 'success' ? '#bbf7d0' : '#fecaca'}`,
-                          }}
-                        >
-                          {createMapLinkStatus.type === 'success' ? (
-                            <CheckCircle2 size={12} style={{ flexShrink: 0 }} />
-                          ) : (
-                            <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                          )}
-                          <span>{createMapLinkStatus.message}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Tọa độ GPS */}
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
-                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', margin: 0 }}>
-                          Tọa độ GPS [Vĩ độ, Kinh độ] <span style={{ color: '#dc2626' }}>*</span>
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (fixedJurisdictionConfig?.bounds) {
-                              const b = fixedJurisdictionConfig.bounds;
-                              setCreateLat(Number(((b.minLat + b.maxLat) / 2).toFixed(5)));
-                              setCreateLng(Number(((b.minLng + b.maxLng) / 2).toFixed(5)));
-                              if (createErrors.coordinates) {
-                                setCreateErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-                              }
-                            }
-                          }}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: '#0284c7',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            padding: 0,
-                          }}
-                        >
-                          📍 Tọa độ trung tâm địa bàn
-                        </button>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                        <div>
-                          <input
-                            type="number"
-                            step="0.00001"
-                            value={createLat}
-                            onChange={(e) => {
-                              setCreateLat(parseFloat(e.target.value) || 0);
-                              if (createErrors.coordinates) {
-                                setCreateErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-                              }
-                            }}
-                            onPaste={(e) => {
-                              const text = e.clipboardData.getData('text');
-                              if (
-                                text &&
-                                (text.includes('http') ||
-                                  text.includes('google') ||
-                                  text.includes(',') ||
-                                  text.includes('°'))
-                              ) {
-                                e.preventDefault();
-                                setCreateMapLinkInput(text);
-                                handleConvertCreateMapLink(text);
-                              }
-                            }}
-                            title="Vĩ độ (Latitude) - Có thể dán link Google Maps vào đây"
-                            style={{
-                              width: '100%',
-                              padding: '7px 10px',
-                              borderRadius: '6px',
-                              border: createErrors.coordinates ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                              background: createErrors.coordinates ? '#fff5f5' : '#ffffff',
-                              fontSize: '12.5px',
-                              color: '#0f172a',
-                              boxSizing: 'border-box',
-                              outline: 'none',
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <input
-                            type="number"
-                            step="0.00001"
-                            value={createLng}
-                            onChange={(e) => {
-                              setCreateLng(parseFloat(e.target.value) || 0);
-                              if (createErrors.coordinates) {
-                                setCreateErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-                              }
-                            }}
-                            onPaste={(e) => {
-                              const text = e.clipboardData.getData('text');
-                              if (
-                                text &&
-                                (text.includes('http') ||
-                                  text.includes('google') ||
-                                  text.includes(',') ||
-                                  text.includes('°'))
-                              ) {
-                                e.preventDefault();
-                                setCreateMapLinkInput(text);
-                                handleConvertCreateMapLink(text);
-                              }
-                            }}
-                            title="Kinh độ (Longitude) - Có thể dán link Google Maps vào đây"
-                            style={{
-                              width: '100%',
-                              padding: '7px 10px',
-                              borderRadius: '6px',
-                              border: createErrors.coordinates ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                              background: createErrors.coordinates ? '#fff5f5' : '#ffffff',
-                              fontSize: '12.5px',
-                              color: '#0f172a',
-                              boxSizing: 'border-box',
-                              outline: 'none',
-                            }}
-                          />
-                        </div>
-                      </div>
-                      {createErrors.coordinates && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
-                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                          <span>{createErrors.coordinates}</span>
-                        </div>
-                      )}
-                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
-                        💡 Click hoặc kéo ghim trên bản đồ để chọn tọa độ chính xác
-                      </div>
-                    </div>
-
-                    {/* Bản đồ mini tương tác */}
-                    <div style={{ flex: 1, minHeight: '220px' }}>
-                      <HazardMiniMap
-                        lat={createLat}
-                        lng={createLng}
-                        title={createTitle || 'Điểm nguy hiểm mới'}
-                        hazardType={createHazardType}
-                        interactive={true}
-                        onLocationChange={(newLat, newLng) => {
-                          setCreateLat(Number(newLat.toFixed(5)));
-                          setCreateLng(Number(newLng.toFixed(5)));
-                          if (createErrors.coordinates) {
-                            setCreateErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-                          }
-                        }}
-                      />
-                    </div>
+                    />
 
                     {/* Trạng thái công bố */}
                     <div>

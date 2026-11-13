@@ -6,7 +6,7 @@ const Notification = require('../models/Notification');
 const User = require('../models/User');
 const SosRequest = require('../models/SosRequest');
 const ApiError = require('../utils/apiError');
-const { sendExpoPushNotification } = require('../utils/expoPush');
+const { sendExpoPushNotification, collectExpoPushTargets } = require('../utils/expoPush');
 const eventBus = require('./eventBus');
 
 class SafetyCheckService {
@@ -272,16 +272,7 @@ class SafetyCheckService {
     }
 
     // Gửi Push Notification qua Expo
-    const uniquePushTokens = [];
-    recipientUsers.forEach((u) => {
-      const tokens = [u.pushToken, u.citizen?.pushToken].filter(Boolean);
-      tokens.forEach((t) => {
-        const trimmed = t.trim();
-        if (trimmed && !uniquePushTokens.includes(trimmed)) {
-          uniquePushTokens.push(trimmed);
-        }
-      });
-    });
+    const { uniqueTokens: uniquePushTokens } = collectExpoPushTargets(recipientUsers);
 
     if (uniquePushTokens.length > 0) {
       sendExpoPushNotification({
@@ -868,6 +859,33 @@ class SafetyCheckService {
       activeChecks,
       myResponses,
     };
+  }
+
+  /**
+   * Xóa đợt kiểm tra an toàn và các phản hồi, thông báo liên quan
+   */
+  async deleteSafetyCheck(user, safetyCheckId) {
+    if (!mongoose.Types.ObjectId.isValid(safetyCheckId)) {
+      throw new ApiError(400, 'Mã đợt kiểm tra không hợp lệ.');
+    }
+
+    const check = await SafetyCheck.findById(safetyCheckId);
+    if (!check) {
+      throw new ApiError(404, 'Không tìm thấy đợt kiểm tra an toàn.');
+    }
+
+    await SafetyCheck.findByIdAndDelete(safetyCheckId);
+    await SafetyCheckResponse.deleteMany({ safetyCheckId });
+    await Notification.deleteMany({
+      $or: [{ 'data.safetyCheckId': safetyCheckId }, { 'data.broadcastId': safetyCheckId }],
+    });
+
+    try {
+      eventBus.emit('safety_check_event', { action: 'DELETED', safetyCheckId });
+      eventBus.emit('notification_event', { action: 'DELETED', broadcastId: safetyCheckId });
+    } catch (_) {}
+
+    return { message: 'Đã xóa đợt kiểm tra an toàn thành công.' };
   }
 }
 

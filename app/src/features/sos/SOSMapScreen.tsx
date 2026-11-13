@@ -338,8 +338,17 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
     const sub = DeviceEventEmitter.addListener('EMERGENCY_CONTACTS_UPDATED', () => {
       loadSavedContacts();
     });
+    const subPrefill = DeviceEventEmitter.addListener('sos:prefill', (data: any) => {
+      if (data?.people && Number(data.people) > 0) {
+        handleSetPeople(Number(data.people));
+      }
+      if (data?.description && typeof data.description === 'string') {
+        setDescription(data.description);
+      }
+    });
     return () => {
       sub.remove();
+      subPrefill.remove();
     };
   }, []);
 
