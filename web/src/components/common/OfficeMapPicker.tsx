@@ -8,7 +8,8 @@ interface OfficeMapPickerProps {
   longitude: number | null;
   officeAddress: string;
   defaultCenter?: { lat: number; lng: number };
-  onChange: (next: {
+  readOnly?: boolean;
+  onChange?: (next: {
     mapUrl: string;
     latitude: number;
     longitude: number;
@@ -49,6 +50,7 @@ export const OfficeMapPicker: React.FC<OfficeMapPickerProps> = ({
   longitude,
   officeAddress,
   defaultCenter = { lat: 16.0544, lng: 108.2022 },
+  readOnly = false,
   onChange,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -85,6 +87,7 @@ export const OfficeMapPicker: React.FC<OfficeMapPickerProps> = ({
   };
 
   const handleSelectPoint = async (lat: number, lng: number) => {
+    if (readOnly || !onChangeRef.current) return;
     const nextUrl = buildGoogleMapsUrl(lat, lng);
     onChangeRef.current({
       mapUrl: nextUrl,
@@ -94,7 +97,7 @@ export const OfficeMapPicker: React.FC<OfficeMapPickerProps> = ({
     });
 
     const resolvedAddress = await reverseGeocode(lat, lng);
-    onChangeRef.current({
+    onChangeRef.current?.({
       mapUrl: nextUrl,
       latitude: lat,
       longitude: lng,
@@ -126,18 +129,20 @@ export const OfficeMapPicker: React.FC<OfficeMapPickerProps> = ({
 
     const marker = L.marker([currentLat, currentLng], {
       icon: pinIcon,
-      draggable: true,
+      draggable: !readOnly,
     }).addTo(map);
 
-    marker.on('dragend', () => {
-      const pos = marker.getLatLng();
-      void handleSelectPoint(pos.lat, pos.lng);
-    });
+    if (!readOnly) {
+      marker.on('dragend', () => {
+        const pos = marker.getLatLng();
+        void handleSelectPoint(pos.lat, pos.lng);
+      });
 
-    map.on('click', (e: L.LeafletMouseEvent) => {
-      marker.setLatLng(e.latlng);
-      void handleSelectPoint(e.latlng.lat, e.latlng.lng);
-    });
+      map.on('click', (e: L.LeafletMouseEvent) => {
+        marker.setLatLng(e.latlng);
+        void handleSelectPoint(e.latlng.lat, e.latlng.lng);
+      });
+    }
 
     mapRef.current = map;
     markerRef.current = marker;
@@ -168,6 +173,7 @@ export const OfficeMapPicker: React.FC<OfficeMapPickerProps> = ({
   }, [currentLat, currentLng]);
 
   const handleUrlInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (readOnly || !onChange) return;
     const val = e.target.value;
     const parsed = parseCoordsFromGoogleMapsUrl(val);
     if (parsed) {
@@ -178,7 +184,7 @@ export const OfficeMapPicker: React.FC<OfficeMapPickerProps> = ({
         officeAddress,
       });
       void reverseGeocode(parsed.lat, parsed.lng).then((addr) => {
-        onChangeRef.current({
+        onChangeRef.current?.({
           mapUrl: val,
           latitude: parsed.lat,
           longitude: parsed.lng,
@@ -206,8 +212,11 @@ export const OfficeMapPicker: React.FC<OfficeMapPickerProps> = ({
           <input
             type="url"
             value={mapUrl}
+            readOnly={readOnly}
+            disabled={readOnly}
             onChange={handleUrlInputChange}
-            placeholder="https://www.google.com/maps?q=16.070975,108.192211"
+            placeholder={readOnly ? 'Chưa cập nhật đường dẫn Google Maps' : 'https://www.google.com/maps?q=16.070975,108.192211'}
+            style={readOnly ? { background: '#f8fafc', color: '#475569', cursor: 'default' } : undefined}
           />
           <button
             type="button"
@@ -230,13 +239,15 @@ export const OfficeMapPicker: React.FC<OfficeMapPickerProps> = ({
             <span>
               {resolvingAddr
                 ? 'Đang xác định địa chỉ từ tọa độ...'
-                : officeAddress || 'Bấm lên bản đồ để ghim vị trí trụ sở Ủy ban'}
+                : officeAddress || (readOnly ? 'Chưa có địa chỉ trụ sở Ủy ban được ghim' : 'Bấm lên bản đồ để ghim vị trí trụ sở Ủy ban')}
             </span>
           </div>
           <div className="sos-office-map-hint-row">
             <span className="sos-office-map-hint-text">
-              <i className="bi bi-lightbulb-fill" style={{ color: '#eab308', marginRight: 4 }} />
-              Bấm hoặc kéo ghim trên bản đồ để chọn chính xác.
+              <i className={`bi ${readOnly ? 'bi-info-circle-fill' : 'bi-lightbulb-fill'}`} style={{ color: readOnly ? '#0284c7' : '#eab308', marginRight: 4 }} />
+              {readOnly
+                ? 'Vị trí trụ sở Ủy ban do cán bộ địa phương cập nhật (chỉ xem).'
+                : 'Bấm hoặc kéo ghim trên bản đồ để chọn chính xác.'}
             </span>
             <a
               href={effectiveMapUrl}

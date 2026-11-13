@@ -508,7 +508,6 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
     longitude: null,
     officeAddress: '',
   });
-  const [savingDetailMap, setSavingDetailMap] = useState(false);
 
   // Tải danh sách cán bộ, tổ chức, và danh mục tỉnh thành
   useEffect(() => {
@@ -753,47 +752,6 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
       setEditAuthError(err?.message || 'Lỗi kết nối khi cập nhật tài khoản.');
     } finally {
       setEditAuthSubmitting(false);
-    }
-  };
-
-  const handleSaveDetailMap = async () => {
-    if (!detailAuthority) return;
-    setSavingDetailMap(true);
-    try {
-      const payload: any = {
-        authority: {
-          areaId: detailAuthority.authority?.areaId,
-          areaName: detailAuthority.authority?.areaName,
-          department: detailAuthority.authority?.department,
-          position: detailAuthority.authority?.position,
-          mapUrl: detailMapState.mapUrl,
-          latitude: detailMapState.latitude,
-          longitude: detailMapState.longitude,
-          officeAddress: detailMapState.officeAddress,
-        },
-      };
-      const res = await updateAdminUser(detailAuthority._id, payload);
-      if (res.success) {
-        const updatedOfficer = res.data || {
-          ...detailAuthority,
-          authority: {
-            ...(detailAuthority.authority || {}),
-            mapUrl: detailMapState.mapUrl,
-            latitude: detailMapState.latitude,
-            longitude: detailMapState.longitude,
-            officeAddress: detailMapState.officeAddress,
-          },
-        };
-        setDetailAuthority(updatedOfficer);
-        toast.success('Đã lưu vị trí trụ sở Ủy ban trên bản đồ!', 'Lưu vị trí thành công');
-        refreshData();
-      } else {
-        toast.error(res.message || 'Không thể lưu vị trí bản đồ', 'Lỗi cập nhật');
-      }
-    } catch (err: any) {
-      toast.error(err?.message || 'Lỗi kết nối khi lưu vị trí bản đồ', 'Lỗi cập nhật');
-    } finally {
-      setSavingDetailMap(false);
     }
   };
 
@@ -1182,7 +1140,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                             cursor: 'pointer',
                           }}
                         >
-                          Mở bản đồ chỉnh sửa →
+                          Xem vị trí bản đồ →
                         </button>
                       </div>
                     </div>
@@ -1495,6 +1453,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                     </div>
                     <div className="auth-drawer-map-wrap">
                       <OfficeMapPicker
+                        readOnly={true}
                         mapUrl={detailMapState.mapUrl}
                         latitude={detailMapState.latitude}
                         longitude={detailMapState.longitude}
@@ -1503,28 +1462,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                           detailAuthority.authority?.areaName || '',
                           detailAuthority.authority?.department || ''
                         )}
-                        onChange={(next) => setDetailMapState(next)}
                       />
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 4 }}>
-                        <button
-                          type="button"
-                          className="executive-btn-primary"
-                          onClick={handleSaveDetailMap}
-                          disabled={savingDetailMap}
-                        >
-                          {savingDetailMap ? (
-                            <>
-                              <Loader2 size={15} className="animate-spin" />
-                              <span>Đang lưu vị trí...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Check size={15} />
-                              <span>Lưu vị trí bản đồ</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
                     </div>
                   </div>
                 )}
