@@ -85,7 +85,7 @@ const getSosRequests = async (req, res, next) => {
       delete query.areaId;
     }
     
-    const list = await sosService.getSosRequests(query);
+    const list = await sosService.getSosRequests(query, req.user);
     res.status(200).json({ success: true, count: list.length, data: list });
   } catch (error) {
     next(error);

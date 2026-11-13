@@ -98,10 +98,10 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
   // Xử lý chuyển bước trạng thái nhiệm vụ tác chiến
   const handleAdvanceStatus = async (nextStatus: string, confirmMsg?: string) => {
     if (!activeAssignment) return;
-    if (nextStatus === 'ACCEPTED' && !isLeader) {
+    if (!isLeader) {
       Alert.alert(
         'Chỉ Đội Trưởng',
-        'Chỉ Đội trưởng mới có quyền xác nhận tiếp nhận hoặc từ chối lệnh điều động.',
+        'Thành viên chỉ được theo dõi nhiệm vụ. Chỉ Đội trưởng mới có quyền thay đổi trạng thái tác chiến hoặc hoàn thành nhiệm vụ.',
         [{ text: 'Đã hiểu' }]
       );
       return;
@@ -396,66 +396,98 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
               )}
 
               {currentStatus === 'ACCEPTED' && (
-                <TouchableOpacity
-                  style={[styles.primaryActionBtn, { backgroundColor: '#F59E0B' }]}
-                  onPress={() => handleAdvanceStatus('EN_ROUTE')}
-                  activeOpacity={0.85}
-                >
-                  <MaterialCommunityIcons name="truck-fast" size={19} color="#FFFFFF" />
-                  <Text style={styles.primaryActionBtnText}>
-                    {isReliefMission ? 'Xuất Kho / Đang Vận Chuyển' : 'Xuất Phát / Đang Di Chuyển'}
-                  </Text>
-                </TouchableOpacity>
+                isLeader ? (
+                  <TouchableOpacity
+                    style={[styles.primaryActionBtn, { backgroundColor: '#F59E0B' }]}
+                    onPress={() => handleAdvanceStatus('EN_ROUTE')}
+                    activeOpacity={0.85}
+                  >
+                    <MaterialCommunityIcons name="truck-fast" size={19} color="#FFFFFF" />
+                    <Text style={styles.primaryActionBtnText}>
+                      {isReliefMission ? 'Xuất Kho / Đang Vận Chuyển' : 'Xuất Phát / Đang Di Chuyển'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={[styles.primaryActionBtn, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0', borderWidth: 1 }]}>
+                    <Text style={[styles.primaryActionBtnText, { color: '#64748B' }]}>
+                      Đã Nhận (Chờ Đội Trưởng Xuất Phát)
+                    </Text>
+                  </View>
+                )
               )}
 
               {['EN_ROUTE', 'DISPATCHED', 'ON_THE_WAY'].includes(currentStatus) && (
-                <TouchableOpacity
-                  style={[styles.primaryActionBtn, { backgroundColor: '#7C3AED' }]}
-                  onPress={() => handleAdvanceStatus('ARRIVED')}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="location" size={18} color="#FFFFFF" />
-                  <Text style={styles.primaryActionBtnText}>
-                    {isReliefMission ? 'Đã Đến Điểm Cứu Trợ' : 'Đã Tới Hiện Trường Cứu Trợ'}
-                  </Text>
-                </TouchableOpacity>
+                isLeader ? (
+                  <TouchableOpacity
+                    style={[styles.primaryActionBtn, { backgroundColor: '#7C3AED' }]}
+                    onPress={() => handleAdvanceStatus('ARRIVED')}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="location" size={18} color="#FFFFFF" />
+                    <Text style={styles.primaryActionBtnText}>
+                      {isReliefMission ? 'Đã Đến Điểm Cứu Trợ' : 'Đã Tới Hiện Trường Cứu Trợ'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={[styles.primaryActionBtn, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0', borderWidth: 1 }]}>
+                    <Text style={[styles.primaryActionBtnText, { color: '#64748B' }]}>
+                      Đang Di Chuyển Đến Hiện Trường
+                    </Text>
+                  </View>
+                )
               )}
 
               {currentStatus === 'ARRIVED' && (
-                <TouchableOpacity
-                  style={[styles.primaryActionBtn, { backgroundColor: '#EA580C' }]}
-                  onPress={() => handleAdvanceStatus('IN_PROGRESS')}
-                  activeOpacity={0.85}
-                >
-                  <MaterialCommunityIcons
-                    name={isReliefMission ? 'package-variant-closed' : 'lifebuoy'}
-                    size={19}
-                    color="#FFFFFF"
-                  />
-                  <Text style={styles.primaryActionBtnText}>
-                    {isReliefMission ? 'Bắt Đầu Cấp Phát Cứu Trợ' : 'Bắt Đầu Tác Chiến Cứu Nạn'}
-                  </Text>
-                </TouchableOpacity>
+                isLeader ? (
+                  <TouchableOpacity
+                    style={[styles.primaryActionBtn, { backgroundColor: '#EA580C' }]}
+                    onPress={() => handleAdvanceStatus('IN_PROGRESS')}
+                    activeOpacity={0.85}
+                  >
+                    <MaterialCommunityIcons
+                      name={isReliefMission ? 'package-variant-closed' : 'lifebuoy'}
+                      size={19}
+                      color="#FFFFFF"
+                    />
+                    <Text style={styles.primaryActionBtnText}>
+                      {isReliefMission ? 'Bắt Đầu Cấp Phát Cứu Trợ' : 'Bắt Đầu Tác Chiến Cứu Nạn'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={[styles.primaryActionBtn, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0', borderWidth: 1 }]}>
+                    <Text style={[styles.primaryActionBtnText, { color: '#64748B' }]}>
+                      Đã Đến Hiện Trường (Theo dõi)
+                    </Text>
+                  </View>
+                )
               )}
 
               {['IN_PROGRESS', 'RESCUING'].includes(currentStatus) && (
-                <TouchableOpacity
-                  style={[styles.primaryActionBtn, { backgroundColor: '#10B981' }]}
-                  onPress={() =>
-                    handleAdvanceStatus(
-                      'COMPLETED',
-                      isReliefMission
-                        ? 'Xác nhận bạn đã bàn giao đầy đủ hàng cứu trợ theo lệnh?'
-                        : 'Xác nhận bạn đã hoàn thành xuất sắc ca cứu nạn này?'
-                    )
-                  }
-                  activeOpacity={0.85}
-                >
-                  <Feather name="check-circle" size={18} color="#FFFFFF" />
-                  <Text style={styles.primaryActionBtnText}>
-                    {isReliefMission ? 'Xác Nhận Đã Bàn Giao Xong' : 'Xác Nhận Hoàn Thành Nhiệm Vụ'}
-                  </Text>
-                </TouchableOpacity>
+                isLeader ? (
+                  <TouchableOpacity
+                    style={[styles.primaryActionBtn, { backgroundColor: '#10B981' }]}
+                    onPress={() =>
+                      handleAdvanceStatus(
+                        'COMPLETED',
+                        isReliefMission
+                          ? 'Xác nhận bạn đã bàn giao đầy đủ hàng cứu trợ theo lệnh?'
+                          : 'Xác nhận bạn đã hoàn thành xuất sắc ca cứu nạn này?'
+                      )
+                    }
+                    activeOpacity={0.85}
+                  >
+                    <Feather name="check-circle" size={18} color="#FFFFFF" />
+                    <Text style={styles.primaryActionBtnText}>
+                      {isReliefMission ? 'Xác Nhận Đã Bàn Giao Xong' : 'Xác Nhận Hoàn Thành Nhiệm Vụ'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={[styles.primaryActionBtn, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0', borderWidth: 1 }]}>
+                    <Text style={[styles.primaryActionBtnText, { color: '#64748B' }]}>
+                      Đang Tác Chiến (Chờ Đội Trưởng Hoàn Tất)
+                    </Text>
+                  </View>
+                )
               )}
             </>
           )}

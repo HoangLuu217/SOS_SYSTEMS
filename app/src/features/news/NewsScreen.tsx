@@ -222,6 +222,16 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
 
   // Mở xem chi tiết
   const handleOpenDetail = async (item: NotificationItem) => {
+    const isChat = item.type === 'CHAT' || item.actionUrl === 'chat' || item.data?.isChat;
+    if (isChat) {
+      if (!item.isRead) {
+        await markAsRead(item._id);
+      }
+      if (onNavigateToTab) onNavigateToTab('home');
+      DeviceEventEmitter.emit('open:local_authority_chat', item.data || item);
+      return;
+    }
+
     setSelectedNotif(item);
     setDetailVisible(true);
 
@@ -505,9 +515,21 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
           }
         >
           {filteredList.map((item) => {
+            const isChat = item.type === 'CHAT' || item.actionUrl === 'chat' || item.data?.isChat;
             const cat = classifyNotification(item);
-            const meta = NOTIFICATION_CATEGORIES[cat] || NOTIFICATION_CATEGORIES.systemNotification;
-            const isCritical = item.priority === 'CRITICAL' || item.priority === 'HIGH';
+            const defaultMeta = NOTIFICATION_CATEGORIES[cat] || NOTIFICATION_CATEGORIES.systemNotification;
+            const meta = isChat
+              ? {
+                  ...defaultMeta,
+                  badgeLabel: 'ĐỊA PHƯƠNG PHẢN HỒI',
+                  badgeBg: '#E0F2FE',
+                  badgeTextColor: '#0284C7',
+                  bgColor: '#F0F9FF',
+                  color: '#0284C7',
+                  iconName: 'chatbubble-ellipses',
+                }
+              : defaultMeta;
+            const isCritical = !isChat && (item.priority === 'CRITICAL' || item.priority === 'HIGH');
             const imageUrl = item.imageUrl || item.data?.imageUrl;
             const articleUrl = item.articleUrl || item.data?.articleUrl || item.data?.url;
             const sourceName = item.sourceName || item.data?.sourceName;
@@ -602,7 +624,9 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
                     <View style={styles.senderWrap}>
                       <Ionicons name="person-circle-outline" size={13} color="#94A3B8" />
                       <Text style={styles.senderText} numberOfLines={1}>
-                        {sourceName || item.createdBy?.fullName || item.data?.senderName || 'Ban chỉ huy SOS'}
+                        {isChat
+                          ? (item.data?.department || (item.data?.senderName && !item.data.senderName.toLowerCase().includes('admin') ? item.data.senderName : 'Ban Chỉ Huy PCTT'))
+                          : (sourceName || item.createdBy?.fullName || item.data?.senderName || 'Ban chỉ huy SOS')}
                       </Text>
                     </View>
 
@@ -780,6 +804,23 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
                 >
                   <Ionicons name="shield-checkmark" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
                   <Text style={[styles.actionBtnPrimaryText, { fontWeight: '700' }]}>Xác nhận an toàn ngay</Text>
+                </TouchableOpacity>
+              ) : Boolean(
+                selectedNotif?.type === 'CHAT' ||
+                selectedNotif?.actionUrl === 'chat' ||
+                selectedNotif?.data?.isChat
+              ) ? (
+                <TouchableOpacity
+                  style={[styles.actionBtnPrimary, { backgroundColor: '#0284C7', flex: 1, paddingVertical: 14 }]}
+                  onPress={() => {
+                    setDetailVisible(false);
+                    if (onNavigateToTab) onNavigateToTab('home');
+                    DeviceEventEmitter.emit('open:local_authority_chat', selectedNotif?.data || selectedNotif);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="chatbubbles" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={[styles.actionBtnPrimaryText, { fontWeight: '700' }]}>Mở cuộc trò chuyện ngay</Text>
                 </TouchableOpacity>
               ) : Boolean(
                 selectedNotif?.type === 'BLOOD_DONATION' ||

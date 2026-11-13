@@ -6,46 +6,74 @@ const ApiError = require('../utils/apiError');
  * Tự động phân giải khu vực hành chính (AdministrativeArea) dựa vào địa chỉ & tọa độ
  */
 const resolveAdministrativeArea = async (address, location, inputAreaId) => {
+  let fallbackProvinceId = null;
+
   if (inputAreaId && mongoose.Types.ObjectId.isValid(inputAreaId) && String(inputAreaId) !== '650c1f1e1c9d440000a1b1c1') {
     const existing = await AdministrativeArea.findById(inputAreaId);
-    if (existing) return existing._id;
+    if (existing) {
+      if (existing.type !== 'PROVINCE') return existing._id;
+      fallbackProvinceId = existing._id;
+    }
   }
 
-  // 0. Nếu có tọa độ GPS hợp lệ, đối chiếu ranh giới không gian (Point-in-Polygon)
+  // 1. Ưu tiên khớp theo địa chỉ văn bản vào cấp hành chính chi tiết (WARD -> DISTRICT)
+  const addressStr = String(address || '').toLowerCase();
+  const allAreas = await AdministrativeArea.find({ status: 'ACTIVE' });
+
+  if (addressStr) {
+    const isDaNangOrQN =
+      addressStr.includes('đà nẵng') ||
+      addressStr.includes('da nang') ||
+      addressStr.includes('ngũ hành sơn') ||
+      addressStr.includes('điện bàn') ||
+      addressStr.includes('hải châu') ||
+      addressStr.includes('thanh khê') ||
+      addressStr.includes('liên chiểu') ||
+      addressStr.includes('sơn trà') ||
+      addressStr.includes('cẩm lệ');
+
+    const typeWeight = { WARD: 3, DISTRICT: 2, PROVINCE: 1 };
+    const sortedAreas = [...allAreas].sort((a, b) => {
+      if (isDaNangOrQN) {
+        const aIsLocal = /^(DAD|DANANG|VN48|DBD)/i.test(a.code || '') ? 1 : 0;
+        const bIsLocal = /^(DAD|DANANG|VN48|DBD)/i.test(b.code || '') ? 1 : 0;
+        if (bIsLocal !== aIsLocal) return bIsLocal - aIsLocal;
+      }
+      const weightDiff = (typeWeight[b.type] || 0) - (typeWeight[a.type] || 0);
+      if (weightDiff !== 0) return weightDiff;
+      return (b.name?.length || 0) - (a.name?.length || 0);
+    });
+
+    for (const a of sortedAreas) {
+      if (!a.name || a.type === 'PROVINCE') continue;
+      const cleanName = a.name
+        .toLowerCase()
+        .replace(/^(phường|xã|quận|huyện|thị trấn|thị xã|tp\.|thành phố)\s+/i, '')
+        .trim();
+      if (cleanName.length >= 3 && addressStr.includes(cleanName)) {
+        return a._id;
+      }
+    }
+  }
+
+  // 2. Nếu có tọa độ GPS hợp lệ, đối chiếu ranh giới không gian (Point-in-Polygon)
   if (location && Array.isArray(location.coordinates) && location.coordinates.length === 2) {
     try {
       const { findAreaByCoordinates } = require('../utils/geoUtils');
       const geoArea = await findAreaByCoordinates(location.coordinates, AdministrativeArea);
-      if (geoArea) return geoArea._id;
+      if (geoArea) {
+        if (geoArea.type !== 'PROVINCE') return geoArea._id;
+        fallbackProvinceId = fallbackProvinceId || geoArea._id;
+      }
     } catch {
-      // Fallback xuống text matching nếu lỗi GeoJSON
+      // Fallback nếu lỗi GeoJSON
     }
   }
 
-  const addressStr = String(address || '').toLowerCase();
-  const allAreas = await AdministrativeArea.find({ status: 'ACTIVE' });
+  if (fallbackProvinceId) return fallbackProvinceId;
 
-  // 1. Khớp theo cấp hành chính chi tiết nhất trước (WARD -> DISTRICT -> PROVINCE), tên dài trước
-  const typeWeight = { WARD: 3, DISTRICT: 2, PROVINCE: 1 };
-  const sortedAreas = [...allAreas].sort((a, b) => {
-    const weightDiff = (typeWeight[b.type] || 0) - (typeWeight[a.type] || 0);
-    if (weightDiff !== 0) return weightDiff;
-    return (b.name?.length || 0) - (a.name?.length || 0);
-  });
-
-  for (const a of sortedAreas) {
-    if (!a.name || a.type === 'PROVINCE') continue; // Bỏ qua Province ở bước so khớp chi tiết
-    const cleanName = a.name
-      .toLowerCase()
-      .replace(/^(phường|xã|quận|huyện|thị trấn|thị xã|tp\.|thành phố)\s+/i, '')
-      .trim();
-    if (cleanName.length >= 3 && addressStr.includes(cleanName)) {
-      return a._id;
-    }
-  }
-
-  // 2. Fallback: Khu vực hoạt động đầu tiên trong CSDL
-  const defaultAny = await AdministrativeArea.findOne({ status: 'ACTIVE' });
+  // 3. Fallback: Khu vực hoạt động đầu tiên trong CSDL
+  const defaultAny = allAreas[0] || (await AdministrativeArea.findOne({ status: 'ACTIVE' }));
   return defaultAny ? defaultAny._id : null;
 };
 
@@ -183,7 +211,7 @@ const createSosRequest = async (citizenId, sosData) => {
   return populatedSos || newSos;
 };
 
-const getSosRequests = async (query = {}) => {
+const getSosRequests = async (query = {}, user = null) => {
   const filter = {};
   if (query.citizenId) filter.citizenId = query.citizenId;
   if (query.status) filter.status = query.status;
@@ -192,32 +220,138 @@ const getSosRequests = async (query = {}) => {
   if (query._id) filter._id = query._id;
   if (query.$or) filter.$or = query.$or;
 
-  // Lọc theo khu vực hành chính: Hỗ trợ phân cấp (Quận -> Các Phường trực thuộc)
-  if (query.areaId && query.areaId !== 'ALL') {
-    if (mongoose.Types.ObjectId.isValid(query.areaId)) {
-      const childAreas = await AdministrativeArea.find({ parentId: query.areaId }).select('_id');
-      if (childAreas && childAreas.length > 0) {
-        filter.areaId = { $in: [query.areaId, ...childAreas.map(c => c._id)] };
+  const userRoles = user?.roles || [];
+  const isLocalAuthorityOnly =
+    (userRoles.includes('LOCAL_AUTHORITY') || userRoles.includes('AUTHORITY')) &&
+    !userRoles.includes('ADMIN');
+
+  const rawQueryAreaId = query.areaId && query.areaId !== 'ALL' ? String(query.areaId) : '';
+  const effectiveAreaId = rawQueryAreaId || (isLocalAuthorityOnly && user?.authority?.areaId ? String(user.authority.areaId) : '');
+  const rawOfficerAreaName = isLocalAuthorityOnly
+    ? String(user?.authority?.areaName || user?.authority?.jurisdictionAreaName || user?.authority?.department || '')
+    : '';
+
+  // Lọc theo khu vực hành chính cho LOCAL_AUTHORITY hoặc khi truyền query.areaId
+  if (effectiveAreaId || rawOfficerAreaName) {
+    const allAreas = await AdministrativeArea.find({ status: 'ACTIVE' })
+      .select('_id name code type parentId')
+      .lean();
+
+    const stripAreaPrefix = (str) =>
+      String(str || '')
+        .split(',')[0]
+        .split('(')[0]
+        .toLowerCase()
+        .replace(/^(ban chỉ huy pctt\s*(&\s*tkcn)?\s*(quận|huyện|phường|xã|thị xã|tp\.?|thành phố)?\s*|ubnd\s*(quận|huyện|phường|xã)?\s*|đội cứu nạn cơ động\s*(phường|xã|quận)?\s*)?/i, '')
+        .replace(/^(phường|xã|quận|huyện|thị trấn|thị xã|tp\.|thành phố|p\.|q\.)\s+/i, '')
+        .trim();
+
+    let matchedArea = null;
+    if (effectiveAreaId) {
+      if (mongoose.Types.ObjectId.isValid(effectiveAreaId)) {
+        matchedArea = allAreas.find((a) => String(a._id) === effectiveAreaId) || null;
       } else {
-        filter.areaId = query.areaId;
+        const cleanSlug = effectiveAreaId.replace(/^area-/, '').toLowerCase();
+        const slugKeyword =
+          cleanSlug === 'nhs' || cleanSlug === 'ngu_hanh_son'
+            ? 'ngũ hành sơn'
+            : cleanSlug === 'lc' || cleanSlug === 'lien_chieu'
+            ? 'liên chiểu'
+            : cleanSlug;
+        matchedArea =
+          allAreas.find(
+            (a) =>
+              (a.code && a.code.toLowerCase() === cleanSlug) ||
+              (a.name && a.name.toLowerCase().includes(slugKeyword) && a.type !== 'PROVINCE')
+          ) || null;
       }
-    } else {
-      // Nếu areaId là chuỗi mã/slug (như area-nhs, DAD-NHS,...), tìm area tương ứng trong CSDL
-      const cleanKey = String(query.areaId).replace(/^area-/, '');
-      const matchedArea = await AdministrativeArea.findOne({
-        $or: [
-          { code: new RegExp(`^${cleanKey}$`, 'i') },
-          { name: new RegExp(cleanKey, 'i') },
-        ],
-      });
-      if (matchedArea) {
-        const childAreas = await AdministrativeArea.find({ parentId: matchedArea._id }).select('_id');
-        if (childAreas && childAreas.length > 0) {
-          filter.areaId = { $in: [matchedArea._id, ...childAreas.map(c => c._id)] };
-        } else {
-          filter.areaId = matchedArea._id;
+    }
+
+    let coreKeyword = stripAreaPrefix(rawOfficerAreaName);
+    if (!coreKeyword && matchedArea && matchedArea.type !== 'PROVINCE') {
+      coreKeyword = stripAreaPrefix(matchedArea.name);
+    }
+
+    const validAreaIds = new Set();
+    const addressKeywords = new Set();
+
+    if (matchedArea && matchedArea.type !== 'PROVINCE') {
+      validAreaIds.add(String(matchedArea._id));
+    }
+
+    if (coreKeyword && coreKeyword.length >= 2) {
+      addressKeywords.add(coreKeyword);
+      if (coreKeyword.includes('điện bàn')) {
+        addressKeywords.add('điện bàn');
+      }
+      if (coreKeyword.includes('ngũ hành sơn')) {
+        ['ngũ hành sơn', 'mỹ an', 'khuê mỹ', 'hòa quý', 'hòa hải'].forEach((kw) => addressKeywords.add(kw));
+      } else if (coreKeyword.includes('liên chiểu')) {
+        ['liên chiểu', 'hòa khánh', 'hòa minh', 'hòa hiệp'].forEach((kw) => addressKeywords.add(kw));
+      } else if (coreKeyword.includes('thanh khê')) {
+        ['thanh khê', 'an khê', 'xuân hà', 'thạc gián', 'chính gián', 'tân chính', 'vĩnh trung', 'tam thuận', 'hòa khê'].forEach((kw) =>
+          addressKeywords.add(kw)
+        );
+      } else if (coreKeyword.includes('hải châu')) {
+        ['hải châu', 'hòa cường', 'thạch thang', 'phước ninh', 'bình hiên', 'bình thuận', 'nam dương', 'thuận phước', 'hòa thuận'].forEach((kw) =>
+          addressKeywords.add(kw)
+        );
+      }
+
+      for (const a of allAreas) {
+        if (!a.name || a.type === 'PROVINCE') continue;
+        const cleanA = stripAreaPrefix(a.name);
+        if (
+          cleanA === coreKeyword ||
+          (coreKeyword.includes('điện bàn') && cleanA.includes('điện bàn'))
+        ) {
+          validAreaIds.add(String(a._id));
         }
       }
+    }
+
+    // Mở rộng lấy tất cả các Phường/Xã con trực thuộc các Quận/Huyện trong validAreaIds
+    for (const a of allAreas) {
+      if (a.parentId && validAreaIds.has(String(a.parentId)) && a.type !== 'PROVINCE') {
+        validAreaIds.add(String(a._id));
+        const childKw = stripAreaPrefix(a.name);
+        if (childKw.length >= 3) {
+          addressKeywords.add(childKw);
+        }
+      }
+    }
+
+    const provinceObjectIds = allAreas
+      .filter((a) => a.type === 'PROVINCE')
+      .map((a) => new mongoose.Types.ObjectId(a._id));
+
+    const areaObjectIds = Array.from(validAreaIds)
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+
+    const escapedKws = Array.from(addressKeywords)
+      .filter((kw) => kw.length >= 2)
+      .map((kw) => kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const kwRegex = escapedKws.length > 0 ? new RegExp(escapedKws.join('|'), 'i') : null;
+
+    const jurisdictionOr = [];
+    if (areaObjectIds.length > 0) {
+      jurisdictionOr.push({ areaId: { $in: areaObjectIds } });
+    }
+    if (kwRegex) {
+      jurisdictionOr.push({
+        address: kwRegex,
+        $or: [
+          { areaId: null },
+          { areaId: { $exists: false } },
+          { areaId: { $in: [...areaObjectIds, ...provinceObjectIds] } },
+        ],
+      });
+    }
+
+    if (jurisdictionOr.length > 0) {
+      filter.$and = filter.$and || [];
+      filter.$and.push({ $or: jurisdictionOr });
     }
   }
 

@@ -98,8 +98,27 @@ export async function updateAdminUser(
   });
 }
 
-export async function fetchAuditLogs(): Promise<{ success: boolean; data: { logs: AuditLogItem[] } }> {
-  const raw = await fetchWithAuth<any>('/audit-logs', { method: 'GET' });
+export async function fetchAuditLogs(params?: {
+  limit?: number;
+  page?: number;
+  action?: string;
+  actorRole?: string;
+  from?: string;
+  to?: string;
+  areaId?: string;
+}): Promise<{ success: boolean; data: { logs: AuditLogItem[] } }> {
+  let endpoint = '/audit-logs';
+  if (params) {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') {
+        qs.append(k, String(v));
+      }
+    });
+    const s = qs.toString();
+    if (s) endpoint += `?${s}`;
+  }
+  const raw = await fetchWithAuth<any>(endpoint, { method: 'GET' });
   if (Array.isArray(raw.data)) {
     return {
       success: raw.success,

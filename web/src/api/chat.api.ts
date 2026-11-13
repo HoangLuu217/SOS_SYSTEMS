@@ -25,6 +25,8 @@ export async function sendChatMessage(payload: {
   recipientId?: string;
   channel?: string;
   attachments?: ChatAttachment[];
+  sosRequestId?: string;
+  sosData?: any;
 }): Promise<{ success: boolean; data: ChatMessageItem }> {
   return fetchWithAuth('/chat/messages', {
     method: 'POST',
@@ -68,6 +70,13 @@ export async function markAllChatMessagesRead(): Promise<{ success: boolean; dat
   return fetchWithAuth('/chat/read-all', {
     method: 'PATCH',
   });
+}
+
+/**
+ * Lấy hồ sơ thông tin chi tiết của người dân (SĐT, Địa chỉ, Người thân, Ca SOS)
+ */
+export async function fetchCitizenInfo(userId: string): Promise<{ success: boolean; data: any }> {
+  return fetchWithAuth(`/chat/citizen-info/${userId}`);
 }
 
 /**

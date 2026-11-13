@@ -15,7 +15,73 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { backendApi, EmergencyAuthorityContact } from '@/api';
+
+const EMERGENCY_DIRECTORY_CACHE_KEY = 'sos_emergency_directory_offline_v1';
+
+const DANANG_FALLBACK_DIRECTORY: EmergencyAuthorityContact[] = [
+  {
+    id: 'offline-dn-pctt',
+    name: 'Ban Chỉ Huy PCTT & TKCN TP. Đà Nẵng',
+    department: 'Ủy Ban Nhân Dân TP. Đà Nẵng',
+    phone: '02363822111',
+    areaName: 'Thành phố Đà Nẵng',
+    address: 'Số 42 Bạch Đằng, Quận Hải Châu, TP. Đà Nẵng',
+    type: 'PROVINCE',
+    lat: 16.0544,
+    lng: 108.2022,
+  },
+  {
+    id: 'offline-dn-dien-ban',
+    name: 'Ban Chỉ Huy PCTT & TKCN Điện Bàn',
+    department: 'Khu vực Điện Bàn, TP. Đà Nẵng',
+    phone: '02353888999',
+    areaName: 'Điện Bàn, TP. Đà Nẵng',
+    address: 'Khu vực Điện Bàn, TP. Đà Nẵng',
+    type: 'ORGANIZATION',
+    lat: 15.8914,
+    lng: 108.2485,
+  },
+  {
+    id: 'offline-dn-tam-ky',
+    name: 'Ban Chỉ Huy PCTT & TKCN Khu vực Tam Kỳ',
+    department: 'Ban Chỉ Huy PCTT & TKCN TP. Đà Nẵng',
+    phone: '02353852554',
+    areaName: 'Khu vực Tam Kỳ, TP. Đà Nẵng',
+    address: 'Số 500 Hùng Vương, Tam Kỳ, TP. Đà Nẵng',
+    type: 'PROVINCE',
+    lat: 15.5647,
+    lng: 108.4839,
+  },
+  {
+    id: 'offline-112',
+    name: 'Tổng đài Tìm kiếm Cứu nạn Quốc gia',
+    department: 'Ứng phó khẩn cấp 24/7',
+    phone: '112',
+    areaName: 'TP. Đà Nẵng',
+    address: 'Gọi miễn phí khi mất mạng / khẩn cấp',
+    type: 'PROVINCE',
+  },
+  {
+    id: 'offline-114',
+    name: 'Cảnh sát PCCC & Cứu nạn Cứu hộ',
+    department: 'Lực lượng Cứu hộ 114',
+    phone: '114',
+    areaName: 'TP. Đà Nẵng',
+    address: 'Gọi khẩn cấp 24/7',
+    type: 'PROVINCE',
+  },
+  {
+    id: 'offline-115',
+    name: 'Trung tâm Cấp cứu Y tế Đà Nẵng',
+    department: 'Cấp cứu 115',
+    phone: '115',
+    areaName: 'TP. Đà Nẵng',
+    address: 'Hỗ trợ cấp cứu y tế khẩn cấp 24/7',
+    type: 'PROVINCE',
+  },
+];
 
 interface EmergencyDirectoryModalProps {
   visible: boolean;
@@ -47,8 +113,9 @@ export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = (
 }) => {
   const insets = useSafeAreaInsets();
 
-  const [directory, setDirectory] = useState<EmergencyAuthorityContact[]>([]);
+  const [directory, setDirectory] = useState<EmergencyAuthorityContact[]>(DANANG_FALLBACK_DIRECTORY);
   const [loading, setLoading] = useState<boolean>(false);
+  const [isOfflineMode, setIsOfflineMode] = useState<boolean>(false);
   const [searchText, setSearchText] = useState<string>('');
   const [selectedTag, setSelectedTag] = useState<string>('TẤT CẢ');
   const [isLocating, setIsLocating] = useState<boolean>(false);
@@ -56,16 +123,37 @@ export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = (
   const [detectedLocationName, setDetectedLocationName] = useState<string>('');
   const [activeSourceMode, setActiveSourceMode] = useState<'GPS' | 'PROFILE' | 'ALL'>('ALL');
 
-  // Nạp danh bạ khẩn cấp từ backend khi mở modal
+  // Nạp danh bạ từ bộ nhớ máy (AsyncStorage) trước để gọi được ngay cả khi tắt máy/mất mạng,
+  // sau đó đồng bộ ngầm với backend để lưu lại số điện thoại chính quyền mới nhất.
   const fetchDirectory = useCallback(async () => {
+    let hasCached = false;
     try {
+      const cachedRaw = await AsyncStorage.getItem(EMERGENCY_DIRECTORY_CACHE_KEY);
+      if (cachedRaw) {
+        const parsed = JSON.parse(cachedRaw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setDirectory(parsed);
+          hasCached = true;
+        }
+      }
+    } catch {}
+
+    if (!hasCached) {
       setLoading(true);
+    }
+
+    try {
       const res = await backendApi.getEmergencyDirectory();
-      if (res.success && Array.isArray(res.data)) {
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
         setDirectory(res.data);
+        setIsOfflineMode(false);
+        await AsyncStorage.setItem(EMERGENCY_DIRECTORY_CACHE_KEY, JSON.stringify(res.data));
+      } else {
+        setIsOfflineMode(true);
       }
     } catch (err) {
-      console.log('Lỗi khi tải danh bạ khẩn cấp:', err);
+      console.log('Đang dùng danh bạ lưu Offline trên máy:', err);
+      setIsOfflineMode(true);
     } finally {
       setLoading(false);
     }
@@ -369,8 +457,29 @@ export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = (
           />
         </View>
 
+        {/* Thông báo khi đang dùng danh bạ lưu Offline trên máy */}
+        {isOfflineMode && (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: '#FFFBEB',
+              borderBottomWidth: 1,
+              borderBottomColor: '#FDE68A',
+              paddingHorizontal: 16,
+              paddingVertical: 7,
+            }}
+          >
+            <Ionicons name="cloud-offline-outline" size={15} color="#B45309" />
+            <Text style={{ fontSize: 12, fontWeight: '600', color: '#92400E', flex: 1 }}>
+              Đang dùng danh bạ lưu trên máy (Offline) — Bấm gọi trực tiếp không cần mạng
+            </Text>
+          </View>
+        )}
+
         {/* Danh sách cơ quan cứu nạn */}
-        {loading ? (
+        {loading && directory.length === 0 ? (
           <View style={styles.centerBox}>
             <ActivityIndicator size="large" color="#0066FF" />
             <Text style={styles.loadingText}>Đang tải danh bạ cứu nạn...</Text>
@@ -380,7 +489,7 @@ export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = (
             <Ionicons name="search-outline" size={48} color="#CBD5E1" />
             <Text style={styles.emptyTitle}>Không tìm thấy địa phương phù hợp</Text>
             <Text style={styles.emptySubtitle}>
-              Vui lòng thử gõ tên phường, xã hoặc tỉnh thành khác.
+              Vui lòng thử gõ tên phường, xã hoặc khu vực khác tại Đà Nẵng.
             </Text>
             <TouchableOpacity style={styles.resetBtn} onPress={() => { setSearchText(''); setSelectedTag('TẤT CẢ'); }}>
               <Text style={styles.resetBtnText}>Xem tất cả danh bạ</Text>

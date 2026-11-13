@@ -10,6 +10,8 @@ export interface ChatMessageItem {
   channel: string;
   content: string;
   attachments?: { url: string; fileType?: string; fileName?: string }[];
+  sosRequestId?: any;
+  sosData?: any;
   readBy?: string[];
   createdAt: string;
 }
@@ -113,6 +115,8 @@ export class ChatApi {
     channel?: string;
     recipientId?: string;
     attachments?: { url: string; fileType?: string; fileName?: string }[];
+    sosRequestId?: string;
+    sosData?: any;
   }): Promise<ApiResponse<ChatMessageItem>> {
     return this.client.post<ChatMessageItem>('/chat/messages', data);
   }

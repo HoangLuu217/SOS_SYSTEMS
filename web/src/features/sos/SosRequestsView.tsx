@@ -26,7 +26,6 @@ import type { SosRequestItem, AdministrativeAreaItem, VehicleItem } from '@/type
 import {
   fetchSosRequests,
   createSosRequest,
-  completeSosRequest,
   fetchAdministrativeAreas,
   fetchVehicles,
   deleteSosRequestApi,
@@ -109,7 +108,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
   const [, setVehicles] = useState<VehicleItem[]>(() => memoryCachedVehicles || []);
 
   const [triageFilter, setTriageFilter] = useState<'ALL' | 'ACTIVE_ALL' | 'CRITICAL' | 'HIGH' | 'PENDING' | 'RESCUING' | 'COMPLETED' | 'CANCELLED'>('ALL');
-  const [completingId, setCompletingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
   const [selectedSosDetail, setSelectedSosDetail] = useState<SosRequestItem | null>(null);
@@ -145,9 +143,18 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
       if (!memoryCachedSosList || memoryCachedSosList.length === 0) {
         setLoading(true);
       }
+      const isLocalAuthOnly =
+        (Boolean(user?.authority) ||
+          Boolean(user?.roles?.includes('LOCAL_AUTHORITY')) ||
+          Boolean(user?.roles?.includes('AUTHORITY'))) &&
+        !user?.roles?.includes('ADMIN');
+      const sosQueryParams: Record<string, string> = { limit: '100' };
+      if (isLocalAuthOnly && user?.authority?.areaId) {
+        sosQueryParams.areaId = String(user.authority.areaId);
+      }
 
       // 1. Ưu tiên nạp danh sách SOS ngay lập tức, render bảng tức thì không đợi areas/vehicles
-      const sosPromise = fetchSosRequests({ limit: '100' })
+      const sosPromise = fetchSosRequests(sosQueryParams)
         .then((res) => {
           if (res.success && Array.isArray(res.data)) {
             memoryCachedSosList = res.data;
@@ -155,12 +162,13 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
               sessionStorage.setItem('sos_requests_cache', JSON.stringify(res.data));
             } catch { }
             setSosList(res.data);
-            setLoading(false);
           }
           return res;
         })
         .catch((err) => {
           console.error('Lỗi khi tải dữ liệu SOS:', err);
+        })
+        .finally(() => {
           setLoading(false);
         });
 
@@ -447,29 +455,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     return null;
   };
 
-  const handleCompleteSosFromPanel = async (sosId: string) => {
-    if (!sosId) return;
-    try {
-      setCompletingId(sosId);
-      const res = await completeSosRequest(sosId);
-      if (res.success) {
-        toast.success('Đã xác nhận hoàn tất ca cứu nạn thành công!', 'Hoàn thành nhiệm vụ');
-        setSosList((prev) =>
-          prev.map((s) => (s._id === sosId ? { ...s, status: 'COMPLETED' } : s))
-        );
-        if (selectedSosDetail?._id === sosId) {
-          setSelectedSosDetail((prev) => (prev ? { ...prev, status: 'COMPLETED' } : null));
-        }
-      } else {
-        toast.error('Không thể hoàn tất ca cứu nạn', 'Lỗi hoàn thành');
-      }
-    } catch (err: any) {
-      toast.error(err?.message || 'Có lỗi xảy ra khi hoàn tất cứu nạn', 'Lỗi');
-    } finally {
-      setCompletingId(null);
-    }
-  };
-
   const renderStepper = (effectiveStatus: string) => {
     if (effectiveStatus === 'CANCELLED' || effectiveStatus === 'REJECTED') {
       return (
@@ -523,7 +508,118 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     );
   };
 
-  const displaySosList = sosList;
+  // Lọc các ca SOS đúng theo địa bàn quản lý của Cán bộ địa phương (LOCAL_AUTHORITY)
+  const displaySosList = React.useMemo(() => {
+    const isAdmin = Boolean(user?.roles?.includes('ADMIN'));
+    if (isAdmin || !user) return sosList;
+
+    const isLocalAuthority =
+      Boolean(user.authority) ||
+      Boolean(user.roles?.includes('LOCAL_AUTHORITY')) ||
+      Boolean(user.roles?.includes('AUTHORITY'));
+    if (!isLocalAuthority) return sosList;
+
+    const stripPrefix = (str?: string) =>
+      String(str || '')
+        .split(',')[0]
+        .split('(')[0]
+        .toLowerCase()
+        .replace(
+          /^(ban chỉ huy pctt\s*(&\s*tkcn)?\s*(quận|huyện|phường|xã|thị xã|tp\.?|thành phố)?\s*|ubnd\s*(quận|huyện|phường|xã)?\s*|đội cứu nạn cơ động\s*(phường|xã|quận)?\s*)?/i,
+          ''
+        )
+        .replace(/^(phường|xã|quận|huyện|thị trấn|thị xã|tp\.|thành phố|p\.|q\.)\s+/i, '')
+        .trim();
+
+    const rawOfficerArea =
+      user.authority?.areaName ||
+      (user.authority as any)?.jurisdictionAreaName ||
+      user.authority?.department ||
+      '';
+    const userAreaId = user.authority?.areaId ? String(user.authority.areaId) : '';
+
+    const matchedAreaDoc = userAreaId
+      ? areas.find((a) => String(a._id) === userAreaId || a.code === userAreaId)
+      : null;
+
+    let coreKw = stripPrefix(rawOfficerArea);
+    if (!coreKw && matchedAreaDoc && matchedAreaDoc.type !== 'PROVINCE') {
+      coreKw = stripPrefix(matchedAreaDoc.name);
+    }
+
+    const allowedAreaIds = new Set<string>();
+    const allowedKeywords = new Set<string>();
+
+    if (userAreaId && (!matchedAreaDoc || matchedAreaDoc.type !== 'PROVINCE')) {
+      allowedAreaIds.add(userAreaId);
+    }
+
+    if (coreKw && coreKw.length >= 2) {
+      allowedKeywords.add(coreKw);
+      if (coreKw.includes('điện bàn')) {
+        allowedKeywords.add('điện bàn');
+      }
+      if (coreKw.includes('ngũ hành sơn')) {
+        ['ngũ hành sơn', 'mỹ an', 'khuê mỹ', 'hòa quý', 'hòa hải'].forEach((k) => allowedKeywords.add(k));
+      } else if (coreKw.includes('liên chiểu')) {
+        ['liên chiểu', 'hòa khánh', 'hòa minh', 'hòa hiệp'].forEach((k) => allowedKeywords.add(k));
+      } else if (coreKw.includes('thanh khê')) {
+        ['thanh khê', 'an khê', 'xuân hà', 'thạc gián', 'chính gián', 'tân chính', 'vĩnh trung', 'tam thuận', 'hòa khê'].forEach((k) =>
+          allowedKeywords.add(k)
+        );
+      } else if (coreKw.includes('hải châu')) {
+        ['hải châu', 'hòa cường', 'thạch thang', 'phước ninh', 'bình hiên', 'bình thuận', 'nam dương', 'thuận phước', 'hòa thuận'].forEach((k) =>
+          allowedKeywords.add(k)
+        );
+      }
+
+      for (const a of areas) {
+        if (!a.name || a.type === 'PROVINCE') continue;
+        const cleanA = stripPrefix(a.name);
+        if (cleanA === coreKw || (coreKw.includes('điện bàn') && cleanA.includes('điện bàn'))) {
+          allowedAreaIds.add(String(a._id));
+        }
+      }
+    }
+
+    for (const a of areas) {
+      const parentIdStr = typeof a.parentId === 'object' && a.parentId ? String((a.parentId as any)._id || '') : String(a.parentId || '');
+      if (parentIdStr && allowedAreaIds.has(parentIdStr) && a.type !== 'PROVINCE') {
+        allowedAreaIds.add(String(a._id));
+        const childKw = stripPrefix(a.name);
+        if (childKw.length >= 3) allowedKeywords.add(childKw);
+      }
+    }
+
+    if (allowedAreaIds.size === 0 && allowedKeywords.size === 0) {
+      return sosList;
+    }
+
+    return sosList.filter((sos) => {
+      const sosAreaObj = typeof sos.areaId === 'object' && sos.areaId !== null ? (sos.areaId as any) : null;
+      const sosAreaId = sosAreaObj ? String(sosAreaObj._id || '') : String(sos.areaId || '');
+      const sosAreaName = sosAreaObj ? String(sosAreaObj.name || '') : '';
+      const isProvinceFallbackArea =
+        sosAreaName.toLowerCase().includes('thành phố đà nẵng') ||
+        sosAreaName.toLowerCase() === 'đà nẵng' ||
+        sosAreaObj?.type === 'PROVINCE';
+
+      if (sosAreaId && !isProvinceFallbackArea && allowedAreaIds.has(sosAreaId)) {
+        return true;
+      }
+
+      const addrLower = String(sos.address || '').toLowerCase();
+      const areaNameLower = isProvinceFallbackArea ? '' : sosAreaName.toLowerCase();
+
+      for (const kw of allowedKeywords) {
+        if (kw.length >= 2 && (addrLower.includes(kw) || (areaNameLower && areaNameLower.includes(kw)))) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+  }, [sosList, user, areas]);
 
   // Phân tách ca đang diễn ra (Active) và ca đã đóng (Completed / Cancelled)
   const activeSosList = displaySosList.filter((s) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(s.status));
@@ -1134,35 +1230,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
       </div>
 
       {/* ============================================================
-            MODAL PHÓNG TO ẢNH HIỆN TRƯỜNG NGẬP LỤT
-            ============================================================ */}
-      {previewPhoto && (
-        <div
-          className="executive-photo-lightbox-backdrop"
-          onClick={() => setPreviewPhoto(null)}
-        >
-          <div className="executive-photo-lightbox-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="executive-photo-lightbox-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Camera size={16} color="#0284C7" />
-                <strong>ẢNH HIỆN TRƯỜNG CỨU NẠN TỪ NGƯỜI DÂN</strong>
-              </div>
-              <button
-                type="button"
-                className="executive-photo-lightbox-close"
-                onClick={() => setPreviewPhoto(null)}
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="executive-photo-lightbox-body">
-              <img src={previewPhoto} alt="Hiện trường cứu nạn" referrerPolicy="no-referrer" />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================
           PANEL CHI TIẾT TOÀN DIỆN (CHIẾM 4/10 MÀN HÌNH BÊN PHẢI)
           ============================================================ */}
       {selectedSosDetail && (
@@ -1177,7 +1244,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
           <aside className="sos-detail-side-panel" onClick={(e) => e.stopPropagation()}>
             {/* Header Panel */}
             <div className="sos-panel-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span className="sos-panel-code">{selectedSosDetail.sosCode}</span>
 
                 {/* Badge phân biệt RESCUER hay CITIZEN */}
@@ -1190,10 +1257,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                       style={{
                         backgroundColor: isDetailRescuer ? '#2563eb' : '#16a34a',
                         color: '#ffffff',
-                        fontWeight: 800,
-                        fontSize: 10,
-                        padding: '2px 6px',
-                        borderRadius: 4,
                       }}
                     >
                       {isDetailRescuer ? 'RESCUER' : 'CITIZEN'}
@@ -1635,9 +1698,9 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                               </div>
                             ))}
                           </div>
-                          {selectedSosDetail.assignment?.actualRecipient && (
+                          {(selectedSosDetail.assignment?.actualRecipient || (selectedSosDetail as any).actualRecipient) && (
                             <div style={{ fontSize: 11.5, color: '#166534', marginTop: 4, fontWeight: 600 }}>
-                              ✓ Người tiếp nhận: <strong>{selectedSosDetail.assignment.actualRecipient}</strong>
+                              ✓ Người tiếp nhận: <strong>{selectedSosDetail.assignment?.actualRecipient || (selectedSosDetail as any).actualRecipient}</strong>
                             </div>
                           )}
                         </>
@@ -1773,35 +1836,19 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                     <span>Đã hoàn tất &amp; Lưu trữ</span>
                   </div>
                 ) : (
-                  <>
-                    <button
-                      type="button"
-                      className="btn-panel-action primary"
-                      onClick={() => {
-                        const targetId = selectedSosDetail._id;
-                        setSelectedSosDetail(null);
-                        onOpenMap(targetId);
-                      }}
-                      title="Mở ngay trên Bản đồ tác chiến"
-                    >
-                      <Compass size={15} />
-                      <span>Bản đồ tác chiến</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-panel-action success"
-                      onClick={() => handleCompleteSosFromPanel(selectedSosDetail._id)}
-                      disabled={completingId === selectedSosDetail._id}
-                      title="Xác nhận hoàn tất ca cứu nạn"
-                    >
-                      {completingId === selectedSosDetail._id ? (
-                        <Loader2 size={15} className="animate-spin" />
-                      ) : (
-                        <CheckCircle2 size={15} />
-                      )}
-                      <span>Hoàn tất nhiệm vụ</span>
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    className="btn-panel-action primary"
+                    onClick={() => {
+                      const targetId = selectedSosDetail._id;
+                      setSelectedSosDetail(null);
+                      onOpenMap(targetId);
+                    }}
+                    title="Mở ngay trên Bản đồ tác chiến"
+                  >
+                    <Compass size={15} />
+                    <span>Bản đồ tác chiến</span>
+                  </button>
                 )}
               </div>
             </div>
@@ -2097,6 +2144,37 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                   <span>{confirmDialog.confirmText || 'Xóa'}</span>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          MODAL PHÓNG TO ẢNH HIỆN TRƯỜNG & NGHIỆM THU
+          (Được đặt ở cuối DOM với z-index 20000 để phủ lên toàn bộ màn hình, bao gồm cả side-panel bên phải)
+          ============================================================ */}
+      {previewPhoto && (
+        <div
+          className="executive-photo-lightbox-backdrop"
+          onClick={() => setPreviewPhoto(null)}
+        >
+          <div className="executive-photo-lightbox-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="executive-photo-lightbox-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Camera size={16} color="#0284C7" />
+                <strong style={{ letterSpacing: 0.3 }}>ẢNH HIỆN TRƯỜNG &amp; NGHIỆM THU CỨU NẠN</strong>
+              </div>
+              <button
+                type="button"
+                className="executive-photo-lightbox-close"
+                onClick={() => setPreviewPhoto(null)}
+                title="Đóng (Esc)"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="executive-photo-lightbox-body">
+              <img src={previewPhoto} alt="Hiện trường cứu nạn phóng to" referrerPolicy="no-referrer" />
             </div>
           </div>
         </div>

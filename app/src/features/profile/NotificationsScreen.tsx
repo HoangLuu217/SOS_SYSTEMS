@@ -173,6 +173,12 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     if (!item.isRead) {
       handleMarkAsRead(item);
     }
+    const isChat = item.type === 'CHAT' || item.actionUrl === 'chat' || item.data?.isChat;
+    if (isChat) {
+      if (onNavigateToTab) onNavigateToTab('home');
+      DeviceEventEmitter.emit('open:local_authority_chat', item.data || item);
+      return;
+    }
     setSelectedNotif({ ...item, isRead: true });
     setActionMenuVisible(false);
     setDetailModalVisible(true);
@@ -217,6 +223,13 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     ) {
       const eid = item.data?.eventId || (item as any).eventId;
       DeviceEventEmitter.emit('open:blood_donation', { eventId: eid });
+    } else if (
+      item.actionUrl === 'chat' ||
+      item.type === 'CHAT' ||
+      item.data?.isChat
+    ) {
+      if (onNavigateToTab) onNavigateToTab('home');
+      DeviceEventEmitter.emit('open:local_authority_chat', item.data || item);
     } else if (item.actionUrl === 'sos_detail' || item.actionUrl === 'tracking') {
       if (onNavigateToTab) onNavigateToTab('sos');
     } else if (item.actionUrl === 'profile') {
@@ -285,6 +298,12 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
         return (
           <View style={[styles.typeIconBox, { backgroundColor: '#ECFDF5' }]}>
             <Feather name="map-pin" size={20} color="#16A34A" />
+          </View>
+        );
+      case 'CHAT':
+        return (
+          <View style={[styles.typeIconBox, { backgroundColor: '#E0F2FE' }]}>
+            <Feather name="message-square" size={20} color="#0284C7" />
           </View>
         );
       case 'SYSTEM':
@@ -742,6 +761,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
                       name={
                         selectedNotif.actionUrl === 'safety_check' || selectedNotif.type === 'SAFETY_CHECK'
                           ? 'shield'
+                          : selectedNotif.actionUrl === 'chat' || selectedNotif.type === 'CHAT'
+                          ? 'message-circle'
                           : selectedNotif.actionUrl === 'sos_detail'
                           ? 'navigation'
                           : selectedNotif.actionUrl === 'map'
@@ -755,6 +776,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
                     <Text style={styles.detailActionText}>
                       {selectedNotif.actionUrl === 'safety_check' || selectedNotif.type === 'SAFETY_CHECK'
                         ? 'Đánh dấu an toàn ngay'
+                        : selectedNotif.actionUrl === 'chat' || selectedNotif.type === 'CHAT'
+                        ? 'Mở cuộc trò chuyện ngay'
                         : selectedNotif.actionUrl === 'blood_donation' || selectedNotif.type === 'BLOOD_DONATION'
                         ? 'Xem & Xác nhận đăng ký hiến máu'
                         : selectedNotif.actionUrl === 'sos_detail'

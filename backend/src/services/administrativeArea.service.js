@@ -3,6 +3,9 @@ const { AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
 
 class AdministrativeAreaService {
+  constructor() {
+    this.boundaryMemoryCache = new Map();
+  }
   /**
    * Kiểm tra tính hợp lệ của phân cấp hành chính (Hierarchy Validation)
    * COUNTRY: parentId = null
@@ -453,29 +456,26 @@ class AdministrativeAreaService {
     };
   }
 
+  getOuterRing(coords) {
+    if (!Array.isArray(coords) || coords.length === 0) return null;
+    // MultiPolygon: coords[0][0][0] là [lng, lat] (Array); Polygon: coords[0][0] là [lng, lat]
+    if (Array.isArray(coords[0]?.[0]?.[0])) {
+      return coords[0][0];
+    }
+    return coords[0];
+  }
+
   isCoordsMatchingProvince(coords, provinceName) {
     if (!provinceName || !coords) return true;
     const p = provinceName.toLowerCase();
-    let sample = null;
-    try {
-      if (Array.isArray(coords)) {
-        if (Array.isArray(coords[0])) {
-          if (Array.isArray(coords[0][0])) {
-            sample = coords[0][0][0] || coords[0][0];
-          } else {
-            sample = coords[0][0];
-          }
-        }
-      }
-    } catch {
-      return true;
-    }
+    const ring = this.getOuterRing(coords);
+    const sample = Array.isArray(ring) ? ring[0] : null;
     if (!sample || !Array.isArray(sample) || sample.length < 2) return true;
     const [lng, lat] = sample;
     if (typeof lng !== 'number' || typeof lat !== 'number') return true;
 
     if (p.includes('đà nẵng') || p.includes('da nang')) {
-      return lat >= 15.5 && lat <= 16.6 && lng >= 107.5 && lng <= 108.7;
+      return lat >= 14.8 && lat <= 16.6 && lng >= 107.0 && lng <= 109.5;
     }
     if (p.includes('hồ chí minh') || p.includes('ho chi minh') || p.includes('sài gòn') || p.includes('tphcm')) {
       return lat >= 10.0 && lat <= 11.5 && lng >= 106.0 && lng <= 107.3;
@@ -490,19 +490,38 @@ class AdministrativeAreaService {
    * Lấy hoặc truy vấn online ranh giới GeoJSON polygon của một khu vực hành chính (phường/xã/quận/huyện)
    * Tự động lưu cache vào CSDL MongoDB để các lần sau không cần gọi API ngoài
    */
-  async getBoundaryForArea({ areaId, name, province, district }) {
+  async getBoundaryForArea({ areaId, name, province, district, level }) {
+    const cacheKey = `${String(level || '').toUpperCase()}|${String(province || '').toLowerCase()}|${String(district || '').toLowerCase()}|${String(areaId || name || '').toLowerCase()}`;
+    if (this.boundaryMemoryCache.has(cacheKey)) {
+      return this.boundaryMemoryCache.get(cacheKey);
+    }
+
     let areaDoc = null;
     if (areaId && mongoose.Types.ObjectId.isValid(areaId)) {
       areaDoc = await AdministrativeArea.findById(areaId);
     }
     if (!areaDoc && name) {
-      const cleanName = name
-        .replace(/^(phường|xã|thị trấn|quận|huyện|thị xã|thành phố)\s+/i, '')
-        .trim();
-      areaDoc = await AdministrativeArea.findOne({
-        name: new RegExp(cleanName, 'i'),
-      });
+      const normalizedLevel = String(level || '').toUpperCase();
+      if (normalizedLevel === 'PROVINCE') {
+        const cleanProvName = name.replace(/^(Thành phố|Tỉnh)\s+/i, '').trim();
+        areaDoc = await AdministrativeArea.findOne({
+          type: 'PROVINCE',
+          name: new RegExp(cleanProvName, 'i'),
+        });
+      }
+      if (!areaDoc) {
+        const cleanName = name
+          .replace(/^(phường|xã|thị trấn|quận|huyện|thị xã|thành phố|tỉnh)\s+/i, '')
+          .trim();
+        areaDoc = await AdministrativeArea.findOne({
+          name: new RegExp(cleanName, 'i'),
+        });
+      }
     }
+
+    const isProvinceScope =
+      String(level || '').toUpperCase() === 'PROVINCE' ||
+      areaDoc?.type === 'PROVINCE';
 
     let cleanProvince = (province || '');
     if (cleanProvince.includes('(') && cleanProvince.includes(')')) {
@@ -513,8 +532,8 @@ class AdministrativeAreaService {
 
     const isTinyBoundary = (coords) => {
       try {
-        const ring = coords && coords[0] && Array.isArray(coords[0][0]) ? coords[0][0] : coords && coords[0];
-        if (!ring || ring.length < 3) return true;
+        const ring = this.getOuterRing(coords);
+        if (!Array.isArray(ring) || ring.length < 3) return true;
         let minX = 999, maxX = -999, minY = 999, maxY = -999;
         for (const pt of ring) {
           const [x, y] = Array.isArray(pt) ? pt : [0, 0];
@@ -536,16 +555,18 @@ class AdministrativeAreaService {
       Array.isArray(areaDoc.boundary.coordinates) &&
       areaDoc.boundary.coordinates.length > 0 &&
       !isTinyBoundary(areaDoc.boundary.coordinates) &&
-      !this.isProvinceLevelBoundary(areaDoc.boundary.coordinates) &&
+      (isProvinceScope || !this.isProvinceLevelBoundary(areaDoc.boundary.coordinates)) &&
       this.isCoordsMatchingProvince(areaDoc.boundary.coordinates, cleanProvince)
     ) {
-      return {
+      const dbResult = {
         areaId: areaDoc._id,
         name: areaDoc.name,
         code: areaDoc.code,
         boundary: areaDoc.boundary,
         source: 'DATABASE_CACHE',
       };
+      this.boundaryMemoryCache.set(cacheKey, dbResult);
+      return dbResult;
     }
 
     // 2. Chuẩn bị truy vấn online qua Nominatim / Geoapify
@@ -578,8 +599,41 @@ class AdministrativeAreaService {
 
     let foundFeature = null;
 
+    // 1B. Nếu tìm boundary cấp Tỉnh / Thành phố: ưu tiên truy vấn Geoapify danh mục tỉnh/thành Việt Nam
+    if (isProvinceScope) {
+      try {
+        const vnProvUrl =
+          'https://api.geoapify.com/v1/boundaries/consists-of?id=510116f9f5c3fd5a40595fa637ed73da2f40f00101f901fbc2000000000000c0020b92030a5669e1bb8774204e616d&boundary=administrative&sublevel=1&geometry=geometry_1000&lang=vi&apiKey=3383e3ba2267489985bbe6d9bf7aa05d';
+        const provRes = await fetch(vnProvUrl);
+        if (provRes.ok) {
+          const provData = await provRes.json();
+          const strippedTarget = cleanTargetName
+            .toLowerCase()
+            .replace(/^(thành phố|tỉnh|tp\.?)\s+/i, '')
+            .trim();
+          const matchedProvFeature = (provData.features || []).find((f) => {
+            if (!f.geometry || (f.geometry.type !== 'Polygon' && f.geometry.type !== 'MultiPolygon')) {
+              return false;
+            }
+            const fName = String(f.properties?.name || f.properties?.name_vi || '').toLowerCase();
+            return (
+              fName === cleanTargetName.toLowerCase() ||
+              fName.includes(strippedTarget) ||
+              strippedTarget.includes(fName)
+            );
+          });
+          if (matchedProvFeature) {
+            foundFeature = matchedProvFeature;
+          }
+        }
+      } catch (err) {
+        console.warn(`Geoapify province boundary fetch failed for "${cleanTargetName}":`, err.message);
+      }
+    }
+
     // Thử lần lượt qua Nominatim
     for (const q of searchQueries) {
+      if (foundFeature) break;
       try {
         const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&countrycodes=vn&format=geojson&polygon_geojson=1&limit=5`;
         const res = await fetch(url, {
@@ -649,7 +703,7 @@ class AdministrativeAreaService {
                     pdFeature &&
                     pdFeature.geometry &&
                     (pdFeature.geometry.type === 'Polygon' || pdFeature.geometry.type === 'MultiPolygon') &&
-                    !this.isProvinceLevelBoundary(pdFeature.geometry.coordinates) &&
+                    (isProvinceScope || !this.isProvinceLevelBoundary(pdFeature.geometry.coordinates)) &&
                     this.isCoordsMatchingProvince(pdFeature.geometry.coordinates, cleanProvince)
                   ) {
                     const fName = (pdFeature.properties?.name || cand.properties?.name || '').toLowerCase();
@@ -727,7 +781,7 @@ class AdministrativeAreaService {
         areaDoc = await AdministrativeArea.create({
           name: cleanTargetName,
           code: `AUTO-${Date.now()}`,
-          type: 'WARD',
+          type: isProvinceScope ? 'PROVINCE' : 'WARD',
           boundary,
           status: 'ACTIVE',
         });
@@ -736,13 +790,15 @@ class AdministrativeAreaService {
       }
     }
 
-    return {
+    const liveResult = {
       areaId: areaDoc ? areaDoc._id : null,
       name: areaDoc ? areaDoc.name : cleanTargetName,
       code: areaDoc ? areaDoc.code : null,
       boundary,
       source: 'LIVE_FETCH_AND_CACHED',
     };
+    this.boundaryMemoryCache.set(cacheKey, liveResult);
+    return liveResult;
   }
 }
 
