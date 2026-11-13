@@ -118,19 +118,35 @@ const startServer = async () => {
       console.warn('⚠️ Lỗi kiểm tra tài khoản canbo.dienban:', authErr.message);
     }
 
-    // Tiến trình tự động dọn dẹp các bản tin thời tiết pending cũ quá 2 ngày
+    // Tiến trình tự động dọn dẹp các bản tin thời tiết cũ và bài lưu trữ quá 2 ngày (chạy tự động không nút nhấn)
     const weatherNotificationService = require('./services/weatherNotification.service');
     setTimeout(() => {
-      weatherNotificationService.cleanupExpiredPendingArticles(2).catch((err) => {
-        console.warn('Lỗi dọn dẹp bản tin thời tiết cũ khi khởi động:', err.message);
+      weatherNotificationService.cleanupExpiredWeatherArticles(2).catch((err) => {
+        console.warn('⚠️ Lỗi dọn dẹp bản tin thời tiết cũ khi khởi động:', err.message);
       });
     }, 5000);
 
+    // Chạy ngầm định kỳ mỗi 30 phút để quét và xóa vĩnh viễn các bài lưu trữ & tin pending quá 2 ngày
     setInterval(() => {
-      weatherNotificationService.cleanupExpiredPendingArticles(2).catch((err) => {
-        console.warn('Lỗi định kỳ dọn dẹp bản tin thời tiết cũ:', err.message);
+      weatherNotificationService.cleanupExpiredWeatherArticles(2).catch((err) => {
+        console.warn('⚠️ Lỗi định kỳ dọn dẹp bản tin thời tiết cũ & lưu trữ:', err.message);
       });
-    }, 60 * 60 * 1000); // Mỗi 1 giờ kiểm tra và dọn dẹp 1 lần
+    }, 30 * 60 * 1000);
+
+    // Tiến trình tự động gửi thông báo nhắc nhở hiến máu cho người dân đã đăng ký (cách 1 ngày & sắp đến giờ)
+    const bloodDonationService = require('./services/bloodDonation.service');
+    setTimeout(() => {
+      bloodDonationService.sendScheduledReminders().catch((err) => {
+        console.warn('⚠️ Lỗi kiểm tra thông báo nhắc nhở hiến máu khi khởi động:', err.message);
+      });
+    }, 10000);
+
+    // Chạy ngầm định kỳ mỗi 10 phút để quét và tự động gửi nhắc nhở
+    setInterval(() => {
+      bloodDonationService.sendScheduledReminders().catch((err) => {
+        console.warn('⚠️ Lỗi định kỳ quét thông báo nhắc nhở hiến máu:', err.message);
+      });
+    }, 10 * 60 * 1000);
 
     const server = http.createServer(app);
     initSocket(server);
@@ -138,7 +154,8 @@ const startServer = async () => {
     server.listen(PORT, '0.0.0.0', () => {
       console.log(` Server đang chạy tại http://0.0.0.0:${PORT} (hỗ trợ Realtime Socket.IO & REST)`);
       console.log(`📡 SSE Realtime Stream sẵn sàng tại /api/notifications/stream`);
-      console.log(`🧹 Auto-cleanup: Bản tin pending quá 2 ngày sẽ tự động được dọn dẹp định kỳ.`);
+      console.log(`🧹 Auto-cleanup: Bản tin lưu trữ (ARCHIVED) & tin pending cũ quá 2 ngày sẽ tự động được xóa vĩnh viễn định kỳ.`);
+      console.log(`🩸 Blood Donation Reminders: Tự động gửi nhắc nhở (cách 1 ngày & sắp đến giờ) đang hoạt động ngầm mỗi 10 phút.`);
     });
   } catch (error) {
     console.error('❌ Lỗi kết nối CSDL hoặc khởi động Server:', error);

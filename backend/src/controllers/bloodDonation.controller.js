@@ -292,6 +292,36 @@ class BloodDonationController {
       return sendSuccess(res, 200, 'Lỗi tra cứu địa chỉ', '');
     }
   }
+
+  /**
+   * POST /blood-donations/events/:id/remind
+   * Thủ công gửi thông báo nhắc nhở cho người tham gia sự kiện hiến máu
+   */
+  async triggerEventReminders(req, res, next) {
+    try {
+      const result = await bloodDonationService.triggerEventReminders(
+        req.user,
+        req.params.id,
+        req.body?.reminderType || 'AUTO'
+      );
+      return sendSuccess(res, 200, 'Đã gửi thông báo nhắc nhở thành công', result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /blood-donations/reminders/scan
+   * Kích hoạt quét và gửi nhắc nhở cho tất cả sự kiện đang hoạt động
+   */
+  async triggerAllReminders(req, res, next) {
+    try {
+      const result = await bloodDonationService.sendScheduledReminders();
+      return sendSuccess(res, 200, 'Đã quét và xử lý gửi nhắc nhở hiến máu', result);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new BloodDonationController();

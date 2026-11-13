@@ -7,7 +7,6 @@ import {
   updateWeatherArticleApi,
   deleteWeatherArticleApi,
   executeWeatherWorkflowApi,
-  cleanupExpiredWeatherArticlesApi,
   subscribeWeatherArticleUpdates,
   type WeatherArticleItem,
   type CreateWeatherPayload,
@@ -51,6 +50,7 @@ import {
   Send,
   Smartphone,
   Download,
+  PlusCircle,
 } from 'lucide-react';
 import './WeatherView.css';
 
@@ -227,7 +227,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     status: 'ACTIVE',
   });
 
-  const canManage = Boolean(user?.roles?.includes('ADMIN'));
+  const canManage = Boolean(user?.roles?.some((r) => ['ADMIN', 'LOCAL_AUTHORITY', 'MANAGER'].includes(r)));
   const canRunWorkflow = Boolean(user?.roles?.includes('ADMIN'));
 
   // Fetch articles from API
@@ -360,31 +360,23 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     }
   };
 
-  const [cleaningExpired, setCleaningExpired] = useState<boolean>(false);
-
-  const handleCleanupExpired = () => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Xác nhận dọn dẹp bản tin quá hạn',
-      message:
-        'Hệ thống sẽ quét và xóa các bản tin CHƯA DUYỆT (pending) có ngày xuất bản quá 2 ngày so với hiện tại. Các bản tin đã duyệt sẽ được giữ an toàn tuyệt đối. Bạn có muốn tiếp tục?',
-      type: 'warning',
-      confirmText: 'Xác nhận dọn dẹp',
-      cancelText: 'Hủy bỏ',
-      onConfirm: async () => {
-        try {
-          setCleaningExpired(true);
-          const res = await cleanupExpiredWeatherArticlesApi(2);
-          const count = res.data?.deletedCount ?? 0;
-          toast.success(res.message || `Đã dọn dẹp thành công ${count} bản tin quá hạn!`);
-          fetchArticles();
-        } catch (err: any) {
-          toast.error(err.message || 'Không thể dọn dẹp bản tin quá hạn');
-        } finally {
-          setCleaningExpired(false);
-        }
-      },
+  const handleOpenCreateModal = () => {
+    setEditingItem(null);
+    setFormValues({
+      title: '',
+      content: '',
+      summary: '',
+      category: 'mua_lu',
+      score: 80,
+      area: '',
+      imageUrl: '',
+      articleUrl: '',
+      articleTitle: '',
+      sourceName: user?.fullName ? `Ban Chỉ Huy PCTT (${user.fullName})` : 'Ban Chỉ Huy PCTT',
+      publishedAt: toDateInputValue(new Date().toISOString()),
+      status: 'ACTIVE',
     });
+    setIsFormOpen(true);
   };
 
   const handleOpenEditModal = (item: WeatherArticleItem) => {
@@ -576,12 +568,12 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     }
   };
 
-  // Lưu trữ hoặc từ chối bản tin
+  // Lưu trữ hoặc từ chối bản tin (Chỉ lưu tối đa 2 ngày, sau đó hệ thống tự xóa vĩnh viễn)
   const handleArchive = (item: WeatherArticleItem) => {
     setConfirmModal({
       isOpen: true,
       title: 'Xác nhận lưu trữ bản tin',
-      message: `Bạn có chắc chắn muốn chuyển bản tin này vào kho lưu trữ? Sau khi lưu trữ, bản tin sẽ không còn hiển thị công khai trên ứng dụng.`,
+      message: `Bạn có chắc chắn muốn chuyển bản tin này vào kho lưu trữ? Bản tin sẽ được lưu trữ tối đa trong 2 ngày, sau đó hệ thống sẽ tự động dọn dẹp và xóa vĩnh viễn khỏi CSDL.`,
       type: 'warning',
       confirmText: 'Xác nhận lưu trữ',
       cancelText: 'Hủy bỏ',
@@ -593,13 +585,41 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
       onConfirm: async () => {
         try {
           await deleteWeatherArticleApi(item._id);
-          toast.success('Đã chuyển bản tin vào lưu trữ');
+          toast.success('Đã chuyển bản tin vào lưu trữ (hệ thống tự động xóa sau 2 ngày)');
           if (detailItem?._id === item._id) {
             setDetailItem(null);
           }
           fetchArticles();
         } catch (err: any) {
           toast.error(err.message || 'Không thể lưu trữ bản tin');
+        }
+      },
+    });
+  };
+
+  // Xóa vĩnh viễn bản tin ngay lập tức (không chờ 2 ngày)
+  const handleDeletePermanent = (item: WeatherArticleItem) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Xác nhận xóa vĩnh viễn bản tin',
+      message: `Bản tin này đang nằm trong kho lưu trữ. Bạn có muốn xóa vĩnh viễn ngay lập tức khỏi cơ sở dữ liệu thay vì chờ tự động dọn sau 2 ngày?`,
+      type: 'danger',
+      confirmText: 'Xóa vĩnh viễn',
+      cancelText: 'Hủy bỏ',
+      details: [
+        { label: 'Tiêu đề', value: item.title },
+        { label: 'Khu vực', value: item.area || 'Toàn quốc' },
+      ],
+      onConfirm: async () => {
+        try {
+          await deleteWeatherArticleApi(item._id, { permanent: true });
+          toast.success('Đã xóa vĩnh viễn bản tin thời tiết khỏi hệ thống');
+          if (detailItem?._id === item._id) {
+            setDetailItem(null);
+          }
+          fetchArticles();
+        } catch (err: any) {
+          toast.error(err.message || 'Không thể xóa vĩnh viễn bản tin');
         }
       },
     });
@@ -789,9 +809,20 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
         </div>
 
         <div className="weather-header-actions">
+          {canManage && (
+            <button
+              className="btn-primary-weather btn-create-weather"
+              onClick={handleOpenCreateModal}
+              title="Tạo thủ công bài tin tức / cảnh báo thời tiết mới"
+            >
+              <PlusCircle size={16} />
+              <span>Tạo bài tin tức thủ công</span>
+            </button>
+          )}
+
           {canRunWorkflow && (
             <button
-              className="btn-primary-weather"
+              className="btn-secondary-weather"
               onClick={handleRunWorkflow}
               disabled={runningWorkflow}
               title="Chạy workflow thu thập và phân loại bản tin thời tiết trên n8n"
@@ -800,17 +831,14 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
               {runningWorkflow ? 'Đang chạy workflow...' : 'Chạy thu thập ngay'}
             </button>
           )}
-          {canManage && (
-            <button
-              className="btn-secondary-weather"
-              onClick={handleCleanupExpired}
-              disabled={cleaningExpired}
-              title="Quét và xóa các bản tin chờ duyệt có ngày xuất bản quá 2 ngày so với hiện tại"
-            >
-              <Trash2 size={15} color="#dc2626" />
-              {cleaningExpired ? 'Đang dọn dẹp...' : 'Dọn tin cũ (>2 ngày)'}
-            </button>
-          )}
+
+          <div
+            className="weather-autoclean-tag"
+            title="Hệ thống chạy ngầm tự động xóa vĩnh viễn các bản tin lưu trữ (ARCHIVED) & tin pending cũ quá 2 ngày định kỳ mỗi 30 phút mà không cần thao tác nút nhấn."
+          >
+            <Sparkles size={13} color="#10b981" />
+            <span>Tự động dọn rác lưu trữ 2 ngày</span>
+          </div>
           <button
             className="btn-secondary-weather"
             onClick={handleExportWeatherCsv}
@@ -944,6 +972,16 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
           </select>
         </div>
       </div>
+
+      {/* Thông báo chính sách dọn dẹp kho lưu trữ sau 2 ngày */}
+      {activeTab === 'archived' && (
+        <div className="weather-archive-notice-bar">
+          <Clock size={16} color="#d97706" />
+          <span>
+            <strong>Chính sách lưu trữ 2 ngày:</strong> Bản tin trong kho lưu trữ chỉ được giữ tối đa trong <strong>2 ngày</strong>. Hệ thống chạy tiến trình tự động ngầm quét và xóa vĩnh viễn khỏi CSDL sau 2 ngày mà không cần bấm nút dọn rác thủ công.
+          </span>
+        </div>
+      )}
 
       {/* Batch Actions Bar for Selected Articles */}
       {selectedIds.size > 0 && (
@@ -1199,13 +1237,34 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                               >
                                 <Edit2 size={13} />
                               </button>
-                              <button
-                                className="btn-tbl-action btn-delete"
-                                onClick={() => handleArchive(item)}
-                                title="Lưu trữ / Từ chối bản tin"
-                              >
-                                <Trash2 size={13} />
-                              </button>
+                              {item.status === 'ARCHIVED' || item.status === 'rejected' ? (
+                                <>
+                                  <button
+                                    className="btn-tbl-action btn-revert"
+                                    onClick={() => handleRevertToPending(item)}
+                                    title="Khôi phục về Chờ duyệt"
+                                  >
+                                    <RotateCcw size={13} />
+                                    <span>Khôi phục</span>
+                                  </button>
+                                  <button
+                                    className="btn-tbl-action btn-delete"
+                                    onClick={() => handleDeletePermanent(item)}
+                                    title="Xóa vĩnh viễn khỏi CSDL ngay"
+                                    style={{ color: '#dc2626' }}
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  className="btn-tbl-action btn-delete"
+                                  onClick={() => handleArchive(item)}
+                                  title="Lưu trữ bản tin (tự động xóa sau 2 ngày)"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
                             </>
                           )}
                         </div>
@@ -1364,13 +1423,33 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                       >
                         <Edit2 size={14} />
                       </button>
-                      <button
-                        className="weather-btn-action delete"
-                        onClick={() => handleArchive(item)}
-                        title="Lưu trữ bản tin"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {item.status === 'ARCHIVED' || item.status === 'rejected' ? (
+                        <>
+                          <button
+                            className="weather-btn-action"
+                            onClick={() => handleRevertToPending(item)}
+                            title="Khôi phục về Chờ duyệt"
+                            style={{ color: '#0284c7' }}
+                          >
+                            <RotateCcw size={14} />
+                          </button>
+                          <button
+                            className="weather-btn-action delete"
+                            onClick={() => handleDeletePermanent(item)}
+                            title="Xóa vĩnh viễn khỏi CSDL ngay"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="weather-btn-action delete"
+                          onClick={() => handleArchive(item)}
+                          title="Lưu trữ bản tin (tự động xóa sau 2 ngày)"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1665,7 +1744,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
             <div className="weather-modal-header">
               <h3>
                 <CloudSun size={20} color="#0284c7" />
-                {editingItem ? 'CHỈNH SỬA BẢN TIN THỜI TIẾT' : 'TẠO MỚI BẢN TIN THỜI TIẾT'}
+                {editingItem ? 'CHỈNH SỬA BẢN TIN THỜI TIẾT' : 'TẠO BẢN TIN THỜI TIẾT THỦ CÔNG'}
               </h3>
               <button
                 className="weather-modal-close"
@@ -1723,13 +1802,29 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                     <input
                       type="text"
                       required
-                      placeholder="VD: Quận Hải Châu, Đà Nẵng"
+                      list="weather-area-suggestions"
+                      placeholder="VD: Điện Bàn Đông, Quận Hải Châu, Đà Nẵng..."
                       className="weather-form-input"
                       value={formValues.area}
-                      onChange={(e) =>
-                        setFormValues({ ...formValues, area: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const matched = administrativeAreas.find(
+                          (a) => a.name.toLowerCase() === val.trim().toLowerCase()
+                        );
+                        setFormValues({
+                          ...formValues,
+                          area: val,
+                          areaId: matched ? matched._id : formValues.areaId,
+                        });
+                      }}
                     />
+                    <datalist id="weather-area-suggestions">
+                      {administrativeAreas.map((area) => (
+                        <option key={area._id} value={area.name}>
+                          {area.type ? `[${area.type}] ` : ''}{area.name}
+                        </option>
+                      ))}
+                    </datalist>
                   </div>
                 </div>
 
@@ -1867,7 +1962,7 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                   className="btn-primary-weather"
                   disabled={submitting}
                 >
-                  {submitting ? 'Đang lưu...' : 'Lưu cập nhật'}
+                  {submitting ? 'Đang lưu...' : editingItem ? 'Lưu cập nhật' : 'Tạo bản tin thủ công'}
                 </button>
               </div>
             </form>

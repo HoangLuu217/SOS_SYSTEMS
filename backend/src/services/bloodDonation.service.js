@@ -951,6 +951,352 @@ class BloodDonationService {
 
     return { message: 'Đã xóa đợt hiến máu thành công.' };
   }
+
+  /**
+   * Helper: Phân tích ngày và giờ bắt đầu sự kiện theo múi giờ Việt Nam (+07:00)
+   */
+  parseEventStartDateTime(eventDate, startTimeStr) {
+    if (!eventDate) return null;
+    let datePart = '';
+    if (typeof eventDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(eventDate)) {
+      datePart = eventDate.slice(0, 10);
+    } else {
+      try {
+        const d = new Date(eventDate);
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Ho_Chi_Minh',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        });
+        datePart = formatter.format(d);
+      } catch {
+        datePart = new Date(eventDate).toISOString().slice(0, 10);
+      }
+    }
+
+    let timePart = (startTimeStr || '07:30').trim();
+    if (/^\d{1}:\d{2}$/.test(timePart)) {
+      timePart = '0' + timePart;
+    }
+    if (!/^\d{2}:\d{2}/.test(timePart)) {
+      timePart = '07:30';
+    }
+    const timeWithSec = `${timePart}:00`;
+    return new Date(`${datePart}T${timeWithSec}+07:00`);
+  }
+
+  /**
+   * 12. Gửi thông báo nhắc nhở tự động cho người dân đã đăng ký hiến máu:
+   *  - Cách 1 ngày (1_DAY_BEFORE): Thông báo trước ngày diễn ra sự kiện (~24 giờ)
+   *  - Sắp đến giờ (UPCOMING): Thông báo trước khi sự kiện bắt đầu (~2 giờ)
+   */
+  async sendScheduledReminders(options = {}) {
+    const { eventId, forceType } = options;
+    const now = new Date();
+
+    const eventQuery = { status: 'ACTIVE' };
+    if (eventId && mongoose.Types.ObjectId.isValid(eventId)) {
+      eventQuery._id = new mongoose.Types.ObjectId(eventId);
+    }
+
+    const events = await BloodDonationEvent.find(eventQuery).lean();
+    if (!events.length) {
+      return { totalReminded: 0, count1Day: 0, countUpcoming: 0, eventsChecked: 0 };
+    }
+
+    let totalCount1Day = 0;
+    let totalCountUpcoming = 0;
+
+    for (const ev of events) {
+      const startDateTime = this.parseEventStartDateTime(ev.eventDate, ev.startTime);
+      if (!startDateTime || isNaN(startDateTime.getTime())) continue;
+
+      const diffMs = startDateTime.getTime() - now.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      const diffMinutes = diffMs / (1000 * 60);
+
+      // Nếu sự kiện đã kết thúc hoặc quá 3 giờ sau khi bắt đầu thì bỏ qua
+      if (diffMinutes < -180) continue;
+
+      let formattedDateStr = '';
+      try {
+        formattedDateStr = new Date(ev.eventDate).toLocaleDateString('vi-VN', {
+          timeZone: 'Asia/Ho_Chi_Minh',
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        });
+      } catch {
+        formattedDateStr = String(ev.eventDate).slice(0, 10);
+      }
+
+      // 1. Kiểm tra điều kiện "Cách một ngày" (12h - 36h trước sự kiện)
+      const shouldCheck1Day =
+        forceType === '1_DAY_BEFORE' ||
+        (!forceType && diffHours >= 12 && diffHours <= 36);
+
+      if (shouldCheck1Day) {
+        const regs1Day = await BloodDonationRegistration.find({
+          eventId: ev._id,
+          registrationType: 'EVENT_REGISTRATION',
+          status: 'CONFIRMED',
+          reminded1DayBefore: { $ne: true },
+        }).lean();
+
+        if (regs1Day.length > 0) {
+          const userIds = regs1Day.map((r) => r.userId).filter(Boolean);
+          const users = await User.find({ _id: { $in: userIds } })
+            .select('_id pushToken citizen fullName')
+            .lean();
+          const userMap = new Map(users.map((u) => [u._id.toString(), u]));
+
+          const notifDocs = [];
+          const pushTokens = [];
+
+          for (const reg of regs1Day) {
+            const uidStr = reg.userId?.toString();
+            const uDoc = userMap.get(uidStr);
+            const recipientName = reg.fullName || uDoc?.fullName || 'bạn';
+
+            const notifTitle = `🩸 [Nhắc nhở] Ngày mai diễn ra đợt hiến máu tình nguyện`;
+            const notifContent = `Chào ${recipientName}, bạn có lịch hẹn hiến máu tại "${ev.title}" vào ngày mai (${formattedDateStr}) lúc ${ev.startTime} tại ${ev.locationName} (${ev.address}). Vui lòng nghỉ ngơi đầy đủ, ăn sáng nhẹ và mang theo CCCD nhé!`;
+
+            notifDocs.push({
+              userId: reg.userId,
+              createdBy: ev.createdBy || null,
+              areaId: ev.areaId || null,
+              areaName: ev.areaName || null,
+              type: 'BLOOD_DONATION',
+              title: notifTitle,
+              content: notifContent,
+              priority: 'HIGH',
+              actionUrl: 'blood_donation',
+              data: {
+                isBloodDonation: true,
+                reminderType: '1_DAY_BEFORE',
+                eventId: ev._id.toString(),
+                title: ev.title,
+                locationName: ev.locationName,
+                address: ev.address,
+                googleMapsUrl: ev.googleMapsUrl || '',
+                eventDate: ev.eventDate,
+                startTime: ev.startTime,
+                endTime: ev.endTime,
+                slot: reg.preferredTimeSlot || `${ev.startTime} - ${ev.endTime}`,
+                actionUrl: 'blood_donation',
+                screen: 'blood_donation',
+              },
+              isRead: false,
+              createdAt: new Date(),
+            });
+
+            if (uDoc) {
+              const tokens = [uDoc.pushToken, uDoc.citizen?.pushToken].filter(Boolean);
+              tokens.forEach((t) => {
+                const tr = t.trim();
+                if (tr && !pushTokens.includes(tr)) pushTokens.push(tr);
+              });
+            }
+          }
+
+          if (notifDocs.length > 0) {
+            const savedNotifs = await Notification.insertMany(notifDocs);
+            savedNotifs.forEach((n) => {
+              try {
+                eventBus.emit('notification_event', {
+                  action: 'USER',
+                  userId: n.userId.toString(),
+                  notification: n,
+                });
+              } catch (_) {}
+            });
+
+            if (pushTokens.length > 0) {
+              sendExpoPushNotification({
+                tokens: pushTokens,
+                title: `🩸 [Nhắc nhở] Ngày mai diễn ra đợt hiến máu tình nguyện`,
+                body: `Bạn có lịch hẹn hiến máu tại "${ev.title}" vào ngày mai lúc ${ev.startTime}. Vui lòng nghỉ ngơi đầy đủ và có mặt đúng giờ!`,
+                priority: 'HIGH',
+                data: {
+                  type: 'BLOOD_DONATION',
+                  isBloodDonation: true,
+                  reminderType: '1_DAY_BEFORE',
+                  eventId: ev._id.toString(),
+                  locationName: ev.locationName,
+                  address: ev.address,
+                  eventDate: ev.eventDate instanceof Date ? ev.eventDate.toISOString() : ev.eventDate,
+                  startTime: ev.startTime,
+                  endTime: ev.endTime,
+                  actionUrl: 'blood_donation',
+                  screen: 'blood_donation',
+                },
+              }).catch((err) => {
+                console.error('[BloodDonationService] Lỗi gửi Push 1 ngày trước:', err.message);
+              });
+            }
+
+            const regIds = regs1Day.map((r) => r._id);
+            await BloodDonationRegistration.updateMany(
+              { _id: { $in: regIds } },
+              { $set: { reminded1DayBefore: true, reminded1DayAt: new Date() } }
+            );
+
+            totalCount1Day += regs1Day.length;
+          }
+        }
+      }
+
+      // 2. Kiểm tra điều kiện "Sắp đến giờ" (Trước 2.5 giờ đến 15 phút sau khi bắt đầu)
+      const shouldCheckUpcoming =
+        forceType === 'UPCOMING' ||
+        (!forceType && diffMinutes >= -15 && diffMinutes <= 150);
+
+      if (shouldCheckUpcoming) {
+        const regsUpcoming = await BloodDonationRegistration.find({
+          eventId: ev._id,
+          registrationType: 'EVENT_REGISTRATION',
+          status: 'CONFIRMED',
+          remindedUpcoming: { $ne: true },
+        }).lean();
+
+        if (regsUpcoming.length > 0) {
+          const userIds = regsUpcoming.map((r) => r.userId).filter(Boolean);
+          const users = await User.find({ _id: { $in: userIds } })
+            .select('_id pushToken citizen fullName')
+            .lean();
+          const userMap = new Map(users.map((u) => [u._id.toString(), u]));
+
+          const notifDocs = [];
+          const pushTokens = [];
+
+          for (const reg of regsUpcoming) {
+            const uidStr = reg.userId?.toString();
+            const uDoc = userMap.get(uidStr);
+            const recipientName = reg.fullName || uDoc?.fullName || 'bạn';
+
+            const notifTitle = `⏰ [Sắp đến giờ] Đợt hiến máu tình nguyện sắp bắt đầu`;
+            const notifContent = `Chào ${recipientName}, đợt hiến máu "${ev.title}" tại ${ev.locationName} sẽ bắt đầu lúc ${ev.startTime} hôm nay (${formattedDateStr}). Vui lòng chuẩn bị và có mặt đúng giờ nhé!`;
+
+            notifDocs.push({
+              userId: reg.userId,
+              createdBy: ev.createdBy || null,
+              areaId: ev.areaId || null,
+              areaName: ev.areaName || null,
+              type: 'BLOOD_DONATION',
+              title: notifTitle,
+              content: notifContent,
+              priority: 'CRITICAL',
+              actionUrl: 'blood_donation',
+              data: {
+                isBloodDonation: true,
+                reminderType: 'UPCOMING',
+                eventId: ev._id.toString(),
+                title: ev.title,
+                locationName: ev.locationName,
+                address: ev.address,
+                googleMapsUrl: ev.googleMapsUrl || '',
+                eventDate: ev.eventDate,
+                startTime: ev.startTime,
+                endTime: ev.endTime,
+                slot: reg.preferredTimeSlot || `${ev.startTime} - ${ev.endTime}`,
+                actionUrl: 'blood_donation',
+                screen: 'blood_donation',
+              },
+              isRead: false,
+              createdAt: new Date(),
+            });
+
+            if (uDoc) {
+              const tokens = [uDoc.pushToken, uDoc.citizen?.pushToken].filter(Boolean);
+              tokens.forEach((t) => {
+                const tr = t.trim();
+                if (tr && !pushTokens.includes(tr)) pushTokens.push(tr);
+              });
+            }
+          }
+
+          if (notifDocs.length > 0) {
+            const savedNotifs = await Notification.insertMany(notifDocs);
+            savedNotifs.forEach((n) => {
+              try {
+                eventBus.emit('notification_event', {
+                  action: 'USER',
+                  userId: n.userId.toString(),
+                  notification: n,
+                });
+              } catch (_) {}
+            });
+
+            if (pushTokens.length > 0) {
+              sendExpoPushNotification({
+                tokens: pushTokens,
+                title: `⏰ [Sắp đến giờ] Đợt hiến máu tình nguyện sắp bắt đầu`,
+                body: `Đợt hiến máu tại "${ev.locationName}" sẽ bắt đầu lúc ${ev.startTime}. Vui lòng chuẩn bị và có mặt đúng giờ!`,
+                priority: 'CRITICAL',
+                data: {
+                  type: 'BLOOD_DONATION',
+                  isBloodDonation: true,
+                  reminderType: 'UPCOMING',
+                  eventId: ev._id.toString(),
+                  locationName: ev.locationName,
+                  address: ev.address,
+                  eventDate: ev.eventDate instanceof Date ? ev.eventDate.toISOString() : ev.eventDate,
+                  startTime: ev.startTime,
+                  endTime: ev.endTime,
+                  actionUrl: 'blood_donation',
+                  screen: 'blood_donation',
+                },
+              }).catch((err) => {
+                console.error('[BloodDonationService] Lỗi gửi Push sắp đến giờ:', err.message);
+              });
+            }
+
+            const regIds = regsUpcoming.map((r) => r._id);
+            await BloodDonationRegistration.updateMany(
+              { _id: { $in: regIds } },
+              { $set: { remindedUpcoming: true, remindedUpcomingAt: new Date() } }
+            );
+
+            totalCountUpcoming += regsUpcoming.length;
+          }
+        }
+      }
+    }
+
+    if (totalCount1Day > 0 || totalCountUpcoming > 0) {
+      console.log(
+        `🩸 [BloodDonationReminder] Đã gửi thông báo nhắc nhở: ${totalCount1Day} người (cách 1 ngày), ${totalCountUpcoming} người (sắp đến giờ).`
+      );
+    }
+
+    return {
+      success: true,
+      totalReminded: totalCount1Day + totalCountUpcoming,
+      count1Day: totalCount1Day,
+      countUpcoming: totalCountUpcoming,
+      eventsChecked: events.length,
+    };
+  }
+
+  /**
+   * 13. Thủ công kích hoạt gửi nhắc nhở cho một đợt hiến máu (Dành cho ADMIN / LOCAL_AUTHORITY)
+   */
+  async triggerEventReminders(requester, eventId, reminderType = 'AUTO') {
+    if (!mongoose.Types.ObjectId.isValid(eventId)) {
+      throw new ApiError(400, 'Mã sự kiện hiến máu không hợp lệ.');
+    }
+
+    const event = await BloodDonationEvent.findById(eventId);
+    if (!event) {
+      throw new ApiError(404, 'Không tìm thấy sự kiện hiến máu.');
+    }
+
+    const forceType =
+      reminderType === '1_DAY_BEFORE' || reminderType === 'UPCOMING' ? reminderType : undefined;
+
+    return await this.sendScheduledReminders({ eventId: event._id, forceType });
+  }
 }
 
 module.exports = new BloodDonationService();

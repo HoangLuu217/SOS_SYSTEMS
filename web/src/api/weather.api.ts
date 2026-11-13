@@ -173,16 +173,22 @@ export async function updateWeatherArticleApi(
 }
 
 export async function deleteWeatherArticleApi(
-  id: string
+  id: string,
+  options: { permanent?: boolean } = {}
 ): Promise<{ success: boolean; message?: string }> {
-  return fetchWithAuth(`/weather-articles/${id}`, {
+  const qs = options.permanent ? '?permanent=true' : '';
+  return fetchWithAuth(`/weather-articles/${id}${qs}`, {
     method: 'DELETE',
   });
 }
 
 export async function cleanupExpiredWeatherArticlesApi(
   days = 2
-): Promise<{ success: boolean; message?: string; data?: { deletedCount: number } }> {
+): Promise<{
+  success: boolean;
+  message?: string;
+  data?: { totalDeleted: number; archivedDeleted: number; pendingDeleted: number; deletedCount?: number };
+}> {
   return fetchWithAuth('/weather-articles/cleanup-expired', {
     method: 'POST',
     body: JSON.stringify({ days }),

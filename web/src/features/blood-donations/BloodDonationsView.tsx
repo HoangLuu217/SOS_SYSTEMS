@@ -15,6 +15,8 @@ import {
   Activity,
   Download,
   ExternalLink,
+  CheckCircle2,
+  Bell,
 } from 'lucide-react';
 import { fetchWithAuth } from '@/api/client';
 import { fetchAdministrativeAreas } from '@/api/area.api';
@@ -67,6 +69,10 @@ interface BloodDonationRegistration {
   status: 'PENDING' | 'CONFIRMED' | 'DECLINED' | 'COMPLETED' | 'CANCELLED';
   respondedAt: string;
   createdAt: string;
+  reminded1DayBefore?: boolean;
+  reminded1DayAt?: string | null;
+  remindedUpcoming?: boolean;
+  remindedUpcomingAt?: string | null;
 }
 
 interface BloodDonationEvent {
@@ -100,6 +106,49 @@ interface BloodDonationEvent {
   createdAt: string;
 }
 
+interface BloodDonationsCache {
+  registrations: BloodDonationRegistration[];
+  events: BloodDonationEvent[];
+  areas: AdministrativeAreaItem[];
+  eventResponses: Record<string, BloodDonationRegistration[]>;
+  eventDetails: Record<string, BloodDonationEvent>;
+  cachedAt: number;
+}
+
+const CACHE_KEY = 'sos_blood_donations_cache_v1';
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 phút
+
+// Bộ nhớ đệm cấp module trong tiến trình trình duyệt (tồn tại qua các lần chuyển tab/menu Admin)
+let memoryBloodCache: BloodDonationsCache | null = null;
+
+const getInitialBloodCache = (): BloodDonationsCache | null => {
+  if (memoryBloodCache && Date.now() - memoryBloodCache.cachedAt < CACHE_TTL_MS) {
+    return memoryBloodCache;
+  }
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as BloodDonationsCache;
+      if (parsed && typeof parsed.cachedAt === 'number' && Date.now() - parsed.cachedAt < CACHE_TTL_MS) {
+        memoryBloodCache = parsed;
+        return parsed;
+      }
+    }
+  } catch {
+    // Bỏ qua lỗi parse
+  }
+  return memoryBloodCache;
+};
+
+const saveBloodCache = (cache: BloodDonationsCache) => {
+  memoryBloodCache = cache;
+  try {
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // Bỏ qua lỗi vượt dung lượng quota sessionStorage
+  }
+};
+
 const getStatusLabelText = (status: string) => {
   if (status === 'PENDING') return 'ĐK nhận thông báo đợt hiến';
   if (status === 'CONFIRMED' || status === 'COMPLETED') return 'Xác nhận tham gia';
@@ -111,11 +160,21 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
   const isAdmin = Boolean(user?.roles?.includes('ADMIN'));
   const authorityAreaId = user?.authority?.areaId ? String(user.authority.areaId) : '';
 
+  // Khởi tạo trực tiếp từ bộ nhớ đệm (Cache) để khi chuyển trang trong admin KHÔNG bị load lại!
+  const initialCache = useMemo(() => getInitialBloodCache(), []);
+
   const [activeTab, setActiveTab] = useState<'REGISTRATIONS' | 'EVENTS'>('REGISTRATIONS');
-  const [registrations, setRegistrations] = useState<BloodDonationRegistration[]>([]);
-  const [events, setEvents] = useState<BloodDonationEvent[]>([]);
-  const [areas, setAreas] = useState<AdministrativeAreaItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [registrations, setRegistrations] = useState<BloodDonationRegistration[]>(
+    () => initialCache?.registrations || []
+  );
+  const [events, setEvents] = useState<BloodDonationEvent[]>(
+    () => initialCache?.events || []
+  );
+  const [areas, setAreas] = useState<AdministrativeAreaItem[]>(
+    () => initialCache?.areas || []
+  );
+  // Nếu đã có cache thì loading = false ngay lập tức, không che màn hình bằng spinner
+  const [loading, setLoading] = useState<boolean>(() => !initialCache || initialCache.events.length === 0);
 
   // Thanh tìm kiếm thông minh & Gợi ý bộ lọc
   const [searchQuery, setSearchQuery] = useState('');
@@ -173,17 +232,35 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
   };
 
   const fetchAreas = useCallback(async () => {
+    if (memoryBloodCache?.areas && memoryBloodCache.areas.length > 0) {
+      setAreas(memoryBloodCache.areas);
+      return;
+    }
     try {
       const res: any = await fetchAdministrativeAreas();
       const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
       setAreas(list);
+      if (memoryBloodCache) {
+        memoryBloodCache.areas = list;
+        saveBloodCache(memoryBloodCache);
+      }
     } catch {
       // ignore
     }
   }, []);
 
-  const fetchAllData = useCallback(async () => {
-    setLoading(true);
+  const fetchAllData = useCallback(async (force = false) => {
+    const hasCache = Boolean(
+      memoryBloodCache &&
+      memoryBloodCache.events.length > 0 &&
+      Date.now() - memoryBloodCache.cachedAt < CACHE_TTL_MS
+    );
+
+    // Chỉ bật spinner che màn hình nếu chưa hề có cache hoặc người dùng nhấn nút "Làm mới"
+    if (!hasCache || force) {
+      setLoading(true);
+    }
+
     try {
       const [regRes, evRes] = await Promise.all([
         fetchWithAuth<any>('/blood-donations/registrations?limit=200'),
@@ -193,16 +270,87 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
       const evList = Array.isArray(evRes?.data) ? evRes.data : [];
       setRegistrations(regList);
       setEvents(evList);
+
+      const curCache = memoryBloodCache || {
+        registrations: [],
+        events: [],
+        areas: [],
+        eventResponses: {},
+        eventDetails: {},
+        cachedAt: 0,
+      };
+      curCache.registrations = regList;
+      curCache.events = evList;
+      curCache.cachedAt = Date.now();
+      saveBloodCache(curCache);
+
+      if (force) {
+        showToast('success', 'Đã làm mới dữ liệu hiến máu từ máy chủ.');
+      }
     } catch (err: any) {
-      showToast('error', err?.message || 'Không thể tải dữ liệu.');
+      if (!hasCache || force) {
+        showToast('error', err?.message || 'Không thể tải dữ liệu.');
+      }
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // Cập nhật trạng thái người tham gia (Xác nhận, Đã hiến máu, Từ chối)
+  const handleUpdateRegistrationStatus = useCallback(
+    async (
+      regId: string,
+      newStatus: 'CONFIRMED' | 'COMPLETED' | 'DECLINED' | 'PENDING'
+    ) => {
+      try {
+        const res = await fetchWithAuth<any>(`/blood-donations/registrations/${regId}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: newStatus }),
+        });
+        if (res?.success === false) {
+          throw new Error(res?.message || 'Không thể cập nhật trạng thái');
+        }
+
+        showToast('success', `Đã cập nhật trạng thái thành: ${getStatusLabelText(newStatus)}`);
+
+        // 1. Cập nhật selectedRegistration nếu đang mở
+        setSelectedRegistration((prev) =>
+          prev && prev._id === regId ? { ...prev, status: newStatus } : prev
+        );
+
+        // 2. Cập nhật eventResponses (trong form đợt hiến hiện tại)
+        setEventResponses((prev) =>
+          prev.map((r) => (r._id === regId ? { ...r, status: newStatus } : r))
+        );
+
+        // 3. Cập nhật danh sách registrations chung
+        setRegistrations((prev) =>
+          prev.map((r) => (r._id === regId ? { ...r, status: newStatus } : r))
+        );
+
+        // 4. Đồng bộ vào cache
+        if (memoryBloodCache) {
+          memoryBloodCache.registrations = memoryBloodCache.registrations.map((r) =>
+            r._id === regId ? { ...r, status: newStatus } : r
+          );
+          if (selectedEventDetail?._id && memoryBloodCache.eventResponses?.[selectedEventDetail._id]) {
+            memoryBloodCache.eventResponses[selectedEventDetail._id] = memoryBloodCache.eventResponses[
+              selectedEventDetail._id
+            ].map((r) => (r._id === regId ? { ...r, status: newStatus } : r));
+          }
+          saveBloodCache(memoryBloodCache);
+        }
+      } catch (err: any) {
+        showToast('error', err?.message || 'Không thể cập nhật trạng thái');
+      }
+    },
+    [selectedEventDetail]
+  );
+
   useEffect(() => {
     void fetchAreas();
-    void fetchAllData();
+    // Khi chuyển trang qua lại, gọi với force=false để tận dụng cache và cập nhật ngầm không giật lag
+    void fetchAllData(false);
   }, [fetchAreas, fetchAllData]);
 
   const areaById = useMemo(() => new Map(areas.map((a) => [a._id, a])), [areas]);
@@ -338,7 +486,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
       showToast('success', `Đã tạo đợt hiến máu và gửi thông báo tới ${notifiedCount} người đăng ký!`);
       setIsCreateOpen(false);
       setActiveTab('EVENTS');
-      await fetchAllData();
+      await fetchAllData(true);
       window.dispatchEvent(new CustomEvent('sos_data_updated'));
     } catch (err: any) {
       showToast('error', err?.message || 'Không thể tạo đợt hiến máu.');
@@ -349,15 +497,46 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
 
   const handleOpenEventDetail = async (ev: BloodDonationEvent) => {
     setSelectedRegistration(null);
-    setSelectedEventDetail(ev);
-    setLoadingDetail(true);
+
+    // Kiểm tra cache cho đợt hiến này -> hiển thị ngay nếu có
+    const cachedEvent = memoryBloodCache?.eventDetails?.[ev._id] || ev;
+    const cachedResponses = memoryBloodCache?.eventResponses?.[ev._id];
+
+    setSelectedEventDetail(cachedEvent);
+
+    if (cachedResponses && cachedResponses.length > 0) {
+      setEventResponses(cachedResponses);
+      setLoadingDetail(false);
+    } else {
+      setEventResponses([]);
+      setLoadingDetail(true);
+    }
+
     try {
       const res = await fetchWithAuth<any>(`/blood-donations/events/${ev._id}`);
       const data = res?.data || res;
-      if (data?.event) setSelectedEventDetail(data.event);
-      setEventResponses(Array.isArray(data?.responses) ? data.responses : []);
+      const resolvedEv = data?.event || ev;
+      const resolvedResponses = Array.isArray(data?.responses) ? data.responses : [];
+
+      setSelectedEventDetail(resolvedEv);
+      setEventResponses(resolvedResponses);
+
+      // Cập nhật vào cache
+      const curCache = memoryBloodCache || {
+        registrations: [],
+        events: [],
+        areas: [],
+        eventResponses: {},
+        eventDetails: {},
+        cachedAt: Date.now(),
+      };
+      if (!curCache.eventResponses) curCache.eventResponses = {};
+      if (!curCache.eventDetails) curCache.eventDetails = {};
+      curCache.eventResponses[ev._id] = resolvedResponses;
+      curCache.eventDetails[ev._id] = resolvedEv;
+      saveBloodCache(curCache);
     } catch {
-      setEventResponses([]);
+      if (!cachedResponses) setEventResponses([]);
     } finally {
       setLoadingDetail(false);
     }
@@ -374,13 +553,38 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         throw new Error(res?.message || 'Lỗi cập nhật trạng thái.');
       }
       showToast('success', nextStatus === 'CLOSED' ? 'Đã đóng đợt hiến máu.' : 'Đã mở lại đợt hiến máu.');
-      await fetchAllData();
+      await fetchAllData(true);
       window.dispatchEvent(new CustomEvent('sos_data_updated'));
       if (selectedEventDetail?._id === ev._id) {
         setSelectedEventDetail({ ...ev, status: nextStatus });
       }
     } catch (err: any) {
       showToast('error', err?.message || 'Không thể cập nhật.');
+    }
+  };
+
+  const [sendingReminder, setSendingReminder] = useState(false);
+
+  const handleSendEventReminders = async (ev: BloodDonationEvent) => {
+    if (sendingReminder) return;
+    setSendingReminder(true);
+    try {
+      const res = await fetchWithAuth<any>(`/blood-donations/events/${ev._id}/remind`, {
+        method: 'POST',
+        body: JSON.stringify({ reminderType: 'AUTO' }),
+      });
+      if (res?.success === false) {
+        throw new Error(res?.message || 'Lỗi gửi nhắc nhở');
+      }
+      const d = res?.data || {};
+      const msg = `Đã kiểm tra gửi nhắc nhở: ${d.count1Day || 0} người (cách 1 ngày), ${d.countUpcoming || 0} người (sắp đến giờ). Tổng đã nhắc: ${d.totalReminded || 0} người.`;
+      showToast('success', msg);
+      // Cập nhật lại danh sách người tham gia để hiển thị cờ nhắc nhở mới nhất
+      await handleOpenEventDetail(ev);
+    } catch (err: any) {
+      showToast('error', err?.message || 'Không thể gửi nhắc nhở.');
+    } finally {
+      setSendingReminder(false);
     }
   };
 
@@ -950,7 +1154,8 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
 
           <button
             type="button"
-            onClick={fetchAllData}
+            onClick={() => fetchAllData(true)}
+            title="Làm mới dữ liệu từ máy chủ (bỏ qua cache)"
             style={{
               padding: '7px 12px',
               borderRadius: 8,
@@ -1269,7 +1474,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
         </div>
       )}
 
-      {/* ================= SLIDE-OVER DRAWER BÊN PHẢI: CHI TIẾT NGƯỜI ĐĂNG KÝ ================= */}
+      {/* ================= SLIDE-OVER DRAWER BÊN PHẢI: CHI TIẾT NGƯỜI ĐĂNG KÝ (ĐÈ LÊN FORM NẾU ĐANG XEM ĐỢT HIẾN) ================= */}
       {selectedRegistration && (
         <>
           <div
@@ -1277,8 +1482,9 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
             style={{
               position: 'fixed',
               inset: 0,
-              background: 'rgba(15, 23, 42, 0.35)',
-              zIndex: 9998,
+              background: 'rgba(15, 23, 42, 0.45)',
+              zIndex: selectedEventDetail ? 10010 : 9998,
+              backdropFilter: selectedEventDetail ? 'blur(2px)' : undefined,
             }}
           />
           <div
@@ -1287,13 +1493,14 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               top: 0,
               right: 0,
               bottom: 0,
-              width: 420,
-              maxWidth: '92vw',
+              width: 440,
+              maxWidth: '94vw',
               background: '#ffffff',
-              zIndex: 9999,
-              boxShadow: '-8px 0 30px rgba(15, 23, 42, 0.15)',
+              zIndex: selectedEventDetail ? 10020 : 9999,
+              boxShadow: '-8px 0 35px rgba(15, 23, 42, 0.25)',
               display: 'flex',
               flexDirection: 'column',
+              animation: 'slideInRight 0.2s ease-out',
             }}
           >
             {/* Header Drawer */}
@@ -1304,23 +1511,32 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                background: selectedEventDetail ? '#f8fafc' : '#ffffff',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <UserIcon size={18} color="#2563eb" />
-                <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: '#0f172a' }}>
-                  Chi tiết đăng ký hiến máu
-                </h3>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: '#0f172a' }}>
+                    {selectedEventDetail ? 'Hồ sơ người tham gia đợt hiến' : 'Chi tiết đăng ký hiến máu'}
+                  </h3>
+                  {selectedEventDetail && (
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                      Thuộc đợt: <strong style={{ color: '#2563eb' }}>{selectedEventDetail.title}</strong>
+                    </div>
+                  )}
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedRegistration(null)}
+                title={selectedEventDetail ? 'Đóng hồ sơ (giữ nguyên đợt hiến)' : 'Đóng'}
                 style={{
                   background: '#f1f5f9',
                   border: 'none',
                   borderRadius: 8,
-                  width: 30,
-                  height: 30,
+                  width: 32,
+                  height: 32,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -1381,7 +1597,12 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                   </div>
                   <div style={{ fontSize: 12.5, color: '#475569', marginTop: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
                     <Phone size={13} color="#64748b" />
-                    <span>{selectedRegistration.phone}</span>
+                    <a
+                      href={`tel:${selectedRegistration.phone}`}
+                      style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}
+                    >
+                      {selectedRegistration.phone}
+                    </a>
                   </div>
                   {selectedRegistration.userId?.email && (
                     <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -1430,6 +1651,15 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                   <span style={{ color: '#64748b' }}>Trạng thái trên App:</span>
                   {renderStatusBadge(selectedRegistration.status)}
                 </div>
+
+                {selectedRegistration.preferredTimeSlot && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                    <span style={{ color: '#64748b' }}>Khung giờ đăng ký:</span>
+                    <strong style={{ color: '#1d4ed8' }}>
+                      {selectedRegistration.preferredTimeSlot}
+                    </strong>
+                  </div>
+                )}
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                   <span style={{ color: '#64748b' }}>Loại đăng ký:</span>
@@ -1503,6 +1733,121 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                   </div>
                 </div>
               )}
+
+              {/* Trạng thái thông báo nhắc nhở (cách 1 ngày & sắp đến giờ) */}
+              {selectedRegistration.registrationType === 'EVENT_REGISTRATION' && (
+                <div
+                  style={{
+                    border: '1px solid #e2e8f0',
+                    background: '#f8fafc',
+                    borderRadius: 12,
+                    padding: 12,
+                    fontSize: 12.5,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 7,
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: '#334155', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Bell size={13} color="#2563eb" />
+                    <span>Trạng thái thông báo nhắc nhở:</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#64748b' }}>Nhắc trước 1 ngày:</span>
+                    {selectedRegistration.reminded1DayBefore ? (
+                      <span style={{ color: '#16a34a', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <CheckCircle2 size={12} color="#16a34a" />
+                        <span>Đã gửi {selectedRegistration.reminded1DayAt ? `(${formatDateTime(selectedRegistration.reminded1DayAt)})` : ''}</span>
+                      </span>
+                    ) : (
+                      <span style={{ color: '#94a3b8' }}>Chưa gửi (tự động trước 24h)</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#64748b' }}>Nhắc sắp đến giờ:</span>
+                    {selectedRegistration.remindedUpcoming ? (
+                      <span style={{ color: '#16a34a', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <CheckCircle2 size={12} color="#16a34a" />
+                        <span>Đã gửi {selectedRegistration.remindedUpcomingAt ? `(${formatDateTime(selectedRegistration.remindedUpcomingAt)})` : ''}</span>
+                      </span>
+                    ) : (
+                      <span style={{ color: '#94a3b8' }}>Chưa gửi (tự động trước 2h)</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Drawer có nút thao tác & Đóng giữ nguyên form đợt hiến */}
+            <div
+              style={{
+                padding: '14px 20px',
+                borderTop: '1px solid #e2e8f0',
+                background: '#f8fafc',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setSelectedRegistration(null)}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 8,
+                  border: '1px solid #cbd5e1',
+                  background: '#ffffff',
+                  color: '#475569',
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                }}
+              >
+                {selectedEventDetail ? '← Đóng (Giữ đợt hiến)' : 'Đóng'}
+              </button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {selectedRegistration.status !== 'COMPLETED' ? (
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateRegistrationStatus(selectedRegistration._id, 'COMPLETED')}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: 8,
+                      border: 'none',
+                      background: '#16a34a',
+                      color: '#ffffff',
+                      fontWeight: 600,
+                      fontSize: 12.5,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <CheckCircle2 size={14} />
+                    <span>Xác nhận đã hiến máu</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateRegistrationStatus(selectedRegistration._id, 'CONFIRMED')}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: '1px solid #cbd5e1',
+                      background: '#ffffff',
+                      color: '#64748b',
+                      fontWeight: 600,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Đổi về: Xác nhận tham gia
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </>
@@ -1648,7 +1993,30 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                 <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>
                   Người dân phản hồi từ App ({eventResponses.length})
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleSendEventReminders(selectedEventDetail)}
+                    disabled={sendingReminder}
+                    title="Gửi thông báo nhắc nhở tự động cho người tham gia (cách 1 ngày và sắp đến giờ)"
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: 6,
+                      border: '1px solid #bfdbfe',
+                      background: '#eff6ff',
+                      color: '#1d4ed8',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: sendingReminder ? 'not-allowed' : 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      opacity: sendingReminder ? 0.7 : 1,
+                    }}
+                  >
+                    <Bell size={13} color="#2563eb" />
+                    <span>{sendingReminder ? 'Đang gửi...' : 'Gửi nhắc nhở'}</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => handleExportEventParticipantsCsv(selectedEventDetail, eventResponses)}
@@ -1698,53 +2066,302 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                   Chưa có người dân xác nhận trên App.
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {eventResponses.map((r) => (
-                    <div
-                      key={r._id}
-                      onClick={() => {
-                        setSelectedEventDetail(null);
-                        setSelectedRegistration(r);
-                      }}
-                      style={{
-                        padding: '10px 12px',
-                        borderRadius: 10,
-                        border: '1px solid #e2e8f0',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div
-                          style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: '50%',
-                            background: '#dbeafe',
-                            color: '#1d4ed8',
-                            fontWeight: 700,
-                            fontSize: 12.5,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          {getInitials(r.fullName)}
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 600, color: '#2563eb', fontSize: 13.5 }}>
-                            {r.fullName}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {eventResponses.map((r) => {
+                    const isCompleted = r.status === 'COMPLETED';
+                    return (
+                      <div
+                        key={r._id}
+                        onClick={() => setSelectedRegistration(r)}
+                        style={{
+                          padding: '12px 14px',
+                          borderRadius: 12,
+                          border: isCompleted ? '1.5px solid #86efac' : '1px solid #e2e8f0',
+                          background: isCompleted ? '#f0fdf4' : '#ffffff',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 9,
+                          boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
+                          transition: 'all 0.18s ease',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {/* Hàng 1: Avatar + Họ tên (Click mở đè lên) + Badge trạng thái */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                            {r.userId?.avatarUrl ? (
+                              <img
+                                src={r.userId.avatarUrl}
+                                alt={r.fullName}
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: '50%',
+                                  objectFit: 'cover',
+                                  border: '1.5px solid #bfdbfe',
+                                  flexShrink: 0,
+                                }}
+                              />
+                            ) : (
+                              <div
+                                style={{
+                                  width: 36,
+                                  height: 36,
+                                  borderRadius: '50%',
+                                  background: isCompleted ? '#dcfce7' : '#dbeafe',
+                                  color: isCompleted ? '#15803d' : '#1d4ed8',
+                                  fontWeight: 700,
+                                  fontSize: 13.5,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {getInitials(r.fullName)}
+                              </div>
+                            )}
+
+                            <div style={{ minWidth: 0 }}>
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedRegistration(r);
+                                }}
+                                style={{
+                                  fontWeight: 700,
+                                  color: '#2563eb',
+                                  fontSize: 14,
+                                  textDecoration: 'underline',
+                                  textUnderlineOffset: 3,
+                                  cursor: 'pointer',
+                                }}
+                                title="Nhấn vào tên để hiển thị hồ sơ chi tiết đè lên form hiện tại"
+                              >
+                                {r.fullName}
+                              </div>
+                              <div style={{ fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                  <Phone size={12} color="#64748b" />
+                                  <a
+                                    href={`tel:${r.phone}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{ color: '#475569', textDecoration: 'none' }}
+                                  >
+                                    {r.phone}
+                                  </a>
+                                </span>
+                                {r.userId?.email && (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                    <Mail size={12} color="#94a3b8" />
+                                    <span>{r.userId.email}</span>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                          <div style={{ fontSize: 12, color: '#64748b' }}>
-                            {r.phone} • Nhóm máu: {r.bloodType === 'UNKNOWN' ? 'Chưa rõ' : r.bloodType}
+
+                          <div style={{ flexShrink: 0 }}>
+                            {renderStatusBadge(r.status)}
+                          </div>
+                        </div>
+
+                        {/* Hàng 2: Nhóm máu nổi bật + Cân nặng + Khung giờ + Thời gian đăng ký */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 11.5 }}>
+                          <span
+                            style={{
+                              background: r.bloodType === 'UNKNOWN' ? '#f1f5f9' : '#fee2e2',
+                              color: r.bloodType === 'UNKNOWN' ? '#64748b' : '#dc2626',
+                              fontWeight: 700,
+                              padding: '2px 8px',
+                              borderRadius: 10,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 3,
+                            }}
+                          >
+                            <Droplet size={11} />
+                            <span>{r.bloodType === 'UNKNOWN' ? 'Chưa rõ nhóm máu' : `Nhóm máu ${r.bloodType}`}</span>
+                          </span>
+
+                          {r.weightKg && (
+                            <span
+                              style={{
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                color: '#334155',
+                                padding: '2px 7px',
+                                borderRadius: 10,
+                                fontWeight: 500,
+                              }}
+                            >
+                              ⚖️ {r.weightKg} kg
+                            </span>
+                          )}
+
+                          {r.preferredTimeSlot && (
+                            <span
+                              style={{
+                                background: '#eff6ff',
+                                border: '1px solid #bfdbfe',
+                                color: '#1d4ed8',
+                                padding: '2px 7px',
+                                borderRadius: 10,
+                                fontWeight: 500,
+                              }}
+                            >
+                              ⏰ Khung giờ: {r.preferredTimeSlot}
+                            </span>
+                          )}
+
+                          {r.reminded1DayBefore && (
+                            <span
+                              style={{
+                                background: '#fef3c7',
+                                border: '1px solid #fde68a',
+                                color: '#b45309',
+                                padding: '2px 7px',
+                                borderRadius: 10,
+                                fontWeight: 600,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 3,
+                              }}
+                              title={`Đã gửi thông báo nhắc nhở 1 ngày trước${r.reminded1DayAt ? ` (${formatDateTime(r.reminded1DayAt)})` : ''}`}
+                            >
+                              <Bell size={10} />
+                              <span>Đã nhắc 1 ngày</span>
+                            </span>
+                          )}
+
+                          {r.remindedUpcoming && (
+                            <span
+                              style={{
+                                background: '#fef2f2',
+                                border: '1px solid #fecaca',
+                                color: '#b91c1c',
+                                padding: '2px 7px',
+                                borderRadius: 10,
+                                fontWeight: 600,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 3,
+                              }}
+                              title={`Đã gửi thông báo nhắc nhở sắp đến giờ${r.remindedUpcomingAt ? ` (${formatDateTime(r.remindedUpcomingAt)})` : ''}`}
+                            >
+                              <Clock size={10} />
+                              <span>Đã nhắc sắp tới</span>
+                            </span>
+                          )}
+
+                          <span style={{ color: '#64748b', marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <Clock size={11} />
+                            {formatDateTime(r.respondedAt || r.createdAt)}
+                          </span>
+                        </div>
+
+                        {/* Hàng 3: Địa chỉ & Sức khỏe & Ghi chú nếu có */}
+                        {(r.address || r.areaName || r.provinceName || (r.healthNote && r.healthNote !== 'Sức khỏe bình thường, đủ điều kiện hiến máu') || r.note) && (
+                          <div
+                            style={{
+                              background: isCompleted ? '#f0fdf4' : '#f8fafc',
+                              border: isCompleted ? '1px dashed #bbf7d0' : '1px dashed #cbd5e1',
+                              borderRadius: 8,
+                              padding: '7px 9px',
+                              fontSize: 11.5,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 3,
+                            }}
+                          >
+                            {(r.address || r.areaName || r.provinceName) && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#475569' }}>
+                                <MapPin size={11} color="#64748b" />
+                                <span>{r.address ? `${r.address}${r.areaName ? `, ${r.areaName}` : ''}` : (r.areaName || r.provinceName)}</span>
+                              </div>
+                            )}
+                            {r.healthNote && r.healthNote !== 'Sức khỏe bình thường, đủ điều kiện hiến máu' && (
+                              <div style={{ color: '#047857' }}>
+                                🩺 <b>Sức khỏe:</b> {r.healthNote}
+                              </div>
+                            )}
+                            {r.note && (
+                              <div style={{ color: '#0284c7' }}>
+                                📝 <b>Ghi chú:</b> {r.note}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Hàng 4: Link xem chi tiết hồ sơ & Nút thao tác nhanh */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4, borderTop: '1px solid #f1f5f9' }}>
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedRegistration(r);
+                            }}
+                            style={{
+                              color: '#2563eb',
+                              fontSize: 11.5,
+                              fontWeight: 600,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <Eye size={12} />
+                            <span>Nhấn xem hồ sơ chi tiết &rarr;</span>
+                          </span>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {!isCompleted ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateRegistrationStatus(r._id, 'COMPLETED');
+                                }}
+                                title="Đánh dấu người này đã đến hiến máu thành công"
+                                style={{
+                                  padding: '4px 9px',
+                                  borderRadius: 6,
+                                  border: '1px solid #bbf7d0',
+                                  background: '#f0fdf4',
+                                  color: '#15803d',
+                                  fontSize: 11.5,
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                ✓ Đã hiến máu
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateRegistrationStatus(r._id, 'CONFIRMED');
+                                }}
+                                title="Khôi phục trạng thái về Xác nhận tham gia"
+                                style={{
+                                  padding: '4px 9px',
+                                  borderRadius: 6,
+                                  border: '1px solid #cbd5e1',
+                                  background: '#ffffff',
+                                  color: '#64748b',
+                                  fontSize: 11.5,
+                                  fontWeight: 500,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Hoàn tác
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
-                      {renderStatusBadge(r.status)}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

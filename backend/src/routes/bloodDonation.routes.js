@@ -44,6 +44,16 @@ router.patch(
   authorize('ADMIN', 'LOCAL_AUTHORITY', 'AUTHORITY'),
   bloodDonationController.updateEventStatus
 );
+router.post(
+  '/events/:id/remind',
+  authorize('ADMIN', 'LOCAL_AUTHORITY', 'AUTHORITY'),
+  bloodDonationController.triggerEventReminders
+);
+router.post(
+  '/reminders/scan',
+  authorize('ADMIN', 'LOCAL_AUTHORITY', 'AUTHORITY'),
+  bloodDonationController.triggerAllReminders
+);
 router.delete(
   '/events/:id',
   authorize('ADMIN', 'LOCAL_AUTHORITY', 'AUTHORITY'),
