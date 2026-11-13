@@ -257,7 +257,11 @@ export const signInWithGoogleOAuth = async () => {
           user: sessionData.user,
           providerToken: searchParams.get('provider_token') || hashParams.get('provider_token') || accessToken,
         };
+      } else {
+        console.warn('[Supabase OAuth] Không tìm thấy access_token hoặc refresh_token trong URL redirect:', finalUrl);
       }
+    } else {
+      console.warn('[Supabase OAuth] Không nhận được finalUrl sau khi xác thực');
     }
 
     // 4. Fallback: Nếu không lấy được URL nhưng session đã được lưu ngầm vào Storage

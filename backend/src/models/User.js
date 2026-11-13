@@ -133,6 +133,10 @@ const rescuerSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    isCccdVerified: {
+      type: Boolean,
+      default: false,
+    },
     skills: {
       type: [String],
       default: [],

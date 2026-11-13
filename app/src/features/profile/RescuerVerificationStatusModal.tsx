@@ -22,21 +22,18 @@ export interface RescuerVerificationStatusModalProps {
 
 const SKILL_NAMES: Record<string, string> = {
   first_aid: 'Sơ cứu y tế',
-  water_rescue: 'Cứu hộ đường thủy',
-  evacuation: 'Sơ tán người dân',
-  firefighting: 'Phòng cháy chữa cháy',
-  relief_logistics: 'Tiếp tế lương thực',
-  communication: 'Thông tin liên lạc',
+  water_rescue: 'Cứu hộ vùng nước',
   search_rescue: 'Tìm kiếm cứu nạn',
+  boat_driver: 'Lái xuồng cứu sinh',
+  rope_climb: 'Leo dây & Độ cao',
+  diving: 'Lặn cứu hộ',
+  firefighting: 'PCCC & Cứu sập',
+  evacuation: 'Sơ tán người dân',
+  communication: 'Thông tin liên lạc',
+  logistics: 'Hậu cần & Cấp dưỡng',
+  // Tương thích ngược với các mã cũ
+  relief_logistics: 'Tiếp tế lương thực',
   technical_rescue: 'Cứu hộ kỹ thuật cao',
-};
-
-const VEHICLE_NAMES: Record<string, string> = {
-  BOAT: 'Thuyền / Ca-nô',
-  AMBULANCE: 'Xe cứu thương',
-  TRUCK: 'Xe bán tải / Tải',
-  MOTORBIKE: 'Xe máy cơ động',
-  OTHER: 'Phương tiện khác',
 };
 
 export const RescuerVerificationStatusModal: React.FC<RescuerVerificationStatusModalProps> = ({
@@ -77,26 +74,31 @@ export const RescuerVerificationStatusModal: React.FC<RescuerVerificationStatusM
   const verificationStatus =
     rescuer.verificationStatus || data?.verificationStatus || 'PENDING';
   const isVerified = verificationStatus === 'VERIFIED';
-  const rawIdNumber = rescuer.idNumber || '';
+  const isRejected = verificationStatus === 'REJECTED';
+  const rawIdNumber = rescuer.idNumber || data?.idNumber || '';
   const maskedIdNumber =
     rawIdNumber.length >= 8
       ? `${rawIdNumber.slice(0, 4)}${rawIdNumber.slice(4, 8).replace(/\d/g, '*')}${rawIdNumber.slice(8)}`
       : rawIdNumber
       ? `${rawIdNumber.slice(0, 4)}****`
-      : '04809900****';
+      : 'Chưa cập nhật';
 
-  const rawSkills: string[] = Array.isArray(rescuer.skills) && rescuer.skills.length > 0
-    ? rescuer.skills
-    : ['first_aid', 'water_rescue', 'evacuation'];
-
-  const vehicleKey = rescuer.vehicleType || 'BOAT';
-  const vehicleLabel = VEHICLE_NAMES[vehicleKey] || rescuer.vehicleType || 'Thuyền / Ca-nô';
-  const areaName = rescuer.areaName || rescuer.areaId?.name || data?.citizen?.areaName || 'UBND Phường sở tại';
+  const rawSkills: string[] = Array.isArray(rescuer.skills) ? rescuer.skills : [];
+  const experienceText: string =
+    typeof rescuer.experience === 'string' ? rescuer.experience.trim() : '';
+  const rejectionReason: string =
+    typeof rescuer.rejectionReason === 'string' ? rescuer.rejectionReason.trim() : '';
+  const areaName =
+    rescuer.areaName ||
+    rescuer.areaId?.name ||
+    data?.citizen?.areaName ||
+    'Chưa cập nhật địa bàn';
 
   // Format hồ sơ ID và ngày nộp
+  const currentYear = new Date().getFullYear();
   const profileId = data?._id
-    ? `RC-${new Date().getFullYear()}-${data._id.slice(-4).toUpperCase()}`
-    : 'RC-2024-8892';
+    ? `RC-${currentYear}-${data._id.slice(-4).toUpperCase()}`
+    : `RC-${currentYear}-0000`;
 
   const submitDate = rescuer.updatedAt || data?.updatedAt || new Date().toISOString();
   const dateObj = new Date(submitDate);
@@ -126,40 +128,65 @@ export const RescuerVerificationStatusModal: React.FC<RescuerVerificationStatusM
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* 1. STATUS CARD (Đồng hồ cát hoặc Khiên xanh) */}
+          {/* 1. STATUS CARD */}
           <View style={styles.card}>
             <View style={styles.statusHeaderRow}>
-              <View style={[styles.hourglassBox, isVerified && { backgroundColor: '#ECFDF5' }]}>
+              <View
+                style={[
+                  styles.hourglassBox,
+                  isVerified && { backgroundColor: '#ECFDF5' },
+                  isRejected && { backgroundColor: '#FEF2F2' },
+                ]}
+              >
                 <MaterialCommunityIcons
-                  name={isVerified ? 'check-decagram' : 'timer-sand'}
+                  name={
+                    isVerified
+                      ? 'check-decagram'
+                      : isRejected
+                      ? 'alert-circle-outline'
+                      : 'timer-sand'
+                  }
                   size={24}
-                  color={isVerified ? '#059669' : '#D97706'}
+                  color={isVerified ? '#059669' : isRejected ? '#DC2626' : '#D97706'}
                 />
               </View>
               <View
                 style={[
                   styles.pendingBadge,
                   isVerified && { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
+                  isRejected && { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
                 ]}
               >
                 <Text
                   style={[
                     styles.pendingBadgeText,
                     isVerified && { color: '#059669' },
+                    isRejected && { color: '#DC2626' },
                   ]}
                 >
-                  {isVerified ? 'Đã được phê duyệt' : 'Đang chờ xác minh'}
+                  {isVerified
+                    ? 'Đã được phê duyệt'
+                    : isRejected
+                    ? 'Cần bổ sung thông tin'
+                    : 'Đang chờ thẩm định'}
                 </Text>
               </View>
             </View>
 
             <Text style={styles.statusTitle}>
-              {isVerified ? 'Hồ sơ đã được phê duyệt chính thức' : 'Hồ sơ đang được xem xét'}
+              {isVerified
+                ? 'Hồ sơ đã được phê duyệt chính thức'
+                : isRejected
+                ? 'Hồ sơ chưa đạt yêu cầu thẩm định'
+                : 'Hồ sơ đang được xem xét'}
             </Text>
             <Text style={styles.statusDesc}>
               {isVerified
-                ? 'Ban chỉ huy PCTT & TKCN địa phương đã thẩm định đạt yêu cầu. Bạn đã được công nhận là Cứu hộ viên chính thức và đủ điều kiện tham gia Đội cứu hộ thực địa.'
-                : 'Local Authority (UBND / Ban chỉ huy PCTT & TKCN địa phương) đang kiểm tra thông tin nhân thân và năng lực kỹ thuật của bạn.'}
+                ? 'Ban Chỉ huy PCTT & TKCN địa phương đã thẩm định đạt yêu cầu. Bạn đã là Cứu hộ viên chính thức và đủ điều kiện tham gia Đội cứu hộ thực địa.'
+                : isRejected
+                ? rejectionReason ||
+                  'Vui lòng kiểm tra lại thông tin CCCD, kỹ năng chuyên môn hoặc kinh nghiệm thực địa và nộp lại hồ sơ.'
+                : 'UBND / Ban Chỉ huy PCTT & TKCN địa phương đang đối soát định danh CCCD, địa bàn đăng ký và kỹ năng chuyên môn của bạn.'}
             </Text>
 
             <View style={styles.metaBox}>
@@ -180,20 +207,22 @@ export const RescuerVerificationStatusModal: React.FC<RescuerVerificationStatusM
           {/* 2. TIẾN TRÌNH XÁC MINH (Timeline 3 bước) */}
           <View style={styles.card}>
             <View style={styles.cardHeaderRow}>
-              <Text style={styles.cardSectionTitle}>Tiến trình xác minh</Text>
+              <Text style={styles.cardSectionTitle}>Tiến trình thẩm định</Text>
               <View
                 style={[
                   styles.stepBadge,
                   isVerified && { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
+                  isRejected && { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
                 ]}
               >
                 <Text
                   style={[
                     styles.stepBadgeText,
                     isVerified && { color: '#059669' },
+                    isRejected && { color: '#DC2626' },
                   ]}
                 >
-                  {isVerified ? '3 / 3 Hoàn tất' : 'Bước 2 / 3'}
+                  {isVerified ? '3 / 3 Hoàn tất' : isRejected ? 'Cần cập nhật' : 'Bước 2 / 3'}
                 </Text>
               </View>
             </View>
@@ -208,9 +237,9 @@ export const RescuerVerificationStatusModal: React.FC<RescuerVerificationStatusM
                   <View style={[styles.timelineLine, styles.timelineLineActive]} />
                 </View>
                 <View style={styles.timelineColRight}>
-                  <Text style={styles.timelineStepTitle}>Đã gửi hồ sơ cứu hộ</Text>
+                  <Text style={styles.timelineStepTitle}>Đã nộp hồ sơ cứu hộ</Text>
                   <Text style={styles.timelineStepSubtitle}>
-                    Xác thực OTP & biên nhận dữ liệu hoàn tất
+                    Quét mã QR CCCD gắn chip & tiếp nhận thông tin hoàn tất
                   </Text>
                   <Text style={styles.timelineStepTime}>
                     {dateFormatted} - {timeFormatted}
@@ -224,11 +253,17 @@ export const RescuerVerificationStatusModal: React.FC<RescuerVerificationStatusM
                   <View
                     style={[
                       styles.timelineIconBox,
-                      isVerified ? styles.timelineIconActive : styles.timelineIconProcessing,
+                      isVerified
+                        ? styles.timelineIconActive
+                        : isRejected
+                        ? styles.timelineIconRejected
+                        : styles.timelineIconProcessing,
                     ]}
                   >
                     {isVerified ? (
                       <Feather name="check" size={13} color="#FFFFFF" />
+                    ) : isRejected ? (
+                      <Feather name="alert-circle" size={13} color="#DC2626" />
                     ) : (
                       <MaterialCommunityIcons name="autorenew" size={14} color="#D97706" />
                     )}
@@ -239,23 +274,30 @@ export const RescuerVerificationStatusModal: React.FC<RescuerVerificationStatusM
                   <Text
                     style={[
                       styles.timelineStepTitle,
-                      { color: isVerified ? '#059669' : '#D97706' },
+                      { color: isVerified ? '#059669' : isRejected ? '#DC2626' : '#D97706' },
                     ]}
                   >
-                    Local Authority thẩm định
+                    Ban Chỉ huy địa phương thẩm định
                   </Text>
                   <Text style={styles.timelineStepSubtitle}>
                     {isVerified
-                      ? 'Đã đối soát đạt yêu cầu chuyên môn & khu vực đăng ký'
-                      : 'Đang đối chiếu dữ liệu hiện trường và năng lực thiết bị cứu hộ'}
+                      ? 'Đã đối soát đạt yêu cầu về định danh, kỹ năng & khu vực đăng ký'
+                      : isRejected
+                      ? 'Hồ sơ cần chỉnh sửa hoặc bổ sung thông tin trước khi duyệt lại'
+                      : 'Đang đối soát định danh CCCD, kỹ năng và địa bàn tác chiến'}
                   </Text>
                   <Text
                     style={[
                       styles.timelineStepEstimate,
                       isVerified && { color: '#059669', fontWeight: '700' },
+                      isRejected && { color: '#DC2626', fontWeight: '700' },
                     ]}
                   >
-                    {isVerified ? '✓ Đã phê chuẩn' : 'Ước tính: trong vòng 24 giờ'}
+                    {isVerified
+                      ? '✓ Đã phê chuẩn'
+                      : isRejected
+                      ? 'Vui lòng cập nhật lại hồ sơ'
+                      : 'Ước tính: trong vòng 24 giờ'}
                   </Text>
                 </View>
               </View>
@@ -283,7 +325,7 @@ export const RescuerVerificationStatusModal: React.FC<RescuerVerificationStatusM
                       { color: isVerified ? '#059669' : '#94A3B8' },
                     ]}
                   >
-                    Cấp chứng nhận Rescuer
+                    Kích hoạt quyền Cứu hộ viên
                   </Text>
                   <Text
                     style={[
@@ -292,8 +334,8 @@ export const RescuerVerificationStatusModal: React.FC<RescuerVerificationStatusM
                     ]}
                   >
                     {isVerified
-                      ? 'Đã kích hoạt huy hiệu cứu nạn & phân quyền điều phối thực địa'
-                      : 'Kích hoạt huy hiệu cứu nạn, phân quyền bản đồ khẩn cấp'}
+                      ? 'Đã kích hoạt huy hiệu cứu nạn & mở quyền tham gia Đội cứu hộ'
+                      : 'Cấp huy hiệu cứu nạn và quyền tiếp nhận điều phối thực địa'}
                   </Text>
                 </View>
               </View>
@@ -303,10 +345,10 @@ export const RescuerVerificationStatusModal: React.FC<RescuerVerificationStatusM
           {/* 3. CHI TIẾT ĐÃ KHAI BÁO */}
           <View style={styles.card}>
             <View style={styles.cardHeaderRow}>
-              <Text style={styles.cardSectionTitle}>Chi tiết đã khai báo</Text>
+              <Text style={styles.cardSectionTitle}>Thông tin đã khai báo</Text>
               <View style={styles.securityTag}>
                 <MaterialCommunityIcons name="lock-outline" size={13} color="#0066FF" />
-                <Text style={styles.securityTagText}>Bảo mật AES</Text>
+                <Text style={styles.securityTagText}>Đã định danh QR</Text>
               </View>
             </View>
 
@@ -318,51 +360,59 @@ export const RescuerVerificationStatusModal: React.FC<RescuerVerificationStatusM
                   size={19}
                   color="#0066FF"
                 />
-                <Text style={styles.declaredLabel}>Số định danh công dân</Text>
+                <Text style={styles.declaredLabel}>Số CCCD định danh</Text>
               </View>
               <View style={styles.declaredItemRight}>
                 <Text style={styles.declaredValueBold}>{maskedIdNumber}</Text>
-                <MaterialCommunityIcons
-                  name="check-decagram"
-                  size={16}
-                  color="#0066FF"
-                  style={{ marginLeft: 5 }}
-                />
+                {rawIdNumber ? (
+                  <MaterialCommunityIcons
+                    name="check-decagram"
+                    size={16}
+                    color="#059669"
+                    style={{ marginLeft: 5 }}
+                  />
+                ) : null}
               </View>
+            </View>
+
+            {/* Field: Địa bàn đăng ký */}
+            <View style={styles.declaredItem}>
+              <View style={styles.declaredItemLeft}>
+                <MaterialCommunityIcons name="map-marker-radius-outline" size={19} color="#0066FF" />
+                <Text style={styles.declaredLabel}>Địa bàn tác chiến</Text>
+              </View>
+              <Text style={[styles.declaredValueBold, { color: '#0066FF', maxWidth: '52%', textAlign: 'right' }]} numberOfLines={1}>
+                {areaName}
+              </Text>
             </View>
 
             {/* Field: Kỹ năng khai báo */}
             <View style={[styles.declaredItem, { flexDirection: 'column', alignItems: 'flex-start' }]}>
               <View style={[styles.declaredItemLeft, { marginBottom: 8 }]}>
-                <MaterialCommunityIcons name="briefcase-outline" size={19} color="#0066FF" />
-                <Text style={styles.declaredLabel}>Kỹ năng khai báo</Text>
+                <MaterialCommunityIcons name="shield-star-outline" size={19} color="#0066FF" />
+                <Text style={styles.declaredLabel}>Kỹ năng cứu hộ</Text>
               </View>
-              <View style={styles.skillsWrap}>
-                {rawSkills.map((s, idx) => (
-                  <View key={idx} style={styles.skillChip}>
-                    <Text style={styles.skillChipText}>{SKILL_NAMES[s] || s}</Text>
-                  </View>
-                ))}
-              </View>
+              {rawSkills.length > 0 ? (
+                <View style={styles.skillsWrap}>
+                  {rawSkills.map((s, idx) => (
+                    <View key={idx} style={styles.skillChip}>
+                      <Text style={styles.skillChipText}>{SKILL_NAMES[s] || s}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.declaredEmptyText}>Chưa cập nhật kỹ năng</Text>
+              )}
             </View>
 
-            {/* Field: Phương tiện sẵn sàng */}
-            <View style={styles.declaredItem}>
-              <View style={styles.declaredItemLeft}>
-                <MaterialCommunityIcons name="sail-boat" size={19} color="#0066FF" />
-                <Text style={styles.declaredLabel}>Phương tiện sẵn sàng</Text>
+            {/* Field: Kinh nghiệm & Chứng chỉ */}
+            <View style={[styles.declaredItem, { flexDirection: 'column', alignItems: 'flex-start', marginBottom: 0 }]}>
+              <View style={[styles.declaredItemLeft, { marginBottom: 6 }]}>
+                <MaterialCommunityIcons name="certificate-outline" size={19} color="#0066FF" />
+                <Text style={styles.declaredLabel}>Kinh nghiệm & Chứng chỉ</Text>
               </View>
-              <Text style={styles.declaredValueBold}>{vehicleLabel}</Text>
-            </View>
-
-            {/* Field: Địa bàn đăng ký */}
-            <View style={[styles.declaredItem, { marginBottom: 0 }]}>
-              <View style={styles.declaredItemLeft}>
-                <MaterialCommunityIcons name="map-marker-radius-outline" size={19} color="#0066FF" />
-                <Text style={styles.declaredLabel}>Địa bàn tác chiến</Text>
-              </View>
-              <Text style={[styles.declaredValueBold, { color: '#0066FF', maxWidth: '50%' }]} numberOfLines={1}>
-                {areaName}
+              <Text style={experienceText ? styles.declaredDescValue : styles.declaredEmptyText}>
+                {experienceText || 'Chưa cập nhật mô tả kinh nghiệm'}
               </Text>
             </View>
           </View>
@@ -372,31 +422,40 @@ export const RescuerVerificationStatusModal: React.FC<RescuerVerificationStatusM
             style={[
               styles.alertNoteBox,
               isVerified && { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
+              isRejected && { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
             ]}
           >
             <MaterialCommunityIcons
-              name={isVerified ? 'check-circle' : 'information'}
+              name={isVerified ? 'check-circle' : isRejected ? 'alert-circle' : 'information'}
               size={19}
-              color={isVerified ? '#059669' : '#0066FF'}
+              color={isVerified ? '#059669' : isRejected ? '#DC2626' : '#0066FF'}
               style={{ marginTop: 1, marginRight: 8 }}
             />
             <Text
               style={[
                 styles.alertNoteText,
                 isVerified && { color: '#065F46' },
+                isRejected && { color: '#991B1B' },
               ]}
             >
-              <Text style={{ fontWeight: '700', color: isVerified ? '#047857' : '#1E40AF' }}>
-                {isVerified ? 'Bước tiếp theo: ' : 'Lưu ý quan trọng: '}
+              <Text
+                style={{
+                  fontWeight: '700',
+                  color: isVerified ? '#047857' : isRejected ? '#DC2626' : '#1E40AF',
+                }}
+              >
+                {isVerified ? 'Bước tiếp theo: ' : isRejected ? 'Cần thực hiện: ' : 'Lưu ý: '}
               </Text>
               {isVerified
-                ? 'Hồ sơ đã hoàn tất! Hãy chọn Đội cứu hộ trong khu vực của bạn để tiếp nhận ca trực và trang bị phương tiện cứu hộ.'
-                : 'Trong thời gian chờ duyệt, bạn chưa thể tiếp nhận điều phối hoặc gửi yêu cầu gia nhập các đội cứu hộ phản ứng nhanh chính thức.'}
+                ? 'Hồ sơ đã hoàn tất! Hãy chọn Đội cứu hộ trong khu vực để nhận ca trực và điều phối phương tiện từ đội.'
+                : isRejected
+                ? 'Hãy bấm "Chỉnh sửa & Nộp lại hồ sơ" bên dưới để bổ sung thông tin và gửi lại cho Ban Chỉ huy duyệt.'
+                : 'Trong thời gian chờ thẩm định, bạn chưa thể tiếp nhận lệnh điều phối nhưng vẫn có thể chỉnh sửa lại hồ sơ nếu cần.'}
             </Text>
           </View>
 
           {/* 5. NÚT HÀNH ĐỘNG */}
-          {isVerified && (
+          {isVerified ? (
             <TouchableOpacity
               style={styles.chooseTeamPrimaryBtn}
               onPress={() => {
@@ -407,6 +466,23 @@ export const RescuerVerificationStatusModal: React.FC<RescuerVerificationStatusM
             >
               <MaterialCommunityIcons name="account-group" size={18} color="#FFFFFF" />
               <Text style={styles.chooseTeamPrimaryBtnText}>Chọn Đội cứu hộ trong khu vực ngay</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[
+                styles.chooseTeamPrimaryBtn,
+                isRejected && { backgroundColor: '#DC2626' },
+              ]}
+              onPress={() => {
+                onClose();
+                onUpdateProfile();
+              }}
+              activeOpacity={0.85}
+            >
+              <Feather name="edit-2" size={16} color="#FFFFFF" />
+              <Text style={styles.chooseTeamPrimaryBtnText}>
+                {isRejected ? 'Chỉnh sửa & Nộp lại hồ sơ' : 'Cập nhật lại thông tin hồ sơ'}
+              </Text>
             </TouchableOpacity>
           )}
 
@@ -576,6 +652,11 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#D97706',
   },
+  timelineIconRejected: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#DC2626',
+  },
   timelineIconPending: {
     backgroundColor: '#F1F5F9',
   },
@@ -653,6 +734,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  declaredDescValue: {
+    fontSize: 12.5,
+    color: '#334155',
+    lineHeight: 18,
+  },
+  declaredEmptyText: {
+    fontSize: 12.5,
+    color: '#94A3B8',
+    fontStyle: 'italic',
   },
   skillsWrap: {
     flexDirection: 'row',
