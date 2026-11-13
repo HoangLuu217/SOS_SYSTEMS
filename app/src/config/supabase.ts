@@ -2,6 +2,7 @@ import { Platform, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { ENV } from './env';
 
@@ -256,10 +257,10 @@ export const signInWithGoogleOAuth = async () => {
           providerToken: searchParams.get('provider_token') || hashParams.get('provider_token') || accessToken,
         };
       } else {
-        console.warn('[Supabase OAuth] Không tìm thấy access_token hoặc refresh_token trong URL redirect:', url);
+        console.warn('[Supabase OAuth] Không tìm thấy access_token hoặc refresh_token trong URL redirect:', finalUrl);
       }
     } else {
-      console.warn('[Supabase OAuth] Trình duyệt đóng với type:', result.type);
+      console.warn('[Supabase OAuth] Không nhận được finalUrl sau khi xác thực');
     }
 
     // 4. Fallback: Nếu không lấy được URL nhưng session đã được lưu ngầm vào Storage
