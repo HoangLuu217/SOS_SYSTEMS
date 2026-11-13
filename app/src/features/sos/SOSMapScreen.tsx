@@ -25,6 +25,7 @@ import { backendApi } from '@/api';
 import { useAuth } from '@/context/AuthContext';
 import { EmergencyContact } from '@/types';
 import { CitizenSosTrackingModal } from '../profile/CitizenSosTrackingModal';
+import { EmergencyContactScreen } from '../profile/EmergencyContactScreen';
 import { styles } from './SOSMapScreen.styles';
 
 // Helper icon đại diện cho người thân
@@ -139,6 +140,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
   const [savedEmergencyContact, setSavedEmergencyContact] = useState<EmergencyContact | null>(null);
   const [savedEmergencyContacts, setSavedEmergencyContacts] = useState<EmergencyContact[]>([]);
   const [showSavePinModal, setShowSavePinModal] = useState<boolean>(false);
+  const [showEmergencyContactModal, setShowEmergencyContactModal] = useState<boolean>(false);
 
   // Nội dung mô tả (0/500 ký tự)
   const [description, setDescription] = useState<string>('');
@@ -157,6 +159,7 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
   const [isReverseGeocoding, setIsReverseGeocoding] = useState<boolean>(false);
   const mapPickerWebViewRef = useRef<WebView>(null);
   const peopleInputRef = useRef<any>(null);
+  const reopenMapAfterContactRef = useRef<boolean>(false);
 
   // Đối tượng ưu tiên (Popup Modal chọn nhanh)
   const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
@@ -256,20 +259,22 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
   const loadSavedContacts = async () => {
     try {
       let foundList: EmergencyContact[] = [];
+      let hasExplicitLocalList = false;
 
       // 1. Đọc từ danh sách nhiều người thân trong AsyncStorage
       const stored = await AsyncStorage.getItem('@sos_emergency_contacts');
-      if (stored) {
+      if (stored !== null) {
         try {
           const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          if (Array.isArray(parsed)) {
+            hasExplicitLocalList = true;
             foundList = parsed;
           }
         } catch { }
       }
 
-      // 2. Dự phòng: Đọc từ liên hệ đơn lẻ cũ nếu danh sách trống
-      if (foundList.length === 0) {
+      // 2. Dự phòng: Đọc từ liên hệ đơn lẻ cũ nếu chưa có key danh sách
+      if (!hasExplicitLocalList && foundList.length === 0) {
         const single = await AsyncStorage.getItem('@sos_emergency_contact');
         if (single) {
           try {
@@ -281,8 +286,8 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
         }
       }
 
-      // 3. Dự phòng từ user profile context nếu đã có
-      if (foundList.length === 0 && user?.citizen) {
+      // 3. Dự phòng từ user profile context chỉ khi local storage chưa từng lưu danh sách
+      if (!hasExplicitLocalList && foundList.length === 0 && user?.citizen) {
         const c = user.citizen as any;
         if (Array.isArray(c.emergencyContacts) && c.emergencyContacts.length > 0) {
           foundList = c.emergencyContacts;
@@ -291,11 +296,9 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
         }
       }
 
-      // Cập nhật ngay vào State nếu tìm thấy
-      if (foundList.length > 0) {
-        setSavedEmergencyContacts(foundList);
-        setSavedEmergencyContact(foundList[0]);
-      }
+      // Luôn cập nhật State (kể cả khi danh sách rỗng sau khi xóa hết)
+      setSavedEmergencyContacts(foundList);
+      setSavedEmergencyContact(foundList[0] || null);
 
       // 4. Đồng bộ từ backend ngầm
       try {
@@ -308,10 +311,13 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
           } else if (citizen.emergencyContact?.name) {
             list = [citizen.emergencyContact];
           }
+          setSavedEmergencyContacts(list);
+          setSavedEmergencyContact(list[0] || null);
+          AsyncStorage.setItem('@sos_emergency_contacts', JSON.stringify(list)).catch(() => { });
           if (list.length > 0) {
-            setSavedEmergencyContacts(list);
-            setSavedEmergencyContact(list[0]);
-            AsyncStorage.setItem('@sos_emergency_contacts', JSON.stringify(list)).catch(() => { });
+            AsyncStorage.setItem('@sos_emergency_contact', JSON.stringify(list[0])).catch(() => { });
+          } else {
+            AsyncStorage.removeItem('@sos_emergency_contact').catch(() => { });
           }
         }
       } catch { }
@@ -332,8 +338,17 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
     const sub = DeviceEventEmitter.addListener('EMERGENCY_CONTACTS_UPDATED', () => {
       loadSavedContacts();
     });
+    const subPrefill = DeviceEventEmitter.addListener('sos:prefill', (data: any) => {
+      if (data?.people && Number(data.people) > 0) {
+        handleSetPeople(Number(data.people));
+      }
+      if (data?.description && typeof data.description === 'string') {
+        setDescription(data.description);
+      }
+    });
     return () => {
       sub.remove();
+      subPrefill.remove();
     };
   }, []);
 
@@ -1779,9 +1794,9 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
             )}
           </View>
 
-          {/* Footer Xác nhận & Nút chọn vị trí người thân */}
+          {/* Footer Xác nhận & Nút chọn/đăng ký vị trí người thân */}
           <View style={styles.mapModalFooter}>
-            {savedEmergencyContacts.length > 0 && (
+            {savedEmergencyContacts.length > 0 ? (
               <TouchableOpacity
                 style={styles.savePinForRelativeBtn}
                 onPress={() => setShowSavePinModal(true)}
@@ -1789,6 +1804,19 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
               >
                 <Ionicons name="location-outline" size={16} color="#0284C7" style={{ marginRight: 6 }} />
                 <Text style={styles.savePinForRelativeBtnText}>Chọn vị trí người thân đã được ghim</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.savePinForRelativeBtn}
+                onPress={() => {
+                  reopenMapAfterContactRef.current = true;
+                  setShowMapPickerModal(false);
+                  setShowEmergencyContactModal(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="person-add-outline" size={16} color="#0284C7" style={{ marginRight: 6 }} />
+                <Text style={styles.savePinForRelativeBtnText}>Đăng ký thông tin & vị trí người thân</Text>
               </TouchableOpacity>
             )}
 
@@ -1878,7 +1906,10 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
         onRequestClose={() => setValidationModalVisible(false)}
       >
         <TouchableOpacity
-          style={styles.modalBackdrop}
+          style={[
+            styles.modalBackdrop,
+            { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
+          ]}
           activeOpacity={1}
           onPress={() => setValidationModalVisible(false)}
         >
@@ -2072,6 +2103,34 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
             </TouchableOpacity>
           </View>
         </View>
+      </Modal>
+
+      {/* MODAL ĐĂNG KÝ THÔNG TIN & VỊ TRÍ NGƯỜI THÂN */}
+      <Modal
+        visible={showEmergencyContactModal}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowEmergencyContactModal(false);
+          void loadSavedContacts();
+          if (reopenMapAfterContactRef.current) {
+            reopenMapAfterContactRef.current = false;
+            setShowMapPickerModal(true);
+          }
+        }}
+      >
+        <EmergencyContactScreen
+          onBack={() => {
+            setShowEmergencyContactModal(false);
+            void loadSavedContacts();
+            if (reopenMapAfterContactRef.current) {
+              reopenMapAfterContactRef.current = false;
+              setShowMapPickerModal(true);
+            }
+          }}
+          onContactSaved={() => {
+            void loadSavedContacts();
+          }}
+        />
       </Modal>
 
       {/* MODAL THEO DÕI & CẬP NHẬT CA SOS ĐANG HOẠT ĐỘNG */}

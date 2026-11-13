@@ -46,7 +46,7 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
   onNavigateToSecurity,
   onNavigateToNotificationSettings,
   onNavigateToNotifications,
-  unreadNotificationsCount = 3,
+  unreadNotificationsCount = 0,
   refreshTrigger,
 }) => {
   const { user, logout, updateUserAvatar } = useAuth();

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,71 +7,172 @@ import {
   ScrollView,
   StatusBar,
   Switch,
-  Platform,
   Alert,
   Vibration,
+  AppState,
+  Linking,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { PROFILE_THEME } from './theme';
 import { useNotifications } from '@/context/NotificationContext';
 import { NotificationSettings, NotificationCategoryKey } from '@/utils';
-import { playDispatchAlertSound } from '@/services';
+import { playNormalNotificationSound, registerForPushNotificationsAsync } from '@/services';
 
 interface NotificationSettingsScreenProps {
   onBack: () => void;
 }
+
+interface CategoryRowConfig {
+  key: NotificationCategoryKey;
+  title: string;
+  desc: string;
+  badge?: string;
+  iconLibrary: 'feather' | 'mci';
+  iconName: string;
+  color: string;
+  iconBg: string;
+}
+
+const MASTER_BLUE = '#0066FF';
+const MASTER_TRACK_ON = '#BFDBFE';
+
+const CATEGORY_ITEMS: CategoryRowConfig[] = [
+  {
+    key: 'alert',
+    title: 'Cảnh báo khẩn cấp',
+    desc: 'SOS, lũ quét, sạt lở, hiến máu',
+    badge: 'Ưu tiên cao',
+    iconLibrary: 'feather',
+    iconName: 'alert-triangle',
+    color: '#DC2626',
+    iconBg: '#FEF2F2',
+  },
+  {
+    key: 'safeLocation',
+    title: 'Vị trí an toàn',
+    desc: 'Điểm sơ tán, trạm y tế, nơi trú ẩn',
+    iconLibrary: 'mci',
+    iconName: 'shield-home',
+    color: '#0066FF',
+    iconBg: '#EFF6FF',
+  },
+  {
+    key: 'chat',
+    title: 'Nhắn tin',
+    desc: 'Tin nhắn trao đổi với cán bộ & người dân',
+    iconLibrary: 'feather',
+    iconName: 'message-circle',
+    color: '#7C3AED',
+    iconBg: '#F5F3FF',
+  },
+  {
+    key: 'systemNotification',
+    title: 'Thông báo hệ thống',
+    desc: 'Điều phối cứu hộ, hồ sơ & tài khoản',
+    iconLibrary: 'feather',
+    iconName: 'bell',
+    color: '#0066FF',
+    iconBg: '#EFF6FF',
+  },
+  {
+    key: 'news',
+    title: 'Tin tức & Thời tiết',
+    desc: 'Dự báo thời tiết và bản tin cảnh báo',
+    iconLibrary: 'feather',
+    iconName: 'file-text',
+    color: '#D97706',
+    iconBg: '#FFFBEB',
+  },
+];
 
 export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProps> = ({ onBack }) => {
   const {
     settings,
     updateSetting: contextUpdateSetting,
     resetSettings: contextResetSettings,
-    testNotification,
   } = useNotifications();
 
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
+  const [osPermissionDenied, setOsPermissionDenied] = useState(false);
 
-  // Lưu cài đặt và phản hồi xúc giác nhẹ nếu là rung
+  const isAppEnabled = settings.appEnabled !== false;
+
+  const checkOsPermission = useCallback(async () => {
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      setOsPermissionDenied(status !== 'granted');
+    } catch {
+      // ignore on unsupported environments
+    }
+  }, []);
+
+  useEffect(() => {
+    checkOsPermission();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        checkOsPermission();
+        registerForPushNotificationsAsync().catch(() => {});
+      }
+    });
+    return () => sub.remove();
+  }, [checkOsPermission]);
+
+  const handleRequestOrOpenOsSettings = useCallback(async () => {
+    try {
+      const { status, canAskAgain } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted' && canAskAgain) {
+        const res = await Notifications.requestPermissionsAsync({
+          ios: { allowAlert: true, allowBadge: true, allowSound: true },
+        });
+        setOsPermissionDenied(res.status !== 'granted');
+        if (res.status === 'granted') {
+          registerForPushNotificationsAsync().catch(() => {});
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    Linking.openSettings().catch(() => {});
+  }, []);
+
+  const flashSavedFeedback = () => {
+    setShowSavedFeedback(true);
+    setTimeout(() => setShowSavedFeedback(false), 1800);
+  };
+
+  // Lưu cài đặt vào AsyncStorage; khóa mọi tùy chọn con nếu công tắc tổng appEnabled đang TẮT
   const updateSetting = async (key: keyof NotificationSettings, value: boolean) => {
+    if (key !== 'appEnabled' && !isAppEnabled) {
+      return;
+    }
+
     if (key === 'vibration' && value) {
       try {
         Vibration.vibrate(80);
       } catch (_) {}
     }
-    if (key === 'sound' && value) {
-      playDispatchAlertSound().catch(() => {});
+    if (key === 'sound' && value && Platform.OS === 'web') {
+      playNormalNotificationSound().catch(() => {});
     }
 
     await contextUpdateSetting(key, value);
-    setShowSavedFeedback(true);
-    setTimeout(() => setShowSavedFeedback(false), 2000);
-  };
-
-  // Thử nghiệm trực tiếp kiểm tra cài đặt
-  const handleTestCategory = async (key: NotificationCategoryKey, label: string) => {
-    const isSuccess = await testNotification(key);
-    if (!isSuccess) {
-      Alert.alert(
-        `Nhóm "${label}" đang TẮT`,
-        `Bạn đã tắt nhận thông báo này trong phần cài đặt ở trên. Khi có sự kiện thật, hệ thống sẽ KHÔNG phát chuông, rung hoặc hiển thị banner cảnh báo.\n\nBạn có muốn bật lại ngay không?`,
-        [
-          { text: 'Đóng', style: 'cancel' },
-          {
-            text: 'Bật lại ngay',
-            style: 'default',
-            onPress: () => updateSetting(key, true),
-          },
-        ]
-      );
+    if (
+      value &&
+      ['appEnabled', 'alert', 'safeLocation', 'chat', 'systemNotification', 'news'].includes(key)
+    ) {
+      await checkOsPermission();
     }
+    flashSavedFeedback();
   };
 
-  // Khôi phục cài đặt mặc định
   const handleResetDefaults = () => {
     Alert.alert(
       'Khôi phục mặc định?',
-      'Bạn có muốn đặt lại toàn bộ tùy chọn thông báo về trạng thái an toàn khuyến nghị?',
+      'Đặt lại toàn bộ tùy chọn thông báo về mặc định?',
       [
         { text: 'Hủy', style: 'cancel' },
         {
@@ -79,13 +180,38 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
           style: 'default',
           onPress: async () => {
             await contextResetSettings();
-            setShowSavedFeedback(true);
-            setTimeout(() => setShowSavedFeedback(false), 2000);
+            flashSavedFeedback();
           },
         },
       ]
     );
   };
+
+  const renderCategoryIcon = (item: CategoryRowConfig, active: boolean) => {
+    const iconColor = active ? item.color : '#94A3B8';
+    if (item.iconLibrary === 'mci') {
+      return <MaterialCommunityIcons name={item.iconName as any} size={18} color={iconColor} />;
+    }
+    return <Feather name={item.iconName as any} size={18} color={iconColor} />;
+  };
+
+  const renderToggleSwitch = (
+    key: keyof NotificationSettings,
+    checked: boolean,
+    disabled = false,
+    testID?: string
+  ) => (
+    <Switch
+      style={styles.switchControl}
+      value={checked}
+      disabled={disabled}
+      onValueChange={(val) => updateSetting(key, val)}
+      trackColor={{ false: '#CBD5E1', true: disabled ? '#E2E8F0' : MASTER_TRACK_ON }}
+      thumbColor={disabled ? '#E2E8F0' : checked ? MASTER_BLUE : '#F1F5F9'}
+      ios_backgroundColor="#CBD5E1"
+      testID={testID}
+    />
+  );
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -100,7 +226,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           testID="btn-back-notification-settings"
         >
-          <Feather name="arrow-left" size={24} color={PROFILE_THEME.colors.textPrimary} />
+          <Feather name="arrow-left" size={22} color={PROFILE_THEME.colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Cài đặt thông báo</Text>
         <TouchableOpacity
@@ -109,7 +235,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
           activeOpacity={0.7}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Feather name="rotate-ccw" size={18} color="#64748B" />
+          <Feather name="rotate-ccw" size={17} color="#64748B" />
         </TouchableOpacity>
       </View>
 
@@ -118,360 +244,152 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Banner giới thiệu */}
-        <View style={styles.bannerCard}>
-          <View style={styles.bannerIconBox}>
-            <Feather name="bell" size={22} color="#0066FF" />
-          </View>
-          <View style={styles.bannerTextBox}>
-            <Text style={styles.bannerTitle}>Tùy chỉnh nhận thông báo</Text>
-            <Text style={styles.bannerDesc}>
-              Quản lý các loại thông báo và cảnh báo khẩn cấp từ hệ thống hỗ trợ cứu nạn để đảm bảo bạn luôn nhận
-              được sự hỗ trợ kịp thời nhất.
+        {osPermissionDenied && (
+          <View style={styles.osPermBanner}>
+            <Feather name="alert-circle" size={16} color="#B45309" />
+            <Text style={styles.osPermText} numberOfLines={2}>
+              Quyền thông báo trên máy đang tắt.
             </Text>
-          </View>
-        </View>
-
-        {/* Thông báo đã lưu cài đặt */}
-        {showSavedFeedback && (
-          <View style={styles.savedBanner}>
-            <Feather name="check-circle" size={16} color="#059669" />
-            <Text style={styles.savedBannerText}>Đã cập nhật tùy chọn thông báo</Text>
+            <TouchableOpacity
+              style={styles.osPermBtn}
+              onPress={handleRequestOrOpenOsSettings}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.osPermBtnText}>Bật quyền</Text>
+            </TouchableOpacity>
           </View>
         )}
 
-        {/* Section 1: 4 Tùy chọn thông báo chính */}
-        <Text style={styles.sectionHeader}>CÁC LOẠI THÔNG BÁO</Text>
-        <View style={styles.cardGroup}>
-          {/* 1. Alert (Cảnh báo khẩn cấp) - MÀU ĐỎ */}
-          <View style={styles.settingItem}>
-            <View style={[styles.settingIconBox, { backgroundColor: '#FEF2F2' }]}>
-              <Feather name="alert-triangle" size={20} color="#DC2626" />
-            </View>
-            <View style={styles.settingTextBox}>
-              <View style={styles.settingTitleRow}>
-                <Text style={styles.settingTitle}>Cảnh báo khẩn cấp</Text>
-                <View style={styles.urgentBadge}>
-                  <Text style={styles.urgentBadgeText}>Ưu tiên cao</Text>
-                </View>
-              </View>
-              <Text style={styles.settingDesc}>
-                Nhận tín hiệu báo động SOS từ người xung quanh, cảnh báo nguy cơ lũ quét, vỡ đê, sạt
-                lở đất đặc biệt nguy hiểm.
-              </Text>
-            </View>
-            <Switch
-              style={styles.switchControl}
-              value={settings.alert}
-              onValueChange={(val) => updateSetting('alert', val)}
-              trackColor={{ false: '#CBD5E1', true: '#FECACA' }}
-              thumbColor={settings.alert ? '#DC2626' : '#F1F5F9'}
-              ios_backgroundColor="#CBD5E1"
-            />
+        {showSavedFeedback && (
+          <View style={styles.savedBanner}>
+            <Feather name="check-circle" size={15} color="#059669" />
+            <Text style={styles.savedBannerText}>Đã lưu cài đặt thông báo</Text>
           </View>
+        )}
 
-          <View style={styles.itemDivider} />
-
-          {/* 2. Safe Location (Vị trí an toàn) - MÀU XANH DƯƠNG */}
-          <View style={styles.settingItem}>
-            <View style={[styles.settingIconBox, { backgroundColor: '#EFF6FF' }]}>
-              <MaterialCommunityIcons name="shield-home" size={20} color="#0066FF" />
-            </View>
-            <View style={styles.settingTextBox}>
-              <View style={styles.settingTitleRow}>
-                <Text style={styles.settingTitle}>Vị trí an toàn</Text>
-                <View style={styles.recBadge}>
-                  <Text style={styles.recBadgeText}>Khuyến nghị</Text>
-                </View>
-              </View>
-              <Text style={styles.settingDesc}>
-                Thông báo gợi ý trạm y tế dã chiến, khu vực sơ tán cao ráo và các điểm tập kết an
-                toàn gần bạn khi đi vào vùng ngập sâu.
-              </Text>
-            </View>
-            <Switch
-              style={styles.switchControl}
-              value={settings.safeLocation}
-              onValueChange={(val) => updateSetting('safeLocation', val)}
-              trackColor={{ false: '#CBD5E1', true: '#BFDBFE' }}
-              thumbColor={settings.safeLocation ? '#0066FF' : '#F1F5F9'}
-              ios_backgroundColor="#CBD5E1"
-            />
-          </View>
-
-          <View style={styles.itemDivider} />
-
-          {/* 3. Notification (Thông báo hệ thống) - MÀU XANH DƯƠNG */}
-          <View style={styles.settingItem}>
-            <View style={[styles.settingIconBox, { backgroundColor: '#EFF6FF' }]}>
-              <Feather name="bell" size={20} color="#0066FF" />
-            </View>
-            <View style={styles.settingTextBox}>
-              <Text style={styles.settingTitle}>Thông báo hệ thống</Text>
-              <Text style={styles.settingDesc}>
-                Cập nhật tiến độ xử lý yêu cầu cứu nạn, kết quả điều phối đội cứu hộ, phản hồi từ
-                tổng đài và thông tin tài khoản.
-              </Text>
-            </View>
-            <Switch
-              style={styles.switchControl}
-              value={settings.systemNotification}
-              onValueChange={(val) => updateSetting('systemNotification', val)}
-              trackColor={{ false: '#CBD5E1', true: '#BFDBFE' }}
-              thumbColor={settings.systemNotification ? '#0066FF' : '#F1F5F9'}
-              ios_backgroundColor="#CBD5E1"
-            />
-          </View>
-
-          <View style={styles.itemDivider} />
-
-          {/* 4. Tin tức (Bản tin thiên tai & thời tiết) - MÀU XANH DƯƠNG */}
-          <View style={styles.settingItem}>
-            <View style={[styles.settingIconBox, { backgroundColor: '#EFF6FF' }]}>
-              <Feather name="file-text" size={20} color="#0066FF" />
-            </View>
-            <View style={styles.settingTextBox}>
-              <Text style={styles.settingTitle}>Tin tức & Thời tiết</Text>
-              <Text style={styles.settingDesc}>
-                Dự báo thời tiết thủy văn, lượng mưa lớn, cảnh báo lũ lụt hàng ngày và cẩm nang kỹ
-                năng sinh tồn, ứng phó bão lũ.
-              </Text>
-            </View>
-            <Switch
-              style={styles.switchControl}
-              value={settings.news}
-              onValueChange={(val) => updateSetting('news', val)}
-              trackColor={{ false: '#CBD5E1', true: '#BFDBFE' }}
-              thumbColor={settings.news ? '#0066FF' : '#F1F5F9'}
-              ios_backgroundColor="#CBD5E1"
-            />
-          </View>
-        </View>
-
-        {/* Section 2: Tùy chọn âm thanh & rung - MÀU XANH DƯƠNG */}
-        <Text style={styles.sectionHeader}>PHẢN HỒI THIẾT BỊ</Text>
-        <View style={styles.cardGroup}>
-          {/* Âm thanh */}
+        {/* Section 1: Công tắc tổng Thông báo ứng dụng */}
+        <Text style={styles.sectionHeader}>TỔNG QUAN</Text>
+        <View style={[styles.cardGroup, !isAppEnabled && styles.masterCardMuted]}>
           <View style={styles.settingItem}>
             <View
               style={[
                 styles.settingIconBox,
-                { backgroundColor: settings.sound ? '#EFF6FF' : '#F8FAFC' },
+                { backgroundColor: isAppEnabled ? '#EFF6FF' : '#F1F5F9' },
+              ]}
+            >
+              <Feather
+                name={isAppEnabled ? 'bell' : 'bell-off'}
+                size={18}
+                color={isAppEnabled ? MASTER_BLUE : '#64748B'}
+              />
+            </View>
+            <View style={styles.settingTextBox}>
+              <View style={styles.settingTitleRow}>
+                <Text style={styles.settingTitle}>Thông báo ứng dụng</Text>
+                <View style={[styles.statusBadge, isAppEnabled ? styles.statusBadgeOn : styles.statusBadgeOff]}>
+                  <Text style={[styles.statusBadgeText, isAppEnabled ? styles.statusBadgeTextOn : styles.statusBadgeTextOff]}>
+                    {isAppEnabled ? 'Đang bật' : 'Đang tắt'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.settingDesc}>
+                {isAppEnabled
+                  ? 'Cho phép nhận và tùy chỉnh các loại thông báo'
+                  : 'Bật công tắc này để bật/tắt các mục bên dưới'}
+              </Text>
+            </View>
+            {renderToggleSwitch('appEnabled', isAppEnabled, false, 'switch-app-notifications')}
+          </View>
+        </View>
+
+        {/* Section 2: Các thông báo con (chỉ mở khi appEnabled = true) */}
+        <Text style={styles.sectionHeader}>LOẠI THÔNG BÁO</Text>
+        <View style={styles.cardGroup}>
+          {CATEGORY_ITEMS.map((item, idx) => {
+            const checked = Boolean(settings[item.key]);
+            return (
+              <React.Fragment key={item.key}>
+                {idx > 0 && <View style={styles.itemDivider} />}
+                <View style={[styles.settingItem, !isAppEnabled && styles.settingItemDisabled]}>
+                  <View
+                    style={[
+                      styles.settingIconBox,
+                      { backgroundColor: isAppEnabled ? item.iconBg : '#F1F5F9' },
+                    ]}
+                  >
+                    {renderCategoryIcon(item, isAppEnabled)}
+                  </View>
+                  <View style={styles.settingTextBox}>
+                    <View style={styles.settingTitleRow}>
+                      <Text style={styles.settingTitle}>{item.title}</Text>
+                      {item.badge && (
+                        <View style={styles.urgentBadge}>
+                          <Text style={styles.urgentBadgeText}>{item.badge}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.settingDesc}>{item.desc}</Text>
+                  </View>
+                  {renderToggleSwitch(item.key, checked, !isAppEnabled)}
+                </View>
+              </React.Fragment>
+            );
+          })}
+        </View>
+
+        {/* Section 3: Âm thanh & Rung */}
+        <Text style={styles.sectionHeader}>ÂM THANH & RUNG</Text>
+        <View style={styles.cardGroup}>
+          <View style={[styles.settingItem, !isAppEnabled && styles.settingItemDisabled]}>
+            <View
+              style={[
+                styles.settingIconBox,
+                { backgroundColor: isAppEnabled && settings.sound ? '#EFF6FF' : '#F1F5F9' },
               ]}
             >
               <Feather
                 name="volume-2"
-                size={20}
-                color={settings.sound ? '#0066FF' : '#64748B'}
+                size={18}
+                color={isAppEnabled && settings.sound ? MASTER_BLUE : '#94A3B8'}
               />
             </View>
             <View style={styles.settingTextBox}>
-              <Text style={styles.settingTitle}>Âm thanh chuông báo</Text>
-              <Text style={styles.settingDesc}>
-                Phát âm thanh chuông khi có thông báo mới (Cảnh báo SOS vẫn phát khi máy im lặng).
-              </Text>
+              <Text style={styles.settingTitle}>Âm thanh thông báo</Text>
+              <Text style={styles.settingDesc}>Nhạc chuông mặc định của thiết bị</Text>
             </View>
-            <Switch
-              style={styles.switchControl}
-              value={settings.sound}
-              onValueChange={(val) => updateSetting('sound', val)}
-              trackColor={{ false: '#CBD5E1', true: '#BFDBFE' }}
-              thumbColor={settings.sound ? '#0066FF' : '#F1F5F9'}
-              ios_backgroundColor="#CBD5E1"
-            />
+            {renderToggleSwitch('sound', settings.sound, !isAppEnabled)}
           </View>
 
           <View style={styles.itemDivider} />
 
-          {/* Rung */}
-          <View style={styles.settingItem}>
+          <View style={[styles.settingItem, !isAppEnabled && styles.settingItemDisabled]}>
             <View
               style={[
                 styles.settingIconBox,
-                { backgroundColor: settings.vibration ? '#EFF6FF' : '#F8FAFC' },
+                { backgroundColor: isAppEnabled && settings.vibration ? '#EFF6FF' : '#F1F5F9' },
               ]}
             >
               <Feather
                 name="smartphone"
-                size={20}
-                color={settings.vibration ? '#0066FF' : '#64748B'}
+                size={18}
+                color={isAppEnabled && settings.vibration ? MASTER_BLUE : '#94A3B8'}
               />
             </View>
             <View style={styles.settingTextBox}>
               <Text style={styles.settingTitle}>Rung thiết bị</Text>
-              <Text style={styles.settingDesc}>
-                Rung khi nhận được cảnh báo cứu nạn hoặc thông báo hệ thống.
-              </Text>
+              <Text style={styles.settingDesc}>Rung nhẹ khi có thông báo mới</Text>
             </View>
-            <Switch
-              style={styles.switchControl}
-              value={settings.vibration}
-              onValueChange={(val) => updateSetting('vibration', val)}
-              trackColor={{ false: '#CBD5E1', true: '#BFDBFE' }}
-              thumbColor={settings.vibration ? '#0066FF' : '#F1F5F9'}
-              ios_backgroundColor="#CBD5E1"
-            />
+            {renderToggleSwitch('vibration', settings.vibration, !isAppEnabled)}
           </View>
         </View>
 
-        {/* Section 3: Kiểm tra cài đặt thông báo thực tế */}
-        <Text style={styles.sectionHeader}>KIỂM TRA CÀI ĐẶT THỰC TẾ</Text>
-        <View style={styles.testCard}>
-          <Text style={styles.testCardDesc}>
-            Bấm vào từng nút để thử nghiệm phát thông báo thực tế theo đúng trạng thái BẬT/TẮT, chuông
-            và rung bạn đã chọn:
-          </Text>
-
-          <View style={styles.testButtonsGrid}>
-            {/* 1. Test Alert */}
-            <TouchableOpacity
-              style={[styles.testBtn, !settings.alert && styles.testBtnDisabled]}
-              onPress={() => handleTestCategory('alert', 'Cảnh báo khẩn cấp')}
-              activeOpacity={0.75}
-            >
-              <View style={styles.testBtnLeft}>
-                <Feather
-                  name="alert-triangle"
-                  size={16}
-                  color={settings.alert ? '#DC2626' : '#94A3B8'}
-                />
-                <Text style={[styles.testBtnText, !settings.alert && styles.testBtnTextDisabled]}>
-                  Thử Cảnh báo SOS
-                </Text>
-              </View>
-              <View style={[styles.testTag, settings.alert ? styles.testTagOn : styles.testTagOff]}>
-                <Text
-                  style={[
-                    styles.testTagText,
-                    settings.alert ? styles.testTagTextOn : styles.testTagTextOff,
-                  ]}
-                >
-                  {settings.alert ? 'BẬT' : 'TẮT'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* 2. Test Safe Location */}
-            <TouchableOpacity
-              style={[styles.testBtn, !settings.safeLocation && styles.testBtnDisabled]}
-              onPress={() => handleTestCategory('safeLocation', 'Vị trí an toàn')}
-              activeOpacity={0.75}
-            >
-              <View style={styles.testBtnLeft}>
-                <MaterialCommunityIcons
-                  name="shield-home"
-                  size={16}
-                  color={settings.safeLocation ? '#0066FF' : '#94A3B8'}
-                />
-                <Text
-                  style={[styles.testBtnText, !settings.safeLocation && styles.testBtnTextDisabled]}
-                >
-                  Thử Vị trí an toàn
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.testTag,
-                  settings.safeLocation ? styles.testTagOn : styles.testTagOff,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.testTagText,
-                    settings.safeLocation ? styles.testTagTextOn : styles.testTagTextOff,
-                  ]}
-                >
-                  {settings.safeLocation ? 'BẬT' : 'TẮT'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* 3. Test System */}
-            <TouchableOpacity
-              style={[styles.testBtn, !settings.systemNotification && styles.testBtnDisabled]}
-              onPress={() => handleTestCategory('systemNotification', 'Thông báo hệ thống')}
-              activeOpacity={0.75}
-            >
-              <View style={styles.testBtnLeft}>
-                <Feather
-                  name="bell"
-                  size={16}
-                  color={settings.systemNotification ? '#0066FF' : '#94A3B8'}
-                />
-                <Text
-                  style={[
-                    styles.testBtnText,
-                    !settings.systemNotification && styles.testBtnTextDisabled,
-                  ]}
-                >
-                  Thử Thông báo hệ thống
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.testTag,
-                  settings.systemNotification ? styles.testTagOn : styles.testTagOff,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.testTagText,
-                    settings.systemNotification ? styles.testTagTextOn : styles.testTagTextOff,
-                  ]}
-                >
-                  {settings.systemNotification ? 'BẬT' : 'TẮT'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* 4. Test News */}
-            <TouchableOpacity
-              style={[styles.testBtn, !settings.news && styles.testBtnDisabled]}
-              onPress={() => handleTestCategory('news', 'Tin tức & Thời tiết')}
-              activeOpacity={0.75}
-            >
-              <View style={styles.testBtnLeft}>
-                <Feather
-                  name="file-text"
-                  size={16}
-                  color={settings.news ? '#D97706' : '#94A3B8'}
-                />
-                <Text style={[styles.testBtnText, !settings.news && styles.testBtnTextDisabled]}>
-                  Thử Tin tức & Thời tiết
-                </Text>
-              </View>
-              <View style={[styles.testTag, settings.news ? styles.testTagOn : styles.testTagOff]}>
-                <Text
-                  style={[
-                    styles.testTagText,
-                    settings.news ? styles.testTagTextOn : styles.testTagTextOff,
-                  ]}
-                >
-                  {settings.news ? 'BẬT' : 'TẮT'}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Thẻ lưu ý an toàn */}
-        <View style={styles.safetyNoticeBox}>
-          <Feather name="info" size={16} color="#64748B" style={{ marginTop: 2 }} />
-          <Text style={styles.safetyNoticeText}>
-            Lưu ý: Để nhận được thông báo cứu hộ kịp thời trong mọi điều kiện mất sóng hoặc màn hình
-            khóa, vui lòng đảm bảo ứng dụng hỗ trợ cứu nạn được cấp quyền Thông báo trong Cài đặt hệ thống
-            của thiết bị.
-          </Text>
-        </View>
-
-        {/* Nút đặt lại */}
         <TouchableOpacity
           style={styles.resetDefaultsButton}
           onPress={handleResetDefaults}
           activeOpacity={0.7}
         >
-          <Feather name="refresh-cw" size={15} color="#64748B" />
-          <Text style={styles.resetDefaultsButtonText}>Khôi phục cài đặt mặc định</Text>
+          <Feather name="refresh-cw" size={14} color="#64748B" />
+          <Text style={styles.resetDefaultsButtonText}>Khôi phục mặc định</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -487,16 +405,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: '#F8FAFC',
     justifyContent: 'center',
     alignItems: 'center',
@@ -504,14 +422,14 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   headerTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#0F172A',
+    color: PROFILE_THEME.colors.textPrimary,
   },
   headerRightBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: '#F8FAFC',
     justifyContent: 'center',
     alignItems: 'center',
@@ -523,65 +441,62 @@ const styles = StyleSheet.create({
     backgroundColor: PROFILE_THEME.colors.background,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
+    padding: 14,
+    paddingBottom: 92,
   },
-  bannerCard: {
+  osPermBanner: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#EFF6FF',
-    borderRadius: PROFILE_THEME.radius.card,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-    marginBottom: 16,
-    gap: 12,
-  },
-  bannerIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: '#DBEAFE',
-    justifyContent: 'center',
     alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 12,
   },
-  bannerTextBox: {
+  osPermText: {
     flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#92400E',
   },
-  bannerTitle: {
-    fontSize: 15,
+  osPermBtn: {
+    backgroundColor: '#D97706',
+    borderRadius: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    flexShrink: 0,
+  },
+  osPermBtnText: {
+    fontSize: 11.5,
     fontWeight: '700',
-    color: '#1E3A8A',
-    marginBottom: 4,
-  },
-  bannerDesc: {
-    fontSize: 12.5,
-    lineHeight: 18,
-    color: '#1E40AF',
+    color: '#FFFFFF',
   },
   savedBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
     backgroundColor: '#ECFDF5',
     borderWidth: 1,
     borderColor: '#A7F3D0',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    marginBottom: 14,
+    borderRadius: 9,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
   },
   savedBannerText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#059669',
   },
   sectionHeader: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#64748B',
     letterSpacing: 0.5,
-    marginBottom: 10,
+    marginBottom: 6,
     marginLeft: 4,
   },
   cardGroup: {
@@ -589,40 +504,43 @@ const styles = StyleSheet.create({
     borderRadius: PROFILE_THEME.radius.card,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginBottom: 20,
+    marginBottom: 14,
     overflow: 'hidden',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 1,
+  },
+  masterCardMuted: {
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
   },
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    gap: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    gap: 10,
+  },
+  settingItemDisabled: {
+    opacity: 0.45,
   },
   settingIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
   settingTextBox: {
     flex: 1,
-    paddingRight: 10,
+    paddingRight: 6,
   },
   settingTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   settingTitle: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#0F172A',
   },
@@ -630,147 +548,61 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   settingDesc: {
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11.5,
+    lineHeight: 15,
     color: '#64748B',
+  },
+  statusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 5,
+  },
+  statusBadgeOn: {
+    backgroundColor: '#DBEAFE',
+  },
+  statusBadgeOff: {
+    backgroundColor: '#E2E8F0',
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  statusBadgeTextOn: {
+    color: MASTER_BLUE,
+  },
+  statusBadgeTextOff: {
+    color: '#475569',
   },
   urgentBadge: {
     backgroundColor: '#FEE2E2',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 5,
   },
   urgentBadgeText: {
     fontSize: 10,
     fontWeight: '700',
     color: '#DC2626',
   },
-  recBadge: {
-    backgroundColor: '#DBEAFE',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  recBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#0066FF',
-  },
   itemDivider: {
     height: 1,
     backgroundColor: '#F1F5F9',
-    marginLeft: 66,
-  },
-  safetyNoticeBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 16,
-    gap: 10,
-  },
-  safetyNoticeText: {
-    flex: 1,
-    fontSize: 12,
-    lineHeight: 17,
-    color: '#64748B',
+    marginLeft: 60,
   },
   resetDefaultsButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 12,
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     backgroundColor: '#FFFFFF',
   },
   resetDefaultsButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  testCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: PROFILE_THEME.radius.card,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 20,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#0F172A',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  testCardDesc: {
     fontSize: 12.5,
-    lineHeight: 18,
-    color: '#64748B',
-    marginBottom: 12,
-  },
-  testButtonsGrid: {
-    gap: 10,
-  },
-  testBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingVertical: 11,
-    paddingHorizontal: 12,
-  },
-  testBtnDisabled: {
-    backgroundColor: '#F1F5F9',
-    borderColor: '#E2E8F0',
-    opacity: 0.8,
-  },
-  testBtnLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
-  testBtnText: {
-    fontSize: 13,
     fontWeight: '600',
-    color: '#1E293B',
-  },
-  testBtnTextDisabled: {
-    color: '#64748B',
-  },
-  testTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  testTagOn: {
-    backgroundColor: '#DCFCE7',
-  },
-  testTagOff: {
-    backgroundColor: '#F1F5F9',
-  },
-  testTagText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  testTagTextOn: {
-    color: '#15803D',
-  },
-  testTagTextOff: {
     color: '#64748B',
   },
 });

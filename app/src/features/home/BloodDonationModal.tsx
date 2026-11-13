@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   DeviceEventEmitter,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -173,21 +174,20 @@ export function BloodDonationModal({
                 ...prev.filter((x) => x._id !== evWithResp._id),
               ]);
               selectEventItem(evWithResp, pre);
-            } else if (events[0]) {
-              selectEventItem(events[0], pre);
+            } else {
+              setSelectedEvent(null);
             }
           }
         } else if (events.length > 0 && pre) {
-          // Nếu đã đăng ký trước rồi và đang có sự kiện mới -> ưu tiên mở tab Sự kiện
-          const firstUnresponded = events.find((e) => !e.myResponse) || events[0];
-          selectEventItem(firstUnresponded, pre);
+          // Nếu đã đăng ký trước rồi và đang có sự kiện mới -> mở tab Sự kiện hiển thị danh sách các đợt
+          setSelectedEvent(null);
           if (events.some((e) => !e.myResponse)) {
             setActiveTab('EVENTS');
           } else {
             setActiveTab('PRE_REGISTER');
           }
         } else {
-          if (events[0]) selectEventItem(events[0], pre);
+          setSelectedEvent(null);
           setActiveTab('PRE_REGISTER');
         }
       }
@@ -459,6 +459,7 @@ export function BloodDonationModal({
               style={[styles.tabItem, activeTab === 'EVENTS' && styles.tabItemActive]}
               onPress={() => {
                 setActiveTab('EVENTS');
+                setSelectedEvent(null);
                 setFeedbackBanner(null);
               }}
             >
@@ -705,45 +706,38 @@ export function BloodDonationModal({
                         Chưa có đợt hiến máu nào đang mở
                       </Text>
                       <Text style={styles.emptySubtitle}>
-                        Bạn có thể đăng ký trước ở tab "Đăng ký trước" để nhận thông báo ngay
+                        Bạn có thể đăng ký trước ở tab "ĐK nhận thông báo" để nhận thông báo ngay
                         khi địa phương tổ chức sự kiện hiến máu mới.
                       </Text>
                     </View>
-                  ) : (
+                  ) : !selectedEvent ? (
+                    /* 1. CHỈ HIỂN THỊ DANH SÁCH CÁC ĐỢT HIẾN MÁU */
                     <>
-                      {/* Danh sách chọn các sự kiện đang mở */}
                       <Text style={styles.sectionLabel}>
-                        Chọn sự kiện hiến máu ({activeEvents.length}):
+                        Chọn sự kiện hiến máu để xem chi tiết ({activeEvents.length}):
                       </Text>
                       <View style={styles.eventListBox}>
                         {activeEvents.map((ev) => {
-                          const isSelected = selectedEvent?._id === ev._id;
                           const respStatus = ev.myResponse?.status;
                           return (
                             <TouchableOpacity
                               key={ev._id}
-                              style={[
-                                styles.eventSelectorItem,
-                                isSelected && styles.eventSelectorItemActive,
-                              ]}
+                              style={styles.eventSelectorItem}
                               onPress={() => {
                                 selectEventItem(ev, myPreRegistration);
                                 setFeedbackBanner(null);
                               }}
+                              activeOpacity={0.7}
                             >
                               <View style={{ flex: 1 }}>
                                 <Text
-                                  style={[
-                                    styles.eventSelectorTitle,
-                                    isSelected && { color: '#0369A1' },
-                                  ]}
+                                  style={styles.eventSelectorTitle}
                                   numberOfLines={1}
                                 >
                                   {ev.title}
                                 </Text>
                                 <Text style={styles.eventSelectorMeta} numberOfLines={1}>
-                                  📍 {ev.locationName} • 🗓️ {formatDate(ev.eventDate)} (
-                                  {ev.startTime} - {ev.endTime})
+                                  📍 {ev.locationName} • 🗓️ {formatDate(ev.eventDate)} ({ev.startTime} - {ev.endTime})
                                 </Text>
                               </View>
                               <View
@@ -773,15 +767,29 @@ export function BloodDonationModal({
                                       : 'Chưa xác nhận'}
                                 </Text>
                               </View>
+                              <Ionicons name="chevron-forward" size={17} color="#94A3B8" />
                             </TouchableOpacity>
                           );
                         })}
                       </View>
+                    </>
+                  ) : (
+                    /* 2. NHẤN VÀO MỚI MỞ TRONG: CHI TIẾT & FORM XÁC NHẬN */
+                    <View>
+                      <TouchableOpacity
+                        style={styles.backToListBtn}
+                        onPress={() => {
+                          setSelectedEvent(null);
+                          setFeedbackBanner(null);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="arrow-back" size={16} color="#0284C7" />
+                        <Text style={styles.backToListBtnText}>Danh sách các đợt hiến máu</Text>
+                      </TouchableOpacity>
 
-                      {/* Chi tiết sự kiện đang chọn (Thiết kế gọn gàng) */}
-                      {selectedEvent && (
-                        <View style={styles.eventDetailCard}>
-                          <View style={styles.eventHeaderRow}>
+                      <View style={styles.eventDetailCard}>
+                        <View style={styles.eventHeaderRow}>
                             <Text style={styles.eventDetailTitle} numberOfLines={2}>
                               {selectedEvent.title}
                             </Text>
@@ -802,13 +810,44 @@ export function BloodDonationModal({
                           <View style={styles.infoGrid}>
                             <View style={styles.infoRow}>
                               <Ionicons name="location" size={15} color="#DC2626" style={{ marginTop: 1 }} />
-                              <Text style={styles.infoCompactText} numberOfLines={2}>
-                                <Text style={styles.infoRowLabel}>Địa điểm: </Text>
-                                <Text style={styles.infoRowValue}>{selectedEvent.locationName}</Text>
-                                {selectedEvent.address ? (
-                                  <Text style={styles.infoRowSub}> ({selectedEvent.address})</Text>
-                                ) : null}
-                              </Text>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.infoCompactText}>
+                                  <Text style={styles.infoRowLabel}>Địa điểm: </Text>
+                                  <Text style={styles.infoRowValue}>{selectedEvent.locationName}</Text>
+                                  {selectedEvent.address ? (
+                                    <Text style={styles.infoRowSub}> ({selectedEvent.address})</Text>
+                                  ) : null}
+                                </Text>
+                                {Boolean((selectedEvent as any).googleMapsUrl || selectedEvent.address) && (
+                                  <TouchableOpacity
+                                    style={{
+                                      flexDirection: 'row',
+                                      alignItems: 'center',
+                                      gap: 4,
+                                      marginTop: 4,
+                                      paddingVertical: 3,
+                                      paddingHorizontal: 8,
+                                      borderRadius: 6,
+                                      backgroundColor: '#EFF6FF',
+                                      alignSelf: 'flex-start',
+                                    }}
+                                    onPress={() => {
+                                      const mapUrl =
+                                        (selectedEvent as any).googleMapsUrl ||
+                                        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                                          `${selectedEvent.locationName} ${selectedEvent.address || ''}`.trim()
+                                        )}`;
+                                      Linking.openURL(mapUrl).catch(() => {});
+                                    }}
+                                    activeOpacity={0.7}
+                                  >
+                                    <Ionicons name="navigate-outline" size={12} color="#0066FF" />
+                                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0066FF' }}>
+                                      Chỉ đường Google Maps ↗
+                                    </Text>
+                                  </TouchableOpacity>
+                                )}
+                              </View>
                             </View>
 
                             <View style={styles.infoRow}>
@@ -994,9 +1033,8 @@ export function BloodDonationModal({
                             </TouchableOpacity>
                           )}
                         </View>
-                      )}
-                    </>
-                  )}
+                      </View>
+                    )}
                 </View>
               )}
             </ScrollView>
@@ -1547,6 +1585,24 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '800',
     color: '#475569',
+  },
+  backToListBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#F0F9FF',
+    alignSelf: 'flex-start',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  backToListBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0284C7',
   },
 });
 

@@ -4,7 +4,7 @@ import { fetchAreaBoundary, syncAdministrativeAreasToBackend } from '@/api';
 export const GEOAPIFY_BOUNDARIES_URL =
   'https://api.geoapify.com/v1/boundaries/consists-of?id=51ce209969560e5b405949be124889113040f00101f9015adc1c0000000000c002089203185468c3a06e68207068e1bb9120c490c3a0204ee1bab56e67&boundary=administrative&sublevel=1&geometry=geometry_1000&lang=vi&apiKey=3383e3ba2267489985bbe6d9bf7aa05d';
 
-export const GEOAPIFY_CACHE_KEY = 'rescuesos_geoapify_areas_cache_v2';
+export const GEOAPIFY_CACHE_KEY = 'rescuesos_geoapify_areas_cache_v3';
 
 // 24 Curated Modern Cartographic Color Schemes to clearly distinguish regions visually
 export const REGION_COLOR_PALETTES = [
@@ -202,6 +202,12 @@ export const INITIAL_GEOAPIFY_AREAS: AdministrativeArea[] = [];
 // Fetch live from the Geoapify API URL
 export async function fetchGeoapifyBoundaries(forceRefresh: boolean = false): Promise<AdministrativeArea[]> {
   try {
+    try {
+      localStorage.removeItem('rescuesos_geoapify_areas_cache_v2');
+    } catch {
+      // Ignore storage cleanup error
+    }
+
     if (!forceRefresh) {
       const cached = localStorage.getItem(GEOAPIFY_CACHE_KEY);
       if (cached) {

@@ -6,6 +6,7 @@ export const NOTIFICATION_SETTINGS_STORAGE_KEY = '@sos_notification_settings';
 export type NotificationCategoryKey =
   | 'alert'
   | 'safeLocation'
+  | 'chat'
   | 'systemNotification'
   | 'news';
 
@@ -29,17 +30,17 @@ export interface CategoryMeta {
 export const NOTIFICATION_CATEGORIES: Record<NotificationCategoryKey, CategoryMeta> = {
   alert: {
     key: 'alert',
-    label: 'Cảnh báo khẩn cấp',
-    shortLabel: 'Khẩn cấp',
-    badgeLabel: 'CẢNH BÁO SOS',
-    iconName: 'warning',
-    featherIcon: 'alert-triangle',
-    color: '#DC2626',
-    bgColor: '#FEF2F2',
-    badgeBg: '#FEE2E2',
-    badgeTextColor: '#DC2626',
-    borderColor: '#FECACA',
-    desc: 'Báo động SOS, lũ quét, sạt lở đất nguy cấp',
+    label: 'Thông báo',
+    shortLabel: 'Thông báo',
+    badgeLabel: 'THÔNG BÁO',
+    iconName: 'notifications-outline',
+    featherIcon: 'bell',
+    color: '#0F172A',
+    bgColor: '#F1F5F9',
+    badgeBg: '#F1F5F9',
+    badgeTextColor: '#334155',
+    borderColor: '#E2E8F0',
+    desc: 'Thông báo điều động và cảnh báo từ ban chỉ huy',
   },
   safeLocation: {
     key: 'safeLocation',
@@ -54,6 +55,20 @@ export const NOTIFICATION_CATEGORIES: Record<NotificationCategoryKey, CategoryMe
     badgeTextColor: '#059669',
     borderColor: '#A7F3D0',
     desc: 'Trạm y tế, điểm sơ tán & tập kết an toàn gần bạn',
+  },
+  chat: {
+    key: 'chat',
+    label: 'Nhắn tin',
+    shortLabel: 'Nhắn tin',
+    badgeLabel: 'TIN NHẮN',
+    iconName: 'chatbubble-ellipses',
+    featherIcon: 'message-circle',
+    color: '#7C3AED',
+    bgColor: '#F5F3FF',
+    badgeBg: '#EDE9FE',
+    badgeTextColor: '#7C3AED',
+    borderColor: '#DDD6FE',
+    desc: 'Tin nhắn trao đổi với cán bộ và người dân',
   },
   systemNotification: {
     key: 'systemNotification',
@@ -86,11 +101,12 @@ export const NOTIFICATION_CATEGORIES: Record<NotificationCategoryKey, CategoryMe
 };
 
 /**
- * Phân loại một thông báo vào 1 trong 4 danh mục của Cài đặt thông báo:
+ * Phân loại một thông báo vào 1 trong 5 danh mục của Cài đặt thông báo:
  * 1. alert: Cảnh báo khẩn cấp
  * 2. safeLocation: Vị trí an toàn
- * 3. systemNotification: Thông báo hệ thống
- * 4. news: Tin tức & Thời tiết
+ * 3. chat: Nhắn tin
+ * 4. systemNotification: Thông báo hệ thống
+ * 5. news: Tin tức & Thời tiết
  */
 export function classifyNotification(item: NotificationItem): NotificationCategoryKey {
   const type = String(item.type || '').toUpperCase();
@@ -98,10 +114,37 @@ export function classifyNotification(item: NotificationItem): NotificationCatego
   const title = (item.title || '').toLowerCase();
   const content = (item.content || '').toLowerCase();
 
-  // 1. Vị trí an toàn (Safe location)
+  // 0. Tin nhắn (Chat) — ưu tiên kiểm tra trước để không bị nhầm bởi từ khóa trong nội dung tin nhắn
+  if (
+    type === 'CHAT' ||
+    Boolean(item.data?.isChat) ||
+    item.data?.actionUrl === 'chat'
+  ) {
+    return 'chat';
+  }
+
+  const hasExplicitWeatherMeta =
+    type === 'WEATHER' ||
+    type === 'NEWS' ||
+    type === 'TIN_TUC' ||
+    type === 'TIN_TUC_THOI' ||
+    Boolean(item.data?.weatherArticleId) ||
+    Boolean(item.data?.weatherType) ||
+    Boolean(item.data?.isWeather) ||
+    (item as any).category === 'WEATHER' ||
+    item.data?.category === 'WEATHER' ||
+    Boolean(item.data?.imageUrl && item.data?.articleUrl);
+
+  // 1a. Bài viết thời tiết / Tin tức có metadata rõ ràng
+  if (hasExplicitWeatherMeta) {
+    return 'news';
+  }
+
+  // 2. Vị trí an toàn (Safe location)
   if (
     type === 'SAFE_LOCATION' ||
     type === 'SAFE' ||
+    Boolean(item.data?.safeLocationId) ||
     title.includes('vị trí an toàn') ||
     title.includes('điểm an toàn') ||
     title.includes('điểm sơ tán') ||
@@ -115,11 +158,13 @@ export function classifyNotification(item: NotificationItem): NotificationCatego
     return 'safeLocation';
   }
 
-  // 2. Cảnh báo khẩn cấp (Emergency Alert)
+  // 3. Thông báo chung & Cảnh báo tác chiến (loại trừ nhầm với từ khóa thời tiết)
   if (
     type === 'ALERT' ||
     type === 'HAZARD' ||
     type === 'RESCUE' ||
+    type === 'BLOOD_DONATION' ||
+    type === 'SAFETY_CHECK' ||
     priority === 'CRITICAL' ||
     (type === 'INSTANT' && (priority === 'HIGH' || priority === 'CRITICAL')) ||
     title.includes('khẩn cấp') ||
@@ -128,19 +173,23 @@ export function classifyNotification(item: NotificationItem): NotificationCatego
     title.includes('lũ quét') ||
     title.includes('sạt lở') ||
     title.includes('vỡ đê') ||
-    title.includes('cứu hộ khẩn cấp') ||
-    title.includes('ứng cứu') ||
-    content.includes('báo động đỏ') ||
-    content.includes('nguy hiểm đặc biệt')
+    title.includes('cứu hộ') ||
+    title.includes('ứng cứu')
   ) {
     return 'alert';
   }
 
-  // 3. Tin tức & Thời tiết (News & Weather)
+  // 3b. Thông báo hệ thống có type rõ ràng
   if (
-    type === 'WEATHER' ||
-    type === 'NEWS' ||
-    type === 'TIN_TUC' ||
+    type === 'SOS_SYNC' ||
+    type === 'RESCUER_VERIFICATION' ||
+    type === 'USER_SYNC'
+  ) {
+    return 'systemNotification';
+  }
+
+  // 1b. Dự phòng nhận diện tin thời tiết qua từ khóa nếu không có type tác chiến cụ thể
+  if (
     title.includes('thời tiết') ||
     title.includes('dự báo') ||
     title.includes('lượng mưa') ||
@@ -157,6 +206,13 @@ export function classifyNotification(item: NotificationItem): NotificationCatego
 
   // 4. Mặc định: Thông báo hệ thống (System Notification)
   return 'systemNotification';
+}
+
+/**
+ * Kiểm tra thông báo có phải là bài viết thời tiết (hiển thị ở tab Tin tức) hay không
+ */
+export function isWeatherNotification(item: NotificationItem): boolean {
+  return classifyNotification(item) === 'news';
 }
 
 /**
@@ -310,10 +366,12 @@ import { NotificationSettings } from '@/types';
 export type { NotificationSettings };
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  appEnabled: true,
   alert: true,
   safeLocation: true,
   systemNotification: true,
   news: true,
+  chat: true,
   sound: true,
   vibration: true,
 };
@@ -353,6 +411,9 @@ export function isNotificationCategoryEnabled(
   item: NotificationItem,
   settings: NotificationSettings
 ): boolean {
+  if (settings.appEnabled === false) {
+    return false;
+  }
   const category = classifyNotification(item);
   return settings[category] !== false;
 }

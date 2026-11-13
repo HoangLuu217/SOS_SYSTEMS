@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { WeatherNotification, AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
+const weatherArticleRealtimeService = require('./weatherArticleRealtime.service');
 
 const parsePublishedAt = (value) => {
   if (value === undefined) return undefined;
@@ -106,10 +107,12 @@ class WeatherNotificationService {
       ];
     }
 
-    // Tùy chọn sắp xếp
-    let sortOptions = { createdAt: -1 };
+    // Tùy chọn sắp xếp (Mặc định: Bản tin thời tiết mới nhất xếp trước)
+    let sortOptions = { published_at: -1, createdAt: -1 };
     if (query.sortBy === 'score') {
-      sortOptions = { score: -1, relevance_score: -1, createdAt: -1 };
+      sortOptions = { score: -1, relevance_score: -1, published_at: -1, createdAt: -1 };
+    } else if (query.sortBy === 'createdAt') {
+      sortOptions = { createdAt: -1, published_at: -1 };
     } else if (query.sortBy === 'publishedAt') {
       sortOptions = { published_at: -1, createdAt: -1 };
     }
@@ -241,13 +244,24 @@ class WeatherNotificationService {
       articleTitle: articleTitle || sourceName || data.source_name || null,
       source_name: sourceName || data.source_name || null,
       original_title: articleTitle || sourceName || data.source_name || null,
-      published_at: publishedAt === undefined ? null : publishedAt,
+      published_at: publishedAt === undefined ? new Date() : publishedAt,
       areaId: areaId && mongoose.Types.ObjectId.isValid(areaId) ? areaId : null,
-      createdBy: user?._id || null,
+      createdBy: user?._id || user?.id || null,
       status: data.status || 'ACTIVE',
+      reviewed_by: (data.status === 'ACTIVE' || data.status === 'approved' || !data.status)
+        ? (user?._id || user?.id || null)
+        : null,
+      reviewed_at: (data.status === 'ACTIVE' || data.status === 'approved' || !data.status)
+        ? new Date()
+        : null,
     });
 
     await doc.save();
+    weatherArticleRealtimeService.publishArticlesUpdated({
+      source: 'crud',
+      reason: 'created',
+      articleId: doc._id.toString(),
+    });
     return doc;
   }
 
@@ -284,6 +298,7 @@ class WeatherNotificationService {
       'published_at',
       'areaId',
       'status',
+      'archivedAt',
     ];
 
     allowedFields.forEach((field) => {
@@ -301,23 +316,67 @@ class WeatherNotificationService {
     if (data.status === 'ACTIVE' || data.status === 'approved') {
       item.reviewed_by = user?._id || user?.id || item.reviewed_by;
       item.reviewed_at = new Date();
+      item.archivedAt = null;
+    } else if (data.status === 'ARCHIVED' || data.status === 'archived' || data.status === 'rejected' || data.status === 'REJECTED') {
+      if (!item.archivedAt) {
+        item.archivedAt = new Date();
+      }
+    } else if (data.status === 'pending' || data.status === 'PENDING') {
+      item.archivedAt = null;
     }
 
     await item.save();
+    weatherArticleRealtimeService.publishArticlesUpdated({
+      source: 'crud',
+      reason: 'updated',
+      articleId: item._id.toString(),
+    });
     return item;
   }
 
   /**
    * Hủy hoặc xóa thông báo thời tiết
+   * @param {string} id - ID bài viết
+   * @param {Object} options - Tùy chọn (permanent: xóa vĩnh viễn khỏi CSDL)
    */
-  async deleteWeatherNotification(id) {
+  async deleteWeatherNotification(id, { permanent = false } = {}) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new ApiError(400, 'ID thông báo thời tiết không hợp lệ');
     }
 
+    if (permanent) {
+      const item = await WeatherNotification.findByIdAndDelete(id);
+      if (!item) {
+        throw new ApiError(404, 'Không tìm thấy thông báo thời tiết');
+      }
+
+      // Xóa các bản ghi thông báo liên quan
+      try {
+        const { Notification } = require('../models');
+        await Notification.deleteMany({
+          $or: [
+            { 'data.weatherArticleId': id.toString() },
+            { 'data.broadcastId': item.broadcastId },
+            ...(item.broadcastId && mongoose.Types.ObjectId.isValid(item.broadcastId)
+              ? [{ _id: item.broadcastId }]
+              : []),
+          ],
+        });
+      } catch (delErr) {
+        console.warn('Lỗi dọn dẹp Notification khi xóa vĩnh viễn bản tin:', delErr.message);
+      }
+
+      weatherArticleRealtimeService.publishArticlesUpdated({
+        source: 'crud',
+        reason: 'deleted',
+        articleId: item._id.toString(),
+      });
+      return item;
+    }
+
     const item = await WeatherNotification.findByIdAndUpdate(
       id,
-      { status: 'ARCHIVED' },
+      { status: 'ARCHIVED', archivedAt: new Date() },
       { returnDocument: 'after' }
     );
 
@@ -325,28 +384,127 @@ class WeatherNotificationService {
       throw new ApiError(404, 'Không tìm thấy thông báo thời tiết');
     }
 
+    // Tự động xóa luôn các bản ghi thông báo (broadcast) liên quan trong bảng Notification
+    try {
+      const { Notification } = require('../models');
+      await Notification.deleteMany({
+        $or: [
+          { 'data.weatherArticleId': id.toString() },
+          { 'data.broadcastId': item.broadcastId },
+          ...(item.broadcastId && mongoose.Types.ObjectId.isValid(item.broadcastId)
+            ? [{ _id: item.broadcastId }]
+            : []),
+        ],
+      });
+    } catch (delErr) {
+      console.warn('Lỗi dọn dẹp Notification liên kết khi lưu trữ bản tin thời tiết:', delErr.message);
+    }
+
+    weatherArticleRealtimeService.publishArticlesUpdated({
+      source: 'crud',
+      reason: 'archived',
+      articleId: item._id.toString(),
+    });
     return item;
   }
 
   /**
-   * Tự động xóa các bản tin chưa duyệt (pending) có ngày xuất bản quá số ngày quy định (mặc định 2 ngày)
-   * @param {number} daysThreshold - Số ngày quá hạn (mặc định: 2 ngày)
+   * Tự động quét và xóa vĩnh viễn các bản tin thời tiết:
+   * 1. Bản tin trong kho lưu trữ (ARCHIVED / rejected): Chỉ lưu trong 2 ngày, sau 2 ngày tự động xóa vĩnh viễn khỏi CSDL.
+   * 2. Bản tin chưa duyệt (pending) quá 2 ngày.
+   * Đồng thời tự động dọn dẹp toàn bộ Notification liên kết trong CSDL.
+   * Chạy tự động ngầm không cần nút bấm.
+   * @param {number} daysThreshold - Số ngày lưu trữ tối đa (mặc định: 2 ngày)
    */
-  async cleanupExpiredPendingArticles(daysThreshold = 2) {
+  async cleanupExpiredWeatherArticles(daysThreshold = 2) {
     const thresholdDate = new Date(Date.now() - daysThreshold * 24 * 60 * 60 * 1000);
+
     const filter = {
-      status: { $in: ['pending', 'PENDING'] },
       $or: [
-        { published_at: { $lt: thresholdDate, $ne: null } },
-        { published_at: null, createdAt: { $lt: thresholdDate } },
+        // 1. Bản tin lưu trữ / từ chối: Chỉ lưu trong 2 ngày rồi tự động xóa luôn
+        {
+          status: { $in: ['ARCHIVED', 'archived', 'rejected', 'REJECTED'] },
+          $or: [
+            { archivedAt: { $lt: thresholdDate, $ne: null } },
+            { archivedAt: null, updatedAt: { $lt: thresholdDate } },
+            { archivedAt: null, updatedAt: { $exists: false }, createdAt: { $lt: thresholdDate } },
+          ],
+        },
+        // 2. Bản tin chưa duyệt (pending) quá 2 ngày
+        {
+          status: { $in: ['pending', 'PENDING'] },
+          $or: [
+            { published_at: { $lt: thresholdDate, $ne: null } },
+            { published_at: null, createdAt: { $lt: thresholdDate } },
+          ],
+        },
       ],
     };
 
-    const result = await WeatherNotification.deleteMany(filter);
-    if (result.deletedCount > 0) {
-      console.log(`🧹 [Weather Auto-Cleanup] Đã tự động xóa ${result.deletedCount} bản tin pending cũ quá ${daysThreshold} ngày.`);
+    const targetArticles = await WeatherNotification.find(filter)
+      .select('_id broadcastId status title')
+      .lean();
+
+    if (!targetArticles || targetArticles.length === 0) {
+      return { totalDeleted: 0, archivedDeleted: 0, pendingDeleted: 0 };
     }
-    return result.deletedCount;
+
+    const idsToDelete = targetArticles.map((a) => a._id);
+    const broadcastIds = targetArticles.map((a) => a.broadcastId).filter(Boolean);
+
+    let archivedDeleted = 0;
+    let pendingDeleted = 0;
+    targetArticles.forEach((a) => {
+      const s = (a.status || '').toLowerCase();
+      if (s === 'archived' || s === 'rejected') {
+        archivedDeleted++;
+      } else {
+        pendingDeleted++;
+      }
+    });
+
+    const result = await WeatherNotification.deleteMany({ _id: { $in: idsToDelete } });
+
+    // Dọn dẹp Notification liên quan
+    try {
+      const { Notification } = require('../models');
+      await Notification.deleteMany({
+        $or: [
+          { 'data.weatherArticleId': { $in: idsToDelete.map((id) => id.toString()) } },
+          ...(broadcastIds.length > 0
+            ? [{ 'data.broadcastId': { $in: broadcastIds } }, { _id: { $in: broadcastIds } }]
+            : []),
+        ],
+      });
+    } catch (delErr) {
+      console.warn('⚠️ Lỗi dọn dẹp Notification liên kết khi dọn rác bản tin thời tiết:', delErr.message);
+    }
+
+    console.log(
+      `🧹 [Weather Auto-Cleanup] Đã tự động xóa vĩnh viễn ${result.deletedCount} bản tin quá ${daysThreshold} ngày (${archivedDeleted} tin lưu trữ, ${pendingDeleted} tin pending).`
+    );
+
+    if (result.deletedCount > 0) {
+      weatherArticleRealtimeService.publishArticlesUpdated({
+        source: 'cleanup',
+        reason: 'cleanup_expired',
+        deletedCount: result.deletedCount,
+      });
+    }
+
+    return {
+      totalDeleted: result.deletedCount,
+      archivedDeleted,
+      pendingDeleted,
+    };
+  }
+
+  /**
+   * Tương thích ngược: dọn dẹp các bản tin quá hạn
+   */
+  async cleanupExpiredPendingArticles(daysThreshold = 2) {
+    const res = await this.cleanupExpiredWeatherArticles(daysThreshold);
+    return res.totalDeleted;
   }
 }
 

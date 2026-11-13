@@ -1597,18 +1597,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({
           />
         </TouchableOpacity>
 
-        {/* Nút 3: Thời gian */}
-        <TouchableOpacity
-          style={styles.rightActionBtn}
-          onPress={() => {
-            Alert.alert('Cập nhật mới', 'Dữ liệu các điểm cứu hộ và nguy hiểm được đồng bộ thời gian thực.');
-          }}
-          activeOpacity={0.85}
-        >
-          <Feather name="clock" size={18} color="#475569" />
-        </TouchableOpacity>
-
-        {/* Nút 4: Đóng góp điểm cứu trợ / nguy hiểm (không hiển thị số 12) */}
+        {/* Nút 3: Đóng góp điểm cứu trợ / nguy hiểm (không hiển thị số 12) */}
         <TouchableOpacity
           style={styles.rightActionBtn}
           onPress={() => setShowHazardModal(true)}

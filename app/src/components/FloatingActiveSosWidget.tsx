@@ -38,6 +38,9 @@ const TYPE_LABELS: Record<string, string> = {
   MEDICAL: '🚑 Cấp cứu Y tế',
   FIRE: '🔥 Hỏa hoạn',
   FLOOD: '🌊 Lũ lụt / Mắc kẹt',
+  FOOD: '🍞 Tiếp tế lương thực',
+  EVACUATION: '🚨 Sơ tán khẩn cấp',
+  SUPPLIES: '📦 Tiếp tế nhu yếu phẩm',
   LANDSLIDE: '⛰️ Sạt lở',
   STORM: '⛈️ Bão lũ',
   ACCIDENT: '💥 Tai nạn',
@@ -155,8 +158,9 @@ export const FloatingActiveSosWidget: React.FC = () => {
       onPanResponderRelease: (_, gestureState) => {
         pan.flattenOffset();
 
-        // Nếu chỉ là chạm nhẹ (tap) và không kéo -> Mở modal danh sách
+        // Nếu chỉ là chạm nhẹ (tap) và không kéo -> Làm mới dữ liệu & mở modal danh sách
         if (!isDragging.current && Math.abs(gestureState.dx) < 6 && Math.abs(gestureState.dy) < 6) {
+          void fetchActiveSos();
           setShowListModal(true);
           return;
         }

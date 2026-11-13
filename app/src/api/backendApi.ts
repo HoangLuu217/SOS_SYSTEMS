@@ -178,6 +178,8 @@ class BackendApiService {
   registerPushToken = (pushToken: string) =>
     notificationApi.registerPushToken(pushToken);
 
+  unregisterPushToken = () => notificationApi.unregisterPushToken();
+
   updateCurrentLocation = (latitude: number, longitude: number) =>
     notificationApi.updateCurrentLocation(latitude, longitude);
 
