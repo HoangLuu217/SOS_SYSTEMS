@@ -84,6 +84,7 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
   const dismissedMissionsRef = React.useRef<Set<string>>(new Set());
 
   const isFetchingRef = useRef(false);
+  const pendingRefetchRef = useRef(false);
   const prevCountRef = useRef<number>(-1);
   const hasLoadedRef = useRef(false);
 
@@ -95,7 +96,10 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
       const isUserPull = options?.isUserPull ?? false;
       const isSilent = options?.isSilent ?? false;
 
-      if (isFetchingRef.current) return;
+      if (isFetchingRef.current) {
+        pendingRefetchRef.current = true;
+        return;
+      }
       isFetchingRef.current = true;
 
       if (isUserPull) {
@@ -141,6 +145,12 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
         isFetchingRef.current = false;
         setLoading(false);
         setRefreshing(false);
+        if (pendingRefetchRef.current) {
+          pendingRefetchRef.current = false;
+          setTimeout(() => {
+            fetchMissions({ isSilent: true });
+          }, 150);
+        }
       }
     },
     [onMissionsCountChange, workspaceVisible]
@@ -154,10 +164,10 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     const sub = DeviceEventEmitter.addListener('sos:sync', () => {
       fetchMissions({ isSilent: true });
     });
-    // Polling dự phòng mỗi 30s (Đồng bộ ngầm yên lặng, không giật màn hình)
+    // Polling dự phòng mỗi 6s (Đồng bộ ngầm yên lặng, không giật màn hình)
     const interval = setInterval(() => {
       fetchMissions({ isSilent: true });
-    }, 30000);
+    }, 6000);
 
     return () => {
       sub.remove();
@@ -492,17 +502,15 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     note?: string,
     extraData?: { proofImages?: string[]; actualRecipient?: string }
   ) => {
-    // Chỉ đội trưởng mới có quyền nhận hoặc từ chối lệnh
-    if (['ACCEPTED', 'REJECTED'].includes(targetStatus)) {
-      const mission = missions.find((m) => m._id === missionId);
-      if (mission && !checkIsLeaderForMission(mission)) {
-        Alert.alert(
-          'Chỉ Đội Trưởng',
-          'Chỉ Đội trưởng mới có quyền xác nhận tiếp nhận hoặc từ chối lệnh điều động này.',
-          [{ text: 'Đã hiểu' }]
-        );
-        return;
-      }
+    // Chỉ Đội trưởng mới có quyền tiếp nhận hoặc thay đổi trạng thái tác chiến / hoàn thành nhiệm vụ
+    const mission = missions.find((m) => m._id === missionId);
+    if (mission && !checkIsLeaderForMission(mission)) {
+      Alert.alert(
+        'Chỉ Đội Trưởng',
+        'Thành viên chỉ có quyền theo dõi nhiệm vụ. Chỉ Đội trưởng mới có quyền tiếp nhận hoặc thay đổi trạng thái tác chiến nhiệm vụ này.',
+        [{ text: 'Đã hiểu' }]
+      );
+      return;
     }
     try {
       setIsSubmitting(true);
@@ -1585,49 +1593,93 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                       )}
 
                       {item.status === 'ACCEPTED' && (
-                        <TouchableOpacity
-                          style={[styles.primaryActionBtn, { flex: 1.3 }]}
-                          onPress={() => handleUpdateStatus(item._id, 'EN_ROUTE')}
-                          activeOpacity={0.85}
-                          disabled={isSubmitting}
-                        >
-                          <LinearGradient
-                            colors={['#F59E0B', '#D97706']}
-                            style={styles.gradientBtn}
+                        checkIsLeaderForMission(item) ? (
+                          <TouchableOpacity
+                            style={[styles.primaryActionBtn, { flex: 1.3 }]}
+                            onPress={() => handleUpdateStatus(item._id, 'EN_ROUTE')}
+                            activeOpacity={0.85}
+                            disabled={isSubmitting}
                           >
-                            <MaterialCommunityIcons name="truck-fast" size={16} color="#FFFFFF" />
-                            <Text style={styles.primaryActionText}>
-                              {isShoreHandoffMission
-                                ? 'Xuất Phát Ra Bến Đón'
-                                : isReliefMission
-                                ? 'Xuất Kho Vận Chuyển'
-                                : 'Xuất Phát Ứng Cứu'}
+                            <LinearGradient
+                              colors={['#F59E0B', '#D97706']}
+                              style={styles.gradientBtn}
+                            >
+                              <MaterialCommunityIcons name="truck-fast" size={16} color="#FFFFFF" />
+                              <Text style={styles.primaryActionText}>
+                                {isShoreHandoffMission
+                                  ? 'Xuất Phát Ra Bến Đón'
+                                  : isReliefMission
+                                  ? 'Xuất Kho Vận Chuyển'
+                                  : 'Xuất Phát Ứng Cứu'}
+                              </Text>
+                            </LinearGradient>
+                          </TouchableOpacity>
+                        ) : (
+                          <View
+                            style={[
+                              styles.primaryActionBtn,
+                              {
+                                flex: 1.3,
+                                backgroundColor: '#F8FAFC',
+                                borderColor: '#E2E8F0',
+                                borderWidth: 1,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                paddingVertical: 9,
+                                borderRadius: 10,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B' }}>
+                              Đã nhận (Chờ Đội trưởng xuất phát)
                             </Text>
-                          </LinearGradient>
-                        </TouchableOpacity>
+                          </View>
+                        )
                       )}
 
                       {['EN_ROUTE', 'DISPATCHED', 'ON_THE_WAY'].includes(item.status) && (
-                        <TouchableOpacity
-                          style={[styles.primaryActionBtn, { flex: 1.3 }]}
-                          onPress={() => handleUpdateStatus(item._id, 'ARRIVED')}
-                          activeOpacity={0.85}
-                          disabled={isSubmitting}
-                        >
-                          <LinearGradient
-                            colors={['#8B5CF6', '#7C3AED']}
-                            style={styles.gradientBtn}
+                        checkIsLeaderForMission(item) ? (
+                          <TouchableOpacity
+                            style={[styles.primaryActionBtn, { flex: 1.3 }]}
+                            onPress={() => handleUpdateStatus(item._id, 'ARRIVED')}
+                            activeOpacity={0.85}
+                            disabled={isSubmitting}
                           >
-                            <Ionicons name="location" size={16} color="#FFFFFF" />
-                            <Text style={styles.primaryActionText}>
-                              {isShoreHandoffMission
-                                ? 'Đã Đến Bến Đón Bờ'
-                                : isReliefMission
-                                ? 'Đã Đến Điểm Cứu Trợ'
-                                : 'Đã Đến Hiện Trường'}
+                            <LinearGradient
+                              colors={['#8B5CF6', '#7C3AED']}
+                              style={styles.gradientBtn}
+                            >
+                              <Ionicons name="location" size={16} color="#FFFFFF" />
+                              <Text style={styles.primaryActionText}>
+                                {isShoreHandoffMission
+                                  ? 'Đã Đến Bến Đón Bờ'
+                                  : isReliefMission
+                                  ? 'Đã Đến Điểm Cứu Trợ'
+                                  : 'Đã Đến Hiện Trường'}
+                              </Text>
+                            </LinearGradient>
+                          </TouchableOpacity>
+                        ) : (
+                          <View
+                            style={[
+                              styles.primaryActionBtn,
+                              {
+                                flex: 1.3,
+                                backgroundColor: '#F8FAFC',
+                                borderColor: '#E2E8F0',
+                                borderWidth: 1,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                paddingVertical: 9,
+                                borderRadius: 10,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B' }}>
+                              Đang di chuyển (Theo dõi)
                             </Text>
-                          </LinearGradient>
-                        </TouchableOpacity>
+                          </View>
+                        )
                       )}
 
                       {/* Nút tác chiến mở Workspace bản đồ */}

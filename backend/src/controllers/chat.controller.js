@@ -47,6 +47,19 @@ class ChatController {
   }
 
   /**
+   * GET /chat/citizen-info/:userId
+   */
+  async getCitizenInfo(req, res, next) {
+    try {
+      const { userId } = req.params;
+      const citizenInfo = await chatService.getCitizenInfo(userId);
+      return sendSuccess(res, 200, 'Lấy thông tin người dân thành công', citizenInfo);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * PATCH /chat/read
    */
   async markAsRead(req, res, next) {

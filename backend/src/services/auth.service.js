@@ -240,28 +240,43 @@ class AuthService {
       throw new ApiError(400, 'Vui lòng cung cấp email hoặc số điện thoại cùng mật khẩu.');
     }
 
-    const query = {};
+    let user = null;
+
     if (email) {
-      query.email = email.toLowerCase().trim();
+      user = await User.findOne({ email: email.toLowerCase().trim() });
     } else if (phone) {
-      query.phone = phone.trim();
+      const rawPhone = phone.trim();
+      const cleanDigits = rawPhone.replace(/[^0-9]/g, '');
+      const domesticPhone = cleanDigits.startsWith('84') ? '0' + cleanDigits.slice(2) : cleanDigits;
+      const internationalPhone = domesticPhone.startsWith('0') ? '+84' + domesticPhone.slice(1) : '+84' + domesticPhone;
+
+      user = await User.findOne({
+        $or: [
+          { phone: rawPhone },
+          { phone: cleanDigits },
+          { phone: domesticPhone },
+          { phone: internationalPhone },
+        ],
+      });
     }
 
-    const user = await User.findOne(query);
     if (!user) {
       throw new ApiError(401, 'Tài khoản hoặc mật khẩu không chính xác.');
     }
 
-    if (!user.passwordHash && password !== '123456' && password !== 'Password@123') {
-      throw new ApiError(
-        400,
-        'Tài khoản này được đăng ký thông qua tài khoản Google. Vui lòng đăng nhập bằng Google.'
-      );
-    }
-
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      throw new ApiError(401, 'Tài khoản hoặc mật khẩu không chính xác.');
+    // Nếu tài khoản trước đó đăng ký qua Google (chưa có passwordHash):
+    // Cho phép tự động thiết lập mật khẩu mà người dùng vừa nhập làm mật khẩu của tài khoản
+    // để người dùng có thể đăng nhập song song bằng cả Google lẫn Số điện thoại / Email + Mật khẩu
+    if (!user.passwordHash) {
+      const newHash = await bcrypt.hash(password, 10);
+      user.passwordHash = newHash;
+      await User.updateOne({ _id: user._id }, { $set: { passwordHash: newHash } });
+      console.log(`🔐 Đã tự động thiết lập mật khẩu cho tài khoản Google: ${user.email || user.phone}`);
+    } else {
+      const isMatch = await user.comparePassword(password);
+      if (!isMatch) {
+        throw new ApiError(401, 'Tài khoản hoặc mật khẩu không chính xác.');
+      }
     }
 
     if (user.status === 'SUSPENDED' || user.status === 'INACTIVE') {
@@ -579,12 +594,12 @@ class AuthService {
     const logoFile = getLogoPath();
     const attachments = logoFile
       ? [
-          {
-            filename: 'logoSOS.png',
-            path: logoFile,
-            cid: 'logoSOS',
-          },
-        ]
+        {
+          filename: 'logoSOS.png',
+          path: logoFile,
+          cid: 'logoSOS',
+        },
+      ]
       : [];
 
     const mailOptions = {
@@ -848,12 +863,12 @@ class AuthService {
     const logoFile = getLogoPath();
     const attachments = logoFile
       ? [
-          {
-            filename: 'logoSOS.png',
-            path: logoFile,
-            cid: 'logoSOS',
-          },
-        ]
+        {
+          filename: 'logoSOS.png',
+          path: logoFile,
+          cid: 'logoSOS',
+        },
+      ]
       : [];
 
     const mailOptions = {

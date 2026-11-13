@@ -195,14 +195,21 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const idsArray = Array.from(seenIdsRef.current).slice(-100);
     AsyncStorage.setItem(SEEN_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(idsArray)).catch(() => {});
 
-    // Bỏ qua các sự kiện đồng bộ thuần túy (không phải thông báo gửi người dùng)
-    if (incoming.type === 'SOS_SYNC' || incoming.data?.type === 'SOS_SYNC') {
+    // Đồng bộ nhiệm vụ tức thời nếu thông báo có liên quan tới SOS / Assignment
+    if (
+      incoming.type === 'SOS_SYNC' ||
+      incoming.data?.type === 'SOS_SYNC' ||
+      incoming.data?.type === 'RESCUE' ||
+      incoming.data?.action === 'ASSIGNED' ||
+      incoming.data?.action === 'CANCELLED' ||
+      incoming.data?.assignmentId ||
+      incoming.data?.sosId ||
+      (incoming as any).sosId
+    ) {
       DeviceEventEmitter.emit('sos:sync');
-      return;
-    }
-
-    if (incoming.data?.type === 'RESCUE' || incoming.data?.sosId) {
-      DeviceEventEmitter.emit('sos:sync');
+      if (incoming.type === 'SOS_SYNC' && !incoming.title) {
+        return;
+      }
     }
 
     if (incoming.data?.type === 'RESCUER_VERIFICATION' || incoming.data?.type === 'USER_SYNC') {
@@ -247,6 +254,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return;
     }
 
+    // 2b. Kiểm tra xem có phải tin nhắn trao đổi với cán bộ địa phương không
+    const isChat =
+      incoming.type === 'CHAT' ||
+      incoming.actionUrl === 'chat' ||
+      incoming.data?.isChat;
+
     // 3. Nếu là thông báo nhận từ remote push, hệ thống đã phát thông báo rồi, KHÔNG gọi triggerLocalNotification để tránh bị alert 2 lần!
     // Chỉ kích hoạt local notification ra thanh trạng thái máy nếu thông báo đến từ kênh khác (SSE) và chưa từng phát
     if (
@@ -258,19 +271,25 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       triggeredPushKeysRef.current.add(broadcastKey);
 
       triggerLocalNotification({
-        title: incoming.title || '🚨 LỆNH ĐIỀU ĐỘNG CỨU HỘ MỚI',
+        title:
+          incoming.title ||
+          (isChat ? '💬 Tin nhắn từ cán bộ địa phương' : '🚨 LỆNH ĐIỀU ĐỘNG CỨU HỘ MỚI'),
         body:
           incoming.content ||
           (incoming.data?.address
             ? `Vị trí ứng cứu: ${incoming.data.address}`
+            : isChat
+            ? 'Đã gửi phản hồi cho bạn'
             : 'Có thông báo mới từ hệ thống cứu hộ SOS'),
-        priority: incoming.priority,
+        priority: isChat ? 'NORMAL' : incoming.priority,
         data: {
           notificationId: incoming._id,
           type: incoming.type,
           areaId: incoming.areaId,
           areaName: incoming.areaName,
           isLocalTrigger: true,
+          isChat: isChat || undefined,
+          channel: incoming.data?.channel,
           assignmentId: incoming.data?.assignmentId,
           sosId: incoming.data?.sosId,
         },
@@ -384,6 +403,15 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         navigateHandlerRef.current?.('home');
         setTimeout(() => {
           DeviceEventEmitter.emit('open:blood_donation', notifData);
+        }, 350);
+      } else if (
+        notifData?.type === 'CHAT' ||
+        notifData?.actionUrl === 'chat' ||
+        notifData?.isChat
+      ) {
+        navigateHandlerRef.current?.('home');
+        setTimeout(() => {
+          DeviceEventEmitter.emit('open:local_authority_chat', notifData);
         }, 350);
       } else if (notifData?.type === 'SOS_SYNC' || notifData?.action === 'ASSIGNED' || notifData?.assignmentId || notifData?.sosId) {
         navigateHandlerRef.current?.('sos');

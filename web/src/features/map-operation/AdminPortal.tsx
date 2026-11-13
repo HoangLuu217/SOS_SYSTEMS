@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -14,12 +14,34 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
+import { fetchSosRequests } from '@/api/sos.api';
 import { GOOGLE_MAP_TILES } from '@/services/mapGeoService';
 import type { User } from '@/types/auth';
-import type { HazardReportItem, SafeLocationItem } from '@/types/dashboard';
+import type { HazardReportItem, SafeLocationItem, SosRequestItem } from '@/types/dashboard';
 import { fetchHazardReports } from '@/api/hazard.api';
 import { fetchSafeLocations } from '@/api/shelter.api';
-import { getSocket } from '@/services/socketService';
+import {
+  extractPolygonLatLngRings,
+  fetchGeoapifyBoundaries,
+  fetchProvinceBoundaryFromApi,
+  getCachedProvinceBoundarySync,
+} from '@/services/geoapifyBoundariesService';
+import {
+  getSocket,
+  onSosCreated,
+  onSosUpdated,
+  onSosDeleted,
+  onAssignmentUpdated,
+} from '@/services/socketService';
+import type { AdministrativeArea } from '@/types/domainD';
+import {
+  AdminMapHud,
+  AdminMapContent,
+  getAdminSosStatusMeta,
+  mapBackendSosForAdmin,
+  type AdminSosItem,
+  type AdminSosFilterMode,
+} from './AdminMapLayers';
 import './RescueSos.css';
 
 interface Props {
@@ -43,6 +65,8 @@ const MapController = ({ onMount }: { onMount?: (map: L.Map) => void }) => {
 
   return null;
 };
+
+const TARGET_PROVINCE_NAME = 'Thành phố Đà Nẵng';
 
 export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Props) => {
   const { theme, mapMode, setMapMode } = useApp();
@@ -236,6 +260,130 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
     });
   };
 
+  const [boundaryArea, setBoundaryArea] = useState<AdministrativeArea | null>(() =>
+    getCachedProvinceBoundarySync(TARGET_PROVINCE_NAME)
+  );
+  const [wardAreas, setWardAreas] = useState<AdministrativeArea[]>([]);
+  const [showWardBoundaries, setShowWardBoundaries] = useState(false);
+  const [wardsLoading, setWardsLoading] = useState(false);
+
+  const [rawSosList, setRawSosList] = useState<SosRequestItem[]>([]);
+  const [filterMode, setFilterMode] = useState<AdminSosFilterMode>('ALL');
+  const [selectedSosId, setSelectedSosId] = useState<string | null>(null);
+  const [focusRequest, setFocusRequest] = useState<{ lat: number; lng: number; seq: number } | null>(null);
+
+  const loadAreaSos = useCallback(async () => {
+    try {
+      const res = await fetchSosRequests({});
+      if (res?.success && Array.isArray(res.data)) {
+        setRawSosList(res.data);
+      }
+    } catch (err) {
+      console.warn(`Không thể tải danh sách SOS tại ${TARGET_PROVINCE_NAME}:`, err);
+    }
+  }, []);
+
+  // Tải boundary khu vực mục tiêu trực tiếp từ API & danh sách SOS ban đầu
+  useEffect(() => {
+    let mounted = true;
+    if (!boundaryArea?.boundary) {
+      fetchProvinceBoundaryFromApi(TARGET_PROVINCE_NAME)
+        .then((area) => {
+          if (mounted && area?.boundary) {
+            setBoundaryArea(area);
+          }
+        });
+    }
+    loadAreaSos();
+    return () => {
+      mounted = false;
+    };
+  }, [loadAreaSos, boundaryArea?.boundary]);
+
+  // Đồng bộ dữ liệu SOS thời gian thực qua Socket.IO (chỉ xem)
+  useEffect(() => {
+    const unsubCreated = onSosCreated(() => loadAreaSos());
+    const unsubUpdated = onSosUpdated(() => loadAreaSos());
+    const unsubDeleted = onSosDeleted(() => loadAreaSos());
+    const unsubAssignment = onAssignmentUpdated(() => loadAreaSos());
+    return () => {
+      unsubCreated();
+      unsubUpdated();
+      unsubDeleted();
+      unsubAssignment();
+    };
+  }, [loadAreaSos]);
+
+  const handleToggleWardBoundaries = useCallback(async () => {
+    const nextState = !showWardBoundaries;
+    setShowWardBoundaries(nextState);
+    if (nextState && wardAreas.length === 0 && !wardsLoading) {
+      try {
+        setWardsLoading(true);
+        const wards = await fetchGeoapifyBoundaries();
+        setWardAreas(wards);
+      } catch (err) {
+        console.warn('Không thể tải ranh giới xã/phường từ API:', err);
+      } finally {
+        setWardsLoading(false);
+      }
+    }
+  }, [showWardBoundaries, wardAreas.length, wardsLoading]);
+
+  const effectiveScopeArea = useMemo<AdministrativeArea>(
+    () =>
+      boundaryArea || {
+        id: 'target-province-scope',
+        name: TARGET_PROVINCE_NAME,
+        code: 'VN-DN',
+        type: 'PROVINCE',
+        parentId: null,
+      },
+    [boundaryArea]
+  );
+
+  const areaSosList = useMemo(
+    () => mapBackendSosForAdmin(rawSosList, effectiveScopeArea),
+    [rawSosList, effectiveScopeArea]
+  );
+
+  const counts = useMemo(() => {
+    let active = 0;
+    let completed = 0;
+    let cancelled = 0;
+    for (const s of areaSosList) {
+      const grp = getAdminSosStatusMeta(s.status).group;
+      if (grp === 'COMPLETED') completed += 1;
+      else if (grp === 'CANCELLED') cancelled += 1;
+      else active += 1;
+    }
+    return {
+      all: areaSosList.length,
+      active,
+      completed,
+      cancelled,
+    };
+  }, [areaSosList]);
+
+  const filteredSosList = useMemo(() => {
+    if (filterMode === 'ALL') return areaSosList;
+    return areaSosList.filter((s) => getAdminSosStatusMeta(s.status).group === filterMode);
+  }, [areaSosList, filterMode]);
+
+  const selectedSos = useMemo(
+    () => areaSosList.find((s) => s.id === selectedSosId) || null,
+    [areaSosList, selectedSosId]
+  );
+
+  const handleSelectSos = useCallback((sos: AdminSosItem | null) => {
+    setSelectedSosId(sos ? sos.id : null);
+  }, []);
+
+  const handleFocusSos = useCallback((sos: AdminSosItem) => {
+    setSelectedSosId(sos.id);
+    setFocusRequest({ lat: sos.lat, lng: sos.lng, seq: Date.now() });
+  }, []);
+
   const tileUrl =
     mapMode === 'satellite'
       ? GOOGLE_MAP_TILES.SATELLITE
@@ -248,7 +396,12 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
   };
 
   const handleReset = () => {
-    if (mapRef.current) {
+    if (!mapRef.current) return;
+    const rings = extractPolygonLatLngRings(boundaryArea?.boundary);
+    const points = rings.flat();
+    if (points.length >= 3) {
+      mapRef.current.fitBounds(L.latLngBounds(points), { padding: [32, 32], maxZoom: 12 });
+    } else {
       mapRef.current.flyTo(defaultCenter, defaultZoom, { duration: 0.8 });
     }
   };
@@ -273,7 +426,12 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
             70% { transform: scale(1.6); opacity: 0; }
             100% { transform: scale(1.8); opacity: 0; }
           }
-          .tactical-shelter-beacon, .tactical-hazard-beacon {
+          @keyframes admin-sos-pulse {
+            0% { transform: scale(0.65); opacity: 0.9; }
+            75% { transform: scale(1.65); opacity: 0; }
+            100% { transform: scale(1.85); opacity: 0; }
+          }
+          .tactical-shelter-beacon, .tactical-hazard-beacon, .admin-sos-pin {
             background: transparent !important;
             border: none !important;
           }
@@ -283,6 +441,21 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
             font-family: inherit;
           }
         `}</style>
+
+        <AdminMapHud
+          targetAreaName={TARGET_PROVINCE_NAME}
+          totalInArea={areaSosList.length}
+          counts={counts}
+          filterMode={filterMode}
+          onFilterModeChange={setFilterMode}
+          filteredSosList={filteredSosList}
+          selectedSos={selectedSos}
+          onSelectSos={handleSelectSos}
+          onFocusSos={handleFocusSos}
+          showWardBoundaries={showWardBoundaries}
+          onToggleWardBoundaries={handleToggleWardBoundaries}
+          wardsLoading={wardsLoading}
+        />
 
         {/* Chuyển đổi chế độ Đường phố / Vệ tinh - Nổi trực tiếp trên bản đồ */}
         <div
@@ -431,22 +604,6 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
             </button>
           )}
         </div>
-        <style>{`
-          @keyframes pulse-beacon {
-            0% { transform: scale(0.6); opacity: 0.9; }
-            70% { transform: scale(1.6); opacity: 0; }
-            100% { transform: scale(1.8); opacity: 0; }
-          }
-          .tactical-shelter-beacon, .tactical-hazard-beacon {
-            background: transparent !important;
-            border: none !important;
-          }
-          .leaflet-container {
-            width: 100% !important;
-            height: 100% !important;
-            font-family: inherit;
-          }
-        `}</style>
         {/* Nút điều khiển Zoom và Về trung tâm */}
         <div
           style={{
@@ -522,6 +679,7 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
         <MapContainer
           center={defaultCenter}
           zoom={defaultZoom}
+          preferCanvas={true}
           zoomControl={false}
           attributionControl={false}
           style={{ width: '100%', height: '100%' }}
@@ -537,6 +695,16 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
             onMount={(m) => {
               mapRef.current = m;
             }}
+          />
+
+          <AdminMapContent
+            boundaryArea={boundaryArea}
+            wardAreas={wardAreas}
+            showWardBoundaries={showWardBoundaries}
+            sosList={filteredSosList}
+            selectedSos={selectedSos}
+            onSelectSos={handleSelectSos}
+            focusRequest={focusRequest}
           />
 
           {/* Ghim các điểm trú ẩn an toàn */}

@@ -115,11 +115,19 @@ export const IncidentFeed = ({
         s.shoreHandoff && s.shoreHandoff.status === 'ASSIGNED' && !s.shoreHandoff.completedAt
       );
 
+      const assign = domainDService.getAssignmentBySosId(s.id);
+      const hasActiveAssignment = Boolean(
+        assign && !['CANCELLED', 'REJECTED', 'COMPLETED'].includes(String(assign.status || '').toUpperCase())
+      );
+
       // Ca được coi là "Đang cứu" (ACTIVE) khi:
-      // 1. Đã có đội cứu hộ được giao đang tác chiến (assignmentId tồn tại và status đang triển khai)
-      // 2. HOẶC đã có xe đón bờ được giao đang tiếp cận (shoreHandoff.status === 'ASSIGNED')
+      // 1. Đã có phân công cứu hộ đang hoạt động (không bị hủy/từ chối/hoàn thành)
+      // 2. HOẶC status của SOS đang ở trạng thái triển khai tác chiến
+      // 3. HOẶC đã có xe đón bờ được giao đang tiếp cận (shoreHandoff.status === 'ASSIGNED')
       const isAssigned = Boolean(
-        (s.assignmentId && ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(s.status)) ||
+        hasActiveAssignment ||
+        (s.assignmentId && ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(st)) ||
+        ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(st) ||
         hasActiveShoreRelay
       );
 
@@ -170,8 +178,15 @@ export const IncidentFeed = ({
       // 2. Status tabs:
       // "Đang cứu" (ACTIVE): Phải có đội đang cứu hoặc xe đón đang chạy
       // "Chờ điều phối" (UNASSIGNED): Chưa phân đội nào hoặc đang chờ điều xe đón bờ
+      const assign = domainDService.getAssignmentBySosId(s.id);
+      const hasActiveAssignment = Boolean(
+        assign && !['CANCELLED', 'REJECTED', 'COMPLETED'].includes(String(assign.status || '').toUpperCase())
+      );
+
       const isAssigned = Boolean(
-        (s.assignmentId && ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(s.status)) ||
+        hasActiveAssignment ||
+        (s.assignmentId && ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(st)) ||
+        ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(st) ||
         hasActiveShoreRelay
       );
 
@@ -215,7 +230,7 @@ export const IncidentFeed = ({
                 : (lang === 'vi' ? `SOS ${activeOfficer?.jurisdictionAreaName || 'Địa Bàn'}` : `SOS ${activeOfficer?.jurisdictionAreaName || 'District'}`)}
             </h2>
             <span className="feed-total-pill" title="Tổng số tín hiệu SOS trong địa bàn">
-              {filteredIncidents.length}
+              {searchQuery ? filteredIncidents.length : tabCounts.all}
             </span>
           </div>
 
@@ -677,12 +692,28 @@ export const IncidentFeed = ({
 
         {filteredIncidents.length === 0 && (
           <div className="feed-empty-state" style={{ padding: '32px 16px', textAlign: 'center' }}>
-            <div style={{ fontSize: 24, marginBottom: 8 }}>🛡️</div>
+            <div style={{ fontSize: 26, marginBottom: 8 }}>
+              {searchQuery ? '🔍' : statusFilter === 'ACTIVE' ? '🚤' : tabCounts.active > 0 ? '⚡' : '🛡️'}
+            </div>
             <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 13, color: 'var(--sos-text-primary)' }}>
-              {lang === 'vi' ? 'Địa bàn an toàn' : 'Area is safe'}
+              {searchQuery
+                ? (lang === 'vi' ? 'Không tìm thấy sự cố' : 'No results found')
+                : statusFilter === 'ACTIVE'
+                ? (lang === 'vi' ? 'Chưa có ca cứu nạn đang tác chiến' : 'No active rescue operations')
+                : statusFilter === 'UNASSIGNED' && tabCounts.active > 0
+                ? (lang === 'vi' ? 'Đã phân công toàn bộ' : 'All incidents assigned')
+                : (lang === 'vi' ? 'Địa bàn an toàn' : 'Area is safe')}
             </p>
             <p style={{ margin: 0, fontSize: 12, color: 'var(--sos-text-muted)' }}>
-              {lang === 'vi' ? 'Hiện không có yêu cầu SOS nào đang chờ điều phối.' : 'No active rescue requests pending.'}
+              {searchQuery
+                ? (lang === 'vi' ? `Không có yêu cầu SOS nào khớp với "${searchQuery}".` : `No incidents match "${searchQuery}".`)
+                : statusFilter === 'ACTIVE'
+                ? (tabCounts.unassigned > 0
+                    ? (lang === 'vi' ? `Hiện chưa có đội cứu hộ nào đang thực hiện cứu nạn tại hiện trường (Đang có ${tabCounts.unassigned} ca chờ điều phối).` : `No rescue teams active. ${tabCounts.unassigned} pending dispatch.`)
+                    : (lang === 'vi' ? 'Hiện không có ca cứu nạn nào đang được triển khai.' : 'No active rescue requests in progress.'))
+                : statusFilter === 'UNASSIGNED' && tabCounts.active > 0
+                ? (lang === 'vi' ? `Tất cả ${tabCounts.active} ca cứu nạn đều đã được điều động lực lượng.` : `All ${tabCounts.active} incidents have been dispatched.`)
+                : (lang === 'vi' ? 'Hiện không có yêu cầu SOS nào cần xử lý trên địa bàn.' : 'No active rescue requests pending.')}
             </p>
           </div>
         )}

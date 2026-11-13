@@ -70,7 +70,7 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
           enableVibrate: true,
           showBadge: true,
           lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-          bypassDnd: true,
+          bypassDnd: false,
         });
       } catch (channelErr) {
         // Trong Expo Go từ SDK 53+, Android không hỗ trợ NotificationsChannelsProvider
@@ -186,7 +186,7 @@ export async function triggerLocalNotification(options: {
           enableVibrate: settings.vibration,
           showBadge: true,
           lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-          bypassDnd: true,
+          bypassDnd: false,
         });
         channelIdToUse = 'emergency-alerts';
       } catch (_) {

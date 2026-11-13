@@ -1,4 +1,5 @@
 import { Platform, Vibration } from 'react-native';
+import { getSavedNotificationSettings } from '../utils';
 
 let activePlayer: any = null;
 
@@ -68,12 +69,31 @@ function playWebFallbackDispatchSound() {
 
 /**
  * Phát chuông báo động điều động tác chiến cứu nạn (Rescue Siren Yelp + Dispatch Ping)
+ * Đảm bảo tuân thủ nghiêm ngặt chế độ im lặng / tắt chuông của điện thoại (playsInSilentMode = false)
  */
 export async function playDispatchAlertSound(): Promise<void> {
-  // Rung 1 lần duy nhất
+  let allowSound = true;
+  let allowVibration = true;
+
   try {
-    Vibration.vibrate(300);
-  } catch (_) { }
+    const settings = await getSavedNotificationSettings();
+    if (settings) {
+      if (settings.sound === false) allowSound = false;
+      if (settings.vibration === false) allowVibration = false;
+    }
+  } catch (_) {}
+
+  // Chỉ rung 1 lần nếu cài đặt cho phép rung
+  if (allowVibration) {
+    try {
+      Vibration.vibrate(300);
+    } catch (_) {}
+  }
+
+  // Nếu người dùng đã tắt chuông trong cài đặt thông báo, không phát bất kỳ âm thanh nào
+  if (!allowSound) {
+    return;
+  }
 
   // 1. Nếu chạy trên nền Web
   if (Platform.OS === 'web') {
@@ -98,15 +118,18 @@ export async function playDispatchAlertSound(): Promise<void> {
     const ExpoAudio = require('expo-audio');
     if (ExpoAudio && typeof ExpoAudio.createAudioPlayer === 'function') {
       if (typeof ExpoAudio.setAudioModeAsync === 'function') {
+        // QUAN TRỌNG: playsInSilentMode = false để TUÂN THỦ chế độ im lặng / tắt chuông của điện thoại
+        // Khi điện thoại gạt nút im lặng (iOS) hoặc đặt chế độ Rung / Im lặng (Android), còi hú sẽ tự động câm
         await ExpoAudio.setAudioModeAsync({
-          playsInSilentMode: true,
+          playsInSilentMode: false,
           interruptionMode: 'duckOthers',
         }).catch(() => { });
       }
 
-      if (activePlayer && typeof activePlayer.remove === 'function') {
+      if (activePlayer) {
         try {
-          activePlayer.remove();
+          if (typeof activePlayer.pause === 'function') activePlayer.pause();
+          if (typeof activePlayer.remove === 'function') activePlayer.remove();
         } catch (_) { }
       }
 
@@ -124,9 +147,10 @@ export async function playDispatchAlertSound(): Promise<void> {
  * Dừng âm thanh thông báo đang phát
  */
 export async function stopAlertSound(): Promise<void> {
-  if (activePlayer && typeof activePlayer.remove === 'function') {
+  if (activePlayer) {
     try {
-      activePlayer.remove();
+      if (typeof activePlayer.pause === 'function') activePlayer.pause();
+      if (typeof activePlayer.remove === 'function') activePlayer.remove();
     } catch (_) { }
     activePlayer = null;
   }

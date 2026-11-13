@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { History, RefreshCw, Search, X } from 'lucide-react';
+import { History, RefreshCw, Search, X, FileSpreadsheet, Download } from 'lucide-react';
 import type { AuditLogItem } from '@/types/dashboard';
+import type { User } from '@/types/auth';
 import { fetchAuditLogs } from '@/api';
+import { toast } from '@/components/common/toast';
+import { exportAuditLogsToExcel } from './exportAuditLogsExcel';
 import './AuditLogsView.css';
 
 // Từ điển chuyển đổi các mã hành động thành nhãn tiếng Việt dễ hiểu
@@ -304,16 +307,21 @@ const isRoleMatch = (roleStr: string, filter: string) => {
   return true;
 };
 
-export const AuditLogsView: React.FC = () => {
+export interface AuditLogsViewProps {
+  user?: User;
+}
+
+export const AuditLogsView: React.FC<AuditLogsViewProps> = ({ user }) => {
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [auditRoleFilter, setAuditRoleFilter] = useState<'ALL' | 'CITIZEN' | 'RESCUER' | 'AUTHORITY' | 'ADMIN'>('ALL');
   const [auditSearchTerm, setAuditSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const loadLogs = async () => {
     try {
       setLoading(true);
-      const res = await fetchAuditLogs();
+      const res = await fetchAuditLogs({ limit: 1000 });
       if (res.success && res.data?.logs) {
         setAuditLogs(res.data.logs);
       }
@@ -359,6 +367,55 @@ export const AuditLogsView: React.FC = () => {
     });
   }
 
+  // Xử lý xuất file Excel đầy đủ cột hàng và định dạng chuẩn
+  const handleExportExcel = async (exportAll = false) => {
+    try {
+      setExporting(true);
+      let logsToExport = filteredLogs;
+
+      // Nếu chọn xuất toàn bộ hoặc danh sách hiện tại chưa tải hết
+      if (exportAll || auditLogs.length === 0) {
+        toast.info('Đang tải đầy đủ dữ liệu nhật ký tác chiến...');
+        const res = await fetchAuditLogs({ limit: 5000 });
+        if (res.success && res.data?.logs) {
+          logsToExport = res.data.logs;
+        }
+      }
+
+      if (logsToExport.length === 0) {
+        toast.warning('Không có dữ liệu nhật ký nào để xuất file Excel!');
+        return;
+      }
+
+      const isAdmin = Boolean(
+        user?.roles?.includes('ADMIN') || (user as any)?.role === 'ADMIN'
+      );
+
+      const scopeName = isAdmin
+        ? 'Toàn hệ thống (Ban Quản trị SOS)'
+        : user?.authority?.areaName
+        ? `UBND / Ban Chỉ Huy PCTT ${user.authority.areaName}`
+        : 'Cơ quan Cứu nạn Địa phương';
+
+      const result = exportAuditLogsToExcel({
+        logs: logsToExport,
+        user,
+        scopeName,
+        roleFilter: exportAll ? 'ALL' : auditRoleFilter,
+        searchTerm: exportAll ? '' : auditSearchTerm,
+      });
+
+      toast.success(
+        `Đã xuất thành công ${result.count} sự kiện nhật ký kiểm toán ra tệp ${result.fileName}!`
+      );
+    } catch (err) {
+      console.error('[Export Audit Logs Error]:', err);
+      toast.error('Có lỗi xảy ra khi tạo tệp Excel!');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="sos-views-container">
       {/* BẢNG CHÍNH NHẬT KÝ TÁC CHIẾN */}
@@ -371,15 +428,64 @@ export const AuditLogsView: React.FC = () => {
               {filteredLogs.length} / {totalCount} sự kiện
             </span>
           </div>
-          <button
-            type="button"
-            className="sos-btn-action"
-            style={{ backgroundColor: '#1e293b', color: '#f1f5f9', border: '1px solid #475569' }}
-            onClick={loadLogs}
-          >
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            <span>Làm mới</span>
-          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {/* Nút xuất file Excel */}
+            <button
+              type="button"
+              className="sos-btn-action"
+              style={{
+                backgroundColor: '#16a34a',
+                color: '#ffffff',
+                border: '1px solid #15803d',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: exporting ? 'not-allowed' : 'pointer',
+              }}
+              onClick={() => handleExportExcel(false)}
+              disabled={exporting}
+              title={`Xuất ${filteredLogs.length} sự kiện nhật ký đang lọc ra file Excel (.xlsx)`}
+            >
+              <FileSpreadsheet size={15} className={exporting ? 'animate-spin' : ''} />
+              <span>{exporting ? 'Đang xuất Excel...' : 'Xuất file Excel'}</span>
+            </button>
+
+            {/* Nút xuất tất cả khi đang có bộ lọc tìm kiếm */}
+            {(filteredLogs.length !== totalCount || auditRoleFilter !== 'ALL' || Boolean(auditSearchTerm)) && (
+              <button
+                type="button"
+                className="sos-btn-action"
+                style={{
+                  backgroundColor: '#0284c7',
+                  color: '#ffffff',
+                  border: '1px solid #0369a1',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: exporting ? 'not-allowed' : 'pointer',
+                }}
+                onClick={() => handleExportExcel(true)}
+                disabled={exporting}
+                title={`Xuất toàn bộ ${totalCount} sự kiện nhật ký ra file Excel (.xlsx)`}
+              >
+                <Download size={14} />
+                <span>Xuất tất cả ({totalCount})</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="sos-btn-action"
+              style={{ backgroundColor: '#1e293b', color: '#f1f5f9', border: '1px solid #475569' }}
+              onClick={loadLogs}
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              <span>Làm mới</span>
+            </button>
+          </div>
         </div>
 
         {/* THANH CÔNG CỤ BỘ LỌC VÀ TÌM KIẾM */}

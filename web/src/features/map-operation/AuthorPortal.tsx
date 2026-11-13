@@ -261,15 +261,26 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
               : 'RESCUE';
 
 
-          // Đồng bộ thông tin khu vực hành chính từ CSDL
-          const fullText = (itemAreaName + ' ' + (item.address || '') + ' ' + (officer.jurisdictionAreaName || '') + ' ' + (officer.districtName || '')).toLowerCase();
-          const isNHS = fullText.includes('ngũ hành sơn') || fullText.includes('mỹ an') || fullText.includes('khuê mỹ') || fullText.includes('hòa quý') || fullText.includes('hòa hải');
-          const isLC = fullText.includes('liên chiểu') || fullText.includes('mẹ suốt') || fullText.includes('hòa khánh');
+          // Đồng bộ thông tin khu vực hành chính từ CSDL của chính ca SOS (không gán đè bằng khu vực của cán bộ)
+          const cleanItemAreaName =
+            itemAreaName && itemAreaName.toLowerCase() !== 'thành phố đà nẵng' ? itemAreaName : '';
+          const fullText = (cleanItemAreaName + ' ' + (item.address || '')).toLowerCase();
+          const isNHS =
+            fullText.includes('ngũ hành sơn') ||
+            fullText.includes('mỹ an') ||
+            fullText.includes('khuê mỹ') ||
+            fullText.includes('hòa quý') ||
+            fullText.includes('hòa hải');
+          const isLC =
+            fullText.includes('liên chiểu') ||
+            fullText.includes('mẹ suốt') ||
+            fullText.includes('hòa khánh') ||
+            fullText.includes('hòa minh');
 
-          const wardId = itemAreaId || officer.jurisdictionAreaId || (isNHS ? 'area-nhs' : isLC ? 'area-lc' : '');
-          const wardName = itemAreaName || officer.jurisdictionAreaName || (isNHS ? 'Quận Ngũ Hành Sơn' : 'Địa bàn phụ trách');
-          const districtId = areaObj?.parentId || itemAreaId || officer.jurisdictionAreaId || '';
-          const districtName = officer.districtName || (isNHS ? 'Quận Ngũ Hành Sơn' : isLC ? 'Quận Liên Chiểu' : itemAreaName || '');
+          const wardId = cleanItemAreaName ? itemAreaId : isNHS ? 'area-nhs' : isLC ? 'area-lc' : '';
+          const wardName = cleanItemAreaName || (isNHS ? 'Phường Ngũ Hành Sơn' : isLC ? 'Quận Liên Chiểu' : '');
+          const districtId = areaObj?.parentId || wardId || '';
+          const districtName = isNHS ? 'Quận Ngũ Hành Sơn' : isLC ? 'Quận Liên Chiểu' : cleanItemAreaName;
 
 
           return {

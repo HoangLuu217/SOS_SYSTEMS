@@ -395,6 +395,45 @@ export const TacticalMap = ({
     return () => unsubscribe();
   }, []);
 
+  // Vị trí ghim khẩn cấp được gửi từ Chat người dân
+  const [chatGpsPin, setChatGpsPin] = useState<{
+    lat: number;
+    lng: number;
+    senderName?: string;
+    address?: string;
+  } | null>(() => {
+    try {
+      const saved = sessionStorage.getItem('sos_highlight_chat_location');
+      if (saved) {
+        sessionStorage.removeItem('sos_highlight_chat_location');
+        return JSON.parse(saved);
+      }
+    } catch {}
+    return null;
+  });
+
+  useEffect(() => {
+    const handleCustomLocation = (e: any) => {
+      const detail = e?.detail;
+      if (detail && typeof detail.lat === 'number' && typeof detail.lng === 'number') {
+        setChatGpsPin(detail);
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.flyTo([detail.lat, detail.lng], 17, { duration: 1.2 });
+        }
+      }
+    };
+    window.addEventListener('sos_highlight_chat_location', handleCustomLocation);
+    return () => window.removeEventListener('sos_highlight_chat_location', handleCustomLocation);
+  }, []);
+
+  useEffect(() => {
+    if (chatGpsPin && mapInstanceRef.current) {
+      setTimeout(() => {
+        mapInstanceRef.current?.flyTo([chatGpsPin.lat, chatGpsPin.lng], 17, { duration: 1.2 });
+      }, 350);
+    }
+  }, [chatGpsPin]);
+
   // Operational base coordinate calculation per team (Phương tiện & Đội cứu hộ)
   const getTeamBaseCoord = (teamId: string, _teamIdx: number): { lat: number; lng: number } => {
     const teamObj = rescueTeams.find((t) => t.id === teamId);
@@ -1089,7 +1128,7 @@ export const TacticalMap = ({
           70% { transform: scale(1.6); opacity: 0; }
           100% { transform: scale(1.8); opacity: 0; }
         }
-        .tactical-main-sos-beacon, .tactical-other-sos-beacon, .tactical-rescuer-beacon, .tactical-rescuer-member-beacon, .tactical-vehicle-beacon, .tactical-landing-handoff-beacon, .tactical-shelter-beacon, .tactical-hazard-beacon {
+        .tactical-main-sos-beacon, .tactical-other-sos-beacon, .tactical-rescuer-beacon, .tactical-rescuer-member-beacon, .tactical-vehicle-beacon, .tactical-landing-handoff-beacon, .tactical-shelter-beacon, .tactical-hazard-beacon, .tactical-chat-gps-marker {
           background: transparent !important;
           border: none !important;
         }
@@ -1256,6 +1295,87 @@ export const TacticalMap = ({
             </Marker>
           );
         })}
+
+        {/* 4B. Marker Tọa độ GPS khẩn cấp nhận từ Chat người dân */}
+        {chatGpsPin && (
+          <Marker
+            position={[chatGpsPin.lat, chatGpsPin.lng]}
+            icon={L.divIcon({
+              className: 'tactical-chat-gps-marker',
+              iconSize: [48, 48],
+              iconAnchor: [24, 48],
+              popupAnchor: [0, -48],
+              html: `
+                <div style="position: relative; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                  <div style="position: absolute; width: 44px; height: 44px; border-radius: 50%; background: rgba(220, 38, 38, 0.35); animation: ping 1.2s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
+                  <div style="position: absolute; width: 32px; height: 32px; border-radius: 50%; background: #dc2626; border: 3px solid #ffffff; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.7); display: flex; align-items: center; justify-content: center; font-size: 16px; color: #ffffff;">
+                    📍
+                  </div>
+                </div>
+              `,
+            })}
+          >
+            <Popup autoPan={true}>
+              <div style={{ fontFamily: 'inherit', padding: '4px 2px', minWidth: '220px' }}>
+                <div style={{ fontWeight: 800, fontSize: '13.5px', color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6, marginBottom: '4px' }}>
+                  <span>📍 Vị trí khẩn cấp (từ Chat)</span>
+                </div>
+                <div style={{ fontSize: '12px', color: '#0f172a', fontWeight: 700, marginBottom: '2px' }}>
+                  Người gửi: {chatGpsPin.senderName || 'Người dân'}
+                </div>
+                {chatGpsPin.address && (
+                  <div style={{ fontSize: '11.5px', color: '#475569', marginBottom: '4px', lineHeight: 1.3 }}>
+                    {chatGpsPin.address}
+                  </div>
+                )}
+                <div style={{ fontSize: '11px', color: '#dc2626', fontWeight: 700, background: '#fef2f2', padding: '3px 6px', borderRadius: 4, display: 'inline-block', marginBottom: '8px', border: '1px solid #fecdd3' }}>
+                  GPS: {chatGpsPin.lat.toFixed(6)}, {chatGpsPin.lng.toFixed(6)}
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  <a
+                    href={`https://www.google.com/maps?q=${chatGpsPin.lat},${chatGpsPin.lng}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      flex: 1,
+                      padding: '5px 8px',
+                      background: '#0284c7',
+                      color: '#ffffff',
+                      borderRadius: 6,
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      textAlign: 'center',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    Google Maps ↗
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setChatGpsPin(null)}
+                    style={{
+                      padding: '5px 8px',
+                      background: '#f1f5f9',
+                      color: '#64748b',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: 6,
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Đóng ghim
+                  </button>
+                </div>
+              </div>
+            </Popup>
+            <Tooltip direction="top" offset={[0, -46]} opacity={0.95} permanent>
+              <span style={{ fontWeight: 800, fontSize: '11.5px', color: '#b91c1c', background: '#fff1f2', border: '1px solid #fecdd3', padding: '2px 8px', borderRadius: 4, boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
+                📍 {chatGpsPin.senderName || 'Vị trí từ Chat'}
+              </span>
+            </Tooltip>
+          </Marker>
+        )}
 
         {/* 5. Render Tuyến đường Road-snapped OSRM & GPS của các đội được chọn */}
         {activePreviewTeams.map((team, tIdx) => {

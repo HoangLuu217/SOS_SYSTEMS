@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Map as MapIcon,
   Search,
@@ -13,6 +14,7 @@ import {
   Unlock,
   Loader2,
   Check,
+  ChevronDown,
   Phone,
   Mail,
   Briefcase,
@@ -63,13 +65,382 @@ function generateRandomPassword(length = 10) {
   return pwd.split('').sort(() => 0.5 - Math.random()).join('');
 }
 
+function getDistinctAreaSubLabel(district?: string, parentCity?: string): string | undefined {
+  const cleanDistrict = (district || '').trim();
+  if (!cleanDistrict) return undefined;
+  const normalizedDistrict = cleanDistrict.toLowerCase();
+  const normalizedCity = (parentCity || 'Thành phố Đà Nẵng').trim().toLowerCase();
+  if (normalizedDistrict === normalizedCity || normalizedDistrict.includes('đà nẵng')) {
+    return undefined;
+  }
+  return cleanDistrict;
+}
+
+interface BoundedAreaOption {
+  id: string;
+  label: string;
+  subLabel?: string;
+  badgeText?: string;
+  isCurrent?: boolean;
+}
+
+interface BoundedAreaSelectProps {
+  value: string;
+  options: BoundedAreaOption[];
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+  emptyText?: string;
+  searchPlaceholder?: string;
+}
+
+const BoundedAreaSelect: React.FC<BoundedAreaSelectProps> = ({
+  value,
+  options,
+  onChange,
+  disabled = false,
+  placeholder = 'Chọn địa bàn quản lý...',
+  emptyText = 'Không tìm thấy địa bàn phù hợp',
+  searchPlaceholder = 'Tìm phường, xã...',
+}) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [menuStyle, setMenuStyle] = useState<{
+    left: number;
+    width: number;
+    top?: number;
+    bottom?: number;
+    maxHeight: number;
+    openUpward: boolean;
+  } | null>(null);
+
+  const selectedOption = useMemo(
+    () => options.find((opt) => opt.id === value) || null,
+    [options, value]
+  );
+
+  const filteredOptions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options;
+    return options.filter(
+      (opt) =>
+        opt.label.toLowerCase().includes(q) ||
+        (opt.subLabel && opt.subLabel.toLowerCase().includes(q))
+    );
+  }, [options, query]);
+
+  const updatePosition = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const viewportH = window.innerHeight;
+    const viewportW = window.innerWidth;
+    const topSafeMargin = 88; // Luôn chừa khoảng trống thoải mái phía trên, không bao giờ chạm sát mép màn hình
+    const bottomSafeMargin = 16;
+    const spaceBelow = viewportH - rect.bottom - bottomSafeMargin;
+    const spaceAbove = rect.top - topSafeMargin;
+
+    const width = Math.min(Math.max(rect.width, 430), viewportW - 32);
+    const left =
+      rect.right - width >= 16 && width > rect.width
+        ? Math.min(rect.right - width, viewportW - width - 16)
+        : Math.max(16, Math.min(rect.left, viewportW - width - 16));
+
+    if (spaceBelow >= 280 || spaceBelow >= spaceAbove) {
+      setMenuStyle({
+        left,
+        width,
+        top: rect.bottom + 6,
+        maxHeight: Math.min(340, Math.max(180, spaceBelow)),
+        openUpward: false,
+      });
+    } else {
+      setMenuStyle({
+        left,
+        width,
+        bottom: viewportH - rect.top + 6,
+        maxHeight: Math.min(340, Math.max(200, spaceAbove)),
+        openUpward: true,
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      setQuery('');
+      return;
+    }
+    updatePosition();
+    const focusTimer = window.setTimeout(() => {
+      searchInputRef.current?.focus();
+    }, 20);
+
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (triggerRef.current?.contains(target) || dropdownRef.current?.contains(target)) {
+        return;
+      }
+      setOpen(false);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+
+    const handleReposition = () => updatePosition();
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleReposition);
+    window.addEventListener('scroll', handleReposition, true);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleReposition);
+      window.removeEventListener('scroll', handleReposition, true);
+    };
+  }, [open, updatePosition]);
+
+  const displayLabel = selectedOption
+    ? `${selectedOption.label}${selectedOption.subLabel ? ` (${selectedOption.subLabel})` : ''}`
+    : placeholder;
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        disabled={disabled}
+        className="executive-modal-select"
+        onClick={() => !disabled && setOpen((prev) => !prev)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '8px',
+          textAlign: 'left',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          opacity: disabled ? 0.65 : 1,
+          borderColor: open ? '#0ea5e9' : undefined,
+          boxShadow: open ? '0 0 0 3px rgba(14, 165, 233, 0.14)' : undefined,
+          backgroundColor: '#ffffff',
+        }}
+      >
+        <span
+          style={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            color: selectedOption ? '#0f172a' : '#64748b',
+            fontWeight: 500,
+          }}
+        >
+          {displayLabel}
+        </span>
+        <ChevronDown
+          size={15}
+          style={{
+            flexShrink: 0,
+            color: '#475569',
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 0.15s ease',
+          }}
+        />
+      </button>
+
+      {open &&
+        menuStyle &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            style={{
+              position: 'fixed',
+              left: `${menuStyle.left}px`,
+              width: `${menuStyle.width}px`,
+              top: menuStyle.top !== undefined ? `${menuStyle.top}px` : undefined,
+              bottom: menuStyle.bottom !== undefined ? `${menuStyle.bottom}px` : undefined,
+              maxHeight: `${menuStyle.maxHeight}px`,
+              zIndex: 1000010,
+              backgroundColor: '#ffffff',
+              border: '1px solid #cbd5e1',
+              borderRadius: '12px',
+              boxShadow: '0 14px 36px -6px rgba(15, 23, 42, 0.22), 0 4px 12px -2px rgba(15, 23, 42, 0.08)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                padding: '10px 12px',
+                borderBottom: '1px solid #e2e8f0',
+                backgroundColor: '#f8fafc',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                flexShrink: 0,
+              }}
+            >
+              <Search size={15} style={{ color: '#64748b', flexShrink: 0 }} />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={searchPlaceholder}
+                style={{
+                  width: '100%',
+                  border: 'none',
+                  outline: 'none',
+                  background: 'transparent',
+                  fontSize: '13.5px',
+                  color: '#0f172a',
+                }}
+              />
+              <span
+                style={{
+                  fontSize: '11.5px',
+                  color: '#64748b',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                {filteredOptions.length} kết quả
+              </span>
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery('')}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    padding: 0,
+                    display: 'flex',
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            <div
+              style={{
+                overflowY: 'auto',
+                padding: '6px',
+                flex: 1,
+                overscrollBehavior: 'contain',
+              }}
+            >
+              {filteredOptions.length === 0 ? (
+                <div
+                  style={{
+                    padding: '18px 12px',
+                    fontSize: '13px',
+                    color: '#64748b',
+                    textAlign: 'center',
+                  }}
+                >
+                  {emptyText}
+                </div>
+              ) : (
+                filteredOptions.map((opt) => {
+                  const isSelected = opt.id === value;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => {
+                        onChange(opt.id);
+                        setOpen(false);
+                      }}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '10px',
+                        padding: '9px 12px',
+                        border: 'none',
+                        borderRadius: '8px',
+                        backgroundColor: isSelected ? '#eff6ff' : 'transparent',
+                        color: isSelected ? '#0369a1' : '#0f172a',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        fontSize: '13.5px',
+                        fontWeight: isSelected ? 600 : 500,
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) e.currentTarget.style.backgroundColor = '#f8fafc';
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) e.currentTarget.style.backgroundColor = 'transparent';
+                      }}
+                    >
+                      <span
+                        style={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {opt.label}
+                        {opt.subLabel ? (
+                          <span style={{ color: '#64748b', fontWeight: 400, marginLeft: 4 }}>
+                            ({opt.subLabel})
+                          </span>
+                        ) : null}
+                      </span>
+
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {opt.badgeText && (
+                          <span
+                            style={{
+                              fontSize: '11px',
+                              padding: '2px 7px',
+                              borderRadius: '999px',
+                              backgroundColor: opt.isCurrent ? '#dbeafe' : '#f1f5f9',
+                              color: opt.isCurrent ? '#1d4ed8' : '#475569',
+                              fontWeight: 600,
+                            }}
+                          >
+                            {opt.badgeText}
+                          </span>
+                        )}
+                        {isSelected && <Check size={14} style={{ color: '#0284c7' }} />}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
+  );
+};
+
 export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
   user: _user,
   areas: propAreas = [],
 }) => {
   const [authorities, setAuthorities] = useState<any[]>([]);
   const [, setOrgs] = useState<AuthorityOrgItem[]>([]);
-  const [areas, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
+  const [, setAreas] = useState<AdministrativeAreaItem[]>(propAreas);
   const [loading, setLoading] = useState(false);
   const [refreshIndex, setRefreshIndex] = useState(0);
   const refreshData = () => setRefreshIndex((prev) => prev + 1);
@@ -202,18 +573,10 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
     [vietnamProvinces]
   );
 
-  // Tự động tải danh sách xã/phường thực tế của tỉnh thành được chọn ngay khi mở trang
+  // Tự động tải danh sách xã/phường thực tế của TP. Đà Nẵng ngay khi mở trang
   useEffect(() => {
-    loadSubUnitsForCity(createAuthForm.city || 'Thành phố Đà Nẵng');
-  }, [loadSubUnitsForCity, createAuthForm.city]);
-
-  const handleCityChange = (cityName: string) => {
-    setCreateAuthForm((prev) => ({
-      ...prev,
-      city: cityName,
-    }));
-    loadSubUnitsForCity(cityName);
-  };
+    loadSubUnitsForCity('Thành phố Đà Nẵng');
+  }, [loadSubUnitsForCity]);
 
   const handleCreateAuthorityUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -361,97 +724,8 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
     }
   };
 
-  const [selectedProvinceFilter, setSelectedProvinceFilter] = useState<string>('ALL');
-
-  // Xác định chuẩn xác Tỉnh / Thành phố quản lý của từng cán bộ
-  const getOfficerProvince = useCallback((officer: any): string => {
-    if (officer.authority?.city) {
-      return officer.authority.city;
-    }
-    const dept = officer.authority?.department || '';
-    if (dept.includes('(') && dept.includes(')')) {
-      const match = dept.match(/\((.*?)\)/);
-      if (match && match[1]) {
-        return match[1].trim();
-      }
-    }
-    const areaId = officer.authority?.areaId ? String(officer.authority.areaId) : null;
-    const areaName = officer.authority?.areaName;
-    if (areas && areas.length > 0) {
-      const areaMap = new Map<string, any>();
-      for (const ar of areas) {
-        if (ar._id) areaMap.set(String(ar._id), ar);
-        if ((ar as any).id) areaMap.set(String((ar as any).id), ar);
-      }
-      if (areaId && areaMap.has(areaId)) {
-        let curr = areaMap.get(areaId);
-        let steps = 0;
-        while (curr && curr.parentId && steps < 5) {
-          steps++;
-          const p = areaMap.get(String(curr.parentId));
-          if (!p) break;
-          curr = p;
-          if (curr.type === 'PROVINCE') return curr.name;
-        }
-        if (curr && curr.type === 'PROVINCE') return curr.name;
-        if (curr && (curr as any).parentName) return (curr as any).parentName;
-      }
-      if (areaName) {
-        const found = areas.find((ar) => ar.name === areaName);
-        if (found && (found as any).parentName) return (found as any).parentName;
-      }
-    }
-    return 'Thành phố Đà Nẵng';
-  }, [areas]);
-
-  // Thống kê danh sách Tỉnh/Thành phố và các xã/phường có cán bộ quản lý
-  const provincesSummary = useMemo(() => {
-    const map = new Map<string, { count: number; wards: Set<string>; wardDetails: Array<{ areaName: string; officerName: string; phone?: string; officerId: string }> }>();
-
-    for (const a of authorities) {
-      const prov = getOfficerProvince(a);
-      if (!map.has(prov)) {
-        map.set(prov, { count: 0, wards: new Set(), wardDetails: [] });
-      }
-      const item = map.get(prov)!;
-      item.count++;
-      const areaName = a.authority?.areaName || a.authority?.areaId || 'Chưa định danh';
-      item.wards.add(areaName);
-      item.wardDetails.push({
-        areaName,
-        officerName: a.fullName,
-        phone: a.phone,
-        officerId: a._id,
-      });
-    }
-
-    const withOfficers: Array<{ name: string; count: number; wardsCount: number; wardDetails: Array<{ areaName: string; officerName: string; phone?: string; officerId: string }> }> = [];
-    map.forEach((val, key) => {
-      withOfficers.push({
-        name: key,
-        count: val.count,
-        wardsCount: val.wards.size,
-        wardDetails: val.wardDetails,
-      });
-    });
-    withOfficers.sort((a, b) => b.count - a.count);
-
-    const existingNames = new Set(withOfficers.map((w) => w.name.toLowerCase()));
-    const others = (vietnamProvinces || VIETNAM_34_PROVINCES_STANDARD)
-      .filter((p) => !existingNames.has(p.name.toLowerCase()))
-      .map((p) => ({ name: p.name, count: 0, wardsCount: 0, wardDetails: [] }))
-      .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
-
-    return { withOfficers, others };
-  }, [authorities, getOfficerProvince, vietnamProvinces]);
-
-  const provinceAuthorities = useMemo(() => {
-    if (selectedProvinceFilter === 'ALL') return authorities;
-    return authorities.filter((a) => getOfficerProvince(a).toLowerCase() === selectedProvinceFilter.toLowerCase());
-  }, [authorities, selectedProvinceFilter, getOfficerProvince]);
-
-  const activeOfficersCount = provinceAuthorities.filter((a) => a.status === 'ACTIVE').length;
-  const inactiveOfficersCount = provinceAuthorities.length - activeOfficersCount;
+  const activeOfficersCount = authorities.filter((a) => a.status === 'ACTIVE').length;
+  const inactiveOfficersCount = authorities.length - activeOfficersCount;
 
   const filteredAuthorities = useMemo(() => {
     return authorities.filter((a) => {
@@ -459,13 +733,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
       if (authStatusFilter === 'ACTIVE' && a.status !== 'ACTIVE') return false;
       if (authStatusFilter === 'INACTIVE' && a.status === 'ACTIVE') return false;
 
-      // 2. Lọc theo Tỉnh / Thành phố
-      if (selectedProvinceFilter !== 'ALL') {
-        const prov = getOfficerProvince(a);
-        if (prov.toLowerCase() !== selectedProvinceFilter.toLowerCase()) return false;
-      }
-
-      // 3. Lọc theo ô tìm kiếm
+      // 2. Lọc theo ô tìm kiếm
       if (authSearchQuery.trim()) {
         const q = authSearchQuery.toLowerCase();
         const matchName = (a.fullName || '').toLowerCase().includes(q);
@@ -478,7 +746,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
       }
       return true;
     });
-  }, [authorities, authStatusFilter, selectedProvinceFilter, authSearchQuery, getOfficerProvince]);
+  }, [authorities, authStatusFilter, authSearchQuery]);
 
   return (
     <div className="authorities-executive-container">
@@ -492,7 +760,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
               className={`triage-btn ${authStatusFilter === 'ALL' ? 'active' : ''}`}
               onClick={() => setAuthStatusFilter('ALL')}
             >
-              Tất cả ({provinceAuthorities.length})
+              Tất cả ({authorities.length})
             </button>
             <button
               type="button"
@@ -511,35 +779,6 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            {/* Bộ lọc Tỉnh / Thành phố */}
-            <div className="executive-province-filter-wrap">
-              <Building2 size={15} className="province-filter-icon" />
-              <select
-                className="executive-province-select"
-                value={selectedProvinceFilter}
-                onChange={(e) => setSelectedProvinceFilter(e.target.value)}
-                title="Lọc cán bộ theo Tỉnh / Thành phố"
-              >
-                <option value="ALL">Toàn quốc (Tất cả Tỉnh/Thành)</option>
-                <optgroup label="Tỉnh / Thành phố có cán bộ quản lý">
-                  {provincesSummary.withOfficers.map((p) => (
-                    <option key={p.name} value={p.name}>
-                      {p.name} ({p.count} cán bộ • {p.wardsCount} địa bàn)
-                    </option>
-                  ))}
-                </optgroup>
-                {provincesSummary.others.length > 0 && (
-                  <optgroup label="Các tỉnh / thành phố khác">
-                    {provincesSummary.others.map((p) => (
-                      <option key={p.name} value={p.name}>
-                        {p.name} (0 cán bộ)
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-            </div>
-
             <div className="executive-search-input-wrap">
               <Search size={16} className="search-icon" />
               <input
@@ -565,7 +804,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
               className="coordination-action-btn primary"
               onClick={() => {
                 setAuthSubmitError(null);
-                const defaultCity = selectedProvinceFilter !== 'ALL' ? selectedProvinceFilter : (createAuthForm.city || 'Thành phố Đà Nẵng');
+                const defaultCity = 'Thành phố Đà Nẵng';
                 setCreateAuthForm((prev) => ({
                   ...prev,
                   city: defaultCity,
@@ -573,9 +812,6 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                 }));
                 loadSubUnitsForCity(defaultCity);
                 setShowCreateAuthModal(true);
-                if (modalProvinceSubUnits.length === 0) {
-                  loadSubUnitsForCity(createAuthForm.city || 'Thành phố Đà Nẵng');
-                }
               }}
             >
               <UserPlus size={15} />
@@ -824,9 +1060,6 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                       value={editAuthForm.email}
                       onChange={(e) => setEditAuthForm({ ...editAuthForm, email: e.target.value })}
                     />
-                    <span style={{ fontSize: '11px', color: '#0284c7', marginTop: '2px', display: 'block' }}>
-                      Dùng nhận mã OTP đổi mật khẩu qua Resend
-                    </span>
                   </div>
                   <div className="executive-modal-field">
                     <label className="executive-modal-label">Trạng thái tài khoản (*)</label>
@@ -846,11 +1079,28 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                   <label className="executive-modal-label">
                     Khu vực phụ trách (Thay đổi địa bàn điều phối) (*)
                   </label>
-                  <select
-                    className="executive-modal-select"
+                  <BoundedAreaSelect
                     value={editAuthForm.areaId}
-                    onChange={(e) => {
-                      const targetId = e.target.value;
+                    options={[
+                      ...(editAuthForm.areaName
+                        ? [
+                            {
+                              id: editAuthForm.areaId,
+                              label: editAuthForm.areaName,
+                              badgeText: 'Địa bàn hiện tại',
+                              isCurrent: true,
+                            },
+                          ]
+                        : []),
+                      ...modalProvinceSubUnits
+                        .filter((ar) => ar.id !== editAuthForm.areaId)
+                        .map((ar: any) => ({
+                          id: ar.id,
+                          label: ar.name,
+                          subLabel: getDistinctAreaSubLabel(ar.district),
+                        })),
+                    ]}
+                    onChange={(targetId) => {
                       const match = modalProvinceSubUnits.find((a) => a.id === targetId);
                       const areaName = match ? match.name : '';
                       setEditAuthForm({
@@ -860,18 +1110,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                         department: `Ban Chỉ Huy PCTT ${areaName}`,
                       });
                     }}
-                  >
-                    {editAuthForm.areaName && (
-                      <option value={editAuthForm.areaId}>
-                        ⭐ {editAuthForm.areaName} (Địa bàn hiện tại)
-                      </option>
-                    )}
-                    {modalProvinceSubUnits.filter((ar) => ar.id !== editAuthForm.areaId).map((ar: any) => (
-                      <option key={ar.id} value={ar.id}>
-                        {ar.name} {ar.district ? `(${ar.district})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                  />
                   <div style={{ fontSize: '11px', color: '#64748b', marginTop: 4 }}>
                     * Chọn địa bàn mới để chuyển quyền điều phối tác chiến của cán bộ này sang khu vực đó.
                   </div>
@@ -975,7 +1214,6 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
           <div className="executive-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 660 }}>
             {(() => {
               const currentCityAreas = modalProvinceSubUnits;
-              const allProvincesList = vietnamProvinces.length > 0 ? vietnamProvinces : VIETNAM_34_PROVINCES_STANDARD;
 
               return (
                 <>
@@ -987,7 +1225,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                       <div>
                         <h3 className="executive-modal-title">Tạo Tài Khoản Cán Bộ & Gán Địa Bàn</h3>
                         <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
-                          Cấp tài khoản điều hành tác chiến theo địa bàn hành chính trên toàn quốc
+                          Cấp tài khoản điều hành tác chiến theo địa bàn hành chính tại Thành phố Đà Nẵng
                         </p>
                       </div>
                     </div>
@@ -1058,9 +1296,6 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                             value={createAuthForm.email}
                             onChange={(e) => setCreateAuthForm({ ...createAuthForm, email: e.target.value })}
                           />
-                          <span style={{ fontSize: '11px', color: '#0284c7', marginTop: '2px', display: 'block' }}>
-                            Dùng nhận mã OTP đổi mật khẩu qua Resend
-                          </span>
                         </div>
                         <div className="executive-modal-field">
                           <label className="executive-modal-label">Mật khẩu khởi tạo (*)</label>
@@ -1104,7 +1339,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
 
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ fontSize: '11.5px', fontWeight: 700, textTransform: 'uppercase', color: '#0284c7', letterSpacing: '0.5px' }}>
-                          2. Phạm Vi Địa Bàn Quản Lý (34 Tỉnh Thành)
+                          2. Phạm Vi Địa Bàn Quản Lý (TP. Đà Nẵng)
                         </div>
                         {modalSubUnitsLoading && (
                           <span style={{ fontSize: '11px', color: '#0284c7', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -1116,29 +1351,57 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         <div className="executive-modal-field">
                           <label className="executive-modal-label">Tỉnh / Thành phố (*)</label>
-                          <select
-                            className="executive-modal-select"
-                            value={createAuthForm.city}
-                            onChange={(e) => handleCityChange(e.target.value)}
-                          >
-                            {allProvincesList.map((p) => (
-                              <option key={p.code || p.name} value={p.name}>
-                                {p.name}
-                              </option>
-                            ))}
-                          </select>
+                          <input
+                            type="text"
+                            className="executive-modal-input"
+                            value="Thành phố Đà Nẵng"
+                            readOnly
+                            disabled
+                            style={{
+                              backgroundColor: '#f8fafc',
+                              color: '#0f172a',
+                              fontWeight: 600,
+                              cursor: 'not-allowed',
+                              opacity: 1,
+                            }}
+                          />
                         </div>
 
                         <div className="executive-modal-field">
                           <label className="executive-modal-label">
                             Khu vực quản lý ({modalSubUnitsLoading ? 'Đang nạp...' : `${currentCityAreas.length} địa bàn`}) (*)
                           </label>
-                          <select
-                            className="executive-modal-select"
+                          <BoundedAreaSelect
                             value={createAuthForm.areaId}
                             disabled={modalSubUnitsLoading}
-                            onChange={(e) => {
-                              const targetId = e.target.value;
+                            placeholder={
+                              modalSubUnitsLoading
+                                ? 'Đang tải danh sách địa bàn thực tế từ API...'
+                                : currentCityAreas.length === 0
+                                  ? `Không có dữ liệu khu vực tại ${createAuthForm.city}`
+                                  : 'Chọn phường, xã...'
+                            }
+                            options={currentCityAreas.map((ar) => {
+                              const officersInArea = authorities.filter((a: any) => {
+                                const authAreaId = String(a.authority?.areaId || '').trim();
+                                const authAreaName = String(a.authority?.areaName || '').trim().toLowerCase();
+                                const cleanAuthName = authAreaName.replace(/^(Phường|Xã|Quận|Huyện|Thị trấn)\s+/i, '').trim();
+                                const cleanArName = ar.name.replace(/^(Phường|Xã|Quận|Huyện|Thị trấn)\s+/i, '').trim().toLowerCase();
+                                return (
+                                  authAreaId === ar.id ||
+                                  authAreaName === ar.name.toLowerCase() ||
+                                  (cleanAuthName && cleanAuthName === cleanArName)
+                                );
+                              });
+                              const count = officersInArea.length;
+                              return {
+                                id: ar.id,
+                                label: ar.name,
+                                subLabel: getDistinctAreaSubLabel(ar.district, createAuthForm.city),
+                                badgeText: count > 0 ? `Hiện có ${count} cán bộ` : undefined,
+                              };
+                            })}
+                            onChange={(targetId) => {
                               const match = currentCityAreas.find((a) => a.id === targetId);
                               const areaName = match ? match.name : '';
                               setCreateAuthForm({
@@ -1147,29 +1410,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                                 areaName: areaName,
                               });
                             }}
-                          >
-                            {currentCityAreas.length === 0 ? (
-                              <option value="" disabled>
-                                {modalSubUnitsLoading ? 'Đang tải danh sách địa bàn thực tế từ API...' : `Không có dữ liệu khu vực tại ${createAuthForm.city}`}
-                              </option>
-                            ) : (
-                              currentCityAreas.map((ar) => {
-                                const officersInArea = authorities.filter((a: any) => {
-                                  const authAreaId = String(a.authority?.areaId || '').trim();
-                                  const authAreaName = String(a.authority?.areaName || '').trim().toLowerCase();
-                                  const cleanAuthName = authAreaName.replace(/^(Phường|Xã|Quận|Huyện|Thị trấn)\s+/i, '').trim();
-                                  const cleanArName = ar.name.replace(/^(Phường|Xã|Quận|Huyện|Thị trấn)\s+/i, '').trim().toLowerCase();
-                                  return authAreaId === ar.id || authAreaName === ar.name.toLowerCase() || (cleanAuthName && cleanAuthName === cleanArName);
-                                });
-                                const count = officersInArea.length;
-                                return (
-                                  <option key={ar.id} value={ar.id}>
-                                    {ar.name} {ar.district ? `(${ar.district})` : ''} {count > 0 ? `• [Hiện có ${count} cán bộ]` : ''}
-                                  </option>
-                                );
-                              })
-                            )}
-                          </select>
+                          />
                         </div>
                       </div>
                     </div>

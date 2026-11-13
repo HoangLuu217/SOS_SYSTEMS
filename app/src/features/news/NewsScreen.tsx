@@ -478,6 +478,11 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
               item.type === 'SAFE_LOCATION' ||
               item.data?.safeLocationId;
 
+            const isChat =
+              item.type === 'CHAT' ||
+              item.actionUrl === 'chat' ||
+              item.data?.isChat;
+
             const imageUrl = item.imageUrl || item.data?.imageUrl;
             const articleUrl = item.articleUrl || item.data?.articleUrl;
 
@@ -488,9 +493,11 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
               >
                 {/* Dòng tag và thời gian: Thông báo bình thường */}
                 <View style={styles.cardMetaRow}>
-                  <View style={styles.tagBadge}>
-                    <Text style={styles.tagBadgeText}>
-                      {isBloodDonation
+                  <View style={[styles.tagBadge, isChat && { backgroundColor: '#E0F2FE' }]}>
+                    <Text style={[styles.tagBadgeText, isChat && { color: '#0284C7' }]}>
+                      {isChat
+                        ? 'ĐỊA PHƯƠNG PHẢN HỒI'
+                        : isBloodDonation
                         ? 'ĐỢT HIẾN MÁU'
                         : isSafetyCheck
                         ? 'XÁC NHẬN AN TOÀN'
@@ -578,6 +585,21 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
                   </TouchableOpacity>
                 )}
 
+                {isChat && (
+                  <TouchableOpacity
+                    style={[styles.actionButton, { backgroundColor: '#0284C7' }]}
+                    onPress={() => {
+                      markAsRead(item._id);
+                      if (onNavigateToTab) onNavigateToTab('home');
+                      DeviceEventEmitter.emit('open:local_authority_chat', item.data || item);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="chatbubbles-outline" size={16} color="#FFFFFF" />
+                    <Text style={styles.actionButtonText}>Mở cuộc trò chuyện ngay</Text>
+                  </TouchableOpacity>
+                )}
+
                 {(isSafeLocation || item.actionUrl === 'map') && onNavigateToTab && (
                   <TouchableOpacity
                     style={styles.actionOutlineButton}
@@ -597,7 +619,16 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({
                   <View style={styles.sourceWrap}>
                     <Ionicons name="person-circle-outline" size={14} color="#64748B" />
                     <Text style={styles.sourceText}>
-                      {item.sourceName || item.createdBy?.fullName || item.data?.senderName || 'Ban chỉ huy SOS'}
+                      {isChat
+                        ? item.data?.department ||
+                          (item.data?.senderName &&
+                          !item.data.senderName.toLowerCase().includes('admin')
+                            ? item.data.senderName
+                            : 'Ban Chỉ Huy PCTT')
+                        : item.sourceName ||
+                          item.createdBy?.fullName ||
+                          item.data?.senderName ||
+                          'Ban chỉ huy SOS'}
                     </Text>
                   </View>
 

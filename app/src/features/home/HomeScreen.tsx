@@ -285,6 +285,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [showSOSMap, setShowSOSMap] = useState(false);
   const [showHazardModal, setShowHazardModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
+  const [chatInitialSos, setChatInitialSos] = useState<any | null>(null);
   const [showSafetyCheckModal, setShowSafetyCheckModal] = useState(false);
   const [activeSafetyCheckId, setActiveSafetyCheckId] = useState<string | undefined>(undefined);
   const [activeSafetyCheck, setActiveSafetyCheck] = useState<SafetyCheckItem | null>(null);
@@ -455,11 +456,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     const subBloodUpdate = DeviceEventEmitter.addListener('blood_donation:updated', () => {
       fetchBloodDonationStatus();
     });
+    const subChatOpen = DeviceEventEmitter.addListener('open:local_authority_chat', (data) => {
+      if (data && (data._id || data.sosId || data.sosCode)) {
+        setChatInitialSos(data);
+      }
+      setShowChatModal(true);
+    });
     void fetchBloodDonationStatus();
     return () => {
       subOpen.remove();
       subUpdate.remove();
       subBloodUpdate.remove();
+      subChatOpen.remove();
     };
   }, [fetchActiveSafetyCheck, fetchBloodDonationStatus]);
 
@@ -840,14 +848,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                       </View>
                     )}
                   </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.circleIconButton}
-                    onPress={onOpenSettings}
-                    activeOpacity={0.75}
-                  >
-                    <Ionicons name="settings-outline" size={20} color="#FFFFFF" />
-                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -1152,31 +1152,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 onPress={() => handleUtilityPress('chat_local_authority')}
                 activeOpacity={0.7}
               >
-                <View style={[styles.utilityIconBox, { backgroundColor: '#E0F2FE' }]}>
-                  <Ionicons
-                    name="chatbubbles"
-                    size={28}
-                    color="#0284C7"
+                <View style={styles.utilityIconBoxStandalone}>
+                  <Image
+                    source={require('../../../assets/appicon/message.png')}
+                    style={styles.utilityImage}
+                    resizeMode="contain"
                   />
                 </View>
                 <Text style={styles.utilityLabel}>Nhắn tin{'\n'}địa phương</Text>
               </TouchableOpacity>
 
-              {/* 8. Đăng tin cảnh báo */}
-              <TouchableOpacity
-                style={styles.utilityItem}
-                onPress={() => handleUtilityPress('post_news')}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.utilityIconBox, { backgroundColor: '#F1F5F9' }]}>
-                  <MaterialCommunityIcons
-                    name="bullhorn-outline"
-                    size={28}
-                    color="#64748B"
-                  />
-                </View>
-                <Text style={styles.utilityLabel}>Đăng tin{'\n'}cảnh báo</Text>
-              </TouchableOpacity>
+              {/* Khoảng trống căn thẳng cột với hàng trên */}
+              <View style={styles.utilityItem} />
             </View>
           </View>
         </View>
@@ -1260,7 +1247,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Modal Chat trực tuyến thời gian thực với Ban chỉ huy địa phương */}
       <LocalAuthorityChatModal
         visible={showChatModal}
-        onClose={() => setShowChatModal(false)}
+        onClose={() => {
+          setShowChatModal(false);
+          setChatInitialSos(null);
+        }}
+        initialSosData={chatInitialSos}
       />
 
       {/* Modal Xác nhận Tùy chỉnh (Thay thế hoàn toàn Alert.alert) */}

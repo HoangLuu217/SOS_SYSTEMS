@@ -65,10 +65,19 @@ export function AuthenticatedApp() {
         }, 120);
       }
     });
+    const subMission = DeviceEventEmitter.addListener('open:mission_tab', () => {
+      setActiveTab('sos');
+      DeviceEventEmitter.emit('sos:sync');
+    });
+    const subChat = DeviceEventEmitter.addListener('open:local_authority_chat', () => {
+      setActiveTab('home');
+    });
     return () => {
       sub.remove();
       subBlood.remove();
       subSos.remove();
+      subMission.remove();
+      subChat.remove();
     };
   }, []);
   const [configVisible, setConfigVisible] = useState(false);
@@ -80,7 +89,7 @@ export function AuthenticatedApp() {
   const roles = Array.isArray(user?.roles) ? user.roles : [];
   const isRescuer =
     roles.includes('LEADER') ||
-    (roles.includes('RESCUER') && user?.rescuer?.verificationStatus === 'VERIFIED');
+    (roles.includes('RESCUER') && user?.rescuer?.verificationStatus !== 'REJECTED');
 
   const { unreadCount, setNavigateHandler } = useNotifications();
 
@@ -139,6 +148,9 @@ export function AuthenticatedApp() {
 
   const handleNavigateToTab = React.useCallback((tab: TabName, options?: { filter?: MapFilterType; areaId?: string }) => {
     setActiveTab(tab);
+    if (tab === 'sos') {
+      DeviceEventEmitter.emit('sos:sync');
+    }
     if (tab === 'map') {
       if (options?.filter) {
         setMapFilter(options.filter);
@@ -146,6 +158,12 @@ export function AuthenticatedApp() {
       setMapNavKey(prev => prev + 1);
     }
   }, []);
+
+  React.useEffect(() => {
+    if (activeTab === 'sos') {
+      DeviceEventEmitter.emit('sos:sync');
+    }
+  }, [activeTab]);
 
   const handleNavigateToHome = React.useCallback(() => {
     setActiveTab('home');
