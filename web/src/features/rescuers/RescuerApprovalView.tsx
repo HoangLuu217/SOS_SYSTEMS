@@ -70,6 +70,7 @@ export interface RescuerApplicant {
   idCardFrontUrl?: string;
   idCardBackUrl?: string;
   hasCccdPhotos: boolean;
+  isCccdVerified?: boolean;
   // Năng lực cứu hộ
   skills: string[];
   experience: string;
@@ -88,18 +89,29 @@ export interface RescuerApplicant {
   history: ApplicationHistoryItem[];
 }
 
-// Danh mục nhãn kỹ năng chuẩn hóa tiếng Việt
+// Danh mục nhãn kỹ năng chuẩn hóa tiếng Việt đồng bộ với ứng dụng di động
 const SKILL_LABELS: Record<string, string> = {
-  water_rescue: 'Bơi cứu hộ vượt lũ',
-  boat_driver: 'Lái xuồng máy cao tốc',
-  first_aid: 'Sơ cấp cứu y tế',
+  first_aid: 'Sơ cứu y tế',
+  water_rescue: 'Cứu hộ vùng nước',
   search_rescue: 'Tìm kiếm cứu nạn',
+  boat_driver: 'Lái xuồng cứu sinh',
   rope_climb: 'Leo dây & Độ cao',
-  diving: 'Lặn cứu nạn',
+  diving: 'Lặn cứu hộ',
   firefighting: 'PCCC & Cứu sập',
+  evacuation: 'Sơ tán người dân',
+  communication: 'Thông tin liên lạc',
+  logistics: 'Hậu cần & Cấp dưỡng',
+  // Tương thích ngược
   relief_logistics: 'Tiếp tế lương thực',
-  communication: 'Thông tin liên lạc vô tuyến',
   vehicle_op: 'Lái xe tải gầm cao',
+};
+
+const getApplicantInitials = (fullName?: string): string => {
+  const parts = (fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  }
+  return (fullName || 'CH').slice(0, 2).toUpperCase();
 };
 
 const SPECIALIZATION_LABELS: Record<string, string> = {
@@ -321,6 +333,12 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
             spec = 'MEDICAL_RESCUE';
           } else if (skillsJoined.includes('fire') || skillsJoined.includes('pccc')) {
             spec = 'FIRE_RESCUE';
+          } else if (skillsJoined.includes('evacuation')) {
+            spec = 'EVACUATION';
+          } else if (skillsJoined.includes('communication')) {
+            spec = 'COMMUNICATION';
+          } else if (skillsJoined.includes('logistics')) {
+            spec = 'LOGISTICS';
           } else if (skillsJoined.includes('truck') || skillsJoined.includes('vehicle')) {
             spec = 'VEHICLE_OP';
           }
@@ -349,6 +367,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
             idCardFrontUrl: cccdFront,
             idCardBackUrl: cccdBack,
             hasCccdPhotos: Boolean(cccdFront || cccdBack),
+            isCccdVerified: Boolean(u.rescuer?.isCccdVerified || u.isCccdVerified),
             skills: skillsList,
             experience: u.rescuer?.experience || u.experience || '',
             specialization: spec,
@@ -545,8 +564,8 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
       const updatedHistory: ApplicationHistoryItem = {
         timestamp: new Date().toLocaleString('vi-VN'),
         action: 'Phê duyệt tư cách Cứu hộ viên',
-        actor: user?.fullName || 'Cán bộ Local Authority',
-        detail: 'Đã xác nhận tư cách Rescuer hợp lệ trên hệ thống SOS SYSTEMS',
+        actor: user?.fullName || 'Cán bộ Ban Chỉ huy địa phương',
+        detail: 'Đã xác nhận tư cách Cứu hộ viên hợp lệ trên hệ thống SOS SYSTEMS',
         type: 'verified',
       };
 
@@ -557,7 +576,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
               ...a,
               status: 'VERIFIED',
               reviewedAt: new Date().toLocaleString('vi-VN'),
-              reviewerName: user?.fullName || 'Cán bộ Local Authority',
+              reviewerName: user?.fullName || 'Cán bộ Ban Chỉ huy địa phương',
               history: [updatedHistory, ...a.history],
             }
             : a
@@ -571,7 +590,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
               ...prev,
               status: 'VERIFIED',
               reviewedAt: new Date().toLocaleString('vi-VN'),
-              reviewerName: user?.fullName || 'Cán bộ Local Authority',
+              reviewerName: user?.fullName || 'Cán bộ Ban Chỉ huy địa phương',
               history: [updatedHistory, ...prev.history],
             }
             : null
@@ -656,12 +675,12 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
     }
     try {
       setSubmittingAction(true);
-      await verifyRescuer(selectedApplicant.id, 'REJECTED');
+      await verifyRescuer(selectedApplicant.id, 'REJECTED', rejectionReasonText.trim());
 
       const updatedHistory: ApplicationHistoryItem = {
         timestamp: new Date().toLocaleString('vi-VN'),
         action: 'Từ chối hồ sơ đăng ký',
-        actor: user?.fullName || 'Cán bộ Local Authority',
+        actor: user?.fullName || 'Cán bộ Ban Chỉ huy địa phương',
         detail: rejectionReasonText.trim(),
         type: 'rejected',
       };
@@ -674,7 +693,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
               status: 'REJECTED',
               rejectionReason: rejectionReasonText.trim(),
               reviewedAt: new Date().toLocaleString('vi-VN'),
-              reviewerName: user?.fullName || 'Cán bộ Local Authority',
+              reviewerName: user?.fullName || 'Cán bộ Ban Chỉ huy địa phương',
               history: [updatedHistory, ...a.history],
             }
             : a
@@ -689,7 +708,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
               status: 'REJECTED',
               rejectionReason: rejectionReasonText.trim(),
               reviewedAt: new Date().toLocaleString('vi-VN'),
-              reviewerName: user?.fullName || 'Cán bộ Local Authority',
+              reviewerName: user?.fullName || 'Cán bộ Ban Chỉ huy địa phương',
               history: [updatedHistory, ...prev.history],
             }
             : null
@@ -1059,7 +1078,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                             {app.avatarUrl ? (
                               <img src={app.avatarUrl} alt={app.fullName} />
                             ) : (
-                              (app.fullName || 'CH').slice(0, 2).toUpperCase()
+                              getApplicantInitials(app.fullName)
                             )}
                           </div>
                           <div className="ra-candidate-meta">
@@ -1084,13 +1103,17 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                           <span className="ra-cccd-masked" title="Số CCCD được mã hóa bảo mật">
                             {maskCccd(app.idNumber)}
                           </span>
-                          {app.hasCccdPhotos ? (
+                          {app.isCccdVerified ? (
+                            <span className="ra-doc-status-badge has-doc" style={{ background: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' }}>
+                              <CheckCircle2 size={11} /> Đã quét mã thẻ
+                            </span>
+                          ) : app.hasCccdPhotos ? (
                             <span className="ra-doc-status-badge has-doc">
                               <FileCheck size={11} /> Đã tải CCCD
                             </span>
                           ) : (
                             <span className="ra-doc-status-badge no-doc">
-                              <AlertCircle size={11} /> Chưa có ảnh CCCD
+                              <AlertCircle size={11} /> Tự nhập tay
                             </span>
                           )}
                         </div>
@@ -1299,176 +1322,171 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
               </button>
             </div>
 
-            {/* Body Drawer */}
-            <div className="ra-drawer-body">
-              {/* Nhóm A: Thông tin cá nhân & Nơi cư trú */}
-              <div className="ra-drawer-section">
-                <div className="ra-section-header">
-                  <UserCheck size={16} />
-                  <span>A. THÔNG TIN CÁ NHÂN</span>
-                </div>
-                <div className="ra-section-body">
-                  {/* Thông tin đại diện & Họ tên */}
-                  <div className="ra-profile-inline-bar">
-                    <div className="ra-profile-avatar">
-                      {selectedApplicant.avatarUrl ? (
-                        <img src={selectedApplicant.avatarUrl} alt={selectedApplicant.fullName} />
-                      ) : (
-                        <span>{(selectedApplicant.fullName || 'CH').slice(0, 2).toUpperCase()}</span>
+            {/* Body Drawer — Phương án 1: Tối giản phẳng (Linear / Apple Inset) */}
+            <div className="ra-drawer-body ra-drawer-body--minimal">
+              {/* 1. Hero Summary Card */}
+              <div className="ra-hero-summary">
+                <div className="ra-hero-top">
+                  <div className="ra-hero-avatar">
+                    {selectedApplicant.avatarUrl ? (
+                      <img src={selectedApplicant.avatarUrl} alt={selectedApplicant.fullName} />
+                    ) : (
+                      <span>{getApplicantInitials(selectedApplicant.fullName)}</span>
+                    )}
+                  </div>
+                  <div className="ra-hero-info">
+                    <div className="ra-hero-name-row">
+                      <h4 className="ra-hero-name">{selectedApplicant.fullName}</h4>
+                      <span className="ra-hero-role-pill">
+                        {selectedApplicant.status === 'VERIFIED'
+                          ? 'Cứu hộ viên địa phương'
+                          : 'Ứng viên Cứu hộ viên'}
+                      </span>
+                    </div>
+                    <div className="ra-hero-meta-row">
+                      {[selectedApplicant.gender, selectedApplicant.dateOfBirth]
+                        .filter(Boolean)
+                        .length > 0 && (
+                        <span>
+                          {[selectedApplicant.gender, selectedApplicant.dateOfBirth]
+                            .filter(Boolean)
+                            .join(' • ')}
+                        </span>
+                      )}
+                      <span>
+                        <Phone size={12} /> {selectedApplicant.phone || 'Chưa cập nhật'}
+                      </span>
+                      {selectedApplicant.email && (
+                        <span>
+                          <Mail size={12} /> {selectedApplicant.email}
+                        </span>
                       )}
                     </div>
-                    <div className="ra-profile-info">
-                      <div className="ra-profile-name-row">
-                        <h4 className="ra-profile-name">{selectedApplicant.fullName}</h4>
-                        <span className="ra-profile-badge">
-                          {SPECIALIZATION_LABELS[selectedApplicant.specialization] || 'Cứu nạn cứu hộ'}
-                        </span>
-                      </div>
-                      <span className="ra-profile-sub">
-                        {selectedApplicant.gender || 'Nam'} • {selectedApplicant.dateOfBirth || 'Chưa cung cấp ngày sinh'}
-                      </span>
-                    </div>
                   </div>
-
-                  <div className="ra-kv-grid">
-                    <div className="ra-kv-item">
-                      <span className="ra-kv-label">Số điện thoại liên lạc</span>
-                      <span className="ra-kv-value phone">{selectedApplicant.phone}</span>
-                    </div>
-                    <div className="ra-kv-item">
-                      <span className="ra-kv-label">Địa chỉ Email</span>
-                      <span className="ra-kv-value">{selectedApplicant.email || 'Chưa cung cấp'}</span>
-                    </div>
-                  </div>
-
-                  <div className="ra-address-box">
-                    <div className="ra-kv-item">
-                      <span className="ra-kv-label">Nơi cư trú thường trú</span>
-                      <span className="ra-kv-value" style={{ marginTop: 2, fontSize: 13.5 }}>
-                        {selectedApplicant.address || 'Chưa cung cấp địa chỉ chi tiết'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="ra-address-box highlight-area">
-                    <div className="ra-kv-item">
-                      <span className="ra-kv-label">Địa bàn đăng ký hoạt động cứu hộ</span>
-                      <span className="ra-kv-value area-text" style={{ marginTop: 2, fontSize: 13.5 }}>
-                        <MapPin size={14} style={{ display: 'inline', marginRight: 4, verticalAlign: '-2px' }} />
-                        {selectedApplicant.areaName || 'Chưa có thông tin địa bàn'}
-                      </span>
-                    </div>
-                  </div>
+                  <span className="ra-area-chip" title="Địa bàn đăng ký hoạt động cứu hộ">
+                    <MapPin size={12} />
+                    {selectedApplicant.areaName || 'Chưa rõ địa bàn'}
+                  </span>
                 </div>
+
+                {selectedApplicant.address &&
+                  selectedApplicant.address.trim() !== '' &&
+                  selectedApplicant.address.trim() !== selectedApplicant.areaName.trim() && (
+                    <>
+                      <div className="ra-flat-divider" />
+                      <div className="ra-hero-address-row">
+                        <span className="ra-kv-label">Nơi cư trú thường trú:</span>
+                        <span className="ra-hero-address-val">{selectedApplicant.address}</span>
+                      </div>
+                    </>
+                  )}
               </div>
 
-              {/* Nhóm B: Thông tin định danh & Giấy tờ */}
-              <div className="ra-drawer-section">
-                <div className="ra-section-header">
-                  <FileCheck size={16} />
-                  <span>B. THÔNG TIN ĐỊNH DANH &amp; GIẤY TỜ XÁC MINH</span>
-                </div>
-                <div className="ra-section-body">
-                  <div className="ra-kv-grid">
+              {/* 2. Định danh & Tiếp nhận */}
+              <div className="ra-inset-section">
+                <div className="ra-inset-label">Định danh &amp; Tiếp nhận</div>
+                <div className="ra-inset-card">
+                  <div className="ra-flat-grid-2">
                     <div className="ra-kv-item">
-                      <span className="ra-kv-label">Số Thẻ CCCD / Định danh</span>
+                      <span className="ra-kv-label">Số thẻ CCCD</span>
                       <span className="ra-kv-value cccd-number">
                         {selectedApplicant.idNumber || 'Chưa cập nhật'}
                       </span>
                     </div>
                     <div className="ra-kv-item">
-                      <span className="ra-kv-label">Nơi cấp &amp; Cơ quan thẩm tra</span>
-                      <span className="ra-kv-value">Cục Cảnh sát QLHC về TTXH</span>
+                      <span className="ra-kv-label">Ngày nộp hồ sơ</span>
+                      <span className="ra-kv-value">
+                        {new Date(selectedApplicant.submittedAt).toLocaleDateString('vi-VN')}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="ra-cccd-images">
-                    {/* Mặt trước CCCD */}
-                    <div className="ra-cccd-card">
-                      <div className="ra-cccd-card-top">
-                        <span className="ra-cccd-label">Ảnh CCCD Mặt trước</span>
-                        {selectedApplicant.idCardFrontUrl ? (
-                          <span className="ra-doc-chip has">Đã đính kèm</span>
-                        ) : (
-                          <span className="ra-doc-chip none">Chưa có ảnh</span>
-                        )}
-                      </div>
-                      <div
-                        className="ra-cccd-preview"
-                        onClick={() => {
-                          if (selectedApplicant.idCardFrontUrl) {
-                            setZoomedImage({
-                              url: selectedApplicant.idCardFrontUrl,
-                              title: `CCCD Mặt trước - ${selectedApplicant.fullName}`,
-                            });
-                          }
-                        }}
-                      >
-                        {selectedApplicant.idCardFrontUrl ? (
-                          <>
-                            <img src={selectedApplicant.idCardFrontUrl} alt="CCCD Mặt trước" />
-                            <div className="ra-cccd-zoom-overlay">
-                              <ZoomIn size={16} /> Bấm để phóng to
-                            </div>
-                          </>
-                        ) : (
-                          <div className="ra-cccd-empty">
-                            <AlertCircle size={22} />
-                            <span>Chưa tải lên ảnh mặt trước</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                  <div className="ra-flat-divider" />
 
-                    {/* Mặt sau CCCD */}
-                    <div className="ra-cccd-card">
-                      <div className="ra-cccd-card-top">
-                        <span className="ra-cccd-label">Ảnh CCCD Mặt sau</span>
-                        {selectedApplicant.idCardBackUrl ? (
-                          <span className="ra-doc-chip has">Đã đính kèm</span>
-                        ) : (
-                          <span className="ra-doc-chip none">Chưa có ảnh</span>
-                        )}
-                      </div>
-                      <div
-                        className="ra-cccd-preview"
-                        onClick={() => {
-                          if (selectedApplicant.idCardBackUrl) {
-                            setZoomedImage({
-                              url: selectedApplicant.idCardBackUrl,
-                              title: `CCCD Mặt sau - ${selectedApplicant.fullName}`,
-                            });
-                          }
-                        }}
-                      >
-                        {selectedApplicant.idCardBackUrl ? (
-                          <>
-                            <img src={selectedApplicant.idCardBackUrl} alt="CCCD Mặt sau" />
-                            <div className="ra-cccd-zoom-overlay">
-                              <ZoomIn size={16} /> Bấm để phóng to
-                            </div>
-                          </>
-                        ) : (
-                          <div className="ra-cccd-empty">
-                            <AlertCircle size={22} />
-                            <span>Chưa tải lên ảnh mặt sau</span>
-                          </div>
-                        )}
-                      </div>
+                  <div className="ra-flat-grid-2">
+                    <div className="ra-kv-item">
+                      <span className="ra-kv-label">Địa bàn đăng ký hoạt động</span>
+                      <span className="ra-kv-value" style={{ color: '#15803d' }}>
+                        {selectedApplicant.areaName || 'Chưa có thông tin địa bàn'}
+                      </span>
+                    </div>
+                    <div className="ra-kv-item">
+                      <span className="ra-kv-label">
+                        {selectedApplicant.status === 'VERIFIED' || selectedApplicant.status === 'REJECTED'
+                          ? 'Cán bộ thẩm định'
+                          : 'Đơn vị tiếp nhận địa phương'}
+                      </span>
+                      <span className="ra-kv-value">
+                        {selectedApplicant.status === 'VERIFIED' || selectedApplicant.status === 'REJECTED'
+                          ? selectedApplicant.reviewerName || 'Ban Chỉ huy địa phương'
+                          : localCommuneName
+                          ? `Ban Chỉ huy ${localCommuneName}`
+                          : userAreaName || 'Ban Chỉ huy địa phương'}
+                      </span>
                     </div>
                   </div>
+
+                  {(selectedApplicant.idCardFrontUrl || selectedApplicant.idCardBackUrl) && (
+                    <>
+                      <div className="ra-flat-divider" />
+                      <div className="ra-cccd-images">
+                        {selectedApplicant.idCardFrontUrl && (
+                          <div className="ra-cccd-card">
+                            <div className="ra-cccd-card-top">
+                              <span className="ra-cccd-label">Ảnh CCCD Mặt trước</span>
+                              <span className="ra-doc-chip has">Đã đính kèm</span>
+                            </div>
+                            <div
+                              className="ra-cccd-preview"
+                              onClick={() =>
+                                setZoomedImage({
+                                  url: selectedApplicant.idCardFrontUrl!,
+                                  title: `CCCD Mặt trước - ${selectedApplicant.fullName}`,
+                                })
+                              }
+                            >
+                              <img src={selectedApplicant.idCardFrontUrl} alt="CCCD Mặt trước" />
+                              <div className="ra-cccd-zoom-overlay">
+                                <ZoomIn size={16} /> Bấm để phóng to
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedApplicant.idCardBackUrl && (
+                          <div className="ra-cccd-card">
+                            <div className="ra-cccd-card-top">
+                              <span className="ra-cccd-label">Ảnh CCCD Mặt sau</span>
+                              <span className="ra-doc-chip has">Đã đính kèm</span>
+                            </div>
+                            <div
+                              className="ra-cccd-preview"
+                              onClick={() =>
+                                setZoomedImage({
+                                  url: selectedApplicant.idCardBackUrl!,
+                                  title: `CCCD Mặt sau - ${selectedApplicant.fullName}`,
+                                })
+                              }
+                            >
+                              <img src={selectedApplicant.idCardBackUrl} alt="CCCD Mặt sau" />
+                              <div className="ra-cccd-zoom-overlay">
+                                <ZoomIn size={16} /> Bấm để phóng to
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* Nhóm C: Hồ sơ năng lực cứu hộ */}
-              <div className="ra-drawer-section">
-                <div className="ra-section-header">
-                  <Award size={16} />
-                  <span>C. HỒ SƠ NĂNG LỰC &amp; KINH NGHIỆM THỰC ĐỊA</span>
-                </div>
-                <div className="ra-section-body">
+              {/* 3. Năng lực & Kinh nghiệm thực địa */}
+              <div className="ra-inset-section">
+                <div className="ra-inset-label">Năng lực &amp; Kinh nghiệm thực địa</div>
+                <div className="ra-inset-card">
                   <div className="ra-kv-item">
-                    <span className="ra-kv-label">Kỹ năng cứu nạn sở trường</span>
+                    <span className="ra-kv-label">Kỹ năng cứu hộ đã đăng ký</span>
                     <div className="ra-skills-list-wrap">
                       {selectedApplicant.skills.length > 0 ? (
                         selectedApplicant.skills.map((sk) => (
@@ -1482,97 +1500,84 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                     </div>
                   </div>
 
+                  <div className="ra-flat-divider" />
+
                   <div className="ra-kv-item">
-                    <span className="ra-kv-label">Kinh nghiệm thực tế</span>
-                    <div className="ra-experience-quote">
+                    <span className="ra-kv-label">Kinh nghiệm &amp; Chứng chỉ thực địa</span>
+                    <div className="ra-experience-box">
                       {selectedApplicant.experience || 'Chưa cung cấp mô tả kinh nghiệm thực địa.'}
                     </div>
                   </div>
 
-                  <div className="ra-kv-grid">
-                    <div className="ra-kv-item">
-                      <span className="ra-kv-label">Chứng chỉ / Bằng cấp đào tạo</span>
-                      <ul className="ra-bullet-list">
-                        {selectedApplicant.certificates && selectedApplicant.certificates.length > 0 ? (
-                          selectedApplicant.certificates.map((c, i) => <li key={i}>{c}</li>)
-                        ) : (
-                          <li className="empty">Chưa có chứng chỉ bằng văn bản</li>
+                  {((selectedApplicant.certificates && selectedApplicant.certificates.length > 0) ||
+                    (selectedApplicant.equipment && selectedApplicant.equipment.length > 0)) && (
+                    <>
+                      <div className="ra-flat-divider" />
+                      <div className="ra-flat-grid-2">
+                        {selectedApplicant.certificates && selectedApplicant.certificates.length > 0 && (
+                          <div className="ra-kv-item">
+                            <span className="ra-kv-label">Chứng chỉ / Bằng cấp</span>
+                            <ul className="ra-bullet-list">
+                              {selectedApplicant.certificates.map((c, i) => (
+                                <li key={i}>{c}</li>
+                              ))}
+                            </ul>
+                          </div>
                         )}
-                      </ul>
-                    </div>
-                    <div className="ra-kv-item">
-                      <span className="ra-kv-label">Phương tiện &amp; Thiết bị cá nhân</span>
-                      <ul className="ra-bullet-list">
-                        {selectedApplicant.equipment && selectedApplicant.equipment.length > 0 ? (
-                          selectedApplicant.equipment.map((eq, i) => <li key={i}>{eq}</li>)
-                        ) : (
-                          <li className="empty">Không mang theo phương tiện cá nhân</li>
+                        {selectedApplicant.equipment && selectedApplicant.equipment.length > 0 && (
+                          <div className="ra-kv-item">
+                            <span className="ra-kv-label">Thiết bị cá nhân</span>
+                            <ul className="ra-bullet-list">
+                              {selectedApplicant.equipment.map((eq, i) => (
+                                <li key={i}>{eq}</li>
+                              ))}
+                            </ul>
+                          </div>
                         )}
-                      </ul>
-                    </div>
-                  </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* Nhóm D: Thông tin xử lý hồ sơ & Lịch sử */}
-              <div className="ra-drawer-section">
-                <div className="ra-section-header">
-                  <Calendar size={16} />
-                  <span>D. THÔNG TIN XỬ LÝ &amp; LỊCH SỬ THẨM ĐỊNH</span>
-                </div>
-                <div className="ra-section-body">
-                  <div className="ra-kv-grid">
-                    <div className="ra-kv-item">
-                      <span className="ra-kv-label">Ngày nộp hồ sơ</span>
-                      <span className="ra-kv-value">
-                        {new Date(selectedApplicant.submittedAt).toLocaleString('vi-VN')}
-                      </span>
-                    </div>
-                    <div className="ra-kv-item">
-                      <span className="ra-kv-label">Cán bộ phụ trách thẩm định</span>
-                      <span className="ra-kv-value">
-                        {selectedApplicant.reviewerName || userAreaName || 'Cán bộ Local Authority'}
-                      </span>
-                    </div>
-                  </div>
-
+              {/* 4. Tiến trình xử lý */}
+              <div className="ra-inset-section">
+                <div className="ra-inset-label">Tiến trình thẩm định</div>
+                <div className="ra-inset-card">
                   {selectedApplicant.supplementaryRequest && (
-                    <div className="ra-feedback-box warning">
+                    <div className="ra-feedback-box warning" style={{ marginBottom: 12 }}>
                       <span className="ra-feedback-title">Nội dung yêu cầu bổ sung:</span>
                       <p className="ra-feedback-content">{selectedApplicant.supplementaryRequest}</p>
                     </div>
                   )}
 
                   {selectedApplicant.rejectionReason && (
-                    <div className="ra-feedback-box danger">
+                    <div className="ra-feedback-box danger" style={{ marginBottom: 12 }}>
                       <span className="ra-feedback-title">Lý do từ chối:</span>
                       <p className="ra-feedback-content">{selectedApplicant.rejectionReason}</p>
                     </div>
                   )}
 
-                  <div className="ra-timeline-container">
-                    <span className="ra-kv-label" style={{ marginBottom: 6 }}>Tiến trình xử lý:</span>
-                    <div className="ra-timeline">
-                      {selectedApplicant.history.map((h, i) => (
-                        <div key={i} className="ra-timeline-item">
-                          <div
-                            className={`ra-timeline-dot ${h.type === 'verified'
-                                ? 'green'
-                                : h.type === 'rejected'
-                                  ? 'red'
-                                  : h.type === 'update'
-                                    ? 'orange'
-                                    : ''
-                              }`}
-                          />
-                          <span className="ra-timeline-action">{h.action}</span>
-                          <span className="ra-timeline-meta">
-                            {h.timestamp} • {h.actor}
-                          </span>
-                          {h.detail && <div className="ra-timeline-detail">{h.detail}</div>}
-                        </div>
-                      ))}
-                    </div>
+                  <div className="ra-timeline" style={{ marginTop: 2 }}>
+                    {selectedApplicant.history.map((h, i) => (
+                      <div key={i} className="ra-timeline-item">
+                        <div
+                          className={`ra-timeline-dot ${h.type === 'verified'
+                              ? 'green'
+                              : h.type === 'rejected'
+                                ? 'red'
+                                : h.type === 'update'
+                                  ? 'orange'
+                                  : ''
+                            }`}
+                        />
+                        <span className="ra-timeline-action">{h.action}</span>
+                        <span className="ra-timeline-meta">
+                          {h.timestamp} • {h.actor}
+                        </span>
+                        {h.detail && <div className="ra-timeline-detail">{h.detail}</div>}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
