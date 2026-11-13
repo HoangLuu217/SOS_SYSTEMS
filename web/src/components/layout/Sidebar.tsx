@@ -230,12 +230,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       if (rescuerRes.success && Array.isArray(rescuerRes.data?.users)) {
         let rescuers = rescuerRes.data.users;
 
-        const isAuthority = Boolean(
+        const isAdminUser = Boolean(user?.roles?.includes('ADMIN') || (user as any)?.role === 'ADMIN');
+        const isAuthority = !isAdminUser && Boolean(
           user?.roles?.includes('LOCAL_AUTHORITY') ||
           user?.roles?.includes('AUTHORITY') ||
           Boolean(user?.authority?.areaId || user?.authority?.areaName)
         );
-        const isAdminUser = Boolean(user?.roles?.includes('ADMIN') || (user as any)?.role === 'ADMIN') && !isAuthority;
 
         if (!isAdminUser) {
           const activeOfficer = domainDService.getActiveOfficer();
@@ -253,7 +253,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           const localCommuneName = (userAreaName || '').split(',')[0].trim();
           const cleanLocalCommune = localCommuneName
-            .replace(/^(phường|xã|thị trấn|quận|huyện)s+/i, '')
+            .replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '')
             .trim()
             .toLowerCase();
 
@@ -333,10 +333,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get('tab')?.toUpperCase();
       const path = window.location.pathname.toLowerCase();
-      if (tabParam === 'SUPPLIES' || path.includes('/supplies')) {
+      if (tabParam === 'SUPPLIES' || tabParam === 'CONSUMABLES' || path.includes('/supplies') || path.includes('/consumables')) {
         setCurrentResourceSubTab('SUPPLIES');
-      } else if (tabParam === 'CONSUMABLES' || path.includes('/consumables')) {
-        setCurrentResourceSubTab('CONSUMABLES');
       } else {
         setCurrentResourceSubTab('VEHICLES');
       }
@@ -346,7 +344,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     window.addEventListener('popstate', syncSubTab);
     const onTabSwitch = (e: any) => {
       if (e?.detail?.tab) {
-        setCurrentResourceSubTab(e.detail.tab);
+        const t = e.detail.tab === 'CONSUMABLES' ? 'SUPPLIES' : e.detail.tab;
+        setCurrentResourceSubTab(t);
       }
     };
     window.addEventListener('sos_switch_resource_tab', onTabSwitch);
@@ -470,23 +469,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       title: 'LỰC LƯỢNG & NGUỒN LỰC',
       items: [
         {
-          key: 'rescuers',
-          label: 'Đội cứu hộ',
-          icon: <LifeBuoy size={18} className="sos-nav-icon" />,
-        },
-        {
           key: 'rescuers_approval',
-          label: 'Duyệt hồ sơ',
+          label: 'Duyệt hồ sơ cứu hộ',
           icon: <UserCheck size={18} className="sos-nav-icon" />,
           badge: pendingRescuersCount > 0 ? `${pendingRescuersCount} duyệt` : undefined,
           badgeType: 'warning',
         },
         {
+          key: 'rescuers',
+          label: 'Đội cứu hộ địa phương',
+          icon: <LifeBuoy size={18} className="sos-nav-icon" />,
+        },
+        {
           key: 'resources',
           label: 'Phương tiện & Vật tư',
           icon: <Package size={18} className="sos-nav-icon" />,
-
-
         },
       ],
     },
@@ -1046,7 +1043,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const rawUserName = localProfile.fullName || user?.fullName || (isAdmin ? 'Quản trị viên' : 'Cán bộ điều phối');
   // Loại bỏ các phần chú thích trong ngoặc đơn như (PCTT Liên Chiểu) để họ tên hiển thị gọn gàng, trọn vẹn
-  const displayUserName = rawUserName.replace(/\s*\([^\)]*\)/g, '').trim() || rawUserName;
+  const displayUserName = rawUserName.replace(/\s*\([^)]*\)/g, '').trim() || rawUserName;
   const displayUserRole = localProfile.position || user?.authority?.position || (isAdmin ? 'Quản trị viên' : 'Chỉ huy cứu hộ');
   const displayAvatar = localProfile.avatarUrl || user?.avatarUrl || '';
   const userInitial = (displayUserName || 'U').trim().charAt(0).toUpperCase() || 'U';
@@ -1625,17 +1622,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 role="button"
                 tabIndex={0}
               >
-
-
                 <Truck size={18} color="#475569" className="sos-nav-flyout-item-icon" />
                 <div className="sos-nav-flyout-info">
                   <div className="sos-nav-flyout-title">Phương tiện cơ động</div>
                   <div className="sos-nav-flyout-desc">Ca-nô, xuồng máy, xe tải, cứu thương</div>
                 </div>
-
               </div>
 
-              {/* 2. Trang thiết bị */}
+              {/* 2. Thiết bị cứu hộ & Hàng cứu trợ tổng hợp */}
               <div
                 className={`sos-nav-flyout-item ${activeKey === 'resources' && currentResourceSubTab === 'SUPPLIES' ? 'active' : ''
                   }`}
@@ -1643,32 +1637,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 role="button"
                 tabIndex={0}
               >
-
-
-                <LifeBuoy size={18} color="#475569" className="sos-nav-flyout-item-icon" />
-                <div className="sos-nav-flyout-info">
-                  <div className="sos-nav-flyout-title">Trang thiết bị tác chiến</div>
-                  <div className="sos-nav-flyout-desc">Áo phao, bộ đàm, đèn pin, cứu sinh</div>
-                </div>
-
-              </div>
-
-              {/* 3. Vật tư cứu trợ */}
-              <div
-                className={`sos-nav-flyout-item ${activeKey === 'resources' && currentResourceSubTab === 'CONSUMABLES' ? 'active' : ''
-                  }`}
-                onClick={() => handleSelectResourceSubTab('CONSUMABLES')}
-                role="button"
-                tabIndex={0}
-              >
-
-
                 <Package size={18} color="#475569" className="sos-nav-flyout-item-icon" />
                 <div className="sos-nav-flyout-info">
-                  <div className="sos-nav-flyout-title">Vật tư cứu trợ &amp; Nhu yếu phẩm</div>
-                  <div className="sos-nav-flyout-desc">Lương thực, nước uống, thuốc men, xăng</div>
+                  <div className="sos-nav-flyout-title">Thiết bị &amp; Hàng cứu trợ</div>
+                  <div className="sos-nav-flyout-desc">Áo phao, bộ đàm, đèn pin, lương thực, nước uống</div>
                 </div>
-
               </div>
             </div>
           </div>,
