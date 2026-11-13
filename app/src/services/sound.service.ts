@@ -68,6 +68,70 @@ function playWebFallbackDispatchSound() {
 }
 
 /**
+ * Phát âm thanh thông báo bình thường (2 nốt nhẹ trên Web)
+ */
+function playWebNormalNotificationChime() {
+  try {
+    const AudioContextClass = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+
+    const now = ctx.currentTime;
+    const playTone = (startTime: number, freq: number, duration: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, startTime);
+      gain.gain.setValueAtTime(0.001, startTime);
+      gain.gain.linearRampToValueAtTime(0.22, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + duration + 0.02);
+    };
+
+    playTone(now, 587.33, 0.14); // D5
+    playTone(now + 0.11, 880, 0.22); // A5
+  } catch (err) {
+    console.warn('⚠️ [SoundService] Web Audio error:', err);
+  }
+}
+
+/**
+ * Phát chuông thông báo bình thường (chỉ dùng tiếng nhẹ, không dùng còi SOS).
+ * Trên thiết bị di động, âm báo mặc định được phát qua hệ thống expo-notifications.
+ */
+export async function playNormalNotificationSound(): Promise<void> {
+  let allowSound = true;
+  let allowVibration = true;
+
+  try {
+    const settings = await getSavedNotificationSettings();
+    if (settings) {
+      if (settings.appEnabled === false) return;
+      if (settings.sound === false) allowSound = false;
+      if (settings.vibration === false) allowVibration = false;
+    }
+  } catch (_) {}
+
+  if (allowVibration) {
+    try {
+      Vibration.vibrate(150);
+    } catch (_) {}
+  }
+
+  if (!allowSound) return;
+
+  if (Platform.OS === 'web') {
+    playWebNormalNotificationChime();
+  }
+}
+
+/**
  * Phát chuông báo động điều động tác chiến cứu nạn (Rescue Siren Yelp + Dispatch Ping)
  * Đảm bảo tuân thủ nghiêm ngặt chế độ im lặng / tắt chuông của điện thoại (playsInSilentMode = false)
  */
@@ -78,6 +142,7 @@ export async function playDispatchAlertSound(): Promise<void> {
   try {
     const settings = await getSavedNotificationSettings();
     if (settings) {
+      if (settings.appEnabled === false) return;
       if (settings.sound === false) allowSound = false;
       if (settings.vibration === false) allowVibration = false;
     }

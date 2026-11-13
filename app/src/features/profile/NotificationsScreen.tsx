@@ -212,6 +212,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
 
   // Tính số lượng đang bật (theo cài đặt) & số lượng chưa đọc động
   const enabledNotifications = useMemo(() => {
+    if (settings.appEnabled === false) return [];
     return notifications.filter((n) => settings[classifyNotification(n)] !== false);
   }, [notifications, settings]);
 
@@ -229,7 +230,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
         if (cat !== selectedCategory) return false;
       } else {
         // Tab "Tất cả": chỉ hiển thị các nhóm thông báo đang BẬT trong Cài đặt
-        if (settings[cat] === false) return false;
+        if (settings.appEnabled === false || settings[cat] === false) return false;
       }
 
       if (activeTab === 'unread') {
@@ -361,6 +362,12 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
               label: NOTIFICATION_CATEGORIES.safeLocation.shortLabel,
               icon: 'shield',
               color: NOTIFICATION_CATEGORIES.safeLocation.color,
+            },
+            {
+              key: 'chat' as const,
+              label: NOTIFICATION_CATEGORIES.chat.shortLabel,
+              icon: 'message-circle',
+              color: NOTIFICATION_CATEGORIES.chat.color,
             },
             {
               key: 'systemNotification' as const,
@@ -495,14 +502,27 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
           }
         >
           <View style={styles.emptyIconCircle}>
-            <Feather name="inbox" size={36} color={PROFILE_THEME.colors.textMuted} />
+            <Feather name={settings.appEnabled === false ? 'bell-off' : 'inbox'} size={36} color={PROFILE_THEME.colors.textMuted} />
           </View>
-          <Text style={styles.emptyTitle}>Bạn chưa có thông báo</Text>
-          <Text style={styles.emptyDesc}>
-            {activeTab === 'unread'
-              ? 'Tất cả thông báo điều phối và cảnh báo đều đã được đọc.'
-              : 'Các thông báo khẩn cấp, cảnh báo địa bàn, điểm an toàn và cập nhật hệ thống sẽ hiển thị tại đây.'}
+          <Text style={styles.emptyTitle}>
+            {settings.appEnabled === false ? 'Thông báo ứng dụng đang tắt' : 'Bạn chưa có thông báo'}
           </Text>
+          <Text style={styles.emptyDesc}>
+            {settings.appEnabled === false
+              ? 'Bật lại Thông báo ứng dụng trong Cài đặt thông báo để nhận các cảnh báo và tin nhắn mới.'
+              : activeTab === 'unread'
+                ? 'Tất cả thông báo điều phối và cảnh báo đều đã được đọc.'
+                : 'Các thông báo khẩn cấp, cảnh báo địa bàn, điểm an toàn và cập nhật hệ thống sẽ hiển thị tại đây.'}
+          </Text>
+          {settings.appEnabled === false && (
+            <TouchableOpacity
+              style={styles.restoreButton}
+              onPress={() => updateSetting('appEnabled', true)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.restoreButtonText}>Bật lại thông báo ứng dụng</Text>
+            </TouchableOpacity>
+          )}
           {screenState === 'empty' && (
             <TouchableOpacity
               style={styles.restoreButton}
@@ -530,22 +550,41 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
             />
           }
         >
-          {selectedCategory !== 'all' && settings[selectedCategory] === false && (
+          {settings.appEnabled === false ? (
             <View style={styles.categoryDisabledNotice}>
               <View style={styles.categoryDisabledNoticeLeft}>
                 <Feather name="bell-off" size={15} color="#DC2626" />
                 <Text style={styles.categoryDisabledNoticeText}>
-                  Bạn đang tắt nhóm thông báo này trong Cài đặt thông báo.
+                  Bạn đang tắt toàn bộ Thông báo ứng dụng trong Cài đặt.
                 </Text>
               </View>
               <TouchableOpacity
                 style={styles.categoryReEnableBtn}
-                onPress={() => updateSetting(selectedCategory, true)}
+                onPress={() => updateSetting('appEnabled', true)}
                 activeOpacity={0.7}
               >
                 <Text style={styles.categoryReEnableBtnText}>Bật lại</Text>
               </TouchableOpacity>
             </View>
+          ) : (
+            selectedCategory !== 'all' &&
+            settings[selectedCategory] === false && (
+              <View style={styles.categoryDisabledNotice}>
+                <View style={styles.categoryDisabledNoticeLeft}>
+                  <Feather name="bell-off" size={15} color="#DC2626" />
+                  <Text style={styles.categoryDisabledNoticeText}>
+                    Bạn đang tắt nhóm thông báo này trong Cài đặt thông báo.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.categoryReEnableBtn}
+                  onPress={() => updateSetting(selectedCategory, true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.categoryReEnableBtnText}>Bật lại</Text>
+                </TouchableOpacity>
+              </View>
+            )
           )}
 
           {displayList.map((item) => (

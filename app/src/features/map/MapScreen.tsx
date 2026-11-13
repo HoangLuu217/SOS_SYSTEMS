@@ -147,7 +147,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({
   const [reliefLocations, setReliefLocations] = useState<any[]>([]);
   const [activeFilter, setActiveFilter] = useState<MapFilterType>(initialFilter);
   const [mapType, setMapType] = useState<'standard' | 'satellite'>('standard');
-  const [weatherLayer, setWeatherLayer] = useState<'off' | 'rain' | 'wind'>('off');
   const [selectedArea, setSelectedArea] = useState<DanangAreaZone>(DANANG_AREAS[0]);
   const [showAreaModal, setShowAreaModal] = useState(false);
   const [baseUrl, setBaseUrl] = useState<string>('');
@@ -567,12 +566,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({
     webViewRef.current?.injectJavaScript(`window.setMapType && window.setMapType('${nextType}'); true;`);
   };
 
-  const toggleWeatherLayer = () => {
-    const nextLayer = weatherLayer === 'off' ? 'rain' : weatherLayer === 'rain' ? 'wind' : 'off';
-    setWeatherLayer(nextLayer);
-    webViewRef.current?.injectJavaScript(`window.setWeatherLayer && window.setWeatherLayer('${nextLayer}'); true;`);
-  };
-
   // Chọn vùng / quận huyện
   const handleSelectArea = (zone: DanangAreaZone) => {
     setSelectedArea(zone);
@@ -790,16 +783,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({
           updateWhenZooming: false
         });
 
-        // Weather tiles are provided by OpenWeatherMap; keep them above either base map.
-        var weatherLayers = {
-          rain: L.tileLayer('https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=', {
-            opacity: 0.62, maxZoom: 19, attribution: 'Weather tiles © OpenWeatherMap'
-          }),
-          wind: L.tileLayer('https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=', {
-            opacity: 0.62, maxZoom: 19, attribution: 'Weather tiles © OpenWeatherMap'
-          })
-        };
-
         if (currentMapType === 'satellite') {
           satelliteLayer.addTo(map);
         } else {
@@ -819,14 +802,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({
             if (!map.hasLayer(overviewLayer)) overviewLayer.addTo(map);
             if (!map.hasLayer(detailLayer)) detailLayer.addTo(map);
           }
-        };
-
-        window.setWeatherLayer = function(type) {
-          Object.keys(weatherLayers).forEach(function(key) {
-            if (map.hasLayer(weatherLayers[key])) map.removeLayer(weatherLayers[key]);
-          });
-          currentWeatherLayer = type;
-          if (weatherLayers[type]) weatherLayers[type].addTo(map);
         };
 
         // Bay tới vị trí một quận / huyện bất kỳ
@@ -1287,21 +1262,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({
           />
         </TouchableOpacity>
 
-        {/* Nút 3: Thời gian */}
-        <TouchableOpacity
-          style={[styles.rightActionBtn, weatherLayer !== 'off' && styles.rightActionBtnActiveWeather]}
-          onPress={toggleWeatherLayer}
-          activeOpacity={0.85}
-        >
-          <MaterialCommunityIcons name={weatherLayer === 'wind' ? 'weather-windy' : 'weather-rainy'} size={20} color={weatherLayer !== 'off' ? '#0284C7' : '#475569'} />
-        </TouchableOpacity>
-        {weatherLayer !== 'off' && (
-          <View style={styles.weatherLayerBadge}>
-            <Text style={styles.weatherLayerBadgeText}>{weatherLayer === 'rain' ? 'Mưa' : 'Gió'}</Text>
-          </View>
-        )}
-
-        {/* Nút 4: Đóng góp điểm cứu trợ / nguy hiểm (không hiển thị số 12) */}
+        {/* Nút 3: Đóng góp điểm cứu trợ / nguy hiểm (không hiển thị số 12) */}
         <TouchableOpacity
           style={styles.rightActionBtn}
           onPress={() => setShowHazardModal(true)}
@@ -1968,25 +1929,6 @@ const styles = StyleSheet.create({
   rightActionBtnActiveSatellite: {
     backgroundColor: '#EFF6FF',
     borderColor: '#0066FF',
-  },
-  rightActionBtnActiveWeather: {
-    backgroundColor: '#E0F2FE',
-    borderColor: '#38BDF8',
-  },
-  weatherLayerBadge: {
-    position: 'absolute',
-    right: 48,
-    top: 110,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    elevation: 3,
-  },
-  weatherLayerBadgeText: {
-    color: '#0369A1',
-    fontSize: 12,
-    fontWeight: '700',
   },
   rightFilterBtnRed: {
     width: 44,

@@ -1,7 +1,7 @@
 const { Equipment, RescueTeam, AuthorityOrganization, AdministrativeArea, SosAssignment, SosRequest, User, Notification } = require('../models');
 const ApiError = require('../utils/apiError');
 const mongoose = require('mongoose');
-const { sendExpoPushNotification } = require('../utils/expoPush');
+const { sendExpoPushNotification, collectExpoPushTargets } = require('../utils/expoPush');
 const eventBus = require('./eventBus');
 
 class EquipmentService {
@@ -744,17 +744,7 @@ class EquipmentService {
           }
 
           // C. Gửi Push Notification ra ngoài ứng dụng điện thoại (Expo Push Service)
-          const pushTokens = [];
-          recipientUsers.forEach((u) => {
-            if (u.pushToken && typeof u.pushToken === 'string' && u.pushToken.trim()) {
-              pushTokens.push(u.pushToken.trim());
-            }
-            if (u.citizen?.pushToken && typeof u.citizen.pushToken === 'string' && u.citizen.pushToken.trim()) {
-              pushTokens.push(u.citizen.pushToken.trim());
-            }
-          });
-
-          const uniquePushTokens = [...new Set(pushTokens)];
+          const { uniqueTokens: uniquePushTokens } = collectExpoPushTargets(recipientUsers);
           if (uniquePushTokens.length > 0) {
             sendExpoPushNotification({
               tokens: uniquePushTokens,

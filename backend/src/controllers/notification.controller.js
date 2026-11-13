@@ -74,6 +74,19 @@ class NotificationController {
   }
 
   /**
+   * DELETE /notifications/register-push-token
+   * Hủy Push Token của thiết bị khi người dùng tắt thông báo ứng dụng
+   */
+  async unregisterPushToken(req, res, next) {
+    try {
+      const result = await notificationService.unregisterPushToken(req.user._id);
+      return sendSuccess(res, 200, result.message);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * PATCH /notifications/location
    * Lưu vị trí foreground gần nhất để giới hạn broadcast điểm an toàn/nguy hiểm theo GPS.
    */

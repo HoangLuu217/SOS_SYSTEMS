@@ -1054,7 +1054,7 @@ class ChatService {
   async sendChatNotification({ message, senderUser, channel, recipientObjectId }) {
     try {
       const { User, Notification } = require('../models');
-      const { sendExpoPushNotification } = require('../utils/expoPush');
+      const { sendExpoPushNotification, collectExpoPushTargets } = require('../utils/expoPush');
       const eventBus = require('./eventBus');
 
       const senderRole = senderUser.roles?.includes('ADMIN')
@@ -1141,7 +1141,6 @@ class ChatService {
         status: { $ne: 'SUSPENDED' },
       }).select('_id fullName pushToken citizen.pushToken');
 
-      const pushTokens = [];
       const notifDocsToInsert = [];
 
       const effectiveSenderName = (senderRole === 'ADMIN' || senderName.toLowerCase().includes('admin'))
@@ -1149,11 +1148,6 @@ class ChatService {
         : senderName;
 
       for (const recUser of recipientUsers) {
-        // Thu thập push token của thiết bị
-        const tokens = [recUser.pushToken, recUser.citizen?.pushToken]
-          .filter((t) => typeof t === 'string' && (t.startsWith('ExponentPushToken[') || t.startsWith('ExpoPushToken[')));
-        pushTokens.push(...tokens);
-
         // Tạo bản ghi Notification trong DB để người dùng xem trong app
         // Ưu tiên mức NORMAL để tránh bị hệ thống nhầm với Cảnh báo khẩn cấp (Emergency Alert)
         notifDocsToInsert.push({
@@ -1207,7 +1201,7 @@ class ChatService {
       }
 
       // 5. Gửi thông báo đẩy ra ngoài ứng dụng (Expo Push Notification)
-      const uniquePushTokens = [...new Set(pushTokens)];
+      const { uniqueTokens: uniquePushTokens } = collectExpoPushTargets(recipientUsers);
       if (uniquePushTokens.length > 0) {
         await sendExpoPushNotification({
           tokens: uniquePushTokens,

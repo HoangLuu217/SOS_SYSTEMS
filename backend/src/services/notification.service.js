@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const { Notification, User, AdministrativeArea, SafeLocation, HazardReport, WeatherNotification } = require('../models');
 const ApiError = require('../utils/apiError');
-const { sendExpoPushNotification } = require('../utils/expoPush');
+const { sendExpoPushNotification, collectExpoPushTargets } = require('../utils/expoPush');
 const eventBus = require('./eventBus');
 const { checkPointInAuthorityJurisdiction, findAreaByCoordinates } = require('../utils/geoUtils');
 
@@ -200,6 +200,21 @@ class NotificationService {
     return {
       message: 'Đăng ký Push Token thành công.',
       pushToken: cleanToken,
+    };
+  }
+
+  /**
+   * Hủy Push Token của thiết bị khi người dùng tắt thông báo ứng dụng
+   */
+  async unregisterPushToken(userId) {
+    await User.findByIdAndUpdate(userId, {
+      $set: {
+        pushToken: null,
+        'citizen.pushToken': null,
+      },
+    });
+    return {
+      message: 'Đã hủy đăng ký Push Token.',
     };
   }
 
@@ -687,31 +702,26 @@ class NotificationService {
     const notificationIdByUserId = new Map(
       savedNotifications.map((notification) => [notification.userId.toString(), notification._id.toString()])
     );
-    const pushDataByToken = {};
-    recipientUsers.forEach((user) => {
-      const notificationId = notificationIdByUserId.get(user._id.toString());
-      const tokens = [user.pushToken, user.citizen?.pushToken]
-        .filter((token) => typeof token === 'string' && token.trim().length > 0);
-      tokens.forEach((token) => {
-        pushDataByToken[token.trim()] = {
-          type: normalizedType,
-          scope,
-          areaId: targetAreaId ? targetAreaId.toString() : '',
-          areaName: targetAreaName,
-          senderName: senderUser.fullName,
-          priority: effectivePriority,
-          content: content.trim(),
-          imageUrl: resolvedImageUrl,
-          articleUrl: resolvedArticleUrl,
-          sourceName: resolvedSourceName,
-          ...pointDetails,
-          notificationId,
-          broadcastId,
-        };
-      });
+    const {
+      uniqueTokens: uniquePushTokens,
+      dataByToken: pushDataByToken,
+    } = collectExpoPushTargets(recipientUsers, {
+      buildTokenData: (user) => ({
+        type: normalizedType,
+        scope,
+        areaId: targetAreaId ? targetAreaId.toString() : '',
+        areaName: targetAreaName,
+        senderName: senderUser.fullName,
+        priority: effectivePriority,
+        content: content.trim(),
+        imageUrl: resolvedImageUrl,
+        articleUrl: resolvedArticleUrl,
+        sourceName: resolvedSourceName,
+        ...pointDetails,
+        notificationId: notificationIdByUserId.get(user._id.toString()),
+        broadcastId,
+      }),
     });
-
-    const uniquePushTokens = Object.keys(pushDataByToken);
 
     let pushResult = { success: false, reason: 'No push tokens' };
     if (uniquePushTokens.length > 0) {

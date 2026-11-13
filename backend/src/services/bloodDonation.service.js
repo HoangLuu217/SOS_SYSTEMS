@@ -5,7 +5,7 @@ const AdministrativeArea = require('../models/AdministrativeArea');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
 const ApiError = require('../utils/apiError');
-const { sendExpoPushNotification } = require('../utils/expoPush');
+const { sendExpoPushNotification, collectExpoPushTargets } = require('../utils/expoPush');
 const { findAreaByCoordinates } = require('../utils/geoUtils');
 const eventBus = require('./eventBus');
 
@@ -783,25 +783,19 @@ class BloodDonationService {
     const notifByUserId = new Map(
       (savedNotifications || []).map((n) => [n.userId.toString(), n])
     );
-    const uniquePushTokens = [];
-    const dataByToken = {};
-
-    (users || []).forEach((u) => {
-      const uid = u?._id?.toString();
-      const notif = uid ? notifByUserId.get(uid) : null;
-      const tokens = this.extractValidExpoTokens(u);
-
-      tokens.forEach((trimmed) => {
-        if (!uniquePushTokens.includes(trimmed)) {
-          uniquePushTokens.push(trimmed);
-        }
-        if (notif && !dataByToken[trimmed]) {
-          dataByToken[trimmed] = {
-            notificationId: notif._id.toString(),
-            broadcastId: notif.data?.broadcastId || notif.data?.eventId || '',
-          };
-        }
-      });
+    const {
+      uniqueTokens: uniquePushTokens,
+      dataByToken,
+    } = collectExpoPushTargets(users, {
+      buildTokenData: (u) => {
+        const uid = u?._id?.toString();
+        const notif = uid ? notifByUserId.get(uid) : null;
+        if (!notif) return null;
+        return {
+          notificationId: notif._id.toString(),
+          broadcastId: notif.data?.broadcastId || notif.data?.eventId || '',
+        };
+      },
     });
 
     return { uniquePushTokens, dataByToken };

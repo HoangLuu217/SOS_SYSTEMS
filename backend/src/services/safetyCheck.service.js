@@ -6,7 +6,7 @@ const Notification = require('../models/Notification');
 const User = require('../models/User');
 const SosRequest = require('../models/SosRequest');
 const ApiError = require('../utils/apiError');
-const { sendExpoPushNotification } = require('../utils/expoPush');
+const { sendExpoPushNotification, collectExpoPushTargets } = require('../utils/expoPush');
 const eventBus = require('./eventBus');
 
 class SafetyCheckService {
@@ -272,16 +272,7 @@ class SafetyCheckService {
     }
 
     // Gửi Push Notification qua Expo
-    const uniquePushTokens = [];
-    recipientUsers.forEach((u) => {
-      const tokens = [u.pushToken, u.citizen?.pushToken].filter(Boolean);
-      tokens.forEach((t) => {
-        const trimmed = t.trim();
-        if (trimmed && !uniquePushTokens.includes(trimmed)) {
-          uniquePushTokens.push(trimmed);
-        }
-      });
-    });
+    const { uniqueTokens: uniquePushTokens } = collectExpoPushTargets(recipientUsers);
 
     if (uniquePushTokens.length > 0) {
       sendExpoPushNotification({

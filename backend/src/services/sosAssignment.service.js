@@ -337,14 +337,14 @@ class SosAssignmentService {
 
         const uniqueTokens = [...new Set(pushTokens)];
         if (uniqueTokens.length > 0) {
-          const { sendExpoPushNotification } = require('../utils/expoPush');
+          const { sendExpoPushNotification, NORMAL_CHANNEL_ID } = require('../utils/expoPush');
           await sendExpoPushNotification({
             tokens: uniqueTokens,
             title: notifTitle,
             body: notifContent,
             priority: 'CRITICAL',
             sound: 'default',
-            channelId: 'emergency-alerts',
+            channelId: NORMAL_CHANNEL_ID,
             data: {
               type: 'SOS_SYNC',
               action: 'ASSIGNED',

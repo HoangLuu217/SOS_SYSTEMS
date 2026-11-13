@@ -51,10 +51,12 @@ export interface NotificationItem {
  * Cài đặt thông báo người dùng thực tế
  */
 export interface NotificationSettings {
+  appEnabled: boolean; // Công tắc tổng bật/tắt toàn bộ thông báo ứng dụng
   alert: boolean; // Cảnh báo khẩn cấp (SOS Alert, cứu nạn, sạt lở...)
   safeLocation: boolean; // Vị trí an toàn (Trạm y tế, điểm sơ tán...)
   systemNotification: boolean; // Thông báo hệ thống (Điều phối, tài khoản...)
   news: boolean; // Tin tức & Thời tiết (Bản tin, dự báo...)
+  chat: boolean; // Tin nhắn trao đổi & trò chuyện
   sound: boolean; // Âm thanh thông báo
   vibration: boolean; // Rung thiết bị
 }

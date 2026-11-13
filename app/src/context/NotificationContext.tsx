@@ -1,15 +1,16 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { AppState, Vibration, DeviceEventEmitter } from 'react-native';
+import { AppState, Platform, Vibration, DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { backendApi, NotificationItem } from '@/api';
 import {
   registerForPushNotificationsAsync,
+  unregisterPushNotificationsAsync,
   getRegisteredExpoPushToken,
   isNotificationAlreadyPresented,
   triggerLocalNotification,
   sseNotificationService,
-  playDispatchAlertSound,
+  playNormalNotificationSound,
 } from '@/services';
 import {
   NotificationSettings,
@@ -105,13 +106,17 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     settingsRef.current = settings;
   }, [settings]);
 
-  // Nạp cài đặt người dùng từ storage khi khởi tạo
+  // Nạp cài đặt người dùng từ AsyncStorage khi khởi tạo (không lưu vào User)
   useEffect(() => {
+    let cancelled = false;
     getSavedNotificationSettings().then((saved) => {
-      if (hasUserModifiedSettingsRef.current) return;
+      if (cancelled || hasUserModifiedSettingsRef.current) return;
       setSettings(saved);
       settingsRef.current = saved;
     });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const updateSetting = useCallback(async (key: keyof NotificationSettings, value: boolean) => {
@@ -121,10 +126,20 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setSettings(next);
     await saveNotificationSettings(next);
 
+    if (key === 'appEnabled' && !value) {
+      unregisterPushNotificationsAsync().catch(() => { });
+      return;
+    }
+
     // Khi người dùng bật lại thông báo, đồng bộ lại quyền OS & Push Token với máy chủ
     if (
       value &&
-      (key === 'alert' || key === 'safeLocation' || key === 'systemNotification' || key === 'news')
+      (key === 'appEnabled' ||
+        key === 'alert' ||
+        key === 'safeLocation' ||
+        key === 'chat' ||
+        key === 'systemNotification' ||
+        key === 'news')
     ) {
       registerForPushNotificationsAsync().catch(() => { });
     }
@@ -140,8 +155,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const testNotification = useCallback(async (category: NotificationCategoryKey = 'alert'): Promise<boolean> => {
     const current = settingsRef.current;
-    if (current[category] === false) {
-      return false; // Nhóm này đang bị tắt
+    if (current.appEnabled === false || current[category] === false) {
+      return false; // Thông báo ứng dụng hoặc nhóm này đang bị tắt
     }
 
     const testItem: NotificationItem = {
@@ -151,51 +166,54 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           ? 'ALERT'
           : category === 'safeLocation'
             ? 'SAFE_LOCATION'
-            : category === 'news'
-              ? 'WEATHER'
-              : 'SYSTEM',
-      priority: category === 'alert' ? 'CRITICAL' : 'HIGH',
+            : category === 'chat'
+              ? 'CHAT'
+              : category === 'news'
+                ? 'WEATHER'
+                : 'SYSTEM',
+      priority: category === 'alert' ? 'CRITICAL' : category === 'chat' ? 'NORMAL' : 'HIGH',
       title:
         category === 'alert'
-          ? '🚨 [Thử nghiệm] Cảnh báo khẩn cấp SOS'
+          ? '🚨 [Thử nghiệm] Cảnh báo khẩn cấp'
           : category === 'safeLocation'
-            ? '🛡️ [Thử nghiệm] Điểm an toàn mới'
-            : category === 'news'
-              ? '📰 [Thử nghiệm] Bản tin dự báo thời tiết'
-              : '🔔 [Thử nghiệm] Thông báo cập nhật hệ thống',
+            ? '🛡️ [Thử nghiệm] Vị trí an toàn'
+            : category === 'chat'
+              ? '💬 [Thử nghiệm] Tin nhắn mới'
+              : category === 'news'
+                ? '📰 [Thử nghiệm] Tin tức & Thời tiết'
+                : '🔔 [Thử nghiệm] Thông báo hệ thống',
       content:
-        'Đây là thông báo thử nghiệm để xác nhận chuông, rung và cài đặt của bạn đang hoạt động thật.',
+        'Thông báo thử nghiệm với âm chuông mặc định bình thường của thiết bị.',
       createdAt: new Date().toISOString(),
       isRead: false,
     };
 
-    // 1. Rung 1 lần duy nhất nếu bật vibration
-    if (current.vibration) {
-      try {
-        Vibration.vibrate(300);
-      } catch (_) { }
+    if (Platform.OS === 'web') {
+      if (current.vibration) {
+        try {
+          Vibration.vibrate(200);
+        } catch (_) { }
+      }
+      if (current.sound !== false) {
+        playNormalNotificationSound().catch(() => { });
+      }
     }
 
-    // 1b. Phát âm thanh điều động tác chiến nếu bật chuông
-    if (current.sound !== false) {
-      playDispatchAlertSound().catch(() => { });
-    }
-
-    // 2. Kích hoạt Local Notification hiển thị ra ngoài hệ điều hành (banner + khay thông báo)
+    // Kích hoạt Local Notification hiển thị ra ngoài hệ điều hành với âm báo mặc định bình thường
     triggerLocalNotification({
       title: testItem.title,
       body: testItem.content,
       priority: testItem.priority,
       allowDuplicate: true,
-      skipHandlerSound: current.sound !== false,
+      skipHandlerSound: false,
       data: {
         notificationId: testItem._id,
         type: testItem.type,
+        isChat: category === 'chat' ? true : undefined,
         isLocalTrigger: true,
       },
     }).catch(() => { });
 
-    // Không hiển thị banner nổi trong app (chỉ đẩy thông báo ra ngoài máy)
     return true;
   }, []);
 
@@ -291,9 +309,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const category = classifyNotification(incoming);
     const currentSettings = settingsRef.current;
 
-    // NẾU NGƯỜI DÙNG ĐÃ TẮT NHÓM THÔNG BÁO NÀY:
-    if (!currentSettings[category]) {
-      console.log(`ℹ️ [NotificationContext] Bỏ qua cảnh báo cho nhóm '${category}' vì người dùng đã tắt.`);
+    // NẾU NGƯỜI DÙNG ĐÃ TẮT THÔNG BÁO ỨNG DỤNG HOẶC TẮT NHÓM THÔNG BÁO NÀY:
+    if (currentSettings.appEnabled === false || currentSettings[category] === false) {
+      console.log(`ℹ️ [NotificationContext] Bỏ qua cảnh báo cho nhóm '${category}' vì cài đặt đang tắt.`);
       return;
     }
 
@@ -459,9 +477,9 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         createdAt: new Date().toISOString(),
       };
 
-      // Chỉ đánh dấu đã hiển thị khi nhóm thông báo đang BẬT (không gọi markNotificationHandled trước processIncomingAlert để không tự chặn chính mình)
+      // Chỉ đánh dấu đã hiển thị khi thông báo ứng dụng & nhóm thông báo đang BẬT
       const category = classifyNotification(item);
-      if (settingsRef.current[category] !== false) {
+      if (settingsRef.current.appEnabled !== false && settingsRef.current[category] !== false) {
         markNotificationPresented(item);
         const persistentKeys = extractPersistentDedupeKeys(item);
         const triggerKeys =
@@ -625,31 +643,28 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   );
 
   // Chỉ tính số lượng chưa đọc của các nhóm thông báo người dùng ĐANG BẬT trong chuông
-  const unreadCount = useMemo(
-    () =>
-      bellNotifications.filter((n) => {
-        if (n.isRead) return false;
-        const cat = classifyNotification(n);
-        return settings[cat] !== false;
-      }).length,
-    [bellNotifications, settings]
-  );
+  const unreadCount = useMemo(() => {
+    if (settings.appEnabled === false) return 0;
+    return bellNotifications.filter((n) => {
+      if (n.isRead) return false;
+      const cat = classifyNotification(n);
+      return settings[cat] !== false;
+    }).length;
+  }, [bellNotifications, settings]);
 
-  const instantUnreadCount = useMemo(
-    () =>
-      bellNotifications.filter(
-        (n) => isInstantType(n.type) && !n.isRead && settings[classifyNotification(n)] !== false
-      ).length,
-    [bellNotifications, settings]
-  );
+  const instantUnreadCount = useMemo(() => {
+    if (settings.appEnabled === false) return 0;
+    return bellNotifications.filter(
+      (n) => isInstantType(n.type) && !n.isRead && settings[classifyNotification(n)] !== false
+    ).length;
+  }, [bellNotifications, settings]);
 
-  const systemUnreadCount = useMemo(
-    () =>
-      bellNotifications.filter(
-        (n) => isSystemType(n.type) && !n.isRead && settings[classifyNotification(n)] !== false
-      ).length,
-    [bellNotifications, settings]
-  );
+  const systemUnreadCount = useMemo(() => {
+    if (settings.appEnabled === false) return 0;
+    return bellNotifications.filter(
+      (n) => isSystemType(n.type) && !n.isRead && settings[classifyNotification(n)] !== false
+    ).length;
+  }, [bellNotifications, settings]);
 
   return (
     <NotificationContext.Provider

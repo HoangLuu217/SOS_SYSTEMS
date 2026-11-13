@@ -6,6 +6,7 @@ export const NOTIFICATION_SETTINGS_STORAGE_KEY = '@sos_notification_settings';
 export type NotificationCategoryKey =
   | 'alert'
   | 'safeLocation'
+  | 'chat'
   | 'systemNotification'
   | 'news';
 
@@ -55,6 +56,20 @@ export const NOTIFICATION_CATEGORIES: Record<NotificationCategoryKey, CategoryMe
     borderColor: '#A7F3D0',
     desc: 'Trạm y tế, điểm sơ tán & tập kết an toàn gần bạn',
   },
+  chat: {
+    key: 'chat',
+    label: 'Nhắn tin',
+    shortLabel: 'Nhắn tin',
+    badgeLabel: 'TIN NHẮN',
+    iconName: 'chatbubble-ellipses',
+    featherIcon: 'message-circle',
+    color: '#7C3AED',
+    bgColor: '#F5F3FF',
+    badgeBg: '#EDE9FE',
+    badgeTextColor: '#7C3AED',
+    borderColor: '#DDD6FE',
+    desc: 'Tin nhắn trao đổi với cán bộ và người dân',
+  },
   systemNotification: {
     key: 'systemNotification',
     label: 'Thông báo hệ thống',
@@ -86,17 +101,27 @@ export const NOTIFICATION_CATEGORIES: Record<NotificationCategoryKey, CategoryMe
 };
 
 /**
- * Phân loại một thông báo vào 1 trong 4 danh mục của Cài đặt thông báo:
+ * Phân loại một thông báo vào 1 trong 5 danh mục của Cài đặt thông báo:
  * 1. alert: Cảnh báo khẩn cấp
  * 2. safeLocation: Vị trí an toàn
- * 3. systemNotification: Thông báo hệ thống
- * 4. news: Tin tức & Thời tiết
+ * 3. chat: Nhắn tin
+ * 4. systemNotification: Thông báo hệ thống
+ * 5. news: Tin tức & Thời tiết
  */
 export function classifyNotification(item: NotificationItem): NotificationCategoryKey {
   const type = String(item.type || '').toUpperCase();
   const priority = String(item.priority || '').toUpperCase();
   const title = (item.title || '').toLowerCase();
   const content = (item.content || '').toLowerCase();
+
+  // 0. Tin nhắn (Chat) — ưu tiên kiểm tra trước để không bị nhầm bởi từ khóa trong nội dung tin nhắn
+  if (
+    type === 'CHAT' ||
+    Boolean(item.data?.isChat) ||
+    item.data?.actionUrl === 'chat'
+  ) {
+    return 'chat';
+  }
 
   const hasExplicitWeatherMeta =
     type === 'WEATHER' ||
@@ -154,9 +179,8 @@ export function classifyNotification(item: NotificationItem): NotificationCatego
     return 'alert';
   }
 
-  // 3b. Thông báo hệ thống / trò chuyện có type rõ ràng
+  // 3b. Thông báo hệ thống có type rõ ràng
   if (
-    type === 'CHAT' ||
     type === 'SOS_SYNC' ||
     type === 'RESCUER_VERIFICATION' ||
     type === 'USER_SYNC'
@@ -342,10 +366,12 @@ import { NotificationSettings } from '@/types';
 export type { NotificationSettings };
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  appEnabled: true,
   alert: true,
   safeLocation: true,
   systemNotification: true,
   news: true,
+  chat: true,
   sound: true,
   vibration: true,
 };
@@ -385,6 +411,9 @@ export function isNotificationCategoryEnabled(
   item: NotificationItem,
   settings: NotificationSettings
 ): boolean {
+  if (settings.appEnabled === false) {
+    return false;
+  }
   const category = classifyNotification(item);
   return settings[category] !== false;
 }
