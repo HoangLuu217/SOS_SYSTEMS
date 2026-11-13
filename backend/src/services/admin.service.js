@@ -198,12 +198,24 @@ class AdminService {
         orgId = defaultOrg ? defaultOrg._id : new mongoose.Types.ObjectId();
       }
 
+      const prevAuth = user.authority && typeof user.authority.toObject === 'function'
+        ? user.authority.toObject()
+        : (user.authority || {});
+
       user.authority = {
+        ...prevAuth,
         organizationId: orgId,
         areaId: finalAreaId,
-        areaName: newAreaName || user.authority?.areaName,
+        areaName: newAreaName || prevAuth.areaName,
         position: newPosition,
         department: newDepartment,
+        ...(authInput.organizationName !== undefined ? { organizationName: authInput.organizationName } : {}),
+        ...(authInput.provinceCode !== undefined ? { provinceCode: authInput.provinceCode ? Number(authInput.provinceCode) : null } : {}),
+        ...(authInput.wardCode !== undefined ? { wardCode: authInput.wardCode ? Number(authInput.wardCode) : null } : {}),
+        ...(authInput.mapUrl !== undefined ? { mapUrl: authInput.mapUrl ? String(authInput.mapUrl).trim() : null } : {}),
+        ...(authInput.latitude !== undefined ? { latitude: Number.isFinite(Number(authInput.latitude)) ? Number(authInput.latitude) : null } : {}),
+        ...(authInput.longitude !== undefined ? { longitude: Number.isFinite(Number(authInput.longitude)) ? Number(authInput.longitude) : null } : {}),
+        ...(authInput.officeAddress !== undefined ? { officeAddress: authInput.officeAddress ? String(authInput.officeAddress).trim() : null } : {}),
       };
     }
 
