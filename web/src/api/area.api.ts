@@ -30,6 +30,7 @@ export async function fetchAreaBoundary(params: {
   name?: string;
   province?: string;
   district?: string;
+  level?: 'PROVINCE' | 'DISTRICT' | 'WARD';
 }): Promise<{
   success: boolean;
   data: {
@@ -49,6 +50,7 @@ export async function fetchAreaBoundary(params: {
     if (params.name) q.append('name', params.name);
     if (params.province) q.append('province', params.province);
     if (params.district) q.append('district', params.district);
+    if (params.level) q.append('level', params.level);
 
     const res = await fetchWithAuth<any>(`/administrative-areas/boundary?${q.toString()}`, {
       method: 'GET',
