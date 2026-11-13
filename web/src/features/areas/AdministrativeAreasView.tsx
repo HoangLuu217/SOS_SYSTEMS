@@ -4,7 +4,7 @@ import {
   Search,
   CheckCircle2,
   MapPin,
-  RefreshCw,
+  X,
   UserCheck,
   UserX,
   Loader2,
@@ -154,17 +154,17 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
                 Phường / Xã Trực Thuộc: {DA_NANG_PROVINCE_NAME} ({filteredSubUnits.length}/{subUnits.length} địa bàn)
               </span>
             </div>
-            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '4px',
                   color: '#0369a1',
-                  background: '#e0f2fe',
+                  background: '#f0f9ff',
                   border: '1px solid #bae6fd',
-                  padding: '1px 8px',
-                  borderRadius: '999px',
+                  padding: '2px 8px',
+                  borderRadius: '6px',
                   fontSize: '11px',
                   fontWeight: 700,
                 }}
@@ -176,109 +176,92 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className={`sos-btn-filter-pill ${subUnitManagerFilter === 'ALL' && subUnitTypeFilter === 'ALL' ? 'active' : ''}`}
-                onClick={() => {
-                  setSubUnitManagerFilter('ALL');
-                  setSubUnitTypeFilter('ALL');
-                }}
-              >
-                Tất cả ({stats.total})
-              </button>
-              <button
-                type="button"
-                className={`sos-btn-filter-pill ${subUnitManagerFilter === 'MANAGED' ? 'active-green' : ''}`}
-                onClick={() =>
-                  setSubUnitManagerFilter(subUnitManagerFilter === 'MANAGED' ? 'ALL' : 'MANAGED')
-                }
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-              >
-                <UserCheck size={13} />
-                <span>Đã có cán bộ ({stats.managedCount})</span>
-              </button>
-              <button
-                type="button"
-                className={`sos-btn-filter-pill ${subUnitManagerFilter === 'UNMANAGED' ? 'active-red' : ''}`}
-                onClick={() =>
-                  setSubUnitManagerFilter(subUnitManagerFilter === 'UNMANAGED' ? 'ALL' : 'UNMANAGED')
-                }
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-              >
-                <UserX size={13} />
-                <span>Chưa phân công ({stats.unmanagedCount})</span>
-              </button>
-              <button
-                type="button"
-                className={`sos-btn-filter-pill ${subUnitTypeFilter === 'WARD' ? 'active-blue' : ''}`}
-                onClick={() => setSubUnitTypeFilter(subUnitTypeFilter === 'WARD' ? 'ALL' : 'WARD')}
-              >
-                Phường ({stats.wardCount})
-              </button>
-              <button
-                type="button"
-                className={`sos-btn-filter-pill ${subUnitTypeFilter === 'COMMUNE' ? 'active-blue' : ''}`}
-                onClick={() =>
-                  setSubUnitTypeFilter(subUnitTypeFilter === 'COMMUNE' ? 'ALL' : 'COMMUNE')
-                }
-              >
-                Xã ({stats.communeCount})
-              </button>
-              {stats.specialCount > 0 && (
+          <div className="areas-filters-row">
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div className="areas-triage-group">
                 <button
                   type="button"
-                  className={`sos-btn-filter-pill ${subUnitTypeFilter === 'SPECIAL' ? 'active-yellow' : ''}`}
+                  className={`areas-triage-btn ${subUnitManagerFilter === 'ALL' && subUnitTypeFilter === 'ALL' ? 'active' : ''}`}
+                  onClick={() => {
+                    setSubUnitManagerFilter('ALL');
+                    setSubUnitTypeFilter('ALL');
+                  }}
+                >
+                  Tất cả ({stats.total})
+                </button>
+                <button
+                  type="button"
+                  className={`areas-triage-btn ${subUnitManagerFilter === 'MANAGED' ? 'active' : ''}`}
                   onClick={() =>
-                    setSubUnitTypeFilter(subUnitTypeFilter === 'SPECIAL' ? 'ALL' : 'SPECIAL')
+                    setSubUnitManagerFilter(subUnitManagerFilter === 'MANAGED' ? 'ALL' : 'MANAGED')
                   }
                 >
-                  Đặc khu / Khác ({stats.specialCount})
+                  <UserCheck size={13} />
+                  <span>Đã có cán bộ ({stats.managedCount})</span>
                 </button>
-              )}
+                <button
+                  type="button"
+                  className={`areas-triage-btn ${subUnitManagerFilter === 'UNMANAGED' ? 'active' : ''}`}
+                  onClick={() =>
+                    setSubUnitManagerFilter(subUnitManagerFilter === 'UNMANAGED' ? 'ALL' : 'UNMANAGED')
+                  }
+                >
+                  <UserX size={13} />
+                  <span>Chưa phân công ({stats.unmanagedCount})</span>
+                </button>
+              </div>
+
+              <div className="areas-triage-group">
+                <button
+                  type="button"
+                  className={`areas-triage-btn ${subUnitTypeFilter === 'WARD' ? 'active' : ''}`}
+                  onClick={() => setSubUnitTypeFilter(subUnitTypeFilter === 'WARD' ? 'ALL' : 'WARD')}
+                >
+                  Phường ({stats.wardCount})
+                </button>
+                <button
+                  type="button"
+                  className={`areas-triage-btn ${subUnitTypeFilter === 'COMMUNE' ? 'active' : ''}`}
+                  onClick={() =>
+                    setSubUnitTypeFilter(subUnitTypeFilter === 'COMMUNE' ? 'ALL' : 'COMMUNE')
+                  }
+                >
+                  Xã ({stats.communeCount})
+                </button>
+                {stats.specialCount > 0 && (
+                  <button
+                    type="button"
+                    className={`areas-triage-btn ${subUnitTypeFilter === 'SPECIAL' ? 'active' : ''}`}
+                    onClick={() =>
+                      setSubUnitTypeFilter(subUnitTypeFilter === 'SPECIAL' ? 'ALL' : 'SPECIAL')
+                    }
+                  >
+                    Đặc khu / Khác ({stats.specialCount})
+                  </button>
+                )}
+              </div>
             </div>
 
-            <div style={{ position: 'relative' }}>
-              <Search
-                size={14}
-                style={{
-                  position: 'absolute',
-                  left: 10,
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: '#64748b',
-                }}
-              />
+            <div className="areas-search-wrap">
+              <Search size={15} className="areas-search-icon" />
               <input
                 type="text"
+                className="areas-search-input"
                 placeholder="Tìm phường, xã hoặc cán bộ phụ trách..."
                 value={subUnitSearchQuery}
                 onChange={(e) => setSubUnitSearchQuery(e.target.value)}
-                style={{
-                  padding: '7px 14px 7px 32px',
-                  borderRadius: '20px',
-                  fontSize: '12.5px',
-                  border: '1px solid #cbd5e1',
-                  background: '#ffffff',
-                  color: '#0f172a',
-                  outline: 'none',
-                  minWidth: '250px',
-                }}
               />
+              {subUnitSearchQuery && (
+                <button
+                  type="button"
+                  className="areas-clear-search-btn"
+                  onClick={() => setSubUnitSearchQuery('')}
+                  title="Xóa tìm kiếm"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
-
-            <button
-              type="button"
-              className="sos-btn-refresh"
-              onClick={loadDaNangAreas}
-              disabled={subUnitsLoading}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 12px', borderRadius: '8px' }}
-              title="Làm mới danh sách địa bàn Đà Nẵng"
-            >
-              <RefreshCw size={14} className={subUnitsLoading ? 'animate-spin' : ''} />
-              <span>Làm mới</span>
-            </button>
           </div>
         </div>
 
@@ -352,7 +335,7 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
                       <td style={{ textAlign: 'center' }}>
                         <span
                           className={`sos-badge ${typeBadgeClass}`}
-                          style={{ fontSize: '11.5px', padding: '3px 10px', fontWeight: 600, whiteSpace: 'nowrap' }}
+                          style={{ fontSize: '11.5px', padding: '3px 10px', fontWeight: 600, whiteSpace: 'nowrap', borderRadius: '6px' }}
                         >
                           {typeLabel}
                         </span>
@@ -437,18 +420,19 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '5px',
-                            fontSize: '11.5px',
+                            gap: '5.5px',
+                            fontSize: '11px',
                             fontWeight: 600,
-                            color: '#16a34a',
+                            color: '#15803d',
                             background: '#f0fdf4',
                             border: '1px solid #bbf7d0',
-                            padding: '3px 8px',
-                            borderRadius: '12px',
+                            padding: '4px 9px',
+                            borderRadius: '6px',
                             whiteSpace: 'nowrap',
+                            letterSpacing: '0.2px',
                           }}
                         >
-                          <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#16a34a' }} />
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a' }} />
                           HOẠT ĐỘNG
                         </span>
                       </td>

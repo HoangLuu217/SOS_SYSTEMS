@@ -3,8 +3,6 @@ import { MapContainer, TileLayer, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import {
-  Map as MapIcon,
-  Layers,
   Plus,
   Minus,
   RotateCcw,
@@ -33,6 +31,7 @@ import {
   AdminMapContent,
   getAdminSosStatusMeta,
   mapBackendSosForAdmin,
+  resolveSosWard,
   type AdminSosItem,
   type AdminSosFilterMode,
 } from './AdminMapLayers';
@@ -44,17 +43,54 @@ interface Props {
   embedded?: boolean;
 }
 
-// Controller component điều khiển Leaflet map
-const MapController = ({ onMount }: { onMount?: (map: L.Map) => void }) => {
+const FALLBACK_DANANG_BOUNDS: L.LatLngBoundsExpression = [
+  [14.94, 107.18],
+  [16.25, 108.78],
+];
+
+// Controller component điều khiển Leaflet map và khóa phạm vi zoom/kéo trong khu vực Đà Nẵng
+const MapController = ({
+  onMount,
+  boundaryArea,
+}: {
+  onMount?: (map: L.Map) => void;
+  boundaryArea: AdministrativeArea | null;
+}) => {
   const map = useMap();
+
+  const applyDanangBoundsLock = useCallback(() => {
+    const rings = extractPolygonLatLngRings(boundaryArea?.boundary);
+    const points = rings.flat();
+    const coreBounds =
+      points.length >= 3 ? L.latLngBounds(points) : L.latLngBounds(FALLBACK_DANANG_BOUNDS);
+    // Đệm nhẹ 5% quanh ranh giới để không bị cắt mất nhãn/ghim ở sát mép Đà Nẵng
+    const lockedBounds = coreBounds.pad(0.05);
+
+    map.options.maxBoundsViscosity = 1.0;
+    map.setMaxBounds(lockedBounds);
+
+    const fitZoom = map.getBoundsZoom(coreBounds, false, L.point(24, 24));
+    const minZoom = Number.isFinite(fitZoom) ? Math.max(9, fitZoom) : 9.5;
+    map.setMinZoom(minZoom);
+
+    if (map.getZoom() < minZoom) {
+      map.setZoom(minZoom);
+    }
+  }, [map, boundaryArea]);
 
   useEffect(() => {
     if (onMount) onMount(map);
     const timer = setTimeout(() => {
       map.invalidateSize();
+      applyDanangBoundsLock();
     }, 150);
-    return () => clearTimeout(timer);
-  }, [map, onMount]);
+
+    map.on('resize', applyDanangBoundsLock);
+    return () => {
+      clearTimeout(timer);
+      map.off('resize', applyDanangBoundsLock);
+    };
+  }, [map, onMount, applyDanangBoundsLock]);
 
   return null;
 };
@@ -62,7 +98,7 @@ const MapController = ({ onMount }: { onMount?: (map: L.Map) => void }) => {
 const TARGET_PROVINCE_NAME = 'Thành phố Đà Nẵng';
 
 export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Props) => {
-  const { theme, mapMode, setMapMode } = useApp();
+  const { theme, mapMode } = useApp();
   const mapRef = useRef<L.Map | null>(null);
 
   const defaultCenter: [number, number] = [16.0544, 108.2022];
@@ -72,13 +108,37 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
     getCachedProvinceBoundarySync(TARGET_PROVINCE_NAME)
   );
   const [wardAreas, setWardAreas] = useState<AdministrativeArea[]>([]);
+  const [selectedWardId, setSelectedWardId] = useState<string | null>(null);
   const [showWardBoundaries, setShowWardBoundaries] = useState(false);
   const [wardsLoading, setWardsLoading] = useState(false);
 
   const [rawSosList, setRawSosList] = useState<SosRequestItem[]>([]);
-  const [filterMode, setFilterMode] = useState<AdminSosFilterMode>('ALL');
+  const [filterMode, setFilterMode] = useState<AdminSosFilterMode>('ACTIVE');
   const [selectedSosId, setSelectedSosId] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState<{ lat: number; lng: number; seq: number } | null>(null);
+
+  const loadDaNangWards = useCallback(async () => {
+    setWardsLoading(true);
+    try {
+      const rawWards = await fetchGeoapifyBoundaries();
+      const mainlandWards = rawWards
+        .filter((w) => {
+          const name = (w.name || '').trim();
+          if (!name) return false;
+          if (w.id === 'area-hs' || /hoàng\s*sa/i.test(name)) return false;
+          if (/mở\s*rộng|lân\s*cận|geoapify/i.test(name)) return false;
+          if (/^(thành\s*phố\s*|tp\.?\s*)?đà\s*nẵng$/i.test(name)) return false;
+          if (/^(quận|huyện|thị\s*xã)\s+/i.test(name)) return false;
+          return /^(phường|xã|thị\s*trấn)\s+/i.test(name);
+        })
+        .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+      setWardAreas(mainlandWards);
+    } catch (err) {
+      console.warn('Không thể tải ranh giới xã/phường từ API:', err);
+    } finally {
+      setWardsLoading(false);
+    }
+  }, []);
 
   const loadAreaSos = useCallback(async () => {
     try {
@@ -91,7 +151,7 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
     }
   }, []);
 
-  // Tải boundary khu vực mục tiêu trực tiếp từ API & danh sách SOS ban đầu
+  // Tải boundary khu vực mục tiêu, danh sách xã/phường Đà Nẵng & danh sách SOS ban đầu
   useEffect(() => {
     let mounted = true;
     if (!boundaryArea?.boundary) {
@@ -103,10 +163,11 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
         });
     }
     loadAreaSos();
+    loadDaNangWards();
     return () => {
       mounted = false;
     };
-  }, [loadAreaSos, boundaryArea?.boundary]);
+  }, [loadAreaSos, loadDaNangWards, boundaryArea?.boundary]);
 
   // Đồng bộ dữ liệu SOS thời gian thực qua Socket.IO (chỉ xem)
   useEffect(() => {
@@ -126,17 +187,9 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
     const nextState = !showWardBoundaries;
     setShowWardBoundaries(nextState);
     if (nextState && wardAreas.length === 0 && !wardsLoading) {
-      try {
-        setWardsLoading(true);
-        const wards = await fetchGeoapifyBoundaries();
-        setWardAreas(wards);
-      } catch (err) {
-        console.warn('Không thể tải ranh giới xã/phường từ API:', err);
-      } finally {
-        setWardsLoading(false);
-      }
+      await loadDaNangWards();
     }
-  }, [showWardBoundaries, wardAreas.length, wardsLoading]);
+  }, [showWardBoundaries, wardAreas.length, wardsLoading, loadDaNangWards]);
 
   const effectiveScopeArea = useMemo<AdministrativeArea>(
     () =>
@@ -155,33 +208,71 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
     [rawSosList, effectiveScopeArea]
   );
 
+  const selectedWard = useMemo(
+    () => (selectedWardId ? wardAreas.find((w) => w.id === selectedWardId) || null : null),
+    [wardAreas, selectedWardId]
+  );
+
+  // Ánh xạ 1-1 mỗi SOS -> 1 xã/phường duy nhất để bộ đếm dropdown và danh sách lọc luôn khớp nhau
+  const sosWardIdMap = useMemo(() => {
+    const mapping = new Map<string, string>();
+    if (wardAreas.length === 0 || areaSosList.length === 0) return mapping;
+
+    for (const sos of areaSosList) {
+      const matchedWard = resolveSosWard(sos, wardAreas);
+      if (matchedWard) {
+        mapping.set(sos.id, matchedWard.id);
+      }
+    }
+    return mapping;
+  }, [wardAreas, areaSosList]);
+
+  // Đếm số SOS theo từng xã/phường để hiển thị nhanh trong bộ lọc
+  const wardSosCountMap = useMemo(() => {
+    const mapCounts: Record<string, number> = {};
+    sosWardIdMap.forEach((wardId) => {
+      mapCounts[wardId] = (mapCounts[wardId] || 0) + 1;
+    });
+    return mapCounts;
+  }, [sosWardIdMap]);
+
+  const scopedSosList = useMemo(() => {
+    if (!selectedWard) return areaSosList;
+    return areaSosList.filter((s) => sosWardIdMap.get(s.id) === selectedWard.id);
+  }, [areaSosList, selectedWard, sosWardIdMap]);
+
   const counts = useMemo(() => {
     let active = 0;
     let completed = 0;
     let cancelled = 0;
-    for (const s of areaSosList) {
+    for (const s of scopedSosList) {
       const grp = getAdminSosStatusMeta(s.status).group;
       if (grp === 'COMPLETED') completed += 1;
       else if (grp === 'CANCELLED') cancelled += 1;
       else active += 1;
     }
     return {
-      all: areaSosList.length,
+      all: scopedSosList.length,
       active,
       completed,
       cancelled,
     };
-  }, [areaSosList]);
+  }, [scopedSosList]);
 
   const filteredSosList = useMemo(() => {
-    if (filterMode === 'ALL') return areaSosList;
-    return areaSosList.filter((s) => getAdminSosStatusMeta(s.status).group === filterMode);
-  }, [areaSosList, filterMode]);
+    if (filterMode === 'ALL') return scopedSosList;
+    return scopedSosList.filter((s) => getAdminSosStatusMeta(s.status).group === filterMode);
+  }, [scopedSosList, filterMode]);
 
   const selectedSos = useMemo(
-    () => areaSosList.find((s) => s.id === selectedSosId) || null,
-    [areaSosList, selectedSosId]
+    () => scopedSosList.find((s) => s.id === selectedSosId) || null,
+    [scopedSosList, selectedSosId]
   );
+
+  const handleSelectWard = useCallback((wardId: string | null) => {
+    setSelectedWardId(wardId);
+    setSelectedSosId(null);
+  }, []);
 
   const handleSelectSos = useCallback((sos: AdminSosItem | null) => {
     setSelectedSosId(sos ? sos.id : null);
@@ -205,10 +296,14 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
 
   const handleReset = () => {
     if (!mapRef.current) return;
-    const rings = extractPolygonLatLngRings(boundaryArea?.boundary);
+    const targetBoundary = selectedWard?.boundary || boundaryArea?.boundary;
+    const rings = extractPolygonLatLngRings(targetBoundary);
     const points = rings.flat();
     if (points.length >= 3) {
-      mapRef.current.fitBounds(L.latLngBounds(points), { padding: [32, 32], maxZoom: 12 });
+      mapRef.current.fitBounds(L.latLngBounds(points), {
+        padding: selectedWard ? [56, 56] : [32, 32],
+        maxZoom: selectedWard ? 15 : 12,
+      });
     } else {
       mapRef.current.flyTo(defaultCenter, defaultZoom, { duration: 0.8 });
     }
@@ -247,7 +342,7 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
 
         <AdminMapHud
           targetAreaName={TARGET_PROVINCE_NAME}
-          totalInArea={areaSosList.length}
+          totalInArea={scopedSosList.length}
           counts={counts}
           filterMode={filterMode}
           onFilterModeChange={setFilterMode}
@@ -258,109 +353,72 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
           showWardBoundaries={showWardBoundaries}
           onToggleWardBoundaries={handleToggleWardBoundaries}
           wardsLoading={wardsLoading}
+          wardAreas={wardAreas}
+          selectedWard={selectedWard}
+          onSelectWard={handleSelectWard}
+          wardSosCountMap={wardSosCountMap}
         />
 
-        {/* Chuyển đổi chế độ Đường phố / Vệ tinh - Nổi trực tiếp trên bản đồ */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 16,
-            right: 16,
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            background: theme === 'dark' ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(8px)',
-            border: '1px solid var(--sos-border)',
-            borderRadius: 8,
-            padding: 3,
-            gap: 3,
-            boxShadow: '0 4px 16px rgba(15, 23, 42, 0.15), 0 1px 3px rgba(0, 0, 0, 0.05)',
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setMapMode('street')}
+        {/* Ẩn bộ chuyển đổi Đường phố / Vệ tinh; chỉ hiện thanh nổi góc phải khi ở chế độ độc lập */}
+        {!embedded && (onSwitchToAuthor || onLogout) && (
+          <div
             style={{
+              position: 'absolute',
+              top: 16,
+              right: 16,
+              zIndex: 1000,
               display: 'flex',
               alignItems: 'center',
-              gap: 5,
-              padding: '5px 12px',
-              borderRadius: 6,
-              border: 'none',
-              background: mapMode === 'street' ? (theme === 'dark' ? '#334155' : '#0f172a') : 'transparent',
-              color: mapMode === 'street' ? '#ffffff' : 'var(--sos-text-secondary)',
-              fontWeight: 600,
-              fontSize: 12,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
+              background: theme === 'dark' ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(8px)',
+              border: '1px solid var(--sos-border)',
+              borderRadius: 8,
+              padding: 3,
+              gap: 3,
+              boxShadow: '0 4px 16px rgba(15, 23, 42, 0.15), 0 1px 3px rgba(0, 0, 0, 0.05)',
             }}
           >
-            <MapIcon size={13} />
-            <span>Đường phố</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setMapMode('satellite')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-              padding: '5px 12px',
-              borderRadius: 6,
-              border: 'none',
-              background: mapMode === 'satellite' ? (theme === 'dark' ? '#334155' : '#0f172a') : 'transparent',
-              color: mapMode === 'satellite' ? '#ffffff' : 'var(--sos-text-secondary)',
-              fontWeight: 600,
-              fontSize: 12,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <Layers size={13} />
-            <span>Vệ tinh</span>
-          </button>
+            {onSwitchToAuthor && (
+              <button
+                type="button"
+                onClick={onSwitchToAuthor}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  background: 'rgba(220, 38, 38, 0.08)',
+                  border: '1px solid rgba(220, 38, 38, 0.3)',
+                  color: '#dc2626',
+                  borderRadius: 6,
+                  padding: '5px 10px',
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <span>🛡️ Cổng Địa Phương</span>
+                <ExternalLink size={12} />
+              </button>
+            )}
 
-          {!embedded && onSwitchToAuthor && (
-            <button
-              type="button"
-              onClick={onSwitchToAuthor}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-                background: 'rgba(220, 38, 38, 0.08)',
-                border: '1px solid rgba(220, 38, 38, 0.3)',
-                color: '#dc2626',
-                borderRadius: 6,
-                padding: '5px 10px',
-                fontSize: 11.5,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <span>🛡️ Cổng Địa Phương</span>
-              <ExternalLink size={12} />
-            </button>
-          )}
-
-          {!embedded && onLogout && (
-            <button
-              type="button"
-              onClick={onLogout}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--sos-text-muted)',
-                cursor: 'pointer',
-                padding: 6,
-              }}
-              title="Đăng xuất"
-            >
-              <LogOut size={16} />
-            </button>
-          )}
-        </div>
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--sos-text-muted)',
+                  cursor: 'pointer',
+                  padding: 6,
+                }}
+                title="Đăng xuất"
+              >
+                <LogOut size={16} />
+              </button>
+            )}
+          </div>
+        )}
         <style>{`
           .leaflet-container {
             width: 100% !important;
@@ -434,7 +492,7 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
               cursor: 'pointer',
               color: '#334155',
             }}
-            title="Đưa về trung tâm bản đồ tác chiến Toàn quốc"
+            title="Đưa về toàn cảnh bản đồ Đà Nẵng"
           >
             <RotateCcw size={15} />
           </button>
@@ -443,6 +501,12 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
         <MapContainer
           center={defaultCenter}
           zoom={defaultZoom}
+          minZoom={9}
+          maxZoom={20}
+          zoomSnap={0.5}
+          zoomDelta={0.5}
+          maxBounds={FALLBACK_DANANG_BOUNDS}
+          maxBoundsViscosity={1.0}
           preferCanvas={true}
           zoomControl={false}
           attributionControl={false}
@@ -456,6 +520,7 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
             maxZoom={20}
           />
           <MapController
+            boundaryArea={boundaryArea}
             onMount={(m) => {
               mapRef.current = m;
             }}
@@ -463,6 +528,7 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
           <AdminMapContent
             boundaryArea={boundaryArea}
             wardAreas={wardAreas}
+            selectedWard={selectedWard}
             showWardBoundaries={showWardBoundaries}
             sosList={filteredSosList}
             selectedSos={selectedSos}
