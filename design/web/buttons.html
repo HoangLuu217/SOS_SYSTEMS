@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SosSystem Web — Bộ Mẫu Tất Cả Các Nút (Button Design System)</title>
+  <title>SosSystem Web — Bộ Mẫu UI: Nút Bấm, Bảng, Form Google Maps &amp; Bản Đồ</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <!-- =========================================================================
        1. PRODUCTION DESIGN SYSTEM CSS (COPY TRỰC TIẾP VÀO web/src/index.css)
@@ -339,6 +341,290 @@
       color: var(--sos-text-primary);
       box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
     }
+
+    /* ==================== FORM GOOGLE MAPS (.sos-map-picker) ==================== */
+    .sos-form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .sos-form-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--sos-text-primary);
+    }
+
+    .sos-form-req {
+      color: var(--sos-emergency);
+      margin-left: 2px;
+    }
+
+    .sos-form-control {
+      width: 100%;
+      height: 36px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 1px solid var(--sos-control-border);
+      background: var(--sos-surface);
+      color: var(--sos-text-primary);
+      font-family: var(--sos-font-sans);
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .sos-form-control:focus {
+      border-color: var(--sos-primary);
+      box-shadow: 0 0 0 3px var(--sos-ring);
+    }
+
+    .sos-form-control.is-error {
+      border-color: var(--sos-emergency);
+    }
+
+    .sos-form-error {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11.5px;
+      font-weight: 500;
+      color: var(--sos-danger-text);
+    }
+
+    .sos-map-picker {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .sos-map-picker-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .sos-map-picker-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--sos-text-primary);
+    }
+
+    .sos-map-picker-search-wrap {
+      position: relative;
+    }
+
+    .sos-map-picker-search-row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .sos-map-picker-input-box {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 36px;
+      padding: 0 10px;
+      border-radius: 8px;
+      border: 1px solid var(--sos-control-border);
+      background: var(--sos-surface-muted);
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .sos-map-picker-input-box:focus-within {
+      background: var(--sos-surface);
+      border-color: var(--sos-primary);
+      box-shadow: 0 0 0 3px var(--sos-ring);
+    }
+
+    .sos-map-picker-input {
+      width: 100%;
+      border: none;
+      outline: none;
+      background: transparent;
+      font-family: var(--sos-font-sans);
+      font-size: 12.5px;
+      color: var(--sos-text-primary);
+    }
+
+    .sos-map-picker-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      max-height: 220px;
+      overflow-y: auto;
+      background: var(--sos-surface);
+      border: 1px solid var(--sos-control-border);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+      z-index: 9999;
+    }
+
+    .sos-map-picker-canvas {
+      position: relative;
+      width: 100%;
+      height: 250px;
+      border-radius: 10px;
+      border: 1px solid var(--sos-control-border);
+      background: var(--sos-surface-muted);
+      overflow: hidden;
+    }
+
+    .sos-map-picker-canvas.is-error {
+      border: 1.5px solid var(--sos-emergency);
+    }
+
+    .sos-map-picker-summary {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--sos-border);
+      background: var(--sos-surface-muted);
+      font-size: 12px;
+      color: var(--sos-text-secondary);
+    }
+
+    .sos-map-picker-coords {
+      font-family: var(--sos-font-mono);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--sos-text-primary);
+    }
+
+    .sos-map-picker-gmap-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--sos-primary);
+      text-decoration: none;
+    }
+    [data-theme="dark"] .sos-map-picker-gmap-link { color: #38bdf8; }
+    .sos-map-picker-gmap-link:hover { text-decoration: underline; }
+
+    /* ==================== MAP SYSTEM OVERLAYS (.sos-map-*) ==================== */
+    .sos-map-shell {
+      position: relative;
+      width: 100%;
+      height: 480px;
+      border-radius: 12px;
+      border: 1px solid var(--sos-border);
+      overflow: hidden;
+      background: var(--sos-surface-muted);
+    }
+
+    .sos-map-hud-panel {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 1000;
+      max-width: calc(100% - 260px);
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--sos-border);
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    [data-theme="dark"] .sos-map-hud-panel {
+      background: rgba(15, 23, 42, 0.92);
+    }
+
+    .sos-map-layer-bar {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      z-index: 1000;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--sos-border);
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.15);
+    }
+    [data-theme="dark"] .sos-map-layer-bar {
+      background: rgba(15, 23, 42, 0.9);
+    }
+
+    .sos-map-zoom-cluster {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--sos-border);
+      border-radius: 8px;
+      background: var(--sos-surface);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+      overflow: hidden;
+    }
+
+    .sos-map-zoom-btn {
+      width: 36px;
+      height: 36px;
+      border: none;
+      background: transparent;
+      color: var(--sos-text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    .sos-map-zoom-btn:hover {
+      background: var(--sos-surface-muted);
+      color: var(--sos-text-primary);
+    }
+
+    .sos-map-zoom-btn + .sos-map-zoom-btn {
+      border-top: 1px solid var(--sos-border);
+    }
+
+    .sos-map-coords-hud {
+      position: absolute;
+      bottom: 20px;
+      left: 16px;
+      z-index: 1000;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--sos-border);
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(6px);
+      font-family: var(--sos-font-mono);
+      font-size: 11px;
+      color: var(--sos-text-secondary);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+    }
+    [data-theme="dark"] .sos-map-coords-hud {
+      background: rgba(15, 23, 42, 0.92);
+    }
+
+    @keyframes sos-radar-pulse {
+      0% { transform: scale(0.65); opacity: 0.9; }
+      75% { transform: scale(1.65); opacity: 0; }
+      100% { transform: scale(1.85); opacity: 0; }
+    }
   </style>
 
   <!-- =========================================================================
@@ -652,6 +938,153 @@
     @media (max-width: 900px) {
       .two-col { grid-template-columns: 1fr; }
       .matrix-row { grid-template-columns: 1fr; gap: 8px; }
+      .sos-map-hud-panel { max-width: calc(100% - 32px); }
+      .sos-map-layer-bar { top: auto; bottom: 20px; left: 16px; right: 72px; }
+      .sos-map-coords-hud { display: none; }
+    }
+
+    /* Showcase additions for Google Map Form & Tactical Map */
+    .form-modal-shell {
+      border: 1px solid var(--sos-border);
+      border-radius: 12px;
+      background: var(--sos-bg);
+      overflow: hidden;
+    }
+
+    .form-modal-head {
+      padding: 12px 16px;
+      background: var(--sos-surface);
+      border-bottom: 1px solid var(--sos-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .form-modal-body {
+      padding: 16px;
+      display: grid;
+      grid-template-columns: 1fr 1.08fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .form-modal-foot {
+      padding: 12px 16px;
+      background: var(--sos-surface);
+      border-top: 1px solid var(--sos-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .pin-legend-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+    }
+
+    .pin-legend-item {
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid var(--sos-border);
+      background: var(--sos-bg);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .map-canvas-live {
+      width: 100%;
+      height: 100%;
+      background-image:
+        linear-gradient(to right, var(--sos-border) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--sos-border) 1px, transparent 1px);
+      background-size: 28px 28px;
+    }
+
+    [data-theme="dark"] .map-canvas-live .leaflet-tile-pane {
+      filter: brightness(0.82) contrast(1.06);
+    }
+
+    .leaflet-container {
+      font-family: var(--sos-font-sans) !important;
+      z-index: 1;
+    }
+
+    .leaflet-popup-content-wrapper {
+      background: var(--sos-surface) !important;
+      color: var(--sos-text-primary) !important;
+      border: 1px solid var(--sos-border) !important;
+      border-radius: 8px !important;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18) !important;
+    }
+
+    .leaflet-popup-tip {
+      background: var(--sos-surface) !important;
+    }
+
+    .sos-map-picker-dropdown-item {
+      padding: 9px 12px;
+      font-size: 12px;
+      border-bottom: 1px solid var(--sos-border);
+      cursor: pointer;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      color: var(--sos-text-primary);
+    }
+
+    .sos-map-picker-dropdown-item:hover {
+      background: var(--sos-surface-muted);
+    }
+
+    .sos-map-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 28px;
+      padding: 0 10px;
+      border-radius: 9999px;
+      border: 1px solid var(--sos-control-border);
+      background: var(--sos-surface);
+      color: var(--sos-text-secondary);
+      font-family: var(--sos-font-sans);
+      font-size: 11.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .sos-map-chip.is-active {
+      background: var(--sos-text-primary);
+      border-color: var(--sos-text-primary);
+      color: var(--sos-surface);
+    }
+
+    .sos-chip-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+    }
+
+    .sos-hud-select {
+      height: 30px;
+      padding: 0 10px;
+      border-radius: 8px;
+      border: 1px solid var(--sos-control-border);
+      background: var(--sos-surface);
+      color: var(--sos-text-primary);
+      font-family: var(--sos-font-sans);
+      font-size: 11.5px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    @media (max-width: 900px) {
+      .form-modal-body { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -660,9 +1093,9 @@
     <!-- Top Sticky Bar -->
     <header class="topbar">
       <div>
-        <h1 class="topbar-title">SosSystem Web — Bộ Mẫu Tất Cả Các Nút (Button Design System)</h1>
+        <h1 class="topbar-title">SosSystem Web — Bộ Mẫu UI: Nút Bấm, Bảng, Form Google Maps &amp; Bản Đồ</h1>
         <p class="topbar-desc">
-          Đồng bộ theo quy chuẩn trong <a href="design.md">design/web/design.md</a>. Bấm vào bất kỳ nút nào bên dưới để lấy code HTML &amp; quy tắc dùng lại.
+          Đồng bộ theo quy chuẩn trong <a href="design.md">design/web/design.md</a>. Bấm vào bất kỳ nút nào bên dưới để lấy code HTML, thử Form Google Maps và tương tác Bản đồ điều hành.
         </p>
       </div>
       <div class="topbar-controls">
@@ -1003,6 +1436,246 @@
           </div>
         </div>
       </section>
+
+      <!-- 6. Form Google Maps (LocationSearchMapPicker trong Modal 2 cột) -->
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">6. Form Google Maps Chọn Tọa Độ (<code>LocationSearchMapPicker</code> — Mục 7.2)</h2>
+            <p class="card-subtitle">Hỗ trợ dán link Google Maps (<code>/@lat,lng</code>, <code>?q=</code>, <code>!3d!4d</code>, tọa độ DMS/thập phân), định vị GPS, kéo-thả ghim &amp; mở nhanh Google Maps</p>
+          </div>
+          <div class="btn-wrap">
+            <span class="mono-tag">.sos-map-picker</span>
+            <button type="button" id="togglePickerErrorBtn" class="sos-btn sos-btn--outline sos-btn--xs" data-sample="Trạng thái Validate lỗi trên Form Google Maps (.is-error)">Thử lỗi Validate</button>
+          </div>
+        </div>
+
+        <div class="form-modal-shell">
+          <div class="form-modal-head">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="sos-badge active" id="formModalAccentBadge">Điểm trú ẩn</span>
+              <strong style="font-size: 14px;">Biểu mẫu Modal 2 cột chuẩn (.executive-modal-card)</strong>
+            </div>
+            <button type="button" class="sos-btn sos-btn--ghost sos-btn--sm sos-btn--icon-sm" title="Đóng Modal" aria-label="Đóng Modal" data-sample="Icon-only SM (32x32): Nút đóng góc phải Modal Header">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+          </div>
+
+          <div class="form-modal-body">
+            <!-- Cột trái: Trường thông tin -->
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <div class="sos-form-group">
+                <label class="sos-form-label" for="demoPointType">Phân loại điểm (đổi màu nhấn &amp; ghim)</label>
+                <select id="demoPointType" class="sos-form-control">
+                  <option value="shelter" selected>Điểm trú ẩn / Sơ tán (#0284c7)</option>
+                  <option value="hazard">Điểm nguy hiểm / Ngập sạt (#dc2626)</option>
+                  <option value="blood">Điểm hiến máu nhân đạo (#e11d48)</option>
+                </select>
+              </div>
+
+              <div class="sos-form-group">
+                <label class="sos-form-label" for="demoPointName">Tên địa điểm <span class="sos-form-req">*</span></label>
+                <input id="demoPointName" type="text" class="sos-form-control" value="Trường Tiểu học Lê Quý Đôn" placeholder="Nhập tên cơ sở / điểm cảnh báo..." />
+              </div>
+
+              <div class="sos-form-group">
+                <label class="sos-form-label" for="demoPointAddress">Địa chỉ thực địa (tự đồng bộ khi chọn ghim)</label>
+                <input id="demoPointAddress" type="text" class="sos-form-control" value="Hải Châu, Thành phố Đà Nẵng" placeholder="Tự động điền từ Reverse Geocode..." />
+              </div>
+
+              <div class="sub-box" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                <span class="sub-box-label">Dán nhanh mẫu Google Maps / Tọa độ vào ô tìm kiếm bên phải:</span>
+                <div class="btn-wrap">
+                  <button type="button" class="sos-btn sos-btn--outline sos-btn--xs" data-gmap-sample="https://www.google.com/maps/place/Cau+Rong/@16.06104,108.22713,17z" data-sample="Nhận diện tự động link Google Maps dạng /@lat,lng">/@16.061, 108.227</button>
+                  <button type="button" class="sos-btn sos-btn--outline sos-btn--xs" data-gmap-sample="https://maps.google.com/?q=16.05441,108.20217" data-sample="Nhận diện tự động link Google Maps dạng ?q=lat,lng">?q=16.054, 108.202</button>
+                  <button type="button" class="sos-btn sos-btn--outline sos-btn--xs" data-gmap-sample="16°04'25.2&quot;N 108°14'18.6&quot;E" data-sample="Nhận diện tự động tọa độ DMS độ-phút-giây">DMS 16°04'25.2"N</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Cột phải: Widget LocationSearchMapPicker -->
+            <div class="sos-map-picker">
+              <div class="sos-map-picker-header">
+                <div class="sos-map-picker-title">
+                  <svg id="pickerAccentIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                  <span>Bản đồ chọn địa điểm &amp; Tìm kiếm tọa độ</span>
+                </div>
+                <button type="button" id="pickerLocateBtn" class="sos-btn sos-btn--outline sos-btn--xs" title="Định vị vị trí hiện tại qua GPS" data-sample="Form Map Picker: Nút định vị GPS hiện tại">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+                  Vị trí của tôi
+                </button>
+              </div>
+
+              <div class="sos-map-picker-search-wrap">
+                <div class="sos-map-picker-search-row">
+                  <div class="sos-map-picker-input-box">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--sos-text-muted); flex-shrink: 0;"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    <input id="pickerSearchInput" type="text" class="sos-map-picker-input" placeholder="Nhập địa chỉ, tọa độ hoặc dán link Google Maps..." />
+                    <button type="button" id="pickerClearBtn" class="sos-btn sos-btn--ghost sos-btn--xs sos-btn--icon-xs" style="display: none; width: 22px; height: 22px;" title="Xóa tìm kiếm" aria-label="Xóa tìm kiếm">×</button>
+                  </div>
+                  <button type="button" id="pickerSearchBtn" class="sos-btn sos-btn--primary sos-btn--md" data-sample="Form Map Picker: Nút Tìm địa chỉ / Giải mã Google Maps">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    Tìm
+                  </button>
+                </div>
+                <div id="pickerFeedback" style="font-size: 11.5px; font-weight: 500; margin-top: 4px; display: none;"></div>
+                <div id="pickerDropdown" class="sos-map-picker-dropdown" style="display: none;"></div>
+              </div>
+
+              <div id="pickerMapCanvas" class="sos-map-picker-canvas map-canvas-live" aria-label="Bản đồ chọn tọa độ"></div>
+
+              <div id="pickerValidationError" class="sos-form-error" style="display: none;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                <span>Vui lòng chọn tọa độ nằm trong phạm vi địa bàn quản lý.</span>
+              </div>
+
+              <div class="sos-map-picker-summary">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                  <span style="font-weight: 600;">Tọa độ chọn:</span>
+                  <span id="pickerCoordsText" class="sos-map-picker-coords">16.057000, 108.217000</span>
+                </div>
+                <div id="pickerAddressText" style="font-size: 11.5px;">📍 Hải Châu, Thành phố Đà Nẵng</div>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px; flex-wrap: wrap;">
+                  <span style="font-size: 11px; color: var(--sos-text-muted);">💡 Bấm hoặc kéo ghim trên bản đồ để chọn chính xác.</span>
+                  <a id="pickerGmapLink" class="sos-map-picker-gmap-link" href="https://www.google.com/maps?q=16.057000,108.217000" target="_blank" rel="noreferrer">
+                    <span>Xem Google Maps</span>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-modal-foot">
+            <span class="mono-tag">STREETS_FULL · iconSize [28,34] · draggable marker</span>
+            <div class="btn-wrap">
+              <button type="button" class="sos-btn sos-btn--outline" data-sample="Modal Form Map: Nút Hủy bên trái">Hủy</button>
+              <button type="button" class="sos-btn sos-btn--primary" data-sample="Modal Form Map: Nút Lưu tọa độ &amp; thông tin">Lưu địa điểm</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 7. Bản Đồ Điều Hành & Tác Chiến (Map System) -->
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">7. Hệ Thống Bản Đồ Điều Hành &amp; Tác Chiến (<code>AdminPortal</code> + <code>TacticalMap</code> — Mục 8)</h2>
+            <p class="card-subtitle">Google Maps <code>STREETS_CLEAN</code> / <code>SATELLITE</code>, Floating HUD lọc khu vực &amp; trạng thái, Layer Trú ẩn/Nguy hiểm, Zoom cluster &amp; Radar Pins</p>
+          </div>
+          <span class="mono-tag">.sos-map-shell / .sos-map-hud-panel</span>
+        </div>
+
+        <!-- Quy chuẩn các loại Marker / Beacon trên Bản đồ -->
+        <div class="pin-legend-grid">
+          <div class="pin-legend-item">
+            <div style="position: relative; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <div style="position: absolute; width: 34px; height: 34px; border-radius: 50%; background: rgba(220, 38, 38, 0.22); border: 1.5px solid #dc2626; animation: sos-radar-pulse 1.6s infinite ease-out;"></div>
+              <div style="position: relative; width: 16px; height: 16px; border-radius: 50%; background: #dc2626; border: 2.5px solid #ffffff; box-shadow: 0 2px 6px rgba(15,23,42,0.4);"></div>
+            </div>
+            <div>
+              <div style="font-weight: 700; font-size: 12.5px;">SOS Radar Pin</div>
+              <div style="font-size: 11.5px; color: var(--sos-text-muted);">Tâm 13–22px, sóng radar 1.6s, pill #SOS ở trên</div>
+            </div>
+          </div>
+
+          <div class="pin-legend-item">
+            <div style="position: relative; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <div style="position: absolute; width: 34px; height: 34px; border-radius: 9px; background: rgba(2, 132, 199, 0.24); border: 1.5px solid #0284c7; animation: sos-radar-pulse 1.6s infinite ease-out;"></div>
+              <div style="position: relative; width: 26px; height: 26px; border-radius: 7px; background: #0284c7; border: 2px solid #ffffff; color: #fff; font-size: 12px; display: flex; align-items: center; justify-content: center;">🚒</div>
+            </div>
+            <div>
+              <div style="font-weight: 700; font-size: 12.5px;">Team Beacon 3 tầng</div>
+              <div style="font-size: 11.5px; color: var(--sos-text-muted);">Biển số #0f172a + pill GPS monospace + xe</div>
+            </div>
+          </div>
+
+          <div class="pin-legend-item">
+            <div style="width: 34px; height: 34px; border-radius: 10px; background: var(--sos-success-soft); border: 1.5px solid var(--sos-success); color: var(--sos-success-text); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
+            </div>
+            <div>
+              <div style="font-weight: 700; font-size: 12.5px;">Điểm Trú ẩn An toàn</div>
+              <div style="font-size: 11.5px; color: var(--sos-text-muted);">Màu #10b981 / #0284c7, bật tắt ở Layer Bar</div>
+            </div>
+          </div>
+
+          <div class="pin-legend-item">
+            <div style="width: 34px; height: 34px; border-radius: 10px; background: var(--sos-danger-soft); border: 1.5px solid var(--sos-emergency); color: var(--sos-danger-text); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+            </div>
+            <div>
+              <div style="font-weight: 700; font-size: 12.5px;">Điểm Nguy hiểm / Ngập</div>
+              <div style="font-size: 11.5px; color: var(--sos-text-muted);">Màu #dc2626 / #d97706, ghim cảnh báo trực quan</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Khung Bản đồ Live kèm đầy đủ HUD & Controls -->
+        <div class="sos-map-shell">
+          <div id="tacticalMapCanvas" class="map-canvas-live" aria-label="Bản đồ điều hành tác chiến"></div>
+
+          <!-- Top-Left Floating HUD -->
+          <div class="sos-map-hud-panel">
+            <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <span style="width: 28px; height: 28px; border-radius: 8px; background: var(--sos-danger-soft); color: var(--sos-emergency); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+              </span>
+              <div>
+                <div style="font-size: 13px; font-weight: 800; line-height: 1.2;">Giám sát SOS — <span id="hudWardTitle">TP Đà Nẵng</span></div>
+                <div style="font-size: 11px; color: var(--sos-text-muted);" id="hudCountSubtitle">4 yêu cầu trên bản đồ</div>
+              </div>
+
+              <select id="hudWardSelect" class="sos-hud-select" title="Lọc và bay tới xã/phường">
+                <option value="ALL">Tất cả xã/phường</option>
+                <option value="HAICHAU">Phường Hải Châu</option>
+                <option value="SONTRA">Quận Sơn Trà</option>
+                <option value="CAMLE">Quận Cẩm Lệ</option>
+              </select>
+
+              <button type="button" id="toggleBoundaryBtn" class="sos-btn sos-btn--soft-primary sos-btn--xs" data-sample="Map HUD: Bật/tắt ranh giới hành chính trên bản đồ">Ranh giới</button>
+            </div>
+
+            <div class="btn-wrap" id="hudStatusChips" style="gap: 6px;">
+              <button type="button" class="sos-map-chip is-active" data-status="ALL" data-sample="Map HUD Chip: Hiển thị toàn bộ ca SOS">
+                <span class="sos-chip-dot" style="background: #0284c7;"></span>Tất cả (4)
+              </button>
+              <button type="button" class="sos-map-chip" data-status="ACTIVE" data-sample="Map HUD Chip: Lọc ca đang mở / xử lý">
+                <span class="sos-chip-dot" style="background: #dc2626;"></span>Đang mở (2)
+              </button>
+              <button type="button" class="sos-map-chip" data-status="COMPLETED" data-sample="Map HUD Chip: Lọc ca đã hoàn thành">
+                <span class="sos-chip-dot" style="background: #16a34a;"></span>Hoàn thành (1)
+              </button>
+              <button type="button" class="sos-map-chip" data-status="CANCELLED" data-sample="Map HUD Chip: Lọc ca đã hủy">
+                <span class="sos-chip-dot" style="background: #64748b;"></span>Đã hủy (1)
+              </button>
+            </div>
+          </div>
+
+          <!-- Top-Right Layer & Mode Bar -->
+          <div class="sos-map-layer-bar">
+            <button type="button" id="layerShelterBtn" class="sos-btn sos-btn--success sos-btn--xs" data-sample="Map Layer Bar: Bật/tắt lớp Điểm trú ẩn (#10b981)">Trú ẩn (2)</button>
+            <button type="button" id="layerHazardBtn" class="sos-btn sos-btn--danger sos-btn--xs" data-sample="Map Layer Bar: Bật/tắt lớp Điểm nguy hiểm (#dc2626)">Nguy hiểm (2)</button>
+            <button type="button" id="layerSatelliteBtn" class="sos-btn sos-btn--outline sos-btn--xs" data-sample="Map Layer Bar: Chuyển Google Maps STREETS_CLEAN / SATELLITE">Vệ tinh</button>
+          </div>
+
+          <!-- Bottom-Left Monospace Coords HUD -->
+          <div class="sos-map-coords-hud">
+            <span>TÂM: <strong id="tacticalCenterText">16.05440, 108.20220</strong></span>
+            <span>|</span>
+            <span id="tacticalZoomText">ZOOM: 13</span>
+            <span>|</span>
+            <span>OSRM ROUTE READY</span>
+          </div>
+
+          <!-- Bottom-Right Zoom & Reset Cluster -->
+          <div class="sos-map-zoom-cluster">
+            <button type="button" id="mapZoomInBtn" class="sos-map-zoom-btn" title="Phóng to" aria-label="Phóng to" data-sample="Map Zoom Cluster: Nút Phóng to (+) 36x36px">+</button>
+            <button type="button" id="mapZoomOutBtn" class="sos-map-zoom-btn" title="Thu nhỏ" aria-label="Thu nhỏ" data-sample="Map Zoom Cluster: Nút Thu nhỏ (-) 36x36px">−</button>
+            <button type="button" id="mapResetBtn" class="sos-map-zoom-btn" title="Đưa về toàn cảnh" aria-label="Đưa về toàn cảnh" data-sample="Map Zoom Cluster: Nút Reset toàn cảnh (↺) 36x36px">↺</button>
+          </div>
+        </div>
+      </section>
     </main>
 
     <!-- Bottom Live Snippet Inspector -->
@@ -1122,6 +1795,481 @@
         var cssText = styleTag ? styleTag.textContent.trim() : '';
         copyWithFeedback(copyAllCssBtn, cssText);
       });
+
+      // ==================== 6. INTERACTIVE FORM GOOGLE MAPS DEMO ====================
+      function parseCoordsFromText(input) {
+        if (!input || typeof input !== 'string') return null;
+        var str = input.trim();
+
+        var dmsMatch = str.match(/(\d{1,2})[°\s]+(\d{1,2})['\s]+([\d.]+)"?\s*([NSns])[\s,]+(\d{1,3})[°\s]+(\d{1,2})['\s]+([\d.]+)"?\s*([EWew])/);
+        if (dmsMatch) {
+          var dLat = parseInt(dmsMatch[1], 10) + parseInt(dmsMatch[2], 10) / 60 + parseFloat(dmsMatch[3]) / 3600;
+          if (dmsMatch[4].toUpperCase() === 'S') dLat = -dLat;
+          var dLng = parseInt(dmsMatch[5], 10) + parseInt(dmsMatch[6], 10) / 60 + parseFloat(dmsMatch[7]) / 3600;
+          if (dmsMatch[8].toUpperCase() === 'W') dLng = -dLng;
+          if (dLat >= -90 && dLat <= 90 && dLng >= -180 && dLng <= 180) {
+            return { lat: Number(dLat.toFixed(5)), lng: Number(dLng.toFixed(5)) };
+          }
+        }
+
+        var atMatch = str.match(/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/);
+        if (atMatch) {
+          var aLat = parseFloat(atMatch[1]);
+          var aLng = parseFloat(atMatch[2]);
+          if (aLat >= -90 && aLat <= 90 && aLng >= -180 && aLng <= 180) return { lat: aLat, lng: aLng };
+        }
+
+        var qMatch = str.match(/[?&](?:q|query|ll|destination|daddr|saddr)=(-?\d{1,2}\.\d+)[,%20\s]+(-?\d{1,3}\.\d+)/i);
+        if (qMatch) {
+          var qLat = parseFloat(qMatch[1]);
+          var qLng = parseFloat(qMatch[2]);
+          if (qLat >= -90 && qLat <= 90 && qLng >= -180 && qLng <= 180) return { lat: qLat, lng: qLng };
+        }
+
+        var rawMatch = str.match(/(-?\d{1,3}\.\d{3,})[,\s;]+(-?\d{1,3}\.\d{3,})/);
+        if (rawMatch) {
+          var rLat = parseFloat(rawMatch[1]);
+          var rLng = parseFloat(rawMatch[2]);
+          if ((Math.abs(rLat) > 90 && Math.abs(rLng) <= 90) || (rLat >= 100 && rLat <= 115 && rLng >= 8 && rLng <= 25)) {
+            var tmp = rLat; rLat = rLng; rLng = tmp;
+          }
+          if (rLat >= -90 && rLat <= 90 && rLng >= -180 && rLng <= 180) return { lat: rLat, lng: rLng };
+        }
+        return null;
+      }
+
+      var TYPE_PRESETS = {
+        shelter: { label: 'Điểm trú ẩn', badgeClass: 'sos-badge active', color: '#0284c7', emoji: '🛡️' },
+        hazard:  { label: 'Điểm nguy hiểm', badgeClass: 'sos-badge critical', color: '#dc2626', emoji: '⚠️' },
+        blood:   { label: 'Điểm hiến máu', badgeClass: 'sos-badge critical', color: '#e11d48', emoji: '🩸' },
+      };
+
+      function buildPickerPinHtml(color, emoji) {
+        return '<div style="width:28px;height:34px;display:flex;flex-direction:column;align-items:center;">' +
+          '<div style="width:26px;height:26px;border-radius:50%;background:' + color + ';border:2.5px solid #fff;box-shadow:0 3px 8px rgba(15,23,42,0.4);display:flex;align-items:center;justify-content:center;font-size:13px;">' + emoji + '</div>' +
+          '<div style="width:2px;height:6px;background:' + color + ';"></div>' +
+        '</div>';
+      }
+
+      var demoPointType = document.getElementById('demoPointType');
+      var demoPointAddress = document.getElementById('demoPointAddress');
+      var formModalAccentBadge = document.getElementById('formModalAccentBadge');
+      var pickerAccentIcon = document.getElementById('pickerAccentIcon');
+      var pickerSearchInput = document.getElementById('pickerSearchInput');
+      var pickerClearBtn = document.getElementById('pickerClearBtn');
+      var pickerSearchBtn = document.getElementById('pickerSearchBtn');
+      var pickerLocateBtn = document.getElementById('pickerLocateBtn');
+      var pickerFeedback = document.getElementById('pickerFeedback');
+      var pickerDropdown = document.getElementById('pickerDropdown');
+      var pickerMapCanvas = document.getElementById('pickerMapCanvas');
+      var pickerValidationError = document.getElementById('pickerValidationError');
+      var togglePickerErrorBtn = document.getElementById('togglePickerErrorBtn');
+      var pickerCoordsText = document.getElementById('pickerCoordsText');
+      var pickerAddressText = document.getElementById('pickerAddressText');
+      var pickerGmapLink = document.getElementById('pickerGmapLink');
+
+      var pickerMap = null;
+      var pickerMarker = null;
+      var currentPointColor = '#0284c7';
+
+      function showPickerFeedback(type, msg) {
+        if (!msg) {
+          pickerFeedback.style.display = 'none';
+          return;
+        }
+        pickerFeedback.style.display = 'block';
+        pickerFeedback.style.color = type === 'success' ? 'var(--sos-success-text)' : 'var(--sos-warning-text)';
+        pickerFeedback.textContent = msg;
+      }
+
+      function updatePickerPosition(lat, lng, fly, addressHint) {
+        var fLat = lat.toFixed(6);
+        var fLng = lng.toFixed(6);
+        pickerCoordsText.textContent = fLat + ', ' + fLng;
+        pickerGmapLink.href = 'https://www.google.com/maps?q=' + fLat + ',' + fLng;
+        if (pickerMarker) pickerMarker.setLatLng([lat, lng]);
+        if (fly && pickerMap) pickerMap.flyTo([lat, lng], 16, { animate: true, duration: 0.7 });
+
+        if (addressHint) {
+          pickerAddressText.textContent = '📍 ' + addressHint;
+          demoPointAddress.value = addressHint;
+        } else {
+          fetch('https://photon.komoot.io/reverse?lon=' + lng + '&lat=' + lat)
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) {
+              var p = d && d.features && d.features[0] && d.features[0].properties;
+              if (!p) return;
+              var addr = [p.name, p.street, p.city, p.country].filter(Boolean).join(', ');
+              if (addr) {
+                pickerAddressText.textContent = '📍 ' + addr;
+                demoPointAddress.value = addr;
+              }
+            }).catch(function () {});
+        }
+      }
+
+      if (window.L && pickerMapCanvas) {
+        pickerMap = L.map(pickerMapCanvas, {
+          center: [16.057, 108.217],
+          zoom: 15,
+          zoomControl: true,
+          attributionControl: false,
+          preferCanvas: true,
+        });
+        L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 20,
+        }).addTo(pickerMap);
+
+        pickerMarker = L.marker([16.057, 108.217], {
+          draggable: true,
+          icon: L.divIcon({
+            html: buildPickerPinHtml('#0284c7', '🛡️'),
+            className: '',
+            iconSize: [28, 34],
+            iconAnchor: [14, 34],
+          }),
+        }).addTo(pickerMap);
+
+        pickerMarker.on('dragend', function (e) {
+          var pos = e.target.getLatLng();
+          updatePickerPosition(pos.lat, pos.lng, false);
+        });
+        pickerMap.on('click', function (e) {
+          updatePickerPosition(e.latlng.lat, e.latlng.lng, false);
+        });
+      }
+
+      function runPickerSearch(overrideText) {
+        var q = (typeof overrideText === 'string' ? overrideText : pickerSearchInput.value).trim();
+        if (!q) return;
+        pickerDropdown.style.display = 'none';
+        pickerDropdown.innerHTML = '';
+
+        var coords = parseCoordsFromText(q);
+        if (coords) {
+          updatePickerPosition(coords.lat, coords.lng, true);
+          showPickerFeedback('success', 'Đã nhận diện tọa độ: ' + coords.lat.toFixed(5) + ', ' + coords.lng.toFixed(5));
+          return;
+        }
+
+        fetch('https://photon.komoot.io/api/?q=' + encodeURIComponent(q + ', Đà Nẵng') + '&limit=5')
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (data) {
+            var features = (data && data.features) || [];
+            if (!features.length) {
+              showPickerFeedback('warn', 'Không tìm thấy địa điểm. Hãy thử bấm trực tiếp trên bản đồ hoặc dán link Google Maps.');
+              return;
+            }
+            features.forEach(function (f) {
+              var p = f.properties || {};
+              var name = [p.name, p.street, p.city, p.country].filter(Boolean).join(', ') || 'Địa điểm';
+              var lat = f.geometry.coordinates[1];
+              var lng = f.geometry.coordinates[0];
+              var itemEl = document.createElement('div');
+              itemEl.className = 'sos-map-picker-dropdown-item';
+              itemEl.innerHTML = '<span style="color:' + currentPointColor + ';">📍</span><span>' + name + '</span>';
+              itemEl.addEventListener('click', function () {
+                updatePickerPosition(lat, lng, true, name);
+                pickerDropdown.style.display = 'none';
+                showPickerFeedback('success', 'Đã chọn: ' + name);
+              });
+              pickerDropdown.appendChild(itemEl);
+            });
+            pickerDropdown.style.display = 'block';
+          })
+          .catch(function () {
+            showPickerFeedback('warn', 'Không thể kết nối dịch vụ tìm kiếm địa điểm.');
+          });
+      }
+
+      pickerSearchInput.addEventListener('input', function () {
+        pickerClearBtn.style.display = pickerSearchInput.value ? 'inline-flex' : 'none';
+      });
+      pickerSearchInput.addEventListener('paste', function (e) {
+        var text = (e.clipboardData && e.clipboardData.getData('text') || '').trim();
+        if (text && (text.indexOf('http') === 0 || text.toLowerCase().indexOf('google') !== -1 || parseCoordsFromText(text))) {
+          setTimeout(function () { runPickerSearch(text); }, 40);
+        }
+      });
+      pickerSearchInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); runPickerSearch(); }
+      });
+      pickerClearBtn.addEventListener('click', function () {
+        pickerSearchInput.value = '';
+        pickerClearBtn.style.display = 'none';
+        pickerDropdown.style.display = 'none';
+        showPickerFeedback('', '');
+      });
+      pickerSearchBtn.addEventListener('click', function () { runPickerSearch(); });
+      pickerLocateBtn.addEventListener('click', function () {
+        if (!navigator.geolocation) {
+          showPickerFeedback('warn', 'Trình duyệt không hỗ trợ định vị GPS.');
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          function (pos) { updatePickerPosition(pos.coords.latitude, pos.coords.longitude, true); },
+          function (err) { showPickerFeedback('warn', 'Không lấy được GPS: ' + err.message); },
+          { enableHighAccuracy: true, timeout: 6000 }
+        );
+      });
+
+      document.querySelectorAll('[data-gmap-sample]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var val = btn.getAttribute('data-gmap-sample') || '';
+          pickerSearchInput.value = val;
+          pickerClearBtn.style.display = 'inline-flex';
+          runPickerSearch(val);
+        });
+      });
+
+      demoPointType.addEventListener('change', function () {
+        var preset = TYPE_PRESETS[demoPointType.value] || TYPE_PRESETS.shelter;
+        currentPointColor = preset.color;
+        formModalAccentBadge.className = preset.badgeClass;
+        formModalAccentBadge.textContent = preset.label;
+        pickerAccentIcon.setAttribute('stroke', preset.color);
+        if (window.L && pickerMarker) {
+          pickerMarker.setIcon(L.divIcon({
+            html: buildPickerPinHtml(preset.color, preset.emoji),
+            className: '',
+            iconSize: [28, 34],
+            iconAnchor: [14, 34],
+          }));
+        }
+      });
+
+      togglePickerErrorBtn.addEventListener('click', function () {
+        var hasErr = pickerMapCanvas.classList.toggle('is-error');
+        pickerValidationError.style.display = hasErr ? 'inline-flex' : 'none';
+      });
+
+      // ==================== 7. INTERACTIVE MAP SYSTEM DEMO ====================
+      var tacticalCanvas = document.getElementById('tacticalMapCanvas');
+      var hudWardSelect = document.getElementById('hudWardSelect');
+      var hudWardTitle = document.getElementById('hudWardTitle');
+      var hudCountSubtitle = document.getElementById('hudCountSubtitle');
+      var toggleBoundaryBtn = document.getElementById('toggleBoundaryBtn');
+      var layerShelterBtn = document.getElementById('layerShelterBtn');
+      var layerHazardBtn = document.getElementById('layerHazardBtn');
+      var layerSatelliteBtn = document.getElementById('layerSatelliteBtn');
+      var mapZoomInBtn = document.getElementById('mapZoomInBtn');
+      var mapZoomOutBtn = document.getElementById('mapZoomOutBtn');
+      var mapResetBtn = document.getElementById('mapResetBtn');
+      var tacticalCenterText = document.getElementById('tacticalCenterText');
+      var tacticalZoomText = document.getElementById('tacticalZoomText');
+
+      var TACTICAL_SAMPLES = {
+        sos: [
+          { code: '#SOS-1042', ward: 'HAICHAU', status: 'ACTIVE', lat: 16.0598, lng: 108.2155, color: '#dc2626', title: 'Ngập sâu tầng 1 — Hải Châu' },
+          { code: '#SOS-1045', ward: 'SONTRA',  status: 'ACTIVE', lat: 16.0715, lng: 108.2382, color: '#ea580c', title: 'Cần hỗ trợ sơ tán — Sơn Trà' },
+          { code: '#SOS-1031', ward: 'CAMLE',   status: 'COMPLETED', lat: 16.0172, lng: 108.2035, color: '#16a34a', title: 'Đã tiếp cận an toàn — Cẩm Lệ' },
+          { code: '#SOS-1019', ward: 'HAICHAU', status: 'CANCELLED', lat: 16.0485, lng: 108.2230, color: '#64748b', title: 'Đã hủy yêu cầu — Hải Châu' },
+        ],
+        shelters: [
+          { name: 'Trường Tiểu học Lê Quý Đôn', lat: 16.0665, lng: 108.2215 },
+          { name: 'Nhà Văn Hóa Quận Sơn Trà', lat: 16.0748, lng: 108.2410 },
+        ],
+        hazards: [
+          { name: 'Ngập sâu nút giao Nguyễn Văn Linh', lat: 16.0604, lng: 108.2110 },
+          { name: 'Điểm sạt lở chân núi Sơn Trà', lat: 16.1030, lng: 108.2580 },
+        ],
+      };
+
+      var WARDS_VIEW = {
+        ALL:     { name: 'TP Đà Nẵng', center: [16.0544, 108.218], zoom: 13 },
+        HAICHAU: { name: 'Phường Hải Châu', center: [16.058, 108.218], zoom: 14 },
+        SONTRA:  { name: 'Quận Sơn Trà', center: [16.074, 108.242], zoom: 14 },
+        CAMLE:   { name: 'Quận Cẩm Lệ', center: [16.018, 108.204], zoom: 14 },
+      };
+
+      if (window.L && tacticalCanvas) {
+        var streetCleanUrl = 'https://mt{s}.google.com/vt/lyrs=m&apistyle=s.t:33|p.v:off&x={x}&y={y}&z={z}';
+        var satelliteUrl = 'https://mt{s}.google.com/vt/lyrs=y&apistyle=s.t:33|p.v:off&x={x}&y={y}&z={z}';
+
+        var tacticalMap = L.map(tacticalCanvas, {
+          center: WARDS_VIEW.ALL.center,
+          zoom: WARDS_VIEW.ALL.zoom,
+          minZoom: 9,
+          maxZoom: 20,
+          zoomControl: false,
+          attributionControl: false,
+          preferCanvas: true,
+        });
+
+        var currentTileLayer = L.tileLayer(streetCleanUrl, {
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 20,
+        }).addTo(tacticalMap);
+
+        var sosLayerGroup = L.layerGroup().addTo(tacticalMap);
+        var shelterLayerGroup = L.layerGroup().addTo(tacticalMap);
+        var hazardLayerGroup = L.layerGroup().addTo(tacticalMap);
+        var boundaryLayerGroup = L.layerGroup().addTo(tacticalMap);
+
+        // Tuyến đường điều phối OSRM mẫu + Team Beacon
+        L.polyline(
+          [[16.0672, 108.2275], [16.0642, 108.2225], [16.0598, 108.2155]],
+          { color: '#0284c7', weight: 4, dashArray: '8 6', opacity: 0.9 }
+        ).addTo(tacticalMap);
+
+        L.marker([16.0672, 108.2275], {
+          icon: L.divIcon({
+            className: '',
+            iconSize: [180, 74],
+            iconAnchor: [90, 56],
+            html: '<div style="display:flex;flex-direction:column;align-items:center;">' +
+              '<div style="background:#0f172a;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;border:1.5px solid #38bdf8;white-space:nowrap;margin-bottom:3px;">🚤 <span style="color:#38bdf8;">43B-098.21</span> • Đội Xuồng 02</div>' +
+              '<div style="position:relative;width:30px;height:30px;display:flex;align-items:center;justify-content:center;">' +
+                '<div style="position:absolute;width:32px;height:32px;border-radius:9px;background:rgba(2,132,199,0.25);border:1.5px solid #0284c7;animation:sos-radar-pulse 1.6s infinite ease-out;"></div>' +
+                '<div style="position:relative;width:26px;height:26px;background:#0284c7;border-radius:7px;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:13px;">🚤</div>' +
+              '</div></div>',
+          }),
+        }).bindPopup('<strong>Đội Xuồng cơ động 02</strong><br/>Đang di chuyển tới #SOS-1042').addTo(tacticalMap);
+
+        // Polygon ranh giới minh họa
+        var sampleBoundary = L.polygon(
+          [[16.078, 108.202], [16.082, 108.248], [16.040, 108.246], [16.042, 108.198]],
+          { color: '#0284c7', weight: 2, fillColor: '#0284c7', fillOpacity: 0.08, dashArray: '5 4' }
+        ).addTo(boundaryLayerGroup);
+        void sampleBoundary;
+
+        TACTICAL_SAMPLES.shelters.forEach(function (sh) {
+          L.marker([sh.lat, sh.lng], {
+            icon: L.divIcon({
+              className: '',
+              iconSize: [28, 28],
+              iconAnchor: [14, 14],
+              html: '<div style="width:26px;height:26px;border-radius:8px;background:#10b981;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:12px;">🛡️</div>',
+            }),
+          }).bindPopup('<strong>Trú ẩn:</strong> ' + sh.name).addTo(shelterLayerGroup);
+        });
+
+        TACTICAL_SAMPLES.hazards.forEach(function (hz) {
+          L.marker([hz.lat, hz.lng], {
+            icon: L.divIcon({
+              className: '',
+              iconSize: [28, 28],
+              iconAnchor: [14, 14],
+              html: '<div style="width:26px;height:26px;border-radius:8px;background:#dc2626;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:12px;">⚠️</div>',
+            }),
+          }).bindPopup('<strong>Nguy hiểm:</strong> ' + hz.name).addTo(hazardLayerGroup);
+        });
+
+        var currentStatusFilter = 'ALL';
+        var currentWardFilter = 'ALL';
+        var showBoundaries = true;
+        var showShelters = true;
+        var showHazards = true;
+        var isSatellite = false;
+
+        function renderSosPins() {
+          sosLayerGroup.clearLayers();
+          var visible = TACTICAL_SAMPLES.sos.filter(function (item) {
+            var okStatus = currentStatusFilter === 'ALL' || item.status === currentStatusFilter;
+            var okWard = currentWardFilter === 'ALL' || item.ward === currentWardFilter;
+            return okStatus && okWard;
+          });
+
+          visible.forEach(function (item) {
+            var isWaiting = item.status === 'ACTIVE';
+            L.marker([item.lat, item.lng], {
+              icon: L.divIcon({
+                className: '',
+                iconSize: [110, 52],
+                iconAnchor: [55, 36],
+                html: '<div style="position:relative;width:110px;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;">' +
+                  '<div style="position:absolute;top:0;background:' + item.color + ';color:#fff;font-size:10px;font-weight:800;padding:1.5px 6px;border-radius:5px;border:1.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.28);white-space:nowrap;">' + item.code + '</div>' +
+                  '<div style="position:relative;width:36px;height:36px;display:flex;align-items:center;justify-content:center;">' +
+                    (isWaiting ? '<div style="position:absolute;width:32px;height:32px;border-radius:50%;background:' + item.color + '33;border:1.5px solid ' + item.color + ';animation:sos-radar-pulse 1.6s infinite ease-out;"></div>' : '') +
+                    '<div style="position:relative;width:' + (isWaiting ? 16 : 13) + 'px;height:' + (isWaiting ? 16 : 13) + 'px;border-radius:50%;background:' + item.color + ';border:2.5px solid #fff;box-shadow:0 2px 8px rgba(15,23,42,0.45);"></div>' +
+                  '</div></div>',
+              }),
+            }).bindPopup('<strong>' + item.code + '</strong><br/>' + item.title).addTo(sosLayerGroup);
+          });
+
+          var wardInfo = WARDS_VIEW[currentWardFilter] || WARDS_VIEW.ALL;
+          hudWardTitle.textContent = wardInfo.name;
+          hudCountSubtitle.textContent = visible.length + ' yêu cầu hiển thị tại ' + wardInfo.name;
+        }
+
+        renderSosPins();
+
+        document.querySelectorAll('#hudStatusChips .sos-map-chip').forEach(function (chip) {
+          chip.addEventListener('click', function () {
+            document.querySelectorAll('#hudStatusChips .sos-map-chip').forEach(function (c) { c.classList.remove('is-active'); });
+            chip.classList.add('is-active');
+            currentStatusFilter = chip.getAttribute('data-status') || 'ALL';
+            renderSosPins();
+          });
+        });
+
+        hudWardSelect.addEventListener('change', function () {
+          currentWardFilter = hudWardSelect.value;
+          var info = WARDS_VIEW[currentWardFilter] || WARDS_VIEW.ALL;
+          tacticalMap.flyTo(info.center, info.zoom, { duration: 0.7 });
+          renderSosPins();
+        });
+
+        toggleBoundaryBtn.addEventListener('click', function () {
+          showBoundaries = !showBoundaries;
+          if (showBoundaries) {
+            tacticalMap.addLayer(boundaryLayerGroup);
+            toggleBoundaryBtn.className = 'sos-btn sos-btn--soft-primary sos-btn--xs';
+          } else {
+            tacticalMap.removeLayer(boundaryLayerGroup);
+            toggleBoundaryBtn.className = 'sos-btn sos-btn--outline sos-btn--xs';
+          }
+        });
+
+        layerShelterBtn.addEventListener('click', function () {
+          showShelters = !showShelters;
+          if (showShelters) {
+            tacticalMap.addLayer(shelterLayerGroup);
+            layerShelterBtn.className = 'sos-btn sos-btn--success sos-btn--xs';
+          } else {
+            tacticalMap.removeLayer(shelterLayerGroup);
+            layerShelterBtn.className = 'sos-btn sos-btn--outline sos-btn--xs';
+          }
+        });
+
+        layerHazardBtn.addEventListener('click', function () {
+          showHazards = !showHazards;
+          if (showHazards) {
+            tacticalMap.addLayer(hazardLayerGroup);
+            layerHazardBtn.className = 'sos-btn sos-btn--danger sos-btn--xs';
+          } else {
+            tacticalMap.removeLayer(hazardLayerGroup);
+            layerHazardBtn.className = 'sos-btn sos-btn--outline sos-btn--xs';
+          }
+        });
+
+        layerSatelliteBtn.addEventListener('click', function () {
+          isSatellite = !isSatellite;
+          tacticalMap.removeLayer(currentTileLayer);
+          currentTileLayer = L.tileLayer(isSatellite ? satelliteUrl : streetCleanUrl, {
+            subdomains: ['0', '1', '2', '3'],
+            maxZoom: 20,
+          }).addTo(tacticalMap);
+          layerSatelliteBtn.className = isSatellite ? 'sos-btn sos-btn--primary sos-btn--xs' : 'sos-btn sos-btn--outline sos-btn--xs';
+          layerSatelliteBtn.textContent = isSatellite ? 'Đường phố' : 'Vệ tinh';
+        });
+
+        mapZoomInBtn.addEventListener('click', function () { tacticalMap.zoomIn(); });
+        mapZoomOutBtn.addEventListener('click', function () { tacticalMap.zoomOut(); });
+        mapResetBtn.addEventListener('click', function () {
+          currentWardFilter = 'ALL';
+          hudWardSelect.value = 'ALL';
+          tacticalMap.flyTo(WARDS_VIEW.ALL.center, WARDS_VIEW.ALL.zoom, { duration: 0.7 });
+          renderSosPins();
+        });
+
+        tacticalMap.on('moveend zoomend', function () {
+          var c = tacticalMap.getCenter();
+          tacticalCenterText.textContent = c.lat.toFixed(5) + ', ' + c.lng.toFixed(5);
+          tacticalZoomText.textContent = 'ZOOM: ' + tacticalMap.getZoom();
+        });
+      }
     })();
   </script>
 </body>

@@ -628,7 +628,7 @@ Không tạo màu tự phát cho từng màn hình. Mọi nhãn trạng thái tr
 
 ---
 
-## 7. Form Controls, Bộ Lọc & Bản Đồ Nhúng
+## 7. Form Controls, Bộ Lọc & Form Google Maps (`LocationSearchMapPicker`)
 
 ### 7.1. Inputs, Selects & Validation
 - **Chiều cao đồng bộ:** Input một dòng, Select và nút tìm kiếm dùng `height: 36px–38px`, `border-radius: 8px`, `border: 1px solid var(--sos-control-border)`, `background: var(--sos-surface)`.
@@ -636,17 +636,411 @@ Không tạo màu tự phát cho từng màn hình. Mọi nhãn trạng thái tr
 - **Trường bắt buộc:** Đánh dấu `*` màu `#dc2626` ngay sau nhãn `.sos-form-label` / `.executive-modal-label`.
 - **Hiển thị lỗi:** Khi validate sai, viền input đổi sang `#dc2626` + hiện 1 dòng text lỗi `11.5px` màu `#dc2626` ngay bên dưới field (không dùng `window.alert`).
 
-### 7.2. Quy chuẩn chọn vị trí trên Bản đồ (`LocationSearchMapPicker`)
-- Mọi form có tọa độ địa lý (tạo Điểm nguy hiểm, Điểm trú ẩn, Đợt hiến máu, Quản lý địa bàn, Sự cố...) **bắt buộc tái sử dụng** [`LocationSearchMapPicker`](../../web/src/components/common/LocationSearchMapPicker.tsx):
-  - Có thanh tìm kiếm địa danh + hỗ trợ dán link Google Maps (bao gồm link rút gọn `maps.app.goo.gl`) hoặc tọa độ nhanh.
-  - Có nút `"Vị trí của tôi"`, click trực tiếp hoặc kéo-thả ghim marker trên bản đồ Leaflet.
-  - Hiển thị tọa độ đã chọn gọn ở chân khung bản đồ kèm link `"Xem Google Maps"` (không đặt 2 ô nhập `[Vĩ độ, Kinh độ]` thô buộc người dùng tự gõ tay).
+### 7.2. Form Google Maps Chọn Tọa Độ (`LocationSearchMapPicker`)
+Mọi biểu mẫu cần chọn hoặc chỉnh sửa tọa độ địa lý (tạo/sửa Điểm nguy hiểm, Điểm trú ẩn, Địa bàn, Điểm hiến máu...) **bắt buộc tái sử dụng** [`LocationSearchMapPicker`](../../web/src/components/common/LocationSearchMapPicker.tsx) kết hợp bộ giải mã [`mapLinkParser.ts`](../../web/src/utils/mapLinkParser.ts) thay vì bắt người dùng tự gõ 2 ô `[Vĩ độ, Kinh độ]`.
+
+#### Cấu trúc giao diện chuẩn của Widget Map Picker
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│ [📍] Bản đồ chọn địa điểm & Tìm kiếm tọa độ          [⌖ Vị trí của tôi] │  ← Header (accentColor theo loại)
+├─────────────────────────────────────────────────────────────────────────┤
+│ [ 🔍 Nhập địa chỉ, địa điểm hoặc dán link Google Maps / tọa độ... (×) ] │ [ Tìm ]
+│   └─ Dropdown gợi ý nổi (max-height: 220px, z-index: 9999)              │
+│   └─ Feedback: Đã nhận diện tọa độ (xanh) / Cảnh báo (vàng)             │
+├─────────────────────────────────────────────────────────────────────────┤
+│  + │  -                                                                 │
+│                                                                         │
+│                  Khung Bản đồ Leaflet (Google Maps Streets Full)        │  ← height: 250px (mặc định)
+│                         [📍 Marker kéo-thả / bấm chọn]                  │
+│                                                                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│ Tọa độ chọn:                                    16.057000, 108.217000   │  ← var(--sos-font-mono)
+│ 📍 Hải Châu, Thành phố Đà Nẵng                                          │  ← Reverse geocode tự động
+│ 💡 Bấm hoặc kéo ghim trên bản đồ...              [Xem Google Maps ↗]    │  ← Mở google.com/maps?q=
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Props API & Quy chuẩn cấu hình (`LocationSearchMapPickerProps`)
+
+| Prop | Kiểu | Mặc định | Mục đích & Quy chuẩn |
+|---|---|---|---|
+| `lat`, `lng` | `number` | `16.057`, `108.217` | Tọa độ tâm ban đầu; tự `sanitizeCoord` nếu NaN |
+| `markerHtml` | `string` | *(bắt buộc)* | HTML custom pin (`L.divIcon`, `iconSize: [28, 34]`, `iconAnchor: [14, 34]`), đổi động theo loại điểm mà không reload map |
+| `selectedAreaName` | `string` | `'Thành phố Đà Nẵng'` | Gắn ngữ cảnh tỉnh/thành khi gọi API tìm kiếm địa chỉ |
+| `accentColor` | `string` | `'#ef4444'` | Màu nhấn icon tiêu đề & gợi ý: `#0284c7` (Điểm trú ẩn / Hệ thống), `#dc2626` (Điểm nguy hiểm / Khẩn cấp), `#e11d48` (Hiến máu) |
+| `headerLabel` | `string` | `'Bản đồ chọn địa điểm & Tìm kiếm tọa độ'` | Nhãn tiêu đề widget |
+| `mapHeight` | `number` | `250` | Chiều cao khung bản đồ (`px`), khuyên dùng `240px–300px` trong modal |
+| `error` | `string?` | — | Khi có lỗi, viền map chuyển `#dc2626` (`1.5px`) + hiện dòng lỗi bên dưới |
+| `onLocationSelected` | `(lat, lng, detectedAddress?) => void` | *(bắt buộc)* | Callback khi click map, kéo marker, bấm GPS, chọn gợi ý hoặc dán link |
+
+#### Các định dạng Link Google Maps & Tọa độ hỗ trợ (`mapLinkParser.ts`)
+- **Dán link tự động (`onPaste` tự kích hoạt tìm sau `40ms`):**
+  - Link rút gọn Google Maps (`maps.app.goo.gl`, `goo.gl/maps`, `app.goo.gl`, `g.co/maps`) → tự động gọi backend `/api/...` giải mã HTTP redirect qua `resolveGoogleMapsInput()`.
+  - Link Google Maps đầy đủ (`/@lat,lng`, `/place/.../@lat,lng`, `?q=lat,lng`, `?query=`, `?ll=`, `?destination=`, `?daddr=`, `!3d<lat>!4d<lng>`, `!2d<lng>!3d<lat>`, `/search/lat,lng`, `/dir/.../lat,lng`) → trích xuất tức thì ở client (`0ms`).
+  - Link OpenStreetMap (`/#map=zoom/lat/lng`).
+- **Tọa độ văn bản & Địa chỉ:**
+  - Thập phân (`16.060512, 108.217045` — tự phát hiện & đảo `[lng, lat]` nếu nhập kinh độ `100–115` trước vĩ độ `8–25`).
+  - Độ-Phút-Giây DMS (`16°03'37.8"N 108°13'01.4"E`).
+  - Tên địa điểm/địa chỉ → tra cứu qua `/api/blood-donations/geocode/search` (fallback `photon.komoot.io`); kéo thả/click ghim sẽ tra ngược địa chỉ qua `/api/blood-donations/geocode/reverse`.
+- **Nền bản đồ trong Form Picker:** Dùng `https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}` (`STREETS_FULL`, giữ đủ tên đường và địa danh dân sinh để cán bộ đối chiếu chính xác vị trí cắm ghim).
+
+#### CSS Chuẩn Cho Form Google Maps (Dual Theme — Thay thế inline hardcode khi refactor)
+```css
+/* Khung Form Google Maps chuẩn đồng bộ --sos-* tokens */
+.sos-map-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sos-map-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sos-map-picker-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--sos-text-primary);
+}
+
+.sos-map-picker-search-wrap {
+  position: relative;
+}
+
+.sos-map-picker-search-row {
+  display: flex;
+  gap: 6px;
+}
+
+.sos-map-picker-input-box {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--sos-radius-sm);
+  border: 1px solid var(--sos-control-border);
+  background: var(--sos-surface-muted);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sos-map-picker-input-box:focus-within {
+  background: var(--sos-surface);
+  border-color: var(--sos-primary);
+  box-shadow: 0 0 0 3px var(--sos-ring);
+}
+
+.sos-map-picker-input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--sos-font-sans);
+  font-size: 12.5px;
+  color: var(--sos-text-primary);
+}
+
+.sos-map-picker-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--sos-surface);
+  border: 1px solid var(--sos-control-border);
+  border-radius: var(--sos-radius-sm);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  z-index: 9999;
+}
+
+.sos-map-picker-canvas {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--sos-control-border);
+  background: var(--sos-surface-muted);
+  overflow: hidden;
+}
+
+.sos-map-picker-canvas.is-error {
+  border: 1.5px solid var(--sos-emergency);
+}
+
+.sos-map-picker-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: var(--sos-radius-sm);
+  border: 1px solid var(--sos-border);
+  background: var(--sos-surface-muted);
+  font-size: 12px;
+  color: var(--sos-text-secondary);
+}
+
+.sos-map-picker-coords {
+  font-family: var(--sos-font-mono);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--sos-text-primary);
+}
+
+.sos-map-picker-gmap-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--sos-primary);
+  text-decoration: none;
+}
+
+.sos-map-picker-gmap-link:hover {
+  text-decoration: underline;
+}
+```
+
+#### Mẫu JSX Chuẩn Tích Hợp Form Modal 2 Cột (Dùng chung cho Tạo/Sửa Điểm)
+```tsx
+{/* Modal Form 2 cột: Trái nhập thông tin, Phải dùng LocationSearchMapPicker */}
+<div className="executive-modal-card" style={{ maxWidth: 920 }}>
+  <div className="executive-modal-body" style={{ display: 'grid', gridTemplateColumns: '1fr 1.05fr', gap: 18 }}>
+    {/* Cột trái: Tên, loại điểm, mô tả, địa chỉ (tự điền từ detectedAddress nếu còn trống) */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* ...các form control chuẩn 36px... */}
+    </div>
+
+    {/* Cột phải: Form Google Maps chọn tọa độ */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <LocationSearchMapPicker
+        lat={lat}
+        lng={lng}
+        markerHtml={getMarkerHtml(selectedType)}
+        selectedAreaName={provinceName || 'Thành phố Đà Nẵng'}
+        accentColor="#0284c7"
+        mapHeight={250}
+        error={errors.coordinates}
+        onLocationSelected={(newLat, newLng, detectedAddress) => {
+          setLat(Number(newLat.toFixed(5)));
+          setLng(Number(newLng.toFixed(5)));
+          if (detectedAddress && !address.trim()) {
+            setAddress(detectedAddress);
+          }
+        }}
+      />
+    </div>
+  </div>
+</div>
+```
+
+> [!NOTE]
+> Thành phần [`BloodEventMapPicker`](../../web/src/features/blood-donations/BloodEventMapPicker.tsx) dùng cho Đợt hiến máu chia sẻ cùng giao diện và logic tìm kiếm; các file mới và khi refactor [LocationSearchMapPicker.tsx](../../web/src/components/common/LocationSearchMapPicker.tsx) cần chuyển dần các mã màu cứng (`#2563eb`, `#ffffff`, `#0f172a`) sang biến `--sos-*` ở bảng CSS trên để hỗ trợ cả Dark Mode.
 
 ---
 
-## 8. Modal Dialog, Slide-Over Drawer & Toast Notification
+## 8. Hệ Thống Bản Đồ Điều Hành & Tác Chiến (`Map System`)
 
-### 8.1. Phân biệt Modal vs Slide-Over Drawer
+Mọi màn hình bản đồ trên Web đều sử dụng thư viện `leaflet` / `react-leaflet` kết hợp Google Maps Tile Server và các lớp điều khiển nổi thống nhất.
+
+### 8.1. Bản Đồ Nền Google Maps & Bộ Lọc Hiển Thị ([`mapGeoService.ts`](../../web/src/services/mapGeoService.ts))
+
+| Hằng số `GOOGLE_MAP_TILES` | URL Tile Template | Đặc tính & Nơi sử dụng |
+|---|---|---|
+| `STREETS_CLEAN` *(mặc định điều hành)* | `https://mt{s}.google.com/vt/lyrs=m&apistyle=s.t:33\|p.v:off&x={x}&y={y}&z={z}` | **Ẩn POI thương mại** (`s.t:33\|p.v:off`: quán cafe, cửa hàng) nhưng giữ bệnh viện, trường học, trụ sở, đường bộ. Dùng tại [`AdminPortal`](../../web/src/features/map-operation/AdminPortal.tsx) & [`TacticalMap`](../../web/src/features/map-operation/dispatch/TacticalMap.tsx). |
+| `STREETS_FULL` | `https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}` | Hiển thị đầy đủ mọi địa danh dân sinh để dễ đối chiếu khi cắm ghim tại `LocationSearchMapPicker`. |
+| `SATELLITE` | `https://mt{s}.google.com/vt/lyrs=y&apistyle=s.t:33\|p.v:off&x={x}&y={y}&z={z}` | Ảnh vệ tinh Hybrid kèm tên đường & ranh giới, bật khi chuyển `mapMode === 'satellite'`. |
+| `TERRAIN` / `TRAFFIC` | `lyrs=p` / `lyrs=m,traffic` *(kèm `apistyle=s.t:33\|p.v:off`)* | Bản đồ địa hình đồi núi / lớp mật độ giao thông khi cần theo dõi tuyến lũ & di chuyển cứu hộ. |
+
+**Cấu hình `<MapContainer>` & `<TileLayer>` chuẩn:**
+- Bật `preferCanvas={true}` để tối ưu hiệu năng khi render hàng trăm polygon ranh giới xã/phường và ghim SOS.
+- Tắt `zoomControl={false}` và `attributionControl={false}` mặc định của Leaflet để thay bằng cụm nút điều khiển chuẩn `.sos-map-*` bên dưới.
+- `TileLayer`: `subdomains={['0', '1', '2', '3']}`, `maxZoom={20}`.
+
+### 8.2. Hai Kiến Trúc Màn Hình Bản Đồ Toàn Web
+
+#### A. Bản đồ Giám sát Khu vực ([`AdminPortal.tsx`](../../web/src/features/map-operation/AdminPortal.tsx) & [`AdminMapLayers.tsx`](../../web/src/features/map-operation/AdminMapLayers.tsx))
+Dùng cho Admin giám sát toàn thành phố (tràn viền `100vh` hoặc `embedded={true}` trong Dashboard), khóa khung kéo/zoom trong ranh giới địa phương (`maxBounds` + `maxBoundsViscosity={1.0}` + `zoomSnap={0.5}` + `zoomDelta={0.5}`).
+
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ┌─ Top-Left HUD (z:1000) ──────────────────┐   ┌─ Top-Right Toolbar ──┐ │
+│ │ [🛡️] Giám sát SOS — TP Đà Nẵng           │   │ [Trú ẩn] [Nguy hiểm] │ │
+│ │ [Xã/Phường ▾] [Ranh giới] [Chips lọc 4]  │   │ [🛡️ Cổng ĐP] [Logout]│ │
+│ └──────────────────────────────────────────┘   └──────────────────────┘ │
+│                                                                         │
+│                     Bản đồ Google Maps STREETS_CLEAN                    │
+│              (Polygon ranh giới + SOS Radar Pins + Trú ẩn/Hiểm họa)     │
+│                                                                         │
+│                                                            ┌──────────┐ │
+│                                                            │   [+]    │ │
+│                                                            │   [-]    │ │
+│                                                            │   [↺]    │ │
+│                                                            └──────────┘ │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Top-Left Floating HUD (`AdminMapHud`):** Khung kính mờ `background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(10px); border-radius: 12px; border: 1px solid var(--sos-border); box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12); padding: 10px 12px;` gồm:
+  1. Icon badge `28×28` (`border-radius: 8px`, nền `#fee2e2`, icon `#dc2626`) + Tiêu đề khu vực & bộ đếm số yêu cầu.
+  2. Dropdown chọn Xã/Phường (có ô tìm kiếm bên trong, sắp xếp xã/phường theo số ca SOS giảm dần).
+  3. Nhóm 4 Filter Chips trạng thái (`Tất cả`, `Đang mở / Xử lý`, `Hoàn thành`, `Đã hủy`) có chấm màu + số đếm `tabular-nums`.
+- **Top-Right Layer Bar:** Giữ gọn các nút bật/tắt lớp dữ liệu thực địa (`Trú ẩn` dùng `#10b981`, `Nguy hiểm` dùng `#dc2626`) và các nút chuyển cổng / đăng xuất (ẩn tự động khi `embedded={true}`).
+- **Bottom-Right Zoom & Reset Cluster (`bottom: 24px; right: 24px`):** 3 nút vuông xếp dọc `36×36px` (`+`, `-`, `Reset toàn cảnh ↺`), viền `--sos-border`, `border-radius: 8px`, `box-shadow: 0 4px 12px rgba(0,0,0,0.15)`.
+
+#### B. Bản đồ Điều phối Tác chiến 3 Cột ([`AuthorPortal.tsx`](../../web/src/features/map-operation/AuthorPortal.tsx), [`TacticalMap.tsx`](../../web/src/features/map-operation/dispatch/TacticalMap.tsx) & [`tactical-map.css`](../../web/src/features/map-operation/css/tactical-map.css))
+Dành cho Cán bộ địa phương điều phối ca SOS theo thời gian thực gồm các thành phần HUD đặc thù trong `tactical-map.css`:
+- **`.tactical-map-top-bar`** (`top: 16px; left: 16px; z-index: 20`): Thanh thông tin ca SOS đang chọn (`font-family: var(--sos-font-mono)`) + tên xã/phường.
+- **`.map-zoom-controls`** (`top: 16px; right: 16px; z-index: 20`): Nhóm nút zoom `32×32px` dọc, bo góc `--sos-radius-md`.
+- **`.map-coords-hud`** (`bottom: 16px; left: 16px; z-index: 10`): Khung hiển thị tọa độ con trỏ / khu vực bằng font monospace.
+- **`.dispatch-floating-status`** (`bottom: 20px; left: 20px; z-index: 20; min-width: 360px; border-radius: 16px`): Card nổi theo dõi Đội cứu hộ đang di chuyển, hiển thị badge phương tiện `40×40`, khoảng cách & ETA (`metric-pill`).
+- **Tuyến đường thực tế OSRM:** Gọi `router.project-osrm.org/route/v1/driving/{lng},{lat};{lng},{lat}?overview=full&geometries=geojson` (chú ý OSRM nhận `[lng, lat]` rồi chuyển sang `[lat, lng]` khi vẽ `<Polyline>`).
+
+### 8.3. Quy Chuẩn Ghim Bản Đồ (Pins / Beacons), Sóng Radar & Popup
+
+| Loại Marker / Lớp phủ | Kích thước & Cấu trúc hình khối | Hiệu ứng & Màu sắc chuẩn |
+|---|---|---|
+| **SOS Radar Pin (`createAdminSosPinIcon`)** | `iconSize: [110, 52]`, chấm tròn tâm `13px` (thường) / `16px` (`PENDING`/`VERIFIED`) / `22px` (đang chọn), viền trắng `2.5px–3px`, pill mã `#SOS` ở trên (`10px bold`, `border-radius: 5px`) | Chấm theo `statusMeta.pinColor`; ca chờ/đang chọn có vòng radar `@keyframes admin-sos-pulse` (`30px–42px`, `1.6s infinite`) |
+| **Team Beacon (`tactical-unified-team-beacon`)** | Xếp dọc 3 tầng: (1) Header Badge `#0f172a` viền `#38bdf8` ghi biển số & tên đội, (2) Pill trắng ghi quân số & GPS monospace, (3) Icon xe/ca-nô `28×28px` bo `8px` viền trắng `2px` | Tâm phương tiện nền `#0284c7`, vòng radar `@keyframes pulse-beacon` nền `rgba(2, 132, 199, 0.25)` |
+| **Điểm Trú ẩn / Điểm Nguy hiểm** | Icon marker `26–28px` phân biệt theo loại hình (`getShelterMarkerHtml`, `getHazardMarkerHtml`), bật/tắt độc lập qua Layer Bar | Trú ẩn dùng tông xanh (`#10b981` / `#0284c7`); Nguy hiểm dùng tông cảnh báo (`#dc2626` / `#d97706`) |
+| **Selected Marker State** | `.is-selected-marker` (`z-index: 100 !important`) | `transform: scale(1.08)` + halo focus xanh |
+| **Popup & Callout** | `.leaflet-popup-content-wrapper` hoặc `.sos-map-callout` | Popup nền `rgba(255,255,255,0.96)`, `blur(8px)`, `border-radius: 8px`; Callout nền tối `rgba(15, 23, 42, 0.92)` có mũi nhọn chỉ xuống |
+
+### 8.4. Code CSS & TSX Mẫu Chuẩn Cho Bản Đồ Toàn Web
+
+```css
+/* Khung & Floating Overlays chuẩn cho mọi màn hình Bản đồ (Light/Dark ready) */
+.sos-map-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--sos-surface-muted);
+}
+
+.sos-map-hud-panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 1000;
+  max-width: calc(100% - 32px);
+  padding: 10px 12px;
+  border-radius: var(--sos-radius-md);
+  border: 1px solid var(--sos-border);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+[data-theme="dark"] .sos-map-hud-panel {
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.sos-map-layer-bar {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--sos-radius-sm);
+  border: 1px solid var(--sos-border);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.15);
+}
+
+[data-theme="dark"] .sos-map-layer-bar {
+  background: rgba(15, 23, 42, 0.88);
+}
+
+.sos-map-zoom-cluster {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--sos-border);
+  border-radius: var(--sos-radius-sm);
+  background: var(--sos-surface);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+  overflow: hidden;
+}
+
+.sos-map-zoom-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: var(--sos-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.sos-map-zoom-btn:hover {
+  background: var(--sos-surface-muted);
+  color: var(--sos-text-primary);
+}
+
+.sos-map-zoom-btn + .sos-map-zoom-btn {
+  border-top: 1px solid var(--sos-border);
+}
+
+@keyframes sos-radar-pulse {
+  0% { transform: scale(0.65); opacity: 0.9; }
+  75% { transform: scale(1.65); opacity: 0; }
+  100% { transform: scale(1.85); opacity: 0; }
+}
+```
+
+```tsx
+{/* Template MapContainer chuẩn với Google Maps Clean & Zoom Cluster */}
+<div className="sos-map-shell">
+  <MapContainer
+    center={defaultCenter}
+    zoom={defaultZoom}
+    minZoom={9}
+    maxZoom={20}
+    zoomSnap={0.5}
+    zoomDelta={0.5}
+    preferCanvas={true}
+    zoomControl={false}
+    attributionControl={false}
+    style={{ width: '100%', height: '100%' }}
+  >
+    <TileLayer
+      key={tileUrl}
+      url={mapMode === 'satellite' ? GOOGLE_MAP_TILES.SATELLITE : GOOGLE_MAP_TILES.STREETS_CLEAN}
+      subdomains={['0', '1', '2', '3']}
+      maxZoom={20}
+    />
+    {/* Polygon ranh giới hành chính & Marker pins */}
+  </MapContainer>
+
+  <div className="sos-map-zoom-cluster">
+    <button type="button" className="sos-map-zoom-btn" onClick={() => handleZoom(1)} title="Phóng to" aria-label="Phóng to"><Plus size={18} /></button>
+    <button type="button" className="sos-map-zoom-btn" onClick={() => handleZoom(-1)} title="Thu nhỏ" aria-label="Thu nhỏ"><Minus size={18} /></button>
+    <button type="button" className="sos-map-zoom-btn" onClick={handleReset} title="Đưa về toàn cảnh" aria-label="Đưa về toàn cảnh"><RotateCcw size={15} /></button>
+  </div>
+</div>
+```
+
+---
+
+## 9. Modal Dialog, Slide-Over Drawer & Toast Notification
+
+### 9.1. Phân biệt Modal vs Slide-Over Drawer
 
 | Tiêu chí | Center Modal (`.executive-modal-card`) | Slide-Over Drawer (`.ra-drawer` / `.sc-drawer-card`) |
 |---|---|---|
@@ -654,13 +1048,13 @@ Không tạo màu tự phát cho từng màn hình. Mọi nhãn trạng thái tr
 | **Kích thước** | Form đơn/Confirm: `max-width: 560px`; Form 2 cột kèm bản đồ: `max-width: 860px–960px` | Chi tiết chuẩn: `width: 520px–740px`; Chi tiết kèm bảng con: `width: min(1200px, 94vw)` |
 | **Cấu trúc bắt buộc** | Header (Icon + Title + `×`) -> Body cuộn độc lập -> Footer (`Hủy` trái/giữa, `Xác nhận` phải) | Header cố định -> Body nền `--sos-bg` chia section cards -> Footer gắn dưới cố định nếu có nút duyệt |
 
-### 8.2. Toast & Realtime Indicator
+### 9.2. Toast & Realtime Indicator
 - **Toast ([`toast.ts`](../../web/src/components/common/toast.ts) & [`Toast.css`](../../web/src/components/common/Toast.css)):** Đặt cố định dưới-phải (`bottom: 24px; right: 24px`), tối đa rộng `420px`, viền trái `4px` phân biệt 4 trạng thái (`success`, `error`, `warning`, `info`). Tuyệt đối **không dùng `alert()` / `confirm()` mặc định của trình duyệt**.
 - **Realtime Status Pill (`.sos-live-pill`):** Màn hình nào nhận luồng Socket.IO (Tactical Map, SOS Requests, Chat, Audit Logs, Safety Check) hiển thị chấm xanh lá pulsing `7px` kèm nhãn ngắn (`Trực tuyến` / `Thời gian thực`).
 
 ---
 
-## 9. Quy Tắc Viết CSS & Checklist Kiểm Duyệt Toàn Web
+## 10. Quy Tắc Viết CSS & Checklist Kiểm Duyệt Toàn Web
 
 ### Quy tắc file CSS
 1. **Không cài hoặc sử dụng class Tailwind** (`flex`, `px-4`, `bg-slate-900`...) trong `web/src/**` vì bundler không build Tailwind.
@@ -673,6 +1067,7 @@ Không tạo màu tự phát cho từng màn hình. Mọi nhãn trạng thái tr
 - [ ] Nút bấm dùng đúng lớp `.sos-btn` + size (`--xs`/`--sm`/`--md`/`--lg`), tối đa **1 nút Primary** trong 1 toolbar/modal?
 - [ ] Nút trong bảng dữ liệu dùng kích thước `--xs` và biến thể `--soft-*` hoặc `--outline`?
 - [ ] Bảng có `sticky` header, tối đa 5–7 cột chính, số liệu căn phải/bằng `tabular-nums`, có Empty State & Pagination?
-- [ ] Form chọn tọa độ đã tái sử dụng `<LocationSearchMapPicker />`?
+- [ ] Form chọn tọa độ đã tái sử dụng `<LocationSearchMapPicker />` và hỗ trợ dán link Google Maps rút gọn/tọa độ?
+- [ ] Màn hình bản đồ tác chiến đã dùng `GOOGLE_MAP_TILES.STREETS_CLEAN` / `SATELLITE`, tắt zoom mặc định Leaflet, tuân thủ `z-index` HUD (`<= 1000`) & cụm zoom `.sos-map-zoom-cluster`?
 - [ ] Thông báo phản hồi dùng `toast` thay vì `window.alert()`, có trạng thái loading khóa double-submit trên nút?
 - [ ] Đã kiểm tra hiển thị tốt trên cả `1280px+` (Desktop) lẫn `<= 768px` / `<= 640px` (Tablet/Mobile) và không vỡ trong cả `[data-theme="light"]` & `[data-theme="dark"]`?
