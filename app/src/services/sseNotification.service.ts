@@ -110,16 +110,31 @@ class SSENotificationService {
               }
 
               if (payload && (payload.action === 'BROADCAST' || payload.action === 'USER')) {
-                const combinedData = {
-                  ...(payload || {}),
-                  ...(payload.data || {}),
-                  title: payload.data?.title || payload.title,
-                  content: payload.data?.content || payload.content || payload.data?.body || payload.body || payload.data?.message || payload.message,
-                  priority: payload.data?.priority || payload.priority || 'HIGH',
-                  type: payload.data?.type || payload.type || 'ALERT',
-                };
-                const item = this.normalizeNotification(combinedData);
-                if (item.title || item.content) {
+                const eventType = payload?.data?.type || payload?.type;
+                const sourceData = payload.data || payload.notification || {};
+                const rawTitle = String(sourceData?.title || payload.title || '').trim();
+                const rawContent = String(
+                  sourceData?.content ||
+                    payload.content ||
+                    sourceData?.body ||
+                    payload.body ||
+                    sourceData?.message ||
+                    payload.message ||
+                    ''
+                ).trim();
+
+                // Bỏ qua tín hiệu đồng bộ nội bộ (VD: RESCUER_APPLICATION) hoặc event rỗng tiêu đề/nội dung
+                // để không bị fallback nhầm thành cảnh báo điều động khẩn cấp.
+                if (eventType !== 'RESCUER_APPLICATION' && (rawTitle || rawContent)) {
+                  const combinedData = {
+                    ...(payload || {}),
+                    ...sourceData,
+                    title: rawTitle || undefined,
+                    content: rawContent,
+                    priority: sourceData?.priority || payload.priority || 'HIGH',
+                    type: sourceData?.type || payload.type || 'ALERT',
+                  };
+                  const item = this.normalizeNotification(combinedData);
                   console.log(`📢 [SSE_NOTIFICATION] Nhận thông báo mới: "${item.title}"`);
                   this.notificationListeners.forEach((fn) => {
                     try {
