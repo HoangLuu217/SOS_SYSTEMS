@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { User } from '@/types/auth';
+import { OfficeMapPicker } from '@/components/common/OfficeMapPicker';
+import { getAreaCoordinates } from '@/features/authorities/AreaPreviewMap';
 import {
   fetchSosRequests,
   fetchAdminUsers,
@@ -627,21 +629,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
     email: string;
     managedArea: string;
     avatarUrl: string;
+    mapUrl: string;
+    latitude: number | null;
+    longitude: number | null;
+    officeAddress: string;
   }>(() => {
+    const initialAreaName =
+      isAdmin
+        ? 'Toàn quốc'
+        : (user?.authority?.areaName ||
+          (user?.authority?.department
+            ? user.authority.department.replace(/^Ban Chỉ Huy PCTT\s*/i, '').replace(/\(.*?\)/g, '').trim()
+            : 'Khu vực quản lý'));
+    const fallbackCoords = getAreaCoordinates(initialAreaName, user?.authority?.department);
+    const lat = user?.authority?.latitude ?? fallbackCoords.lat;
+    const lng = user?.authority?.longitude ?? fallbackCoords.lng;
     return {
       fullName: user?.fullName || 'Cán Bộ Phụ Trách',
       position: user?.authority?.position || (isAdmin ? 'Quản trị viên hệ thống' : 'Chỉ huy trực ban cứu hộ'),
       organizationName: user?.authority?.organizationName || 'Ban Chỉ Huy PCTT & TKCN',
       phone: (user as any)?.phoneNumber || (user as any)?.phone || '112',
       email: user?.email || 'canbo@sos.gov.vn',
-      managedArea:
-        isAdmin
-          ? 'Toàn quốc'
-          : (user?.authority?.areaName ||
-            (user?.authority?.department
-              ? user.authority.department.replace(/^Ban Chỉ Huy PCTT\s*/i, '').replace(/\(.*?\)/g, '').trim()
-              : 'Khu vực quản lý')),
+      managedArea: initialAreaName,
       avatarUrl: user?.avatarUrl || '',
+      mapUrl: user?.authority?.mapUrl || (user?.authority?.latitude && user?.authority?.longitude ? `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}` : ''),
+      latitude: lat,
+      longitude: lng,
+      officeAddress: user?.authority?.officeAddress || '',
     };
   });
 
@@ -820,20 +834,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setIsPhoneVerified(isVer);
       setVerifiedPhone(isVer ? cleanP : '');
 
+      const syncedAreaName =
+        isAdmin
+          ? 'Toàn quốc'
+          : (user.authority?.areaName ||
+            (user.authority?.department
+              ? user.authority.department.replace(/^Ban Chỉ Huy PCTT\s*/i, '').replace(/\(.*?\)/g, '').trim()
+              : 'Khu vực quản lý'));
+      const fallbackCoords = getAreaCoordinates(syncedAreaName, user.authority?.department);
+      const lat = user.authority?.latitude ?? fallbackCoords.lat;
+      const lng = user.authority?.longitude ?? fallbackCoords.lng;
+
       setLocalProfile({
         fullName: user.fullName || 'Cán Bộ Phụ Trách',
         position: user.authority?.position || (isAdmin ? 'Quản trị viên hệ thống' : 'Chỉ huy trực ban cứu hộ'),
         organizationName: user.authority?.organizationName || 'Ban Chỉ Huy PCTT & TKCN',
         phone: p,
         email: user.email || 'canbo@sos.gov.vn',
-        managedArea:
-          isAdmin
-            ? 'Toàn quốc'
-            : (user.authority?.areaName ||
-              (user.authority?.department
-                ? user.authority.department.replace(/^Ban Chỉ Huy PCTT\s*/i, '').replace(/\(.*?\)/g, '').trim()
-                : 'Khu vực quản lý')),
+        managedArea: syncedAreaName,
         avatarUrl: user.avatarUrl || '',
+        mapUrl: user.authority?.mapUrl || (user.authority?.latitude && user.authority?.longitude ? `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}` : ''),
+        latitude: lat,
+        longitude: lng,
+        officeAddress: user.authority?.officeAddress || '',
       });
     }
   }, [user, isAdmin]);
@@ -993,9 +1016,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           : {
             position: localProfile.position,
             organizationName: localProfile.organizationName,
-            areaName: localProfile.managedArea,
-            provinceCode: selectedProvinceCode ? Number(selectedProvinceCode) : undefined,
-            wardCode: selectedWardCode !== 'ALL' ? Number(selectedWardCode) : undefined,
+            mapUrl: localProfile.mapUrl,
+            latitude: localProfile.latitude ?? undefined,
+            longitude: localProfile.longitude ?? undefined,
+            officeAddress: localProfile.officeAddress,
           },
       });
 
@@ -1013,15 +1037,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ...(serverUser?.authority || {}),
           areaId: isAdmin
             ? null
-            : (serverUser?.authority?.areaId || (currentUserObj.authority?.areaName === localProfile.managedArea ? currentUserObj.authority?.areaId : null)),
+            : (serverUser?.authority?.areaId || currentUserObj.authority?.areaId || null),
           department: isAdmin
             ? (serverUser?.authority?.department || 'Ban Quản Trị Hệ Thống SOS')
-            : (serverUser?.authority?.department || (currentUserObj.authority?.areaName === localProfile.managedArea ? currentUserObj.authority?.department : `Ban Chỉ Huy PCTT ${localProfile.managedArea.split(',')[0].trim()}`)),
+            : (serverUser?.authority?.department || currentUserObj.authority?.department),
           position: localProfile.position,
           organizationName: localProfile.organizationName,
-          areaName: isAdmin ? 'Toàn quốc' : localProfile.managedArea,
-          provinceCode: isAdmin ? undefined : (selectedProvinceCode || undefined),
-          wardCode: isAdmin ? undefined : (selectedWardCode !== 'ALL' ? selectedWardCode : undefined),
+          areaName: isAdmin ? 'Toàn quốc' : (serverUser?.authority?.areaName || currentUserObj.authority?.areaName || localProfile.managedArea),
+          provinceCode: isAdmin ? undefined : (serverUser?.authority?.provinceCode ?? currentUserObj.authority?.provinceCode ?? (selectedProvinceCode || undefined)),
+          wardCode: isAdmin ? undefined : (serverUser?.authority?.wardCode ?? currentUserObj.authority?.wardCode ?? (selectedWardCode !== 'ALL' ? selectedWardCode : undefined)),
+          mapUrl: serverUser?.authority?.mapUrl ?? localProfile.mapUrl,
+          latitude: serverUser?.authority?.latitude ?? localProfile.latitude ?? undefined,
+          longitude: serverUser?.authority?.longitude ?? localProfile.longitude ?? undefined,
+          officeAddress: serverUser?.authority?.officeAddress ?? localProfile.officeAddress,
         } as any,
       };
 
@@ -1518,6 +1546,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <label className="sos-profile-section-label">
                         <i className="bi bi-geo-alt" style={{ color: '#2563eb' }}></i>
                         <span>Địa bàn phụ trách quản lý:</span>
+                        <span className="sos-profile-area-locked-badge">
+                          <i className="bi bi-lock-fill"></i> Cố định theo phân quyền
+                        </span>
                       </label>
 
                       <div className="sos-profile-area-dropdowns">
@@ -1526,7 +1557,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           <select
                             value={selectedProvinceCode}
                             onChange={handleProvinceChange}
-                            disabled={loadingProvinces}
+                            disabled={true}
+                            title="Tỉnh/Thành phố được khóa theo tài khoản địa phương"
                           >
                             <option value="">
                               {loadingProvinces ? '-- Đang tải danh sách Tỉnh/TP... --' : '-- Chọn Tỉnh / Thành phố --'}
@@ -1547,7 +1579,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           <select
                             value={selectedWardCode}
                             onChange={handleWardChange}
-                            disabled={!selectedProvinceCode || loadingWards}
+                            disabled={true}
+                            title="Phường/Xã được khóa theo tài khoản địa phương"
                           >
                             <option value="ALL">-- Toàn bộ Tỉnh / Thành phố (Cấp Tỉnh) --</option>
                             {wards.map((w) => (
@@ -1564,11 +1597,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <input
                           type="text"
                           required
+                          readOnly
+                          disabled={true}
                           value={localProfile.managedArea}
-                          onChange={(e) => setLocalProfile({ ...localProfile, managedArea: e.target.value })}
                           placeholder="VD: Phường Hải Châu, Thành phố Đà Nẵng"
+                          title="Địa bàn phân quyền cố định, liên hệ Ban chỉ huy nếu cần điều chỉnh"
                         />
                       </div>
+
+                      <OfficeMapPicker
+                        mapUrl={localProfile.mapUrl}
+                        latitude={localProfile.latitude}
+                        longitude={localProfile.longitude}
+                        officeAddress={localProfile.officeAddress}
+                        defaultCenter={getAreaCoordinates(localProfile.managedArea, user?.authority?.department)}
+                        onChange={(next) =>
+                          setLocalProfile((prev) => ({
+                            ...prev,
+                            mapUrl: next.mapUrl,
+                            latitude: next.latitude,
+                            longitude: next.longitude,
+                            officeAddress: next.officeAddress,
+                          }))
+                        }
+                      />
                     </div>
                   )}
 

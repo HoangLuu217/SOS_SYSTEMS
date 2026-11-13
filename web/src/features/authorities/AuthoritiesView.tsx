@@ -21,7 +21,9 @@ import {
   ShieldCheck,
   Calendar,
   Navigation,
+  ExternalLink,
 } from 'lucide-react';
+import { parseCoordsFromGoogleMapsUrl } from '@/components/common/OfficeMapPicker';
 import type { User } from '@/types/auth';
 import type { AuthorityOrgItem, AdministrativeAreaItem } from '@/types/dashboard';
 import {
@@ -1514,7 +1516,22 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
       {selectedMapOfficer && (() => {
         const officerArea = selectedMapOfficer.authority?.areaName || selectedMapOfficer.authority?.areaId || 'Địa bàn quản lý';
         const officerDept = selectedMapOfficer.authority?.department || '';
-        const coords = getAreaCoordinates(officerArea, officerDept);
+        const hasPinnedCoords =
+          typeof selectedMapOfficer.authority?.latitude === 'number' &&
+          typeof selectedMapOfficer.authority?.longitude === 'number';
+        const parsedFromMapUrl =
+          !hasPinnedCoords && selectedMapOfficer.authority?.mapUrl
+            ? parseCoordsFromGoogleMapsUrl(selectedMapOfficer.authority.mapUrl)
+            : null;
+        const fallbackCoords = getAreaCoordinates(officerArea, officerDept);
+        const coords = hasPinnedCoords
+          ? { lat: selectedMapOfficer.authority!.latitude!, lng: selectedMapOfficer.authority!.longitude! }
+          : parsedFromMapUrl || fallbackCoords;
+        const isPinnedLocation = Boolean(hasPinnedCoords || parsedFromMapUrl);
+        const officerOfficeAddress = selectedMapOfficer.authority?.officeAddress || '';
+        const officerMapUrl =
+          selectedMapOfficer.authority?.mapUrl ||
+          (isPinnedLocation ? `https://www.google.com/maps?q=${coords.lat.toFixed(6)},${coords.lng.toFixed(6)}` : '');
         const isOfficerActive = selectedMapOfficer.status === 'ACTIVE';
 
         return (
@@ -1589,6 +1606,9 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                     areaName={officerArea}
                     areaId={selectedMapOfficer.authority?.areaId}
                     department={officerDept}
+                    isPinnedLocation={isPinnedLocation}
+                    officeAddress={officerOfficeAddress}
+                    mapUrl={officerMapUrl}
                   />
                 </div>
 
@@ -1820,11 +1840,40 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                           {officerArea}
                         </span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '11px', color: '#64748b' }}>
-                        <div style={{ width: 20, height: 20, borderRadius: 5, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <Navigation size={11} color="#64748b" />
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 7, fontSize: '11px', color: '#64748b' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                          <div style={{ width: 20, height: 20, borderRadius: 5, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Navigation size={11} color="#64748b" />
+                          </div>
+                          <span
+                            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            title={officerOfficeAddress || `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`}
+                          >
+                            {isPinnedLocation
+                              ? (officerOfficeAddress || `Đã ghim: ${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`)
+                              : `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`}
+                          </span>
                         </div>
-                        <span>{coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}</span>
+                        {officerMapUrl && (
+                          <a
+                            href={officerMapUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              color: '#2563eb',
+                              fontWeight: 700,
+                              textDecoration: 'none',
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <span>Google Maps</span>
+                            <ExternalLink size={11} />
+                          </a>
+                        )}
                       </div>
                     </div>
 
