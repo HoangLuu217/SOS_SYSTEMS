@@ -1,10 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { Platform, Vibration, DeviceEventEmitter } from 'react-native';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { AppState, Vibration, DeviceEventEmitter } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { backendApi, NotificationItem } from '@/api';
 import {
   registerForPushNotificationsAsync,
+  getRegisteredExpoPushToken,
+  isNotificationAlreadyPresented,
   triggerLocalNotification,
   sseNotificationService,
   playDispatchAlertSound,
@@ -13,13 +15,31 @@ import {
   NotificationSettings,
   NotificationCategoryKey,
   classifyNotification,
+  isWeatherNotification,
   getSavedNotificationSettings,
   saveNotificationSettings,
   DEFAULT_NOTIFICATION_SETTINGS,
+  extractNotificationDedupeKeys,
+  extractPersistentDedupeKeys,
+  hasRecentNotification,
+  markNotificationHandled,
+  hasRecentlyPresentedNotification,
+  markNotificationPresented,
 } from '@/utils';
 import { useAuth } from './AuthContext';
 
 const SEEN_NOTIFICATIONS_STORAGE_KEY = 'sos_seen_notification_ids_v1';
+const FRESH_POLL_MAX_AGE_MS = 90 * 1000;
+const PUSH_BACKED_TYPES = new Set([
+  'BLOOD_DONATION',
+  'SAFETY_CHECK',
+  'ALERT',
+  'INSTANT',
+  'WEATHER',
+  'SAFE_LOCATION',
+  'HAZARD',
+  'CHAT',
+]);
 
 interface NotificationContextType {
   notifications: NotificationItem[];
@@ -35,6 +55,7 @@ interface NotificationContextType {
   refreshNotifications: () => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
   navigateToTab?: (tab: string) => void;
   setNavigateHandler: (fn: (tab: string) => void) => void;
   isSocketConnected: boolean; // Alias cho trạng thái realtime
@@ -54,7 +75,30 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const seenIdsRef = useRef<Set<string>>(new Set());
   const triggeredPushKeysRef = useRef<Set<string>>(new Set());
   const isInitializedRef = useRef<boolean>(false);
+  const hasUserModifiedSettingsRef = useRef<boolean>(false);
   const navigateHandlerRef = useRef<((tab: string) => void) | null>(null);
+  const pendingFallbackTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+
+  const hasSeenNotification = useCallback((item: NotificationItem): boolean => {
+    if (item._id && seenIdsRef.current.has(item._id)) return true;
+    const persistentKeys = extractPersistentDedupeKeys(item);
+    if (persistentKeys.some((k) => seenIdsRef.current.has(k))) return true;
+    if (item.data?.broadcastId && seenIdsRef.current.has(item.data.broadcastId)) return true;
+    return hasRecentNotification(item);
+  }, []);
+
+  const markSeenNotification = useCallback((item: NotificationItem) => {
+    markNotificationHandled(item);
+    if (item._id && !item._id.startsWith('sse_') && !item._id.startsWith('local-')) {
+      seenIdsRef.current.add(item._id);
+    }
+    if (item.data?.broadcastId) {
+      seenIdsRef.current.add(item.data.broadcastId);
+    }
+    extractPersistentDedupeKeys(item).forEach((k) => seenIdsRef.current.add(k));
+    const idsArray = Array.from(seenIdsRef.current).slice(-150);
+    AsyncStorage.setItem(SEEN_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(idsArray)).catch(() => { });
+  }, []);
 
   // Luôn đồng bộ settingsRef với settings state
   useEffect(() => {
@@ -64,24 +108,34 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Nạp cài đặt người dùng từ storage khi khởi tạo
   useEffect(() => {
     getSavedNotificationSettings().then((saved) => {
+      if (hasUserModifiedSettingsRef.current) return;
       setSettings(saved);
       settingsRef.current = saved;
     });
   }, []);
 
   const updateSetting = useCallback(async (key: keyof NotificationSettings, value: boolean) => {
-    setSettings((prev: NotificationSettings) => {
-      const next = { ...prev, [key]: value };
-      settingsRef.current = next;
-      saveNotificationSettings(next).catch(() => {});
-      return next;
-    });
+    hasUserModifiedSettingsRef.current = true;
+    const next = { ...settingsRef.current, [key]: value };
+    settingsRef.current = next;
+    setSettings(next);
+    await saveNotificationSettings(next);
+
+    // Khi người dùng bật lại thông báo, đồng bộ lại quyền OS & Push Token với máy chủ
+    if (
+      value &&
+      (key === 'alert' || key === 'safeLocation' || key === 'systemNotification' || key === 'news')
+    ) {
+      registerForPushNotificationsAsync().catch(() => { });
+    }
   }, []);
 
   const resetSettings = useCallback(async () => {
+    hasUserModifiedSettingsRef.current = true;
     setSettings(DEFAULT_NOTIFICATION_SETTINGS);
     settingsRef.current = DEFAULT_NOTIFICATION_SETTINGS;
     await saveNotificationSettings(DEFAULT_NOTIFICATION_SETTINGS);
+    registerForPushNotificationsAsync().catch(() => { });
   }, []);
 
   const testNotification = useCallback(async (category: NotificationCategoryKey = 'alert'): Promise<boolean> => {
@@ -96,19 +150,19 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         category === 'alert'
           ? 'ALERT'
           : category === 'safeLocation'
-          ? 'SAFE_LOCATION'
-          : category === 'news'
-          ? 'WEATHER'
-          : 'SYSTEM',
+            ? 'SAFE_LOCATION'
+            : category === 'news'
+              ? 'WEATHER'
+              : 'SYSTEM',
       priority: category === 'alert' ? 'CRITICAL' : 'HIGH',
       title:
         category === 'alert'
           ? '🚨 [Thử nghiệm] Cảnh báo khẩn cấp SOS'
           : category === 'safeLocation'
-          ? '🛡️ [Thử nghiệm] Điểm an toàn mới'
-          : category === 'news'
-          ? '📰 [Thử nghiệm] Bản tin dự báo thời tiết'
-          : '🔔 [Thử nghiệm] Thông báo cập nhật hệ thống',
+            ? '🛡️ [Thử nghiệm] Điểm an toàn mới'
+            : category === 'news'
+              ? '📰 [Thử nghiệm] Bản tin dự báo thời tiết'
+              : '🔔 [Thử nghiệm] Thông báo cập nhật hệ thống',
       content:
         'Đây là thông báo thử nghiệm để xác nhận chuông, rung và cài đặt của bạn đang hoạt động thật.',
       createdAt: new Date().toISOString(),
@@ -119,25 +173,27 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (current.vibration) {
       try {
         Vibration.vibrate(300);
-      } catch (_) {}
+      } catch (_) { }
     }
 
     // 1b. Phát âm thanh điều động tác chiến nếu bật chuông
     if (current.sound !== false) {
-      playDispatchAlertSound().catch(() => {});
+      playDispatchAlertSound().catch(() => { });
     }
 
-    // 2. Kích hoạt Local Notification hiển thị ra ngoài hệ điều hành (thanh trạng thái / màn hình khóa)
+    // 2. Kích hoạt Local Notification hiển thị ra ngoài hệ điều hành (banner + khay thông báo)
     triggerLocalNotification({
       title: testItem.title,
       body: testItem.content,
       priority: testItem.priority,
+      allowDuplicate: true,
+      skipHandlerSound: current.sound !== false,
       data: {
         notificationId: testItem._id,
         type: testItem.type,
         isLocalTrigger: true,
       },
-    }).catch(() => {});
+    }).catch(() => { });
 
     // Không hiển thị banner nổi trong app (chỉ đẩy thông báo ra ngoài máy)
     return true;
@@ -162,38 +218,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const verificationStatus =
       incoming.data?.verificationStatus || (incoming as any).verificationStatus || 'VERIFIED';
 
-    const safetyCheckId = incoming.data?.safetyCheckId || (incoming as any).safetyCheckId;
-    const broadcastKey =
-      incoming.data?.broadcastId ||
-      (safetyCheckId ? `safety_${safetyCheckId}` : null) ||
-      `${incoming.title?.trim()}_${incoming.content?.trim()}_${incoming.createdAt?.slice(0, 16)}`;
-
-    // Bỏ qua nếu đã từng xử lý thông báo này (Deduplicate)
+    // Bỏ qua nếu đã từng xử lý thông báo này (Deduplicate nhất quán giữa Remote Push, SSE và Polling)
     if (
-      seenIdsRef.current.has(incoming._id) ||
-      (incoming.data?.broadcastId && seenIdsRef.current.has(incoming.data.broadcastId)) ||
-      (safetyCheckId && seenIdsRef.current.has(`safety_${safetyCheckId}`)) ||
-      seenIdsRef.current.has(broadcastKey) ||
+      hasSeenNotification(incoming) ||
       (isRescuerVerification && seenIdsRef.current.has(`rescuer_ver_${verificationStatus}`))
     ) {
       return;
     }
 
-    seenIdsRef.current.add(incoming._id);
-    if (incoming.data?.broadcastId) {
-      seenIdsRef.current.add(incoming.data.broadcastId);
-    }
-    if (safetyCheckId) {
-      seenIdsRef.current.add(`safety_${safetyCheckId}`);
-    }
-    seenIdsRef.current.add(broadcastKey);
+    markSeenNotification(incoming);
     if (isRescuerVerification) {
       seenIdsRef.current.add(`rescuer_ver_${verificationStatus}`);
     }
-
-    // Lưu lại bộ nhớ đã thấy
-    const idsArray = Array.from(seenIdsRef.current).slice(-100);
-    AsyncStorage.setItem(SEEN_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(idsArray)).catch(() => {});
 
     // Đồng bộ nhiệm vụ tức thời nếu thông báo có liên quan tới SOS / Assignment
     if (
@@ -234,15 +270,22 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
 
     // 1. Chèn thông báo mới vào đầu danh sách ngay lập tức
+    const incomingPersistentKeys = new Set(extractPersistentDedupeKeys(incoming));
     setNotifications((prev) => {
-      const isExisted = prev.some(
-        (n) =>
-          n._id === incoming._id ||
-          (incoming.data?.broadcastId && n.data?.broadcastId === incoming.data.broadcastId)
-      );
+      const isExisted = prev.some((n) => {
+        if (n._id === incoming._id) return true;
+        if (incoming.data?.broadcastId && n.data?.broadcastId === incoming.data.broadcastId) {
+          return true;
+        }
+        return extractPersistentDedupeKeys(n).some((k) => incomingPersistentKeys.has(k));
+      });
       if (isExisted) return prev;
       return [incoming, ...prev];
     });
+
+    if (isWeatherNotification(incoming)) {
+      DeviceEventEmitter.emit('weather:articles_updated');
+    }
 
     // 2. Phân loại thông báo và kiểm tra Cài đặt của người dùng
     const category = classifyNotification(incoming);
@@ -261,16 +304,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       incoming.data?.isChat;
 
     // 3. Nếu là thông báo nhận từ remote push, hệ thống đã phát thông báo rồi, KHÔNG gọi triggerLocalNotification để tránh bị alert 2 lần!
-    // Chỉ kích hoạt local notification ra thanh trạng thái máy nếu thông báo đến từ kênh khác (SSE) và chưa từng phát
-    if (
-      !isFromRemotePush &&
-      !triggeredPushKeysRef.current.has(incoming._id) &&
-      !triggeredPushKeysRef.current.has(broadcastKey)
-    ) {
-      triggeredPushKeysRef.current.add(incoming._id);
-      triggeredPushKeysRef.current.add(broadcastKey);
+    // Chỉ kích hoạt local notification khi đến từ SSE/Polling và chưa từng được phát / chưa hiện trong khay thông báo.
+    const persistentKeys = extractPersistentDedupeKeys(incoming);
+    const dedupeKeysForTrigger =
+      persistentKeys.length > 0 ? persistentKeys : extractNotificationDedupeKeys(incoming);
+    const alreadyTriggered =
+      hasRecentlyPresentedNotification(incoming) ||
+      dedupeKeysForTrigger.some((k) => triggeredPushKeysRef.current.has(k));
 
-      triggerLocalNotification({
+    if (!isFromRemotePush && !alreadyTriggered) {
+      dedupeKeysForTrigger.forEach((k) => triggeredPushKeysRef.current.add(k));
+
+      const localPayload = {
         title:
           incoming.title ||
           (isChat ? '💬 Tin nhắn từ cán bộ địa phương' : '🚨 LỆNH ĐIỀU ĐỘNG CỨU HỘ MỚI'),
@@ -279,69 +324,100 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           (incoming.data?.address
             ? `Vị trí ứng cứu: ${incoming.data.address}`
             : isChat
-            ? 'Đã gửi phản hồi cho bạn'
-            : 'Có thông báo mới từ hệ thống cứu hộ SOS'),
+              ? 'Đã gửi phản hồi cho bạn'
+              : 'Có thông báo mới từ hệ thống cứu hộ SOS'),
         priority: isChat ? 'NORMAL' : incoming.priority,
         data: {
+          ...(incoming.data || {}),
           notificationId: incoming._id,
           type: incoming.type,
           areaId: incoming.areaId,
           areaName: incoming.areaName,
+          actionUrl: incoming.actionUrl || incoming.data?.actionUrl,
           isLocalTrigger: true,
           isChat: isChat || undefined,
-          channel: incoming.data?.channel,
-          assignmentId: incoming.data?.assignmentId,
-          sosId: incoming.data?.sosId,
         },
-      }).catch(() => {});
+      };
+
+      const hasPushToken = Boolean(getRegisteredExpoPushToken());
+      const expectsRemotePush =
+        hasPushToken &&
+        incoming.data?.pushDispatched !== false &&
+        (incoming.data?.pushDispatched === true ||
+          PUSH_BACKED_TYPES.has(String(incoming.type || '').toUpperCase()));
+
+      if (expectsRemotePush) {
+        // Nếu app đang nền/khóa màn hình, APNs/FCM tự đẩy thông báo gốc ra màn hình khóa -> không bắn Local Notification chồng lên.
+        // Nếu app đang active, chờ 1500ms ưu tiên Remote Push; chỉ fallback Local Notification nếu chưa có Remote Push.
+        if (AppState.currentState === 'active') {
+          const timer = setTimeout(async () => {
+            pendingFallbackTimersRef.current.delete(timer);
+            if (AppState.currentState !== 'active') return;
+            const alreadyShown = await isNotificationAlreadyPresented({
+              ...incoming,
+              title: localPayload.title,
+              content: localPayload.body,
+              data: localPayload.data,
+            });
+            if (!alreadyShown) {
+              triggerLocalNotification(localPayload).catch(() => { });
+            }
+          }, 1500);
+          pendingFallbackTimersRef.current.add(timer);
+        }
+      } else {
+        triggerLocalNotification(localPayload).catch(() => { });
+      }
     }
 
     // "Chỉ đẩy thông báo ra ngoài app không hiển thị trong app":
     // Tuyệt đối không gọi setLatestEmergencyAlert(incoming) để không bật banner nổi trong app.
-  }, [user?._id]);
+  }, [user?._id, hasSeenNotification, markSeenNotification]);
 
   // Tải danh sách thông báo và đối chiếu tin mới
   const syncNotifications = useCallback(async () => {
     try {
-      const res = await backendApi.getNotifications({ limit: 40 });
+      const res = await backendApi.getNotifications({ limit: 100 });
       if (!res.success || !Array.isArray(res.data)) {
         return;
       }
 
       // Khử trùng lặp danh sách thông báo trả về (Deduplicate)
       const deduplicatedList: NotificationItem[] = [];
-      const seenBroadcastKeys = new Set<string>();
+      const seenKeysInBatch = new Set<string>();
 
       for (const item of res.data) {
-        const broadcastKey =
+        const persistentKeys = extractPersistentDedupeKeys(item);
+        const fallbackKey =
           item.data?.broadcastId ||
           `${item.title?.trim()}_${item.content?.trim()}_${item.createdAt?.slice(0, 16)}`;
+        const keysToCheck = persistentKeys.length > 0 ? persistentKeys : [fallbackKey];
 
-        if (seenBroadcastKeys.has(broadcastKey)) {
+        if (keysToCheck.some((k) => seenKeysInBatch.has(k))) {
           continue; // Bỏ qua nếu trùng nội dung / đợt broadcast
         }
-        seenBroadcastKeys.add(broadcastKey);
+        keysToCheck.forEach((k) => seenKeysInBatch.add(k));
         deduplicatedList.push(item);
       }
 
       // Nếu đã khởi tạo ban đầu, kiểm tra xem có tin mới xuất hiện không
       if (isInitializedRef.current) {
+        const nowMs = Date.now();
         for (const item of deduplicatedList) {
-          const broadcastKey =
-            item.data?.broadcastId ||
-            `${item.title?.trim()}_${item.content?.trim()}_${item.createdAt?.slice(0, 16)}`;
-
-          if (!seenIdsRef.current.has(item._id) && !seenIdsRef.current.has(broadcastKey)) {
+          if (hasSeenNotification(item)) continue;
+          const createdMs = item.createdAt ? new Date(item.createdAt).getTime() : nowMs;
+          const isFresh = Number.isNaN(createdMs) || nowMs - createdMs <= FRESH_POLL_MAX_AGE_MS;
+          if (isFresh) {
             processIncomingAlert(item);
+          } else {
+            // Thông báo cũ đồng bộ lại khi mở/chuyển trạng thái app -> chỉ đánh dấu đã xem, không reo lại
+            markSeenNotification(item);
           }
         }
       } else {
         // Đánh dấu các tin cũ đã xem để không reo chuông khi vừa mở app
         for (const item of deduplicatedList) {
-          seenIdsRef.current.add(item._id);
-          if (item.data?.broadcastId) {
-            seenIdsRef.current.add(item.data.broadcastId);
-          }
+          markSeenNotification(item);
         }
         isInitializedRef.current = true;
       }
@@ -350,11 +426,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } catch (err) {
       // Giữ kết nối ngầm ổn định, không gián đoạn giao diện
     }
-  }, [processIncomingAlert]);
+  }, [processIncomingAlert, hasSeenNotification, markSeenNotification]);
 
   // Khởi tạo đăng ký push token và đồng bộ thông báo từ push khi app đang mở.
   useEffect(() => {
-    registerForPushNotificationsAsync().catch(() => {});
+    registerForPushNotificationsAsync().catch(() => { });
+
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        registerForPushNotificationsAsync().catch(() => { });
+        syncNotifications();
+      }
+    });
 
     const receivedSub = Notifications.addNotificationReceivedListener((notification) => {
       const content = notification.request.content;
@@ -376,16 +459,23 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         createdAt: new Date().toISOString(),
       };
 
-      // Đánh dấu đã nhận từ Remote Push để không kích hoạt Local Notification lần thứ 2
-      if (item._id) triggeredPushKeysRef.current.add(item._id);
-      if (item.data?.broadcastId) triggeredPushKeysRef.current.add(item.data.broadcastId);
+      // Chỉ đánh dấu đã hiển thị khi nhóm thông báo đang BẬT (không gọi markNotificationHandled trước processIncomingAlert để không tự chặn chính mình)
+      const category = classifyNotification(item);
+      if (settingsRef.current[category] !== false) {
+        markNotificationPresented(item);
+        const persistentKeys = extractPersistentDedupeKeys(item);
+        const triggerKeys =
+          persistentKeys.length > 0 ? persistentKeys : extractNotificationDedupeKeys(item);
+        triggerKeys.forEach((k) => triggeredPushKeysRef.current.add(k));
+      }
 
       processIncomingAlert(item, true);
     });
 
     const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
       syncNotifications();
-      const notifData = response?.notification?.request?.content?.data as Record<string, any> | undefined;
+      const notifContent = response?.notification?.request?.content;
+      const notifData = notifContent?.data as Record<string, any> | undefined;
       if (
         notifData?.type === 'SAFETY_CHECK' ||
         notifData?.actionUrl === 'safety_check' ||
@@ -415,8 +505,20 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }, 350);
       } else if (notifData?.type === 'SOS_SYNC' || notifData?.action === 'ASSIGNED' || notifData?.assignmentId || notifData?.sosId) {
         navigateHandlerRef.current?.('sos');
-      } else {
+      } else if (
+        isWeatherNotification({
+          _id: String(notifData?.notificationId || ''),
+          title: String(notifContent?.title || notifData?.title || ''),
+          content: String(notifContent?.body || notifData?.content || notifData?.body || ''),
+          type: String(notifData?.type || ''),
+          data: notifData,
+          isRead: false,
+          createdAt: new Date().toISOString(),
+        })
+      ) {
         navigateHandlerRef.current?.('news');
+      } else {
+        navigateHandlerRef.current?.('notifications');
       }
     });
 
@@ -425,12 +527,15 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       try {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) parsed.forEach((id) => seenIdsRef.current.add(id));
-      } catch (_) {}
+      } catch (_) { }
     });
 
     return () => {
+      appStateSub.remove();
       receivedSub.remove();
       responseSub.remove();
+      pendingFallbackTimersRef.current.forEach((t) => clearTimeout(t));
+      pendingFallbackTimersRef.current.clear();
     };
   }, [user?._id, processIncomingAlert, syncNotifications]);
 
@@ -446,7 +551,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (!isMounted) return;
       try {
         await syncNotifications();
-      } catch (_) {}
+      } catch (_) { }
     }, 30000);
 
     return () => {
@@ -491,39 +596,65 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     );
     try {
       await backendApi.markNotificationAsRead(id);
-    } catch (_) {}
+    } catch (_) { }
   }, []);
 
   const markAllAsRead = useCallback(async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     try {
       await backendApi.markAllNotificationsAsRead();
-    } catch (_) {}
+    } catch (_) { }
+  }, []);
+
+  const deleteNotification = useCallback(async (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n._id !== id));
+    try {
+      await backendApi.deleteNotification(id);
+    } catch (_) { }
   }, []);
 
   const setNavigateHandler = useCallback((fn: (tab: string) => void) => {
     navigateHandlerRef.current = fn;
   }, []);
 
-  // Chỉ tính số lượng chưa đọc của các nhóm thông báo người dùng ĐANG BẬT
-  const unreadCount = notifications.filter((n) => {
-    if (n.isRead) return false;
-    const cat = classifyNotification(n);
-    return settings[cat] !== false;
-  }).length;
+  // Hộp chuông thông báo chỉ hiển thị các thông báo phi thời tiết
+  // (bài viết thời tiết được hiển thị riêng tại tab Tin tức)
+  const bellNotifications = useMemo(
+    () => notifications.filter((n) => !isWeatherNotification(n)),
+    [notifications]
+  );
 
-  const instantUnreadCount = notifications.filter(
-    (n) => isInstantType(n.type) && !n.isRead && settings[classifyNotification(n)] !== false
-  ).length;
+  // Chỉ tính số lượng chưa đọc của các nhóm thông báo người dùng ĐANG BẬT trong chuông
+  const unreadCount = useMemo(
+    () =>
+      bellNotifications.filter((n) => {
+        if (n.isRead) return false;
+        const cat = classifyNotification(n);
+        return settings[cat] !== false;
+      }).length,
+    [bellNotifications, settings]
+  );
 
-  const systemUnreadCount = notifications.filter(
-    (n) => isSystemType(n.type) && !n.isRead && settings[classifyNotification(n)] !== false
-  ).length;
+  const instantUnreadCount = useMemo(
+    () =>
+      bellNotifications.filter(
+        (n) => isInstantType(n.type) && !n.isRead && settings[classifyNotification(n)] !== false
+      ).length,
+    [bellNotifications, settings]
+  );
+
+  const systemUnreadCount = useMemo(
+    () =>
+      bellNotifications.filter(
+        (n) => isSystemType(n.type) && !n.isRead && settings[classifyNotification(n)] !== false
+      ).length,
+    [bellNotifications, settings]
+  );
 
   return (
     <NotificationContext.Provider
       value={{
-        notifications,
+        notifications: bellNotifications,
         unreadCount,
         instantUnreadCount,
         systemUnreadCount,
@@ -536,6 +667,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         refreshNotifications,
         markAsRead,
         markAllAsRead,
+        deleteNotification,
         setNavigateHandler,
         isSocketConnected: isRealtimeConnected,
         isRealtimeConnected,

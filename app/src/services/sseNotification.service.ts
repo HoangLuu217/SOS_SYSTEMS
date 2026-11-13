@@ -78,6 +78,14 @@ class SSENotificationService {
               const payload = JSON.parse(jsonStr);
 
               if (
+                payload?.action === 'WEATHER_ARTICLES_UPDATED' ||
+                payload?.data?.type === 'WEATHER_ARTICLES_SYNC'
+              ) {
+                console.log('⚡ [SSE_NOTIFICATION] Đồng bộ tin tức thời tiết realtime');
+                DeviceEventEmitter.emit('weather:articles_updated', payload);
+              }
+
+              if (
                 payload?.data?.type === 'SOS_SYNC' ||
                 payload?.data?.type === 'RELIEF_MISSION' ||
                 payload?.data?.action === 'ASSIGNED' ||
@@ -110,25 +118,63 @@ class SSENotificationService {
               }
 
               if (payload && (payload.action === 'BROADCAST' || payload.action === 'USER')) {
+                const source =
+                  (payload.notification && typeof payload.notification === 'object'
+                    ? payload.notification
+                    : null) ||
+                  (payload.data && typeof payload.data === 'object' ? payload.data : null) ||
+                  payload;
+                const rawNested =
+                  source.data && typeof source.data === 'object'
+                    ? source.data
+                    : payload.data && typeof payload.data === 'object' && source !== payload.data
+                    ? payload.data
+                    : source !== payload
+                    ? source
+                    : {};
+                const nestedData = {
+                  ...(payload.broadcastId ? { broadcastId: payload.broadcastId } : {}),
+                  ...rawNested,
+                };
+                const rawTitle = String(
+                  source.title || payload.title || nestedData.title || ''
+                ).trim();
+                const rawContent = String(
+                  source.content ||
+                    payload.content ||
+                    source.body ||
+                    payload.body ||
+                    source.message ||
+                    payload.message ||
+                    nestedData.content ||
+                    nestedData.body ||
+                    ''
+                ).trim();
+
+                // Chỉ phát tiếp nếu gói SSE thực sự mang tiêu đề hoặc nội dung hiển thị,
+                // tránh biến sự kiện đồng bộ ngầm thành thông báo khẩn cấp giả
+                if (!rawTitle && !rawContent) {
+                  continue;
+                }
+
                 const combinedData = {
                   ...(payload || {}),
-                  ...(payload.data || {}),
-                  title: payload.data?.title || payload.title,
-                  content: payload.data?.content || payload.content || payload.data?.body || payload.body || payload.data?.message || payload.message,
-                  priority: payload.data?.priority || payload.priority || 'HIGH',
-                  type: payload.data?.type || payload.type || 'ALERT',
+                  ...(source || {}),
+                  title: rawTitle,
+                  content: rawContent,
+                  priority: source.priority || payload.priority || nestedData.priority || 'HIGH',
+                  type: source.type || payload.type || nestedData.type || 'ALERT',
+                  data: nestedData,
                 };
                 const item = this.normalizeNotification(combinedData);
-                if (item.title || item.content) {
-                  console.log(`📢 [SSE_NOTIFICATION] Nhận thông báo mới: "${item.title}"`);
-                  this.notificationListeners.forEach((fn) => {
-                    try {
-                      fn(item);
-                    } catch (e) {
-                      console.error('Lỗi listener SSE notification:', e);
-                    }
-                  });
-                }
+                console.log(`📢 [SSE_NOTIFICATION] Nhận thông báo mới: "${item.title}"`);
+                this.notificationListeners.forEach((fn) => {
+                  try {
+                    fn(item);
+                  } catch (e) {
+                    console.error('Lỗi listener SSE notification:', e);
+                  }
+                });
               }
             } catch {
               // Dữ liệu heartbeat hoặc kết nối ban đầu

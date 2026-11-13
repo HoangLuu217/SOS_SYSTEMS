@@ -89,3 +89,93 @@ export async function fetchAreaManagers(): Promise<{ success: boolean; data: Rec
     return { success: false, data: {} };
   }
 }
+
+export interface AreaScopeNode {
+  _id: string;
+  name: string;
+  code?: string;
+  type?: string;
+  parentId?: { _id: string; name?: string } | string | null;
+}
+
+const normalizeAreaText = (value?: string): string =>
+  (value || '')
+    .replace(/đ/gi, 'd')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+export function getParentAreaId(area?: AreaScopeNode | null): string | null {
+  if (!area?.parentId) return null;
+  if (typeof area.parentId === 'string') return area.parentId;
+  return area.parentId._id ? String(area.parentId._id) : null;
+}
+
+export function findRootProvinceId<T extends AreaScopeNode>(
+  area: T | undefined,
+  areaById: Map<string, T>
+): string | null {
+  const visited = new Set<string>();
+  let current: T | undefined = area;
+  while (current) {
+    const id = String(current._id);
+    if (visited.has(id)) break;
+    visited.add(id);
+    if (current.type === 'PROVINCE') return id;
+    const parentId = getParentAreaId(current);
+    current = parentId ? areaById.get(parentId) : undefined;
+  }
+  return null;
+}
+
+/**
+ * Extracts Đà Nẵng root province and its DB child wards from `fetchAdministrativeAreas()` results.
+ */
+export function getDaNangAreaScope<T extends AreaScopeNode>(areas: T[]): {
+  areaById: Map<string, T>;
+  daNangProvince: T | null;
+  daNangProvinceId: string;
+  daNangWards: T[];
+  daNangAreaIds: Set<string>;
+} {
+  const areaById = new Map<string, T>();
+  areas.forEach((a) => {
+    if (a?._id) areaById.set(String(a._id), a);
+  });
+
+  const provinces = areas.filter((a) => a.type === 'PROVINCE');
+  const daNangProvince =
+    provinces.find(
+      (p) => (p.code || '').trim().toUpperCase() === 'DANANG' || normalizeAreaText(p.name).includes('da nang')
+    ) ||
+    (provinces.length === 1 ? provinces[0] : null);
+  const daNangProvinceId = daNangProvince ? String(daNangProvince._id) : '';
+
+  const daNangAreaIds = new Set<string>();
+  if (daNangProvinceId) daNangAreaIds.add(daNangProvinceId);
+
+  const daNangWards = areas
+    .filter((a) => {
+      if (a.type !== 'WARD') return false;
+      if (!daNangProvinceId) return true;
+      const rootProvId = findRootProvinceId(a, areaById);
+      const directParentId = getParentAreaId(a);
+      return (
+        rootProvId === daNangProvinceId ||
+        directParentId === daNangProvinceId ||
+        (provinces.length <= 1 && !directParentId)
+      );
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' }));
+
+  daNangWards.forEach((w) => daNangAreaIds.add(String(w._id)));
+
+  return {
+    areaById,
+    daNangProvince,
+    daNangProvinceId,
+    daNangWards,
+    daNangAreaIds,
+  };
+}

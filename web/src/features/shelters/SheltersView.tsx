@@ -4,7 +4,6 @@ import {
   MapPin,
   Search,
   ExternalLink,
-  Navigation,
   CheckCircle2,
   AlertTriangle,
   X,
@@ -28,10 +27,9 @@ import {
   updateSafeLocation,
   deleteSafeLocation,
   fetchAdministrativeAreas,
-  fetchProvincesV2,
-  type ProvinceV2,
+  getDaNangAreaScope,
 } from '@/api';
-import { resolveGoogleMapsInput } from '@/utils/mapLinkParser';
+import { LocationSearchMapPicker } from '@/components/common/LocationSearchMapPicker';
 import { domainDService, JURISDICTION_CONFIGS, type JurisdictionConfig } from '@/services/domainDService';
 import { FALLBACK_SHELTERS } from '@/constants';
 import { useGlobalModals } from '@/hooks/useGlobalModals';
@@ -39,6 +37,7 @@ import {
   ShelterTypeIcon,
   SHELTER_TYPE_CARDS,
   ShelterMiniMap,
+  getShelterMarkerHtml,
 } from './shelterConstants';
 import './SheltersView.css';
 
@@ -66,7 +65,6 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
   const [shelterTypeFilter, setShelterTypeFilter] = useState<'ALL' | 'EVACUATION_CENTER' | 'HOSPITAL' | 'SHELTER' | 'RESCUE_STATION' | 'MEETING_POINT'>('ALL');
   const [shelterManagementScope, setShelterManagementScope] = useState<'LOCAL' | 'CITY'>('LOCAL');
   const [selectedAdminProvince, setSelectedAdminProvince] = useState<string>('ALL');
-  const [allProvinces, setAllProvinces] = useState<ProvinceV2[]>([]);
   const [shelterSearchText, setShelterSearchText] = useState('');
   const [shelterPage, setShelterPage] = useState<number>(1);
   const [shelterSortField, setShelterSortField] = useState<'createdAt' | 'name' | 'capacity' | 'occupancyRate' | 'district' | 'address' | 'status'>('createdAt');
@@ -92,9 +90,6 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
   const [createShelterLat, setCreateShelterLat] = useState<number>(16.0570);
   const [createShelterLng, setCreateShelterLng] = useState<number>(108.2170);
   const [createShelterNotes, setCreateShelterNotes] = useState('');
-  const [createShelterMapLinkInput, setCreateShelterMapLinkInput] = useState('');
-  const [resolvingCreateShelterMapLink, setResolvingCreateShelterMapLink] = useState(false);
-  const [createShelterMapLinkStatus, setCreateShelterMapLinkStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [submittingCreateShelter, setSubmittingCreateShelter] = useState(false);
   const [createShelterErrors, setCreateShelterErrors] = useState<{
     name?: string;
@@ -116,9 +111,6 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
   const [editShelterLat, setEditShelterLat] = useState<number>(16.0570);
   const [editShelterLng, setEditShelterLng] = useState<number>(108.2170);
   const [editShelterNotes, setEditShelterNotes] = useState('');
-  const [editShelterMapLinkInput, setEditShelterMapLinkInput] = useState('');
-  const [resolvingEditShelterMapLink, setResolvingEditShelterMapLink] = useState(false);
-  const [editShelterMapLinkStatus, setEditShelterMapLinkStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [submittingEditShelter, setSubmittingEditShelter] = useState(false);
   const [editShelterErrors, setEditShelterErrors] = useState<{
     name?: string;
@@ -167,13 +159,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
     }
   }, [propAreas.length]);
 
-  useEffect(() => {
-    fetchProvincesV2().then((list) => {
-      if (Array.isArray(list) && list.length > 0) {
-        setAllProvinces(list);
-      }
-    });
-  }, []);
+  const { daNangProvince, daNangProvinceId, daNangWards, daNangAreaIds } = useMemo(
+    () => getDaNangAreaScope(areas),
+    [areas]
+  );
 
   domainDService.syncFromStoredAuthUser();
   const authUserStr = typeof localStorage !== 'undefined' ? localStorage.getItem('sos_auth_user') : null;
@@ -522,13 +511,19 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
     // 4. TẬP DỮ LIỆU ĐỊA PHƯƠNG & THÀNH PHỐ QUẢN LÝ
     const displayShelters = shelters.length > 0 ? shelters : FALLBACK_SHELTERS;
 
-    // Hàm xác định điểm trú ẩn có thuộc Tỉnh / Thành phố được chọn (cho Admin)
-    const isShelterInProvince = (s: SafeLocationItem, provinceName: string): boolean => {
-      if (!provinceName || provinceName === 'ALL') return true;
-      const targetClean = provinceName
+    // Hàm xác định điểm trú ẩn có thuộc Phường / Xã Đà Nẵng được chọn (cho Admin)
+    const isShelterInProvince = (s: SafeLocationItem, selectedAreaName: string): boolean => {
+      if (!selectedAreaName || selectedAreaName === 'ALL') return true;
+      const targetClean = selectedAreaName
         .toLowerCase()
-        .replace(/^(tỉnh|thành phố|tp\.?)\s+/i, '')
+        .replace(/^(tỉnh|thành phố|tp\.?|phường|xã|thị trấn)\s+/i, '')
         .trim();
+
+      const itemAreaId = typeof s.areaId === 'object' ? (s.areaId as any)?._id : s.areaId;
+      const matchedWard = daNangWards.find((w) => w.name === selectedAreaName);
+      if (matchedWard && itemAreaId && String(itemAreaId) === String(matchedWard._id)) {
+        return true;
+      }
 
       const addr = (s.address || '').toLowerCase();
       const name = (s.name || '').toLowerCase();
@@ -548,49 +543,12 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
         }
       }
 
-      if (targetClean.includes('đà nẵng') || targetClean.includes('da nang')) {
-        const daNangDistricts = ['ngũ hành sơn', 'hải châu', 'sơn trà', 'thanh khê', 'cẩm lệ', 'liên chiểu', 'hòa vang', 'hoàng sa'];
-        if (daNangDistricts.some((d) => fullText.includes(d) || removeAccents(fullText).includes(removeAccents(d)))) {
-          return true;
-        }
-        const coords = s.location?.coordinates;
-        if (Array.isArray(coords) && coords.length === 2) {
-          const lng = Number(coords[0]);
-          const lat = Number(coords[1]);
-          if (lat >= 15.9 && lat <= 16.3 && lng >= 107.9 && lng <= 108.4) return true;
-        }
-      }
-
       return false;
     };
 
-    // Danh sách Tỉnh/Thành cho Admin kèm số lượng điểm trú ẩn thực tế (không mock)
-    const adminProvinceOptions = useMemo(() => {
-      if (!isAdmin) return [];
-      const countsMap = new Map<string, number>();
-
-      allProvinces.forEach((p) => {
-        const c = displayShelters.filter((s) => isShelterInProvince(s, p.name)).length;
-        countsMap.set(p.name, c);
-      });
-
-      return [...allProvinces]
-        .map((p) => ({
-          code: p.code,
-          name: p.name,
-          count: countsMap.get(p.name) || 0,
-        }))
-        .sort((a, b) => {
-          if (a.count > 0 && b.count === 0) return -1;
-          if (a.count === 0 && b.count > 0) return 1;
-          if (b.count !== a.count) return b.count - a.count;
-          return a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' });
-        });
-    }, [isAdmin, allProvinces, displayShelters]);
-
     const localShelters = displayShelters.filter((s) => isShelterInOfficerJurisdiction(s));
 
-    // Lọc theo Cấp quản lý: Admin lọc theo 1 tab và chọn Tỉnh/Thành phố (Toàn quốc hoặc Tỉnh cụ thể), Cán bộ lọc theo Địa phương vs Tổng Tỉnh/Thành
+    // Lọc theo Cấp quản lý: Admin lọc khu vực Đà Nẵng (toàn Đà Nẵng hoặc theo Phường/Xã), Cán bộ lọc theo Địa phương vs Tổng khu vực
     const baseScopedShelters = isAdmin
       ? (selectedAdminProvince === 'ALL'
           ? displayShelters
@@ -771,15 +729,15 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       let initAreaId = '';
       if (isAdmin) {
         if (selectedAdminProvince !== 'ALL') {
-          const matched = areas.find(
+          const matched = daNangWards.find(
             (a) =>
               String(a._id) === selectedAdminProvince ||
               a.name.toLowerCase().includes(selectedAdminProvince.toLowerCase()) ||
               selectedAdminProvince.toLowerCase().includes(a.name.toLowerCase())
           );
-          initAreaId = matched ? String(matched._id) : (areas[0] ? String(areas[0]._id) : '');
-        } else if (areas.length > 0) {
-          initAreaId = String(areas[0]._id);
+          initAreaId = matched ? String(matched._id) : daNangProvinceId || (areas[0] ? String(areas[0]._id) : '');
+        } else {
+          initAreaId = daNangProvinceId || (areas[0] ? String(areas[0]._id) : '');
         }
       } else {
         initAreaId = (resolvedAccountArea?._id as string) || accountAreaId || '';
@@ -788,7 +746,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       setCreateShelterAreaId(initAreaId);
       setCreateShelterAddress(
         isAdmin
-          ? selectedInitArea?.name || (selectedAdminProvince !== 'ALL' ? selectedAdminProvince : '')
+          ? selectedInitArea?.name || (selectedAdminProvince !== 'ALL' ? selectedAdminProvince : daNangProvince?.name || 'Thành phố Đà Nẵng')
           : accountAreaWithCity || accountAreaDisplayName
       );
       setCreateShelterCapacity(300);
@@ -801,8 +759,6 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
           ? 'Điểm trú ẩn an toàn thuộc Quản trị viên hệ thống SOS quản lý'
           : `Điểm trú ẩn an toàn thuộc quản lý Ban Chỉ Huy PCTT ${localTabLabel}`
       );
-      setCreateShelterMapLinkInput('');
-      setCreateShelterMapLinkStatus(null);
       setCreateShelterErrors({});
       setIsCreateShelterOpen(true);
     };
@@ -828,71 +784,21 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
         setEditShelterLat(16.0570);
       }
       setEditShelterNotes('');
-      setEditShelterMapLinkInput('');
-      setEditShelterMapLinkStatus(null);
       setEditShelterErrors({});
     };
 
-    // Chuyển đổi liên kết Google Maps sang tọa độ khi tạo mới
-    const handleConvertCreateMapLink = async (customText?: string) => {
-      const textToResolve = (typeof customText === 'string' ? customText : createShelterMapLinkInput).trim();
-      if (!textToResolve) return;
-
-      setResolvingCreateShelterMapLink(true);
-      setCreateShelterMapLinkStatus(null);
-
-      try {
-        const res = await resolveGoogleMapsInput(textToResolve);
-        setCreateShelterLat(res.lat);
-        setCreateShelterLng(res.lng);
-        setCreateShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-        if (res.placeName && (!createShelterAddress || createShelterAddress === (accountAreaWithCity || accountAreaDisplayName) || createShelterAddress === localTabLabel)) {
-          setCreateShelterAddress(res.placeName);
-          setCreateShelterErrors((prev) => ({ ...prev, address: undefined }));
-        }
-        setCreateShelterMapLinkStatus({
-          type: 'success',
-          message: `Đã ghim tọa độ: [${res.lat}, ${res.lng}]${res.placeName ? ` - ${res.placeName}` : ''}`,
-        });
-      } catch (err: any) {
-        setCreateShelterMapLinkStatus({
-          type: 'error',
-          message: err.message || 'Không thể nhận diện tọa độ từ liên kết này.',
-        });
-      } finally {
-        setResolvingCreateShelterMapLink(false);
-      }
-    };
-
-    // Chuyển đổi liên kết Google Maps sang tọa độ khi chỉnh sửa
-    const handleConvertEditMapLink = async (customText?: string) => {
-      const textToResolve = (typeof customText === 'string' ? customText : editShelterMapLinkInput).trim();
-      if (!textToResolve) return;
-
-      setResolvingEditShelterMapLink(true);
-      setEditShelterMapLinkStatus(null);
-
-      try {
-        const res = await resolveGoogleMapsInput(textToResolve);
-        setEditShelterLat(res.lat);
-        setEditShelterLng(res.lng);
-        setEditShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-        if (res.placeName && (!editShelterAddress || editShelterAddress.trim().length <= 3)) {
-          setEditShelterAddress(res.placeName);
-          setEditShelterErrors((prev) => ({ ...prev, address: undefined }));
-        }
-        setEditShelterMapLinkStatus({
-          type: 'success',
-          message: `Đã ghim tọa độ: [${res.lat}, ${res.lng}]${res.placeName ? ` - ${res.placeName}` : ''}`,
-        });
-      } catch (err: any) {
-        setEditShelterMapLinkStatus({
-          type: 'error',
-          message: err.message || 'Không thể nhận diện tọa độ từ liên kết này.',
-        });
-      } finally {
-        setResolvingEditShelterMapLink(false);
-      }
+    const isPlaceholderShelterAddress = (value: string) => {
+      const trimmed = value.trim();
+      if (!trimmed || trimmed.length <= 3) return true;
+      const placeholders = [
+        daNangProvince?.name,
+        'Thành phố Đà Nẵng',
+        accountAreaWithCity,
+        accountAreaDisplayName,
+        localTabLabel,
+      ].filter((item): item is string => Boolean(item));
+      if (placeholders.includes(trimmed)) return true;
+      return daNangWards.some((w) => w.name === trimmed || `${w.name}, ${daNangProvince?.name || 'Thành phố Đà Nẵng'}` === trimmed);
     };
 
     // Gửi yêu cầu Tạo Điểm Trú Ẩn Mới lên server
@@ -956,6 +862,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
           createShelterAreaId ||
           (resolvedAccountArea?._id as string) ||
           accountAreaId ||
+          daNangProvinceId ||
           (areas[0]?._id as string) ||
           fixedJurisdictionConfig.areaId;
         const payload = {
@@ -1366,7 +1273,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
               {isAdmin ? 'Phạm vi quản trị:' : 'Địa bàn phụ trách:'}
             </span>
             <strong style={{ color: '#0f172a', fontWeight: 700, fontSize: '14px' }}>
-              {isAdmin ? 'Toàn quốc' : accountAreaWithCity}
+              {isAdmin ? daNangProvince?.name || 'Thành phố Đà Nẵng' : accountAreaWithCity}
             </strong>
           </div>
 
@@ -1435,15 +1342,15 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     setSelectedAdminProvince('ALL');
                     setShelterPage(1);
                   }}
-                  title="Hiển thị tất cả điểm trú ẩn trên toàn quốc"
+                  title="Hiển thị tất cả điểm trú ẩn tại Đà Nẵng"
                 >
-                  <span>{selectedAdminProvince === 'ALL' ? 'Toàn quốc' : selectedAdminProvince}</span>
+                  <span>{selectedAdminProvince === 'ALL' ? 'Toàn Đà Nẵng' : selectedAdminProvince}</span>
                   <span className="sos-scope-badge">{baseScopedShelters.length}</span>
                 </button>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '4px' }}>
                   <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500 }}>
-                    Lọc theo Khu vực / Tỉnh thành:
+                    Lọc theo Phường / Xã (Đà Nẵng):
                   </span>
                   <select
                     value={selectedAdminProvince}
@@ -1465,36 +1372,12 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                       boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                     }}
                   >
-                    <option value="ALL">-- Tất cả Khu vực / Tỉnh thành (Toàn quốc) --</option>
-                    {areas.filter((a) => a.type === 'PROVINCE').length > 0 && (
-                      <optgroup label="Tỉnh / Thành phố (Trong CSDL Area)">
-                        {areas
-                          .filter((a) => a.type === 'PROVINCE')
-                          .map((a) => (
-                            <option key={`f-prov-${a._id}`} value={a.name}>
-                              {a.name} {a.code ? `[${a.code}]` : ''}
-                            </option>
-                          ))}
-                      </optgroup>
-                    )}
-                    {areas.filter((a) => a.type === 'WARD').length > 0 && (
-                      <optgroup label="Phường / Xã (Trong CSDL Area)">
-                        {areas
-                          .filter((a) => a.type === 'WARD')
-                          .map((a) => (
-                            <option key={`f-ward-${a._id}`} value={a.name}>
-                              {a.name} {a.code ? `[${a.code}]` : ''}
-                            </option>
-                          ))}
-                      </optgroup>
-                    )}
-                    <optgroup label="Danh mục Tỉnh / Thành phố">
-                      {adminProvinceOptions.map((p: { code?: number; name: string; count: number }) => (
-                        <option key={p.code || p.name} value={p.name}>
-                          {p.name} {p.count > 0 ? `(${p.count})` : ''}
-                        </option>
-                      ))}
-                    </optgroup>
+                    <option value="ALL">-- Tất cả Phường / Xã Đà Nẵng ({daNangWards.length}) --</option>
+                    {daNangWards.map((a) => (
+                      <option key={`f-ward-${a._id}`} value={a.name}>
+                        {a.name} {a.code ? `[${a.code}]` : ''}
+                      </option>
+                    ))}
                   </select>
 
                   {selectedAdminProvince !== 'ALL' && (
@@ -1504,7 +1387,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                         setSelectedAdminProvince('ALL');
                         setShelterPage(1);
                       }}
-                      title="Quay lại xem Toàn quốc"
+                      title="Quay lại xem Toàn Đà Nẵng"
                       style={{
                         padding: '5px 10px',
                         fontSize: '12px',
@@ -1516,7 +1399,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                         fontWeight: 600,
                       }}
                     >
-                      ✕ Xem Toàn quốc
+                      ✕ Xem Toàn Đà Nẵng
                     </button>
                   )}
                 </div>
@@ -2882,97 +2765,44 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                         </label>
                         {isAdmin ? (
                           (() => {
-                            const provinces = areas.filter((a) => a.type === 'PROVINCE');
                             const currentArea = areas.find((a) => String(a._id) === String(createShelterAreaId));
-                            const selectedProvId =
-                              currentArea?.type === 'PROVINCE'
-                                ? String(currentArea._id)
-                                : currentArea?.parentId
-                                  ? String((currentArea.parentId as any)?._id || currentArea.parentId)
-                                  : '';
-                            const childWards = selectedProvId
-                              ? areas.filter(
-                                  (a) =>
-                                    a.type === 'WARD' &&
-                                    String((a.parentId as any)?._id || a.parentId) === selectedProvId
-                                )
-                              : [];
-                            const selectedProvObj = provinces.find((p) => String(p._id) === selectedProvId);
 
                             return (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <div style={{ display: 'grid', gridTemplateColumns: selectedProvId ? '1fr 1fr' : '1fr', gap: '8px' }}>
-                                  <div>
-                                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
-                                      1. Tỉnh / Thành phố
-                                    </div>
-                                    <select
-                                      value={selectedProvId}
-                                      onChange={(e) => {
-                                        const provId = e.target.value;
-                                        setCreateShelterAreaId(provId);
-                                        const found = areas.find((a) => String(a._id) === provId);
-                                        if (found && (!createShelterAddress || areas.some((a) => a.name === createShelterAddress))) {
-                                          setCreateShelterAddress(found.name);
-                                        }
-                                      }}
-                                      style={{
-                                        width: '100%',
-                                        padding: '8px 10px',
-                                        borderRadius: '6px',
-                                        border: '1px solid #cbd5e1',
-                                        fontSize: '12.5px',
-                                        color: '#0f172a',
-                                        background: '#ffffff',
-                                        boxSizing: 'border-box',
-                                      }}
-                                    >
-                                      <option value="">-- Chọn Tỉnh / Thành phố (hoặc tự động theo GPS) --</option>
-                                      {provinces.map((p) => (
-                                        <option key={`c-prov-${p._id}`} value={p._id}>
-                                          {p.name}
-                                        </option>
-                                      ))}
-                                    </select>
+                                <div>
+                                  <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
+                                    Phường / Xã ({daNangProvince?.name || 'Thành phố Đà Nẵng'})
                                   </div>
-
-                                  {selectedProvId && (
-                                    <div>
-                                      <div style={{ fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
-                                        2. Phường / Xã nhận thông báo
-                                      </div>
-                                      <select
-                                        value={createShelterAreaId}
-                                        onChange={(e) => {
-                                          const val = e.target.value;
-                                          setCreateShelterAreaId(val);
-                                          const found = areas.find((a) => String(a._id) === val);
-                                          if (found && (!createShelterAddress || areas.some((a) => a.name === createShelterAddress))) {
-                                            setCreateShelterAddress(found.name);
-                                          }
-                                        }}
-                                        style={{
-                                          width: '100%',
-                                          padding: '8px 10px',
-                                          borderRadius: '6px',
-                                          border: '1px solid #cbd5e1',
-                                          fontSize: '12.5px',
-                                          color: '#0f172a',
-                                          background: '#ffffff',
-                                          boxSizing: 'border-box',
-                                        }}
-                                      >
-                                        <option value={selectedProvId}>
-                                          Toàn {selectedProvObj?.name || 'Tỉnh / Thành phố'}
-                                        </option>
-                                        {childWards.map((w) => (
-                                          <option key={`c-ward-${w._id}`} value={w._id}>
-                                            {w.name}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </div>
-                                  )}
+                                  <select
+                                    value={createShelterAreaId || daNangProvinceId}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setCreateShelterAreaId(val);
+                                      const found = areas.find((a) => String(a._id) === val);
+                                      if (found && (!createShelterAddress || areas.some((a) => a.name === createShelterAddress))) {
+                                        setCreateShelterAddress(found.name);
+                                      }
+                                    }}
+                                    style={{
+                                      width: '100%',
+                                      padding: '8px 10px',
+                                      borderRadius: '6px',
+                                      border: '1px solid #cbd5e1',
+                                      fontSize: '12.5px',
+                                      color: '#0f172a',
+                                      background: '#ffffff',
+                                      boxSizing: 'border-box',
+                                    }}
+                                  >
+                                    <option value={daNangProvinceId}>
+                                      Toàn {daNangProvince?.name || 'Thành phố Đà Nẵng'} ({daNangWards.length} Phường/Xã — hoặc tự động theo GPS)
+                                    </option>
+                                    {daNangWards.map((w) => (
+                                      <option key={`c-ward-${w._id}`} value={w._id}>
+                                        {w.name}
+                                      </option>
+                                    ))}
+                                  </select>
                                 </div>
 
                                 <div
@@ -2986,7 +2816,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                                   }}
                                 >
                                   Hệ thống sẽ tự động gửi thông báo đẩy theo tọa độ GPS cho toàn bộ người dân (Citizen) đang có mặt trong{' '}
-                                  <strong>{currentArea?.name || 'khu vực mục tiêu được chọn'}</strong>.
+                                  <strong>{currentArea?.name || daNangProvince?.name || 'Thành phố Đà Nẵng'}</strong>.
                                 </div>
                               </div>
                             );
@@ -3152,252 +2982,28 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     </div>
                   </div>
 
-                  {/* CỘT PHẢI: GOOGLE MAPS LINK RESOLVER, TỌA ĐỘ GPS, BẢN ĐỒ MINI & GHI CHÚ */}
+                  {/* CỘT PHẢI: TÌM KIẾM ĐỊA ĐIỂM, TỌA ĐỘ & BẢN ĐỒ */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    {/* Nhập link Google Maps hoặc tọa độ */}
-                    <div
-                      style={{
-                        background: '#f8fafc',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '8px',
-                        padding: '10px 12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '7px',
+                    <LocationSearchMapPicker
+                      lat={createShelterLat}
+                      lng={createShelterLng}
+                      markerHtml={getShelterMarkerHtml(createShelterType)}
+                      selectedAreaName={daNangProvince?.name || 'Thành phố Đà Nẵng'}
+                      accentColor="#0284c7"
+                      mapHeight={250}
+                      error={createShelterErrors.coordinates}
+                      onLocationSelected={(newLat, newLng, detectedAddress) => {
+                        setCreateShelterLat(Number(newLat.toFixed(5)));
+                        setCreateShelterLng(Number(newLng.toFixed(5)));
+                        if (createShelterErrors.coordinates) {
+                          setCreateShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
+                        }
+                        if (detectedAddress && isPlaceholderShelterAddress(createShelterAddress)) {
+                          setCreateShelterAddress(detectedAddress);
+                          setCreateShelterErrors((prev) => ({ ...prev, address: undefined, general: undefined }));
+                        }
                       }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <label
-                          style={{
-                            fontSize: '12.5px',
-                            fontWeight: 600,
-                            color: '#1e293b',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            margin: 0,
-                          }}
-                        >
-                          <MapPin size={14} color="#0284c7" />
-                          <span>Link Google Map - Tọa độ</span>
-                        </label>
-                        <span style={{ fontSize: '11px', color: '#64748b' }}>
-                          Hỗ trợ cả link rút gọn (maps.app.goo.gl)
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <div style={{ position: 'relative', flex: 1 }}>
-                          <input
-                            type="text"
-                            value={createShelterMapLinkInput}
-                            onChange={(e) => {
-                              setCreateShelterMapLinkInput(e.target.value);
-                              if (createShelterMapLinkStatus) setCreateShelterMapLinkStatus(null);
-                            }}
-                            onPaste={(e) => {
-                              const pastedText = e.clipboardData.getData('text');
-                              if (
-                                pastedText &&
-                                (pastedText.includes('google') ||
-                                  pastedText.includes('goo.gl') ||
-                                  pastedText.includes('http') ||
-                                  pastedText.includes(',') ||
-                                  pastedText.includes('°'))
-                              ) {
-                                setTimeout(() => handleConvertCreateMapLink(pastedText), 50);
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleConvertCreateMapLink();
-                              }
-                            }}
-                            placeholder="Dán link Google Maps hoặc tọa độ (ví dụ 16.0605, 108.2170)..."
-                            style={{
-                              width: '100%',
-                              padding: '7px 10px',
-                              paddingRight: createShelterMapLinkInput ? '28px' : '10px',
-                              borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              fontSize: '12px',
-                              color: '#0f172a',
-                              background: '#ffffff',
-                              boxSizing: 'border-box',
-                            }}
-                          />
-                          {createShelterMapLinkInput && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCreateShelterMapLinkInput('');
-                                setCreateShelterMapLinkStatus(null);
-                              }}
-                              style={{
-                                position: 'absolute',
-                                right: '6px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                background: 'none',
-                                border: 'none',
-                                color: '#94a3b8',
-                                cursor: 'pointer',
-                                padding: '2px',
-                                display: 'flex',
-                                alignItems: 'center',
-                              }}
-                              title="Xóa nội dung"
-                            >
-                              <X size={13} />
-                            </button>
-                          )}
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleConvertCreateMapLink()}
-                          disabled={resolvingCreateShelterMapLink || !createShelterMapLinkInput.trim()}
-                          className="sos-btn-flat"
-                          style={{
-                            padding: '6px 12px',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            background: resolvingCreateShelterMapLink ? '#f1f5f9' : '#0284c7',
-                            color: resolvingCreateShelterMapLink ? '#94a3b8' : '#ffffff',
-                            borderColor: resolvingCreateShelterMapLink ? '#cbd5e1' : '#0284c7',
-                            cursor: resolvingCreateShelterMapLink || !createShelterMapLinkInput.trim() ? 'not-allowed' : 'pointer',
-                            whiteSpace: 'nowrap',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                          }}
-                        >
-                          {resolvingCreateShelterMapLink ? (
-                            <>
-                              <Loader2 size={13} className="animate-spin" />
-                              <span>Đang xử lý...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Navigation size={13} />
-                              <span>Ghim vị trí</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      {createShelterMapLinkStatus && (
-                        <div
-                          style={{
-                            fontSize: '11px',
-                            padding: '5px 8px',
-                            borderRadius: '5px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            background: createShelterMapLinkStatus.type === 'success' ? '#f0fdf4' : '#fef2f2',
-                            color: createShelterMapLinkStatus.type === 'success' ? '#166534' : '#991b1b',
-                            border: `1px solid ${createShelterMapLinkStatus.type === 'success' ? '#bbf7d0' : '#fecaca'}`,
-                          }}
-                        >
-                          {createShelterMapLinkStatus.type === 'success' ? (
-                            <CheckCircle2 size={12} style={{ flexShrink: 0 }} />
-                          ) : (
-                            <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                          )}
-                          <span>{createShelterMapLinkStatus.message}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Tọa độ GPS */}
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
-                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', margin: 0 }}>
-                          Tọa độ GPS [Vĩ độ, Kinh độ]
-                        </label>
-                        <span style={{ fontSize: '11px', color: '#64748b' }}>
-                          Kéo ghim hoặc click trên bản đồ
-                        </span>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                        <div>
-                          <input
-                            type="number"
-                            step="0.00001"
-                            value={createShelterLat}
-                            onChange={(e) => {
-                              setCreateShelterLat(parseFloat(e.target.value) || 0);
-                              if (createShelterErrors.coordinates) {
-                                setCreateShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-                              }
-                            }}
-                            title="Vĩ độ (Latitude)"
-                            style={{
-                              width: '100%',
-                              padding: '7px 10px',
-                              borderRadius: '6px',
-                              border: createShelterErrors.coordinates ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                              background: createShelterErrors.coordinates ? '#fff5f5' : '#ffffff',
-                              fontSize: '12.5px',
-                              color: '#0f172a',
-                              boxSizing: 'border-box',
-                              outline: 'none',
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <input
-                            type="number"
-                            step="0.00001"
-                            value={createShelterLng}
-                            onChange={(e) => {
-                              setCreateShelterLng(parseFloat(e.target.value) || 0);
-                              if (createShelterErrors.coordinates) {
-                                setCreateShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-                              }
-                            }}
-                            title="Kinh độ (Longitude)"
-                            style={{
-                              width: '100%',
-                              padding: '7px 10px',
-                              borderRadius: '6px',
-                              border: createShelterErrors.coordinates ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                              background: createShelterErrors.coordinates ? '#fff5f5' : '#ffffff',
-                              fontSize: '12.5px',
-                              color: '#0f172a',
-                              boxSizing: 'border-box',
-                              outline: 'none',
-                            }}
-                          />
-                        </div>
-                      </div>
-                      {createShelterErrors.coordinates && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
-                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                          <span>{createShelterErrors.coordinates}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Bản đồ mini tương tác */}
-                    <div style={{ flex: 1, minHeight: '220px' }}>
-                      <ShelterMiniMap
-                        lat={createShelterLat}
-                        lng={createShelterLng}
-                        name={createShelterName || 'Vị trí điểm trú ẩn'}
-                        type={createShelterType}
-                        interactive={true}
-                        onLocationChange={(newLat, newLng) => {
-                          setCreateShelterLat(Number(newLat.toFixed(5)));
-                          setCreateShelterLng(Number(newLng.toFixed(5)));
-                          if (createShelterErrors.coordinates) {
-                            setCreateShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-                          }
-                        }}
-                      />
-                    </div>
+                    />
 
                     {/* Ghi chú cơ sở vật chất / Hướng dẫn */}
                     <div>
@@ -3650,7 +3256,7 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                         </label>
                         {isAdmin ? (
                           <select
-                            value={editShelterAreaId}
+                            value={editShelterAreaId || daNangProvinceId}
                             onChange={(e) => {
                               const val = e.target.value;
                               setEditShelterAreaId(val);
@@ -3670,38 +3276,25 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                               boxSizing: 'border-box',
                             }}
                           >
-                            <option value="">-- Chọn khu vực hành chính trong hệ thống ({areas.length} khu vực) --</option>
-                            {areas.filter((a) => a.type === 'PROVINCE').length > 0 && (
-                              <optgroup label="Cấp Tỉnh / Thành phố">
-                                {areas
-                                  .filter((a) => a.type === 'PROVINCE')
-                                  .map((a) => (
-                                    <option key={`edit-prov-${a._id}`} value={a._id}>
-                                      {a.name} {a.code ? `[${a.code}]` : ''}
-                                    </option>
-                                  ))}
-                              </optgroup>
+                            {daNangProvinceId ? (
+                              <option value={daNangProvinceId}>
+                                Toàn {daNangProvince?.name || 'Thành phố Đà Nẵng'} ({daNangWards.length} Phường/Xã)
+                              </option>
+                            ) : (
+                              <option value="">-- Chọn Phường / Xã Đà Nẵng --</option>
                             )}
-                            {areas.filter((a) => a.type === 'WARD').length > 0 && (
-                              <optgroup label="Cấp Phường / Xã">
-                                {areas
-                                  .filter((a) => a.type === 'WARD')
-                                  .map((a) => (
-                                    <option key={`edit-ward-${a._id}`} value={a._id}>
-                                      {a.name} {a.code ? `[${a.code}]` : ''}
-                                    </option>
-                                  ))}
-                              </optgroup>
+                            {editShelterAreaId && !daNangAreaIds.has(String(editShelterAreaId)) && (
+                              <option value={editShelterAreaId}>
+                                {areas.find((a) => String(a._id) === String(editShelterAreaId))?.name || 'Khu vực hiện tại'}
+                              </option>
                             )}
-                            {areas.filter((a) => a.type !== 'PROVINCE' && a.type !== 'WARD').length > 0 && (
-                              <optgroup label="Khu vực hành chính khác">
-                                {areas
-                                  .filter((a) => a.type !== 'PROVINCE' && a.type !== 'WARD')
-                                  .map((a) => (
-                                    <option key={`edit-other-${a._id}`} value={a._id}>
-                                      {a.name} {a.code ? `[${a.code}]` : ''}
-                                    </option>
-                                  ))}
+                            {daNangWards.length > 0 && (
+                              <optgroup label="Phường / Xã tại Đà Nẵng">
+                                {daNangWards.map((a) => (
+                                  <option key={`edit-ward-${a._id}`} value={a._id}>
+                                    {a.name} {a.code ? `[${a.code}]` : ''}
+                                  </option>
+                                ))}
                               </optgroup>
                             )}
                           </select>
@@ -3849,252 +3442,28 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     </div>
                   </div>
 
-                  {/* CỘT PHẢI */}
+                  {/* CỘT PHẢI: TÌM KIẾM ĐỊA ĐIỂM, TỌA ĐỘ & BẢN ĐỒ */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    {/* Link Google Maps */}
-                    <div
-                      style={{
-                        background: '#f8fafc',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '8px',
-                        padding: '10px 12px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '7px',
+                    <LocationSearchMapPicker
+                      lat={editShelterLat}
+                      lng={editShelterLng}
+                      markerHtml={getShelterMarkerHtml(editShelterType)}
+                      selectedAreaName={daNangProvince?.name || 'Thành phố Đà Nẵng'}
+                      accentColor="#0284c7"
+                      mapHeight={250}
+                      error={editShelterErrors.coordinates}
+                      onLocationSelected={(newLat, newLng, detectedAddress) => {
+                        setEditShelterLat(Number(newLat.toFixed(5)));
+                        setEditShelterLng(Number(newLng.toFixed(5)));
+                        if (editShelterErrors.coordinates) {
+                          setEditShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
+                        }
+                        if (detectedAddress && isPlaceholderShelterAddress(editShelterAddress)) {
+                          setEditShelterAddress(detectedAddress);
+                          setEditShelterErrors((prev) => ({ ...prev, address: undefined, general: undefined }));
+                        }
                       }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <label
-                          style={{
-                            fontSize: '12.5px',
-                            fontWeight: 600,
-                            color: '#1e293b',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            margin: 0,
-                          }}
-                        >
-                          <MapPin size={14} color="#0284c7" />
-                          <span>Link Google Map - Tọa độ</span>
-                        </label>
-                        <span style={{ fontSize: '11px', color: '#64748b' }}>
-                          Hỗ trợ cả link rút gọn
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <div style={{ position: 'relative', flex: 1 }}>
-                          <input
-                            type="text"
-                            value={editShelterMapLinkInput}
-                            onChange={(e) => {
-                              setEditShelterMapLinkInput(e.target.value);
-                              if (editShelterMapLinkStatus) setEditShelterMapLinkStatus(null);
-                            }}
-                            onPaste={(e) => {
-                              const pastedText = e.clipboardData.getData('text');
-                              if (
-                                pastedText &&
-                                (pastedText.includes('google') ||
-                                  pastedText.includes('goo.gl') ||
-                                  pastedText.includes('http') ||
-                                  pastedText.includes(',') ||
-                                  pastedText.includes('°'))
-                              ) {
-                                setTimeout(() => handleConvertEditMapLink(pastedText), 50);
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleConvertEditMapLink();
-                              }
-                            }}
-                            placeholder="Dán link Google Maps hoặc tọa độ..."
-                            style={{
-                              width: '100%',
-                              padding: '7px 10px',
-                              paddingRight: editShelterMapLinkInput ? '28px' : '10px',
-                              borderRadius: '6px',
-                              border: '1px solid #cbd5e1',
-                              fontSize: '12px',
-                              color: '#0f172a',
-                              background: '#ffffff',
-                              boxSizing: 'border-box',
-                            }}
-                          />
-                          {editShelterMapLinkInput && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditShelterMapLinkInput('');
-                                setEditShelterMapLinkStatus(null);
-                              }}
-                              style={{
-                                position: 'absolute',
-                                right: '6px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                background: 'none',
-                                border: 'none',
-                                color: '#94a3b8',
-                                cursor: 'pointer',
-                                padding: '2px',
-                                display: 'flex',
-                                alignItems: 'center',
-                              }}
-                              title="Xóa nội dung"
-                            >
-                              <X size={13} />
-                            </button>
-                          )}
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleConvertEditMapLink()}
-                          disabled={resolvingEditShelterMapLink || !editShelterMapLinkInput.trim()}
-                          className="sos-btn-flat"
-                          style={{
-                            padding: '6px 12px',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            background: resolvingEditShelterMapLink ? '#f1f5f9' : '#0284c7',
-                            color: resolvingEditShelterMapLink ? '#94a3b8' : '#ffffff',
-                            borderColor: resolvingEditShelterMapLink ? '#cbd5e1' : '#0284c7',
-                            cursor: resolvingEditShelterMapLink || !editShelterMapLinkInput.trim() ? 'not-allowed' : 'pointer',
-                            whiteSpace: 'nowrap',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                          }}
-                        >
-                          {resolvingEditShelterMapLink ? (
-                            <>
-                              <Loader2 size={13} className="animate-spin" />
-                              <span>Đang xử lý...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Navigation size={13} />
-                              <span>Ghim vị trí</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      {editShelterMapLinkStatus && (
-                        <div
-                          style={{
-                            fontSize: '11px',
-                            padding: '5px 8px',
-                            borderRadius: '5px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            background: editShelterMapLinkStatus.type === 'success' ? '#f0fdf4' : '#fef2f2',
-                            color: editShelterMapLinkStatus.type === 'success' ? '#166534' : '#991b1b',
-                            border: `1px solid ${editShelterMapLinkStatus.type === 'success' ? '#bbf7d0' : '#fecaca'}`,
-                          }}
-                        >
-                          {editShelterMapLinkStatus.type === 'success' ? (
-                            <CheckCircle2 size={12} style={{ flexShrink: 0 }} />
-                          ) : (
-                            <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                          )}
-                          <span>{editShelterMapLinkStatus.message}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Tọa độ GPS */}
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '5px' }}>
-                        <label style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a', margin: 0 }}>
-                          Tọa độ GPS [Vĩ độ, Kinh độ]
-                        </label>
-                        <span style={{ fontSize: '11px', color: '#64748b' }}>
-                          Kéo ghim hoặc click trên bản đồ
-                        </span>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                        <div>
-                          <input
-                            type="number"
-                            step="0.00001"
-                            value={editShelterLat}
-                            onChange={(e) => {
-                              setEditShelterLat(parseFloat(e.target.value) || 0);
-                              if (editShelterErrors.coordinates) {
-                                setEditShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-                              }
-                            }}
-                            title="Vĩ độ (Latitude)"
-                            style={{
-                              width: '100%',
-                              padding: '7px 10px',
-                              borderRadius: '6px',
-                              border: editShelterErrors.coordinates ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                              background: editShelterErrors.coordinates ? '#fff5f5' : '#ffffff',
-                              fontSize: '12.5px',
-                              color: '#0f172a',
-                              boxSizing: 'border-box',
-                              outline: 'none',
-                            }}
-                          />
-                        </div>
-                        <div>
-                          <input
-                            type="number"
-                            step="0.00001"
-                            value={editShelterLng}
-                            onChange={(e) => {
-                              setEditShelterLng(parseFloat(e.target.value) || 0);
-                              if (editShelterErrors.coordinates) {
-                                setEditShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-                              }
-                            }}
-                            title="Kinh độ (Longitude)"
-                            style={{
-                              width: '100%',
-                              padding: '7px 10px',
-                              borderRadius: '6px',
-                              border: editShelterErrors.coordinates ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-                              background: editShelterErrors.coordinates ? '#fff5f5' : '#ffffff',
-                              fontSize: '12.5px',
-                              color: '#0f172a',
-                              boxSizing: 'border-box',
-                              outline: 'none',
-                            }}
-                          />
-                        </div>
-                      </div>
-                      {editShelterErrors.coordinates && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px', color: '#dc2626', fontSize: '11.5px', fontWeight: 500 }}>
-                          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
-                          <span>{editShelterErrors.coordinates}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Bản đồ mini tương tác */}
-                    <div style={{ flex: 1, minHeight: '220px' }}>
-                      <ShelterMiniMap
-                        lat={editShelterLat}
-                        lng={editShelterLng}
-                        name={editShelterName || 'Vị trí điểm trú ẩn'}
-                        type={editShelterType}
-                        interactive={true}
-                        onLocationChange={(newLat, newLng) => {
-                          setEditShelterLat(Number(newLat.toFixed(5)));
-                          setEditShelterLng(Number(newLng.toFixed(5)));
-                          if (editShelterErrors.coordinates) {
-                            setEditShelterErrors((prev) => ({ ...prev, coordinates: undefined, general: undefined }));
-                          }
-                        }}
-                      />
-                    </div>
+                    />
 
                     {/* Ghi chú */}
                     <div>

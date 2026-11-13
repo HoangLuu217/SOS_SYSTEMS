@@ -95,7 +95,7 @@ export async function executeWeatherWorkflowApi(): Promise<{
 }
 
 export function subscribeWeatherArticleUpdates(
-  onUpdated: () => void,
+  onUpdated: (payload?: { action?: string; source?: string; reason?: string; articleId?: string }) => void,
   onConnected?: () => void
 ): () => void {
   let eventSource: EventSource | null = null;
@@ -105,7 +105,7 @@ export function subscribeWeatherArticleUpdates(
     eventSource.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
-        if (payload?.action === 'WEATHER_ARTICLES_UPDATED') onUpdated();
+        if (payload?.action === 'WEATHER_ARTICLES_UPDATED') onUpdated(payload);
       } catch (error) {
         console.warn('[Weather SSE] Không đọc được sự kiện cập nhật:', error);
       }

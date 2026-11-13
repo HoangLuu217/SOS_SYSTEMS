@@ -749,18 +749,24 @@ class NotificationService {
     // Nếu là 'WEATHER' (Thông báo thời tiết), đồng bộ vào bảng WeatherNotification riêng biệt
     if (normalizedType === 'WEATHER') {
       try {
+        let syncedArticleId = null;
         if (extraData.weatherArticleId && mongoose.Types.ObjectId.isValid(extraData.weatherArticleId)) {
-          await WeatherNotification.findByIdAndUpdate(extraData.weatherArticleId, {
-            $set: {
-              broadcastId,
-              areaId: targetAreaId,
-              area: targetAreaName,
-              regions: targetAreaName ? [targetAreaName] : [],
-              status: 'approved',
+          const updatedArticle = await WeatherNotification.findByIdAndUpdate(
+            extraData.weatherArticleId,
+            {
+              $set: {
+                broadcastId,
+                areaId: targetAreaId,
+                area: targetAreaName,
+                regions: targetAreaName ? [targetAreaName] : [],
+                status: 'approved',
+              },
             },
-          });
+            { new: true }
+          );
+          syncedArticleId = updatedArticle?._id?.toString() || extraData.weatherArticleId.toString();
         } else {
-          await WeatherNotification.create({
+          const createdArticle = await WeatherNotification.create({
             title: title.trim(),
             content: content.trim(),
             summary: extraData.summary || content.trim().slice(0, 200),
@@ -780,7 +786,15 @@ class NotificationService {
             broadcastId,
             status: 'approved',
           });
+          syncedArticleId = createdArticle?._id?.toString() || null;
         }
+
+        const weatherArticleRealtimeService = require('./weatherArticleRealtime.service');
+        weatherArticleRealtimeService.publishArticlesUpdated({
+          source: 'broadcast-sync',
+          reason: 'weather_broadcast',
+          articleId: syncedArticleId,
+        });
       } catch (weatherErr) {
         console.warn('Lưu kèm bảng WeatherNotification gặp lỗi nhỏ (không ảnh hưởng notification):', weatherErr.message);
       }

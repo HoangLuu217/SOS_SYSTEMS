@@ -179,7 +179,11 @@ class NotificationController {
         return;
       }
 
-      if (payload.action === 'DELETED' || payload.action === 'BROADCAST') {
+      if (
+        payload.action === 'DELETED' ||
+        payload.action === 'BROADCAST' ||
+        payload.action === 'WEATHER_ARTICLES_UPDATED'
+      ) {
         res.write(`data: ${JSON.stringify(payload)}\n\n`);
         if (typeof res.flush === 'function') res.flush();
       }

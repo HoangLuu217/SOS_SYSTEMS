@@ -125,15 +125,6 @@ export const BloodEventMapPicker: React.FC<BloodEventMapPickerProps> = ({
 
       if (markerRef.current) {
         markerRef.current.setLatLng([fixedLat, fixedLng]);
-        markerRef.current
-          .setPopupContent(
-            `<div style="font-family:sans-serif;font-size:12px;font-weight:600;color:#0f172a;line-height:1.4;">
-              📍 Vị trí đợt hiến máu<br/>
-              <span style="color:#64748b;font-weight:normal;">[${fixedLat.toFixed(6)}, ${fixedLng.toFixed(6)}]</span><br/>
-              <span style="color:#2563eb;font-weight:500;font-size:11px;">(Kéo thả ghim hoặc bấm bản đồ để chỉnh)</span>
-            </div>`
-          )
-          .openPopup();
       }
 
       if (fly && mapRef.current) {
@@ -197,23 +188,12 @@ export const BloodEventMapPicker: React.FC<BloodEventMapPickerProps> = ({
       className: '',
       iconSize: [34, 34],
       iconAnchor: [17, 34],
-      popupAnchor: [0, -34],
     });
 
     const marker = L.marker([initialPos.lat, initialPos.lng], {
       icon: customIcon,
       draggable: true,
     }).addTo(map);
-
-    marker
-      .bindPopup(
-        `<div style="font-family:sans-serif;font-size:12px;font-weight:600;color:#0f172a;line-height:1.4;">
-          📍 Vị trí đợt hiến máu<br/>
-          <span style="color:#64748b;font-weight:normal;">[${initialPos.lat.toFixed(6)}, ${initialPos.lng.toFixed(6)}]</span><br/>
-          <span style="color:#2563eb;font-weight:500;font-size:11px;">(Kéo thả ghim hoặc bấm bản đồ để chỉnh)</span>
-        </div>`
-      )
-      .openPopup();
 
     mapRef.current = map;
     markerRef.current = marker;
@@ -258,14 +238,6 @@ export const BloodEventMapPicker: React.FC<BloodEventMapPickerProps> = ({
       setCurrentCoords(coords);
       if (markerRef.current) {
         markerRef.current.setLatLng([coords.lat, coords.lng]);
-        markerRef.current
-          .setPopupContent(
-            `<div style="font-family:sans-serif;font-size:12px;font-weight:600;color:#0f172a;line-height:1.4;">
-              📍 Vị trí từ Google Maps<br/>
-              <span style="color:#64748b;font-weight:normal;">[${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}]</span>
-            </div>`
-          )
-          .openPopup();
       }
       mapRef.current.flyTo([coords.lat, coords.lng], 17, { animate: true, duration: 0.8 });
       void doReverseGeocode(coords.lat, coords.lng);

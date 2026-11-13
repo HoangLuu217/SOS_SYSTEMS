@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { WeatherNotification, AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
+const weatherArticleRealtimeService = require('./weatherArticleRealtime.service');
 
 const parsePublishedAt = (value) => {
   if (value === undefined) return undefined;
@@ -256,6 +257,11 @@ class WeatherNotificationService {
     });
 
     await doc.save();
+    weatherArticleRealtimeService.publishArticlesUpdated({
+      source: 'crud',
+      reason: 'created',
+      articleId: doc._id.toString(),
+    });
     return doc;
   }
 
@@ -320,6 +326,11 @@ class WeatherNotificationService {
     }
 
     await item.save();
+    weatherArticleRealtimeService.publishArticlesUpdated({
+      source: 'crud',
+      reason: 'updated',
+      articleId: item._id.toString(),
+    });
     return item;
   }
 
@@ -355,6 +366,11 @@ class WeatherNotificationService {
         console.warn('Lỗi dọn dẹp Notification khi xóa vĩnh viễn bản tin:', delErr.message);
       }
 
+      weatherArticleRealtimeService.publishArticlesUpdated({
+        source: 'crud',
+        reason: 'deleted',
+        articleId: item._id.toString(),
+      });
       return item;
     }
 
@@ -384,6 +400,11 @@ class WeatherNotificationService {
       console.warn('Lỗi dọn dẹp Notification liên kết khi lưu trữ bản tin thời tiết:', delErr.message);
     }
 
+    weatherArticleRealtimeService.publishArticlesUpdated({
+      source: 'crud',
+      reason: 'archived',
+      articleId: item._id.toString(),
+    });
     return item;
   }
 
@@ -462,6 +483,14 @@ class WeatherNotificationService {
     console.log(
       `🧹 [Weather Auto-Cleanup] Đã tự động xóa vĩnh viễn ${result.deletedCount} bản tin quá ${daysThreshold} ngày (${archivedDeleted} tin lưu trữ, ${pendingDeleted} tin pending).`
     );
+
+    if (result.deletedCount > 0) {
+      weatherArticleRealtimeService.publishArticlesUpdated({
+        source: 'cleanup',
+        reason: 'cleanup_expired',
+        deletedCount: result.deletedCount,
+      });
+    }
 
     return {
       totalDeleted: result.deletedCount,

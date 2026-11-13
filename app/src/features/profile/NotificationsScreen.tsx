@@ -9,16 +9,16 @@ import {
   Modal,
   TouchableWithoutFeedback,
   RefreshControl,
-  Animated,
   DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { PROFILE_THEME } from './theme';
-import { backendApi, NotificationItem } from '@/api';
+import { NotificationItem } from '@/api';
 import {
   formatRelativeTimeVi,
   classifyNotification,
+  isWeatherNotification,
   NOTIFICATION_CATEGORIES,
   NotificationFilterKey,
 } from '@/utils';
@@ -26,64 +26,9 @@ import { useNotifications } from '@/context/NotificationContext';
 
 interface NotificationsScreenProps {
   onBack?: () => void;
-  onNavigateToTab?: (tab: string) => void;
+  onNavigateToTab?: (tab: string, options?: any) => void;
   onNavigateToProfile?: () => void;
 }
-
-// Dữ liệu thông báo thực tế cho nhân viên cứu hộ cứu nạn
-const INITIAL_RESCUER_NOTIFICATIONS: NotificationItem[] = [
-  {
-    _id: 'notif-assignment-1',
-    type: 'RESCUE',
-    title: 'Phân công nhiệm vụ cứu hộ khẩn cấp #SOS-2849',
-    content:
-      'Bạn được Trung tâm điều phối giao nhiệm vụ ứng cứu 3 người dân bị cô lập do lũ dâng cao tại Thôn An Sơn, Xã Hòa Khương, Huyện Hòa Vang, TP. Đà Nẵng. Phương tiện yêu cầu: Xuồng cứu sinh. Vui lòng phản hồi trạng thái và di chuyển tới vị trí tập kết ngay lập tức.',
-    isRead: false,
-    createdAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(), // 15 phút trước
-    actionUrl: 'sos_detail',
-  },
-  {
-    _id: 'notif-verification-2',
-    type: 'SYSTEM',
-    title: 'Kết quả thẩm định hồ sơ cứu hộ chuyên môn',
-    content:
-      'Chúc mừng Nguyễn Minh An! Hồ sơ năng lực cứu hộ chuyên môn của bạn đã được Ban chỉ huy Phòng chống thiên tai & Tìm kiếm cứu nạn xác minh thành công. Trạng thái: Hồ sơ cứu hộ đã xác minh. Bạn đã đủ điều kiện tiếp nhận và chỉ huy các nhiệm vụ cứu nạn cấp bách.',
-    isRead: false,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 giờ trước
-    actionUrl: 'profile',
-  },
-  {
-    _id: 'notif-weather-3',
-    type: 'WEATHER',
-    title: 'Cảnh báo thời tiết nguy hiểm: Mưa lũ đặc biệt lớn',
-    content:
-      'Trung tâm Dự báo Khí tượng Thủy văn Quốc gia phát cảnh báo đỏ: Mưa rất to lượng mưa từ 200 - 380mm gây ngập lụt sâu và nguy cơ sạt lở đất nghiêm trọng tại lưu vực sông Vu Gia - Thu Bồn. Đề nghị toàn bộ đội viên cứu hộ duy trì trạng thái "Sẵn sàng" trực chiến 24/24.',
-    isRead: false,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(), // 5 giờ trước
-    actionUrl: 'map',
-  },
-  {
-    _id: 'notif-update-4',
-    type: 'ALERT',
-    title: 'Cập nhật tình hình sơ tán tại Xã Hòa Tiến',
-    content:
-      'Đội phản ứng nhanh số 2 đã hoàn tất việc hỗ trợ sơ tán 18 hộ dân vùng trũng thấp ven sông về nhà văn hóa an toàn. Áo phao và nước uống tinh khiết đã được cấp phát đầy đủ.',
-    isRead: true,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 ngày trước
-    actionUrl: 'sos_detail',
-  },
-  {
-    _id: 'notif-system-5',
-    type: 'SYSTEM',
-    title: 'Kích hoạt tài khoản nhân viên cứu hộ thành công',
-    content:
-      'Tài khoản cứu hộ của bạn đã được kích hoạt thành công trên hệ thống điều phối hỗ trợ cứu nạn. Trạng thái tài khoản: Đang hoạt động.',
-    isRead: true,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), // 2 ngày trước
-    actionUrl: 'profile',
-  },
-];
-
 
 type ScreenStateMode = 'populated' | 'empty' | 'loading' | 'error';
 
@@ -97,11 +42,15 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     refreshNotifications,
     markAsRead: markContextNotificationAsRead,
     markAllAsRead: markContextNotificationsAsRead,
+    deleteNotification: deleteContextNotification,
     settings,
     updateSetting,
   } = useNotifications();
-  // Trạng thái danh sách thông báo
-  const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_RESCUER_NOTIFICATIONS);
+  // Đồng bộ trực tiếp danh sách thông báo (loại trừ các bài viết thời tiết đã có ở tab Tin tức)
+  const notifications = useMemo(
+    () => realtimeNotifications.filter((n) => !isWeatherNotification(n)),
+    [realtimeNotifications]
+  );
   const [activeTab, setActiveTab] = useState<'all' | 'unread'>('all');
   const [selectedCategory, setSelectedCategory] = useState<NotificationFilterKey>('all');
 
@@ -123,7 +72,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     try {
       await refreshNotifications();
     } catch {
-      // Giữ nguyên dữ liệu cứu hộ mẫu
+      // Giữ nguyên danh sách hiện tại
     } finally {
       setRefreshing(false);
     }
@@ -133,27 +82,17 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     loadNotifications();
   }, []);
 
-  useEffect(() => {
-    if (realtimeNotifications.length > 0) {
-      setNotifications(realtimeNotifications);
-    }
-  }, [realtimeNotifications]);
-
   const onRefresh = () => {
     loadNotifications(true);
   };
 
   // Đọc tất cả thông báo
   const handleMarkAllAsRead = async () => {
-    setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
     await markContextNotificationsAsRead();
   };
 
   // Đánh dấu 1 thông báo là đã đọc
   const handleMarkAsRead = async (item: NotificationItem) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n._id === item._id ? { ...n, isRead: true } : n))
-    );
     if (selectedNotif && selectedNotif._id === item._id) {
       setSelectedNotif({ ...selectedNotif, isRead: true });
     }
@@ -195,15 +134,42 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
   const handleConfirmDelete = async () => {
     if (!notifToDelete) return;
     const targetId = notifToDelete._id;
-    setNotifications((prev) => prev.filter((n) => n._id !== targetId));
     setDeleteConfirmVisible(false);
     setNotifToDelete(null);
 
-    try {
-      await backendApi.deleteNotification(targetId);
-    } catch {
-      // Ignored
+    await deleteContextNotification(targetId);
+  };
+
+  const getDetailActionConfig = (item: NotificationItem | null): { icon: string; label: string } | null => {
+    if (!item) return null;
+    if (item.actionUrl === 'safety_check' || item.type === 'SAFETY_CHECK' || item.data?.isSafetyCheck) {
+      return { icon: 'shield', label: 'Đánh dấu an toàn ngay' };
     }
+    if (item.actionUrl === 'chat' || item.type === 'CHAT' || item.data?.isChat) {
+      return { icon: 'message-circle', label: 'Mở cuộc trò chuyện ngay' };
+    }
+    if (item.actionUrl === 'blood_donation' || item.type === 'BLOOD_DONATION' || item.data?.isBloodDonation) {
+      return { icon: 'heart', label: 'Xem & Xác nhận đăng ký hiến máu' };
+    }
+    if (item.type === 'SAFE_LOCATION' || item.data?.safeLocationId) {
+      return { icon: 'map-pin', label: 'Xem điểm trú ẩn trên bản đồ' };
+    }
+    if (item.type === 'HAZARD' || item.data?.hazardReportId) {
+      return { icon: 'map', label: 'Xem điểm nguy hiểm trên bản đồ' };
+    }
+    if (item.actionUrl === 'sos_detail' || item.actionUrl === 'tracking') {
+      return { icon: 'navigation', label: 'Xem tiến trình cứu trợ' };
+    }
+    if (item.actionUrl === 'map') {
+      return { icon: 'map', label: 'Xem bản đồ cảnh báo' };
+    }
+    if (item.actionUrl === 'profile') {
+      return { icon: 'user', label: 'Xem hồ sơ chuyên môn' };
+    }
+    if (item.actionUrl) {
+      return { icon: 'arrow-right', label: 'Xem chi tiết' };
+    }
+    return null;
   };
 
   // Xử lý nút hành động trong modal chi tiết
@@ -230,6 +196,10 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     ) {
       if (onNavigateToTab) onNavigateToTab('home');
       DeviceEventEmitter.emit('open:local_authority_chat', item.data || item);
+    } else if (item.type === 'SAFE_LOCATION' || item.data?.safeLocationId) {
+      if (onNavigateToTab) onNavigateToTab('map', { filter: 'SAFE' });
+    } else if (item.type === 'HAZARD' || item.data?.hazardReportId) {
+      if (onNavigateToTab) onNavigateToTab('map', { filter: 'HAZARD' });
     } else if (item.actionUrl === 'sos_detail' || item.actionUrl === 'tracking') {
       if (onNavigateToTab) onNavigateToTab('sos');
     } else if (item.actionUrl === 'profile') {
@@ -240,12 +210,14 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
     }
   };
 
-  // Tính số lượng chưa đọc động (chỉ tính các nhóm người dùng đang BẬT)
-  const unreadCount = useMemo(() => {
-    return notifications.filter(
-      (n) => !n.isRead && settings[classifyNotification(n)] !== false
-    ).length;
+  // Tính số lượng đang bật (theo cài đặt) & số lượng chưa đọc động
+  const enabledNotifications = useMemo(() => {
+    return notifications.filter((n) => settings[classifyNotification(n)] !== false);
   }, [notifications, settings]);
+
+  const unreadCount = useMemo(() => {
+    return enabledNotifications.filter((n) => !n.isRead).length;
+  }, [enabledNotifications]);
 
   // Lọc theo tab & danh mục trong cài đặt
   const displayList = useMemo(() => {
@@ -300,6 +272,18 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
             <Feather name="map-pin" size={20} color="#16A34A" />
           </View>
         );
+      case 'BLOOD_DONATION':
+        return (
+          <View style={[styles.typeIconBox, { backgroundColor: '#FEF2F2' }]}>
+            <Feather name="heart" size={20} color="#DC2626" />
+          </View>
+        );
+      case 'SAFETY_CHECK':
+        return (
+          <View style={[styles.typeIconBox, { backgroundColor: '#E0F2FE' }]}>
+            <Feather name="shield" size={20} color="#0284C7" />
+          </View>
+        );
       case 'CHAT':
         return (
           <View style={[styles.typeIconBox, { backgroundColor: '#E0F2FE' }]}>
@@ -315,6 +299,8 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
         );
     }
   };
+
+  const detailActionConfig = getDetailActionConfig(selectedNotif);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -355,7 +341,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
         )}
       </View>
 
-      {/* Bộ lọc danh mục như trong Cài đặt thông báo */}
+      {/* Bộ lọc danh mục (không chứa Tin tức/Thời tiết vì đã có riêng ở tab Tin tức) */}
       <View style={styles.categoryScrollWrap}>
         <ScrollView
           horizontal
@@ -381,12 +367,6 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
               label: NOTIFICATION_CATEGORIES.systemNotification.shortLabel,
               icon: 'bell',
               color: NOTIFICATION_CATEGORIES.systemNotification.color,
-            },
-            {
-              key: 'news' as const,
-              label: NOTIFICATION_CATEGORIES.news.shortLabel,
-              icon: 'file-text',
-              color: NOTIFICATION_CATEGORIES.news.color,
             },
           ].map((cat) => {
             const isSel = selectedCategory === cat.key;
@@ -434,7 +414,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
           </Text>
           <View style={[styles.tabCountBadge, activeTab === 'all' && styles.tabCountBadgeActive]}>
             <Text style={[styles.tabCountText, activeTab === 'all' && styles.tabCountTextActive]}>
-              {screenState === 'empty' ? 0 : notifications.length}
+              {screenState === 'empty' ? 0 : enabledNotifications.length}
             </Text>
           </View>
         </TouchableOpacity>
@@ -521,7 +501,7 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
           <Text style={styles.emptyDesc}>
             {activeTab === 'unread'
               ? 'Tất cả thông báo điều phối và cảnh báo đều đã được đọc.'
-              : 'Các thông báo khẩn cấp, phân công nhiệm vụ và cảnh báo thời tiết sẽ hiển thị tại đây.'}
+              : 'Các thông báo khẩn cấp, cảnh báo địa bàn, điểm an toàn và cập nhật hệ thống sẽ hiển thị tại đây.'}
           </Text>
           {screenState === 'empty' && (
             <TouchableOpacity
@@ -751,42 +731,20 @@ export const NotificationsScreen: React.FC<NotificationsScreenProps> = ({
                 </ScrollView>
 
                 {/* Nút hành động tương ứng khi có liên kết nghiệp vụ */}
-                {selectedNotif?.actionUrl && (
+                {detailActionConfig && selectedNotif && (
                   <TouchableOpacity
                     style={styles.detailActionButton}
                     onPress={() => handleDetailAction(selectedNotif)}
                     activeOpacity={0.8}
                   >
                     <Feather
-                      name={
-                        selectedNotif.actionUrl === 'safety_check' || selectedNotif.type === 'SAFETY_CHECK'
-                          ? 'shield'
-                          : selectedNotif.actionUrl === 'chat' || selectedNotif.type === 'CHAT'
-                          ? 'message-circle'
-                          : selectedNotif.actionUrl === 'sos_detail'
-                          ? 'navigation'
-                          : selectedNotif.actionUrl === 'map'
-                          ? 'map'
-                          : 'arrow-right'
-                      }
+                      name={detailActionConfig.icon as any}
                       size={16}
                       color="#FFFFFF"
                       style={{ marginRight: 6 }}
                     />
                     <Text style={styles.detailActionText}>
-                      {selectedNotif.actionUrl === 'safety_check' || selectedNotif.type === 'SAFETY_CHECK'
-                        ? 'Đánh dấu an toàn ngay'
-                        : selectedNotif.actionUrl === 'chat' || selectedNotif.type === 'CHAT'
-                        ? 'Mở cuộc trò chuyện ngay'
-                        : selectedNotif.actionUrl === 'blood_donation' || selectedNotif.type === 'BLOOD_DONATION'
-                        ? 'Xem & Xác nhận đăng ký hiến máu'
-                        : selectedNotif.actionUrl === 'sos_detail'
-                        ? 'Xem tiến trình cứu trợ'
-                        : selectedNotif.actionUrl === 'map'
-                        ? 'Xem bản đồ cảnh báo'
-                        : selectedNotif.actionUrl === 'profile'
-                        ? 'Xem hồ sơ chuyên môn'
-                        : 'Xem chi tiết'}
+                      {detailActionConfig.label}
                     </Text>
                   </TouchableOpacity>
                 )}

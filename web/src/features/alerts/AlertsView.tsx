@@ -6,6 +6,8 @@ import {
   fetchBroadcastHistory,
   deleteBroadcastApi,
   fetchAdministrativeAreas,
+  findRootProvinceId,
+  getDaNangAreaScope,
   subscribeNotificationEvents,
   fetchSafeLocations,
   fetchHazardReports,
@@ -68,7 +70,6 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
     articleUrl: '',
     sourceName: '',
   });
-  const [selectedProvinceId, setSelectedProvinceId] = useState('ALL');
   const [createErrors, setCreateErrors] = useState<{
     title?: string;
     content?: string;
@@ -122,21 +123,46 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
     (user?.roles?.includes('LOCAL_AUTHORITY') || user?.roles?.includes('AUTHORITY')) && !isAdmin
   );
 
-  const areaById = useMemo(() => new Map(areas.map((area) => [area._id, area])), [areas]);
-  const getProvinceId = useCallback((area?: AdministrativeAreaItem): string | null => {
-    let current = area;
-    while (current) {
-      if (current.type === 'PROVINCE') return current._id;
-      const parentId = typeof current.parentId === 'string'
-        ? current.parentId
-        : current.parentId?._id;
-      current = parentId ? areaById.get(parentId) : undefined;
+  const { areaById, daNangProvince, daNangProvinceId } = useMemo(
+    () => getDaNangAreaScope(areas),
+    [areas]
+  );
+  const getProvinceId = useCallback(
+    (area?: AdministrativeAreaItem): string | null => findRootProvinceId(area, areaById),
+    [areaById]
+  );
+
+  useEffect(() => {
+    if (!isAuthority && daNangProvinceId && (!alertForm.areaId || alertForm.areaId === 'ALL')) {
+      setAlertForm((prev) => ({ ...prev, areaId: daNangProvinceId }));
     }
-    return null;
-  }, [areaById]);
-  const provinceAreas = areas.filter((area) => area.type === 'PROVINCE');
-  const wardAreas = areas.filter((area) =>
-    area.type === 'WARD' && getProvinceId(area) === selectedProvinceId
+  }, [isAuthority, daNangProvinceId, alertForm.areaId]);
+
+  const renderTargetAreaBadge = () => (
+    <div
+      style={{
+        width: '100%',
+        padding: '6px 10px',
+        borderRadius: '6px',
+        border: '1px solid #cbd5e1',
+        background: '#f8fafc',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        boxSizing: 'border-box',
+        minHeight: '34px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <i className="bi bi-geo-alt" style={{ fontSize: '13px', color: '#64748b' }}></i>
+        <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#0f172a' }}>
+          {isAuthority ? authorityAreaName : daNangProvince?.name || 'Thành phố Đà Nẵng'}
+        </span>
+      </div>
+      <span style={{ fontSize: '11px', color: '#475569', background: '#e2e8f0', padding: '1px 6px', borderRadius: '4px' }}>
+        {isAuthority ? 'Địa bàn phụ trách' : 'Khu vực cố định'}
+      </span>
+    </div>
   );
 
   const currentArea =
@@ -420,12 +446,11 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
       content: '',
       type: 'FLOOD',
       severity: 'HIGH',
-      areaId: isAuthority ? (user?.authority?.areaId as string) || '' : 'ALL',
+      areaId: isAuthority ? (user?.authority?.areaId as string) || '' : daNangProvinceId || 'ALL',
       imageUrl: '',
       articleUrl: '',
       sourceName: '',
     });
-    setSelectedProvinceId('ALL');
     setIsCreateOpen(true);
   };
 
@@ -482,7 +507,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
       setSubmittingCreate(true);
       const targetAreaId = isAuthority
         ? user?.authority?.areaId
-        : alertForm.areaId || (areas[0]?._id as string) || 'ALL';
+        : (alertForm.areaId && alertForm.areaId !== 'ALL'
+            ? alertForm.areaId
+            : daNangProvinceId || (areas[0]?._id as string) || 'ALL');
 
       const categoryLabels = {
         INSTANT: 'Tin tức thời',
@@ -810,7 +837,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
             {isAdmin ? 'Phạm vi phát tin:' : 'Địa bàn:'}
           </span>
           <strong style={{ color: '#0f172a', fontWeight: 700, fontSize: '14px' }}>
-            {isAdmin ? 'Toàn quốc / Toàn thành phố' : authorityAreaName}
+            {isAdmin ? daNangProvince?.name || 'Thành phố Đà Nẵng' : authorityAreaName}
           </strong>
         </div>
 
@@ -1860,74 +1887,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                           <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
                             Địa bàn phát thông báo <span style={{ color: '#dc2626' }}>*</span>
                           </label>
-                          {isAuthority ? (
-                            <div
-                              style={{
-                                width: '100%',
-                                padding: '6px 10px',
-                                borderRadius: '6px',
-                                border: '1px solid #cbd5e1',
-                                background: '#f8fafc',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                boxSizing: 'border-box',
-                                minHeight: '34px',
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <i className="bi bi-geo-alt" style={{ fontSize: '13px', color: '#64748b' }}></i>
-                                <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#0f172a' }}>
-                                  {authorityAreaName}
-                                </span>
-                              </div>
-                              <span style={{ fontSize: '11px', color: '#475569', background: '#e2e8f0', padding: '1px 6px', borderRadius: '4px' }}>
-                                Địa bàn phụ trách
-                              </span>
-                            </div>
-                          ) : (
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                              <select
-                                value={selectedProvinceId}
-                                onChange={(event) => {
-                                  const provinceId = event.target.value || 'ALL';
-                                  setSelectedProvinceId(provinceId);
-                                  setSelectedPointId('');
-                                  setAlertForm((prev) => ({
-                                    ...prev,
-                                    areaId: provinceId,
-                                  }));
-                                }}
-                                className="sos-form-select"
-                                aria-label="Chọn tỉnh thành"
-                                style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', boxSizing: 'border-box' }}
-                              >
-                                <option value="ALL">Tất cả tỉnh/thành</option>
-                                {provinceAreas.map((province) => (
-                                  <option key={province._id} value={province._id}>{province.name} ({province.code})</option>
-                                ))}
-                              </select>
-                              <select
-                                value={areas.find((area) => area._id === alertForm.areaId)?.type === 'WARD' ? alertForm.areaId : ''}
-                                disabled={selectedProvinceId === 'ALL'}
-                                onChange={(event) => {
-                                  setSelectedPointId('');
-                                  setAlertForm((prev) => ({
-                                    ...prev,
-                                    areaId: event.target.value || selectedProvinceId,
-                                  }));
-                                }}
-                                className="sos-form-select"
-                                aria-label="Chọn xã phường"
-                                style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: selectedProvinceId === 'ALL' ? '#f8fafc' : '#fff', boxSizing: 'border-box' }}
-                              >
-                                <option value="">Tất cả xã/phường</option>
-                                {wardAreas.map((ward) => (
-                                  <option key={ward._id} value={ward._id}>{ward.name} ({ward.code})</option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
+                          {renderTargetAreaBadge()}
                         </div>
 
                         {/* Hộp chỉ dẫn lấy trực tiếp từ DB */}
@@ -1959,74 +1919,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                           <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
                             Địa bàn nhận tin <span style={{ color: '#dc2626' }}>*</span>
                           </label>
-                          {isAuthority ? (
-                            <div
-                              style={{
-                                width: '100%',
-                                padding: '6px 10px',
-                                borderRadius: '6px',
-                                border: '1px solid #cbd5e1',
-                                background: '#f8fafc',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                boxSizing: 'border-box',
-                                minHeight: '34px',
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <i className="bi bi-geo-alt" style={{ fontSize: '13px', color: '#64748b' }}></i>
-                                <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#0f172a' }}>
-                                  {authorityAreaName}
-                                </span>
-                              </div>
-                              <span style={{ fontSize: '11px', color: '#475569', background: '#e2e8f0', padding: '1px 6px', borderRadius: '4px' }}>
-                                Địa bàn phụ trách
-                              </span>
-                            </div>
-                          ) : (
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                              <select
-                                value={selectedProvinceId}
-                                onChange={(event) => {
-                                  const provinceId = event.target.value || 'ALL';
-                                  setSelectedProvinceId(provinceId);
-                                  setSelectedPointId('');
-                                  setAlertForm((prev) => ({
-                                    ...prev,
-                                    areaId: provinceId,
-                                  }));
-                                }}
-                                className="sos-form-select"
-                                aria-label="Chọn tỉnh thành"
-                                style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: '#fff', boxSizing: 'border-box' }}
-                              >
-                                <option value="ALL">Tất cả tỉnh/thành</option>
-                                {provinceAreas.map((province) => (
-                                  <option key={province._id} value={province._id}>{province.name} ({province.code})</option>
-                                ))}
-                              </select>
-                              <select
-                                value={areas.find((area) => area._id === alertForm.areaId)?.type === 'WARD' ? alertForm.areaId : ''}
-                                disabled={selectedProvinceId === 'ALL'}
-                                onChange={(event) => {
-                                  setSelectedPointId('');
-                                  setAlertForm((prev) => ({
-                                    ...prev,
-                                    areaId: event.target.value || selectedProvinceId,
-                                  }));
-                                }}
-                                className="sos-form-select"
-                                aria-label="Chọn xã phường"
-                                style={{ width: '100%', padding: '6px 9px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px', background: selectedProvinceId === 'ALL' ? '#f8fafc' : '#fff', boxSizing: 'border-box' }}
-                              >
-                                <option value="">Tất cả xã/phường</option>
-                                {wardAreas.map((ward) => (
-                                  <option key={ward._id} value={ward._id}>{ward.name} ({ward.code})</option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
+                          {renderTargetAreaBadge()}
                         </div>
 
                         {/* Mẫu nhanh */}

@@ -13,7 +13,7 @@ import {
   type WeatherPaginationCounts,
 } from '@/api/weather.api';
 import { broadcastNotificationApi } from '@/api/alert.api';
-import { fetchAdministrativeAreas } from '@/api/area.api';
+import { fetchAdministrativeAreas, getDaNangAreaScope } from '@/api/area.api';
 import { toast } from '@/components/common/toast';
 import { useGlobalModals } from '@/hooks/useGlobalModals';
 import {
@@ -175,41 +175,19 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
     priority: 'HIGH',
     areaId: 'ALL',
   });
-  const [selectedProvinceId, setSelectedProvinceId] = useState<string>('ALL');
   const [broadcasting, setBroadcasting] = useState<boolean>(false);
   const [administrativeAreas, setAdministrativeAreas] = useState<AdministrativeAreaItem[]>([]);
 
-  const areaById = useMemo(
-    () => new Map(administrativeAreas.map((area) => [area._id, area])),
+  const { areaById, daNangProvince, daNangProvinceId, daNangWards } = useMemo(
+    () => getDaNangAreaScope(administrativeAreas),
     [administrativeAreas]
   );
 
-  const getProvinceId = useCallback(
-    (area?: AdministrativeAreaItem): string | null => {
-      let current = area;
-      while (current) {
-        if (current.type === 'PROVINCE') return current._id;
-        const parentId =
-          typeof current.parentId === 'string' ? current.parentId : current.parentId?._id;
-        current = parentId ? areaById.get(parentId) : undefined;
-      }
-      return null;
-    },
-    [areaById]
-  );
-
-  const provinceAreas = useMemo(
-    () => administrativeAreas.filter((area) => area.type === 'PROVINCE'),
-    [administrativeAreas]
-  );
-
-  const wardAreas = useMemo(
-    () =>
-      administrativeAreas.filter(
-        (area) => area.type === 'WARD' && getProvinceId(area) === selectedProvinceId
-      ),
-    [administrativeAreas, getProvinceId, selectedProvinceId]
-  );
+  useEffect(() => {
+    if (broadcastModalItem && daNangProvinceId && (!broadcastForm.areaId || broadcastForm.areaId === 'ALL')) {
+      setBroadcastForm((prev) => ({ ...prev, areaId: daNangProvinceId }));
+    }
+  }, [broadcastModalItem, daNangProvinceId, broadcastForm.areaId]);
 
   // Form values
   const [formValues, setFormValues] = useState<CreateWeatherPayload>({
@@ -323,10 +301,10 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
 
   // Realtime updates from n8n / backend SSE
   useEffect(() => {
-    const unsubscribe = subscribeWeatherArticleUpdates(async () => {
+    const unsubscribe = subscribeWeatherArticleUpdates(async (payload) => {
       if (document.visibilityState === 'visible') {
         const refreshed = await fetchArticles({ silent: true });
-        if (refreshed && !runningWorkflow) {
+        if (refreshed && !runningWorkflow && (!payload?.source || payload.source === 'workflow')) {
           toast.success('Dữ liệu thời tiết vừa được cập nhật từ crawler!');
         }
       }
@@ -438,25 +416,14 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
       initialPriority = 'HIGH';
     }
 
-    const defaultAreaId =
+    const rawAreaId =
       typeof item.areaId === 'object' && item.areaId?._id
         ? item.areaId._id
         : typeof item.areaId === 'string' && item.areaId
           ? item.areaId
-          : 'ALL';
-
-    if (defaultAreaId !== 'ALL') {
-      const matchedArea = areaById.get(defaultAreaId);
-      if (matchedArea?.type === 'WARD') {
-        setSelectedProvinceId(getProvinceId(matchedArea) || 'ALL');
-      } else if (matchedArea?.type === 'PROVINCE') {
-        setSelectedProvinceId(matchedArea._id);
-      } else {
-        setSelectedProvinceId('ALL');
-      }
-    } else {
-      setSelectedProvinceId('ALL');
-    }
+          : '';
+    const isDaNangWard = rawAreaId ? daNangWards.some((w) => w._id === rawAreaId) : false;
+    const defaultAreaId = isDaNangWard ? rawAreaId : daNangProvinceId || 'ALL';
 
     setBroadcastForm({
       title: item.title || '',
@@ -496,7 +463,10 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
       const imageUrl = broadcastModalItem.imageUrl || broadcastModalItem.image_url;
       const articleUrl = broadcastModalItem.articleUrl || broadcastModalItem.source_url;
       const sourceName = broadcastModalItem.sourceName || broadcastModalItem.source_name;
-      const targetAreaId = broadcastForm.areaId === 'ALL' ? undefined : broadcastForm.areaId;
+      const targetAreaId =
+        broadcastForm.areaId && broadcastForm.areaId !== 'ALL'
+          ? broadcastForm.areaId
+          : daNangProvinceId || undefined;
 
       await broadcastNotificationApi({
         title: broadcastForm.title.trim(),
@@ -1797,31 +1767,33 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
 
                   <div className="weather-form-group">
                     <label className="weather-form-label">
-                      Khu vực cảnh báo <span className="required">*</span>
+                      Khu vực cảnh báo (Đà Nẵng) <span className="required">*</span>
                     </label>
                     <input
                       type="text"
                       required
                       list="weather-area-suggestions"
-                      placeholder="VD: Điện Bàn Đông, Quận Hải Châu, Đà Nẵng..."
+                      placeholder="VD: Thành phố Đà Nẵng, Phường Hải Châu, Xã Hòa Vang..."
                       className="weather-form-input"
                       value={formValues.area}
                       onChange={(e) => {
                         const val = e.target.value;
-                        const matched = administrativeAreas.find(
+                        const daNangOptions = daNangProvince ? [daNangProvince, ...daNangWards] : daNangWards;
+                        const matched = daNangOptions.find(
                           (a) => a.name.toLowerCase() === val.trim().toLowerCase()
                         );
                         setFormValues({
                           ...formValues,
                           area: val,
-                          areaId: matched ? matched._id : formValues.areaId,
+                          areaId: matched ? matched._id : formValues.areaId || daNangProvinceId || undefined,
                         });
                       }}
                     />
                     <datalist id="weather-area-suggestions">
-                      {administrativeAreas.map((area) => (
+                      {(daNangProvince ? [daNangProvince, ...daNangWards] : daNangWards).map((area) => (
                         <option key={area._id} value={area.name}>
-                          {area.type ? `[${area.type}] ` : ''}{area.name}
+                          {area.type === 'PROVINCE' ? '[Toàn TP Đà Nẵng] ' : '[Phường/Xã] '}
+                          {area.name}
                         </option>
                       ))}
                     </datalist>
@@ -2211,54 +2183,35 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                 </div>
               </div>
 
-              {/* Phạm vi thông báo */}
+              {/* Phạm vi thông báo (Khu vực Đà Nẵng) */}
               <div className="weather-form-group" style={{ margin: 0 }}>
-                <label className="weather-form-label">Phạm vi phát thông báo (Khu vực nhận tin)</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <select
-                    className="weather-form-input"
-                    value={selectedProvinceId}
-                    onChange={(e) => {
-                      const provId = e.target.value || 'ALL';
-                      setSelectedProvinceId(provId);
-                      setBroadcastForm((prev) => ({ ...prev, areaId: provId }));
-                    }}
-                    disabled={broadcasting}
-                    aria-label="Chọn tỉnh thành"
-                  >
-                    <option value="ALL">Tất cả tỉnh/thành (Toàn quốc)</option>
-                    {provinceAreas.map((prov) => (
-                      <option key={prov._id} value={prov._id}>
-                        {prov.name} ({prov.code})
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    className="weather-form-input"
-                    value={areaById.get(broadcastForm.areaId)?.type === 'WARD' ? broadcastForm.areaId : ''}
-                    disabled={broadcasting || selectedProvinceId === 'ALL'}
-                    onChange={(e) => {
-                      const wardId = e.target.value;
-                      setBroadcastForm((prev) => ({
-                        ...prev,
-                        areaId: wardId || selectedProvinceId,
-                      }));
-                    }}
-                    aria-label="Chọn xã phường"
-                    style={{
-                      background: selectedProvinceId === 'ALL' ? '#f8fafc' : '#ffffff',
-                      color: selectedProvinceId === 'ALL' ? '#94a3b8' : '#0f172a',
-                    }}
-                  >
-                    <option value="">Tất cả xã/phường</option>
-                    {wardAreas.map((ward) => (
-                      <option key={ward._id} value={ward._id}>
-                        {ward.name} ({ward.code})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <label className="weather-form-label">
+                  Phạm vi phát thông báo — Phường / Xã ({daNangProvince?.name || 'Thành phố Đà Nẵng'})
+                </label>
+                <select
+                  className="weather-form-input"
+                  value={areaById.get(broadcastForm.areaId)?.type === 'WARD' ? broadcastForm.areaId : ''}
+                  disabled={broadcasting}
+                  onChange={(e) => {
+                    const wardId = e.target.value;
+                    setBroadcastForm((prev) => ({
+                      ...prev,
+                      areaId: wardId || daNangProvinceId || 'ALL',
+                    }));
+                  }}
+                  aria-label="Chọn xã phường"
+                  style={{
+                    background: '#ffffff',
+                    color: '#0f172a',
+                  }}
+                >
+                  <option value="">Tất cả Phường/Xã tại Đà Nẵng ({daNangWards.length})</option>
+                  {daNangWards.map((ward) => (
+                    <option key={ward._id} value={ward._id}>
+                      {ward.name} ({ward.code})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Live Preview trên điện thoại (Nền trắng đồng bộ) */}
@@ -2320,8 +2273,8 @@ export const WeatherView: React.FC<WeatherViewProps> = ({ user }) => {
                     </div>
                     <span style={{ fontSize: '11px', color: '#475569', fontWeight: 600 }}>
                       {broadcastForm.areaId === 'ALL'
-                        ? 'Toàn quốc'
-                        : areaById.get(broadcastForm.areaId)?.name || 'Toàn quốc'}
+                        ? daNangProvince?.name || 'Thành phố Đà Nẵng'
+                        : areaById.get(broadcastForm.areaId)?.name || daNangProvince?.name || 'Thành phố Đà Nẵng'}
                     </span>
                   </div>
                   <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#0f172a', marginBottom: '4px', lineHeight: 1.4 }}>

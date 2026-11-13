@@ -19,7 +19,7 @@ import {
   Bell,
 } from 'lucide-react';
 import { fetchWithAuth } from '@/api/client';
-import { fetchAdministrativeAreas } from '@/api/area.api';
+import { fetchAdministrativeAreas, getDaNangAreaScope } from '@/api/area.api';
 import type { User } from '@/types/auth';
 import { BloodEventMapPicker, parseGoogleMapsUrlOrCoords } from './BloodEventMapPicker';
 
@@ -208,7 +208,6 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
   const [formLocationName, setFormLocationName] = useState('');
   const [formAddress, setFormAddress] = useState('');
   const [formMapUrl, setFormMapUrl] = useState('');
-  const [selectedProvinceId, setSelectedProvinceId] = useState<string>('ALL');
   const [formAreaId, setFormAreaId] = useState<string>(isAdmin ? 'ALL' : authorityAreaId || 'ALL');
   const [formEventDate, setFormEventDate] = useState<string>(() => {
     const tomorrow = new Date(Date.now() + 86400000);
@@ -353,31 +352,16 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
     void fetchAllData(false);
   }, [fetchAreas, fetchAllData]);
 
-  const areaById = useMemo(() => new Map(areas.map((a) => [a._id, a])), [areas]);
-  const getProvinceId = useCallback(
-    (area?: any): string | null => {
-      let current = area;
-      while (current) {
-        if (current.type === 'PROVINCE') return current._id;
-        const parentId =
-          typeof current.parentId === 'string' ? current.parentId : (current.parentId as any)?._id;
-        current = parentId ? areaById.get(parentId) : undefined;
-      }
-      return null;
-    },
-    [areaById]
+  const { areaById, daNangProvince, daNangProvinceId, daNangWards } = useMemo(
+    () => getDaNangAreaScope(areas),
+    [areas]
   );
 
-  const provinceAreas = useMemo(() => areas.filter((a) => a.type === 'PROVINCE'), [areas]);
-  const modalWardAreas = useMemo(
-    () =>
-      areas.filter(
-        (a) =>
-          a.type === 'WARD' &&
-          (selectedProvinceId === 'ALL' ? true : getProvinceId(a) === selectedProvinceId)
-      ),
-    [areas, selectedProvinceId, getProvinceId]
-  );
+  useEffect(() => {
+    if (isAdmin && daNangProvinceId && (!formAreaId || formAreaId === 'ALL')) {
+      setFormAreaId(daNangProvinceId);
+    }
+  }, [isAdmin, daNangProvinceId, formAreaId]);
 
   const filteredRegistrations = useMemo(() => {
     return registrations.filter((r) => {
@@ -451,8 +435,15 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
       return;
     }
 
-    if (isAdmin && selectedProvinceId === 'ALL' && formAreaId === 'ALL') {
-      showToast('error', 'Vui lòng chọn Tỉnh / Thành phố tổ chức để hệ thống gửi thông báo cho người hiến máu trong tỉnh.');
+    const resolvedAreaId =
+      !isAdmin && authorityAreaId
+        ? authorityAreaId
+        : formAreaId && formAreaId !== 'ALL'
+          ? formAreaId
+          : daNangProvinceId || 'ALL';
+
+    if (isAdmin && (!resolvedAreaId || resolvedAreaId === 'ALL')) {
+      showToast('error', 'Không tìm thấy dữ liệu khu vực Đà Nẵng trong hệ thống, vui lòng thử lại.');
       return;
     }
 
@@ -465,7 +456,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
           locationName: formLocationName.trim(),
           address: formAddress.trim(),
           googleMapsUrl: resolvedMapUrl,
-          areaId: formAreaId,
+          areaId: resolvedAreaId,
           eventDate: formEventDate,
           startTime: formStartTime.trim(),
           endTime: formEndTime.trim(),
@@ -1092,32 +1083,32 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                 </div>
               )}
 
-              {/* Khu vực phổ biến */}
-              {provinceAreas.length > 0 && (
+              {/* Khu vực phổ biến (Đà Nẵng) */}
+              {daNangWards.length > 0 && (
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 5 }}>
-                    📍 Tỉnh / Thành phố:
+                    📍 Phường / Xã (Đà Nẵng):
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, maxHeight: 90, overflowY: 'auto' }}>
-                    {provinceAreas.map((p) => (
+                    {daNangWards.map((w) => (
                       <button
-                        key={p._id}
+                        key={w._id}
                         type="button"
                         onClick={() => {
-                          setSearchQuery(p.name);
+                          setSearchQuery(w.name);
                           setShowSuggestions(false);
                         }}
                         style={{
                           padding: '3px 8px',
                           borderRadius: 6,
                           border: '1px solid #e2e8f0',
-                          background: searchQuery === p.name ? '#2563eb' : '#f1f5f9',
-                          color: searchQuery === p.name ? '#ffffff' : '#475569',
+                          background: searchQuery === w.name ? '#2563eb' : '#f1f5f9',
+                          color: searchQuery === w.name ? '#ffffff' : '#475569',
                           fontSize: 11.5,
                           cursor: 'pointer',
                         }}
                       >
-                        {p.name}
+                        {w.name}
                       </button>
                     ))}
                   </div>
@@ -2483,75 +2474,43 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
                       }}
                     />
                   ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                      <div>
-                        <div style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4 }}>
-                          1. Tỉnh / Thành phố
-                        </div>
-                        <select
-                          value={selectedProvinceId}
-                          onChange={(e) => {
-                            const provId = e.target.value || 'ALL';
-                            setSelectedProvinceId(provId);
-                            setFormAreaId(provId);
-                            const matched = areas.find((a) => a._id === provId);
-                            if (matched && !formAddress) setFormAddress(matched.name);
-                          }}
-                          style={{
-                            width: '100%',
-                            padding: '8px 11px',
-                            borderRadius: 8,
-                            border: '1px solid #cbd5e1',
-                            fontSize: 13,
-                            background: '#ffffff',
-                          }}
-                        >
-                          <option value="">-- Chọn Tỉnh / Thành phố --</option>
-                          {provinceAreas.map((p) => (
-                            <option key={p._id} value={p._id}>
-                              {p.name}
-                            </option>
-                          ))}
-                        </select>
+                    <div>
+                      <div style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4 }}>
+                        Phường / Xã ({daNangProvince?.name || 'Thành phố Đà Nẵng'})
                       </div>
-
-                      <div>
-                        <div style={{ fontSize: 11.5, fontWeight: 600, color: '#475569', marginBottom: 4 }}>
-                          2. Phường / Xã
-                        </div>
-                        <select
-                          value={
-                            areas.find((a) => a._id === formAreaId)?.type === 'WARD'
-                              ? formAreaId
-                              : ''
-                          }
-                          onChange={(e) => {
-                            const wardId = e.target.value;
-                            const nextAreaId = wardId || selectedProvinceId;
-                            setFormAreaId(nextAreaId);
-                            const matched = areas.find((a) => a._id === nextAreaId);
-                            if (matched) setFormAddress(matched.name);
-                          }}
-                          style={{
-                            width: '100%',
-                            padding: '8px 11px',
-                            borderRadius: 8,
-                            border: '1px solid #cbd5e1',
-                            fontSize: 13,
-                            background: '#ffffff',
-                          }}
-                        >
-                          <option value="">
-                            {selectedProvinceId === 'ALL' || !selectedProvinceId
-                              ? `Tất cả Phường/Xã (${modalWardAreas.length})`
-                              : `Toàn Tỉnh/TP đã chọn (${modalWardAreas.length} Phường/Xã)`}
+                      <select
+                        value={
+                          areaById.get(formAreaId)?.type === 'WARD'
+                            ? formAreaId
+                            : ''
+                        }
+                        onChange={(e) => {
+                          const wardId = e.target.value;
+                          const nextAreaId = wardId || daNangProvinceId || 'ALL';
+                          setFormAreaId(nextAreaId);
+                          const matched = areas.find((a) => a._id === nextAreaId);
+                          if (matched) setFormAddress(matched.name);
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px 11px',
+                          borderRadius: 8,
+                          border: '1px solid #cbd5e1',
+                          fontSize: 13,
+                          background: '#ffffff',
+                        }}
+                      >
+                        <option value="">
+                          Toàn {daNangProvince?.name || 'Thành phố Đà Nẵng'} ({daNangWards.length} Phường/Xã)
+                        </option>
+                        {daNangWards.map((w) => (
+                          <option key={w._id} value={w._id}>
+                            {w.name}
                           </option>
-                          {modalWardAreas.map((w) => (
-                            <option key={w._id} value={w._id}>
-                              {w.name}
-                            </option>
-                          ))}
-                        </select>
+                        ))}
+                      </select>
+                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
+                        Khu vực áp dụng: <strong>{daNangProvince?.name || 'Thành phố Đà Nẵng'}</strong>
                       </div>
                     </div>
                   )}
@@ -2802,11 +2761,7 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
               >
                 <BloodEventMapPicker
                   mapUrl={formMapUrl}
-                  selectedProvinceName={
-                    selectedProvinceId !== 'ALL'
-                      ? provinceAreas.find((p) => p._id === selectedProvinceId)?.name
-                      : undefined
-                  }
+                  selectedProvinceName={daNangProvince?.name || 'Thành phố Đà Nẵng'}
                   onLocationSelected={(_lat, _lng, googleMapsUrl, detectedAddress) => {
                     setFormMapUrl(googleMapsUrl);
                     if (detectedAddress && !formAddress.trim()) {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,13 +10,16 @@ import {
   Platform,
   Alert,
   Vibration,
+  AppState,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { PROFILE_THEME } from './theme';
 import { useNotifications } from '@/context/NotificationContext';
 import { NotificationSettings, NotificationCategoryKey } from '@/utils';
-import { playDispatchAlertSound } from '@/services';
+import { playDispatchAlertSound, registerForPushNotificationsAsync } from '@/services';
 
 interface NotificationSettingsScreenProps {
   onBack: () => void;
@@ -31,6 +34,46 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
   } = useNotifications();
 
   const [showSavedFeedback, setShowSavedFeedback] = useState(false);
+  const [osPermissionDenied, setOsPermissionDenied] = useState(false);
+
+  const checkOsPermission = useCallback(async () => {
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      setOsPermissionDenied(status !== 'granted');
+    } catch {
+      // ignore on unsupported environments
+    }
+  }, []);
+
+  useEffect(() => {
+    checkOsPermission();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        checkOsPermission();
+        registerForPushNotificationsAsync().catch(() => {});
+      }
+    });
+    return () => sub.remove();
+  }, [checkOsPermission]);
+
+  const handleRequestOrOpenOsSettings = useCallback(async () => {
+    try {
+      const { status, canAskAgain } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted' && canAskAgain) {
+        const res = await Notifications.requestPermissionsAsync({
+          ios: { allowAlert: true, allowBadge: true, allowSound: true },
+        });
+        setOsPermissionDenied(res.status !== 'granted');
+        if (res.status === 'granted') {
+          registerForPushNotificationsAsync().catch(() => {});
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    Linking.openSettings().catch(() => {});
+  }, []);
 
   // Lưu cài đặt và phản hồi xúc giác nhẹ nếu là rung
   const updateSetting = async (key: keyof NotificationSettings, value: boolean) => {
@@ -44,6 +87,9 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
     }
 
     await contextUpdateSetting(key, value);
+    if (value && ['alert', 'safeLocation', 'systemNotification', 'news'].includes(key)) {
+      await checkOsPermission();
+    }
     setShowSavedFeedback(true);
     setTimeout(() => setShowSavedFeedback(false), 2000);
   };
@@ -131,6 +177,26 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
             </Text>
           </View>
         </View>
+
+        {/* Cảnh báo nếu người dùng đã tắt quyền thông báo ở Cài đặt hệ thống của điện thoại */}
+        {osPermissionDenied && (
+          <View style={styles.osPermBanner}>
+            <Feather name="alert-circle" size={18} color="#B45309" style={{ marginTop: 1 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.osPermTitle}>Quyền thông báo trên thiết bị đang TẮT</Text>
+              <Text style={styles.osPermDesc}>
+                Bạn cần cấp quyền Thông báo trong Cài đặt của điện thoại để nhận được cảnh báo đẩy từ hệ thống.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.osPermBtn}
+              onPress={handleRequestOrOpenOsSettings}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.osPermBtnText}>Bật quyền</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Thông báo đã lưu cài đặt */}
         {showSavedFeedback && (
@@ -558,6 +624,40 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 18,
     color: '#1E40AF',
+  },
+  osPermBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+  },
+  osPermTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+    marginBottom: 2,
+  },
+  osPermDesc: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#B45309',
+  },
+  osPermBtn: {
+    backgroundColor: '#D97706',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    flexShrink: 0,
+  },
+  osPermBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   savedBanner: {
     flexDirection: 'row',

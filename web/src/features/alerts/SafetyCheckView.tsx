@@ -9,7 +9,7 @@ import {
   type SafetyCheckResponseItem,
   type CreateSafetyCheckPayload,
 } from '@/api/safetyCheck.api';
-import { fetchAdministrativeAreas } from '@/api/area.api';
+import { fetchAdministrativeAreas, findRootProvinceId, getDaNangAreaScope } from '@/api/area.api';
 import { toast } from '@/components/common/toast';
 import {
   ShieldCheck,
@@ -49,7 +49,6 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
   // Filter & Search
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'CLOSED'>('ALL');
   const [disasterTypeFilter, setDisasterTypeFilter] = useState<string>('ALL');
-  const [filterProvinceId, setFilterProvinceId] = useState<string>('ALL');
   const [areaFilter, setAreaFilter] = useState<string>('ALL');
   const [scopeMode, setScopeMode] = useState<'LOCAL' | 'ALL'>('LOCAL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,7 +64,6 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
   // Modal tạo đợt mới
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [submittingCreate, setSubmittingCreate] = useState(false);
-  const [selectedProvinceId, setSelectedProvinceId] = useState<string>('ALL');
   const [createForm, setCreateForm] = useState<{
     title: string;
     description: string;
@@ -79,48 +77,17 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
     areaId: isAuthority ? (user?.authority?.areaId as string) || '' : 'ALL',
   });
 
-  // Tổ chức phân cấp khu vực hành chính từ DB: Tỉnh/Thành phố (PROVINCE) -> Phường/Xã (WARD)
-  const areaById = useMemo(() => new Map(areas.map((area) => [area._id, area])), [areas]);
-  const getProvinceId = useCallback(
-    (area?: any): string | null => {
-      let current = area;
-      while (current) {
-        if (current.type === 'PROVINCE') return current._id;
-        const parentId =
-          typeof current.parentId === 'string' ? current.parentId : current.parentId?._id;
-        current = parentId ? areaById.get(parentId) : undefined;
-      }
-      return null;
-    },
-    [areaById]
-  );
-
-  const provinceAreas = useMemo(
-    () => areas.filter((a) => a.type === 'PROVINCE'),
+  // Phân cấp khu vực hành chính khu vực Đà Nẵng từ DB
+  const { areaById, daNangProvince, daNangProvinceId, daNangWards } = useMemo(
+    () => getDaNangAreaScope(areas),
     [areas]
   );
 
-  // Danh sách Phường/Xã thuộc Tỉnh/TP đang chọn trong modal tạo mới
-  const modalWardAreas = useMemo(
-    () =>
-      areas.filter(
-        (a) =>
-          a.type === 'WARD' &&
-          (selectedProvinceId === 'ALL' ? false : getProvinceId(a) === selectedProvinceId)
-      ),
-    [areas, selectedProvinceId, getProvinceId]
-  );
-
-  // Danh sách Phường/Xã thuộc Tỉnh/TP đang chọn ở thanh bộ lọc
-  const filterWardAreas = useMemo(
-    () =>
-      areas.filter(
-        (a) =>
-          a.type === 'WARD' &&
-          (filterProvinceId === 'ALL' ? true : getProvinceId(a) === filterProvinceId)
-      ),
-    [areas, filterProvinceId, getProvinceId]
-  );
+  useEffect(() => {
+    if (isCreateOpen && !isAuthority && daNangProvinceId && (!createForm.areaId || createForm.areaId === 'ALL')) {
+      setCreateForm((prev) => ({ ...prev, areaId: daNangProvinceId }));
+    }
+  }, [isCreateOpen, isAuthority, daNangProvinceId, createForm.areaId]);
 
   // Modal xem danh sách phản hồi người dân (Drawer)
   const [viewingCheck, setViewingCheck] = useState<SafetyCheckItem | null>(null);
@@ -170,9 +137,10 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
     if (!user?.authority?.areaId) return user?.authority?.areaName || 'Phường/Xã quản lý';
     const found = areas.find((a) => a._id === user?.authority?.areaId);
     if (!found) return user?.authority?.areaName || 'Phường/Xã quản lý';
-    const parentProv = provinceAreas.find((p) => p._id === getProvinceId(found));
+    const parentProvId = findRootProvinceId(found, areaById);
+    const parentProv = parentProvId ? areaById.get(parentProvId) : null;
     return parentProv ? `${found.name} - ${parentProv.name}` : found.name;
-  }, [user, areas, provinceAreas, getProvinceId]);
+  }, [user, areas, areaById]);
 
   // Tính KPI tổng thể
   const kpis = useMemo(() => {
@@ -334,19 +302,15 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
   // Mở modal tạo mới
   const handleOpenCreate = () => {
     const authorityArea = areas.find((a) => a._id === user?.authority?.areaId);
-    const defaultProvince = provinceAreas.length === 1 ? provinceAreas[0] : null;
-    const initProvinceId = defaultProvince ? defaultProvince._id : 'ALL';
+    const daNangLabel = daNangProvince?.name || 'Thành phố Đà Nẵng';
     const initAreaId = isAuthority
       ? (user?.authority?.areaId as string) || ''
-      : initProvinceId;
+      : daNangProvinceId || 'ALL';
 
     const defaultAreaLabel = isAuthority
       ? authorityArea?.name || user?.authority?.areaName || 'Phường/Xã quản lý'
-      : defaultProvince
-        ? defaultProvince.name
-        : 'Toàn hệ thống';
+      : daNangLabel;
 
-    setSelectedProvinceId(initProvinceId);
     setCreateForm({
       title: `Kiểm tra an toàn sau bão lũ tại ${defaultAreaLabel}`,
       description:
@@ -370,11 +334,15 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
 
     setSubmittingCreate(true);
     try {
+      const resolvedAdminAreaId =
+        createForm.areaId && createForm.areaId !== 'ALL'
+          ? createForm.areaId
+          : daNangProvinceId || undefined;
       const payload: CreateSafetyCheckPayload = {
         title: createForm.title.trim(),
         description: createForm.description.trim(),
         disasterType: createForm.disasterType,
-        areaId: isAuthority ? (user?.authority?.areaId as string) : (createForm.areaId === 'ALL' ? undefined : createForm.areaId),
+        areaId: isAuthority ? (user?.authority?.areaId as string) : resolvedAdminAreaId,
       };
 
       const res = await createSafetyCheckApi(payload);
@@ -581,7 +549,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
             {isAdmin ? 'Phạm vi quản trị:' : 'Địa bàn phụ trách:'}
           </span>
           <strong style={{ color: '#0f172a', fontWeight: 700, fontSize: '14px' }}>
-            {isAdmin ? 'Toàn quốc' : authorityAreaName}
+            {isAdmin ? daNangProvince?.name || 'Thành phố Đà Nẵng' : authorityAreaName}
           </strong>
         </div>
 
@@ -635,66 +603,39 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
             <>
               <button
                 type="button"
-                className={`sos-scope-tab ${filterProvinceId === 'ALL' ? 'active' : ''}`}
+                className={`sos-scope-tab ${areaFilter === 'ALL' ? 'active' : ''}`}
                 onClick={() => {
-                  setFilterProvinceId('ALL');
                   setAreaFilter('ALL');
                   setCurrentPage(1);
                   setJumpPageInput('1');
                 }}
               >
-                <span>Toàn quốc</span>
+                <span>Toàn Đà Nẵng</span>
                 <span className="sos-scope-badge">{safetyChecks.length}</span>
               </button>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500 }}>
-                  Lọc theo Tỉnh/TP:
+                  Phường/Xã (Đà Nẵng):
                 </span>
                 <select
                   className="sos-clean-sort-select"
-                  value={filterProvinceId}
+                  value={areaById.get(areaFilter)?.type === 'WARD' ? areaFilter : ''}
                   onChange={(e) => {
-                    const pId = e.target.value;
-                    setFilterProvinceId(pId);
-                    setAreaFilter(pId);
+                    const wId = e.target.value;
+                    setAreaFilter(wId || 'ALL');
                     setCurrentPage(1);
                     setJumpPageInput('1');
                   }}
                 >
-                  <option value="ALL">-- Tất cả Tỉnh / Thành phố --</option>
-                  {provinceAreas.map((p) => (
-                    <option key={p._id} value={p._id}>
-                      {p.name}
+                  <option value="">Tất cả Phường / Xã Đà Nẵng ({daNangWards.length})</option>
+                  {daNangWards.map((w) => (
+                    <option key={w._id} value={w._id}>
+                      {w.name}
                     </option>
                   ))}
                 </select>
               </div>
-
-              {filterProvinceId !== 'ALL' && filterWardAreas.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '12.5px', color: '#64748b', fontWeight: 500 }}>
-                    Phường/Xã:
-                  </span>
-                  <select
-                    className="sos-clean-sort-select"
-                    value={areas.find((a) => a._id === areaFilter)?.type === 'WARD' ? areaFilter : ''}
-                    onChange={(e) => {
-                      const wId = e.target.value;
-                      setAreaFilter(wId || filterProvinceId);
-                      setCurrentPage(1);
-                      setJumpPageInput('1');
-                    }}
-                  >
-                    <option value="">Tất cả Phường / Xã ({filterWardAreas.length})</option>
-                    {filterWardAreas.map((w) => (
-                      <option key={w._id} value={w._id}>
-                        {w.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
             </>
           ) : (
             <>
@@ -1834,86 +1775,39 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                     </div>
                   ) : (
                     <div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                        {/* Bước 1: Chọn Tỉnh / Thành phố */}
-                        <div>
-                          <div style={{ fontSize: '11.5px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                            1. Tỉnh / Thành phố
-                          </div>
-                          <select
-                            className="sc-form-control"
-                            value={selectedProvinceId}
-                            onChange={(e) => {
-                              const provId = e.target.value || 'ALL';
-                              setSelectedProvinceId(provId);
-                              const provObj = provinceAreas.find((p) => p._id === provId);
-                              const nextAreaLabel = provObj ? provObj.name : 'Toàn hệ thống';
-                              setCreateForm((prev) => ({
-                                ...prev,
-                                areaId: provId,
-                                title: prev.title.startsWith('Kiểm tra an toàn sau bão lũ')
-                                  ? `Kiểm tra an toàn sau bão lũ tại ${nextAreaLabel}`
-                                  : prev.title,
-                              }));
-                            }}
-                          >
-                            <option value="ALL">🌐 Tất cả Tỉnh / Thành phố</option>
-                            {provinceAreas.map((prov) => (
-                              <option key={prov._id} value={prov._id}>
-                                {prov.name} ({prov.code})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* Bước 2: Chọn Phường / Xã trực thuộc Tỉnh/TP đã chọn */}
-                        <div>
-                          <div style={{ fontSize: '11.5px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                            2. Phường / Xã trực thuộc
-                          </div>
-                          <select
-                            className="sc-form-control"
-                            value={
-                              areas.find((a) => a._id === createForm.areaId)?.type === 'WARD'
-                                ? createForm.areaId
-                                : ''
-                            }
-                            disabled={selectedProvinceId === 'ALL'}
-                            style={{
-                              backgroundColor: selectedProvinceId === 'ALL' ? '#f8fafc' : '#ffffff',
-                              cursor: selectedProvinceId === 'ALL' ? 'not-allowed' : 'pointer',
-                            }}
-                            onChange={(e) => {
-                              const wardId = e.target.value;
-                              const nextAreaId = wardId || selectedProvinceId;
-                              const selectedAreaObj = areas.find((a) => a._id === nextAreaId);
-                              const nextAreaLabel = selectedAreaObj
-                                ? selectedAreaObj.name
-                                : 'Toàn hệ thống';
-                              setCreateForm((prev) => ({
-                                ...prev,
-                                areaId: nextAreaId,
-                                title: prev.title.startsWith('Kiểm tra an toàn sau bão lũ')
-                                  ? `Kiểm tra an toàn sau bão lũ tại ${nextAreaLabel}`
-                                  : prev.title,
-                              }));
-                            }}
-                          >
-                            <option value="">
-                              {selectedProvinceId === 'ALL'
-                                ? 'Chọn Tỉnh/TP trước'
-                                : `Tất cả Phường/Xã (${modalWardAreas.length})`}
-                            </option>
-                            {modalWardAreas.map((ward) => (
-                              <option key={ward._id} value={ward._id}>
-                                {ward.name} ({ward.code})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                      <div style={{ fontSize: '11.5px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                        Phường / Xã (Khu vực {daNangProvince?.name || 'Thành phố Đà Nẵng'})
                       </div>
+                      <select
+                        className="sc-form-control"
+                        value={areaById.get(createForm.areaId)?.type === 'WARD' ? createForm.areaId : ''}
+                        onChange={(e) => {
+                          const wardId = e.target.value;
+                          const nextAreaId = wardId || daNangProvinceId || 'ALL';
+                          const selectedAreaObj = areaById.get(nextAreaId);
+                          const nextAreaLabel = selectedAreaObj
+                            ? selectedAreaObj.name
+                            : daNangProvince?.name || 'Thành phố Đà Nẵng';
+                          setCreateForm((prev) => ({
+                            ...prev,
+                            areaId: nextAreaId,
+                            title: prev.title.startsWith('Kiểm tra an toàn sau bão lũ')
+                              ? `Kiểm tra an toàn sau bão lũ tại ${nextAreaLabel}`
+                              : prev.title,
+                          }));
+                        }}
+                      >
+                        <option value="">
+                          Tất cả Phường/Xã tại Đà Nẵng ({daNangWards.length})
+                        </option>
+                        {daNangWards.map((ward) => (
+                          <option key={ward._id} value={ward._id}>
+                            {ward.name} ({ward.code})
+                          </option>
+                        ))}
+                      </select>
                       <p className="sc-form-hint">
-                        Dữ liệu địa giới hành chính tải trực tiếp từ CSDL (Cấp Tỉnh/Thành phố → Phường/Xã).
+                        Khu vực áp dụng: <strong>{daNangProvince?.name || 'Thành phố Đà Nẵng'}</strong> — Dữ liệu Phường/Xã tải trực tiếp từ CSDL.
                       </p>
                     </div>
                   )}

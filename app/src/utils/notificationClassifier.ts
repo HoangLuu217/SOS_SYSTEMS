@@ -98,26 +98,20 @@ export function classifyNotification(item: NotificationItem): NotificationCatego
   const title = (item.title || '').toLowerCase();
   const content = (item.content || '').toLowerCase();
 
-  // 1. Tin tức & Thời tiết (News & Weather) - Kiểm tra đầu tiên để bài viết thời tiết không bao giờ bị xếp nhầm vào Thông báo/Cảnh báo
-  if (
+  const hasExplicitWeatherMeta =
     type === 'WEATHER' ||
     type === 'NEWS' ||
     type === 'TIN_TUC' ||
-    item.data?.weatherArticleId ||
-    item.data?.weatherType ||
+    type === 'TIN_TUC_THOI' ||
+    Boolean(item.data?.weatherArticleId) ||
+    Boolean(item.data?.weatherType) ||
     Boolean(item.data?.isWeather) ||
-    Boolean(item.data?.imageUrl && item.data?.articleUrl) ||
-    title.includes('thời tiết') ||
-    title.includes('dự báo') ||
-    title.includes('lượng mưa') ||
-    title.includes('áp thấp') ||
-    title.includes('triều cường') ||
-    title.includes('sóng lớn') ||
-    title.includes('cẩm nang') ||
-    title.includes('bản tin') ||
-    content.includes('khí tượng thủy văn') ||
-    content.includes('dự báo thời tiết')
-  ) {
+    (item as any).category === 'WEATHER' ||
+    item.data?.category === 'WEATHER' ||
+    Boolean(item.data?.imageUrl && item.data?.articleUrl);
+
+  // 1a. Bài viết thời tiết / Tin tức có metadata rõ ràng
+  if (hasExplicitWeatherMeta) {
     return 'news';
   }
 
@@ -139,7 +133,7 @@ export function classifyNotification(item: NotificationItem): NotificationCatego
     return 'safeLocation';
   }
 
-  // 3. Thông báo chung & Cảnh báo tác chiến
+  // 3. Thông báo chung & Cảnh báo tác chiến (loại trừ nhầm với từ khóa thời tiết)
   if (
     type === 'ALERT' ||
     type === 'HAZARD' ||
@@ -160,8 +154,41 @@ export function classifyNotification(item: NotificationItem): NotificationCatego
     return 'alert';
   }
 
+  // 3b. Thông báo hệ thống / trò chuyện có type rõ ràng
+  if (
+    type === 'CHAT' ||
+    type === 'SOS_SYNC' ||
+    type === 'RESCUER_VERIFICATION' ||
+    type === 'USER_SYNC'
+  ) {
+    return 'systemNotification';
+  }
+
+  // 1b. Dự phòng nhận diện tin thời tiết qua từ khóa nếu không có type tác chiến cụ thể
+  if (
+    title.includes('thời tiết') ||
+    title.includes('dự báo') ||
+    title.includes('lượng mưa') ||
+    title.includes('áp thấp') ||
+    title.includes('triều cường') ||
+    title.includes('sóng lớn') ||
+    title.includes('cẩm nang') ||
+    title.includes('bản tin') ||
+    content.includes('khí tượng thủy văn') ||
+    content.includes('dự báo thời tiết')
+  ) {
+    return 'news';
+  }
+
   // 4. Mặc định: Thông báo hệ thống (System Notification)
   return 'systemNotification';
+}
+
+/**
+ * Kiểm tra thông báo có phải là bài viết thời tiết (hiển thị ở tab Tin tức) hay không
+ */
+export function isWeatherNotification(item: NotificationItem): boolean {
+  return classifyNotification(item) === 'news';
 }
 
 /**

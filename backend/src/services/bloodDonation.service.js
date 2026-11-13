@@ -640,6 +640,12 @@ class BloodDonationService {
     const notifTitle = `🩸 [Đợt Hiến Máu] ${title.trim()}`;
     const notifContent = `📍 Địa điểm: ${locationName.trim()} (${address.trim()})\n🕒 Thời gian: ${startTime.trim()} - ${endTime.trim()} ngày ${formattedDate}. Nhấn vào để xem vị trí trên Google Maps và xác nhận tham gia!`;
 
+    const pushTargetedUserIds = new Set(
+      recipientUsers
+        .filter((u) => this.extractValidExpoTokens(u).length > 0)
+        .map((u) => u._id.toString())
+    );
+
     // Gửi thông báo đến người dùng trong cùng tỉnh đã ĐK nhận thông báo (nếu chưa có ai, vẫn lưu 1 bản ghi lịch sử phát cho người tạo)
     const targetUsersForNotification =
       recipientUsers.length > 0 ? recipientUsers : [{ _id: senderUser._id }];
@@ -669,6 +675,7 @@ class BloodDonationService {
         areaName: targetAreaName,
         actionUrl: 'blood_donation',
         screen: 'blood_donation',
+        pushDispatched: pushTargetedUserIds.has(u._id.toString()),
       },
       isRead: false,
       createdAt: now,
@@ -679,24 +686,14 @@ class BloodDonationService {
     if (recipientUsers.length > 0) {
       // Bắn sự kiện SSE realtime đến từng user đã đăng ký hiến máu
       savedNotifications.forEach((notification) => {
-        eventBus.emit('notification_event', {
-          action: 'USER',
-          userId: notification.userId.toString(),
-          notification,
-        });
+        this.emitUserNotificationSse(notification);
       });
 
-      // Gửi Expo Push Notification đến thiết bị di động
-      const uniquePushTokens = [];
-      recipientUsers.forEach((u) => {
-        const tokens = [u.pushToken, u.citizen?.pushToken].filter(Boolean);
-        tokens.forEach((t) => {
-          const trimmed = t.trim();
-          if (trimmed && !uniquePushTokens.includes(trimmed)) {
-            uniquePushTokens.push(trimmed);
-          }
-        });
-      });
+      // Gửi Expo Push Notification đến thiết bị di động (kèm notificationId & broadcastId để chống trùng lặp trên app)
+      const { uniquePushTokens, dataByToken } = this.buildUserPushTargets(
+        recipientUsers,
+        savedNotifications
+      );
 
       if (uniquePushTokens.length > 0) {
         sendExpoPushNotification({
@@ -707,6 +704,7 @@ class BloodDonationService {
           data: {
             type: 'BLOOD_DONATION',
             isBloodDonation: true,
+            broadcastId: eventDoc._id.toString(),
             eventId: eventDoc._id.toString(),
             locationName: eventDoc.locationName,
             address: eventDoc.address,
@@ -717,6 +715,7 @@ class BloodDonationService {
             actionUrl: 'blood_donation',
             screen: 'blood_donation',
           },
+          dataByToken,
         }).catch((err) => {
           console.error('[BloodDonationService] Gửi Expo Push Notification thất bại:', err.message);
         });
@@ -724,6 +723,205 @@ class BloodDonationService {
     }
 
     return eventDoc;
+  }
+
+  /**
+   * Lọc các Expo Push Token hợp lệ của một user
+   */
+  extractValidExpoTokens(userDoc) {
+    if (!userDoc) return [];
+    const candidates = [userDoc.pushToken, userDoc.citizen?.pushToken].filter(Boolean);
+    const tokens = [];
+    for (const raw of candidates) {
+      const trimmed = typeof raw === 'string' ? raw.trim() : '';
+      if (
+        trimmed &&
+        (trimmed.startsWith('ExponentPushToken[') || trimmed.startsWith('ExpoPushToken[')) &&
+        !tokens.includes(trimmed)
+      ) {
+        tokens.push(trimmed);
+      }
+    }
+    return tokens;
+  }
+
+  /**
+   * Chuẩn hóa và phát sự kiện SSE notification_event đồng bộ định dạng với mobile/web
+   */
+  emitUserNotificationSse(notification) {
+    if (!notification || !notification.userId) return;
+    const createdAtIso =
+      notification.createdAt instanceof Date
+        ? notification.createdAt.toISOString()
+        : new Date(notification.createdAt || Date.now()).toISOString();
+
+    eventBus.emit('notification_event', {
+      action: 'USER',
+      userId: notification.userId.toString(),
+      data: {
+        _id: notification._id.toString(),
+        userId: notification.userId.toString(),
+        title: notification.title,
+        content: notification.content,
+        type: notification.type,
+        priority: notification.priority,
+        areaId: notification.areaId?.toString() || null,
+        areaName: notification.areaName || null,
+        actionUrl: notification.actionUrl || null,
+        data: notification.data || {},
+        isRead: Boolean(notification.isRead),
+        createdAt: createdAtIso,
+      },
+      notification,
+    });
+  }
+
+  /**
+   * Gom danh sách push token duy nhất và ánh xạ notificationId/broadcastId theo từng token
+   */
+  buildUserPushTargets(users, savedNotifications) {
+    const notifByUserId = new Map(
+      (savedNotifications || []).map((n) => [n.userId.toString(), n])
+    );
+    const uniquePushTokens = [];
+    const dataByToken = {};
+
+    (users || []).forEach((u) => {
+      const uid = u?._id?.toString();
+      const notif = uid ? notifByUserId.get(uid) : null;
+      const tokens = this.extractValidExpoTokens(u);
+
+      tokens.forEach((trimmed) => {
+        if (!uniquePushTokens.includes(trimmed)) {
+          uniquePushTokens.push(trimmed);
+        }
+        if (notif && !dataByToken[trimmed]) {
+          dataByToken[trimmed] = {
+            notificationId: notif._id.toString(),
+            broadcastId: notif.data?.broadcastId || notif.data?.eventId || '',
+          };
+        }
+      });
+    });
+
+    return { uniquePushTokens, dataByToken };
+  }
+
+  /**
+   * Helper dùng chung để gửi thông báo nhắc nhở hiến máu (1 ngày trước / sắp đến giờ)
+   */
+  async dispatchReminderBatch({
+    ev,
+    regs,
+    reminderType,
+    notifTitle,
+    buildContent,
+    pushBody,
+    priority,
+    remindedField,
+    remindedAtField,
+  }) {
+    if (!regs || regs.length === 0) return 0;
+
+    const userIds = [...new Set(regs.map((r) => r.userId?.toString()).filter(Boolean))];
+    const users = await User.find({ _id: { $in: userIds } })
+      .select('_id pushToken citizen fullName')
+      .lean();
+    const userMap = new Map(users.map((u) => [u._id.toString(), u]));
+
+    const seenUserIds = new Set();
+    const notifDocs = [];
+    const recipientUsers = [];
+
+    for (const reg of regs) {
+      const uidStr = reg.userId?.toString();
+      if (!uidStr || seenUserIds.has(uidStr)) continue;
+      seenUserIds.add(uidStr);
+
+      const uDoc = userMap.get(uidStr);
+      if (uDoc) recipientUsers.push(uDoc);
+      const recipientName = reg.fullName || uDoc?.fullName || 'bạn';
+      const hasPushToken = this.extractValidExpoTokens(uDoc).length > 0;
+      const broadcastId = `blood_reminder_${ev._id.toString()}_${reminderType}_${uidStr}`;
+
+      notifDocs.push({
+        userId: reg.userId,
+        createdBy: ev.createdBy || null,
+        areaId: ev.areaId || null,
+        areaName: ev.areaName || null,
+        type: 'BLOOD_DONATION',
+        title: notifTitle,
+        content: buildContent(recipientName),
+        priority,
+        actionUrl: 'blood_donation',
+        data: {
+          broadcastId,
+          isBloodDonation: true,
+          reminderType,
+          eventId: ev._id.toString(),
+          title: ev.title,
+          locationName: ev.locationName,
+          address: ev.address,
+          googleMapsUrl: ev.googleMapsUrl || '',
+          eventDate: ev.eventDate,
+          startTime: ev.startTime,
+          endTime: ev.endTime,
+          slot: reg.preferredTimeSlot || `${ev.startTime} - ${ev.endTime}`,
+          actionUrl: 'blood_donation',
+          screen: 'blood_donation',
+          pushDispatched: hasPushToken,
+        },
+        isRead: false,
+        createdAt: new Date(),
+      });
+    }
+
+    if (notifDocs.length > 0) {
+      const savedNotifs = await Notification.insertMany(notifDocs);
+      savedNotifs.forEach((n) => {
+        try {
+          this.emitUserNotificationSse(n);
+        } catch (_) {}
+      });
+
+      const { uniquePushTokens, dataByToken } = this.buildUserPushTargets(
+        recipientUsers,
+        savedNotifs
+      );
+
+      if (uniquePushTokens.length > 0) {
+        sendExpoPushNotification({
+          tokens: uniquePushTokens,
+          title: notifTitle,
+          body: pushBody,
+          priority,
+          data: {
+            type: 'BLOOD_DONATION',
+            isBloodDonation: true,
+            reminderType,
+            eventId: ev._id.toString(),
+            locationName: ev.locationName,
+            address: ev.address,
+            eventDate: ev.eventDate instanceof Date ? ev.eventDate.toISOString() : ev.eventDate,
+            startTime: ev.startTime,
+            endTime: ev.endTime,
+            actionUrl: 'blood_donation',
+            screen: 'blood_donation',
+          },
+          dataByToken,
+        }).catch((err) => {
+          console.error(`[BloodDonationService] Lỗi gửi Push (${reminderType}):`, err.message);
+        });
+      }
+
+      const regIds = regs.map((r) => r._id);
+      await BloodDonationRegistration.updateMany(
+        { _id: { $in: regIds } },
+        { $set: { [remindedField]: true, [remindedAtField]: new Date() } }
+      );
+    }
+
+    return regs.length;
   }
 
   /**
@@ -1044,107 +1242,18 @@ class BloodDonationService {
           reminded1DayBefore: { $ne: true },
         }).lean();
 
-        if (regs1Day.length > 0) {
-          const userIds = regs1Day.map((r) => r.userId).filter(Boolean);
-          const users = await User.find({ _id: { $in: userIds } })
-            .select('_id pushToken citizen fullName')
-            .lean();
-          const userMap = new Map(users.map((u) => [u._id.toString(), u]));
-
-          const notifDocs = [];
-          const pushTokens = [];
-
-          for (const reg of regs1Day) {
-            const uidStr = reg.userId?.toString();
-            const uDoc = userMap.get(uidStr);
-            const recipientName = reg.fullName || uDoc?.fullName || 'bạn';
-
-            const notifTitle = `🩸 [Nhắc nhở] Ngày mai diễn ra đợt hiến máu tình nguyện`;
-            const notifContent = `Chào ${recipientName}, bạn có lịch hẹn hiến máu tại "${ev.title}" vào ngày mai (${formattedDateStr}) lúc ${ev.startTime} tại ${ev.locationName} (${ev.address}). Vui lòng nghỉ ngơi đầy đủ, ăn sáng nhẹ và mang theo CCCD nhé!`;
-
-            notifDocs.push({
-              userId: reg.userId,
-              createdBy: ev.createdBy || null,
-              areaId: ev.areaId || null,
-              areaName: ev.areaName || null,
-              type: 'BLOOD_DONATION',
-              title: notifTitle,
-              content: notifContent,
-              priority: 'HIGH',
-              actionUrl: 'blood_donation',
-              data: {
-                isBloodDonation: true,
-                reminderType: '1_DAY_BEFORE',
-                eventId: ev._id.toString(),
-                title: ev.title,
-                locationName: ev.locationName,
-                address: ev.address,
-                googleMapsUrl: ev.googleMapsUrl || '',
-                eventDate: ev.eventDate,
-                startTime: ev.startTime,
-                endTime: ev.endTime,
-                slot: reg.preferredTimeSlot || `${ev.startTime} - ${ev.endTime}`,
-                actionUrl: 'blood_donation',
-                screen: 'blood_donation',
-              },
-              isRead: false,
-              createdAt: new Date(),
-            });
-
-            if (uDoc) {
-              const tokens = [uDoc.pushToken, uDoc.citizen?.pushToken].filter(Boolean);
-              tokens.forEach((t) => {
-                const tr = t.trim();
-                if (tr && !pushTokens.includes(tr)) pushTokens.push(tr);
-              });
-            }
-          }
-
-          if (notifDocs.length > 0) {
-            const savedNotifs = await Notification.insertMany(notifDocs);
-            savedNotifs.forEach((n) => {
-              try {
-                eventBus.emit('notification_event', {
-                  action: 'USER',
-                  userId: n.userId.toString(),
-                  notification: n,
-                });
-              } catch (_) {}
-            });
-
-            if (pushTokens.length > 0) {
-              sendExpoPushNotification({
-                tokens: pushTokens,
-                title: `🩸 [Nhắc nhở] Ngày mai diễn ra đợt hiến máu tình nguyện`,
-                body: `Bạn có lịch hẹn hiến máu tại "${ev.title}" vào ngày mai lúc ${ev.startTime}. Vui lòng nghỉ ngơi đầy đủ và có mặt đúng giờ!`,
-                priority: 'HIGH',
-                data: {
-                  type: 'BLOOD_DONATION',
-                  isBloodDonation: true,
-                  reminderType: '1_DAY_BEFORE',
-                  eventId: ev._id.toString(),
-                  locationName: ev.locationName,
-                  address: ev.address,
-                  eventDate: ev.eventDate instanceof Date ? ev.eventDate.toISOString() : ev.eventDate,
-                  startTime: ev.startTime,
-                  endTime: ev.endTime,
-                  actionUrl: 'blood_donation',
-                  screen: 'blood_donation',
-                },
-              }).catch((err) => {
-                console.error('[BloodDonationService] Lỗi gửi Push 1 ngày trước:', err.message);
-              });
-            }
-
-            const regIds = regs1Day.map((r) => r._id);
-            await BloodDonationRegistration.updateMany(
-              { _id: { $in: regIds } },
-              { $set: { reminded1DayBefore: true, reminded1DayAt: new Date() } }
-            );
-
-            totalCount1Day += regs1Day.length;
-          }
-        }
+        totalCount1Day += await this.dispatchReminderBatch({
+          ev,
+          regs: regs1Day,
+          reminderType: '1_DAY_BEFORE',
+          notifTitle: `🩸 [Nhắc nhở] Ngày mai diễn ra đợt hiến máu tình nguyện`,
+          buildContent: (recipientName) =>
+            `Chào ${recipientName}, bạn có lịch hẹn hiến máu tại "${ev.title}" vào ngày mai (${formattedDateStr}) lúc ${ev.startTime} tại ${ev.locationName} (${ev.address}). Vui lòng nghỉ ngơi đầy đủ, ăn sáng nhẹ và mang theo CCCD nhé!`,
+          pushBody: `Bạn có lịch hẹn hiến máu tại "${ev.title}" vào ngày mai lúc ${ev.startTime}. Vui lòng nghỉ ngơi đầy đủ và có mặt đúng giờ!`,
+          priority: 'HIGH',
+          remindedField: 'reminded1DayBefore',
+          remindedAtField: 'reminded1DayAt',
+        });
       }
 
       // 2. Kiểm tra điều kiện "Sắp đến giờ" (Trước 2.5 giờ đến 15 phút sau khi bắt đầu)
@@ -1160,107 +1269,18 @@ class BloodDonationService {
           remindedUpcoming: { $ne: true },
         }).lean();
 
-        if (regsUpcoming.length > 0) {
-          const userIds = regsUpcoming.map((r) => r.userId).filter(Boolean);
-          const users = await User.find({ _id: { $in: userIds } })
-            .select('_id pushToken citizen fullName')
-            .lean();
-          const userMap = new Map(users.map((u) => [u._id.toString(), u]));
-
-          const notifDocs = [];
-          const pushTokens = [];
-
-          for (const reg of regsUpcoming) {
-            const uidStr = reg.userId?.toString();
-            const uDoc = userMap.get(uidStr);
-            const recipientName = reg.fullName || uDoc?.fullName || 'bạn';
-
-            const notifTitle = `⏰ [Sắp đến giờ] Đợt hiến máu tình nguyện sắp bắt đầu`;
-            const notifContent = `Chào ${recipientName}, đợt hiến máu "${ev.title}" tại ${ev.locationName} sẽ bắt đầu lúc ${ev.startTime} hôm nay (${formattedDateStr}). Vui lòng chuẩn bị và có mặt đúng giờ nhé!`;
-
-            notifDocs.push({
-              userId: reg.userId,
-              createdBy: ev.createdBy || null,
-              areaId: ev.areaId || null,
-              areaName: ev.areaName || null,
-              type: 'BLOOD_DONATION',
-              title: notifTitle,
-              content: notifContent,
-              priority: 'CRITICAL',
-              actionUrl: 'blood_donation',
-              data: {
-                isBloodDonation: true,
-                reminderType: 'UPCOMING',
-                eventId: ev._id.toString(),
-                title: ev.title,
-                locationName: ev.locationName,
-                address: ev.address,
-                googleMapsUrl: ev.googleMapsUrl || '',
-                eventDate: ev.eventDate,
-                startTime: ev.startTime,
-                endTime: ev.endTime,
-                slot: reg.preferredTimeSlot || `${ev.startTime} - ${ev.endTime}`,
-                actionUrl: 'blood_donation',
-                screen: 'blood_donation',
-              },
-              isRead: false,
-              createdAt: new Date(),
-            });
-
-            if (uDoc) {
-              const tokens = [uDoc.pushToken, uDoc.citizen?.pushToken].filter(Boolean);
-              tokens.forEach((t) => {
-                const tr = t.trim();
-                if (tr && !pushTokens.includes(tr)) pushTokens.push(tr);
-              });
-            }
-          }
-
-          if (notifDocs.length > 0) {
-            const savedNotifs = await Notification.insertMany(notifDocs);
-            savedNotifs.forEach((n) => {
-              try {
-                eventBus.emit('notification_event', {
-                  action: 'USER',
-                  userId: n.userId.toString(),
-                  notification: n,
-                });
-              } catch (_) {}
-            });
-
-            if (pushTokens.length > 0) {
-              sendExpoPushNotification({
-                tokens: pushTokens,
-                title: `⏰ [Sắp đến giờ] Đợt hiến máu tình nguyện sắp bắt đầu`,
-                body: `Đợt hiến máu tại "${ev.locationName}" sẽ bắt đầu lúc ${ev.startTime}. Vui lòng chuẩn bị và có mặt đúng giờ!`,
-                priority: 'CRITICAL',
-                data: {
-                  type: 'BLOOD_DONATION',
-                  isBloodDonation: true,
-                  reminderType: 'UPCOMING',
-                  eventId: ev._id.toString(),
-                  locationName: ev.locationName,
-                  address: ev.address,
-                  eventDate: ev.eventDate instanceof Date ? ev.eventDate.toISOString() : ev.eventDate,
-                  startTime: ev.startTime,
-                  endTime: ev.endTime,
-                  actionUrl: 'blood_donation',
-                  screen: 'blood_donation',
-                },
-              }).catch((err) => {
-                console.error('[BloodDonationService] Lỗi gửi Push sắp đến giờ:', err.message);
-              });
-            }
-
-            const regIds = regsUpcoming.map((r) => r._id);
-            await BloodDonationRegistration.updateMany(
-              { _id: { $in: regIds } },
-              { $set: { remindedUpcoming: true, remindedUpcomingAt: new Date() } }
-            );
-
-            totalCountUpcoming += regsUpcoming.length;
-          }
-        }
+        totalCountUpcoming += await this.dispatchReminderBatch({
+          ev,
+          regs: regsUpcoming,
+          reminderType: 'UPCOMING',
+          notifTitle: `⏰ [Sắp đến giờ] Đợt hiến máu tình nguyện sắp bắt đầu`,
+          buildContent: (recipientName) =>
+            `Chào ${recipientName}, đợt hiến máu "${ev.title}" tại ${ev.locationName} sẽ bắt đầu lúc ${ev.startTime} hôm nay (${formattedDateStr}). Vui lòng chuẩn bị và có mặt đúng giờ nhé!`,
+          pushBody: `Đợt hiến máu tại "${ev.locationName}" sẽ bắt đầu lúc ${ev.startTime}. Vui lòng chuẩn bị và có mặt đúng giờ!`,
+          priority: 'CRITICAL',
+          remindedField: 'remindedUpcoming',
+          remindedAtField: 'remindedUpcomingAt',
+        });
       }
     }
 

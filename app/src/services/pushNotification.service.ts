@@ -2,11 +2,66 @@ import * as Notifications from 'expo-notifications';
 import { Platform, Vibration } from 'react-native';
 import Constants from 'expo-constants';
 import { backendApi } from '@/api';
-import { getSavedNotificationSettings, classifyNotification } from '@/utils';
+import {
+  getSavedNotificationSettings,
+  classifyNotification,
+  extractNotificationDedupeKeys,
+  hasRecentlyPresentedNotification,
+  markNotificationPresented,
+} from '@/utils';
 
-// Cấu hình cách xử lý thông báo khi ứng dụng đang chạy ở foreground:
-// "Chỉ đẩy thông báo ra ngoài app không hiển thị trong app":
-// Không bật banner nổi và chuông khi đang mở app, chỉ cập nhật badge và lưu vào trung tâm thông báo bên ngoài của hệ điều hành.
+let registeredExpoPushToken: string | null = null;
+
+export function getRegisteredExpoPushToken(): string | null {
+  return registeredExpoPushToken;
+}
+
+/**
+ * Kiểm tra xem thông báo này đã có mặt trong khay thông báo của hệ điều hành hay chưa
+ * (Bao gồm Remote Push đến khi app đang nền / khóa màn hình).
+ */
+export async function isNotificationAlreadyPresented(input: {
+  _id?: string | null;
+  title?: string | null;
+  content?: string | null;
+  body?: string | null;
+  data?: Record<string, any> | null;
+}): Promise<boolean> {
+  if (hasRecentlyPresentedNotification(input)) {
+    return true;
+  }
+  try {
+    const presented = await Notifications.getPresentedNotificationsAsync();
+    if (!Array.isArray(presented) || presented.length === 0) {
+      return false;
+    }
+    const targetKeys = new Set(extractNotificationDedupeKeys(input));
+    const targetStructuralKeys = Array.from(targetKeys).filter((k) => !k.startsWith('sig:'));
+    const matchPool = targetStructuralKeys.length > 0 ? targetStructuralKeys : Array.from(targetKeys);
+    for (const notif of presented) {
+      const content = notif?.request?.content;
+      if (!content) continue;
+      const presentedObj = {
+        _id: notif.request.identifier,
+        title: content.title || '',
+        body: content.body || '',
+        data: (content.data || {}) as Record<string, any>,
+      };
+      markNotificationPresented(presentedObj);
+      const presentedKeys = new Set(extractNotificationDedupeKeys(presentedObj));
+      if (matchPool.some((k) => presentedKeys.has(k))) {
+        return true;
+      }
+    }
+  } catch {
+    // Một số môi trường chưa hỗ trợ getPresentedNotificationsAsync
+  }
+  return hasRecentlyPresentedNotification(input);
+}
+
+// Cấu hình cách xử lý thông báo hệ điều hành khi ứng dụng đang mở (foreground):
+// Tôn trọng tùy chọn BẬT/TẮT và Âm thanh trong Cài đặt thông báo của người dùng,
+// hiển thị banner hệ thống phía trên màn hình (không dùng banner JSX đè giao diện app).
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     try {
@@ -34,17 +89,29 @@ Notifications.setNotificationHandler({
         };
       }
 
+      // Nếu Remote Push đến khi foreground nhưng thông báo này ĐÃ thực sự được hiển thị trước đó -> chặn trùng
+      if (!data.isLocalTrigger && hasRecentlyPresentedNotification(item)) {
+        return {
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+          shouldShowBanner: false,
+          shouldShowList: false,
+        };
+      }
+
+      markNotificationPresented(item);
+
       return {
-        shouldPlaySound: false, // Không chuông đè khi đang mở app
+        shouldPlaySound: settings.sound !== false && !data.skipHandlerSound,
         shouldSetBadge: true,
-        shouldShowBanner: false, // KHÔNG hiển thị banner trong app (chỉ đẩy ra ngoài hệ điều hành)
-        shouldShowList: true,   // Lưu vào danh sách thông báo ngoài màn hình máy
+        shouldShowBanner: true,
+        shouldShowList: true,
       };
     } catch {
       return {
-        shouldPlaySound: false,
+        shouldPlaySound: true,
         shouldSetBadge: true,
-        shouldShowBanner: false,
+        shouldShowBanner: true,
         shouldShowList: true,
       };
     }
@@ -117,11 +184,13 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
         console.log('📱 [PushNotification] Đã lấy được Push Token:', token);
         const registration = await backendApi.registerPushToken(token);
         if (!registration.success) {
+          registeredExpoPushToken = null;
           console.warn(
             '⚠️ Đã lấy được Expo Push Token nhưng máy chủ không lưu được token:',
             registration.message || 'Chưa đăng nhập tài khoản'
           );
         } else {
+          registeredExpoPushToken = token;
           console.log('✅ Đã đăng ký Expo Push Token với máy chủ thành công cho tài khoản.');
         }
       } else {
@@ -149,11 +218,13 @@ export async function triggerLocalNotification(options: {
   body: string;
   data?: any;
   priority?: 'NORMAL' | 'HIGH' | 'CRITICAL' | string;
+  allowDuplicate?: boolean;
+  skipHandlerSound?: boolean;
 }): Promise<void> {
   try {
     const settings = await getSavedNotificationSettings();
     const item: any = {
-      _id: 'local-' + Date.now(),
+      _id: String(options.data?.notificationId || 'local-' + Date.now()),
       title: options.title,
       content: options.body,
       type: options.data?.type || 'SYSTEM',
@@ -168,27 +239,39 @@ export async function triggerLocalNotification(options: {
       return;
     }
 
+    if (!options.allowDuplicate) {
+      const alreadyPresented = await isNotificationAlreadyPresented(item);
+      if (alreadyPresented) {
+        return;
+      }
+      markNotificationPresented(item);
+    }
+
     // Rung 1 lần duy nhất nếu bật vibration
     if (settings.vibration !== false) {
       Vibration.vibrate(300);
     }
 
-    // Đảm bảo kênh Android đã sẵn sàng trước khi bắn thông báo (nếu được hỗ trợ)
+    // Đảm bảo kênh Android đã sẵn sàng trước khi bắn thông báo (không ghi đè làm tắt âm kênh mặc định)
     let channelIdToUse: string | undefined = undefined;
     if (Platform.OS === 'android') {
+      const targetChannelId = settings.sound !== false ? 'emergency-alerts' : 'emergency-alerts-silent';
       try {
-        await Notifications.setNotificationChannelAsync('emergency-alerts', {
-          name: 'Cảnh báo khẩn cấp & Tin tức SOS',
+        await Notifications.setNotificationChannelAsync(targetChannelId, {
+          name:
+            settings.sound !== false
+              ? 'Cảnh báo khẩn cấp & Tin tức SOS'
+              : 'Cảnh báo khẩn cấp (Im lặng)',
           importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: settings.vibration ? [0, 300] : [0],
+          vibrationPattern: settings.vibration !== false ? [0, 300] : [0],
           lightColor: '#EF4444',
-          sound: settings.sound ? 'default' : undefined,
-          enableVibrate: settings.vibration,
+          sound: settings.sound !== false ? 'default' : undefined,
+          enableVibrate: settings.vibration !== false,
           showBadge: true,
           lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
           bypassDnd: false,
         });
-        channelIdToUse = 'emergency-alerts';
+        channelIdToUse = targetChannelId;
       } catch (_) {
         // Expo Go fallback: không ép buộc kênh tùy chỉnh nếu môi trường chưa hỗ trợ
         channelIdToUse = undefined;
@@ -198,7 +281,11 @@ export async function triggerLocalNotification(options: {
     const notificationContent: any = {
       title: options.title,
       body: options.body,
-      data: options.data || {},
+      data: {
+        ...(options.data || {}),
+        isLocalTrigger: true,
+        skipHandlerSound: options.skipHandlerSound || undefined,
+      },
       sound: settings.sound !== false ? 'default' : undefined,
       badge: 1,
       priority:

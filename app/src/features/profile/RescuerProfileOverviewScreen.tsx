@@ -57,7 +57,7 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
   onNavigateToSecurity,
   onNavigateToNotificationSettings,
   onNavigateToNotifications,
-  unreadNotificationsCount = 3,
+  unreadNotificationsCount = 0,
   refreshTrigger,
 }) => {
   const { user, logout, updateUserAvatar } = useAuth();
