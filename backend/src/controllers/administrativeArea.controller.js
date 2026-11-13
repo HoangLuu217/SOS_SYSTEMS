@@ -97,12 +97,13 @@ class AdministrativeAreaController {
    */
   async getAreaBoundary(req, res, next) {
     try {
-      const { areaId, name, province, district } = req.query;
+      const { areaId, name, province, district, level } = req.query;
       const data = await administrativeAreaService.getBoundaryForArea({
         areaId,
         name,
         province,
         district,
+        level,
       });
       if (!data) {
         return sendSuccess(res, 200, 'Không tìm thấy ranh giới cho khu vực này', null);

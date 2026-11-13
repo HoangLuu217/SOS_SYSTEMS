@@ -1,5 +1,5 @@
 import type { AdministrativeArea, GeoJsonPolygon } from '@/types/domainD';
-import { syncAdministrativeAreasToBackend } from '@/api';
+import { fetchAreaBoundary, syncAdministrativeAreasToBackend } from '@/api';
 
 export const GEOAPIFY_BOUNDARIES_URL =
   'https://api.geoapify.com/v1/boundaries/consists-of?id=51ce209969560e5b405949be124889113040f00101f9015adc1c0000000000c002089203185468c3a06e68207068e1bb9120c490c3a0204ee1bab56e67&boundary=administrative&sublevel=1&geometry=geometry_1000&lang=vi&apiKey=3383e3ba2267489985bbe6d9bf7aa05d';
@@ -486,15 +486,19 @@ export async function fetchProvinceSubUnitsService(
     );
     if (firstMatch) provCode = firstMatch.code;
   }
-  const cacheKey = `rescuesos_subunits_v6_p${provCode}`;
+  const cacheKey = `rescuesos_subunits_v7_p${provCode}`;
+  const isExcludedSpecialIsland = (name?: string) => (name || '').toLowerCase().includes('hoàng sa');
 
   try {
+    localStorage.removeItem(`rescuesos_subunits_v6_p${provCode}`);
     localStorage.removeItem(`rescuesos_subunits_v3_p${provCode}`);
     localStorage.removeItem(`rescuesos_subunits_v2_p${provCode}`);
 
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
-      const parsed: ProvinceSubUnitItem[] = JSON.parse(cached);
+      const parsed: ProvinceSubUnitItem[] = JSON.parse(cached).filter(
+        (u: ProvinceSubUnitItem) => !isExcludedSpecialIsland(u.name)
+      );
       const isOldDistrictsOnly = parsed.length <= 8 && parsed.every((u) => u.type === 'DISTRICT');
       if (Array.isArray(parsed) && parsed.length > 0 && !isOldDistrictsOnly) {
         syncAdministrativeAreasToBackend({
@@ -522,7 +526,7 @@ export async function fetchProvinceSubUnitsService(
 
         apiWards.forEach((w: any) => {
           const exactName = sanitizeWardName(w.name);
-          if (exactName && !officialWardsMap.has(exactName)) {
+          if (exactName && !isExcludedSpecialIsland(exactName) && !officialWardsMap.has(exactName)) {
             officialWardsMap.set(exactName, {
               ...w,
               exactName,
@@ -581,5 +585,179 @@ export async function fetchProvinceSubUnitsService(
   }).catch((err) => console.warn('Lỗi đồng bộ vào CSDL:', err));
 
   return units;
+}
+
+const PROVINCE_BOUNDARY_CACHE_PREFIX = 'rescuesos_province_boundary_v1_';
+const PROVINCE_BOUNDARY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const provinceBoundaryMemoryCache = new Map<string, AdministrativeArea>();
+const provinceBoundaryInFlight = new Map<string, Promise<AdministrativeArea | null>>();
+
+export function getCachedProvinceBoundarySync(provinceName: string): AdministrativeArea | null {
+  const slug = slugifyVietnamese(provinceName);
+  const mem = provinceBoundaryMemoryCache.get(slug);
+  if (mem?.boundary?.coordinates?.length) return mem;
+
+  const cacheKey = `${PROVINCE_BOUNDARY_CACHE_PREFIX}${slug}`;
+  try {
+    const cachedRaw = localStorage.getItem(cacheKey);
+    if (cachedRaw) {
+      const parsed = JSON.parse(cachedRaw) as {
+        timestamp: number;
+        area: AdministrativeArea;
+      };
+      if (
+        parsed?.area?.boundary?.coordinates?.length &&
+        Date.now() - parsed.timestamp < PROVINCE_BOUNDARY_TTL_MS
+      ) {
+        provinceBoundaryMemoryCache.set(slug, parsed.area);
+        return parsed.area;
+      }
+    }
+  } catch {
+    // Bỏ qua lỗi đọc cache localStorage
+  }
+  return null;
+}
+
+/**
+ * Tải boundary GeoJSON của một Tỉnh/Thành phố trực tiếp từ Backend API / Geoapify API (không hardcode tọa độ).
+ */
+export async function fetchProvinceBoundaryFromApi(
+  provinceName: string
+): Promise<AdministrativeArea | null> {
+  const slug = slugifyVietnamese(provinceName);
+  const cacheKey = `${PROVINCE_BOUNDARY_CACHE_PREFIX}${slug}`;
+
+  const cachedSync = getCachedProvinceBoundarySync(provinceName);
+  if (cachedSync) return cachedSync;
+
+  const existingInFlight = provinceBoundaryInFlight.get(slug);
+  if (existingInFlight) return existingInFlight;
+
+  const saveBoundaryCache = (area: AdministrativeArea) => {
+    provinceBoundaryMemoryCache.set(slug, area);
+    try {
+      localStorage.setItem(
+        cacheKey,
+        JSON.stringify({ timestamp: Date.now(), area })
+      );
+    } catch {
+      // Không chặn nếu localStorage đầy
+    }
+  };
+
+  const loaderPromise = (async (): Promise<AdministrativeArea | null> => {
+    // 1. Ưu tiên gọi API Backend (/administrative-areas/boundary)
+    try {
+      const backendRes = await fetchAreaBoundary({
+        name: provinceName,
+        province: provinceName,
+        level: 'PROVINCE',
+      });
+      if (backendRes.success && backendRes.data?.boundary?.coordinates?.length) {
+        const areaFromApi: AdministrativeArea = {
+          id: backendRes.data.areaId || `prov-${slug}`,
+          name: backendRes.data.name || provinceName,
+          code: backendRes.data.code || `VN-${slug.toUpperCase()}`,
+          type: 'PROVINCE',
+          parentId: null,
+          status: 'ACTIVE',
+          boundary: backendRes.data.boundary,
+        };
+        saveBoundaryCache(areaFromApi);
+        return areaFromApi;
+      }
+    } catch (err) {
+      console.warn(`Lỗi lấy boundary ${provinceName} từ Backend API:`, err);
+    }
+
+    // 2. Fallback trực tiếp sang Geoapify Administrative Boundaries API
+    try {
+      const res = await fetch(GEOAPIFY_VIETNAM_PROVINCES_URL);
+      if (res.ok) {
+        const data: GeoapifyBoundariesResponse = await res.json();
+        const targetClean = provinceName
+          .toLowerCase()
+          .replace(/^(thành phố|tỉnh|tp\.?)\s+/i, '')
+          .trim();
+
+        const matchedFeature = (data.features || []).find((f) => {
+          if (
+            !f.geometry ||
+            (f.geometry.type !== 'Polygon' && f.geometry.type !== 'MultiPolygon')
+          ) {
+            return false;
+          }
+          const fName = String(
+            f.properties?.name || f.properties?.name_vi || ''
+          ).toLowerCase();
+          return (
+            fName === provinceName.toLowerCase() ||
+            fName.includes(targetClean) ||
+            targetClean.includes(fName)
+          );
+        });
+
+        if (matchedFeature?.geometry) {
+          const areaFromGeoapify: AdministrativeArea = {
+            id: matchedFeature.properties?.place_id || `prov-${slug}`,
+            name: matchedFeature.properties?.name || provinceName,
+            code: matchedFeature.properties?.['ISO3166-2'] || `VN-${slug.toUpperCase()}`,
+            type: 'PROVINCE',
+            parentId: null,
+            status: 'ACTIVE',
+            boundary: {
+              type: matchedFeature.geometry.type as 'Polygon' | 'MultiPolygon',
+              coordinates: matchedFeature.geometry.coordinates,
+            },
+          };
+          saveBoundaryCache(areaFromGeoapify);
+          return areaFromGeoapify;
+        }
+      }
+    } catch (err) {
+      console.warn(`Lỗi lấy boundary ${provinceName} từ Geoapify API:`, err);
+    }
+
+    return null;
+  })().finally(() => {
+    provinceBoundaryInFlight.delete(slug);
+  });
+
+  provinceBoundaryInFlight.set(slug, loaderPromise);
+  return loaderPromise;
+}
+
+/**
+ * Chuyển GeoJSON Polygon/MultiPolygon ([lng, lat]) sang danh sách vòng tọa độ Leaflet ([lat, lng])
+ */
+export function extractPolygonLatLngRings(boundary?: GeoJsonPolygon): [number, number][][] {
+  if (!boundary || !Array.isArray(boundary.coordinates)) return [];
+
+  const toLatLngRing = (ring: unknown): [number, number][] => {
+    if (!Array.isArray(ring)) return [];
+    return ring
+      .filter(
+        (pt): pt is [number, number] =>
+          Array.isArray(pt) &&
+          pt.length >= 2 &&
+          typeof pt[0] === 'number' &&
+          typeof pt[1] === 'number'
+      )
+      .map(([lng, lat]) => [lat, lng]);
+  };
+
+  if (boundary.type === 'Polygon') {
+    const rings = boundary.coordinates as number[][][];
+    const outer = toLatLngRing(rings[0]);
+    return outer.length >= 3 ? [outer] : [];
+  }
+
+  if (boundary.type === 'MultiPolygon') {
+    const polys = boundary.coordinates as number[][][][];
+    return polys.map((poly) => toLatLngRing(poly?.[0])).filter((ring) => ring.length >= 3);
+  }
+
+  return [];
 }
 

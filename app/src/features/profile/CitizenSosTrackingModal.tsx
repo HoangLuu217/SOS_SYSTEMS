@@ -14,8 +14,9 @@ import {
   Dimensions,
   TextInput,
   DeviceEventEmitter,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { backendApi } from '@/api';
@@ -159,6 +160,8 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
   } | null>(null);
   const [inAppAlertLoading, setInAppAlertLoading] = useState<boolean>(false);
   const webViewRef = useRef<WebView>(null);
+  const insets = useSafeAreaInsets();
+  const iosHeaderPaddingTop = Platform.OS === 'ios' ? (insets.top > 20 ? insets.top + 6 : 50) : 12;
 
   // Tải chi tiết ca SOS và danh sách phân công đội cứu hộ
   const loadData = async (showLoadingIndicator = true) => {
@@ -193,12 +196,31 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
   };
 
   useEffect(() => {
-    if (visible && sosId) {
-      if (initialSosData) {
-        setSos(initialSosData);
-      }
-      loadData(!initialSosData);
+    if (!visible || !sosId) return;
+
+    if (initialSosData) {
+      setSos(initialSosData);
     }
+    loadData(!initialSosData);
+
+    // Lắng nghe sự kiện realtime khi Ban chỉ huy điều phối hoặc Cứu hộ viên cập nhật tiến trình
+    const subSync = DeviceEventEmitter.addListener('sos:sync', () => {
+      loadData(false);
+    });
+    const subUpdated = DeviceEventEmitter.addListener('sos:updated', () => {
+      loadData(false);
+    });
+
+    // Tự động kiểm tra cập nhật mỗi 10 giây khi người dân đang mở màn hình theo dõi
+    const pollInterval = setInterval(() => {
+      loadData(false);
+    }, 10000);
+
+    return () => {
+      subSync.remove();
+      subUpdated.remove();
+      clearInterval(pollInterval);
+    };
   }, [visible, sosId]);
 
   // Xử lý khi người dân nhấn "Tôi đã được cứu an toàn" (Custom Alert Popup)
@@ -396,6 +418,12 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
   const rescuerLat = victimLat + 0.0072;
   const rescuerLng = victimLng - 0.0055;
 
+  const hasAssignedTeam = Boolean(
+    assignment?.rescueTeamId ||
+    assignment?.rescuerId ||
+    ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING', 'COMPLETED'].includes(currentStatus)
+  );
+
   const rescuerPhone =
     assignment?.rescuerId?.phone ||
     assignment?.rescueTeamId?.leaderId?.phone ||
@@ -406,16 +434,16 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
     assignment?.rescuerId?.fullName ||
     assignment?.rescueTeamId?.leaderId?.fullName ||
     assignment?.rescueTeamId?.name ||
-    'Đội Phản ứng nhanh địa phương';
+    'Đang phân công chỉ huy';
 
   const teamName =
     assignment?.rescueTeamId?.name ||
-    'Lực lượng Cứu nạn - Cứu trợ TP Đà Nẵng';
+    'Đội Cứu nạn - Cứu trợ TP Đà Nẵng';
 
   const vehicleName =
     assignment?.vehicleId?.plateNumber
-      ? `Cano / Phương tiện: ${assignment.vehicleId.plateNumber}`
-      : 'Cano chuyên dụng vượt lũ';
+      ? `Phương tiện: ${assignment.vehicleId.plateNumber}`
+      : 'Cano / Xe cứu hộ chuyên dụng';
 
   // Vật phẩm tiếp tế chuẩn bị mang theo
   const peopleCount = sos?.people || 1;
@@ -602,11 +630,11 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.safeArea} edges={['bottom']}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
         {/* 1. HEADER CHUẨN ĐỒNG BỘ PHONG CÁCH PROFILE */}
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: iosHeaderPaddingTop, paddingBottom: 12 }]}>
           <TouchableOpacity style={styles.backBtn} onPress={onClose} activeOpacity={0.7}>
             <Feather name="arrow-left" size={24} color="#0F172A" />
           </TouchableOpacity>
@@ -643,22 +671,22 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {/* 2. BANNER TRẠNG THÁI & STEPPER TIẾN TRÌNH */}
-            <View style={[styles.statusBanner, { backgroundColor: statusCfg.bgColor, borderColor: statusCfg.color + '40' }]}>
-              <View style={styles.statusBannerTop}>
-                <View style={[styles.statusIconWrap, { backgroundColor: statusCfg.color }]}>
-                  <Ionicons name={statusCfg.icon} size={20} color="#FFFFFF" />
+            {/* 2. BANNER TRẠNG THÁI & STEPPER TIẾN TRÌNH (Ẩn khi Đã hủy / Từ chối vì đã có card chi tiết bên dưới) */}
+            {currentStatus !== 'CANCELLED' && currentStatus !== 'REJECTED' && (
+              <View style={[styles.statusBanner, { backgroundColor: statusCfg.bgColor, borderColor: statusCfg.color + '40' }]}>
+                <View style={styles.statusBannerTop}>
+                  <View style={[styles.statusIconWrap, { backgroundColor: statusCfg.color }]}>
+                    <Ionicons name={statusCfg.icon} size={20} color="#FFFFFF" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.statusBannerTitle, { color: statusCfg.color }]}>
+                      {statusCfg.label.toUpperCase()}
+                    </Text>
+                    <Text style={styles.statusBannerDesc}>{statusCfg.desc}</Text>
+                  </View>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.statusBannerTitle, { color: statusCfg.color }]}>
-                    {statusCfg.label.toUpperCase()}
-                  </Text>
-                  <Text style={styles.statusBannerDesc}>{statusCfg.desc}</Text>
-                </View>
-              </View>
 
-              {/* Stepper trực quan 4 bước */}
-              {currentStatus !== 'CANCELLED' && currentStatus !== 'REJECTED' && (
+                {/* Stepper trực quan 4 bước */}
                 <View style={styles.stepperContainer}>
                   {[
                     { step: 1, label: 'Tiếp nhận' },
@@ -702,8 +730,8 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                     );
                   })}
                 </View>
-              )}
-            </View>
+              </View>
+            )}
 
             {/* 3. BẢN ĐỒ LIVE TRỰC QUAN (LEAFLET WEBVIEW) */}
             <View style={styles.mapCard}>
@@ -743,10 +771,12 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                   <View style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
                   <Text style={styles.legendLabel}>Vị trí của bạn</Text>
                 </View>
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: '#2563EB' }]} />
-                  <Text style={styles.legendLabel}>Đội cứu hộ đang đến</Text>
-                </View>
+                {hasAssignedTeam && (
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: '#2563EB' }]} />
+                    <Text style={styles.legendLabel}>Đội cứu hộ đang đến</Text>
+                  </View>
+                )}
               </View>
             </View>
 
@@ -759,22 +789,42 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                 <Text style={styles.cardSectionTitle}>Đội cứu hộ & Vật phẩm tiếp ứng</Text>
               </View>
 
-              <View style={styles.teamInfoBox}>
-                <View style={styles.teamMainInfo}>
-                  <Text style={styles.teamName}>{teamName}</Text>
-                  <Text style={styles.teamLeader}>Chỉ huy: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{rescuerName}</Text></Text>
-                  <Text style={styles.teamVehicle}>{vehicleName}</Text>
-                </View>
+              {hasAssignedTeam ? (
+                <View style={styles.teamInfoBox}>
+                  <View style={styles.teamMainInfo}>
+                    <Text style={styles.teamName}>{teamName}</Text>
+                    <Text style={styles.teamLeader}>Chỉ huy: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{rescuerName}</Text></Text>
+                    <Text style={styles.teamVehicle}>{vehicleName}</Text>
+                  </View>
 
-                <TouchableOpacity
-                  style={styles.callRescuerBtn}
-                  onPress={() => Linking.openURL(`tel:${rescuerPhone}`)}
-                  activeOpacity={0.8}
-                >
-                  <Feather name="phone-call" size={15} color="#FFFFFF" />
-                  <Text style={styles.callRescuerBtnText}>Gọi điện</Text>
-                </TouchableOpacity>
-              </View>
+                  <TouchableOpacity
+                    style={styles.callRescuerBtn}
+                    onPress={() => Linking.openURL(`tel:${rescuerPhone}`)}
+                    activeOpacity={0.8}
+                  >
+                    <Feather name="phone-call" size={15} color="#FFFFFF" />
+                    <Text style={styles.callRescuerBtnText}>Gọi điện</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={[styles.teamInfoBox, { backgroundColor: '#F8FAFC', borderColor: '#E2E8F0', paddingVertical: 12 }]}>
+                  <View style={styles.teamMainInfo}>
+                    <Text style={[styles.teamName, { color: '#475569', fontSize: 13 }]}>⏳ Đang chờ Ban chỉ huy điều phối lực lượng</Text>
+                    <Text style={[styles.teamLeader, { color: '#64748B', fontSize: 12, marginTop: 4, lineHeight: 17 }]}>
+                      Thông tin Đội cứu hộ, Chỉ huy và SĐT liên hệ trực tiếp sẽ tự động hiển thị ngay khi lệnh xuất kích được duyệt.
+                    </Text>
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.callRescuerBtn, { backgroundColor: '#DC2626' }]}
+                    onPress={() => Linking.openURL('tel:112')}
+                    activeOpacity={0.8}
+                  >
+                    <Feather name="phone-call" size={15} color="#FFFFFF" />
+                    <Text style={styles.callRescuerBtnText}>Gọi 112</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
               {/* Danh sách vật phẩm cứu trợ mang theo */}
               <View style={styles.gearBox}>
@@ -925,16 +975,40 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={styles.completedBadgeBox}>
+              <View
+                style={[
+                  styles.completedBadgeBox,
+                  (currentStatus === 'CANCELLED' || currentStatus === 'REJECTED') && {
+                    backgroundColor: '#F1F5F9',
+                    borderColor: '#CBD5E1',
+                  },
+                ]}
+              >
                 <Ionicons
-                  name={currentStatus === 'CANCELLED' ? 'close-circle' : 'checkmark-done-circle'}
+                  name={currentStatus === 'CANCELLED' || currentStatus === 'REJECTED' ? 'close-circle' : 'checkmark-done-circle'}
                   size={42}
-                  color={currentStatus === 'CANCELLED' ? '#DC2626' : '#16A34A'}
+                  color={currentStatus === 'CANCELLED' || currentStatus === 'REJECTED' ? '#64748B' : '#16A34A'}
                 />
-                <Text style={[styles.completedBadgeTitle, currentStatus === 'CANCELLED' && { color: '#DC2626' }]}>
-                  {currentStatus === 'CANCELLED' ? 'YÊU CẦU ĐÃ ĐƯỢC HỦY' : 'YÊU CẦU ĐÃ KẾT THÚC'}
+                <Text
+                  style={[
+                    styles.completedBadgeTitle,
+                    (currentStatus === 'CANCELLED' || currentStatus === 'REJECTED')
+                      ? { color: '#334155' }
+                      : { color: '#16A34A' },
+                  ]}
+                >
+                  {currentStatus === 'CANCELLED' || currentStatus === 'REJECTED'
+                    ? 'YÊU CẦU ĐÃ ĐƯỢC HỦY'
+                    : 'YÊU CẦU ĐÃ KẾT THÚC'}
                 </Text>
-                <Text style={styles.completedBadgeSub}>
+                <Text
+                  style={[
+                    styles.completedBadgeSub,
+                    (currentStatus === 'CANCELLED' || currentStatus === 'REJECTED') && {
+                      color: '#64748B',
+                    },
+                  ]}
+                >
                   {currentStatus === 'COMPLETED'
                     ? 'Bạn đã xác nhận an toàn. Chúc bạn và gia đình luôn khỏe mạnh và bình an!'
                     : 'Yêu cầu cứu hộ này đã được hủy. Bạn có thể xóa ca này để danh sách không bị rối mắt.'}
@@ -945,9 +1019,9 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                     flexDirection: 'row',
                     alignItems: 'center',
                     gap: 6,
-                    backgroundColor: '#FEF2F2',
+                    backgroundColor: '#FFFFFF',
                     borderWidth: 1,
-                    borderColor: '#FEE2E2',
+                    borderColor: (currentStatus === 'CANCELLED' || currentStatus === 'REJECTED') ? '#CBD5E1' : '#FEE2E2',
                     paddingHorizontal: 16,
                     paddingVertical: 10,
                     borderRadius: 12,
@@ -1393,11 +1467,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#16A34A',
+    backgroundColor: '#0066FF',
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: 10,
-    shadowColor: '#16A34A',
+    shadowColor: '#0066FF',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,

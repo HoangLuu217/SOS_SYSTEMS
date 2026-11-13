@@ -1639,6 +1639,7 @@
 .table-progress-pill {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   padding: 2.5px 8px;
   border-radius: 6px;
@@ -1665,6 +1666,11 @@
   background: #F0FDF4;
   color: #15803D;
   border: 1px solid #BBF7D0;
+}
+.table-progress-pill.cancelled {
+  background: #F1F5F9;
+  color: #475569;
+  border: 1px solid #CBD5E1;
 }
 
 
