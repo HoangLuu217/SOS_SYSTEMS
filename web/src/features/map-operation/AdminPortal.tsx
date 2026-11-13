@@ -76,7 +76,7 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
   const [wardsLoading, setWardsLoading] = useState(false);
 
   const [rawSosList, setRawSosList] = useState<SosRequestItem[]>([]);
-  const [filterMode, setFilterMode] = useState<AdminSosFilterMode>('ALL');
+  const [filterMode, setFilterMode] = useState<AdminSosFilterMode>('ACTIVE');
   const [selectedSosId, setSelectedSosId] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState<{ lat: number; lng: number; seq: number } | null>(null);
 

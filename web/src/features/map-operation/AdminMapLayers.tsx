@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Polygon, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import {
@@ -212,18 +212,18 @@ export function mapBackendSosForAdmin(
         Array.isArray(item.images) && item.images.length > 0
           ? item.images
           : item.imageUrl
-          ? [item.imageUrl]
-          : [];
+            ? [item.imageUrl]
+            : [];
 
       const assign = item.assignment;
       const assignmentSummary = assign
         ? {
-            status: assign.status || item.status,
-            teamName: assign.rescueTeamId?.name || assign.rescueTeamName || undefined,
-            rescuerName: assign.rescuerId?.fullName || assign.rescuerName || undefined,
-            vehiclePlate: assign.vehicleId?.plateNumber || assign.vehicleName || undefined,
-            orgName: assign.authorityOrganizationId?.name || undefined,
-          }
+          status: assign.status || item.status,
+          teamName: assign.rescueTeamId?.name || assign.rescueTeamName || undefined,
+          rescuerName: assign.rescuerId?.fullName || assign.rescuerName || undefined,
+          vehiclePlate: assign.vehicleId?.plateNumber || assign.vehicleName || undefined,
+          orgName: assign.authorityOrganizationId?.name || undefined,
+        }
         : null;
 
       return {
@@ -267,9 +267,8 @@ function createAdminSosPinIcon(sos: AdminSosItem, isSelected: boolean): L.DivIco
     popupAnchor: [0, -24],
     html: `
       <div style="position:relative;width:110px;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;cursor:pointer;">
-        ${
-          showCodeBadge
-            ? `<div style="
+        ${showCodeBadge
+        ? `<div style="
                 position:absolute;
                 top:0;
                 background:${isSelected ? '#0f172a' : statusMeta.pinColor};
@@ -284,12 +283,11 @@ function createAdminSosPinIcon(sos: AdminSosItem, isSelected: boolean): L.DivIco
                 letter-spacing:0.2px;
                 z-index:20;
               ">${sos.sosCode}</div>`
-            : ''
-        }
+        : ''
+      }
         <div style="position:relative;width:36px;height:36px;display:flex;align-items:center;justify-content:center;">
-          ${
-            haloSize > 0
-              ? `<div style="
+          ${haloSize > 0
+        ? `<div style="
                   position:absolute;
                   width:${haloSize}px;
                   height:${haloSize}px;
@@ -298,8 +296,8 @@ function createAdminSosPinIcon(sos: AdminSosItem, isSelected: boolean): L.DivIco
                   border:1.5px solid ${statusMeta.pinColor};
                   animation:admin-sos-pulse 1.6s infinite ease-out;
                 "></div>`
-              : ''
-          }
+        : ''
+      }
           <div style="
             position:relative;
             width:${dotSize}px;
@@ -383,45 +381,20 @@ export const AdminMapContent = ({
           key={ward.key}
           positions={ward.positions}
           pathOptions={{
-            color: '#475569',
-            weight: 1.1,
-            dashArray: '3, 4',
-            fillColor: '#3b82f6',
-            fillOpacity: 0.03,
+            color: '#df4f47',
+            weight: 2.1,
+            opacity: 0.78,
+            dashArray: '1, 5.5',
+            lineCap: 'round',
+            lineJoin: 'round',
+            fillColor: '#ef5350',
+            fillOpacity: 0.02,
           }}
         >
           <Tooltip sticky direction="center" opacity={0.9}>
             <span style={{ fontWeight: 700, fontSize: 11 }}>{ward.name}</span>
           </Tooltip>
         </Polygon>
-      ))}
-
-      {areaRings.map((ring, idx) => (
-        <Fragment key={`area-perimeter-${idx}`}>
-          <Polygon
-            positions={ring}
-            interactive={false}
-            pathOptions={{
-              color: '#ffffff',
-              weight: 5,
-              opacity: 0.65,
-              fill: false,
-            }}
-          />
-          <Polygon
-            positions={ring}
-            interactive={false}
-            pathOptions={{
-              color: '#dc2626',
-              weight: 2.8,
-              dashArray: '8, 6',
-              lineCap: 'round',
-              lineJoin: 'round',
-              fillColor: '#ef4444',
-              fillOpacity: 0.04,
-            }}
-          />
-        </Fragment>
       ))}
 
       {sosList.map((sos) => {
