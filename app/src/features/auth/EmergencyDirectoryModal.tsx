@@ -15,11 +15,79 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { backendApi, EmergencyAuthorityContact } from '@/api';
+
+const EMERGENCY_DIRECTORY_CACHE_KEY = 'sos_emergency_directory_offline_v1';
+
+const DANANG_FALLBACK_DIRECTORY: EmergencyAuthorityContact[] = [
+  {
+    id: 'offline-dn-pctt',
+    name: 'Ban Chỉ Huy PCTT & TKCN TP. Đà Nẵng',
+    department: 'Ủy Ban Nhân Dân TP. Đà Nẵng',
+    phone: '02363822111',
+    areaName: 'Thành phố Đà Nẵng',
+    address: 'Số 42 Bạch Đằng, Quận Hải Châu, TP. Đà Nẵng',
+    type: 'PROVINCE',
+    lat: 16.0544,
+    lng: 108.2022,
+  },
+  {
+    id: 'offline-dn-dien-ban',
+    name: 'Ban Chỉ Huy PCTT & TKCN Điện Bàn',
+    department: 'Khu vực Điện Bàn, TP. Đà Nẵng',
+    phone: '02353888999',
+    areaName: 'Điện Bàn, TP. Đà Nẵng',
+    address: 'Khu vực Điện Bàn, TP. Đà Nẵng',
+    type: 'ORGANIZATION',
+    lat: 15.8914,
+    lng: 108.2485,
+  },
+  {
+    id: 'offline-dn-tam-ky',
+    name: 'Ban Chỉ Huy PCTT & TKCN Khu vực Tam Kỳ',
+    department: 'Ban Chỉ Huy PCTT & TKCN TP. Đà Nẵng',
+    phone: '02353852554',
+    areaName: 'Khu vực Tam Kỳ, TP. Đà Nẵng',
+    address: 'Số 500 Hùng Vương, Tam Kỳ, TP. Đà Nẵng',
+    type: 'PROVINCE',
+    lat: 15.5647,
+    lng: 108.4839,
+  },
+  {
+    id: 'offline-112',
+    name: 'Tổng đài Tìm kiếm Cứu nạn Quốc gia',
+    department: 'Ứng phó khẩn cấp 24/7',
+    phone: '112',
+    areaName: 'TP. Đà Nẵng',
+    address: 'Gọi miễn phí khi mất mạng / khẩn cấp',
+    type: 'PROVINCE',
+  },
+  {
+    id: 'offline-114',
+    name: 'Cảnh sát PCCC & Cứu nạn Cứu hộ',
+    department: 'Lực lượng Cứu hộ 114',
+    phone: '114',
+    areaName: 'TP. Đà Nẵng',
+    address: 'Gọi khẩn cấp 24/7',
+    type: 'PROVINCE',
+  },
+  {
+    id: 'offline-115',
+    name: 'Trung tâm Cấp cứu Y tế Đà Nẵng',
+    department: 'Cấp cứu 115',
+    phone: '115',
+    areaName: 'TP. Đà Nẵng',
+    address: 'Hỗ trợ cấp cứu y tế khẩn cấp 24/7',
+    type: 'PROVINCE',
+  },
+];
 
 interface EmergencyDirectoryModalProps {
   visible: boolean;
   onClose: () => void;
+  userAddress?: string;
+  initialMode?: 'GPS' | 'PROFILE' | 'ALL';
 }
 
 // Hàm tính khoảng cách giữa 2 toạ độ GPS (km) theo công thức Haversine
@@ -40,45 +108,72 @@ function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
 export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = ({
   visible,
   onClose,
+  userAddress,
+  initialMode = 'ALL',
 }) => {
   const insets = useSafeAreaInsets();
 
-  const [directory, setDirectory] = useState<EmergencyAuthorityContact[]>([]);
+  const [directory, setDirectory] = useState<EmergencyAuthorityContact[]>(DANANG_FALLBACK_DIRECTORY);
   const [loading, setLoading] = useState<boolean>(false);
+  const [isOfflineMode, setIsOfflineMode] = useState<boolean>(false);
   const [searchText, setSearchText] = useState<string>('');
   const [selectedTag, setSelectedTag] = useState<string>('TẤT CẢ');
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [detectedLocationName, setDetectedLocationName] = useState<string>('');
+  const [activeSourceMode, setActiveSourceMode] = useState<'GPS' | 'PROFILE' | 'ALL'>('ALL');
 
-  // Nạp danh bạ khẩn cấp từ backend khi mở modal
+  // Nạp danh bạ từ bộ nhớ máy (AsyncStorage) trước để gọi được ngay cả khi tắt máy/mất mạng,
+  // sau đó đồng bộ ngầm với backend để lưu lại số điện thoại chính quyền mới nhất.
   const fetchDirectory = useCallback(async () => {
+    let hasCached = false;
     try {
+      const cachedRaw = await AsyncStorage.getItem(EMERGENCY_DIRECTORY_CACHE_KEY);
+      if (cachedRaw) {
+        const parsed = JSON.parse(cachedRaw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setDirectory(parsed);
+          hasCached = true;
+        }
+      }
+    } catch {}
+
+    if (!hasCached) {
       setLoading(true);
+    }
+
+    try {
       const res = await backendApi.getEmergencyDirectory();
-      if (res.success && Array.isArray(res.data)) {
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
         setDirectory(res.data);
+        setIsOfflineMode(false);
+        await AsyncStorage.setItem(EMERGENCY_DIRECTORY_CACHE_KEY, JSON.stringify(res.data));
+      } else {
+        setIsOfflineMode(true);
       }
     } catch (err) {
-      console.log('Lỗi khi tải danh bạ khẩn cấp:', err);
+      console.log('Đang dùng danh bạ lưu Offline trên máy:', err);
+      setIsOfflineMode(true);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    if (visible) {
-      void fetchDirectory();
-    } else {
-      setSearchText('');
-      setSelectedTag('TẤT CẢ');
-    }
-  }, [visible, fetchDirectory]);
+  // Lọc theo địa chỉ hồ sơ
+  const handleFilterByProfile = useCallback(() => {
+    if (!userAddress) return;
+    setActiveSourceMode('PROFILE');
+    setUserCoords(null);
+    const parts = userAddress.split(',').map((p) => p.trim()).filter(Boolean);
+    const searchTarget = parts.length > 1 ? parts[parts.length - 2] : parts[0] || userAddress;
+    setSearchText(searchTarget);
+  }, [userAddress]);
 
   // Tự động định vị GPS thiết bị để gợi ý phường/tỉnh gần nhất
-  const handleAutoLocate = async () => {
+  const handleAutoLocate = useCallback(async () => {
     try {
       setIsLocating(true);
+      setActiveSourceMode('GPS');
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         setIsLocating(false);
@@ -107,7 +202,26 @@ export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = (
     } finally {
       setIsLocating(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (visible) {
+      void fetchDirectory();
+      if (initialMode === 'GPS') {
+        void handleAutoLocate();
+      } else if (initialMode === 'PROFILE' && userAddress) {
+        handleFilterByProfile();
+      } else {
+        setActiveSourceMode('ALL');
+      }
+    } else {
+      setSearchText('');
+      setSelectedTag('TẤT CẢ');
+      setUserCoords(null);
+      setDetectedLocationName('');
+      setActiveSourceMode('ALL');
+    }
+  }, [visible, initialMode, userAddress, fetchDirectory, handleAutoLocate, handleFilterByProfile]);
 
   // Mở ứng dụng gọi điện ngay lập tức với số điện thoại đã chọn
   const handleCall = (phoneNumber: string) => {
@@ -118,8 +232,8 @@ export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = (
     });
   };
 
-  // Danh mục bộ lọc nhanh theo tỉnh/thành phố phổ biến
-  const QUICK_TAGS = ['TẤT CẢ', 'CẦN THƠ', 'ĐÀ NẴNG', 'QUẢNG NAM', 'HÀ NỘI', 'TP. HCM'];
+  // Danh mục bộ lọc nhanh các khu vực thuộc TP. Đà Nẵng mới
+  const QUICK_TAGS = ['TẤT CẢ', 'HẢI CHÂU', 'THANH KHÊ', 'SƠN TRÀ', 'NGŨ HÀNH SƠN', 'LIÊN CHIỂU', 'CẨM LỆ', 'ĐIỆN BÀN', 'HỘI AN', 'TAM KỲ'];
 
   // Lọc và sắp xếp danh sách theo từ khóa tìm kiếm & khoảng cách
   const filteredList = useMemo(() => {
@@ -204,7 +318,7 @@ export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = (
             <Ionicons name="search" size={18} color="#94A3B8" style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Tìm theo phường, xã, quận, huyện, tỉnh..."
+              placeholder="Tìm theo phường, xã, khu vực Đà Nẵng..."
               placeholderTextColor="#94A3B8"
               value={searchText}
               onChangeText={setSearchText}
@@ -218,30 +332,104 @@ export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = (
             )}
           </View>
 
-          {/* Nút định vị GPS nhanh */}
-          <TouchableOpacity
-            style={[styles.locateBtn, userCoords ? styles.locateBtnActive : null]}
-            onPress={handleAutoLocate}
-            disabled={isLocating}
-            activeOpacity={0.75}
-          >
-            {isLocating ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
+          {/* Hàng nút chọn: Định vị GPS thực tế vs Lọc theo địa chỉ Hồ sơ */}
+          {userAddress ? (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {/* Nút GPS */}
+              <TouchableOpacity
+                style={[
+                  styles.locateBtn,
+                  { flex: 1, paddingHorizontal: 8 },
+                  activeSourceMode === 'GPS' && userCoords ? styles.locateBtnActive : null,
+                ]}
+                onPress={handleAutoLocate}
+                disabled={isLocating}
+                activeOpacity={0.75}
+              >
+                {isLocating ? (
+                  <ActivityIndicator size="small" color={activeSourceMode === 'GPS' ? '#FFFFFF' : '#0066FF'} />
+                ) : (
+                  <>
+                    <Ionicons
+                      name={activeSourceMode === 'GPS' && userCoords ? 'location' : 'location-outline'}
+                      size={15}
+                      color={activeSourceMode === 'GPS' && userCoords ? '#FFFFFF' : '#0066FF'}
+                    />
+                    <Text
+                      style={[
+                        styles.locateBtnText,
+                        { fontSize: 12 },
+                        activeSourceMode === 'GPS' && userCoords ? styles.locateBtnTextActive : null,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {activeSourceMode === 'GPS' && detectedLocationName
+                        ? `GPS: ${detectedLocationName}`
+                        : 'GPS hiện tại'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Nút Hồ sơ */}
+              <TouchableOpacity
+                style={[
+                  styles.locateBtn,
+                  {
+                    flex: 1,
+                    paddingHorizontal: 8,
+                    backgroundColor: activeSourceMode === 'PROFILE' ? '#0066FF' : '#F1F5F9',
+                    borderColor: activeSourceMode === 'PROFILE' ? '#0066FF' : '#E2E8F0',
+                  },
+                ]}
+                onPress={handleFilterByProfile}
+                activeOpacity={0.75}
+              >
                 <Ionicons
-                  name={userCoords ? 'location' : 'location-outline'}
-                  size={16}
-                  color={userCoords ? '#FFFFFF' : '#16A34A'}
+                  name={activeSourceMode === 'PROFILE' ? 'home' : 'home-outline'}
+                  size={15}
+                  color={activeSourceMode === 'PROFILE' ? '#FFFFFF' : '#475569'}
                 />
-                <Text style={[styles.locateBtnText, userCoords ? styles.locateBtnTextActive : null]}>
-                  {userCoords
-                    ? `Đã định vị: ${detectedLocationName || 'Gần bạn'}`
-                    : 'Tìm phường gần tôi'}
+                <Text
+                  style={[
+                    styles.locateBtnText,
+                    {
+                      fontSize: 12,
+                      color: activeSourceMode === 'PROFILE' ? '#FFFFFF' : '#475569',
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
+                  Theo Hồ sơ
                 </Text>
-              </>
-            )}
-          </TouchableOpacity>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            /* Nút định vị GPS nhanh mặc định */
+            <TouchableOpacity
+              style={[styles.locateBtn, userCoords ? styles.locateBtnActive : null]}
+              onPress={handleAutoLocate}
+              disabled={isLocating}
+              activeOpacity={0.75}
+            >
+              {isLocating ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <Ionicons
+                    name={userCoords ? 'location' : 'location-outline'}
+                    size={16}
+                    color={userCoords ? '#FFFFFF' : '#0066FF'}
+                  />
+                  <Text style={[styles.locateBtnText, userCoords ? styles.locateBtnTextActive : null]}>
+                    {userCoords
+                      ? `Đã định vị: ${detectedLocationName || 'Gần bạn'}`
+                      : 'Tìm phường gần tôi'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Danh sách chip lọc nhanh */}
@@ -269,10 +457,31 @@ export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = (
           />
         </View>
 
+        {/* Thông báo khi đang dùng danh bạ lưu Offline trên máy */}
+        {isOfflineMode && (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: '#FFFBEB',
+              borderBottomWidth: 1,
+              borderBottomColor: '#FDE68A',
+              paddingHorizontal: 16,
+              paddingVertical: 7,
+            }}
+          >
+            <Ionicons name="cloud-offline-outline" size={15} color="#B45309" />
+            <Text style={{ fontSize: 12, fontWeight: '600', color: '#92400E', flex: 1 }}>
+              Đang dùng danh bạ lưu trên máy (Offline) — Bấm gọi trực tiếp không cần mạng
+            </Text>
+          </View>
+        )}
+
         {/* Danh sách cơ quan cứu nạn */}
-        {loading ? (
+        {loading && directory.length === 0 ? (
           <View style={styles.centerBox}>
-            <ActivityIndicator size="large" color="#16A34A" />
+            <ActivityIndicator size="large" color="#0066FF" />
             <Text style={styles.loadingText}>Đang tải danh bạ cứu nạn...</Text>
           </View>
         ) : filteredList.length === 0 ? (
@@ -280,7 +489,7 @@ export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = (
             <Ionicons name="search-outline" size={48} color="#CBD5E1" />
             <Text style={styles.emptyTitle}>Không tìm thấy địa phương phù hợp</Text>
             <Text style={styles.emptySubtitle}>
-              Vui lòng thử gõ tên phường, xã hoặc tỉnh thành khác.
+              Vui lòng thử gõ tên phường, xã hoặc khu vực khác tại Đà Nẵng.
             </Text>
             <TouchableOpacity style={styles.resetBtn} onPress={() => { setSearchText(''); setSelectedTag('TẤT CẢ'); }}>
               <Text style={styles.resetBtnText}>Xem tất cả danh bạ</Text>
@@ -305,7 +514,7 @@ export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = (
                       <Ionicons
                         name={item.type === 'OFFICER' ? 'person' : 'shield-checkmark'}
                         size={20}
-                        color="#16A34A"
+                        color="#0066FF"
                       />
                     </View>
 
@@ -381,7 +590,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#16A34A',
+    backgroundColor: '#0066FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -431,22 +640,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#EFF6FF',
     borderWidth: 1,
-    borderColor: '#86EFAC',
+    borderColor: '#BFDBFE',
     borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 14,
     marginTop: 8,
   },
   locateBtnActive: {
-    backgroundColor: '#16A34A',
-    borderColor: '#15803D',
+    backgroundColor: '#0066FF',
+    borderColor: '#0052CC',
   },
   locateBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#16A34A',
+    color: '#0066FF',
     marginLeft: 6,
   },
   locateBtnTextActive: {
@@ -550,7 +759,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -609,14 +820,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#16A34A',
+    backgroundColor: '#0066FF',
     justifyContent: 'center',
     alignItems: 'center',
     ...Platform.select({
       ios: {
-        shadowColor: '#16A34A',
+        shadowColor: '#0066FF',
         shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.35,
+        shadowOpacity: 0.25,
         shadowRadius: 5,
       },
       android: {
@@ -627,7 +838,7 @@ const styles = StyleSheet.create({
   callPhoneText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#16A34A',
+    color: '#0066FF',
     marginTop: 4,
   },
 });

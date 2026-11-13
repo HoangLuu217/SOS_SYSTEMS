@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   Linking,
   TextInput,
   Alert,
+  DeviceEventEmitter,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
@@ -21,6 +22,7 @@ import * as Location from 'expo-location';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { backendApi } from '@/api';
 import { ContributeHazardModal } from '@/features/sos';
+import { CitizenSosTrackingModal } from '@/features/profile/CitizenSosTrackingModal';
 import { formatDateTime } from '@/utils';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -170,15 +172,29 @@ export const MapScreen: React.FC<MapScreenProps> = ({
     medical: true,
     hazards: true,
   });
-  
+
   // Modal Chi tiết điểm (Detail Bottom Sheet / Modal)
   const [selectedDetail, setSelectedDetail] = useState<SelectedDetailItem | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
+  // Danh sách ca SOS cứu nạn đang kích hoạt & Modal theo dõi hành trình
+  const [activeSosList, setActiveSosList] = useState<any[]>([]);
+  const [trackingSosId, setTrackingSosId] = useState<string | null>(null);
+  const [showTrackingModal, setShowTrackingModal] = useState<boolean>(false);
+  const [showSosListModal, setShowSosListModal] = useState<boolean>(false);
+
   const webViewRef = useRef<WebView>(null);
   const hazardsRef = useRef(hazards);
   hazardsRef.current = hazards;
+  const initialCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+  if (location && !initialCoordsRef.current) {
+    initialCoordsRef.current = {
+      lat: location.coords.latitude,
+      lng: location.coords.longitude,
+    };
+  }
+  const lastSosSigRef = useRef<string>('');
 
   // Lấy Base URL để phục vụ SSE Stream và API
   useEffect(() => {
@@ -217,7 +233,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({
           setHazards(res.data);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
 
     // 2. Lấy danh sách điểm an toàn và điểm cứu trợ
     backendApi.get('/safe-locations')
@@ -236,12 +252,34 @@ export const MapScreen: React.FC<MapScreenProps> = ({
           setReliefLocations(relief);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
+
+    // 3. Lấy danh sách các ca SOS cứu nạn đang kích hoạt
+    backendApi.get('/sos')
+      .then((res) => {
+        if (res.success && Array.isArray(res.data)) {
+          const active = res.data.filter(
+            (item: any) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(item.status)
+          );
+          setActiveSosList(active);
+        }
+      })
+      .catch(() => { });
   }, []);
 
-  // Tải dữ liệu ban đầu
+  // Tải dữ liệu ban đầu & lắng nghe sự kiện cập nhật SOS realtime
   useEffect(() => {
     fetchMapData();
+
+    const subSync = DeviceEventEmitter.addListener('sos:sync', fetchMapData);
+    const subUpdated = DeviceEventEmitter.addListener('sos:updated', fetchMapData);
+    const subCreated = DeviceEventEmitter.addListener('sos:created', fetchMapData);
+
+    return () => {
+      subSync.remove();
+      subUpdated.remove();
+      subCreated.remove();
+    };
   }, [fetchMapData]);
 
   // Xử lý sự kiện Realtime cập nhật duyệt / tạo / xóa điểm nguy hiểm
@@ -350,7 +388,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({
       if (xhr) {
         try {
           xhr.abort();
-        } catch {}
+        } catch { }
       }
       if (pollInterval) {
         clearInterval(pollInterval);
@@ -358,24 +396,95 @@ export const MapScreen: React.FC<MapScreenProps> = ({
     };
   }, [fetchMapData, handleRealtimeHazardEvent]);
 
+  // Helper escape JSON an toàn khi inject vào WebView
+  const safeJsonForWebView = (data: any) =>
+    JSON.stringify(data)
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'")
+      .replace(/\n/g, '\\n')
+      .replace(/\r/g, '');
+
   // Bắn dữ liệu mới vào Leaflet ngay lập tức mà KHÔNG cần reload lại map
   useEffect(() => {
     if (webViewRef.current && hazards) {
       try {
-        const jsonStr = JSON.stringify(hazards)
-          .replace(/\\/g, '\\\\')
-          .replace(/'/g, "\\'")
-          .replace(/\n/g, '\\n')
-          .replace(/\r/g, '');
+        const jsonStr = safeJsonForWebView(hazards);
         webViewRef.current.injectJavaScript(`
           if (window.updateHazardsData) {
             window.updateHazardsData(JSON.parse('${jsonStr}'));
           }
           true;
         `);
-      } catch {}
+      } catch { }
     }
   }, [hazards]);
+
+  useEffect(() => {
+    if (webViewRef.current && safeLocations) {
+      try {
+        const jsonStr = safeJsonForWebView(safeLocations);
+        webViewRef.current.injectJavaScript(`
+          if (window.updateSafeData) {
+            window.updateSafeData(JSON.parse('${jsonStr}'));
+          }
+          true;
+        `);
+      } catch { }
+    }
+  }, [safeLocations]);
+
+  useEffect(() => {
+    if (webViewRef.current && reliefLocations) {
+      try {
+        const jsonStr = safeJsonForWebView(reliefLocations);
+        webViewRef.current.injectJavaScript(`
+          if (window.updateReliefData) {
+            window.updateReliefData(JSON.parse('${jsonStr}'));
+          }
+          true;
+        `);
+      } catch { }
+    }
+  }, [reliefLocations]);
+
+  // Đồng bộ danh sách tín hiệu SOS vào Leaflet (chỉ cập nhật khi có thay đổi thực sự để tránh giật)
+  useEffect(() => {
+    if (webViewRef.current && activeSosList) {
+      const sig = activeSosList
+        .map((s) => `${s._id}:${s.status}:${s.location?.coordinates?.join(',') || ''}`)
+        .join('|');
+      if (sig === lastSosSigRef.current) return;
+      lastSosSigRef.current = sig;
+
+      try {
+        const jsonStr = safeJsonForWebView(activeSosList);
+        webViewRef.current.injectJavaScript(`
+          if (window.updateSosData) {
+            window.updateSosData(JSON.parse('${jsonStr}'));
+          }
+          true;
+        `);
+      } catch { }
+    }
+  }, [activeSosList]);
+
+  // Bơm toàn bộ dữ liệu ngay khi WebView load xong
+  const injectAllMapData = useCallback(() => {
+    if (!webViewRef.current) return;
+    try {
+      const hStr = safeJsonForWebView(hazards);
+      const sStr = safeJsonForWebView(safeLocations);
+      const rStr = safeJsonForWebView(reliefLocations);
+      const sosStr = safeJsonForWebView(activeSosList);
+      webViewRef.current.injectJavaScript(`
+        if (window.updateHazardsData) window.updateHazardsData(JSON.parse('${hStr}'));
+        if (window.updateSafeData) window.updateSafeData(JSON.parse('${sStr}'));
+        if (window.updateReliefData) window.updateReliefData(JSON.parse('${rStr}'));
+        if (window.updateSosData) window.updateSosData(JSON.parse('${sosStr}'));
+        true;
+      `);
+    } catch { }
+  }, [hazards, safeLocations, reliefLocations, activeSosList]);
 
   // Lắng nghe thay đổi bộ lọc từ bên ngoài (ví dụ bấm nút tiện ích từ HomeScreen)
   useEffect(() => {
@@ -590,6 +699,59 @@ export const MapScreen: React.FC<MapScreenProps> = ({
     }
   };
 
+  // Bay về vị trí tín hiệu SOS cứu nạn đang kích hoạt
+  const handleFlyToActiveSos = () => {
+    if (activeSosList.length === 0) {
+      Alert.alert(
+        'Tín hiệu cứu nạn SOS',
+        'Hiện không có yêu cầu SOS nào đang kích hoạt quanh bạn. Nếu gặp tình huống khẩn cấp, vui lòng nhấn nút SOS màu đỏ ở giữa thanh điều hướng để phát tín hiệu ứng cứu ngay!'
+      );
+      return;
+    }
+
+    if (activeSosList.length === 1) {
+      const targetSos = activeSosList[0];
+      const coords = targetSos.location?.coordinates;
+      if (coords && coords.length === 2) {
+        const [lng, lat] = coords;
+        webViewRef.current?.injectJavaScript(`
+          if (window.flyToSosSignal) {
+            window.flyToSosSignal(${lat}, ${lng});
+          }
+          true;
+        `);
+      }
+      return;
+    }
+
+    // Nếu có nhiều tín hiệu SOS, mở danh sách để chọn đúng ca cần xem
+    setShowSosListModal(true);
+  };
+
+  const handleSelectSosFromList = (sosItem: any) => {
+    setShowSosListModal(false);
+    const coords = sosItem?.location?.coordinates;
+    if (coords && coords.length === 2) {
+      const [lng, lat] = coords;
+      webViewRef.current?.injectJavaScript(`
+        if (window.flyToSosSignal) {
+          window.flyToSosSignal(${lat}, ${lng});
+        }
+        true;
+      `);
+    }
+  };
+
+  const handleFitAllSosSignals = () => {
+    setShowSosListModal(false);
+    webViewRef.current?.injectJavaScript(`
+      if (window.fitAllSosSignals) {
+        window.fitAllSosSignals();
+      }
+      true;
+    `);
+  };
+
   // Đếm số điểm nguy hiểm trong từng khu vực quận / huyện
   const getAreaHazardCount = (zone: DanangAreaZone) => {
     if (zone.id === 'ALL') return hazards.length;
@@ -604,6 +766,11 @@ export const MapScreen: React.FC<MapScreenProps> = ({
     try {
       const msg = JSON.parse(event.nativeEvent.data);
       if (msg.type === 'SELECT_PIN') {
+        if (msg.category === 'SOS' && msg.data?._id) {
+          setTrackingSosId(msg.data._id);
+          setShowTrackingModal(true);
+          return;
+        }
         setSelectedDetail({
           category: msg.category,
           data: msg.data,
@@ -668,8 +835,14 @@ export const MapScreen: React.FC<MapScreenProps> = ({
   };
 
   const streamUrl = baseUrl ? `${baseUrl}/hazard-reports/stream` : '';
+  const hasLocation = Boolean(location);
 
-  const mapHtml = location ? `
+  const mapHtml = useMemo(() => {
+    if (!hasLocation || !initialCoordsRef.current) return '';
+    const initLat = initialCoordsRef.current.lat;
+    const initLng = initialCoordsRef.current.lng;
+
+    return `
     <!DOCTYPE html>
     <html>
     <head>
@@ -724,6 +897,65 @@ export const MapScreen: React.FC<MapScreenProps> = ({
           box-shadow: 0 2px 6px rgba(0, 102, 255, 0.45), 0 1px 3px rgba(0, 0, 0, 0.25);
           z-index: 2;
         }
+
+        /* Tín hiệu Radar SOS phát sóng cứu hộ */
+        @keyframes sosPulseWave {
+          0% { transform: scale(0.6); opacity: 0.95; }
+          70% { transform: scale(1.6); opacity: 0; }
+          100% { transform: scale(1.8); opacity: 0; }
+        }
+        .sos-marker-wrap {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          cursor: pointer;
+        }
+        .sos-radar-container {
+          position: relative;
+          width: 44px;
+          height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+        }
+        .sos-radar-wave {
+          position: absolute;
+          width: 38px;
+          height: 38px;
+          border-radius: 50%;
+          background-color: rgba(220, 38, 38, 0.45);
+          border: 2px solid #DC2626;
+          animation: sosPulseWave 1.6s ease-out infinite;
+        }
+        .sos-radar-core {
+          position: relative;
+          width: 28px;
+          height: 28px;
+          background: #DC2626;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          box-shadow: 0 0 10px rgba(220, 38, 38, 0.8), 0 2px 5px rgba(0,0,0,0.3);
+          border: 2px solid white;
+          z-index: 2;
+        }
+        .sos-label-pill {
+          margin-top: 2px;
+          background: rgba(15, 23, 42, 0.9);
+          color: #FFFFFF;
+          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+          font-size: 10px;
+          font-weight: 800;
+          padding: 2px 7px;
+          border-radius: 10px;
+          white-space: nowrap;
+          border: 1px solid rgba(255,255,255,0.85);
+          box-shadow: 0 2px 5px rgba(0,0,0,0.35);
+          letter-spacing: 0.2px;
+        }
         .leaflet-control-attribution {
           display: none !important;
         }
@@ -736,13 +968,12 @@ export const MapScreen: React.FC<MapScreenProps> = ({
           zoomControl: false,
           preferCanvas: true,
           attributionControl: false
-        }).setView([${location.coords.latitude}, ${location.coords.longitude}], 15);
+        }).setView([${initLat}, ${initLng}], 15);
 
         L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
-        var currentMapType = '${mapType}';
-        var currentWeatherLayer = 'off';
-        var userCoords = { lat: ${location.coords.latitude}, lng: ${location.coords.longitude} };
+        var currentMapType = 'standard';
+        var userCoords = { lat: ${initLat}, lng: ${initLng} };
 
         // 1. Chế độ thu nhỏ / Tổng quan (Zoom <= 15):
         // Ẩn toàn bộ quán cà phê / cửa hàng (s.t:33|p.v:off)
@@ -832,7 +1063,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({
           iconAnchor: [16, 16]
         });
 
-        L.marker([${location.coords.latitude}, ${location.coords.longitude}], { icon: myIcon }).addTo(map);
+        L.marker([${initLat}, ${initLng}], { icon: myIcon }).addTo(map);
 
         // Cấu hình Icon ghim nhỏ gọn (Compact 26px x 30px) chuẩn theo đúng 6 icon trong tab loại nguy hiểm
         function getHazardMarkerHtml(type) {
@@ -920,6 +1151,85 @@ export const MapScreen: React.FC<MapScreenProps> = ({
         var hazardLayer = L.layerGroup();
         var safeLayer = L.layerGroup();
         var reliefLayer = L.layerGroup();
+        var sosLayer = L.layerGroup().addTo(map);
+
+        var allSosPoints = [];
+
+        // Hàm render tín hiệu Radar SOS cứu nạn (hỗ trợ tách vị trí nếu trùng tọa độ + gắn nhãn mã SOS)
+        function renderSosMarkers(sosList) {
+          sosLayer.clearLayers();
+          allSosPoints = [];
+          if (!Array.isArray(sosList)) return;
+
+          var coordCountMap = {};
+          sosList.forEach(function(s) {
+            if (s.location && s.location.coordinates && s.location.coordinates.length === 2) {
+              var key = s.location.coordinates[1].toFixed(5) + ',' + s.location.coordinates[0].toFixed(5);
+              coordCountMap[key] = (coordCountMap[key] || 0) + 1;
+            }
+          });
+
+          var coordIdxMap = {};
+          sosList.forEach(function(s) {
+            if (s.location && s.location.coordinates && s.location.coordinates.length === 2) {
+              var baseLng = s.location.coordinates[0];
+              var baseLat = s.location.coordinates[1];
+              var key = baseLat.toFixed(5) + ',' + baseLng.toFixed(5);
+              var totalAtSpot = coordCountMap[key] || 1;
+              var idxAtSpot = coordIdxMap[key] || 0;
+              coordIdxMap[key] = idxAtSpot + 1;
+
+              var lat = baseLat;
+              var lng = baseLng;
+              if (totalAtSpot > 1) {
+                var angle = (2 * Math.PI * idxAtSpot) / totalAtSpot;
+                var offsetDeg = 0.00028;
+                lat = baseLat + Math.sin(angle) * offsetDeg;
+                lng = baseLng + Math.cos(angle) * offsetDeg;
+              }
+
+              allSosPoints.push([lat, lng]);
+
+              var codeLabel = s.code
+                ? ('#' + s.code)
+                : ('#SOS-' + String(s._id || '').slice(-4).toUpperCase());
+              if (s.isProxyReport) {
+                codeLabel += ' · Hộ';
+              }
+
+              var radarIcon = L.divIcon({
+                html: '<div class="sos-marker-wrap">' +
+                  '<div class="sos-radar-container"><div class="sos-radar-wave"></div><div class="sos-radar-core"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M7 12a5 5 0 0 1 5-5v0a5 5 0 0 1 5 5v6H7v-6Z"/><path d="M5 20a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v2H5v-2Z"/><path d="M21 12h1"/><path d="M18.5 4.5 19 4"/><path d="M2 12h1"/><path d="M12 2v1"/><path d="M4.5 4.5 5 4"/><path d="M12 11v3"/></svg></div></div>' +
+                  '<div class="sos-label-pill">' + codeLabel + '</div>' +
+                '</div>',
+                className: '',
+                iconSize: [110, 66],
+                iconAnchor: [55, 22]
+              });
+
+              var circle = L.circle([lat, lng], {
+                color: '#DC2626',
+                fillColor: '#EF4444',
+                fillOpacity: 0.12,
+                radius: 200,
+                weight: 1.5
+              });
+              sosLayer.addLayer(circle);
+
+              var marker = L.marker([lat, lng], { icon: radarIcon, zIndexOffset: 1000 });
+              marker.on('click', function() {
+                if (window.ReactNativeWebView) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'SELECT_PIN',
+                    category: 'SOS',
+                    data: s
+                  }));
+                }
+              });
+              sosLayer.addLayer(marker);
+            }
+          });
+        }
 
         // Hàm render ghim điểm nguy hiểm
         function renderHazardMarkers(hazardList) {
@@ -1015,24 +1325,15 @@ export const MapScreen: React.FC<MapScreenProps> = ({
           });
         }
 
-        // Khởi tạo các điểm ban đầu
-        renderHazardMarkers(${JSON.stringify(hazards)});
-        renderSafeMarkers(${JSON.stringify(safeLocations)});
-        renderReliefMarkers(${JSON.stringify(reliefLocations)});
+        // Khởi tạo mảng dữ liệu rỗng, sẽ được inject từ React Native ngay khi load xong
+        var allHazards = [];
+        var allSafe = [];
+        var allRelief = [];
 
-        // Đưa các layer vào bản đồ theo bộ lọc ban đầu
-        var initialFilter = '${activeFilter}';
-        if (initialFilter === 'HAZARD') {
-          hazardLayer.addTo(map);
-        } else if (initialFilter === 'SAFE') {
-          safeLayer.addTo(map);
-        } else if (initialFilter === 'RELIEF') {
-          reliefLayer.addTo(map);
-        } else {
-          hazardLayer.addTo(map);
-          safeLayer.addTo(map);
-          reliefLayer.addTo(map);
-        }
+        // Đưa các layer vào bản đồ
+        hazardLayer.addTo(map);
+        safeLayer.addTo(map);
+        reliefLayer.addTo(map);
 
         // Hàm điều khiển lọc tầng dữ liệu cực nhanh không cần reload trang
         window.setMapFilter = function(filter) {
@@ -1055,9 +1356,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({
           }
         };
 
-        var allHazards = ${JSON.stringify(hazards)};
-        var allSafe = ${JSON.stringify(safeLocations)};
-        var allRelief = ${JSON.stringify(reliefLocations)};
+        // Dữ liệu được đồng bộ động qua updateHazardsData / updateSafeData / updateReliefData
 
         // Hàm lọc chi tiết từng danh mục theo Popup Card
         window.applyDetailedFilter = function(st) {
@@ -1118,8 +1417,42 @@ export const MapScreen: React.FC<MapScreenProps> = ({
 
         // Hàm cập nhật dữ liệu Realtime động từ React Native
         window.updateHazardsData = function(newHazards) {
-          allHazards = newHazards;
-          renderHazardMarkers(newHazards);
+          allHazards = newHazards || [];
+          renderHazardMarkers(allHazards);
+        };
+
+        window.updateSafeData = function(newSafe) {
+          allSafe = newSafe || [];
+          renderSafeMarkers(allSafe);
+        };
+
+        window.updateReliefData = function(newRelief) {
+          allRelief = newRelief || [];
+          renderReliefMarkers(allRelief);
+        };
+
+        window.updateSosData = function(newSos) {
+          renderSosMarkers(newSos);
+        };
+
+        window.flyToSosSignal = function(lat, lng) {
+          if (map && lat && lng) {
+            map.flyTo([lat, lng], 17, {
+              animate: true,
+              duration: 1.2
+            });
+          }
+        };
+
+        window.fitAllSosSignals = function() {
+          if (map && allSosPoints && allSosPoints.length > 0) {
+            if (allSosPoints.length === 1) {
+              map.flyTo(allSosPoints[0], 17, { animate: true, duration: 1.0 });
+            } else {
+              var bounds = L.latLngBounds(allSosPoints);
+              map.fitBounds(bounds, { padding: [70, 70], maxZoom: 17, animate: true });
+            }
+          }
         };
 
         // Kết nối SSE Realtime trực tiếp từ trình duyệt WebView
@@ -1160,7 +1493,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({
       </script>
     </body>
     </html>
-  ` : '';
+  `;
+  }, [hasLocation, streamUrl]);
 
   const totalCount = hazards.length + safeLocations.length + reliefLocations.length;
   const unsupportedCount = hazards.filter(h => h.severity === 'CRITICAL' || h.severity === 'HIGH').length || 1;
@@ -1182,9 +1516,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({
             <Text style={{ marginTop: 15, color: '#64748B' }}>{loadingMsg}</Text>
           </View>
         ) : (
-          <WebView 
+          <WebView
             ref={webViewRef}
-            source={{ html: mapHtml }} 
+            source={{ html: mapHtml }}
             style={{ flex: 1, width: '100%', backgroundColor: '#F1F5F9' }}
             javaScriptEnabled={true}
             domStorageEnabled={true}
@@ -1193,6 +1527,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({
             originWhitelist={['*']}
             scalesPageToFit={false}
             scrollEnabled={false}
+            onLoadEnd={injectAllMapData}
             onMessage={handleWebViewMessage}
           />
         )}
@@ -1220,10 +1555,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({
             {mapMode === 'HAZARD'
               ? 'Bản đồ nơi nguy hiểm'
               : mapMode === 'SOS'
-              ? 'Bản đồ cứu trợ'
-              : mapMode === 'SAFE'
-              ? 'Bản đồ điểm an toàn'
-              : 'Bản đồ tổng hợp'}
+                ? 'Bản đồ cứu trợ'
+                : mapMode === 'SAFE'
+                  ? 'Bản đồ điểm an toàn'
+                  : 'Bản đồ tổng hợp'}
           </Text>
           <Feather name="chevron-down" size={17} color="#475569" />
         </TouchableOpacity>
@@ -1269,6 +1604,49 @@ export const MapScreen: React.FC<MapScreenProps> = ({
           activeOpacity={0.85}
         >
           <MaterialCommunityIcons name="human-handsup" size={20} color="#0066FF" />
+        </TouchableOpacity>
+
+        {/* Nút 5: Tín hiệu SOS Cứu nạn (Định vị radar ca cứu hộ) */}
+        <TouchableOpacity
+          style={[
+            styles.rightActionBtn,
+            activeSosList.length > 0 && {
+              borderColor: '#FCA5A5',
+              backgroundColor: '#FEF2F2',
+              shadowColor: '#DC2626',
+              shadowOpacity: 0.28,
+            },
+          ]}
+          onPress={handleFlyToActiveSos}
+          activeOpacity={0.85}
+        >
+          <MaterialCommunityIcons
+            name="alarm-light"
+            size={20}
+            color={activeSosList.length > 0 ? '#DC2626' : '#64748B'}
+          />
+          {activeSosList.length > 0 && (
+            <View
+              style={{
+                position: 'absolute',
+                top: -3,
+                right: -3,
+                minWidth: 16,
+                height: 16,
+                borderRadius: 8,
+                paddingHorizontal: 3,
+                backgroundColor: '#DC2626',
+                borderWidth: 1.5,
+                borderColor: '#FFFFFF',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 9.5, fontWeight: '800', lineHeight: 11 }}>
+                {activeSosList.length}
+              </Text>
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -1436,8 +1814,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({
                   {/* THÔNG TIN RIÊNG CHO ĐIỂM AN TOÀN */}
                   {selectedDetail.category === 'SAFE' && (() => {
                     const s = selectedDetail.data;
-                    const typeLabel = s.type === 'HOSPITAL' 
-                      ? '🏥 Bệnh viện - Cấp cứu y tế' 
+                    const typeLabel = s.type === 'HOSPITAL'
+                      ? '🏥 Bệnh viện - Cấp cứu y tế'
                       : (s.type === 'SHELTER' ? '🛡️ Khu trú ẩn an toàn' : '🛡️ Trung tâm sơ tán khẩn cấp');
 
                     return (
@@ -1788,8 +2166,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({
                           {zone.id === 'ALL'
                             ? `Toàn thành phố (${hazards.length} điểm nguy hiểm)`
                             : count > 0
-                            ? `${count} điểm nguy hiểm ghi nhận`
-                            : 'Không có điểm nguy hiểm ghi nhận'}
+                              ? `${count} điểm nguy hiểm ghi nhận`
+                              : 'Không có điểm nguy hiểm ghi nhận'}
                         </Text>
                       </View>
                     </View>
@@ -1811,6 +2189,169 @@ export const MapScreen: React.FC<MapScreenProps> = ({
           </View>
         </View>
       </Modal>
+
+      {/* Modal chọn tín hiệu SOS khi có nhiều ca đang kích hoạt */}
+      <Modal
+        visible={showSosListModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowSosListModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <TouchableOpacity
+            style={styles.modalDismissArea}
+            activeOpacity={1}
+            onPress={() => setShowSosListModal(false)}
+          />
+          <View style={[styles.detailSheetContainer, { paddingBottom: Math.max(insets.bottom, 20), maxHeight: SCREEN_HEIGHT * 0.7 }]}>
+            <View style={styles.dragHandle} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialCommunityIcons name="alarm-light" size={18} color="#DC2626" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>
+                    Tín hiệu SOS đang phát ({activeSosList.length})
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#64748B' }}>
+                    Chọn 1 ca để định vị hoặc xem tất cả trên bản đồ
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setShowSosListModal(false)} style={{ padding: 4 }}>
+                <Feather name="x" size={20} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              onPress={handleFitAllSosSignals}
+              activeOpacity={0.85}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                backgroundColor: '#EFF6FF',
+                borderWidth: 1,
+                borderColor: '#BFDBFE',
+                borderRadius: 12,
+                paddingVertical: 10,
+                marginBottom: 12,
+              }}
+            >
+              <MaterialCommunityIcons name="map-marker-multiple" size={18} color="#0066FF" />
+              <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0066FF' }}>
+                Xem tất cả {activeSosList.length} tín hiệu trên bản đồ
+              </Text>
+            </TouchableOpacity>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {activeSosList.map((sosItem, idx) => {
+                const code = sosItem.code || `SOS-${String(sosItem._id || '').slice(-4).toUpperCase()}`;
+                const address = sosItem.location?.address || 'Chưa rõ địa chỉ';
+                const statusLabel =
+                  sosItem.status === 'PENDING'
+                    ? 'Chờ tiếp nhận'
+                    : sosItem.status === 'VERIFIED' || sosItem.status === 'ASSIGNED'
+                    ? 'Đã điều phối'
+                    : sosItem.status === 'IN_PROGRESS' || sosItem.status === 'EN_ROUTE'
+                    ? 'Đang cứu hộ'
+                    : sosItem.status || 'Đang xử lý';
+                return (
+                  <View
+                    key={sosItem._id || idx}
+                    style={{
+                      backgroundColor: '#F8FAFC',
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                      borderRadius: 14,
+                      padding: 12,
+                      marginBottom: 10,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
+                          #{code}
+                        </Text>
+                        {sosItem.isProxyReport && (
+                          <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                            <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#B45309' }}>Báo hộ</Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={{ backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#DC2626' }}>{statusLabel}</Text>
+                      </View>
+                    </View>
+
+                    <Text style={{ fontSize: 12.5, color: '#334155', marginBottom: 4 }} numberOfLines={2}>
+                      {sosItem.description || 'Yêu cầu hỗ trợ khẩn cấp'}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 10 }} numberOfLines={1}>
+                      📍 {address} · {sosItem.victimCount || 1} người
+                    </Text>
+
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => handleSelectSosFromList(sosItem)}
+                        activeOpacity={0.85}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          backgroundColor: '#DC2626',
+                          paddingVertical: 9,
+                          borderRadius: 10,
+                        }}
+                      >
+                        <MaterialCommunityIcons name="crosshairs-gps" size={16} color="#FFFFFF" />
+                        <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' }}>Định vị</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setShowSosListModal(false);
+                          setTrackingSosId(sosItem._id);
+                          setShowTrackingModal(true);
+                        }}
+                        activeOpacity={0.85}
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          backgroundColor: '#FFFFFF',
+                          borderWidth: 1,
+                          borderColor: '#CBD5E1',
+                          paddingVertical: 9,
+                          borderRadius: 10,
+                        }}
+                      >
+                        <Feather name="eye" size={15} color="#334155" />
+                        <Text style={{ color: '#334155', fontSize: 12.5, fontWeight: '700' }}>Theo dõi</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal theo dõi hành trình SOS khi bấm vào ghim radar trên bản đồ */}
+      <CitizenSosTrackingModal
+        visible={showTrackingModal && !!trackingSosId}
+        sosId={trackingSosId}
+        onClose={() => {
+          setShowTrackingModal(false);
+          setTrackingSosId(null);
+        }}
+      />
     </View>
   );
 };

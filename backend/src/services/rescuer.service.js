@@ -72,6 +72,7 @@ class RescuerService {
 
     // Các trường cho phép cập nhật trong hồ sơ rescuer (người dùng không thể tự đổi verificationStatus)
     if (data.idNumber !== undefined) user.rescuer.idNumber = data.idNumber ? String(data.idNumber).trim() : null;
+    if (data.isCccdVerified !== undefined) user.rescuer.isCccdVerified = Boolean(data.isCccdVerified);
     if (data.vehicleType !== undefined) user.rescuer.vehicleType = data.vehicleType;
     if (data.skills !== undefined && Array.isArray(data.skills)) {
       user.rescuer.skills = Array.from(new Set(data.skills.map(s => String(s).trim()).filter(Boolean)));

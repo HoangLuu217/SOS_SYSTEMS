@@ -415,7 +415,9 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
             {/* Description Text */}
             <Text style={styles.rescuerDesc}>
               {rescuerStatus === 'PENDING'
-                ? 'Hồ sơ chuyên môn của bạn đang được Ban Chỉ huy PCTT & TKCN địa phương thẩm định năng lực và đối soát thực địa.'
+                ? 'Hồ sơ chuyên môn của bạn đang được Ban Chỉ huy PCTT & TKCN địa phương đối soát và thẩm định.'
+                : rescuerStatus === 'REJECTED'
+                ? 'Hồ sơ trước đó cần bổ sung hoặc chỉnh sửa thông tin theo yêu cầu của Ban Chỉ huy địa phương.'
                 : 'Tham gia đội ngũ hỗ trợ cứu hộ và ứng phó thiên tai, lũ lụt tại địa phương. Giúp đỡ đồng bào trong những thời điểm khẩn cấp nhất.'}
             </Text>
 
@@ -426,7 +428,7 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
                 rescuerStatus === 'PENDING' && styles.rescuerActionBtnPending,
               ]}
               onPress={() => {
-                if (rescuerStatus === 'PENDING') {
+                if (rescuerStatus === 'PENDING' || rescuerStatus === 'REJECTED') {
                   setStatusModalVisible(true);
                 } else {
                   onNavigateToProfessional();
@@ -435,7 +437,13 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
               activeOpacity={0.85}
             >
               <MaterialCommunityIcons
-                name={rescuerStatus === 'PENDING' ? 'timer-sand' : 'account-plus'}
+                name={
+                  rescuerStatus === 'PENDING'
+                    ? 'timer-sand'
+                    : rescuerStatus === 'REJECTED'
+                    ? 'alert-circle-outline'
+                    : 'account-plus'
+                }
                 size={19}
                 color={rescuerStatus === 'PENDING' ? '#B45309' : '#FFFFFF'}
               />
@@ -445,7 +453,11 @@ export const CitizenProfileOverviewScreen: React.FC<CitizenProfileOverviewScreen
                   rescuerStatus === 'PENDING' && styles.rescuerActionBtnTextPending,
                 ]}
               >
-                {rescuerStatus === 'PENDING' ? 'Chờ duyệt - Xem chi tiết hồ sơ' : 'Đăng ký Cứu hộ viên ngay'}
+                {rescuerStatus === 'PENDING'
+                  ? 'Chờ duyệt - Xem chi tiết hồ sơ'
+                  : rescuerStatus === 'REJECTED'
+                  ? 'Xem lý do & Cập nhật hồ sơ'
+                  : 'Đăng ký Cứu hộ viên ngay'}
               </Text>
             </TouchableOpacity>
           </LinearGradient>

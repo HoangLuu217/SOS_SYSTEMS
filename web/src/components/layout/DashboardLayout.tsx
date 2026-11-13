@@ -3,6 +3,7 @@ import { Sidebar, type NavItemKey } from './Sidebar';
 import { MapPin } from 'lucide-react';
 import { AuthorPortal, AdminPortal } from '@/features/map-operation';
 import { NAV_TITLES } from '@/constants/navConfig';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import type { User } from '@/types/auth';
 
 export interface DashboardLayoutProps {
@@ -148,7 +149,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               }}
             >
               <div style={{ width: '100%', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                {children}
+                <ErrorBoundary fallbackTitle={`Đã xảy ra sự cố khi tải dữ liệu ${currentMeta.title}`}>
+                  {children}
+                </ErrorBoundary>
               </div>
             </div>
           </>

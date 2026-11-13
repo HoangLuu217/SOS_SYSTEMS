@@ -354,14 +354,14 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#16A34A',
+    backgroundColor: '#0066FF',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: 'rgba(255, 255, 255, 0.65)',
     ...Platform.select({
       ios: {
-        shadowColor: '#16A34A',
+        shadowColor: '#0066FF',
         shadowOffset: { width: 0, height: 3 },
         shadowOpacity: 0.45,
         shadowRadius: 6,

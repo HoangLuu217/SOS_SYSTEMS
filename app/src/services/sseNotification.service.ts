@@ -118,6 +118,11 @@ class SSENotificationService {
               }
 
               if (payload && (payload.action === 'BROADCAST' || payload.action === 'USER')) {
+                const eventType = payload?.data?.type || payload?.type;
+                if (eventType === 'RESCUER_APPLICATION') {
+                  continue;
+                }
+
                 const source =
                   (payload.notification && typeof payload.notification === 'object'
                     ? payload.notification
@@ -152,7 +157,7 @@ class SSENotificationService {
                 ).trim();
 
                 // Chỉ phát tiếp nếu gói SSE thực sự mang tiêu đề hoặc nội dung hiển thị,
-                // tránh biến sự kiện đồng bộ ngầm thành thông báo khẩn cấp giả
+                // tránh biến tín hiệu đồng bộ ngầm thành thông báo khẩn cấp giả
                 if (!rawTitle && !rawContent) {
                   continue;
                 }

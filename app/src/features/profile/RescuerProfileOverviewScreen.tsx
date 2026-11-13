@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -27,6 +27,13 @@ import { useAuth } from '@/context/AuthContext';
 import { LogoSOS } from '@/components';
 import { backendApi } from '@/api';
 import type { RescueTeamData, VehicleData, RescuerVerificationStatus } from '@/types';
+import { RESCUE_SKILLS } from './ProfessionalProfileScreen';
+
+const APPLICANT_SKILL_LABELS: Record<string, string> = {
+  ...Object.fromEntries(RESCUE_SKILLS.map((s) => [s.id, s.label])),
+  relief_logistics: 'Tiếp tế lương thực',
+  technical_rescue: 'Cứu hộ kỹ thuật cao',
+};
 
 export type RescuerAvailability =
   | 'OFFLINE'      // Ngoại tuyến
@@ -101,6 +108,13 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
   const [isTransferringLeader, setIsTransferringLeader] = useState<boolean>(false);
   const [localRefreshTrigger, setLocalRefreshTrigger] = useState<number>(0);
 
+  const selectedTeamIdRef = useRef<string | null>(null);
+  const showTeamDetailRef = useRef<boolean>(false);
+  useEffect(() => {
+    selectedTeamIdRef.current = selectedTeamForDetail?._id || null;
+    showTeamDetailRef.current = showTeamDetailModal;
+  }, [selectedTeamForDetail?._id, showTeamDetailModal]);
+
   const handleCallLeader = (phone?: string) => {
     if (!phone) {
       Alert.alert('Thông báo', 'Đội trưởng chưa cập nhật số điện thoại.');
@@ -144,27 +158,71 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
     });
   };
 
+  const getNameInitials = (name: string) => {
+    const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+    }
+    return (name || 'TV').slice(0, 2).toUpperCase();
+  };
+
+  const isSameAccountAsCurrentUser = (accountObj: any) => {
+    if (!user || !accountObj) return false;
+    const currentUserId = (user._id || (user as any)?.id)?.toString();
+    const currentUserPhone = user.phone;
+    const currentUserEmail = user.email?.toLowerCase();
+    const targetId = (accountObj?._id || accountObj)?.toString();
+    const targetPhone = accountObj?.phone;
+    const targetEmail = accountObj?.email?.toLowerCase();
+    return Boolean(
+      (currentUserId && targetId === currentUserId) ||
+        (currentUserPhone && targetPhone === currentUserPhone) ||
+        (currentUserEmail && targetEmail === currentUserEmail)
+    );
+  };
+
   const getApprovedMembers = (team?: RescueTeamData | null) => {
     if (!team || !Array.isArray(team.members)) return [];
     return team.members.filter((m: any) => m.status === 'APPROVED' || !m.status);
   };
 
+  const getRosterMembers = (team?: RescueTeamData | null) => {
+    if (!team) return [];
+    const approved = getApprovedMembers(team);
+    const leaderObj = typeof team.leaderId === 'object' ? team.leaderId : null;
+    const leaderIdStr = (team.leaderId?._id || team.leaderId)?.toString();
+
+    const list = [...approved];
+    const hasLeaderInList =
+      leaderIdStr &&
+      list.some((m: any) => ((m.rescuerId?._id || m.rescuerId)?.toString() === leaderIdStr));
+
+    if (!hasLeaderInList && leaderObj) {
+      list.unshift({
+        _id: `leader-${leaderIdStr}`,
+        rescuerId: leaderObj,
+        role: 'LEADER',
+        status: 'APPROVED',
+        joinedAt: (team as any).createdAt || new Date().toISOString(),
+      });
+    }
+
+    return list.sort((a: any, b: any) => {
+      const aId = (a.rescuerId?._id || a.rescuerId)?.toString();
+      const bId = (b.rescuerId?._id || b.rescuerId)?.toString();
+      const aIsLeader = a.role === 'LEADER' || (leaderIdStr && aId === leaderIdStr);
+      const bIsLeader = b.role === 'LEADER' || (leaderIdStr && bId === leaderIdStr);
+      if (aIsLeader && !bIsLeader) return -1;
+      if (!aIsLeader && bIsLeader) return 1;
+      return 0;
+    });
+  };
+
   const getOtherTeamMembers = (team?: RescueTeamData | null) => {
     if (!team || !Array.isArray(team.members)) return [];
-    const currentUserId = (user?._id || (user as any)?.id)?.toString();
-    const currentUserPhone = user?.phone;
-    const currentUserEmail = user?.email?.toLowerCase();
     return team.members.filter((m: any) => {
-      const r = m.rescuerId;
-      const mId = (r?._id || r)?.toString();
-      const mPhone = r?.phone;
-      const mEmail = r?.email?.toLowerCase();
-      const matchesUser =
-        (currentUserId && mId === currentUserId) ||
-        (currentUserPhone && mPhone === currentUserPhone) ||
-        (currentUserEmail && mEmail === currentUserEmail);
       const isApproved = m.status === 'APPROVED' || !m.status;
-      return !matchesUser && isApproved;
+      return !isSameAccountAsCurrentUser(m.rescuerId) && isApproved;
     });
   };
 
@@ -595,6 +653,29 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
           setTeamVehicles([]);
           setPendingTeam(foundPendingTeam || null);
         }
+
+        // Nếu đang mở màn Hồ sơ Đội cứu hộ, đồng bộ luôn danh sách đơn ứng tuyển & thành viên mới nhất
+        if (showTeamDetailRef.current && selectedTeamIdRef.current) {
+          try {
+            const detailRes = await backendApi.getRescueTeamById(selectedTeamIdRef.current);
+            if (detailRes.success && detailRes.data) {
+              const freshTeam = detailRes.data;
+              setSelectedTeamForDetail((prev) => ({
+                ...(prev || {}),
+                ...freshTeam,
+                vehicles:
+                  freshTeam.vehicles && freshTeam.vehicles.length > 0
+                    ? freshTeam.vehicles
+                    : prev?.vehicles || [],
+              }));
+            }
+          } catch {
+            const matched = combinedTeams.find(
+              (t: any) => t._id === selectedTeamIdRef.current
+            );
+            if (matched) setSelectedTeamForDetail(matched);
+          }
+        }
       }
     } catch (err) {
       console.warn('Lỗi tải dữ liệu cứu hộ viên:', err);
@@ -634,8 +715,6 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
   }, [refreshTrigger, localRefreshTrigger, fetchRescuerData]);
 
   // Dữ liệu thực tế từ User Profile
-  const isLeader = user?.roles?.includes('LEADER');
-  const roleName = isLeader ? 'Đội trưởng cứu hộ' : 'Nhân viên cứu hộ';
   const displayName = user?.fullName || 'Nhân viên cứu hộ';
   const displayPhone = user?.phone || 'Chưa cập nhật SĐT';
   const displayEmail = user?.email || 'Chưa có email';
@@ -983,10 +1062,35 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
           />
         }
       >
-        {/* 2. Main Profile Card */}
+        {/* 2. Main Profile Card (Layout nằm ngang đồng bộ với CitizenProfileOverviewScreen) */}
         <View style={styles.profileCard}>
-          {/* Avatar with Camera Button */}
-          <View style={styles.avatarWrap}>
+          {/* Cột trái: Tên, SĐT, Email */}
+          <View style={styles.profileInfoCol}>
+            <Text style={styles.rescuerName} numberOfLines={1}>
+              {displayName}
+            </Text>
+
+            <View style={styles.contactItem}>
+              <Feather name="phone" size={15} color="#64748B" style={styles.contactIcon} />
+              <Text style={styles.contactText} numberOfLines={1}>
+                {displayPhone}
+              </Text>
+            </View>
+
+            <View style={styles.contactItem}>
+              <Feather name="mail" size={15} color="#64748B" style={styles.contactIcon} />
+              <Text style={styles.contactText} numberOfLines={1}>
+                {displayEmail}
+              </Text>
+            </View>
+          </View>
+
+          {/* Cột phải: Avatar đại diện tròn + nút máy ảnh */}
+          <TouchableOpacity
+            style={styles.avatarWrap}
+            onPress={() => setAvatarSheetVisible(true)}
+            activeOpacity={0.85}
+          >
             {user?.avatarUrl ? (
               <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
             ) : (
@@ -996,37 +1100,10 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
                 </Text>
               </View>
             )}
-            <TouchableOpacity
-              style={styles.cameraBtn}
-              onPress={() => setAvatarSheetVisible(true)}
-              activeOpacity={0.85}
-            >
-              <Feather name="camera" size={13} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Rescuer Name */}
-          <Text style={styles.rescuerName}>{displayName}</Text>
-
-          {/* Role Badge */}
-          <View style={styles.roleBadge}>
-            <MaterialCommunityIcons name="shield-account" size={13} color="#FFFFFF" />
-            <Text style={styles.roleBadgeText}>{roleName}</Text>
-          </View>
-
-          {/* Contact Row: Phone & Email */}
-          <View style={styles.contactDivider} />
-          <View style={styles.contactRow}>
-            <View style={styles.contactItem}>
-              <Feather name="phone" size={13} color="#64748B" />
-              <Text style={styles.contactText}>{displayPhone}</Text>
+            <View style={styles.cameraBtn}>
+              <Feather name="camera" size={12} color="#FFFFFF" />
             </View>
-            <View style={styles.contactDot} />
-            <View style={styles.contactItem}>
-              <Feather name="mail" size={13} color="#64748B" />
-              <Text style={styles.contactText} numberOfLines={1}>{displayEmail}</Text>
-            </View>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Banner nhắc nhở xác thực số điện thoại cho tài khoản Google */}
@@ -1137,22 +1214,39 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
           </TouchableOpacity>
 
 
-          {/* Hint row for assigned rescuer to view details */}
-          {myTeam && (
-            <TouchableOpacity
-              style={styles.tacticalDetailHintRow}
-              activeOpacity={0.7}
-              onPress={() => {
-                handleOpenTeamDetail(myTeam);
-              }}
-            >
-              <Feather name="info" size={12} color="#0284C7" />
-              <Text style={styles.tacticalDetailHintText}>
-                Nhấn vào để xem chi tiết đội cứu hộ, chỉ huy & phương tiện
-              </Text>
-              <Feather name="chevron-right" size={12} color="#0284C7" />
-            </TouchableOpacity>
-          )}
+          {/* Alert row only shown to Team Leader when there are pending applicants */}
+          {myTeam && (() => {
+            const leaderPendingCount = isUserLeaderOfTeam(myTeam)
+              ? (myTeam.members || []).filter((m: any) => m.status === 'PENDING').length
+              : 0;
+            if (leaderPendingCount <= 0) return null;
+            return (
+              <TouchableOpacity
+                style={[
+                  styles.tacticalDetailHintRow,
+                  {
+                    backgroundColor: '#FFFBEB',
+                    borderColor: '#FDE68A',
+                  },
+                ]}
+                activeOpacity={0.7}
+                onPress={() => {
+                  handleOpenTeamDetail(myTeam);
+                }}
+              >
+                <Feather name="user-plus" size={12} color="#D97706" />
+                <Text
+                  style={[
+                    styles.tacticalDetailHintText,
+                    { color: '#B45309', fontWeight: '700' },
+                  ]}
+                >
+                  {`Có ${leaderPendingCount} đơn ứng tuyển chờ duyệt — Nhấn để xem & duyệt`}
+                </Text>
+                <Feather name="chevron-right" size={12} color="#D97706" />
+              </TouchableOpacity>
+            );
+          })()}
 
           {/* Button: Chờ duyệt (khi đang có đơn ứng tuyển chờ xử lý) */}
           {!myTeam && pendingTeam ? (
@@ -1525,15 +1619,23 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
         </View>
       </Modal>
 
-      {/* Modal: Danh sách & Chọn Đội cứu hộ trong khu vực */}
+      {/* Modal gộp: Danh sách & Chi tiết Đội cứu hộ (1 Modal duy nhất để tránh lỗi iOS kẹt Modal chồng nhau) */}
       <Modal
-        visible={showTeamPickerModal}
+        visible={showTeamPickerModal || (showTeamDetailModal && !!selectedTeamForDetail)}
         transparent={false}
         animationType="slide"
-        onRequestClose={() => setShowTeamPickerModal(false)}
+        onRequestClose={() => {
+          if (showTeamDetailModal) {
+            setShowTeamDetailModal(false);
+          } else {
+            setShowTeamPickerModal(false);
+          }
+        }}
         statusBarTranslucent={true}
       >
-        <View style={styles.teamModalContainer}>
+        <View style={{ flex: 1 }}>
+          {showTeamPickerModal && (
+            <View style={styles.teamModalContainer}>
           <StatusBar barStyle="dark-content" />
 
           {/* Header Modal */}
@@ -1740,20 +1842,20 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
                 );
               })
             )}
-          </ScrollView>
-        </View>
-      </Modal>
+            </ScrollView>
+          </View>
+          )}
 
-      {/* Modal: Chi tiết Đội cứu hộ tác chiến */}
-      <Modal
-        visible={showTeamDetailModal && !!selectedTeamForDetail}
-        transparent={false}
-        animationType="slide"
-        onRequestClose={() => setShowTeamDetailModal(false)}
-        statusBarTranslucent={true}
-      >
-        {selectedTeamForDetail && (
-          <View style={styles.teamModalContainer}>
+          {/* Chi tiết Đội cứu hộ tác chiến (hiển thị ngay trong cùng Modal) */}
+          {showTeamDetailModal && selectedTeamForDetail && (
+            <View
+              style={[
+                styles.teamModalContainer,
+                styles.teamDetailCanvas,
+                showTeamPickerModal && StyleSheet.absoluteFill,
+                { zIndex: 20 },
+              ]}
+            >
             <StatusBar barStyle="dark-content" />
 
             {/* Header Modal */}
@@ -1769,7 +1871,9 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={styles.teamModalTitle}>Hồ sơ Đội cứu hộ</Text>
                 <Text style={styles.teamModalSubtitle} numberOfLines={1}>
-                  Thông tin chi tiết đơn vị tác chiến
+                  {isUserLeaderOfTeam(selectedTeamForDetail)
+                    ? 'Quản lý đơn vị & phê duyệt thành viên'
+                    : 'Thông tin chi tiết đơn vị tác chiến'}
                 </Text>
               </View>
               {selectedTeamForDetail._id === myTeam?._id && (
@@ -1801,369 +1905,562 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
               contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
               showsVerticalScrollIndicator={false}
             >
-              {/* Banner: Đang chờ duyệt nếu người dùng đang có đơn chờ */}
-              {isUserPendingInTeam(selectedTeamForDetail) && (
-                <View style={styles.teamDetailPendingBanner}>
-                  <Feather name="clock" size={20} color="#D97706" />
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={styles.teamDetailPendingBannerTitle}>
-                      ĐƠN ỨNG TUYỂN ĐANG CHỜ PHÊ DUYỆT
-                    </Text>
-                    <Text style={styles.teamDetailPendingBannerText}>
-                      Đơn tham gia của bạn đã được chuyển tới Đội trưởng và Ban chỉ huy. Vui lòng chờ xem xét duyệt vào danh sách thành viên.
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              {/* Hero Team Card */}
-              <View style={styles.teamDetailHeroCard}>
-                <LinearGradient
-                  colors={['#0066FF', '#2563EB']}
-                  style={styles.teamDetailHeroIcon}
-                >
-                  <MaterialCommunityIcons name="account-group" size={28} color="#FFFFFF" />
-                </LinearGradient>
-
-                <Text style={styles.teamDetailHeroName}>{selectedTeamForDetail.name}</Text>
-
-                <View style={styles.teamDetailBadgeRow}>
-                  <View style={styles.teamDetailTypeBadge}>
-                    <Text style={styles.teamDetailTypeBadgeText}>
-                      {getTeamTypeInfo(selectedTeamForDetail.type).label}
-                    </Text>
-                  </View>
-                  <View style={styles.teamDetailStatusBadge}>
-                    <View style={styles.teamDetailStatusDot} />
-                    <Text style={styles.teamDetailStatusText}>
-                      {selectedTeamForDetail.status === 'ACTIVE' ? 'Đang hoạt động' : 'Tạm dừng'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Section 1: Thông tin chỉ huy & Liên hệ */}
-              <View style={styles.teamDetailSection}>
-                <Text style={styles.teamDetailSectionTitle}>CHỈ HUY ĐỘI TRƯỞNG</Text>
-                <View style={styles.teamDetailLeaderCard}>
-                  <View style={styles.teamDetailLeaderAvatar}>
-                    <Feather name="user-check" size={20} color="#0284C7" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.teamDetailLeaderName}>
-                      {selectedTeamForDetail.leaderId?.fullName || 'Chưa cập nhật chỉ huy'}
-                    </Text>
-                    <Text style={styles.teamDetailLeaderRole}>
-                      Đội trưởng chỉ huy tác chiến
-                    </Text>
-                    {selectedTeamForDetail.leaderId?.phone && (
-                      <Text style={styles.teamDetailLeaderPhone}>
-                        SĐT: {selectedTeamForDetail.leaderId.phone}
-                      </Text>
-                    )}
-                  </View>
-                  {selectedTeamForDetail.leaderId?.phone && (
-                    <TouchableOpacity
-                      style={styles.teamDetailCallBtn}
-                      onPress={() => handleCallLeader(selectedTeamForDetail.leaderId?.phone)}
-                      activeOpacity={0.8}
-                    >
-                      <Feather name="phone-call" size={15} color="#FFFFFF" />
-                      <Text style={styles.teamDetailCallBtnText}>Gọi</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-
-              {/* Section: Đơn ứng tuyển chờ duyệt (Hiển thị cho Đội trưởng) */}
-              {isUserLeaderOfTeam(selectedTeamForDetail) && (() => {
+              {(() => {
+                const isLeader = isUserLeaderOfTeam(selectedTeamForDetail);
+                const isPendingSelf = isUserPendingInTeam(selectedTeamForDetail);
+                const typeInfo = getTeamTypeInfo(selectedTeamForDetail.type);
                 const pendingApplicants = (selectedTeamForDetail.members || []).filter(
                   (m: any) => m.status === 'PENDING'
                 );
+                const rosterMembers = getRosterMembers(selectedTeamForDetail);
+                const leaderIdStr = (
+                  selectedTeamForDetail.leaderId?._id || selectedTeamForDetail.leaderId
+                )?.toString();
+                const vehiclesList =
+                  Array.isArray(selectedTeamForDetail.vehicles) &&
+                  selectedTeamForDetail.vehicles.length > 0
+                    ? selectedTeamForDetail.vehicles
+                    : selectedTeamForDetail._id === myTeam?._id &&
+                      Array.isArray(teamVehicles) &&
+                      teamVehicles.length > 0
+                    ? teamVehicles
+                    : [];
+
                 return (
-                  <View style={styles.teamDetailSection}>
-                    <View style={styles.teamDetailSectionTitleRow}>
-                      <Text style={styles.teamDetailSectionTitle}>
-                        ĐƠN ỨNG TUYỂN CHỜ DUYỆT ({pendingApplicants.length})
-                      </Text>
-                      {pendingApplicants.length > 0 && (
-                        <View style={styles.pendingCountBadge}>
-                          <Text style={styles.pendingCountBadgeText}>{pendingApplicants.length} mới</Text>
+                  <>
+                    {/* Banner: Đang chờ duyệt nếu người dùng đang có đơn chờ */}
+                    {isPendingSelf && (
+                      <View style={styles.teamDetailPendingBanner}>
+                        <Feather name="clock" size={18} color="#D97706" />
+                        <View style={{ flex: 1, marginLeft: 10 }}>
+                          <Text style={styles.teamDetailPendingBannerTitle}>
+                            ĐƠN ỨNG TUYỂN ĐANG CHỜ PHÊ DUYỆT
+                          </Text>
+                          <Text style={styles.teamDetailPendingBannerText}>
+                            Đơn tham gia của bạn đã được chuyển tới Đội trưởng. Vui lòng chờ xem xét duyệt vào danh sách thành viên.
+                          </Text>
                         </View>
-                      )}
-                    </View>
-
-                    {pendingApplicants.length === 0 ? (
-                      <View style={styles.pendingEmptyCard}>
-                        <Feather name="check-circle" size={18} color="#059669" />
-                        <Text style={styles.pendingEmptyText}>
-                          Hiện không có đơn ứng tuyển nào đang chờ phê duyệt.
-                        </Text>
-                      </View>
-                    ) : (
-                      <View style={styles.pendingApplicantsList}>
-                        {pendingApplicants.map((applicant: any, idx: number) => {
-                          const rescuerIdStr = (applicant.rescuerId?._id || applicant.rescuerId)?.toString();
-                          const isThisProcessing = isProcessingMember === rescuerIdStr;
-                          const applicantName =
-                            applicant.rescuerId?.fullName || `Cứu hộ viên #${rescuerIdStr?.slice(-4)}`;
-                          const applicantPhone = applicant.rescuerId?.phone || 'Chưa cập nhật SĐT';
-                          const applicantEmail = applicant.rescuerId?.email;
-
-                          return (
-                            <View key={applicant._id || rescuerIdStr || idx} style={styles.applicantCard}>
-                              <View style={styles.applicantAvatarBox}>
-                                <Feather name="user" size={18} color="#0066FF" />
-                              </View>
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.applicantName}>{applicantName}</Text>
-                                <View style={styles.applicantMetaRow}>
-                                  <Feather name="phone" size={11} color="#64748B" />
-                                  <Text style={styles.applicantMetaText}>{applicantPhone}</Text>
-                                </View>
-                                {applicantEmail && (
-                                  <View style={styles.applicantMetaRow}>
-                                    <Feather name="mail" size={11} color="#64748B" />
-                                    <Text style={styles.applicantMetaText}>{applicantEmail}</Text>
-                                  </View>
-                                )}
-                                <Text style={styles.applicantDateText}>
-                                  Nộp đơn: {applicant.joinedAt ? new Date(applicant.joinedAt).toLocaleDateString('vi-VN') : 'Gần đây'}
-                                </Text>
-                              </View>
-
-                              <View style={styles.applicantActionCol}>
-                                <TouchableOpacity
-                                  style={[styles.applicantApproveBtn, isThisProcessing && { opacity: 0.6 }]}
-                                  onPress={() => !isThisProcessing && handleApproveApplicant(applicant)}
-                                  disabled={isThisProcessing}
-                                  activeOpacity={0.8}
-                                >
-                                  {isThisProcessing ? (
-                                    <ActivityIndicator size="small" color="#FFFFFF" />
-                                  ) : (
-                                    <>
-                                      <Feather name="check" size={13} color="#FFFFFF" />
-                                      <Text style={styles.applicantApproveBtnText}>Duyệt</Text>
-                                    </>
-                                  )}
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                  style={[styles.applicantRejectBtn, isThisProcessing && { opacity: 0.6 }]}
-                                  onPress={() => !isThisProcessing && handleRejectApplicant(applicant)}
-                                  disabled={isThisProcessing}
-                                  activeOpacity={0.8}
-                                >
-                                  <Feather name="x" size={13} color="#DC2626" />
-                                  <Text style={styles.applicantRejectBtnText}>Từ chối</Text>
-                                </TouchableOpacity>
-                              </View>
-                            </View>
-                          );
-                        })}
                       </View>
                     )}
-                  </View>
-                );
-              })()}
 
-              {/* Section 2: Địa bàn & Quản lý */}
-              <View style={styles.teamDetailSection}>
-                <Text style={styles.teamDetailSectionTitle}>ĐỊA BÀN & CƠ QUAN QUẢN LÝ</Text>
-                <View style={styles.teamDetailInfoCard}>
-                  <View style={styles.teamDetailInfoItem}>
-                    <Feather name="map-pin" size={15} color="#0284C7" />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.teamDetailInfoLabel}>Địa bàn hoạt động phụ trách</Text>
-                      <Text style={styles.teamDetailInfoValue}>
-                        {selectedTeamForDetail.areaId?.name || userAreaName || 'Đà Nẵng'}
-                      </Text>
+                    {/* Compact Hero Inset Card */}
+                    <View style={styles.teamDetailHeroCard}>
+                      <View style={[styles.teamDetailHeroIcon, { backgroundColor: typeInfo.bg }]}>
+                        <MaterialCommunityIcons
+                          name={typeInfo.icon as any}
+                          size={24}
+                          color={typeInfo.color}
+                        />
+                      </View>
+                      <View style={styles.teamDetailHeroContent}>
+                        <Text style={styles.teamDetailHeroName} numberOfLines={2}>
+                          {selectedTeamForDetail.name}
+                        </Text>
+                        <View style={styles.teamDetailBadgeRow}>
+                          <View style={styles.teamDetailTypeBadge}>
+                            <Text style={styles.teamDetailTypeBadgeText}>{typeInfo.label}</Text>
+                          </View>
+                          <View style={styles.teamDetailStatusInline}>
+                            <View
+                              style={[
+                                styles.teamDetailStatusDot,
+                                {
+                                  backgroundColor:
+                                    selectedTeamForDetail.status === 'ACTIVE' ? '#10B981' : '#F59E0B',
+                                },
+                              ]}
+                            />
+                            <Text
+                              style={[
+                                styles.teamDetailStatusText,
+                                {
+                                  color:
+                                    selectedTeamForDetail.status === 'ACTIVE' ? '#059669' : '#B45309',
+                                },
+                              ]}
+                            >
+                              {selectedTeamForDetail.status === 'ACTIVE' ? 'Đang hoạt động' : 'Tạm dừng'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
                     </View>
-                  </View>
 
-                  <View style={styles.teamDetailInfoDivider} />
+                    {/* Ưu tiên trên cùng cho Đội trưởng khi có đơn ứng tuyển chờ duyệt */}
+                    {isLeader && pendingApplicants.length > 0 && (
+                      <View style={styles.teamDetailSection}>
+                        <View style={styles.teamDetailSectionTitleRow}>
+                          <Text style={[styles.teamDetailSectionTitle, { marginBottom: 0 }]}>
+                            ĐƠN ỨNG TUYỂN CHỜ DUYỆT ({pendingApplicants.length})
+                          </Text>
+                          <View style={styles.pendingCountBadge}>
+                            <Text style={styles.pendingCountBadgeText}>
+                              {pendingApplicants.length} mới
+                            </Text>
+                          </View>
+                        </View>
 
-                  <View style={styles.teamDetailInfoItem}>
-                    <Feather name="shield" size={15} color="#0284C7" />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.teamDetailInfoLabel}>Cơ quan chỉ đạo trực tiếp</Text>
-                      <Text style={styles.teamDetailInfoValue}>
-                        {selectedTeamForDetail.authorityId?.name || 'Ban Chỉ huy PCTT & TKCN địa phương'}
-                      </Text>
+                        <View style={styles.pendingApplicantsList}>
+                          {pendingApplicants.map((applicant: any, idx: number) => {
+                            const rescuerObj =
+                              typeof applicant.rescuerId === 'object' ? applicant.rescuerId : null;
+                            const rescuerIdStr = (rescuerObj?._id || applicant.rescuerId)?.toString();
+                            const isThisProcessing = isProcessingMember === rescuerIdStr;
+                            const applicantName =
+                              rescuerObj?.fullName || `Cứu hộ viên #${rescuerIdStr?.slice(-4)}`;
+                            const applicantPhone = rescuerObj?.phone || 'Chưa cập nhật SĐT';
+                            const applicantAvatar = rescuerObj?.avatarUrl;
+                            const initials = getNameInitials(applicantName);
+                            const rawApplicantSkills: string[] = Array.isArray(
+                              rescuerObj?.rescuer?.skills
+                            )
+                              ? rescuerObj.rescuer.skills
+                              : [];
+                            const skillSummary = rawApplicantSkills
+                              .map((s) => APPLICANT_SKILL_LABELS[s] || s)
+                              .join(', ');
+                            const submittedDate = applicant.joinedAt
+                              ? new Date(applicant.joinedAt).toLocaleDateString('vi-VN', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                })
+                              : '';
+
+                            return (
+                              <React.Fragment key={applicant._id || rescuerIdStr || idx}>
+                                {idx > 0 && <View style={styles.teamDetailRowDivider} />}
+                                <View style={styles.applicantCard}>
+                                  <View style={styles.applicantAvatarBox}>
+                                    {applicantAvatar ? (
+                                      <Image
+                                        source={{ uri: applicantAvatar }}
+                                        style={styles.applicantAvatarImg}
+                                      />
+                                    ) : (
+                                      <Text style={styles.applicantAvatarInitials}>{initials}</Text>
+                                    )}
+                                  </View>
+
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={styles.applicantName} numberOfLines={1}>
+                                      {applicantName}
+                                    </Text>
+                                    <Text style={styles.applicantMetaText} numberOfLines={1}>
+                                      {applicantPhone}
+                                      {submittedDate ? ` • ${submittedDate}` : ''}
+                                    </Text>
+                                    {skillSummary ? (
+                                      <Text style={styles.applicantSkillsText} numberOfLines={1}>
+                                        {skillSummary}
+                                      </Text>
+                                    ) : null}
+                                  </View>
+
+                                  <View style={styles.applicantActionRow}>
+                                    <TouchableOpacity
+                                      style={[
+                                        styles.applicantRejectCircleBtn,
+                                        isThisProcessing && { opacity: 0.5 },
+                                      ]}
+                                      onPress={() =>
+                                        !isThisProcessing && handleRejectApplicant(applicant)
+                                      }
+                                      disabled={isThisProcessing}
+                                      activeOpacity={0.75}
+                                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                                      accessibilityLabel={`Từ chối ${applicantName}`}
+                                    >
+                                      <Feather name="x" size={17} color="#DC2626" />
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                      style={[
+                                        styles.applicantApproveCircleBtn,
+                                        isThisProcessing && { opacity: 0.6 },
+                                      ]}
+                                      onPress={() =>
+                                        !isThisProcessing && handleApproveApplicant(applicant)
+                                      }
+                                      disabled={isThisProcessing}
+                                      activeOpacity={0.8}
+                                      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                                      accessibilityLabel={`Duyệt ${applicantName}`}
+                                    >
+                                      {isThisProcessing ? (
+                                        <ActivityIndicator size="small" color="#FFFFFF" />
+                                      ) : (
+                                        <Feather name="check" size={17} color="#FFFFFF" />
+                                      )}
+                                    </TouchableOpacity>
+                                  </View>
+                                </View>
+                              </React.Fragment>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Section 1: Thông tin đơn vị hợp nhất (Inset Grouped) */}
+                    <View style={styles.teamDetailSection}>
+                      <Text style={styles.teamDetailSectionTitle}>THÔNG TIN ĐƠN VỊ</Text>
+                      <View style={styles.teamDetailInfoCard}>
+                        {/* Row: Chỉ huy trưởng */}
+                        <View style={styles.teamDetailInfoItem}>
+                          <View style={styles.teamDetailInfoIconBox}>
+                            <Feather name="user-check" size={15} color="#475569" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.teamDetailInfoLabel}>Chỉ huy trưởng</Text>
+                            <Text style={styles.teamDetailInfoValue}>
+                              {selectedTeamForDetail.leaderId?.fullName || 'Chưa cập nhật chỉ huy'}
+                            </Text>
+                            {selectedTeamForDetail.leaderId?.phone ? (
+                              <Text style={styles.teamDetailInfoSubValue}>
+                                SĐT: {selectedTeamForDetail.leaderId.phone}
+                              </Text>
+                            ) : null}
+                          </View>
+                          {isLeader ? (
+                            <View style={styles.teamSelfBadge}>
+                              <Text style={styles.teamSelfBadgeText}>Bạn</Text>
+                            </View>
+                          ) : selectedTeamForDetail.leaderId?.phone ? (
+                            <TouchableOpacity
+                              style={styles.teamDetailCallBtn}
+                              onPress={() => handleCallLeader(selectedTeamForDetail.leaderId?.phone)}
+                              activeOpacity={0.8}
+                            >
+                              <Feather name="phone-call" size={13} color="#FFFFFF" />
+                              <Text style={styles.teamDetailCallBtnText}>Gọi</Text>
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
+
+                        <View style={styles.teamDetailInfoDivider} />
+
+                        {/* Row: Địa bàn phụ trách */}
+                        <View style={styles.teamDetailInfoItem}>
+                          <View style={styles.teamDetailInfoIconBox}>
+                            <Feather name="map-pin" size={15} color="#475569" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.teamDetailInfoLabel}>Địa bàn phụ trách</Text>
+                            <Text style={styles.teamDetailInfoValue}>
+                              {selectedTeamForDetail.areaId?.name || userAreaName || 'Đà Nẵng'}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.teamDetailInfoDivider} />
+
+                        {/* Row: Cơ quan quản lý */}
+                        <View style={styles.teamDetailInfoItem}>
+                          <View style={styles.teamDetailInfoIconBox}>
+                            <Feather name="shield" size={15} color="#475569" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.teamDetailInfoLabel}>Cơ quan chỉ đạo trực tiếp</Text>
+                            <Text style={styles.teamDetailInfoValue}>
+                              {selectedTeamForDetail.authorityId?.name ||
+                                'Ban Chỉ huy PCTT & TKCN địa phương'}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.teamDetailInfoDivider} />
+
+                        {/* Row: Nhiệm vụ tác chiến */}
+                        <View style={[styles.teamDetailInfoItem, { alignItems: 'flex-start' }]}>
+                          <View style={[styles.teamDetailInfoIconBox, { marginTop: 2 }]}>
+                            <Feather name="file-text" size={15} color="#475569" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.teamDetailInfoLabel}>Nhiệm vụ tác chiến</Text>
+                            <Text style={styles.teamDetailDescText}>
+                              {selectedTeamForDetail.description ||
+                                'Đơn vị cơ động xung kích chuyên trách tìm kiếm, cứu hộ, di dời người dân khỏi vùng ngập lũ sâu, cô lập và vận chuyển nhu yếu phẩm y tế khẩn cấp.'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
                     </View>
-                  </View>
 
-                  <View style={styles.teamDetailInfoDivider} />
-
-                  <View style={styles.teamDetailInfoItem}>
-                    <Feather name="users" size={15} color="#0284C7" />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.teamDetailInfoLabel}>Quân số hiện tại</Text>
-                      <Text style={styles.teamDetailInfoValue}>
-                        {getApprovedMembers(selectedTeamForDetail).length || 1} chiến sĩ cứu nạn chuyên trách
+                    {/* Section 2: Thành viên đội */}
+                    <View style={styles.teamDetailSection}>
+                      <Text style={styles.teamDetailSectionTitle}>
+                        THÀNH VIÊN ĐỘI ({rosterMembers.length})
                       </Text>
+                      <View style={styles.teamDetailInfoCard}>
+                        {rosterMembers.length === 0 ? (
+                          <Text style={styles.teamDetailMutedEmptyText}>
+                            Chưa có danh sách thành viên chính thức.
+                          </Text>
+                        ) : (
+                          rosterMembers.map((member: any, idx: number) => {
+                            const rObj =
+                              typeof member.rescuerId === 'object' ? member.rescuerId : null;
+                            const rIdStr = (rObj?._id || member.rescuerId)?.toString();
+                            const isRowLeader =
+                              member.role === 'LEADER' ||
+                              (!!leaderIdStr && !!rIdStr && rIdStr === leaderIdStr);
+                            const isSelf = isSameAccountAsCurrentUser(rObj || rIdStr);
+                            const memberName =
+                              rObj?.fullName ||
+                              (isRowLeader && selectedTeamForDetail.leaderId?.fullName) ||
+                              `Thành viên #${rIdStr?.slice(-4) || idx + 1}`;
+                            const memberPhone =
+                              rObj?.phone ||
+                              (isRowLeader ? selectedTeamForDetail.leaderId?.phone : undefined);
+                            const memberAvatar = rObj?.avatarUrl;
+
+                            return (
+                              <React.Fragment key={member._id || rIdStr || idx}>
+                                {idx > 0 && <View style={styles.teamDetailRowDivider} />}
+                                <View style={styles.memberRow}>
+                                  <View
+                                    style={[
+                                      styles.memberAvatarCircle,
+                                      isRowLeader && styles.memberAvatarCircleLeader,
+                                    ]}
+                                  >
+                                    {memberAvatar ? (
+                                      <Image
+                                        source={{ uri: memberAvatar }}
+                                        style={styles.memberAvatarImg}
+                                      />
+                                    ) : (
+                                      <Text
+                                        style={[
+                                          styles.memberAvatarInitials,
+                                          isRowLeader && { color: '#1D4ED8' },
+                                        ]}
+                                      >
+                                        {getNameInitials(memberName)}
+                                      </Text>
+                                    )}
+                                  </View>
+
+                                  <View style={{ flex: 1 }}>
+                                    <View style={styles.memberNameRow}>
+                                      <Text style={styles.memberName} numberOfLines={1}>
+                                        {memberName}
+                                      </Text>
+                                      {isSelf && (
+                                        <View style={styles.teamSelfBadge}>
+                                          <Text style={styles.teamSelfBadgeText}>Bạn</Text>
+                                        </View>
+                                      )}
+                                    </View>
+                                    <Text style={styles.memberSubText} numberOfLines={1}>
+                                      {memberPhone || 'Chưa cập nhật SĐT'}
+                                    </Text>
+                                  </View>
+
+                                  <View style={styles.memberRightGroup}>
+                                    <View
+                                      style={[
+                                        styles.memberRoleBadge,
+                                        isRowLeader
+                                          ? styles.memberRoleBadgeLeader
+                                          : styles.memberRoleBadgeDefault,
+                                      ]}
+                                    >
+                                      <Text
+                                        style={[
+                                          styles.memberRoleText,
+                                          isRowLeader
+                                            ? styles.memberRoleTextLeader
+                                            : styles.memberRoleTextDefault,
+                                        ]}
+                                      >
+                                        {isRowLeader ? 'Đội trưởng' : 'Thành viên'}
+                                      </Text>
+                                    </View>
+
+                                    {!isSelf && memberPhone ? (
+                                      <TouchableOpacity
+                                        style={styles.memberCallCircleBtn}
+                                        onPress={() => handleCallLeader(memberPhone)}
+                                        activeOpacity={0.75}
+                                        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                                      >
+                                        <Feather name="phone" size={14} color="#059669" />
+                                      </TouchableOpacity>
+                                    ) : null}
+                                  </View>
+                                </View>
+                              </React.Fragment>
+                            );
+                          })
+                        )}
+                      </View>
                     </View>
-                  </View>
-                </View>
-              </View>
 
-              {/* Section 3: Nhiệm vụ tác chiến */}
-              <View style={styles.teamDetailSection}>
-                <Text style={styles.teamDetailSectionTitle}>NHIỆM VỤ TÁC CHIẾN</Text>
-                <View style={styles.teamDetailDescCard}>
-                  <Text style={styles.teamDetailDescText}>
-                    {selectedTeamForDetail.description ||
-                      'Đơn vị cơ động xung kích chuyên trách tìm kiếm, cứu hộ, di dời người dân khỏi vùng ngập lũ sâu, cô lập và vận chuyển nhu yếu phẩm y tế khẩn cấp.'}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Section 4: Phương tiện cứu hộ */}
-              <View style={styles.teamDetailSection}>
-                {(() => {
-                  const vehiclesList =
-                    Array.isArray(selectedTeamForDetail.vehicles) && selectedTeamForDetail.vehicles.length > 0
-                      ? selectedTeamForDetail.vehicles
-                      : selectedTeamForDetail._id === myTeam?._id && Array.isArray(teamVehicles) && teamVehicles.length > 0
-                      ? teamVehicles
-                      : [];
-
-                  return (
-                    <>
+                    {/* Section 3: Phương tiện trang bị */}
+                    <View style={styles.teamDetailSection}>
                       <Text style={styles.teamDetailSectionTitle}>
                         PHƯƠNG TIỆN TRANG BỊ ({vehiclesList.length})
                       </Text>
 
                       {vehiclesList.length > 0 ? (
-                        <View style={styles.teamDetailVehiclesList}>
-                          {vehiclesList.map((v) => (
-                            <View key={v._id} style={styles.teamDetailVehicleCard}>
-                              <View style={styles.teamDetailVehicleIcon}>
-                                <MaterialCommunityIcons
-                                  name={
-                                    v.type === 'BOAT'
-                                      ? 'ferry'
+                        <View style={styles.teamDetailInfoCard}>
+                          {vehiclesList.map((v, idx) => (
+                            <React.Fragment key={v._id || idx}>
+                              {idx > 0 && <View style={styles.teamDetailRowDivider} />}
+                              <View style={styles.teamDetailVehicleRow}>
+                                <View style={styles.teamDetailVehicleIcon}>
+                                  <MaterialCommunityIcons
+                                    name={
+                                      v.type === 'BOAT'
+                                        ? 'ferry'
+                                        : v.type === 'AMBULANCE'
+                                        ? 'ambulance'
+                                        : 'car'
+                                    }
+                                    size={18}
+                                    color="#475569"
+                                  />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.teamDetailVehicleName}>
+                                    {v.type === 'BOAT'
+                                      ? 'Ca-nô / Xuồng máy vượt lũ'
                                       : v.type === 'AMBULANCE'
-                                      ? 'ambulance'
-                                      : 'car'
-                                  }
-                                  size={20}
-                                  color="#0284C7"
-                                />
-                              </View>
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.teamDetailVehicleName}>
-                                  {v.type === 'BOAT'
-                                    ? 'Ca-nô / Xuồng máy vượt lũ'
-                                    : v.type === 'AMBULANCE'
-                                    ? 'Xe cứu thương cấp cứu dã chiến'
-                                    : 'Xe tải lội nước chuyên dụng'}
-                                </Text>
-                                <Text style={styles.teamDetailVehiclePlate}>
-                                  Biển số: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{v.plateNumber}</Text>
-                                </Text>
-                                {v.description ? (
-                                  <Text style={styles.teamDetailVehicleDesc} numberOfLines={2}>
-                                    {v.description}
+                                      ? 'Xe cứu thương dã chiến'
+                                      : 'Xe tải lội nước chuyên dụng'}
                                   </Text>
-                                ) : null}
-                              </View>
-                              <View
-                                style={[
-                                  styles.teamDetailVehicleStatus,
-                                  { backgroundColor: v.status === 'AVAILABLE' ? '#ECFDF5' : '#FEF3C7' },
-                                ]}
-                              >
-                                <Text
+                                  <Text style={styles.teamDetailVehiclePlate}>
+                                    Biển số:{' '}
+                                    <Text style={{ fontWeight: '700', color: '#0F172A' }}>
+                                      {v.plateNumber}
+                                    </Text>
+                                  </Text>
+                                  {v.description ? (
+                                    <Text style={styles.teamDetailVehicleDesc} numberOfLines={2}>
+                                      {v.description}
+                                    </Text>
+                                  ) : null}
+                                </View>
+                                <View
                                   style={[
-                                    styles.teamDetailVehicleStatusText,
-                                    { color: v.status === 'AVAILABLE' ? '#059669' : '#D97706' },
+                                    styles.teamDetailVehicleStatus,
+                                    {
+                                      backgroundColor:
+                                        v.status === 'AVAILABLE' ? '#ECFDF5' : '#FEF3C7',
+                                    },
                                   ]}
                                 >
-                                  {v.status === 'AVAILABLE' ? 'Sẵn sàng' : 'Bảo dưỡng'}
-                                </Text>
+                                  <Text
+                                    style={[
+                                      styles.teamDetailVehicleStatusText,
+                                      { color: v.status === 'AVAILABLE' ? '#059669' : '#D97706' },
+                                    ]}
+                                  >
+                                    {v.status === 'AVAILABLE' ? 'Sẵn sàng' : 'Bảo dưỡng'}
+                                  </Text>
+                                </View>
                               </View>
-                            </View>
+                            </React.Fragment>
                           ))}
                         </View>
                       ) : (
                         <View style={styles.teamDetailNoVehicles}>
+                          <Feather name="info" size={15} color="#64748B" />
                           <Text style={styles.teamDetailNoVehiclesText}>
                             Phương tiện được cơ động điều động theo tình hình thực địa của Ban chỉ huy trung tâm.
                           </Text>
                         </View>
                       )}
-                    </>
-                  );
-                })()}
-              </View>
+                    </View>
 
-              {/* Action Button: Rút đơn nếu đang chờ duyệt */}
-              {selectedTeamForDetail._id !== myTeam?._id && isUserPendingInTeam(selectedTeamForDetail) && (
-                <TouchableOpacity
-                  style={[styles.teamDetailCancelApplyBtn, isJoiningTeam === selectedTeamForDetail._id && { opacity: 0.7 }]}
-                  onPress={() => handleCancelApplication(selectedTeamForDetail)}
-                  disabled={isJoiningTeam === selectedTeamForDetail._id}
-                  activeOpacity={0.85}
-                >
-                  {isJoiningTeam === selectedTeamForDetail._id ? (
-                    <ActivityIndicator size="small" color="#DC2626" />
-                  ) : (
-                    <>
-                      <Feather name="x-circle" size={16} color="#DC2626" />
-                      <Text style={styles.teamDetailCancelApplyBtnText}>
-                        Rút đơn ứng tuyển vào đội này
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
+                    {/* Trạng thái gọn khi Đội trưởng không có đơn chờ */}
+                    {isLeader && pendingApplicants.length === 0 && (
+                      <View style={styles.teamDetailSection}>
+                        <Text style={styles.teamDetailSectionTitle}>ĐƠN ỨNG TUYỂN CHỜ DUYỆT (0)</Text>
+                        <View style={styles.pendingEmptyCard}>
+                          <Feather name="check-circle" size={16} color="#059669" />
+                          <Text style={styles.pendingEmptyText}>
+                            Hiện không có đơn ứng tuyển nào đang chờ phê duyệt.
+                          </Text>
+                        </View>
+                      </View>
+                    )}
 
-              {/* Action Button if looking from picker and not yet member and not pending */}
-              {selectedTeamForDetail._id !== myTeam?._id &&
-                !isUserPendingInTeam(selectedTeamForDetail) &&
-                verificationStatus === 'VERIFIED' && (
-                <TouchableOpacity
-                  style={[styles.teamDetailApplyBtn, isJoiningTeam === selectedTeamForDetail._id && { opacity: 0.7 }]}
-                  onPress={() => {
-                    handleJoinTeam(selectedTeamForDetail);
-                  }}
-                  disabled={isJoiningTeam === selectedTeamForDetail._id}
-                  activeOpacity={0.88}
-                >
-                  <Feather name="user-plus" size={16} color="#FFFFFF" />
-                  <Text style={styles.teamDetailApplyBtnText}>
-                    Nộp đơn ứng tuyển gia nhập đội này
-                  </Text>
-                  <Feather name="arrow-right" size={16} color="#FFFFFF" />
-                </TouchableOpacity>
-              )}
+                    {/* Action Button: Rút đơn nếu đang chờ duyệt */}
+                    {selectedTeamForDetail._id !== myTeam?._id && isPendingSelf && (
+                      <TouchableOpacity
+                        style={[
+                          styles.teamDetailCancelApplyBtn,
+                          isJoiningTeam === selectedTeamForDetail._id && { opacity: 0.7 },
+                        ]}
+                        onPress={() => handleCancelApplication(selectedTeamForDetail)}
+                        disabled={isJoiningTeam === selectedTeamForDetail._id}
+                        activeOpacity={0.85}
+                      >
+                        {isJoiningTeam === selectedTeamForDetail._id ? (
+                          <ActivityIndicator size="small" color="#DC2626" />
+                        ) : (
+                          <>
+                            <Feather name="x-circle" size={16} color="#DC2626" />
+                            <Text style={styles.teamDetailCancelApplyBtnText}>
+                              Rút đơn ứng tuyển vào đội này
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
 
-              {/* Action Button: Rời đội nếu đang là thành viên */}
-              {selectedTeamForDetail._id === myTeam?._id && (
-                <TouchableOpacity
-                  style={[styles.teamDetailLeaveBtn, isLeavingTeam && { opacity: 0.7 }]}
-                  onPress={() => handleLeaveTeam(selectedTeamForDetail)}
-                  disabled={isLeavingTeam}
-                  activeOpacity={0.85}
-                >
-                  {isLeavingTeam ? (
-                    <ActivityIndicator size="small" color="#DC2626" />
-                  ) : (
-                    <>
-                      <Feather name="log-out" size={16} color="#DC2626" />
-                      <Text style={styles.teamDetailLeaveBtnText}>
-                        {isUserLeaderOfTeam(selectedTeamForDetail)
-                          ? (getOtherTeamMembers(selectedTeamForDetail).length > 0
-                              ? 'Chuyển giao quyền Đội trưởng & Rời đội'
-                              : 'Tạm dừng hoạt động & Rời đội')
-                          : 'Rời khỏi Đội cứu hộ này'}
-                      </Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              )}
+                    {/* Action Button if looking from picker and not yet member and not pending */}
+                    {selectedTeamForDetail._id !== myTeam?._id &&
+                      !isPendingSelf &&
+                      verificationStatus === 'VERIFIED' && (
+                        <TouchableOpacity
+                          style={[
+                            styles.teamDetailApplyBtn,
+                            isJoiningTeam === selectedTeamForDetail._id && { opacity: 0.7 },
+                          ]}
+                          onPress={() => {
+                            handleJoinTeam(selectedTeamForDetail);
+                          }}
+                          disabled={isJoiningTeam === selectedTeamForDetail._id}
+                          activeOpacity={0.88}
+                        >
+                          <Feather name="user-plus" size={16} color="#FFFFFF" />
+                          <Text style={styles.teamDetailApplyBtnText}>
+                            Nộp đơn ứng tuyển gia nhập đội này
+                          </Text>
+                          <Feather name="arrow-right" size={16} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      )}
+
+                    {/* Action Button: Rời đội nếu đang là thành viên */}
+                    {selectedTeamForDetail._id === myTeam?._id && (
+                      <TouchableOpacity
+                        style={[styles.teamDetailLeaveBtn, isLeavingTeam && { opacity: 0.7 }]}
+                        onPress={() => handleLeaveTeam(selectedTeamForDetail)}
+                        disabled={isLeavingTeam}
+                        activeOpacity={0.85}
+                      >
+                        {isLeavingTeam ? (
+                          <ActivityIndicator size="small" color="#DC2626" />
+                        ) : (
+                          <>
+                            <Feather name="log-out" size={16} color="#DC2626" />
+                            <Text style={styles.teamDetailLeaveBtnText}>
+                              {isLeader
+                                ? getOtherTeamMembers(selectedTeamForDetail).length > 0
+                                  ? 'Chuyển giao quyền Đội trưởng & Rời đội'
+                                  : 'Tạm dừng hoạt động & Rời đội'
+                                : 'Rời khỏi Đội cứu hộ này'}
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </>
+                );
+              })()}
             </ScrollView>
 
             {/* Popup Dialog: Chọn thành viên làm Đội trưởng mới */}
@@ -2295,8 +2592,9 @@ export const RescuerProfileOverviewScreen: React.FC<RescuerProfileOverviewScreen
                 </View>
               </View>
             )}
-          </View>
-        )}
+            </View>
+          )}
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -2399,9 +2697,11 @@ const styles = StyleSheet.create({
   },
   profileCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: PROFILE_THEME.radius.card,
+    borderRadius: 20,
     padding: 20,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     marginBottom: 14,
@@ -2410,127 +2710,72 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
-    overflow: 'hidden',
+  },
+  profileInfoCol: {
+    flex: 1,
+    paddingRight: 16,
+    justifyContent: 'center',
   },
   avatarWrap: {
+    width: 82,
+    height: 82,
     position: 'relative',
-    marginBottom: 12,
   },
   avatarImage: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    resizeMode: 'cover',
   },
   avatarPlaceholder: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 82,
+    height: 82,
+    borderRadius: 41,
     backgroundColor: '#EFF6FF',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#BFDBFE',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
   },
   avatarInitials: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#2563EB',
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#0066FF',
   },
   cameraBtn: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#2563EB',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#0066FF',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
   },
   rescuerName: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: '800',
     color: '#0F172A',
     marginBottom: 10,
-    textAlign: 'center',
-    paddingHorizontal: 12,
-  },
-  roleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    backgroundColor: '#2563EB',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
-    marginBottom: 14,
-  },
-  roleBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  verifiedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 12,
-    paddingVertical: 4.5,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  verifiedBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  activeDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#10B981',
-  },
-  accountStatusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  contactDivider: {
-    width: '100%',
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginBottom: 12,
-  },
-  contactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    flexWrap: 'wrap',
+    letterSpacing: -0.3,
   },
   contactItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    marginTop: 6,
   },
-  contactDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: '#CBD5E1',
+  contactIcon: {
+    marginRight: 8,
+    width: 16,
   },
   contactText: {
-    fontSize: 12.5,
+    fontSize: 14,
     fontWeight: '500',
-    color: '#64748B',
+    color: '#475569',
+    flexShrink: 1,
   },
   availabilityCard: {
     backgroundColor: '#FFFFFF',
@@ -3062,63 +3307,58 @@ const styles = StyleSheet.create({
     color: '#0284C7',
     flex: 1,
   },
+  teamDetailCanvas: {
+    backgroundColor: '#F2F4F7',
+  },
   teamDetailHeroCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 16,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: '#E5E7EB',
+    marginBottom: 18,
   },
   teamDetailHeroIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+  },
+  teamDetailHeroContent: {
+    flex: 1,
   },
   teamDetailHeroName: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     color: '#0F172A',
-    textAlign: 'center',
-    marginBottom: 8,
+    lineHeight: 22,
+    marginBottom: 6,
   },
   teamDetailBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
   },
   teamDetailTypeBadge: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   teamDetailTypeBadgeText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#0066FF',
+    fontWeight: '600',
+    color: '#334155',
   },
-  teamDetailStatusBadge: {
+  teamDetailStatusInline: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
   },
   teamDetailStatusDot: {
     width: 6,
@@ -3127,146 +3367,202 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
   },
   teamDetailStatusText: {
-    fontSize: 11.5,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '600',
     color: '#059669',
   },
   teamDetailSection: {
-    marginBottom: 16,
+    marginBottom: 18,
   },
   teamDetailSectionTitle: {
     fontSize: 11.5,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#64748B',
     letterSpacing: 0.5,
     marginBottom: 8,
     marginLeft: 4,
   },
-  teamDetailLeaderCard: {
+  teamDetailInfoCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  teamDetailInfoItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
   },
-  teamDetailLeaderAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: '#F0F9FF',
+  teamDetailInfoIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  teamDetailLeaderName: {
-    fontSize: 15,
+  teamDetailInfoLabel: {
+    fontSize: 11.5,
+    color: '#64748B',
+  },
+  teamDetailInfoValue: {
+    fontSize: 14,
     fontWeight: '700',
     color: '#0F172A',
-  },
-  teamDetailLeaderRole: {
-    fontSize: 12,
-    color: '#64748B',
     marginTop: 1,
   },
-  teamDetailLeaderPhone: {
+  teamDetailInfoSubValue: {
     fontSize: 12,
-    color: '#0284C7',
-    fontWeight: '600',
+    color: '#475569',
     marginTop: 2,
+  },
+  teamDetailInfoDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 11,
+    marginLeft: 44,
+  },
+  teamDetailRowDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 10,
+  },
+  teamSelfBadge: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  teamSelfBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1D4ED8',
   },
   teamDetailCallBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     backgroundColor: '#059669',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 9,
   },
   teamDetailCallBtnText: {
     fontSize: 12.5,
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  teamDetailInfoCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  teamDetailInfoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  teamDetailInfoLabel: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  teamDetailInfoValue: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 1,
-  },
-  teamDetailInfoDivider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 10,
-  },
-  teamDetailDescCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
   teamDetailDescText: {
     fontSize: 13,
     color: '#334155',
-    lineHeight: 20,
+    lineHeight: 19,
+    marginTop: 2,
   },
-  teamDetailVehiclesList: {
+  teamDetailMutedEmptyText: {
+    fontSize: 13,
+    color: '#64748B',
+    paddingVertical: 4,
+  },
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    paddingVertical: 2,
+  },
+  memberAvatarCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  memberAvatarCircleLeader: {
+    backgroundColor: '#EFF6FF',
+  },
+  memberAvatarImg: {
+    width: 38,
+    height: 38,
+  },
+  memberAvatarInitials: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  memberNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  memberName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    flexShrink: 1,
+  },
+  memberSubText: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  memberRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
-  teamDetailVehicleCard: {
+  memberRoleBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  memberRoleBadgeLeader: {
+    backgroundColor: '#EFF6FF',
+  },
+  memberRoleBadgeDefault: {
+    backgroundColor: '#F1F5F9',
+  },
+  memberRoleText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  memberRoleTextLeader: {
+    color: '#1D4ED8',
+  },
+  memberRoleTextDefault: {
+    color: '#475569',
+  },
+  memberCallCircleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  teamDetailVehicleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    paddingVertical: 2,
   },
   teamDetailVehicleIcon: {
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: '#F0F9FF',
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
   teamDetailVehicleName: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#0F172A',
   },
   teamDetailVehiclePlate: {
-    fontSize: 11.5,
+    fontSize: 12,
     color: '#64748B',
     marginTop: 2,
   },
@@ -3280,17 +3576,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   teamDetailNoVehicles: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5E7EB',
   },
   teamDetailNoVehiclesText: {
-    fontSize: 12,
+    flex: 1,
+    fontSize: 12.5,
     color: '#64748B',
     lineHeight: 18,
-    fontStyle: 'italic',
   },
   teamDetailApplyBtn: {
     flexDirection: 'row',
@@ -3964,100 +4263,88 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#F0FDF4',
-    padding: 12,
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#BBF7D0',
+    borderColor: '#E5E7EB',
   },
   pendingEmptyText: {
     fontSize: 12.5,
-    color: '#166534',
+    color: '#64748B',
     fontWeight: '500',
   },
   pendingApplicantsList: {
-    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   applicantCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#FFFFFF',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
+    gap: 11,
+    paddingVertical: 2,
   },
   applicantAvatarBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: '#EFF6FF',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  applicantAvatarImg: {
+    width: 40,
+    height: 40,
+  },
+  applicantAvatarInitials: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#475569',
   },
   applicantName: {
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0F172A',
   },
-  applicantMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+  applicantMetaText: {
+    fontSize: 12,
+    color: '#64748B',
     marginTop: 2,
   },
-  applicantMetaText: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  applicantDateText: {
-    fontSize: 10,
-    color: '#94A3B8',
-    marginTop: 3,
-  },
-  applicantActionCol: {
-    gap: 6,
-    alignItems: 'flex-end',
-  },
-  applicantApproveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#059669',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 7,
-    minWidth: 64,
-    justifyContent: 'center',
-  },
-  applicantApproveBtnText: {
+  applicantSkillsText: {
     fontSize: 11.5,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#475569',
+    fontWeight: '500',
+    marginTop: 2,
   },
-  applicantRejectBtn: {
+  applicantActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 8,
+  },
+  applicantRejectCircleBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#FEF2F2',
     borderWidth: 1,
     borderColor: '#FECACA',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 7,
-    minWidth: 64,
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  applicantRejectBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#DC2626',
+  applicantApproveCircleBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#059669',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   teamDetailVehicleDesc: {
     fontSize: 11,

@@ -126,9 +126,9 @@ export async function deleteSosRequestApi(sosId: string): Promise<{ success: boo
   });
 }
 
-export async function clearCancelledSosApi(): Promise<{ success: boolean; message?: string; data?: { deletedCount: number } }> {
+export async function clearCancelledSosApi(sosIds?: string[]): Promise<{ success: boolean; message?: string; data?: { deletedCount: number } }> {
   return fetchWithAuth('/sos/clear-cancelled', {
     method: 'DELETE',
-
+    body: JSON.stringify({ sosIds: sosIds || [] }),
   });
 }

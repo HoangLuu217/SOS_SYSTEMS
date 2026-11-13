@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Phone, MapPin, Maximize2, X, ChevronDown, ChevronUp, MessageSquareText, Package, Plus, Minus } from 'lucide-react';
+import { Phone, MapPin, Maximize2, X, ChevronDown, ChevronUp, MessageSquareText, Package, Plus, Minus, Users, AlertCircle } from 'lucide-react';
 import type { SosRequest } from '@/types/domainD';
 import type { EquipmentItem } from '@/api/equipment.api';
 
@@ -83,18 +83,31 @@ export const CitizenDistressProfile: React.FC<Props> = ({
     return keywords;
   })();
 
-  const getPriorityEmoji = (group: string) => {
-    const g = group.toLowerCase();
-    if (g.includes("trẻ") || g.includes("em bé") || g.includes("sơ sinh")) return "👶";
-    if (g.includes("già") || g.includes("cao tuổi")) return "👴";
-    if (g.includes("thai") || g.includes("bầu")) return "🤰";
-    if (g.includes("khuyết tật") || g.includes("tàn tật")) return "♿";
-    if (g.includes("bệnh") || g.includes("thương") || g.includes("oxy")) return "🏥";
-    if (g.includes("khó khăn") || g.includes("nghèo") || g.includes("hộ")) return "🏡";
-    return "⭐";
-  };
+  const secondaryTagLabel =
+    priorityList.length > 0
+      ? priorityList.join(', ')
+      : selectedSos.affectedPeople > 1
+        ? 'Hộ gia đình'
+        : null;
 
   const hasExtraDetail = Boolean(selectedSos.description || selectedSos.imageUrl);
+
+  const uniformBoxStyle: React.CSSProperties = {
+    minWidth: 0,
+    minHeight: 32,
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    padding: '6px 8px',
+    borderRadius: 6,
+    fontSize: 11.5,
+    fontWeight: 700,
+    lineHeight: 1.3,
+    border: '1px solid #e2e8f0',
+    boxSizing: 'border-box',
+  };
 
   return (
     <>
@@ -102,17 +115,17 @@ export const CitizenDistressProfile: React.FC<Props> = ({
         style={{
           padding: '10px 12px',
           background: '#ffffff',
-          border: '1.5px solid #cbd5e1',
+          border: '1px solid #cbd5e1',
           borderRadius: 10,
           display: 'flex',
           flexDirection: 'column',
           gap: 7,
-          boxShadow: '0 1px 4px rgba(15, 23, 42, 0.05)',
+          boxShadow: '0 1px 4px rgba(15, 23, 42, 0.04)',
         }}
       >
         {/* Section 1: Tên người dân & Số điện thoại đường dây nóng trên 1 hàng */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <div style={{ fontWeight: 900, color: '#0f172a', fontSize: 15, letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontWeight: 800, color: '#0f172a', fontSize: 15, letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {selectedSos.citizenName}
           </div>
 
@@ -122,97 +135,81 @@ export const CitizenDistressProfile: React.FC<Props> = ({
               display: 'inline-flex',
               alignItems: 'center',
               gap: 5,
-              color: '#0284c7',
-              fontWeight: 800,
+              color: '#1e293b',
+              fontWeight: 700,
               textDecoration: 'none',
-              background: '#f0f9ff',
-              padding: '3.5px 9px',
+              background: '#f8fafc',
+              padding: '4px 9px',
               borderRadius: 6,
-              border: '1px solid #bae6fd',
+              border: '1px solid #e2e8f0',
               fontSize: 12,
               flexShrink: 0,
               transition: 'all 0.15s ease',
             }}
             title="Gọi trực tiếp cho người dân"
           >
-            <Phone size={12} style={{ color: '#0284c7' }} />
+            <Phone size={12} style={{ color: '#475569' }} />
             <span>{selectedSos.citizenPhone}</span>
           </a>
         </div>
 
-        {/* Section 2: Vị trí hiện trường khẩn cấp với ghim đỏ (bỏ nhãn thừa) */}
+        {/* Section 2: Vị trí hiện trường */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-          <MapPin size={15} style={{ color: '#dc2626', flexShrink: 0, marginTop: 1 }} />
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1e293b', lineHeight: 1.35, wordBreak: 'break-word' }}>
+          <MapPin size={14} style={{ color: '#64748b', flexShrink: 0, marginTop: 2 }} />
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: '#334155', lineHeight: 1.35, wordBreak: 'break-word' }}>
             {selectedSos.locationName}
           </div>
         </div>
 
-        {/* Section 3: Gom 2 huy hiệu nạn nhân trên cùng 1 hàng ngang */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          {/* Huy hiệu chính (Đỏ) */}
-          <span
+        {/* Section 3: Hai ô thông tin nạn nhân kích thước đều nhau & không cắt chữ */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: secondaryTagLabel ? '1fr 1fr' : '1fr',
+            alignItems: 'stretch',
+            gap: 6,
+          }}
+        >
+          <div
             style={{
-              background: '#fef2f2',
-              border: '1px solid #fecaca',
-              padding: '2.5px 8px',
-              borderRadius: 5,
-              fontWeight: 900,
-              color: '#dc2626',
-              fontSize: 12,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
+              ...uniformBoxStyle,
+              background: '#f8fafc',
+              color: '#0f172a',
             }}
+            title={`${selectedSos.affectedPeople} người gặp nạn`}
           >
-            <span>🚨</span>
-            <span>{selectedSos.affectedPeople} người gặp nạn</span>
-          </span>
+            <Users size={12.5} style={{ color: '#475569', flexShrink: 0 }} />
+            <span style={{ whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center' }}>
+              {selectedSos.affectedPeople} người gặp nạn
+            </span>
+          </div>
 
-          {/* Huy hiệu đối tượng ưu tiên thực tế từ ca SOS */}
-          {priorityList.length > 0 ? (
-            <span
+          {secondaryTagLabel && (
+            <div
               style={{
-                background: '#fefce8',
-                border: '1px solid #fde68a',
-                color: '#b45309',
-                fontSize: 11.5,
-                fontWeight: 800,
-                padding: '2.5px 8px',
-                borderRadius: 5,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
+                ...uniformBoxStyle,
+                background: '#f8fafc',
+                color: '#334155',
               }}
-              title={`Đối tượng ưu tiên: ${priorityList.join(', ')}`}
+              title={`Đối tượng ưu tiên: ${secondaryTagLabel}`}
             >
-              <span>{priorityList.map(getPriorityEmoji).join('')}</span>
-              <span>{priorityList.join(', ')}</span>
-            </span>
-          ) : selectedSos.affectedPeople > 1 ? (
-            <span
-              style={{
-                background: '#fefce8',
-                border: '1px solid #fde68a',
-                color: '#b45309',
-                fontSize: 11.5,
-                fontWeight: 800,
-                padding: '2.5px 8px',
-                borderRadius: 5,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
-            >
-              <span>👥</span>
-              <span>Hộ gia đình</span>
-            </span>
-          ) : null}
+              <AlertCircle size={12.5} style={{ color: '#64748b', flexShrink: 0 }} />
+              <span style={{ whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center' }}>
+                {secondaryTagLabel}
+              </span>
+            </div>
+          )}
         </div>
 
-
-        {/* Section 5: Buttons Action Bar - Nằm gọn trên 1 dòng duy nhất không rớt chữ */}
-        <div style={{ display: 'flex', gap: 6 }}>
+        {/* Section 5: Buttons Action Bar - Bằng kích thước với hàng ô phía trên */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: hasExtraDetail ? '1fr 1fr' : '1fr',
+            alignItems: 'stretch',
+            gap: 6,
+          }}
+        >
           {hasExtraDetail && (
             <button
               type="button"
@@ -221,26 +218,19 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                 if (!isDetailExpanded) setIsSuppliesExpanded(false);
               }}
               style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 4,
-                padding: '5px 6px',
-                background: isDetailExpanded ? '#f0f9ff' : '#ffffff',
-                border: isDetailExpanded ? '1.5px solid #0284c7' : '1px solid #e2e8f0',
-                borderRadius: 6,
+                ...uniformBoxStyle,
+                background: isDetailExpanded ? '#f1f5f9' : '#ffffff',
+                border: isDetailExpanded ? '1px solid #94a3b8' : '1px solid #e2e8f0',
                 cursor: 'pointer',
-                fontSize: 11,
-                fontWeight: 800,
-                color: isDetailExpanded ? '#0369a1' : '#334155',
-                whiteSpace: 'nowrap',
+                color: isDetailExpanded ? '#0f172a' : '#334155',
                 transition: 'all 0.15s ease',
               }}
               title="Nhấn để xem lời nhắn chi tiết từ hiện trường"
             >
-              <MessageSquareText size={12.5} style={{ color: isDetailExpanded ? '#0284c7' : '#64748b', flexShrink: 0 }} />
-              <span style={{ whiteSpace: 'nowrap' }}>{isDetailExpanded ? 'Thu gọn lời nhắn' : 'Xem lời nhắn & ảnh'}</span>
+              <MessageSquareText size={12.5} style={{ color: isDetailExpanded ? '#0f172a' : '#64748b', flexShrink: 0 }} />
+              <span style={{ whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center' }}>
+                {isDetailExpanded ? 'Thu gọn lời nhắn' : 'Xem lời nhắn & ảnh'}
+              </span>
               {isDetailExpanded ? <ChevronUp size={12} style={{ flexShrink: 0 }} /> : <ChevronDown size={12} style={{ flexShrink: 0 }} />}
             </button>
           )}
@@ -252,26 +242,17 @@ export const CitizenDistressProfile: React.FC<Props> = ({
               if (!isSuppliesExpanded) setIsDetailExpanded(false);
             }}
             style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 4,
-              padding: '5px 6px',
-              background: isSuppliesExpanded ? '#f0fdf4' : '#ffffff',
-              border: isSuppliesExpanded ? '1.5px solid #16a34a' : '1px solid #e2e8f0',
-              borderRadius: 6,
+              ...uniformBoxStyle,
+              background: isSuppliesExpanded ? '#f1f5f9' : '#ffffff',
+              border: isSuppliesExpanded ? '1px solid #94a3b8' : '1px solid #e2e8f0',
               cursor: 'pointer',
-              fontSize: 11,
-              fontWeight: 800,
-              color: isSuppliesExpanded ? '#15803d' : '#334155',
-              whiteSpace: 'nowrap',
+              color: isSuppliesExpanded ? '#0f172a' : '#334155',
               transition: 'all 0.15s ease',
             }}
             title="Quản lý vật tư và trang thiết bị cấp phát cho ca cứu nạn"
           >
-            <Package size={12.5} style={{ color: isSuppliesExpanded ? '#16a34a' : '#64748b', flexShrink: 0 }} />
-            <span style={{ whiteSpace: 'nowrap' }}>
+            <Package size={12.5} style={{ color: isSuppliesExpanded ? '#0f172a' : '#64748b', flexShrink: 0 }} />
+            <span style={{ whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center' }}>
               {isSuppliesExpanded ? 'Đóng kho vật tư' : 'Cấp vật tư'}
             </span>
             {isSuppliesExpanded ? <ChevronUp size={12} style={{ flexShrink: 0 }} /> : <ChevronDown size={12} style={{ flexShrink: 0 }} />}
@@ -293,7 +274,7 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                 style={{
                   padding: '8px 11px',
                   background: '#f8fafc',
-                  borderLeft: '3.5px solid #ef4444',
+                  borderLeft: '3px solid #64748b',
                   borderRadius: '0 6px 6px 0',
                   borderTop: '1px solid #e2e8f0',
                   borderRight: '1px solid #e2e8f0',

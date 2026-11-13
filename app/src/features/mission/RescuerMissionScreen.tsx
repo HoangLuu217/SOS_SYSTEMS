@@ -852,6 +852,20 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     );
   };
 
+  // Khi cứu hộ viên bấm SOS, hiển thị toàn màn hình form SOS chuẩn y hệt như bên người dân (Citizen)
+  if (sosModalVisible) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <SosScreen
+          onNavigateToHome={() => {
+            setSosModalVisible(false);
+          }}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
@@ -2016,26 +2030,6 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
         </View>
       </Modal>
 
-      {/* 4. Modal SOS khẩn cấp dành cho Cứu hộ viên khi gặp sự cố */}
-      <Modal
-        visible={sosModalVisible}
-        animationType="slide"
-        onRequestClose={() => setSosModalVisible(false)}
-      >
-        <View style={{ flex: 1 }}>
-          <View style={[styles.sosModalHeader, { paddingTop: Math.max(insets.top, 16) }]}>
-            <Text style={styles.sosModalTitle}>🚨 Báo nạn khẩn cấp Cứu hộ viên</Text>
-            <TouchableOpacity
-              onPress={() => setSosModalVisible(false)}
-              style={styles.sosModalCloseBtn}
-            >
-              <Feather name="x" size={22} color="#0F172A" />
-            </TouchableOpacity>
-          </View>
-          <SosScreen onNavigateToHome={() => setSosModalVisible(false)} />
-        </View>
-      </Modal>
-
       {/* 5. Modal Tác chiến Thực địa GrabDriver */}
       <RescuerMissionWorkspaceModal
         visible={workspaceVisible}
@@ -2807,24 +2801,6 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '700',
     color: '#FFFFFF',
-  },
-  sosModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  sosModalTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#EF4444',
-  },
-  sosModalCloseBtn: {
-    padding: 6,
   },
   openWorkspaceBtn: {
     flexDirection: 'row',

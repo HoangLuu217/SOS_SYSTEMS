@@ -181,29 +181,24 @@ class ChatService {
           io.to(`user_${recipientObjectId}`).emit('new_message', populated);
         }
 
-        // Nếu là kênh area_..., phát tới các cán bộ địa phương phụ trách & ban chỉ huy
+        // Nếu là kênh area_..., phát tới các cán bộ địa phương phụ trách (không phát tới Admin)
         if (channel.startsWith('area_')) {
           const staffUsers = await User.find({
-            roles: { $in: ['LOCAL_AUTHORITY', 'ADMIN'] },
+            roles: { $in: ['LOCAL_AUTHORITY'] },
             status: { $ne: 'SUSPENDED' },
           }).select('_id authority roles');
           const chClean = channel.replace(/^area_/, '');
 
           for (const u of staffUsers) {
-            const isAdmin = u.roles?.includes('ADMIN');
-            if (isAdmin) {
-              io.to(`user_${u._id}`).emit('new_message', populated);
-            } else {
-              const { specificSlug, broadSlug } = this.extractAuthorityScope(u.authority);
-              const isMatched = specificSlug
-                ? chClean.includes(specificSlug)
-                : broadSlug
-                ? chClean.includes(broadSlug)
-                : false;
+            const { specificSlug, broadSlug } = this.extractAuthorityScope(u.authority);
+            const isMatched = specificSlug
+              ? chClean.includes(specificSlug)
+              : broadSlug
+              ? chClean.includes(broadSlug)
+              : false;
 
-              if (isMatched) {
-                io.to(`user_${u._id}`).emit('new_message', populated);
-              }
+            if (isMatched) {
+              io.to(`user_${u._id}`).emit('new_message', populated);
             }
           }
         }
@@ -254,9 +249,70 @@ class ChatService {
       .sort({ createdAt: 1 })
       .limit(Math.min(limit, 300));
 
+    // Tự động kiểm tra và đồng bộ trạng thái thực tế mới nhất của các ca SOS vào tin nhắn
+    const sosIdsToFetch = [];
+    const sosCodesToFetch = [];
+    messages.forEach((m) => {
+      const rawId = (m.sosRequestId && typeof m.sosRequestId === 'object' ? m.sosRequestId._id : m.sosRequestId) || m.sosData?._id;
+      if (rawId && mongoose.isValidObjectId(rawId)) {
+        sosIdsToFetch.push(rawId);
+      }
+      const rawCode = m.sosData?.sosCode || m.content?.match(/Mã cứu trợ:\s*(SOS-[A-Z0-9\-]+)/i)?.[1]?.trim();
+      if (rawCode) {
+        sosCodesToFetch.push(rawCode);
+      }
+    });
+
+    const liveStatusMap = new Map();
+    if (sosIdsToFetch.length > 0 || sosCodesToFetch.length > 0) {
+      try {
+        const liveSosList = await SosRequest.find({
+          $or: [
+            ...(sosIdsToFetch.length > 0 ? [{ _id: { $in: sosIdsToFetch } }] : []),
+            ...(sosCodesToFetch.length > 0 ? [{ sosCode: { $in: sosCodesToFetch } }] : []),
+          ],
+        }).select('_id sosCode status');
+
+        liveSosList.forEach((s) => {
+          liveStatusMap.set(String(s._id), s.status);
+          if (s.sosCode) liveStatusMap.set(s.sosCode, s.status);
+        });
+      } catch (sosLookupErr) {
+        console.warn('Sync live SOS status in getMessages error:', sosLookupErr);
+      }
+    }
+
+    const processedMessages = messages.map((m) => {
+      const rawId = (m.sosRequestId && typeof m.sosRequestId === 'object' ? m.sosRequestId._id : m.sosRequestId) || m.sosData?._id;
+      const rawCode = m.sosData?.sosCode || m.content?.match(/Mã cứu trợ:\s*(SOS-[A-Z0-9\-]+)/i)?.[1]?.trim();
+      const liveStatus = (rawId && liveStatusMap.get(String(rawId))) || (rawCode && liveStatusMap.get(rawCode));
+
+      if (liveStatus) {
+        const mObj = m.toObject ? m.toObject() : { ...m };
+        if (!mObj.sosData) mObj.sosData = {};
+        mObj.sosData.status = liveStatus;
+        if (mObj.sosRequestId && typeof mObj.sosRequestId === 'object') {
+          mObj.sosRequestId.status = liveStatus;
+        }
+        if (mObj.content && mObj.content.includes('Trạng thái hiện tại:')) {
+          const statusLabel =
+            liveStatus === 'CANCELLED'
+              ? 'Đã hủy'
+              : liveStatus === 'COMPLETED'
+              ? 'Hoàn thành'
+              : liveStatus === 'VERIFIED'
+              ? 'Đã xác minh'
+              : liveStatus;
+          mObj.content = mObj.content.replace(/Trạng thái hiện tại:\s*[^\n]+/i, `Trạng thái hiện tại: ${statusLabel}`);
+        }
+        return mObj;
+      }
+      return m;
+    });
+
     return {
       channel: targetChannel,
-      messages,
+      messages: processedMessages,
     };
   }
 
@@ -297,20 +353,20 @@ class ChatService {
     ];
 
     // 2. Kênh Địa Bàn Quản Lý (Người dân liên hệ cứu hộ địa phương)
+    // CHỈ CÁN BỘ ĐỊA PHƯƠNG (LOCAL_AUTHORITY) MỚI TIẾP NHẬN KÊNH AREA_ CỨU NẠN CỦA NGƯỜI DÂN
+    // Tài khoản Ban chỉ huy (ADMIN) không hiển thị kênh chat riêng giữa người dân và địa phương
     const areaChannelsSet = new Set();
 
-    // Tìm tất cả các kênh area_ có tin nhắn trong database
-    const distinctAreaChannels = await ChatMessage.distinct('channel', {
-      channel: { $regex: '^area_' },
-    });
+    if (isAuthority && !isUserAdmin) {
+      // Tìm tất cả các kênh area_ có tin nhắn trong database
+      const distinctAreaChannels = await ChatMessage.distinct('channel', {
+        channel: { $regex: '^area_' },
+      });
 
-    // Lấy phạm vi quản lý của cán bộ hiện tại
-    const { specificSlug, broadSlug } = this.extractAuthorityScope(currentUser.authority);
+      // Lấy phạm vi quản lý của cán bộ hiện tại
+      const { specificSlug, broadSlug } = this.extractAuthorityScope(currentUser.authority);
 
-    for (const ch of distinctAreaChannels) {
-      if (isUserAdmin) {
-        areaChannelsSet.add(ch);
-      } else if (isAuthority) {
+      for (const ch of distinctAreaChannels) {
         const chClean = ch.replace(/^area_/, '');
 
         let isMatched = false;
@@ -433,10 +489,18 @@ class ChatService {
 
       const partnerRole = partner.roles?.includes('ADMIN') ? 'ADMIN' : 'LOCAL_AUTHORITY';
 
-      // Chỉ hiển thị trong danh sách nếu:
+      // Điều kiện hiển thị cuộc trò chuyện 1-1 (Direct):
       // 1. Đã từng có trao đổi tin nhắn (latestMsg !== null)
       // 2. HOẶC đối tác là Quản trị viên hệ thống (ADMIN) để tiện liên hệ chỉ đạo
-      if (!latestMsg && partnerRole !== 'ADMIN') {
+      // 3. HOẶC người xem là ADMIN và đối tác là LOCAL_AUTHORITY (để Admin luôn có thể chủ động nhắn tin chỉ đạo các cán bộ địa phương)
+      // 4. HOẶC người xem là LOCAL_AUTHORITY và đối tác là LOCAL_AUTHORITY (để các cán bộ địa phương có thể chủ động nhắn tin phối hợp liên phường/xã)
+      const isVisible =
+        Boolean(latestMsg) ||
+        partnerRole === 'ADMIN' ||
+        (isUserAdmin && partnerRole === 'LOCAL_AUTHORITY') ||
+        (isAuthority && partnerRole === 'LOCAL_AUTHORITY');
+
+      if (!isVisible) {
         continue;
       }
 
@@ -663,22 +727,22 @@ class ChatService {
       }
     }
 
-    // ƯU TIÊN 2: Nếu có tọa độ GPS [lat, lng], tìm qua ranh giới AdministrativeArea
+    // ƯU TIÊN 2: Nếu có tọa độ GPS [lat, lng], tìm ranh giới GeoJSON Polygon thực tế trong CSDL AdministrativeArea
     if (!manager && !matchedOrg && typeof lat === 'number' && typeof lng === 'number' && !isNaN(lat) && !isNaN(lng)) {
       try {
-        const matchingArea = await AdministrativeArea.findOne({
-          status: 'ACTIVE',
-          $or: [
-            wardKeyword ? { name: new RegExp(wardKeyword, 'i') } : null,
-            cleanProvince ? { name: new RegExp(cleanProvince, 'i') } : null,
-          ].filter(Boolean),
-        });
+        const { findAreaByCoordinates } = require('../utils/geoUtils');
+        const matchingArea = await findAreaByCoordinates([lng, lat], AdministrativeArea);
 
         if (matchingArea) {
+          const areaKw = matchingArea.name.replace(/^(phường|quận|huyện|xã)\s+/i, '').trim();
           manager = await User.findOne({
             roles: 'LOCAL_AUTHORITY',
             status: { $ne: 'SUSPENDED' },
-            'authority.areaId': matchingArea._id,
+            $or: [
+              { 'authority.areaId': matchingArea._id },
+              { 'authority.areaName': new RegExp(areaKw, 'i') },
+              { 'authority.department': new RegExp(areaKw, 'i') },
+            ],
           }).select('fullName phone email roles authority avatarUrl');
 
           if (!manager) {
@@ -687,8 +751,19 @@ class ChatService {
               $or: [
                 { areaId: matchingArea._id },
                 { administrativeAreaId: matchingArea._id },
+                { name: new RegExp(areaKw, 'i') },
+                { address: new RegExp(areaKw, 'i') },
               ],
             }).select('name code phone email address');
+          }
+
+          // Nếu khu vực tìm được là Phường nhưng chưa có cán bộ, tìm lên cấp Quận/Tỉnh cha
+          if (!manager && !matchedOrg && matchingArea.parentId) {
+            manager = await User.findOne({
+              roles: 'LOCAL_AUTHORITY',
+              status: { $ne: 'SUSPENDED' },
+              'authority.areaId': matchingArea.parentId,
+            }).select('fullName phone email roles authority avatarUrl');
           }
         }
       } catch (err) {
@@ -763,22 +838,11 @@ class ChatService {
       }
     }
 
-    // Danh bạ đường dây nóng Ban Chỉ Huy PCTT & TKCN các Tỉnh/Thành phố Việt Nam
+    // Danh bạ đường dây nóng Ban Chỉ Huy PCTT & TKCN khu vực TP. Đà Nẵng (mới)
     const PROVINCE_HOTLINES = {
-      'cần thơ': { phone: '02923822266', name: 'Ban Chỉ Huy PCTT & TKCN TP. Cần Thơ' },
       'đà nẵng': { phone: '02363822111', name: 'Ban Chỉ Huy PCTT & TKCN TP. Đà Nẵng' },
-      'hà nội': { phone: '02438344059', name: 'Ban Chỉ Huy PCTT & TKCN TP. Hà Nội' },
-      'hồ chí minh': { phone: '02838297598', name: 'Ban Chỉ Huy PCTT & TKCN TP. Hồ Chí Minh' },
-      'quảng nam': { phone: '02353852554', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Quảng Nam' },
-      'thừa thiên huế': { phone: '02343822076', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Thừa Thiên Huế' },
-      'quảng ngãi': { phone: '02553822841', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Quảng Ngãi' },
-      'bình định': { phone: '02563822934', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Bình Định' },
-      'khánh hòa': { phone: '02583822955', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Khánh Hòa' },
-      'hải phòng': { phone: '02253842322', name: 'Ban Chỉ Huy PCTT & TKCN TP. Hải Phòng' },
-      'bình dương': { phone: '02743822452', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Bình Dương' },
-      'đồng nai': { phone: '02513822521', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Đồng Nai' },
-      'an giang': { phone: '02963953457', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh An Giang' },
-      'kiên giang': { phone: '02973862043', name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Kiên Giang' },
+      'quảng nam': { phone: '02353852554', name: 'Ban Chỉ Huy PCTT & TKCN Khu vực Quảng Nam (Đà Nẵng mới)' },
+      'điện bàn': { phone: '02353888999', name: 'Ban Chỉ Huy PCTT & TKCN Khu vực Điện Bàn' },
     };
 
     let provContact = null;
@@ -855,18 +919,8 @@ class ChatService {
   async getEmergencyDirectory({ search, lat, lng } = {}) {
     const { User, AuthorityOrganization } = require('../models');
 
+    // Chỉ giữ lại đầu mối khu vực TP. Đà Nẵng mới (Đà Nẵng & Quảng Nam sáp nhập)
     const PROVINCE_DIRECTORY = [
-      {
-        id: 'hotline-can-tho',
-        name: 'Ban Chỉ Huy PCTT & TKCN TP. Cần Thơ',
-        department: 'Ủy Ban Nhân Dân TP. Cần Thơ',
-        phone: '02923822266',
-        areaName: 'Thành phố Cần Thơ',
-        address: 'Số 02 Hoà Bình, Quận Ninh Kiều, TP. Cần Thơ',
-        type: 'PROVINCE',
-        lat: 10.0341,
-        lng: 105.7876,
-      },
       {
         id: 'hotline-da-nang',
         name: 'Ban Chỉ Huy PCTT & TKCN TP. Đà Nẵng',
@@ -879,94 +933,28 @@ class ChatService {
         lng: 108.2022,
       },
       {
-        id: 'hotline-ha-noi',
-        name: 'Ban Chỉ Huy PCTT & TKCN TP. Hà Nội',
-        department: 'Ủy Ban Nhân Dân TP. Hà Nội',
-        phone: '02438344059',
-        areaName: 'Thành phố Hà Nội',
-        address: 'Số 12 phố Lê Lai, Quận Hoàn Kiếm, TP. Hà Nội',
-        type: 'PROVINCE',
-        lat: 21.0285,
-        lng: 105.8542,
-      },
-      {
-        id: 'hotline-hcm',
-        name: 'Ban Chỉ Huy PCTT & TKCN TP. Hồ Chí Minh',
-        department: 'Ủy Ban Nhân Dân TP. Hồ Chí Minh',
-        phone: '02838297598',
-        areaName: 'Thành phố Hồ Chí Minh',
-        address: 'Số 86 Lê Thánh Tôn, Bến Nghé, Quận 1, TP. Hồ Chí Minh',
-        type: 'PROVINCE',
-        lat: 10.7769,
-        lng: 106.7009,
-      },
-      {
-        id: 'hotline-quang-nam',
-        name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Quảng Nam',
-        department: 'Ủy Ban Nhân Dân Tỉnh Quảng Nam',
+        id: 'hotline-quang-nam-dn',
+        name: 'Ban Chỉ Huy PCTT & TKCN Khu vực Tam Kỳ (Đà Nẵng mới)',
+        department: 'Ban Chỉ Huy PCTT & TKCN TP. Đà Nẵng',
         phone: '02353852554',
-        areaName: 'Tỉnh Quảng Nam',
-        address: 'Số 500 Hùng Vương, TP. Tam Kỳ, Tỉnh Quảng Nam',
+        areaName: 'Khu vực Tam Kỳ, TP. Đà Nẵng',
+        address: 'Số 500 Hùng Vương, Tam Kỳ, TP. Đà Nẵng',
         type: 'PROVINCE',
         lat: 15.5647,
         lng: 108.4839,
       },
-      {
-        id: 'hotline-hue',
-        name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Thừa Thiên Huế',
-        department: 'Ủy Ban Nhân Dân Tỉnh Thừa Thiên Huế',
-        phone: '02343822076',
-        areaName: 'Thừa Thiên Huế',
-        address: 'Số 14 Lê Lợi, TP. Huế, Tỉnh Thừa Thiên Huế',
-        type: 'PROVINCE',
-        lat: 16.4637,
-        lng: 107.5909,
-      },
-      {
-        id: 'hotline-quang-ngai',
-        name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Quảng Ngãi',
-        department: 'Ủy Ban Nhân Dân Tỉnh Quảng Ngãi',
-        phone: '02553822841',
-        areaName: 'Tỉnh Quảng Ngãi',
-        address: 'Số 122 Hùng Vương, TP. Quảng Ngãi',
-        type: 'PROVINCE',
-        lat: 15.1205,
-        lng: 108.7923,
-      },
-      {
-        id: 'hotline-binh-dinh',
-        name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Bình Định',
-        department: 'Ủy Ban Nhân Dân Tỉnh Bình Định',
-        phone: '02563822934',
-        areaName: 'Tỉnh Bình Định',
-        address: 'Số 01 Trần Phú, TP. Quy Nhơn, Tỉnh Bình Định',
-        type: 'PROVINCE',
-        lat: 13.783,
-        lng: 109.2197,
-      },
-      {
-        id: 'hotline-khanh-hoa',
-        name: 'Ban Chỉ Huy PCTT & TKCN Tỉnh Khánh Hòa',
-        department: 'Ủy Ban Nhân Dân Tỉnh Khánh Hòa',
-        phone: '02583822955',
-        areaName: 'Tỉnh Khánh Hòa',
-        address: 'Số 01 Trần Phú, Lộc Thọ, TP. Nha Trang',
-        type: 'PROVINCE',
-        lat: 12.2388,
-        lng: 109.1967,
-      },
-      {
-        id: 'hotline-hai-phong',
-        name: 'Ban Chỉ Huy PCTT & TKCN TP. Hải Phòng',
-        department: 'Ủy Ban Nhân Dân TP. Hải Phòng',
-        phone: '02253842322',
-        areaName: 'Thành phố Hải Phòng',
-        address: 'Số 18 Hoàng Diệu, Minh Khai, Hồng Bàng, Hải Phòng',
-        type: 'PROVINCE',
-        lat: 20.8449,
-        lng: 106.6881,
-      },
     ];
+
+    const OUTSIDE_DANANG_KEYWORDS = [
+      'cần thơ', 'ninh kiều', 'tân an', 'hà nội', 'hoàn kiếm', 'hồ chí minh',
+      'tp. hcm', 'quận 1', 'hải phòng', 'huế', 'thừa thiên', 'quảng ngãi',
+      'bình định', 'quy nhơn', 'khánh hòa', 'nha trang', 'bình dương',
+      'đồng nai', 'an giang', 'kiên giang',
+    ];
+    const isInsideDanangNew = (text = '') => {
+      const lower = String(text).toLowerCase();
+      return !OUTSIDE_DANANG_KEYWORDS.some((kw) => lower.includes(kw));
+    };
 
     // Lấy tất cả AuthorityOrganization đang ACTIVE
     const orgs = await AuthorityOrganization.find({ status: 'ACTIVE' })
@@ -985,8 +973,10 @@ class ChatService {
     const seenPhones = new Set();
     const results = [];
 
-    // 1. Đưa các tổ chức cấp phường/xã/quận/huyện/tỉnh trong DB lên trước
+    // 1. Đưa các tổ chức cấp phường/xã/khu vực Đà Nẵng mới trong DB lên trước
     for (const org of orgs) {
+      const combined = `${org.name || ''} ${org.address || ''}`;
+      if (!isInsideDanangNew(combined)) continue;
       const cleanPhone = (org.phone || '').replace(/[^0-9+]/g, '');
       if (cleanPhone && !seenPhones.has(cleanPhone)) {
         seenPhones.add(cleanPhone);
@@ -995,20 +985,21 @@ class ChatService {
           name: org.name,
           department: org.name,
           phone: cleanPhone,
-          address: org.address || 'Địa bàn phụ trách',
+          address: org.address || 'Địa bàn TP. Đà Nẵng',
           areaName: org.address || org.name,
           type: 'ORGANIZATION',
         });
       }
     }
 
-    // 2. Thêm cán bộ phụ trách
+    // 2. Thêm cán bộ phụ trách trong khu vực Đà Nẵng mới
     for (const officer of officers) {
+      const dept = officer.authority?.department || 'Cán bộ trực ban PCTT';
+      const area = officer.authority?.areaName || officer.address || 'Địa bàn quản lý';
+      if (!isInsideDanangNew(`${dept} ${area} ${officer.fullName || ''}`)) continue;
       const cleanPhone = (officer.phone || '').replace(/[^0-9+]/g, '');
       if (cleanPhone && !seenPhones.has(cleanPhone)) {
         seenPhones.add(cleanPhone);
-        const dept = officer.authority?.department || 'Cán bộ trực ban PCTT';
-        const area = officer.authority?.areaName || officer.address || 'Địa bàn quản lý';
         results.push({
           id: String(officer._id),
           name: officer.fullName || dept,
@@ -1089,9 +1080,9 @@ class ChatService {
             }
           }
         } else {
-          // Nếu người gửi là Người dân => Gửi thông báo đến Cán bộ địa phương phụ trách địa bàn đó
+          // Nếu người gửi là Người dân => Gửi thông báo đến Cán bộ địa phương phụ trách địa bàn đó (không gửi Admin)
           const staffUsers = await User.find({
-            roles: { $in: ['LOCAL_AUTHORITY', 'ADMIN'] },
+            roles: { $in: ['LOCAL_AUTHORITY'] },
             status: { $ne: 'SUSPENDED' },
           }).select('_id authority roles');
 

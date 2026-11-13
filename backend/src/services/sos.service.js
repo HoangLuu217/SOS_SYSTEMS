@@ -425,6 +425,7 @@ const getSosRequestById = async (id) => {
     $or: [{ sosRequestId: id }, { sosId: id }],
     status: { $nin: ['CANCELLED', 'REJECTED'] },
   })
+    .sort({ createdAt: -1 })
     .populate('rescueTeamId', 'name type areaId status')
     .populate('rescuerId', 'fullName phone roles')
     .populate('vehicleId', 'plateNumber type capacity')
@@ -478,6 +479,30 @@ const changeStatus = async (id, newStatus, changedBy, note = '') => {
   await SosRequest.updateOne({ _id: id }, { $set: updateFields });
   sos.status = newStatus;
   if (updateFields.resolvedAt) sos.resolvedAt = updateFields.resolvedAt;
+
+  // Đồng bộ trạng thái mới vào các tin nhắn Chat liên quan đến ca SOS này
+  try {
+    const { ChatMessage } = require('../models');
+    if (ChatMessage) {
+      await ChatMessage.updateMany(
+        {
+          $or: [
+            { sosRequestId: id },
+            { 'sosData._id': id },
+            { 'sosData._id': String(id) },
+            ...(sos.sosCode ? [{ 'sosData.sosCode': sos.sosCode }] : []),
+          ],
+        },
+        {
+          $set: {
+            'sosData.status': newStatus,
+          },
+        }
+      );
+    }
+  } catch (chatSyncErr) {
+    console.warn('Sync chat messages on SOS status change error:', chatSyncErr);
+  }
 
   await SosStatusHistory.create({
     sosId: sos._id,
@@ -602,7 +627,7 @@ const deleteSos = async (id, user) => {
   return sos;
 };
 
-const clearCancelledSos = async (user) => {
+const clearCancelledSos = async (user, sosIds = []) => {
   const isAdmin = user.roles?.includes('ADMIN');
   const isAuthority = user.roles?.includes('LOCAL_AUTHORITY');
 
@@ -610,9 +635,23 @@ const clearCancelledSos = async (user) => {
     throw new ApiError(403, 'Chỉ cán bộ hoặc quản trị viên mới có quyền dọn dẹp các ca đã hủy');
   }
 
-  const query = { status: 'CANCELLED' };
-  if (isAuthority && !isAdmin && user.authority?.areaId) {
-    query.areaId = user.authority.areaId;
+  const query = { status: { $in: ['CANCELLED', 'REJECTED'] } };
+
+  // 1. Nếu chỉ định cụ thể danh sách ca cần dọn dẹp (từ frontend gửi lên)
+  if (Array.isArray(sosIds) && sosIds.length > 0) {
+    const validIds = sosIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+    if (validIds.length > 0) {
+      query._id = { $in: validIds };
+    }
+  } else if (isAuthority && !isAdmin && user.authority?.areaId) {
+    // 2. Nếu dọn dẹp toàn bộ: Lấy theo khu vực cán bộ quản lý (bao gồm các phường con hoặc ca chưa gán areaId)
+    const childAreas = await AdministrativeArea.find({ parentId: user.authority.areaId }).select('_id');
+    const areaIds = [user.authority.areaId, ...(childAreas || []).map((c) => c._id)];
+    query.$or = [
+      { areaId: { $in: areaIds } },
+      { areaId: null },
+      { areaId: { $exists: false } },
+    ];
   }
 
   const cancelledList = await SosRequest.find(query).select('_id');

@@ -261,14 +261,15 @@ const requestShoreHandoff = async (req, res, next) => {
 
 const clearCancelledSos = async (req, res, next) => {
   try {
-    const result = await sosService.clearCancelledSos(req.user);
+    const sosIds = req.body?.sosIds || (req.query?.ids ? String(req.query.ids).split(',') : []);
+    const result = await sosService.clearCancelledSos(req.user, sosIds);
 
     await auditService.log({
       actorId: req.user._id,
       actorRole: req.user.roles?.[0] || 'LOCAL_AUTHORITY',
       action: 'CLEAR_CANCELLED_SOS',
       entityType: 'SosRequest',
-      metadata: { deletedCount: result.deletedCount },
+      metadata: { deletedCount: result.deletedCount, deletedIds: result.deletedIds },
     });
 
     result.deletedIds.forEach((id) => emitSosDeleted(id.toString()));

@@ -110,7 +110,7 @@ class RescueTeamService {
 
     const team = await RescueTeam.create({
       name,
-      type: type || 'GENERAL_RESCUE',
+      type: type || 'WATER_RESCUE',
       leaderId,
       authorityId,
       areaId,
@@ -284,7 +284,17 @@ class RescueTeamService {
     if (updateData.name !== undefined) team.name = updateData.name.trim();
     if (updateData.type !== undefined) team.type = updateData.type;
     if (updateData.description !== undefined) team.description = updateData.description;
+    if (updateData.phone !== undefined) team.phone = updateData.phone;
+    if (updateData.headquartersAddress !== undefined) team.headquartersAddress = updateData.headquartersAddress;
     if (updateData.status !== undefined) team.status = updateData.status;
+    if (updateData.operationalStatus !== undefined) {
+      team.operationalStatus = updateData.operationalStatus;
+      if (updateData.operationalStatus === 'INACTIVE') {
+        team.status = 'INACTIVE';
+      } else {
+        team.status = 'ACTIVE';
+      }
+    }
 
     if (updateData.areaId) {
       const area = await AdministrativeArea.findById(updateData.areaId);
@@ -298,7 +308,11 @@ class RescueTeamService {
       team.authorityId = updateData.authorityId;
     }
 
-    await team.save();
+    if (updateData.leaderId && updateData.leaderId !== String(team.leaderId?._id || team.leaderId)) {
+      await this.changeLeader(id, updateData.leaderId);
+    } else {
+      await team.save();
+    }
 
     // Thông báo & realtime socket khi cập nhật đội
     try {

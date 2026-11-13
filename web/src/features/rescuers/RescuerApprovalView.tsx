@@ -10,21 +10,19 @@ import {
   MapPin,
   Phone,
   Mail,
-  UserCheck,
-  Award,
   FileCheck,
   X,
   ChevronLeft,
   ChevronRight,
   AlertCircle,
   ZoomIn,
-  Calendar,
   Compass,
+  FilterX,
 } from 'lucide-react';
 import type { User } from '@/types/auth';
-import type { AdministrativeAreaItem } from '@/types/dashboard';
 import { fetchAdminUsers, verifyRescuer, fetchAdministrativeAreas } from '@/api';
 import { domainDService } from '@/services/domainDService';
+import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import { toast } from '@/components/common/toast';
 import { onRescuerApplicationSubmitted, onRescuerVerificationChanged } from '@/services/socketService';
 import './RescuerApprovalView.css';
@@ -68,10 +66,20 @@ export interface RescuerApplicant {
   idCardFrontUrl?: string;
   idCardBackUrl?: string;
   hasCccdPhotos: boolean;
+  isCccdVerified?: boolean;
   // Năng lực cứu hộ
   skills: string[];
   experience: string;
-  specialization: 'FLOOD_RESCUE' | 'SEARCH_RESCUE' | 'MEDICAL_RESCUE' | 'FIRE_RESCUE' | 'VEHICLE_OP' | 'OTHER';
+  specialization:
+    | 'FLOOD_RESCUE'
+    | 'SEARCH_RESCUE'
+    | 'MEDICAL_RESCUE'
+    | 'FIRE_RESCUE'
+    | 'EVACUATION'
+    | 'COMMUNICATION'
+    | 'LOGISTICS'
+    | 'VEHICLE_OP'
+    | 'OTHER';
   certificates: string[];
   equipment: string[];
   vehicleType?: string;
@@ -86,44 +94,39 @@ export interface RescuerApplicant {
   history: ApplicationHistoryItem[];
 }
 
-// Danh mục nhãn kỹ năng chuẩn hóa tiếng Việt
+// Danh mục nhãn kỹ năng chuẩn hóa tiếng Việt đồng bộ với ứng dụng di động
 const SKILL_LABELS: Record<string, string> = {
-  water_rescue: 'Bơi cứu hộ vượt lũ',
-  boat_driver: 'Lái xuồng máy cao tốc',
-  first_aid: 'Sơ cấp cứu y tế',
+  first_aid: 'Sơ cứu y tế',
+  water_rescue: 'Cứu hộ vùng nước',
   search_rescue: 'Tìm kiếm cứu nạn',
+  boat_driver: 'Lái xuồng cứu sinh',
   rope_climb: 'Leo dây & Độ cao',
-  diving: 'Lặn cứu nạn',
+  diving: 'Lặn cứu hộ',
   firefighting: 'PCCC & Cứu sập',
+  evacuation: 'Sơ tán người dân',
+  communication: 'Thông tin liên lạc',
+  logistics: 'Hậu cần & Cấp dưỡng',
+  // Tương thích ngược
   relief_logistics: 'Tiếp tế lương thực',
-  communication: 'Thông tin liên lạc vô tuyến',
   vehicle_op: 'Lái xe tải gầm cao',
 };
 
-const SPECIALIZATION_LABELS: Record<string, string> = {
-  FLOOD_RESCUE: 'Thủy bộ vượt lũ',
-  SEARCH_RESCUE: 'Tìm kiếm & Cứu nạn',
-  MEDICAL_RESCUE: 'Sơ cấp cứu y tế',
-  FIRE_RESCUE: 'PCCC & Cứu sập',
-  VEHICLE_OP: 'Vận hành phương tiện',
-  OTHER: 'Cứu hộ tổng hợp',
+const getApplicantInitials = (fullName?: string): string => {
+  const parts = (fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  }
+  return (fullName || 'CH').slice(0, 2).toUpperCase();
 };
-
 
 export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }) => {
   // 1. Phân quyền và Địa bàn Local Authority vs Admin
   const activeOfficer = domainDService.getActiveOfficer();
 
-  const isAuthority = Boolean(
-    user?.roles?.includes('LOCAL_AUTHORITY') ||
-    user?.roles?.includes('AUTHORITY') ||
-    Boolean(user?.authority?.areaId || user?.authority?.areaName)
-  );
-
   const isAdmin = Boolean(
     user?.roles?.includes('ADMIN') ||
     (user as any)?.role === 'ADMIN'
-  ) && !isAuthority;
+  );
 
   const userAreaId =
     user?.authority?.areaId ||
@@ -151,13 +154,46 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
   const [applicants, setApplicants] = useState<RescuerApplicant[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshSpin, setRefreshSpin] = useState(false);
-  const [_areas, setAreas] = useState<AdministrativeAreaItem[]>([]);
+  // Hook bộ lọc hành chính toàn quốc từ API
+  const {
+    provinces,
+    provincesLoading,
+    selectedProvince,
+    setSelectedProvince,
+    wards,
+    wardsLoading,
+    selectedAreaId: areaFilter,
+    setSelectedAreaId: setAreaFilter,
+    isApplicantInTargetArea,
+  } = useAdministrativeFilter({
+    isAdmin,
+    userAreaId,
+    userAreaName,
+  });
 
   // 3. States bộ lọc
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [areaFilter, setAreaFilter] = useState<string>('ALL');
   const [specFilter, setSpecFilter] = useState<string>('ALL');
+
+  const hasActiveFilters = Boolean(
+    (isAdmin && (selectedProvince !== 'ALL' || areaFilter !== 'ALL')) ||
+    (!isAdmin && areaFilter !== 'ALL') ||
+    statusFilter !== 'ALL' ||
+    specFilter !== 'ALL' ||
+    searchQuery.trim() !== ''
+  );
+
+  const handleClearFilters = useCallback(() => {
+    if (isAdmin) {
+      setSelectedProvince('ALL');
+    }
+    setAreaFilter('ALL');
+    setStatusFilter('ALL');
+    setSpecFilter('ALL');
+    setSearchQuery('');
+    setCurrentPage(1);
+  }, [isAdmin, setSelectedProvince, setAreaFilter]);
 
   // 4. Phân trang
   const [currentPage, setCurrentPage] = useState(1);
@@ -231,14 +267,12 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
   const loadApplicants = useCallback(async () => {
     try {
       setLoading(true);
-      const [usersRes, areasRes] = await Promise.allSettled([
+      const [usersRes] = await Promise.allSettled([
         fetchAdminUsers({ role: 'RESCUER', limit: '100' }),
         fetchAdministrativeAreas(),
       ]);
 
-      if (areasRes.status === 'fulfilled' && areasRes.value.success && Array.isArray(areasRes.value.data)) {
-        setAreas(areasRes.value.data);
-      }
+      // Dữ liệu khu vực hành chính được quản lý tập trung qua useAdministrativeFilter
 
       let dbUsers: any[] = [];
       if (usersRes.status === 'fulfilled') {
@@ -282,6 +316,12 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
             spec = 'MEDICAL_RESCUE';
           } else if (skillsJoined.includes('fire') || skillsJoined.includes('pccc')) {
             spec = 'FIRE_RESCUE';
+          } else if (skillsJoined.includes('evacuation')) {
+            spec = 'EVACUATION';
+          } else if (skillsJoined.includes('communication')) {
+            spec = 'COMMUNICATION';
+          } else if (skillsJoined.includes('logistics')) {
+            spec = 'LOGISTICS';
           } else if (skillsJoined.includes('truck') || skillsJoined.includes('vehicle')) {
             spec = 'VEHICLE_OP';
           }
@@ -310,6 +350,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
             idCardFrontUrl: cccdFront,
             idCardBackUrl: cccdBack,
             hasCccdPhotos: Boolean(cccdFront || cccdBack),
+            isCccdVerified: Boolean(u.rescuer?.isCccdVerified || u.isCccdVerified),
             skills: skillsList,
             experience: u.rescuer?.experience || u.experience || '',
             specialization: spec,
@@ -383,7 +424,6 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
   // - Nếu là Admin (isAdmin): Giữ nguyên xem toàn bộ hồ sơ trên toàn hệ thống
   const authorizedApplicants = useMemo(() => {
     if (isAdmin) return applicants;
-    if (!cleanLocalCommune) return applicants;
 
     const targetAreaId = userAreaId ? String(userAreaId) : '';
     const targetCommune = (localCommuneName || userAreaName || '')
@@ -398,28 +438,29 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
     const normTarget = normalizeStr(targetCommune);
 
     return applicants.filter((app) => {
-      if (userAreaId && app.areaId === userAreaId) return true;
-      const appLocation = `${app.communeName || ''} ${app.areaName || ''} ${app.address || ''}`.toLowerCase();
-      return appLocation.includes(cleanLocalCommune);
       // 1. Khớp theo ID địa bàn
       if (targetAreaId && app.areaId && String(app.areaId) === targetAreaId) {
         return true;
       }
 
       // 2. Khớp theo tên xã/phường phụ trách (hỗ trợ cả có dấu và không dấu Unicode)
-      if (targetCommune) {
-        const appLocation = `${app.communeName || ''} ${app.areaName || ''} ${app.address || ''}`.toLowerCase();
-        if (appLocation.includes(targetCommune)) return true;
+      const appLocation = `${app.communeName || ''} ${app.areaName || ''} ${app.address || ''}`.toLowerCase();
+      if (cleanLocalCommune && appLocation.includes(cleanLocalCommune)) {
+        return true;
+      }
 
-        if (normTarget) {
-          const normApp = normalizeStr(appLocation);
-          if (normApp.includes(normTarget)) return true;
-        }
+      if (targetCommune && appLocation.includes(targetCommune)) {
+        return true;
+      }
+
+      if (normTarget) {
+        const normApp = normalizeStr(appLocation);
+        if (normApp.includes(normTarget)) return true;
       }
 
       return false;
     });
-  }, [applicants, isAdmin, localCommuneName, userAreaName, userAreaId]);
+  }, [applicants, isAdmin, cleanLocalCommune, localCommuneName, userAreaName, userAreaId]);
 
   // Thống kê KPI trên danh sách hồ sơ được phân quyền
   const stats = useMemo(() => {
@@ -439,10 +480,10 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
         // Tìm kiếm
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase().trim();
-          const matchName = app.fullName.toLowerCase().includes(q);
-          const matchPhone = app.phone.includes(q);
-          const matchCccd = app.idNumber.toLowerCase().includes(q);
-          const matchEmail = app.email.toLowerCase().includes(q);
+          const matchName = (app.fullName || '').toLowerCase().includes(q);
+          const matchPhone = (app.phone || '').includes(q);
+          const matchCccd = (app.idNumber || '').toLowerCase().includes(q);
+          const matchEmail = (app.email || '').toLowerCase().includes(q);
           if (!matchName && !matchPhone && !matchCccd && !matchEmail) return false;
         }
 
@@ -466,17 +507,8 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
           return false;
         }
 
-        // Bộ lọc địa bàn
-        if (areaFilter !== 'ALL') {
-          const cleanArea = areaFilter.toLowerCase();
-          const appArea = `${app.communeName || ''} ${app.areaName || ''} ${app.address || ''}`.toLowerCase();
-          if (!appArea.includes(cleanArea)) return false;
-          const normalizeStr = (s: string) =>
-            s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-          if (!appArea.includes(cleanArea) && !normalizeStr(appArea).includes(normalizeStr(cleanArea))) {
-            return false;
-          }
-        }
+        // Bộ lọc địa bàn (hỗ trợ phân cấp Tỉnh/TP -> Xã/Phường từ API)
+        if (!isApplicantInTargetArea(app)) return false;
 
         return true;
       })
@@ -496,7 +528,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
         // Nếu cùng trạng thái, hồ sơ mới gửi hoặc chờ lâu sắp xếp theo thời gian
         return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
       });
-  }, [authorizedApplicants, searchQuery, statusFilter, specFilter, areaFilter]);
+  }, [authorizedApplicants, searchQuery, statusFilter, specFilter, isApplicantInTargetArea]);
 
   // Phân trang
   const totalPages = Math.ceil(filteredApplicants.length / pageSize) || 1;
@@ -515,8 +547,8 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
       const updatedHistory: ApplicationHistoryItem = {
         timestamp: new Date().toLocaleString('vi-VN'),
         action: 'Phê duyệt tư cách Cứu hộ viên',
-        actor: user?.fullName || 'Cán bộ Local Authority',
-        detail: 'Đã xác nhận tư cách Rescuer hợp lệ trên hệ thống SOS SYSTEMS',
+        actor: user?.fullName || 'Cán bộ Ban Chỉ huy địa phương',
+        detail: 'Đã xác nhận tư cách Cứu hộ viên hợp lệ trên hệ thống SOS SYSTEMS',
         type: 'verified',
       };
 
@@ -527,7 +559,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
               ...a,
               status: 'VERIFIED',
               reviewedAt: new Date().toLocaleString('vi-VN'),
-              reviewerName: user?.fullName || 'Cán bộ Local Authority',
+              reviewerName: user?.fullName || 'Cán bộ Ban Chỉ huy địa phương',
               history: [updatedHistory, ...a.history],
             }
             : a
@@ -541,7 +573,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
               ...prev,
               status: 'VERIFIED',
               reviewedAt: new Date().toLocaleString('vi-VN'),
-              reviewerName: user?.fullName || 'Cán bộ Local Authority',
+              reviewerName: user?.fullName || 'Cán bộ Ban Chỉ huy địa phương',
               history: [updatedHistory, ...prev.history],
             }
             : null
@@ -626,12 +658,12 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
     }
     try {
       setSubmittingAction(true);
-      await verifyRescuer(selectedApplicant.id, 'REJECTED');
+      await verifyRescuer(selectedApplicant.id, 'REJECTED', rejectionReasonText.trim());
 
       const updatedHistory: ApplicationHistoryItem = {
         timestamp: new Date().toLocaleString('vi-VN'),
         action: 'Từ chối hồ sơ đăng ký',
-        actor: user?.fullName || 'Cán bộ Local Authority',
+        actor: user?.fullName || 'Cán bộ Ban Chỉ huy địa phương',
         detail: rejectionReasonText.trim(),
         type: 'rejected',
       };
@@ -644,7 +676,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
               status: 'REJECTED',
               rejectionReason: rejectionReasonText.trim(),
               reviewedAt: new Date().toLocaleString('vi-VN'),
-              reviewerName: user?.fullName || 'Cán bộ Local Authority',
+              reviewerName: user?.fullName || 'Cán bộ Ban Chỉ huy địa phương',
               history: [updatedHistory, ...a.history],
             }
             : a
@@ -659,7 +691,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
               status: 'REJECTED',
               rejectionReason: rejectionReasonText.trim(),
               reviewedAt: new Date().toLocaleString('vi-VN'),
-              reviewerName: user?.fullName || 'Cán bộ Local Authority',
+              reviewerName: user?.fullName || 'Cán bộ Ban Chỉ huy địa phương',
               history: [updatedHistory, ...prev.history],
             }
             : null
@@ -789,29 +821,69 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
         {/* Toolbar */}
         <div className="ra-toolbar">
           <div className="ra-toolbar-controls">
-            {/* Ô tìm kiếm */}
-            <div className="ra-search-box">
-              <Search size={15} className="ra-search-icon" />
-              <input
-                type="text"
-                className="ra-search-input"
-                placeholder="Tìm theo họ tên, số điện thoại, CCCD..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setCurrentPage(1);
-                }}
-              />
-              {searchQuery && (
-                <button
-                  className="ra-search-clear"
-                  onClick={() => setSearchQuery('')}
-                  title="Xóa tìm kiếm"
+            {/* Bộ lọc địa bàn: Dành riêng cho Quản trị viên (Admin) chọn phân cấp Tỉnh/TP -> Xã/Phường */}
+            {isAdmin && (
+              <>
+                {/* 0A. Lọc theo Tỉnh / Thành phố: Dành cho Admin quản lý Toàn quốc */}
+                {/* 0A. Lọc theo Tỉnh / Thành phố: Gọi từ API Open-API Việt Nam */}
+                <select
+                  className="ra-filter-select"
+                  value={selectedProvince}
+                  onChange={(e) => {
+                    setSelectedProvince(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    minWidth: 175,
+                    fontWeight: 700,
+                    borderColor: selectedProvince !== 'ALL' ? '#0284c7' : undefined,
+                    background: selectedProvince !== 'ALL' ? '#f0f9ff' : undefined,
+                    color: selectedProvince !== 'ALL' ? '#0369a1' : undefined,
+                  }}
+                  title="Bước 1: Chọn Tỉnh / Thành phố (API)"
                 >
-                  <X size={14} />
-                </button>
-              )}
-            </div>
+                  <option value="ALL">
+                    {provincesLoading ? '⏳ Đang tải Tỉnh / TP...' : `🌐 Tất cả Tỉnh / TP (${provinces.length})`}
+                  </option>
+                  {provinces.map((prov) => (
+                    <option key={prov.id || prov.name} value={prov.name}>
+                      🏙️ {prov.name}
+                    </option>
+                  ))}
+                </select>
+
+                {/* 0B. Lọc theo Quận / Huyện / Xã / Phường: Gọi từ API Wards */}
+                <select
+                  className="ra-filter-select"
+                  value={areaFilter}
+                  onChange={(e) => {
+                    setAreaFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    minWidth: 185,
+                    fontWeight: 700,
+                    borderColor: areaFilter !== 'ALL' ? '#0284c7' : undefined,
+                    background: areaFilter !== 'ALL' ? '#f0f9ff' : undefined,
+                    color: areaFilter !== 'ALL' ? '#0369a1' : undefined,
+                  }}
+                  title="Bước 2: Chọn Quận / Huyện / Xã / Phường"
+                >
+                  <option value="ALL">
+                    {wardsLoading
+                      ? '⏳ Đang tải xã, phường từ API...'
+                      : selectedProvince === 'ALL'
+                      ? `📍 Tất cả địa bàn (${wards.length})`
+                      : `📍 Tất cả xã / phường (${wards.length})`}
+                  </option>
+                  {wards.map((ward) => (
+                    <option key={ward.id} value={ward.id}>
+                      {ward.type === 'DISTRICT' ? '🏛️' : '📍'} {ward.name} {ward.code ? `(${ward.code})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
 
             {/* Bộ lọc trạng thái */}
             <select
@@ -841,38 +913,70 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
             >
               <option value="ALL">Tất cả chuyên môn</option>
               <option value="FLOOD_RESCUE">Thủy bộ vượt lũ</option>
-              <option value="SEARCH_RESCUE">Tìm kiếm & Cứu nạn</option>
+              <option value="SEARCH_RESCUE">Tìm kiếm &amp; Cứu nạn</option>
               <option value="MEDICAL_RESCUE">Sơ cấp cứu y tế</option>
-              <option value="FIRE_RESCUE">PCCC & Cứu sập</option>
+              <option value="FIRE_RESCUE">PCCC &amp; Cứu sập</option>
+              <option value="EVACUATION">Sơ tán người dân</option>
+              <option value="COMMUNICATION">Thông tin liên lạc</option>
+              <option value="LOGISTICS">Hậu cần &amp; Tiếp tế</option>
               <option value="VEHICLE_OP">Vận hành phương tiện</option>
               <option value="OTHER">Chuyên môn khác</option>
             </select>
 
-            {/* Bộ lọc địa bàn: Phân quyền theo vai trò đăng nhập hoàn toàn từ DB thật */}
-            <select
-              className="ra-filter-select"
-              value={areaFilter}
-              onChange={(e) => {
-                setAreaFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-            >
-              {isAdmin ? (
-                <>
-                  <option value="ALL">Tất cả địa bàn</option>
-                  {Array.from(new Set(applicants.map((a) => a.communeName || a.areaName).filter(Boolean))).map((area) => (
-                    <option key={area} value={area}>{area}</option>
-                  ))}
-                </>
-              ) : (
-                <>
-                  <option value="ALL">Địa bàn: {localCommuneName || 'Địa phương'}</option>
-                  {Array.from(new Set(authorizedApplicants.map((a) => a.address).filter(Boolean))).map((addr) => (
-                    <option key={addr} value={addr}>{addr}</option>
-                  ))}
-                </>
+            {/* Ô tìm kiếm */}
+            <div className="ra-search-box">
+              <Search size={15} className="ra-search-icon" />
+              <input
+                type="text"
+                className="ra-search-input"
+                placeholder="Tìm theo họ tên, số điện thoại, CCCD..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+              {searchQuery && (
+                <button
+                  className="ra-search-clear"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setCurrentPage(1);
+                  }}
+                  title="Xóa tìm kiếm"
+                >
+                  <X size={14} />
+                </button>
               )}
-            </select>
+            </div>
+
+            {/* Nút xóa lọc nhanh */}
+            {hasActiveFilters && (
+              <button
+                type="button"
+                className="ra-clear-filter-btn"
+                onClick={handleClearFilters}
+                title="Xóa toàn bộ bộ lọc hồ sơ và đặt lại ban đầu"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '7px 12px',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  color: '#dc2626',
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                <FilterX size={14} />
+                <span>Xóa lọc</span>
+              </button>
+            )}
 
             <button
               className="ra-refresh-btn"
@@ -920,15 +1024,11 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                   </p>
                   <button
                     className="ra-btn ra-btn-secondary"
-                    style={{ marginTop: 14 }}
-                    onClick={() => {
-                      setSearchQuery('');
-                      setStatusFilter('ALL');
-                      setSpecFilter('ALL');
-                      setAreaFilter('ALL');
-                    }}
+                    style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    onClick={handleClearFilters}
                   >
-                    Đặt lại bộ lọc
+                    <FilterX size={14} />
+                    <span>Xóa lọc</span>
                   </button>
                 </>
               )}
@@ -964,7 +1064,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                             {app.avatarUrl ? (
                               <img src={app.avatarUrl} alt={app.fullName} />
                             ) : (
-                              (app.fullName || 'CH').slice(0, 2).toUpperCase()
+                              getApplicantInitials(app.fullName)
                             )}
                           </div>
                           <div className="ra-candidate-meta">
@@ -975,7 +1075,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                               </span>
                               {app.email && (
                                 <span title={app.email}>
-                                  <Mail size={11} /> {app.email.split('@')[0]}
+                                  <Mail size={11} /> {app.email.includes('@') ? app.email.split('@')[0] : app.email}
                                 </span>
                               )}
                             </div>
@@ -989,13 +1089,17 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                           <span className="ra-cccd-masked" title="Số CCCD được mã hóa bảo mật">
                             {maskCccd(app.idNumber)}
                           </span>
-                          {app.hasCccdPhotos ? (
+                          {app.isCccdVerified ? (
+                            <span className="ra-doc-status-badge has-doc" style={{ background: '#ECFDF5', color: '#059669', borderColor: '#A7F3D0' }}>
+                              <CheckCircle2 size={11} /> Đã quét mã thẻ
+                            </span>
+                          ) : app.hasCccdPhotos ? (
                             <span className="ra-doc-status-badge has-doc">
                               <FileCheck size={11} /> Đã tải CCCD
                             </span>
                           ) : (
                             <span className="ra-doc-status-badge no-doc">
-                              <AlertCircle size={11} /> Chưa có ảnh CCCD
+                              <AlertCircle size={11} /> Tự nhập tay
                             </span>
                           )}
                         </div>
@@ -1005,7 +1109,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                       <td>
                         <div className="ra-area-cell">
                           <span className="ra-area-commune">
-                            {app.communeName || app.areaName.split(',')[0]}
+                            {app.communeName || (app.areaName ? app.areaName.split(',')[0] : '') || 'Địa bàn cư trú'}
                           </span>
                           <span className="ra-area-district">
                             {app.districtName || 'Thành phố Đà Nẵng'}
@@ -1204,176 +1308,171 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
               </button>
             </div>
 
-            {/* Body Drawer */}
-            <div className="ra-drawer-body">
-              {/* Nhóm A: Thông tin cá nhân & Nơi cư trú */}
-              <div className="ra-drawer-section">
-                <div className="ra-section-header">
-                  <UserCheck size={16} />
-                  <span>A. THÔNG TIN CÁ NHÂN</span>
-                </div>
-                <div className="ra-section-body">
-                  {/* Thông tin đại diện & Họ tên */}
-                  <div className="ra-profile-inline-bar">
-                    <div className="ra-profile-avatar">
-                      {selectedApplicant.avatarUrl ? (
-                        <img src={selectedApplicant.avatarUrl} alt={selectedApplicant.fullName} />
-                      ) : (
-                        <span>{(selectedApplicant.fullName || 'CH').slice(0, 2).toUpperCase()}</span>
+            {/* Body Drawer — Phương án 1: Tối giản phẳng (Linear / Apple Inset) */}
+            <div className="ra-drawer-body ra-drawer-body--minimal">
+              {/* 1. Hero Summary Card */}
+              <div className="ra-hero-summary">
+                <div className="ra-hero-top">
+                  <div className="ra-hero-avatar">
+                    {selectedApplicant.avatarUrl ? (
+                      <img src={selectedApplicant.avatarUrl} alt={selectedApplicant.fullName} />
+                    ) : (
+                      <span>{getApplicantInitials(selectedApplicant.fullName)}</span>
+                    )}
+                  </div>
+                  <div className="ra-hero-info">
+                    <div className="ra-hero-name-row">
+                      <h4 className="ra-hero-name">{selectedApplicant.fullName}</h4>
+                      <span className="ra-hero-role-pill">
+                        {selectedApplicant.status === 'VERIFIED'
+                          ? 'Cứu hộ viên địa phương'
+                          : 'Ứng viên Cứu hộ viên'}
+                      </span>
+                    </div>
+                    <div className="ra-hero-meta-row">
+                      {[selectedApplicant.gender, selectedApplicant.dateOfBirth]
+                        .filter(Boolean)
+                        .length > 0 && (
+                        <span>
+                          {[selectedApplicant.gender, selectedApplicant.dateOfBirth]
+                            .filter(Boolean)
+                            .join(' • ')}
+                        </span>
+                      )}
+                      <span>
+                        <Phone size={12} /> {selectedApplicant.phone || 'Chưa cập nhật'}
+                      </span>
+                      {selectedApplicant.email && (
+                        <span>
+                          <Mail size={12} /> {selectedApplicant.email}
+                        </span>
                       )}
                     </div>
-                    <div className="ra-profile-info">
-                      <div className="ra-profile-name-row">
-                        <h4 className="ra-profile-name">{selectedApplicant.fullName}</h4>
-                        <span className="ra-profile-badge">
-                          {SPECIALIZATION_LABELS[selectedApplicant.specialization] || 'Cứu nạn cứu hộ'}
-                        </span>
-                      </div>
-                      <span className="ra-profile-sub">
-                        {selectedApplicant.gender || 'Nam'} • {selectedApplicant.dateOfBirth || 'Chưa cung cấp ngày sinh'}
-                      </span>
-                    </div>
                   </div>
-
-                  <div className="ra-kv-grid">
-                    <div className="ra-kv-item">
-                      <span className="ra-kv-label">Số điện thoại liên lạc</span>
-                      <span className="ra-kv-value phone">{selectedApplicant.phone}</span>
-                    </div>
-                    <div className="ra-kv-item">
-                      <span className="ra-kv-label">Địa chỉ Email</span>
-                      <span className="ra-kv-value">{selectedApplicant.email || 'Chưa cung cấp'}</span>
-                    </div>
-                  </div>
-
-                  <div className="ra-address-box">
-                    <div className="ra-kv-item">
-                      <span className="ra-kv-label">Nơi cư trú thường trú</span>
-                      <span className="ra-kv-value" style={{ marginTop: 2, fontSize: 13.5 }}>
-                        {selectedApplicant.address || 'Chưa cung cấp địa chỉ chi tiết'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="ra-address-box highlight-area">
-                    <div className="ra-kv-item">
-                      <span className="ra-kv-label">Địa bàn đăng ký hoạt động cứu hộ</span>
-                      <span className="ra-kv-value area-text" style={{ marginTop: 2, fontSize: 13.5 }}>
-                        <MapPin size={14} style={{ display: 'inline', marginRight: 4, verticalAlign: '-2px' }} />
-                        {selectedApplicant.areaName || 'Chưa có thông tin địa bàn'}
-                      </span>
-                    </div>
-                  </div>
+                  <span className="ra-area-chip" title="Địa bàn đăng ký hoạt động cứu hộ">
+                    <MapPin size={12} />
+                    {selectedApplicant.areaName || 'Chưa rõ địa bàn'}
+                  </span>
                 </div>
+
+                {selectedApplicant.address &&
+                  selectedApplicant.address.trim() !== '' &&
+                  selectedApplicant.address.trim() !== selectedApplicant.areaName.trim() && (
+                    <>
+                      <div className="ra-flat-divider" />
+                      <div className="ra-hero-address-row">
+                        <span className="ra-kv-label">Nơi cư trú thường trú:</span>
+                        <span className="ra-hero-address-val">{selectedApplicant.address}</span>
+                      </div>
+                    </>
+                  )}
               </div>
 
-              {/* Nhóm B: Thông tin định danh & Giấy tờ */}
-              <div className="ra-drawer-section">
-                <div className="ra-section-header">
-                  <FileCheck size={16} />
-                  <span>B. THÔNG TIN ĐỊNH DANH &amp; GIẤY TỜ XÁC MINH</span>
-                </div>
-                <div className="ra-section-body">
-                  <div className="ra-kv-grid">
+              {/* 2. Định danh & Tiếp nhận */}
+              <div className="ra-inset-section">
+                <div className="ra-inset-label">Định danh &amp; Tiếp nhận</div>
+                <div className="ra-inset-card">
+                  <div className="ra-flat-grid-2">
                     <div className="ra-kv-item">
-                      <span className="ra-kv-label">Số Thẻ CCCD / Định danh</span>
+                      <span className="ra-kv-label">Số thẻ CCCD</span>
                       <span className="ra-kv-value cccd-number">
                         {selectedApplicant.idNumber || 'Chưa cập nhật'}
                       </span>
                     </div>
                     <div className="ra-kv-item">
-                      <span className="ra-kv-label">Nơi cấp &amp; Cơ quan thẩm tra</span>
-                      <span className="ra-kv-value">Cục Cảnh sát QLHC về TTXH</span>
+                      <span className="ra-kv-label">Ngày nộp hồ sơ</span>
+                      <span className="ra-kv-value">
+                        {new Date(selectedApplicant.submittedAt).toLocaleDateString('vi-VN')}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="ra-cccd-images">
-                    {/* Mặt trước CCCD */}
-                    <div className="ra-cccd-card">
-                      <div className="ra-cccd-card-top">
-                        <span className="ra-cccd-label">Ảnh CCCD Mặt trước</span>
-                        {selectedApplicant.idCardFrontUrl ? (
-                          <span className="ra-doc-chip has">Đã đính kèm</span>
-                        ) : (
-                          <span className="ra-doc-chip none">Chưa có ảnh</span>
-                        )}
-                      </div>
-                      <div
-                        className="ra-cccd-preview"
-                        onClick={() => {
-                          if (selectedApplicant.idCardFrontUrl) {
-                            setZoomedImage({
-                              url: selectedApplicant.idCardFrontUrl,
-                              title: `CCCD Mặt trước - ${selectedApplicant.fullName}`,
-                            });
-                          }
-                        }}
-                      >
-                        {selectedApplicant.idCardFrontUrl ? (
-                          <>
-                            <img src={selectedApplicant.idCardFrontUrl} alt="CCCD Mặt trước" />
-                            <div className="ra-cccd-zoom-overlay">
-                              <ZoomIn size={16} /> Bấm để phóng to
-                            </div>
-                          </>
-                        ) : (
-                          <div className="ra-cccd-empty">
-                            <AlertCircle size={22} />
-                            <span>Chưa tải lên ảnh mặt trước</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                  <div className="ra-flat-divider" />
 
-                    {/* Mặt sau CCCD */}
-                    <div className="ra-cccd-card">
-                      <div className="ra-cccd-card-top">
-                        <span className="ra-cccd-label">Ảnh CCCD Mặt sau</span>
-                        {selectedApplicant.idCardBackUrl ? (
-                          <span className="ra-doc-chip has">Đã đính kèm</span>
-                        ) : (
-                          <span className="ra-doc-chip none">Chưa có ảnh</span>
-                        )}
-                      </div>
-                      <div
-                        className="ra-cccd-preview"
-                        onClick={() => {
-                          if (selectedApplicant.idCardBackUrl) {
-                            setZoomedImage({
-                              url: selectedApplicant.idCardBackUrl,
-                              title: `CCCD Mặt sau - ${selectedApplicant.fullName}`,
-                            });
-                          }
-                        }}
-                      >
-                        {selectedApplicant.idCardBackUrl ? (
-                          <>
-                            <img src={selectedApplicant.idCardBackUrl} alt="CCCD Mặt sau" />
-                            <div className="ra-cccd-zoom-overlay">
-                              <ZoomIn size={16} /> Bấm để phóng to
-                            </div>
-                          </>
-                        ) : (
-                          <div className="ra-cccd-empty">
-                            <AlertCircle size={22} />
-                            <span>Chưa tải lên ảnh mặt sau</span>
-                          </div>
-                        )}
-                      </div>
+                  <div className="ra-flat-grid-2">
+                    <div className="ra-kv-item">
+                      <span className="ra-kv-label">Địa bàn đăng ký hoạt động</span>
+                      <span className="ra-kv-value" style={{ color: '#15803d' }}>
+                        {selectedApplicant.areaName || 'Chưa có thông tin địa bàn'}
+                      </span>
+                    </div>
+                    <div className="ra-kv-item">
+                      <span className="ra-kv-label">
+                        {selectedApplicant.status === 'VERIFIED' || selectedApplicant.status === 'REJECTED'
+                          ? 'Cán bộ thẩm định'
+                          : 'Đơn vị tiếp nhận địa phương'}
+                      </span>
+                      <span className="ra-kv-value">
+                        {selectedApplicant.status === 'VERIFIED' || selectedApplicant.status === 'REJECTED'
+                          ? selectedApplicant.reviewerName || 'Ban Chỉ huy địa phương'
+                          : localCommuneName
+                          ? `Ban Chỉ huy ${localCommuneName}`
+                          : userAreaName || 'Ban Chỉ huy địa phương'}
+                      </span>
                     </div>
                   </div>
+
+                  {(selectedApplicant.idCardFrontUrl || selectedApplicant.idCardBackUrl) && (
+                    <>
+                      <div className="ra-flat-divider" />
+                      <div className="ra-cccd-images">
+                        {selectedApplicant.idCardFrontUrl && (
+                          <div className="ra-cccd-card">
+                            <div className="ra-cccd-card-top">
+                              <span className="ra-cccd-label">Ảnh CCCD Mặt trước</span>
+                              <span className="ra-doc-chip has">Đã đính kèm</span>
+                            </div>
+                            <div
+                              className="ra-cccd-preview"
+                              onClick={() =>
+                                setZoomedImage({
+                                  url: selectedApplicant.idCardFrontUrl!,
+                                  title: `CCCD Mặt trước - ${selectedApplicant.fullName}`,
+                                })
+                              }
+                            >
+                              <img src={selectedApplicant.idCardFrontUrl} alt="CCCD Mặt trước" />
+                              <div className="ra-cccd-zoom-overlay">
+                                <ZoomIn size={16} /> Bấm để phóng to
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedApplicant.idCardBackUrl && (
+                          <div className="ra-cccd-card">
+                            <div className="ra-cccd-card-top">
+                              <span className="ra-cccd-label">Ảnh CCCD Mặt sau</span>
+                              <span className="ra-doc-chip has">Đã đính kèm</span>
+                            </div>
+                            <div
+                              className="ra-cccd-preview"
+                              onClick={() =>
+                                setZoomedImage({
+                                  url: selectedApplicant.idCardBackUrl!,
+                                  title: `CCCD Mặt sau - ${selectedApplicant.fullName}`,
+                                })
+                              }
+                            >
+                              <img src={selectedApplicant.idCardBackUrl} alt="CCCD Mặt sau" />
+                              <div className="ra-cccd-zoom-overlay">
+                                <ZoomIn size={16} /> Bấm để phóng to
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* Nhóm C: Hồ sơ năng lực cứu hộ */}
-              <div className="ra-drawer-section">
-                <div className="ra-section-header">
-                  <Award size={16} />
-                  <span>C. HỒ SƠ NĂNG LỰC &amp; KINH NGHIỆM THỰC ĐỊA</span>
-                </div>
-                <div className="ra-section-body">
+              {/* 3. Năng lực & Kinh nghiệm thực địa */}
+              <div className="ra-inset-section">
+                <div className="ra-inset-label">Năng lực &amp; Kinh nghiệm thực địa</div>
+                <div className="ra-inset-card">
                   <div className="ra-kv-item">
-                    <span className="ra-kv-label">Kỹ năng cứu nạn sở trường</span>
+                    <span className="ra-kv-label">Kỹ năng cứu hộ đã đăng ký</span>
                     <div className="ra-skills-list-wrap">
                       {selectedApplicant.skills.length > 0 ? (
                         selectedApplicant.skills.map((sk) => (
@@ -1387,97 +1486,84 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
                     </div>
                   </div>
 
+                  <div className="ra-flat-divider" />
+
                   <div className="ra-kv-item">
-                    <span className="ra-kv-label">Kinh nghiệm thực tế</span>
-                    <div className="ra-experience-quote">
+                    <span className="ra-kv-label">Kinh nghiệm &amp; Chứng chỉ thực địa</span>
+                    <div className="ra-experience-box">
                       {selectedApplicant.experience || 'Chưa cung cấp mô tả kinh nghiệm thực địa.'}
                     </div>
                   </div>
 
-                  <div className="ra-kv-grid">
-                    <div className="ra-kv-item">
-                      <span className="ra-kv-label">Chứng chỉ / Bằng cấp đào tạo</span>
-                      <ul className="ra-bullet-list">
-                        {selectedApplicant.certificates && selectedApplicant.certificates.length > 0 ? (
-                          selectedApplicant.certificates.map((c, i) => <li key={i}>{c}</li>)
-                        ) : (
-                          <li className="empty">Chưa có chứng chỉ bằng văn bản</li>
+                  {((selectedApplicant.certificates && selectedApplicant.certificates.length > 0) ||
+                    (selectedApplicant.equipment && selectedApplicant.equipment.length > 0)) && (
+                    <>
+                      <div className="ra-flat-divider" />
+                      <div className="ra-flat-grid-2">
+                        {selectedApplicant.certificates && selectedApplicant.certificates.length > 0 && (
+                          <div className="ra-kv-item">
+                            <span className="ra-kv-label">Chứng chỉ / Bằng cấp</span>
+                            <ul className="ra-bullet-list">
+                              {selectedApplicant.certificates.map((c, i) => (
+                                <li key={i}>{c}</li>
+                              ))}
+                            </ul>
+                          </div>
                         )}
-                      </ul>
-                    </div>
-                    <div className="ra-kv-item">
-                      <span className="ra-kv-label">Phương tiện &amp; Thiết bị cá nhân</span>
-                      <ul className="ra-bullet-list">
-                        {selectedApplicant.equipment && selectedApplicant.equipment.length > 0 ? (
-                          selectedApplicant.equipment.map((eq, i) => <li key={i}>{eq}</li>)
-                        ) : (
-                          <li className="empty">Không mang theo phương tiện cá nhân</li>
+                        {selectedApplicant.equipment && selectedApplicant.equipment.length > 0 && (
+                          <div className="ra-kv-item">
+                            <span className="ra-kv-label">Thiết bị cá nhân</span>
+                            <ul className="ra-bullet-list">
+                              {selectedApplicant.equipment.map((eq, i) => (
+                                <li key={i}>{eq}</li>
+                              ))}
+                            </ul>
+                          </div>
                         )}
-                      </ul>
-                    </div>
-                  </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* Nhóm D: Thông tin xử lý hồ sơ & Lịch sử */}
-              <div className="ra-drawer-section">
-                <div className="ra-section-header">
-                  <Calendar size={16} />
-                  <span>D. THÔNG TIN XỬ LÝ &amp; LỊCH SỬ THẨM ĐỊNH</span>
-                </div>
-                <div className="ra-section-body">
-                  <div className="ra-kv-grid">
-                    <div className="ra-kv-item">
-                      <span className="ra-kv-label">Ngày nộp hồ sơ</span>
-                      <span className="ra-kv-value">
-                        {new Date(selectedApplicant.submittedAt).toLocaleString('vi-VN')}
-                      </span>
-                    </div>
-                    <div className="ra-kv-item">
-                      <span className="ra-kv-label">Cán bộ phụ trách thẩm định</span>
-                      <span className="ra-kv-value">
-                        {selectedApplicant.reviewerName || userAreaName || 'Cán bộ Local Authority'}
-                      </span>
-                    </div>
-                  </div>
-
+              {/* 4. Tiến trình xử lý */}
+              <div className="ra-inset-section">
+                <div className="ra-inset-label">Tiến trình thẩm định</div>
+                <div className="ra-inset-card">
                   {selectedApplicant.supplementaryRequest && (
-                    <div className="ra-feedback-box warning">
+                    <div className="ra-feedback-box warning" style={{ marginBottom: 12 }}>
                       <span className="ra-feedback-title">Nội dung yêu cầu bổ sung:</span>
                       <p className="ra-feedback-content">{selectedApplicant.supplementaryRequest}</p>
                     </div>
                   )}
 
                   {selectedApplicant.rejectionReason && (
-                    <div className="ra-feedback-box danger">
+                    <div className="ra-feedback-box danger" style={{ marginBottom: 12 }}>
                       <span className="ra-feedback-title">Lý do từ chối:</span>
                       <p className="ra-feedback-content">{selectedApplicant.rejectionReason}</p>
                     </div>
                   )}
 
-                  <div className="ra-timeline-container">
-                    <span className="ra-kv-label" style={{ marginBottom: 6 }}>Tiến trình xử lý:</span>
-                    <div className="ra-timeline">
-                      {selectedApplicant.history.map((h, i) => (
-                        <div key={i} className="ra-timeline-item">
-                          <div
-                            className={`ra-timeline-dot ${h.type === 'verified'
-                                ? 'green'
-                                : h.type === 'rejected'
-                                  ? 'red'
-                                  : h.type === 'update'
-                                    ? 'orange'
-                                    : ''
-                              }`}
-                          />
-                          <span className="ra-timeline-action">{h.action}</span>
-                          <span className="ra-timeline-meta">
-                            {h.timestamp} • {h.actor}
-                          </span>
-                          {h.detail && <div className="ra-timeline-detail">{h.detail}</div>}
-                        </div>
-                      ))}
-                    </div>
+                  <div className="ra-timeline" style={{ marginTop: 2 }}>
+                    {selectedApplicant.history.map((h, i) => (
+                      <div key={i} className="ra-timeline-item">
+                        <div
+                          className={`ra-timeline-dot ${h.type === 'verified'
+                              ? 'green'
+                              : h.type === 'rejected'
+                                ? 'red'
+                                : h.type === 'update'
+                                  ? 'orange'
+                                  : ''
+                            }`}
+                        />
+                        <span className="ra-timeline-action">{h.action}</span>
+                        <span className="ra-timeline-meta">
+                          {h.timestamp} • {h.actor}
+                        </span>
+                        {h.detail && <div className="ra-timeline-detail">{h.detail}</div>}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
