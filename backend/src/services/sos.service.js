@@ -425,6 +425,7 @@ const getSosRequestById = async (id) => {
     $or: [{ sosRequestId: id }, { sosId: id }],
     status: { $nin: ['CANCELLED', 'REJECTED'] },
   })
+    .sort({ createdAt: -1 })
     .populate('rescueTeamId', 'name type areaId status')
     .populate('rescuerId', 'fullName phone roles')
     .populate('vehicleId', 'plateNumber type capacity')
@@ -478,6 +479,30 @@ const changeStatus = async (id, newStatus, changedBy, note = '') => {
   await SosRequest.updateOne({ _id: id }, { $set: updateFields });
   sos.status = newStatus;
   if (updateFields.resolvedAt) sos.resolvedAt = updateFields.resolvedAt;
+
+  // Đồng bộ trạng thái mới vào các tin nhắn Chat liên quan đến ca SOS này
+  try {
+    const { ChatMessage } = require('../models');
+    if (ChatMessage) {
+      await ChatMessage.updateMany(
+        {
+          $or: [
+            { sosRequestId: id },
+            { 'sosData._id': id },
+            { 'sosData._id': String(id) },
+            ...(sos.sosCode ? [{ 'sosData.sosCode': sos.sosCode }] : []),
+          ],
+        },
+        {
+          $set: {
+            'sosData.status': newStatus,
+          },
+        }
+      );
+    }
+  } catch (chatSyncErr) {
+    console.warn('Sync chat messages on SOS status change error:', chatSyncErr);
+  }
 
   await SosStatusHistory.create({
     sosId: sos._id,
