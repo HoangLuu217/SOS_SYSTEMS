@@ -19,6 +19,8 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/context/AuthContext';
+import { CccdQrScannerModal } from '@/components/CccdQrScannerModal';
+import type { ParsedCccdData } from '@/utils/cccdHelper';
 import {
   backendApi,
   provinceApi,
@@ -27,7 +29,7 @@ import {
   FALLBACK_PROVINCES,
   FALLBACK_WARDS,
 } from '@/api';
-import type { RescuerVerificationStatus, RescuerVehicleType } from '@/types';
+import type { RescuerVerificationStatus } from '@/types';
 
 export const RESCUE_SKILLS = [
   {
@@ -67,6 +69,24 @@ export const RESCUE_SKILLS = [
     desc: 'Lặn tìm kiếm vùng nước sâu',
   },
   {
+    id: 'firefighting',
+    label: 'PCCC & Cứu sập',
+    icon: 'fire',
+    desc: 'Dập cháy cơ sở, cứu nạn sập đổ, dọn cây gãy đổ',
+  },
+  {
+    id: 'evacuation',
+    label: 'Sơ tán người dân',
+    icon: 'account-group',
+    desc: 'Di dời hộ dân vùng ngập sâu, người yếu thế',
+  },
+  {
+    id: 'communication',
+    label: 'Thông tin liên lạc',
+    icon: 'radio',
+    desc: 'Vận hành bộ đàm, định vị vùng mất sóng',
+  },
+  {
     id: 'logistics',
     label: 'Hậu cần & Cấp dưỡng',
     icon: 'truck-delivery',
@@ -74,51 +94,14 @@ export const RESCUE_SKILLS = [
   },
 ];
 
-export const VEHICLE_OPTIONS: Array<{
-  id: RescuerVehicleType;
-  label: string;
-  icon: string;
-  shortDesc: string;
-}> = [
-    {
-      id: 'BOAT',
-      label: 'Xuồng / Ca-nô',
-      icon: 'ferry',
-      shortDesc: 'Vượt dòng lũ xiết',
-    },
-    {
-      id: 'MOTORBIKE',
-      label: 'Xe máy cơ động',
-      icon: 'motorbike',
-      shortDesc: 'Luồn lách ngõ hẹp',
-    },
-    {
-      id: 'TRUCK',
-      label: 'Xe tải cứu trợ',
-      icon: 'truck',
-      shortDesc: 'Chở nhu yếu phẩm',
-    },
-    {
-      id: 'AMBULANCE',
-      label: 'Xe cứu thương',
-      icon: 'ambulance',
-      shortDesc: 'Sơ cấp cứu dã chiến',
-    },
-    {
-      id: 'OTHER',
-      label: 'Bán tải / Xe khác',
-      icon: 'car',
-      shortDesc: 'Gầm cao lội nước',
-    },
-  ];
-
-
-// Gợi ý kinh nghiệm nhanh cho người dùng chạm điền
+// Gợi ý kinh nghiệm nhanh cho người dùng chạm chọn / bỏ chọn
 const QUICK_EXPERIENCE_TAGS = [
-  'Đã học sơ cấp cứu CPR',
-  '3 năm kinh nghiệm lái ca-nô',
-  'Tình nguyện viên xung kích PCTT',
-  'Bơi cứu sinh thành thạo',
+  { label: 'Người mới, hỗ trợ', text: 'Người mới, sẵn sàng hỗ trợ' },
+  { label: 'Thông thạo địa bàn', text: 'Thông thạo địa hình địa phương' },
+  { label: 'Đội xung kích PCTT', text: 'Tình nguyện viên xung kích PCTT' },
+  { label: 'Sơ cấp cứu / CPR', text: 'Đã tập huấn sơ cấp cứu / CPR' },
+  { label: 'Dân quân / PCCC', text: 'Dân quân / PCCC cơ sở' },
+  { label: 'Bơi / Lái xuồng', text: 'Bơi cứu sinh / Lái xuồng' },
 ];
 
 interface ProfessionalProfileScreenProps {
@@ -172,9 +155,6 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
       ? initialRescuer.skills
       : ['first_aid', 'water_rescue']
   );
-  const [selectedVehicleType, setSelectedVehicleType] = useState<RescuerVehicleType>(() =>
-    (initialRescuer.vehicleType as RescuerVehicleType) || 'BOAT'
-  );
   const [experience, setExperience] = useState<string>(() => initialRescuer.experience || '');
   const [agreeTerms, setAgreeTerms] = useState<boolean>(() => initialRescuer.verificationStatus === 'VERIFIED');
 
@@ -187,8 +167,32 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
-  const [isVehicleSheetOpen, setIsVehicleSheetOpen] = useState<boolean>(false);
   const [isSkillSheetOpen, setIsSkillSheetOpen] = useState<boolean>(false);
+
+  // Trạng thái quét mã QR thẻ CCCD gắn chip
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState<boolean>(false);
+  const [isCccdQrVerified, setIsCccdQrVerified] = useState<boolean>(() => Boolean(initialRescuer.isCccdVerified));
+  const [scannedCccdInfo, setScannedCccdInfo] = useState<ParsedCccdData | null>(null);
+
+  const handleScanCccdSuccess = (data: ParsedCccdData) => {
+    setIdNumber(data.idNumber);
+    setIsCccdQrVerified(true);
+    setScannedCccdInfo(data);
+
+    // Gợi ý chọn xã nếu trong địa chỉ thường trú của CCCD có tên xã khớp với danh sách xã hiện tại
+    if (data.address && (!selectedWardName || !selectedAreaId)) {
+      const addrLower = data.address.toLowerCase();
+      const matchedW = wardsList.find((w) => {
+        const cleanWName = w.name.toLowerCase().replace(/^(xã|phường|thị trấn)\s+/i, '').trim();
+        return addrLower.includes(cleanWName);
+      });
+      if (matchedW) {
+        setSelectedWardCode(matchedW.code);
+        setSelectedWardName(matchedW.name);
+        setSelectedAreaName(`${matchedW.name}, ${selectedProvince?.name || 'Thành phố Đà Nẵng'}`);
+      }
+    }
+  };
 
   // 1. Tải và đồng bộ ngầm hồ sơ từ Backend (không block màn hình)
   useEffect(() => {
@@ -203,13 +207,11 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
           const rescuer: any = res.data.rescuer || u?.rescuer || {};
           const existingId = rescuer.idNumber || u?.idNumber || u?.citizen?.idNumber || u?.idCard;
           if (existingId) setIdNumber(String(existingId).replace(/\D/g, ''));
+          if (rescuer.isCccdVerified) setIsCccdQrVerified(true);
           if (Array.isArray(rescuer.skills) && rescuer.skills.length > 0) {
             setSelectedSkills(rescuer.skills);
           }
           if (rescuer.experience) setExperience(rescuer.experience);
-          if (rescuer.vehicleType) {
-            setSelectedVehicleType(rescuer.vehicleType as RescuerVehicleType);
-          }
           if (rescuer.areaId) {
             setSelectedAreaId(typeof rescuer.areaId === 'object' ? rescuer.areaId._id : rescuer.areaId);
           } else if (u?.citizen?.areaId || u?.areaId) {
@@ -304,12 +306,6 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
     );
   };
 
-  // Chọn phương tiện
-  const handleSelectVehicle = (vehicleId: RescuerVehicleType) => {
-    if (isVerified) return;
-    setSelectedVehicleType(vehicleId);
-  };
-
   // Chọn Tỉnh / Thành phố
   const handleSelectProvince = (prov: Province) => {
     setSelectedProvince(prov);
@@ -344,13 +340,30 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
     setIsAreaSheetOpen(true);
   };
 
-  // Thêm nhanh tag kinh nghiệm
-  const handleAppendExperience = (tag: string) => {
+  // Chọn / bỏ chọn nhanh tag kinh nghiệm (2 chiều)
+  const handleToggleExperienceTag = (tag: string) => {
     if (isVerified) return;
     setExperience((prev) => {
-      if (!prev.trim()) return tag;
-      if (prev.includes(tag)) return prev;
-      return `${prev.trim()}, ${tag}`;
+      const trimmed = prev.trim();
+      if (!trimmed) return tag;
+
+      if (trimmed.includes(tag)) {
+        const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const pattern = new RegExp(`(?:^|,\\s*)${escaped}(?=\\s*(?:,|$))`);
+        const next = trimmed
+          .replace(pattern, '')
+          .replace(/^\s*,\s*|\s*,\s*$/g, '')
+          .trim();
+        if (next !== trimmed) return next;
+
+        return trimmed
+          .replace(tag, '')
+          .replace(/,\s*,+/g, ',')
+          .replace(/^\s*,\s*|\s*,\s*$/g, '')
+          .trim();
+      }
+
+      return `${trimmed}, ${tag}`;
     });
   };
 
@@ -370,28 +383,72 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
 
   // Gửi hồ sơ lưu / nộp đơn đăng ký
   const handleSave = async () => {
-    if (!idNumber.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập Số Căn cước công dân (CCCD) để định danh.');
-      return;
+    // 1. Bắt buộc quét mã QR thẻ CCCD nếu chưa được duyệt chính thức
+    if (!isVerified) {
+      if (!isCccdQrVerified || !idNumber.trim() || idNumber.trim().length !== 12) {
+        Alert.alert(
+          'Bắt buộc quét mã thẻ CCCD',
+          'Để đảm bảo tính định danh chính chủ và an toàn cho Đội cứu hộ, bạn bắt buộc phải quét mã QR trên thẻ CCCD gắn chip.',
+          [
+            { text: 'Quét mã thẻ ngay', onPress: () => setIsQrScannerOpen(true) },
+            { text: 'Đóng', style: 'cancel' },
+          ]
+        );
+        return;
+      }
+    } else {
+      if (!idNumber.trim() || idNumber.trim().length !== 12) {
+        Alert.alert('CCCD chưa hợp lệ', 'Số Căn cước công dân (CCCD) phải bao gồm đúng 12 chữ số.');
+        return;
+      }
     }
-    if (idNumber.trim().length !== 12) {
-      Alert.alert('CCCD chưa hợp lệ', 'Số Căn cước công dân (CCCD) phải bao gồm đúng 12 chữ số.');
-      return;
-    }
+
+    // 2. Bắt buộc chọn địa bàn tác chiến
     if (!selectedAreaName && !selectedAreaId) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng chọn Địa bàn / Phường, Xã bạn sẵn sàng tác chiến.');
+      Alert.alert(
+        'Thiếu thông tin địa bàn',
+        'Vui lòng chọn Địa bàn / Phường, Xã bạn sẵn sàng cơ động tác chiến cứu hộ.',
+        [
+          { text: 'Chọn địa bàn ngay', onPress: handleOpenAreaSheet },
+          { text: 'Đóng', style: 'cancel' },
+        ]
+      );
       return;
     }
+
+    // 3. Bắt buộc chọn ít nhất 1 kỹ năng cứu hộ chuyên môn
     if (selectedSkills.length === 0) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng chọn ít nhất 1 kỹ năng cứu hộ chuyên môn.');
+      Alert.alert(
+        'Thiếu kỹ năng chuyên môn',
+        'Vui lòng chọn ít nhất 1 kỹ năng cứu hộ chuyên môn để Ban Chỉ huy phân loại lực lượng.',
+        [
+          { text: 'Chọn kỹ năng', onPress: () => setIsSkillSheetOpen(true) },
+          { text: 'Đóng', style: 'cancel' },
+        ]
+      );
       return;
     }
+
+    // 4. Bắt buộc nhập kinh nghiệm / chứng chỉ
     if (!experience.trim()) {
-      Alert.alert('Thiếu thông tin', 'Vui lòng nhập tóm tắt kinh nghiệm hoặc chứng chỉ cứu nạn.');
+      Alert.alert(
+        'Thiếu thông tin kinh nghiệm',
+        'Vui lòng nhập tóm tắt kinh nghiệm cứu nạn hoặc chạm vào các gợi ý nhanh bên dưới ô nhập.',
+        [{ text: 'Đã hiểu', style: 'default' }]
+      );
       return;
     }
+
+    // 5. Bắt buộc cam kết tự nguyện
     if (!agreeTerms) {
-      Alert.alert('Xác nhận cam kết', 'Vui lòng tick xác nhận cam kết tự nguyện cứu hộ trước khi gửi hồ sơ.');
+      Alert.alert(
+        'Xác nhận cam kết tự nguyện',
+        'Bạn cần xác nhận cam kết tự nguyện tham gia và chấp hành điều phối của Ban Chỉ huy PCTT & TKCN trước khi gửi đơn.',
+        [
+          { text: 'Tôi đồng ý & Cam kết', onPress: () => setAgreeTerms(true) },
+          { text: 'Xem lại', style: 'cancel' },
+        ]
+      );
       return;
     }
 
@@ -400,9 +457,9 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
       const isValidObjectId = (id?: string) => Boolean(id && /^[0-9a-fA-F]{24}$/.test(id));
       const res = await backendApi.updateRescuerProfile({
         idNumber: idNumber.trim(),
+        isCccdVerified: isCccdQrVerified,
         skills: selectedSkills,
         experience: experience.trim(),
-        vehicleType: selectedVehicleType,
         areaId: isValidObjectId(selectedAreaId) ? selectedAreaId : undefined,
         areaName: selectedAreaName || undefined,
       });
@@ -424,9 +481,6 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
       setIsSaving(false);
     }
   };
-
-  const selectedVehicleObj =
-    VEHICLE_OPTIONS.find((v) => v.id === selectedVehicleType) || VEHICLE_OPTIONS[0];
 
   // Cấu hình thông báo trạng thái
   const getStatusAlertConfig = () => {
@@ -516,7 +570,7 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
             </View>
           )}
 
-          {/* 3. Thẻ thông tin ứng viên liên kết (Profile Strip) */}
+          {/* 3. Thông tin tài khoản liên kết */}
           <View style={styles.applicantStrip}>
             <View style={styles.applicantAvatarBox}>
               {user?.avatarUrl ? (
@@ -530,263 +584,163 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
               )}
             </View>
             <View style={styles.applicantInfo}>
-              <View style={styles.applicantNameRow}>
-                <Text style={styles.applicantName} numberOfLines={1}>
-                  {user?.fullName || 'Người dân'}
-                </Text>
-                <View style={styles.applicantBadge}>
-                  <Text style={styles.applicantBadgeText}>Tài khoản liên kết</Text>
-                </View>
-              </View>
+              <Text style={styles.applicantName} numberOfLines={1}>
+                {user?.fullName || 'Người dân'}
+              </Text>
               <Text style={styles.applicantContact} numberOfLines={1}>
                 {user?.phone || 'Chưa cập nhật SĐT'} {user?.email ? `• ${user.email}` : ''}
               </Text>
             </View>
-          </View>
-
-          {/* 4. KHỐI 1: BENTO CARD - Định danh CCCD & Địa bàn tác chiến */}
-          <View style={styles.bentoCard}>
-            <View style={styles.cardHeaderRow}>
-              <View style={[styles.cardHeaderIcon, { backgroundColor: '#EFF6FF' }]}>
-                <MaterialCommunityIcons name="card-account-details-outline" size={19} color="#0066FF" />
-              </View>
-              <View style={styles.cardHeaderTitleCol}>
-                <Text style={styles.cardTitle}>1. Định danh & Địa bàn trực thuộc</Text>
-
-              </View>
-            </View>
-
-            {/* Ô nhập CCCD */}
-            <View style={styles.subFieldGroup}>
-              <Text style={styles.fieldLabel}>
-                Số Căn cước công dân (CCCD) <Text style={styles.requiredStar}>*</Text>
-              </Text>
-
-              {isVerified ? (
-                <View style={styles.maskedNumberBox}>
-                  <Text style={styles.maskedNumberText}>
-                    {idNumber ? `${idNumber.slice(0, 4)}********${idNumber.slice(-2)}` : '0792********01'}
-                  </Text>
-                  <View style={styles.verifiedTag}>
-                    <Feather name="check-circle" size={12} color="#059669" />
-                    <Text style={styles.verifiedTagText}>Đã xác thực</Text>
-                  </View>
-                </View>
-              ) : (
-                <View
-                  style={[
-                    styles.inputBox,
-                    idNumber.length === 12 && styles.inputBoxValid,
-                  ]}
-                >
-                  <Feather
-                    name={idNumber.length === 12 ? 'check-circle' : 'hash'}
-                    size={16}
-                    color={idNumber.length === 12 ? '#0066FF' : '#64748B'}
-                    style={{ marginRight: 8 }}
-                  />
-                  <TextInput
-                    style={styles.textInput}
-                    value={idNumber}
-                    onChangeText={(val) => setIdNumber(val.replace(/\D/g, ''))}
-                    placeholder="Nhập đủ 12 chữ số CCCD"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="numeric"
-                    maxLength={12}
-                  />
-                  <Text
-                    style={[
-                      styles.charCounter,
-                      idNumber.length === 12 && styles.charCounterComplete,
-                    ]}
-                  >
-                    {idNumber.length}/12
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Địa bàn tác chiến - Bấm để mở Popup nổi (Bottom Sheet) */}
-            <View style={[styles.subFieldGroup, { marginTop: 14 }]}>
-              <Text style={styles.fieldLabel}>
-                Địa bàn sẵn sàng tác chiến <Text style={styles.requiredStar}>*</Text>
-              </Text>
-
-              {/* Ô hiển thị Phường/Xã hiện tại - Bấm để mở Bottom Sheet Popup */}
-              <TouchableOpacity
-                style={[
-                  styles.inlineAreaBox,
-                  selectedAreaName ? styles.inlineAreaBoxActive : styles.inlineAreaBoxEmpty,
-                  isVerified && { opacity: 0.8 },
-                ]}
-                onPress={handleOpenAreaSheet}
-                activeOpacity={0.75}
-                disabled={isVerified}
-              >
-                <MaterialCommunityIcons
-                  name="map-marker-radius"
-                  size={20}
-                  color={selectedAreaName ? '#0066FF' : '#D97706'}
-                />
-                <Text
-                  style={[
-                    styles.inlineAreaText,
-                    !selectedAreaName && { color: '#94A3B8', fontWeight: '500' },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {selectedAreaName || 'Bấm để chọn Tỉnh thành & Phường, Xã'}
-                </Text>
-                {!isVerified && (
-                  <Feather
-                    name="chevron-down"
-                    size={18}
-                    color="#64748B"
-                  />
-                )}
-              </TouchableOpacity>
+            <View style={styles.applicantBadge}>
+              <Text style={styles.applicantBadgeText}>Tài khoản liên kết</Text>
             </View>
           </View>
 
-          {/* 5. KHỐI 2: BENTO CARD - Phương tiện cơ động (Hiển thị gọn + Popup nổi dưới màn hình) */}
-          <View style={styles.bentoCard}>
-            <View style={styles.cardHeaderRow}>
-              <View style={[styles.cardHeaderIcon, { backgroundColor: '#FFFBEB' }]}>
-                <MaterialCommunityIcons name="truck-fast-outline" size={19} color="#D97706" />
-              </View>
-              <View style={styles.cardHeaderTitleCol}>
-                <Text style={styles.cardTitle}>2. Phương tiện cơ động sẵn sàng</Text>
-              </View>
-            </View>
-
-            {/* Ô hiển thị 1 phương tiện đang chọn - Bấm vào để mở Bottom Sheet Popup */}
+          {/* 4. KHỐI GỘP: HỒ SƠ TÁC CHIẾN (iOS Inset Grouped Style) */}
+          <Text style={styles.insetSectionTitle}>HỒ SƠ TÁC CHIẾN</Text>
+          <View style={styles.insetGroupCard}>
+            {/* Row 1: Số CCCD */}
             <TouchableOpacity
-              style={[styles.vehicleTriggerCard, isVerified && { opacity: 0.85 }]}
-              onPress={() => !isVerified && setIsVehicleSheetOpen(true)}
-              activeOpacity={0.75}
+              style={[styles.insetRow, styles.insetRowDivider]}
+              onPress={() => setIsQrScannerOpen(true)}
+              activeOpacity={0.7}
               disabled={isVerified}
             >
-              <MaterialCommunityIcons
-                name={selectedVehicleObj.icon as any}
-                size={20}
-                color="#0066FF"
-              />
-
-              <View style={styles.vehicleTriggerInfo}>
-                <Text style={styles.vehicleTriggerLabel} numberOfLines={1}>
-                  {selectedVehicleObj.label}
-                  <Text style={styles.vehicleTriggerDesc}>  •  {selectedVehicleObj.shortDesc}</Text>
-                </Text>
-              </View>
-
-              {!isVerified && (
-                <Feather name="chevron-down" size={18} color="#64748B" />
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* 6. KHỐI 3: BENTO CARD - Kỹ năng chuyên môn cứu hộ (Hiển thị gọn + Popup nổi dưới màn hình) */}
-          <View style={styles.bentoCard}>
-            <View style={styles.cardHeaderRow}>
-              <View style={[styles.cardHeaderIcon, { backgroundColor: '#F0FDF4' }]}>
-                <MaterialCommunityIcons name="shield-star-outline" size={19} color="#10B981" />
-              </View>
-              <View style={styles.cardHeaderTitleCol}>
-                <Text style={styles.cardTitle}>3. Kỹ năng cứu hộ chuyên môn</Text>
-              </View>
-              <View style={styles.skillsCountBadge}>
-                <Text style={styles.skillsCountText}>{selectedSkills.length} đã chọn</Text>
-              </View>
-            </View>
-
-            {/* Ô hiển thị tóm tắt kỹ năng đã chọn - Bấm vào để mở Bottom Sheet Popup */}
-            <TouchableOpacity
-              style={[styles.skillTriggerCard, isVerified && { opacity: 0.85 }]}
-              onPress={() => !isVerified && setIsSkillSheetOpen(true)}
-              activeOpacity={0.75}
-              disabled={isVerified}
-            >
-              <MaterialCommunityIcons name="shield-check" size={20} color="#10B981" />
-
-              <View style={styles.skillTriggerInfo}>
-                {selectedSkills.length > 0 ? (
-                  <View style={styles.skillSelectedChipsRow}>
-                    {selectedSkills.slice(0, 3).map((id) => {
-                      const sk = RESCUE_SKILLS.find((s) => s.id === id);
-                      return (
-                        <View key={id} style={styles.skillMiniChip}>
-                          <Text style={styles.skillMiniChipText} numberOfLines={1}>
-                            {sk?.label || id}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                    {selectedSkills.length > 3 && (
-                      <View style={styles.skillMoreChip}>
-                        <Text style={styles.skillMoreChipText}>+{selectedSkills.length - 3}</Text>
-                      </View>
-                    )}
-                  </View>
+              <Text style={styles.insetRowLabel}>
+                Số CCCD <Text style={styles.requiredStar}>*</Text>
+              </Text>
+              <View style={styles.insetRowRight}>
+                {isVerified ? (
+                  <>
+                    <Text style={styles.insetRowValue} numberOfLines={1}>
+                      {idNumber ? `${idNumber.slice(0, 4)}********${idNumber.slice(-2)}` : '0792********01'}
+                    </Text>
+                    <Feather name="check-circle" size={14} color="#059669" />
+                    <Text style={styles.insetRowVerifiedText}>Đã xác thực</Text>
+                  </>
+                ) : isCccdQrVerified && idNumber ? (
+                  <>
+                    <Feather name="check-circle" size={14} color="#059669" />
+                    <Text style={styles.insetRowValue} numberOfLines={1}>
+                      {idNumber}
+                    </Text>
+                    <Feather name="chevron-right" size={16} color="#94A3B8" />
+                  </>
                 ) : (
-                  <Text style={styles.skillEmptyText}>Bấm để chọn kỹ năng cứu hộ</Text>
+                  <>
+                    <MaterialCommunityIcons name="qrcode-scan" size={15} color="#0066FF" />
+                    <Text style={styles.insetRowActionText}>Quét mã thẻ</Text>
+                    <Feather name="chevron-right" size={16} color="#94A3B8" />
+                  </>
                 )}
               </View>
+            </TouchableOpacity>
 
-              {!isVerified && (
-                <Feather name="chevron-down" size={18} color="#64748B" />
-              )}
+            {/* Row 2: Địa bàn tác chiến */}
+            <TouchableOpacity
+              style={[styles.insetRow, styles.insetRowDivider]}
+              onPress={handleOpenAreaSheet}
+              activeOpacity={0.7}
+              disabled={isVerified}
+            >
+              <Text style={styles.insetRowLabel}>
+                Địa bàn <Text style={styles.requiredStar}>*</Text>
+              </Text>
+              <View style={styles.insetRowRight}>
+                {selectedAreaName ? (
+                  <Text style={styles.insetRowValue} numberOfLines={1}>
+                    {selectedAreaName}
+                  </Text>
+                ) : (
+                  <Text style={styles.insetRowPlaceholder} numberOfLines={1}>
+                    Chọn Tỉnh / Xã
+                  </Text>
+                )}
+                {!isVerified && <Feather name="chevron-right" size={16} color="#94A3B8" />}
+              </View>
+            </TouchableOpacity>
+
+            {/* Row 3: Kỹ năng cứu hộ */}
+            <TouchableOpacity
+              style={styles.insetRow}
+              onPress={() => !isVerified && setIsSkillSheetOpen(true)}
+              activeOpacity={0.7}
+              disabled={isVerified}
+            >
+              <Text style={styles.insetRowLabel}>
+                Kỹ năng <Text style={styles.requiredStar}>*</Text>
+              </Text>
+              <View style={styles.insetRowRight}>
+                {selectedSkills.length > 0 ? (
+                  <Text style={styles.insetRowValue} numberOfLines={1}>
+                    {selectedSkills
+                      .map((id) => RESCUE_SKILLS.find((s) => s.id === id)?.label || id)
+                      .join(', ')}
+                  </Text>
+                ) : (
+                  <Text style={styles.insetRowPlaceholder} numberOfLines={1}>
+                    Chọn kỹ năng
+                  </Text>
+                )}
+                {!isVerified && <Feather name="chevron-right" size={16} color="#94A3B8" />}
+              </View>
             </TouchableOpacity>
           </View>
 
-          {/* 7. KHỐI 4: BENTO CARD - Kinh nghiệm tác chiến & Chứng chỉ */}
-          <View style={styles.bentoCard}>
-            <View style={styles.cardHeaderRow}>
-              <View style={[styles.cardHeaderIcon, { backgroundColor: '#F5F3FF' }]}>
-                <MaterialCommunityIcons name="certificate-outline" size={19} color="#7C3AED" />
-              </View>
-              <View style={styles.cardHeaderTitleCol}>
-                <Text style={styles.cardTitle}>4. Kinh nghiệm & Chứng chỉ</Text>
-              </View>
-            </View>
+          {/* 5. KINH NGHIỆM & CHỨNG CHỈ */}
+          <Text style={styles.insetSectionTitle}>
+            KINH NGHIỆM & CHỨNG CHỈ <Text style={styles.requiredStar}>*</Text>
+          </Text>
+          <View style={styles.insetGroupCard}>
+            <TextInput
+              style={styles.insetTextArea}
+              value={experience}
+              onChangeText={setExperience}
+              multiline
+              numberOfLines={3}
+              placeholder="VD: Tham gia đội xung kích xã 2 năm, chứng chỉ sơ cấp cứu... (hoặc chọn nhanh bên dưới)"
+              placeholderTextColor="#94A3B8"
+              textAlignVertical="top"
+              editable={!isVerified}
+            />
 
-            {/* Ô nhập kinh nghiệm */}
-            <View style={styles.textAreaBox}>
-              <TextInput
-                style={styles.textArea}
-                value={experience}
-                onChangeText={setExperience}
-                multiline
-                numberOfLines={3}
-                placeholder="Nhập tóm tắt quá trình kinh nghiệm, đơn vị thiện nguyện từng tham gia, chứng chỉ cứu nạn đã có..."
-                placeholderTextColor="#94A3B8"
-                textAlignVertical="top"
-                editable={!isVerified}
-              />
-            </View>
-
-            {/* Quick Experience Tags để tự điền nhanh - Đặt bên dưới ô nhập */}
             {!isVerified && (
-              <View style={styles.quickTagsWrapper}>
-                <Text style={styles.quickTagsTitle}>Gợi ý nhanh (chạm để thêm):</Text>
-                <View style={styles.quickTagsRow}>
-                  {QUICK_EXPERIENCE_TAGS.map((tag, idx) => (
-                    <TouchableOpacity
-                      key={idx}
-                      style={styles.quickTagBtn}
-                      onPress={() => handleAppendExperience(tag)}
-                      activeOpacity={0.7}
-                    >
-                      <Feather name="plus" size={11} color="#0066FF" />
-                      <Text style={styles.quickTagBtnText}>{tag}</Text>
-                    </TouchableOpacity>
-                  ))}
+              <View style={styles.quickTagsSection}>
+                <Text style={styles.quickTagsTitle}>Gợi ý nhanh (chạm để chọn / bỏ chọn)</Text>
+                <View style={styles.quickTagsGrid}>
+                  {QUICK_EXPERIENCE_TAGS.map((item, idx) => {
+                    const isSelected = experience.includes(item.text);
+                    return (
+                      <TouchableOpacity
+                        key={idx}
+                        style={[styles.quickTagBtn, isSelected && styles.quickTagBtnActive]}
+                        onPress={() => handleToggleExperienceTag(item.text)}
+                        activeOpacity={0.7}
+                      >
+                        <Feather
+                          name={isSelected ? 'check' : 'plus'}
+                          size={12}
+                          color={isSelected ? '#0066FF' : '#64748B'}
+                        />
+                        <Text
+                          style={[
+                            styles.quickTagBtnText,
+                            isSelected && styles.quickTagBtnTextActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {item.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </View>
             )}
           </View>
 
-          {/* 8. KHỐI 5: Cam kết tự nguyện (Pledge & Agreement) */}
-          <View style={styles.pledgeCard}>
+          {/* 6. CAM KẾT TỰ NGUYỆN */}
+          <View style={styles.pledgeGroupCard}>
             <TouchableOpacity
               style={styles.pledgeRow}
               onPress={() => !isVerified && setAgreeTerms(!agreeTerms)}
@@ -798,559 +752,466 @@ export const ProfessionalProfileScreen: React.FC<ProfessionalProfileScreenProps>
               </View>
               <Text style={styles.pledgeText}>
                 Tôi cam kết thông tin khai báo là hoàn toàn trung thực, tự nguyện tham gia mạng lưới cứu
-                hộ và sẵn sàng chấp hành lệnh điều phối của Ban Chỉ huy PCTT & TKCN địa phương.
+                hộ và sẵn sàng chấp hành lệnh điều phối của Ban Chỉ huy PCTT & TKCN địa phương. <Text style={styles.requiredStar}>*</Text>
               </Text>
             </TouchableOpacity>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+    </ScrollView>
+      </KeyboardAvoidingView >
 
-      {/* 9. Nút Lưu / Nộp đơn ghim cố định ở đáy (Sticky Bottom Action Bar) */}
-      <View style={[styles.stickyBottomBar, { paddingBottom: Math.max(insets.bottom, 14) }]}>
-        <TouchableOpacity
-          style={[
-            styles.submitButton,
-            isSaving && { opacity: 0.75 },
-            !isVerified && !agreeTerms && styles.submitButtonDisabled,
-            isVerified && styles.submitButtonVerified,
-          ]}
-          onPress={handleSave}
-          disabled={isSaving || isVerified || !agreeTerms}
-          activeOpacity={0.85}
-        >
-          <LinearGradient
-            colors={
-              isVerified
-                ? ['#059669', '#047857']
-                : !agreeTerms
-                  ? ['#94A3B8', '#64748B']
-                  : ['#0066FF', '#0052CC']
-            }
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.submitGradient}
-          >
-            {isSaving ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : isVerified ? (
-              <>
-                <Feather name="check-circle" size={18} color="#FFFFFF" />
-                <Text style={styles.submitButtonText}>Hồ sơ đã được phê duyệt chính thức</Text>
-              </>
-            ) : (
-              <>
-                <MaterialCommunityIcons name="send" size={18} color="#FFFFFF" />
-                <Text style={styles.submitButtonText}>
-                  {verificationStatus === 'NOT_REGISTERED'
-                    ? 'Nộp đơn đăng ký Cứu hộ viên'
-                    : 'Cập nhật lại hồ sơ chuyên môn'}
-                </Text>
-              </>
-            )}
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
-
-      {/* 10. Modal phản hồi gửi thành công */}
-      <Modal visible={showSuccessModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.feedbackCard}>
-            <View style={styles.feedbackIconBox}>
-              <MaterialCommunityIcons name="check-decagram" size={36} color="#059669" />
-            </View>
-            <Text style={styles.feedbackTitle}>Gửi hồ sơ thành công!</Text>
-            <Text style={styles.feedbackDesc}>
-              Thông tin CCCD, kỹ năng và phương tiện cơ động đã được chuyển tới Ban Chỉ huy địa
-              phương để thẩm định và đối soát cấp quyền tác chiến.
+  {/* 9. Nút Lưu / Nộp đơn ghim cố định ở đáy (Sticky Bottom Action Bar) */ }
+  < View style = { [styles.stickyBottomBar, { paddingBottom: Math.max(insets.bottom, 14) }]} >
+    <TouchableOpacity
+      style={[
+        styles.submitButton,
+        isSaving && { opacity: 0.75 },
+        isVerified && styles.submitButtonVerified,
+      ]}
+      onPress={handleSave}
+      disabled={isSaving || isVerified}
+      activeOpacity={0.85}
+    >
+      <LinearGradient
+        colors={
+          isVerified
+            ? ['#059669', '#047857']
+            : ['#0066FF', '#0052CC']
+        }
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.submitGradient}
+      >
+        {isSaving ? (
+          <ActivityIndicator color="#FFFFFF" size="small" />
+        ) : isVerified ? (
+          <>
+            <Feather name="check-circle" size={18} color="#FFFFFF" />
+            <Text style={styles.submitButtonText}>Hồ sơ đã được phê duyệt chính thức</Text>
+          </>
+        ) : (
+          <>
+            <MaterialCommunityIcons name="send" size={18} color="#FFFFFF" />
+            <Text style={styles.submitButtonText}>
+              {verificationStatus === 'NOT_REGISTERED'
+                ? 'Nộp đơn đăng ký Cứu hộ viên'
+                : 'Cập nhật lại hồ sơ chuyên môn'}
             </Text>
+          </>
+        )}
+      </LinearGradient>
+    </TouchableOpacity>
+      </View >
 
-            {/* Bảng tóm tắt hồ sơ vừa nộp */}
-            <View style={styles.feedbackSummaryBox}>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>CCCD định danh:</Text>
-                <Text style={styles.summaryValue}>
-                  {idNumber.slice(0, 4)}****{idNumber.slice(-4)}
-                </Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Địa bàn tác chiến:</Text>
-                <Text style={[styles.summaryValue, { color: '#0066FF' }]}>
-                  {selectedAreaName || 'Theo hồ sơ cư trú'}
-                </Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Kỹ năng tác chiến:</Text>
-                <Text style={styles.summaryValue}>{selectedSkills.length} kỹ năng</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Phương tiện:</Text>
-                <Text style={styles.summaryValue}>{selectedVehicleObj.label}</Text>
-              </View>
-            </View>
+  {/* 10. Modal phản hồi gửi thành công */ }
+  < Modal visible = { showSuccessModal } transparent animationType = "fade" >
+    <View style={styles.modalOverlay}>
+      <View style={styles.feedbackCard}>
+        <View style={styles.feedbackIconBox}>
+          <MaterialCommunityIcons name="check-decagram" size={36} color="#059669" />
+        </View>
+        <Text style={styles.feedbackTitle}>Gửi hồ sơ thành công!</Text>
+        <Text style={styles.feedbackDesc}>
+          Thông tin CCCD, địa bàn, kỹ năng và kinh nghiệm của bạn đã được chuyển tới Ban Chỉ huy
+          địa phương để thẩm định và cấp quyền tác chiến.
+        </Text>
 
-            <TouchableOpacity
-              style={styles.feedbackBtn}
-              onPress={() => {
-                setShowSuccessModal(false);
-                onBack();
-              }}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.feedbackBtnText}>Xác nhận & Quay lại</Text>
-            </TouchableOpacity>
+        {/* Bảng tóm tắt hồ sơ vừa nộp */}
+        <View style={styles.feedbackSummaryBox}>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>CCCD định danh:</Text>
+            <Text style={styles.summaryValue}>
+              {idNumber.slice(0, 4)}****{idNumber.slice(-4)}
+            </Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Địa bàn tác chiến:</Text>
+            <Text style={[styles.summaryValue, { color: '#0066FF', maxWidth: '58%' }]} numberOfLines={1}>
+              {selectedAreaName || 'Theo hồ sơ cư trú'}
+            </Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Kỹ năng tác chiến:</Text>
+            <Text style={styles.summaryValue}>{selectedSkills.length} kỹ năng</Text>
+          </View>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Kinh nghiệm:</Text>
+            <Text style={[styles.summaryValue, { maxWidth: '58%' }]} numberOfLines={1}>
+              {experience.trim()}
+            </Text>
           </View>
         </View>
-      </Modal>
 
-      {/* 11. Modal Popup nổi ở dưới màn hình (Bottom Sheet) chọn Tỉnh thành & Phường xã */}
-      <Modal
-        visible={isAreaSheetOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsAreaSheetOpen(false)}
-      >
         <TouchableOpacity
-          style={styles.bottomSheetOverlay}
-          activeOpacity={1}
-          onPress={() => setIsAreaSheetOpen(false)}
+          style={styles.feedbackBtn}
+          onPress={() => {
+            setShowSuccessModal(false);
+            onBack();
+          }}
+          activeOpacity={0.85}
         >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={[styles.bottomSheetCard, { paddingBottom: Math.max(insets.bottom + 16, 28) }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Thanh gạt trên đầu Bottom Sheet */}
-            <View style={styles.sheetHandle} />
+          <Text style={styles.feedbackBtnText}>Xác nhận & Quay lại</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+      </Modal >
 
-            {/* Header Bottom Sheet */}
-            <View style={styles.sheetHeaderRow}>
-              <View style={styles.sheetHeaderTitleCol}>
-                <View style={styles.sheetTitleWithIcon}>
-                  {areaStep === 'WARD' && (
-                    <TouchableOpacity
-                      style={styles.sheetBackBtn}
-                      onPress={() => setAreaStep('PROVINCE')}
-                      activeOpacity={0.7}
-                    >
-                      <Feather name="arrow-left" size={17} color="#0066FF" />
-                    </TouchableOpacity>
-                  )}
-                  <View style={[styles.cardHeaderIcon, { backgroundColor: '#EFF6FF', width: 30, height: 30 }]}>
-                    <MaterialCommunityIcons name="map-marker-radius" size={17} color="#0066FF" />
-                  </View>
-                  <Text style={styles.sheetTitle}>Địa bàn sẵn sàng tác chiến</Text>
-                </View>
-                <Text style={styles.sheetSubtitle}>
-                  {areaStep === 'PROVINCE'
-                    ? 'Bước 1: Chọn Tỉnh / Thành phố bạn thường trú'
-                    : 'Bước 2: Chọn Phường / Xã bạn sẵn sàng tác chiến'}
-                </Text>
-              </View>
+  {/* 11. Modal Popup nổi ở dưới màn hình (Bottom Sheet) chọn Tỉnh thành & Phường xã */ }
+  < Modal
+visible = { isAreaSheetOpen }
+transparent
+animationType = "slide"
+onRequestClose = {() => setIsAreaSheetOpen(false)}
+      >
+  <TouchableOpacity
+    style={styles.bottomSheetOverlay}
+    activeOpacity={1}
+    onPress={() => setIsAreaSheetOpen(false)}
+  >
+    <TouchableOpacity
+      activeOpacity={1}
+      style={[styles.bottomSheetCard, { paddingBottom: Math.max(insets.bottom + 16, 28) }]}
+      onPress={(e) => e.stopPropagation()}
+    >
+      {/* Thanh gạt trên đầu Bottom Sheet */}
+      <View style={styles.sheetHandle} />
 
+      {/* Header Bottom Sheet */}
+      <View style={styles.sheetHeaderRow}>
+        <View style={styles.sheetHeaderTitleCol}>
+          <View style={styles.sheetTitleWithIcon}>
+            {areaStep === 'WARD' && (
               <TouchableOpacity
-                style={styles.sheetCloseBtn}
-                onPress={() => setIsAreaSheetOpen(false)}
-                activeOpacity={0.7}
-              >
-                <Feather name="x" size={18} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Thanh điều hướng 2 bước (Step Tabs) */}
-            <View style={styles.stepTabsRow}>
-              <TouchableOpacity
-                style={[styles.stepTab, areaStep === 'PROVINCE' && styles.stepTabActive]}
+                style={styles.sheetBackBtn}
                 onPress={() => setAreaStep('PROVINCE')}
                 activeOpacity={0.7}
               >
-                <View style={[styles.stepTabBadge, areaStep === 'PROVINCE' && styles.stepTabBadgeActive]}>
-                  <Text style={[styles.stepTabBadgeText, areaStep === 'PROVINCE' && styles.stepTabBadgeTextActive]}>1</Text>
-                </View>
-                <Text style={[styles.stepTabText, areaStep === 'PROVINCE' && styles.stepTabTextActive]} numberOfLines={1}>
-                  Tỉnh / Thành phố
-                </Text>
+                <Feather name="arrow-left" size={17} color="#0066FF" />
               </TouchableOpacity>
-
-              <Feather name="chevron-right" size={15} color="#94A3B8" style={{ marginHorizontal: 3 }} />
-
-              <TouchableOpacity
-                style={[
-                  styles.stepTab,
-                  areaStep === 'WARD' && styles.stepTabActive,
-                  !selectedProvince && { opacity: 0.5 },
-                ]}
-                onPress={() => selectedProvince && setAreaStep('WARD')}
-                disabled={!selectedProvince}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.stepTabBadge, areaStep === 'WARD' && styles.stepTabBadgeActive]}>
-                  <Text style={[styles.stepTabBadgeText, areaStep === 'WARD' && styles.stepTabBadgeTextActive]}>2</Text>
-                </View>
-                <Text style={[styles.stepTabText, areaStep === 'WARD' && styles.stepTabTextActive]} numberOfLines={1}>
-                  {selectedWardName || 'Phường / Xã'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {areaStep === 'PROVINCE' ? (
-              <>
-                {/* Ô tìm kiếm Tỉnh / Thành phố */}
-                <View style={styles.sheetSearchInputRow}>
-                  <Feather name="search" size={16} color="#94A3B8" />
-                  <TextInput
-                    style={styles.sheetSearchInput}
-                    placeholder="Tìm Tỉnh / Thành phố (Đà Nẵng, Hà Nội...)..."
-                    placeholderTextColor="#94A3B8"
-                    value={provinceSearchQuery}
-                    onChangeText={setProvinceSearchQuery}
-                  />
-                  {provinceSearchQuery.length > 0 && (
-                    <TouchableOpacity onPress={() => setProvinceSearchQuery('')}>
-                      <Feather name="x-circle" size={16} color="#94A3B8" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Danh sách Tỉnh / Thành phố */}
-                <ScrollView
-                  style={{ maxHeight: 360 }}
-                  contentContainerStyle={styles.areaSheetList}
-                  showsVerticalScrollIndicator={false}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {filteredProvinces.map((p) => {
-                    const isSelected = selectedProvince?.code === p.code;
-                    return (
-                      <TouchableOpacity
-                        key={p.code}
-                        style={[styles.areaSheetItem, isSelected && styles.areaSheetItemActive]}
-                        onPress={() => handleSelectProvince(p)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={[styles.areaSheetIconCircle, isSelected && styles.areaSheetIconCircleActive]}>
-                          <MaterialCommunityIcons
-                            name="city-variant-outline"
-                            size={19}
-                            color={isSelected ? '#0066FF' : '#64748B'}
-                          />
-                        </View>
-
-                        <View style={styles.areaSheetInfo}>
-                          <Text style={[styles.areaSheetLabel, isSelected && styles.areaSheetLabelActive]}>
-                            {p.name}
-                          </Text>
-                        </View>
-
-                        <Feather
-                          name="chevron-right"
-                          size={16}
-                          color={isSelected ? '#0066FF' : '#94A3B8'}
-                        />
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </>
-            ) : (
-              <>
-                {/* Ô tìm kiếm Phường / Xã */}
-                <View style={styles.sheetSearchInputRow}>
-                  <Feather name="search" size={16} color="#94A3B8" />
-                  <TextInput
-                    style={styles.sheetSearchInput}
-                    placeholder="Tìm kiếm Phường / Xã..."
-                    placeholderTextColor="#94A3B8"
-                    value={wardSearchQuery}
-                    onChangeText={setWardSearchQuery}
-                  />
-                  {wardSearchQuery.length > 0 && (
-                    <TouchableOpacity onPress={() => setWardSearchQuery('')}>
-                      <Feather name="x-circle" size={16} color="#94A3B8" />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Danh sách Phường / Xã */}
-                {isLoadingWards ? (
-                  <View style={styles.loadingWardsBox}>
-                    <ActivityIndicator size="small" color="#0066FF" />
-                    <Text style={styles.loadingWardsText}>Đang tải danh sách Phường / Xã...</Text>
-                  </View>
-                ) : (
-                  <ScrollView
-                    style={{ maxHeight: 360 }}
-                    contentContainerStyle={styles.areaSheetList}
-                    showsVerticalScrollIndicator={false}
-                    keyboardShouldPersistTaps="handled"
-                  >
-                    {filteredWards.length > 0 ? (
-                      filteredWards.map((w) => {
-                        const isSelected = selectedWardCode === w.code || selectedAreaName.includes(w.name);
-                        return (
-                          <TouchableOpacity
-                            key={w.code}
-                            style={[styles.areaSheetItem, isSelected && styles.areaSheetItemActive]}
-                            onPress={() => handleSelectWard(w)}
-                            activeOpacity={0.7}
-                          >
-                            <View style={[styles.areaSheetIconCircle, isSelected && styles.areaSheetIconCircleActive]}>
-                              <MaterialCommunityIcons
-                                name="map-marker-outline"
-                                size={19}
-                                color={isSelected ? '#0066FF' : '#64748B'}
-                              />
-                            </View>
-
-                            <View style={styles.areaSheetInfo}>
-                              <Text style={[styles.areaSheetLabel, isSelected && styles.areaSheetLabelActive]}>
-                                {w.name}
-                              </Text>
-                            </View>
-
-                            <View
-                              style={[
-                                styles.vehicleRadioDot,
-                                isSelected && styles.vehicleRadioDotActive,
-                              ]}
-                            >
-                              {isSelected && <View style={styles.vehicleRadioInner} />}
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })
-                    ) : (
-                      <View style={styles.emptyAreaBox}>
-                        <Text style={styles.emptyAreaText}>Không tìm thấy Phường / Xã phù hợp</Text>
-                      </View>
-                    )}
-                  </ScrollView>
-                )}
-              </>
             )}
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+            <View style={[styles.cardHeaderIcon, { backgroundColor: '#EFF6FF', width: 30, height: 30 }]}>
+              <MaterialCommunityIcons name="map-marker-radius" size={17} color="#0066FF" />
+            </View>
+            <Text style={styles.sheetTitle}>Địa bàn sẵn sàng tác chiến</Text>
+          </View>
+          <Text style={styles.sheetSubtitle}>
+            {areaStep === 'PROVINCE'
+              ? 'Bước 1: Chọn Tỉnh / Thành phố bạn thường trú'
+              : 'Bước 2: Chọn Phường / Xã bạn sẵn sàng tác chiến'}
+          </Text>
+        </View>
 
-      {/* 12. Modal Popup nổi ở dưới màn hình (Bottom Sheet) chọn Phương tiện */}
-      <Modal
-        visible={isVehicleSheetOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsVehicleSheetOpen(false)}
-      >
         <TouchableOpacity
-          style={styles.bottomSheetOverlay}
-          activeOpacity={1}
-          onPress={() => setIsVehicleSheetOpen(false)}
+          style={styles.sheetCloseBtn}
+          onPress={() => setIsAreaSheetOpen(false)}
+          activeOpacity={0.7}
         >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={[styles.bottomSheetCard, { paddingBottom: Math.max(insets.bottom + 16, 28) }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Thanh gạt trên đầu Bottom Sheet */}
-            <View style={styles.sheetHandle} />
-
-            {/* Header Bottom Sheet */}
-            <View style={styles.sheetHeaderRow}>
-              <View style={styles.sheetHeaderTitleCol}>
-                <View style={styles.sheetTitleWithIcon}>
-                  <View style={[styles.cardHeaderIcon, { backgroundColor: '#FFFBEB', width: 30, height: 30 }]}>
-                    <MaterialCommunityIcons name="truck-fast-outline" size={17} color="#D97706" />
-                  </View>
-                  <Text style={styles.sheetTitle}>Phương tiện cơ động sẵn sàng</Text>
-                </View>
-                <Text style={styles.sheetSubtitle}>
-                  Chọn phương tiện bạn có thể tự vận hành khi nhận lệnh huy động
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.sheetCloseBtn}
-                onPress={() => setIsVehicleSheetOpen(false)}
-                activeOpacity={0.7}
-              >
-                <Feather name="x" size={18} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Danh sách các phương tiện trong Bottom Sheet */}
-            <View style={styles.vehicleSheetList}>
-              {VEHICLE_OPTIONS.map((v) => {
-                const isSelected = selectedVehicleType === v.id;
-                return (
-                  <TouchableOpacity
-                    key={v.id}
-                    style={[
-                      styles.vehicleSheetItem,
-                      isSelected && styles.vehicleSheetItemActive,
-                    ]}
-                    onPress={() => {
-                      handleSelectVehicle(v.id);
-                      setIsVehicleSheetOpen(false);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View
-                      style={[
-                        styles.vehicleSheetIconCircle,
-                        isSelected && styles.vehicleSheetIconCircleActive,
-                      ]}
-                    >
-                      <MaterialCommunityIcons
-                        name={v.icon as any}
-                        size={19}
-                        color={isSelected ? '#0066FF' : '#64748B'}
-                      />
-                    </View>
-
-                    <View style={styles.vehicleSheetInfo}>
-                      <Text
-                        style={[
-                          styles.vehicleSheetLabel,
-                          isSelected && styles.vehicleSheetLabelActive,
-                        ]}
-                      >
-                        {v.label}
-                      </Text>
-                      <Text style={styles.vehicleSheetDesc}>{v.shortDesc}</Text>
-                    </View>
-
-                    <View
-                      style={[
-                        styles.vehicleRadioDot,
-                        isSelected && styles.vehicleRadioDotActive,
-                      ]}
-                    >
-                      {isSelected && <View style={styles.vehicleRadioInner} />}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </TouchableOpacity>
+          <Feather name="x" size={18} color="#64748B" />
         </TouchableOpacity>
-      </Modal>
-      {/* 12. Modal Popup nổi ở dưới màn hình (Bottom Sheet) chọn Kỹ năng chuyên môn */}
-      <Modal
-        visible={isSkillSheetOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsSkillSheetOpen(false)}
-      >
+      </View>
+
+      {/* Thanh điều hướng 2 bước (Step Tabs) */}
+      <View style={styles.stepTabsRow}>
         <TouchableOpacity
-          style={styles.bottomSheetOverlay}
-          activeOpacity={1}
-          onPress={() => setIsSkillSheetOpen(false)}
+          style={[styles.stepTab, areaStep === 'PROVINCE' && styles.stepTabActive]}
+          onPress={() => setAreaStep('PROVINCE')}
+          activeOpacity={0.7}
         >
-          <TouchableOpacity
-            activeOpacity={1}
-            style={[styles.bottomSheetCard, { paddingBottom: Math.max(insets.bottom + 16, 28) }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            {/* Thanh gạt trên đầu Bottom Sheet */}
-            <View style={styles.sheetHandle} />
+          <View style={[styles.stepTabBadge, areaStep === 'PROVINCE' && styles.stepTabBadgeActive]}>
+            <Text style={[styles.stepTabBadgeText, areaStep === 'PROVINCE' && styles.stepTabBadgeTextActive]}>1</Text>
+          </View>
+          <Text style={[styles.stepTabText, areaStep === 'PROVINCE' && styles.stepTabTextActive]} numberOfLines={1}>
+            Tỉnh / Thành phố
+          </Text>
+        </TouchableOpacity>
 
-            {/* Header Bottom Sheet */}
-            <View style={styles.sheetHeaderRow}>
-              <View style={styles.sheetHeaderTitleCol}>
-                <View style={styles.sheetTitleWithIcon}>
-                  <View style={[styles.cardHeaderIcon, { backgroundColor: '#F0FDF4', width: 30, height: 30 }]}>
-                    <MaterialCommunityIcons name="shield-star-outline" size={17} color="#10B981" />
-                  </View>
-                  <Text style={styles.sheetTitle}>Kỹ năng cứu hộ chuyên môn</Text>
-                </View>
-                <Text style={styles.sheetSubtitle}>
-                  Chọn các kỹ năng bạn có đủ điều kiện và tự tin tham gia tác chiến
-                </Text>
-              </View>
+        <Feather name="chevron-right" size={15} color="#94A3B8" style={{ marginHorizontal: 3 }} />
 
-              <TouchableOpacity
-                style={styles.sheetCloseBtn}
-                onPress={() => setIsSkillSheetOpen(false)}
-                activeOpacity={0.7}
-              >
-                <Feather name="x" size={18} color="#64748B" />
+        <TouchableOpacity
+          style={[
+            styles.stepTab,
+            areaStep === 'WARD' && styles.stepTabActive,
+            !selectedProvince && { opacity: 0.5 },
+          ]}
+          onPress={() => selectedProvince && setAreaStep('WARD')}
+          disabled={!selectedProvince}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.stepTabBadge, areaStep === 'WARD' && styles.stepTabBadgeActive]}>
+            <Text style={[styles.stepTabBadgeText, areaStep === 'WARD' && styles.stepTabBadgeTextActive]}>2</Text>
+          </View>
+          <Text style={[styles.stepTabText, areaStep === 'WARD' && styles.stepTabTextActive]} numberOfLines={1}>
+            {selectedWardName || 'Phường / Xã'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {areaStep === 'PROVINCE' ? (
+        <>
+          {/* Ô tìm kiếm Tỉnh / Thành phố */}
+          <View style={styles.sheetSearchInputRow}>
+            <Feather name="search" size={16} color="#94A3B8" />
+            <TextInput
+              style={styles.sheetSearchInput}
+              placeholder="Tìm Tỉnh / Thành phố (Đà Nẵng, Hà Nội...)..."
+              placeholderTextColor="#94A3B8"
+              value={provinceSearchQuery}
+              onChangeText={setProvinceSearchQuery}
+            />
+            {provinceSearchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setProvinceSearchQuery('')}>
+                <Feather name="x-circle" size={16} color="#94A3B8" />
               </TouchableOpacity>
-            </View>
+            )}
+          </View>
 
-            {/* Danh sách kỹ năng trong Bottom Sheet */}
+          {/* Danh sách Tỉnh / Thành phố */}
+          <ScrollView
+            style={{ maxHeight: 360 }}
+            contentContainerStyle={styles.areaSheetList}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {filteredProvinces.map((p) => {
+              const isSelected = selectedProvince?.code === p.code;
+              return (
+                <TouchableOpacity
+                  key={p.code}
+                  style={[styles.areaSheetItem, isSelected && styles.areaSheetItemActive]}
+                  onPress={() => handleSelectProvince(p)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.areaSheetIconCircle, isSelected && styles.areaSheetIconCircleActive]}>
+                    <MaterialCommunityIcons
+                      name="city-variant-outline"
+                      size={19}
+                      color={isSelected ? '#0066FF' : '#64748B'}
+                    />
+                  </View>
+
+                  <View style={styles.areaSheetInfo}>
+                    <Text style={[styles.areaSheetLabel, isSelected && styles.areaSheetLabelActive]}>
+                      {p.name}
+                    </Text>
+                  </View>
+
+                  <Feather
+                    name="chevron-right"
+                    size={16}
+                    color={isSelected ? '#0066FF' : '#94A3B8'}
+                  />
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </>
+      ) : (
+        <>
+          {/* Ô tìm kiếm Phường / Xã */}
+          <View style={styles.sheetSearchInputRow}>
+            <Feather name="search" size={16} color="#94A3B8" />
+            <TextInput
+              style={styles.sheetSearchInput}
+              placeholder="Tìm kiếm Phường / Xã..."
+              placeholderTextColor="#94A3B8"
+              value={wardSearchQuery}
+              onChangeText={setWardSearchQuery}
+            />
+            {wardSearchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setWardSearchQuery('')}>
+                <Feather name="x-circle" size={16} color="#94A3B8" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Danh sách Phường / Xã */}
+          {isLoadingWards ? (
+            <View style={styles.loadingWardsBox}>
+              <ActivityIndicator size="small" color="#0066FF" />
+              <Text style={styles.loadingWardsText}>Đang tải danh sách Phường / Xã...</Text>
+            </View>
+          ) : (
             <ScrollView
               style={{ maxHeight: 360 }}
-              contentContainerStyle={styles.skillSheetList}
+              contentContainerStyle={styles.areaSheetList}
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
-              {RESCUE_SKILLS.map((skill) => {
-                const isSelected = selectedSkills.includes(skill.id);
-                return (
-                  <TouchableOpacity
-                    key={skill.id}
-                    style={[
-                      styles.skillSheetItem,
-                      isSelected && styles.skillSheetItemActive,
-                    ]}
-                    onPress={() => handleToggleSkill(skill.id)}
-                    activeOpacity={0.7}
-                  >
-                    <View
-                      style={[
-                        styles.skillSheetIconCircle,
-                        isSelected && styles.skillSheetIconCircleActive,
-                      ]}
+              {filteredWards.length > 0 ? (
+                filteredWards.map((w) => {
+                  const isSelected = selectedWardCode === w.code || selectedAreaName.includes(w.name);
+                  return (
+                    <TouchableOpacity
+                      key={w.code}
+                      style={[styles.areaSheetItem, isSelected && styles.areaSheetItemActive]}
+                      onPress={() => handleSelectWard(w)}
+                      activeOpacity={0.7}
                     >
-                      <MaterialCommunityIcons
-                        name={skill.icon as any}
-                        size={19}
-                        color={isSelected ? '#0066FF' : '#64748B'}
-                      />
-                    </View>
+                      <View style={[styles.areaSheetIconCircle, isSelected && styles.areaSheetIconCircleActive]}>
+                        <MaterialCommunityIcons
+                          name="map-marker-outline"
+                          size={19}
+                          color={isSelected ? '#0066FF' : '#64748B'}
+                        />
+                      </View>
 
-                    <View style={styles.skillSheetInfo}>
-                      <Text
+                      <View style={styles.areaSheetInfo}>
+                        <Text style={[styles.areaSheetLabel, isSelected && styles.areaSheetLabelActive]}>
+                          {w.name}
+                        </Text>
+                      </View>
+
+                      <View
                         style={[
-                          styles.skillSheetLabel,
-                          isSelected && styles.skillSheetLabelActive,
+                          styles.radioDot,
+                          isSelected && styles.radioDotActive,
                         ]}
                       >
-                        {skill.label}
-                      </Text>
-                      <Text style={styles.skillSheetDesc}>{skill.desc}</Text>
-                    </View>
-
-                    <View
-                      style={[
-                        styles.skillCheckCircle,
-                        isSelected && styles.skillCheckCircleActive,
-                      ]}
-                    >
-                      {isSelected && <Feather name="check" size={11} color="#FFFFFF" />}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
+                        {isSelected && <View style={styles.radioInner} />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              ) : (
+                <View style={styles.emptyAreaBox}>
+                  <Text style={styles.emptyAreaText}>Không tìm thấy Phường / Xã phù hợp</Text>
+                </View>
+              )}
             </ScrollView>
+          )}
+        </>
+      )}
+    </TouchableOpacity>
+  </TouchableOpacity>
+      </Modal >
 
-            {/* Nút xác nhận hoàn tất chọn kỹ năng */}
-            <TouchableOpacity
-              style={styles.sheetConfirmBtn}
-              onPress={() => setIsSkillSheetOpen(false)}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.sheetConfirmBtnText}>
-                Xác nhận ({selectedSkills.length} kỹ năng đã chọn)
-              </Text>
-            </TouchableOpacity>
-          </TouchableOpacity>
+  {/* 12. Modal Popup nổi ở dưới màn hình (Bottom Sheet) chọn Kỹ năng chuyên môn */}
+  < Modal
+visible = { isSkillSheetOpen }
+transparent
+animationType = "slide"
+onRequestClose = {() => setIsSkillSheetOpen(false)}
+      >
+  <TouchableOpacity
+    style={styles.bottomSheetOverlay}
+    activeOpacity={1}
+    onPress={() => setIsSkillSheetOpen(false)}
+  >
+    <TouchableOpacity
+      activeOpacity={1}
+      style={[styles.bottomSheetCard, { paddingBottom: Math.max(insets.bottom + 16, 28) }]}
+      onPress={(e) => e.stopPropagation()}
+    >
+      {/* Thanh gạt trên đầu Bottom Sheet */}
+      <View style={styles.sheetHandle} />
+
+      {/* Header Bottom Sheet */}
+      <View style={styles.sheetHeaderRow}>
+        <View style={styles.sheetHeaderTitleCol}>
+          <View style={styles.sheetTitleWithIcon}>
+            <View style={[styles.cardHeaderIcon, { backgroundColor: '#F0FDF4', width: 30, height: 30 }]}>
+              <MaterialCommunityIcons name="shield-star-outline" size={17} color="#10B981" />
+            </View>
+            <Text style={styles.sheetTitle}>Kỹ năng cứu hộ chuyên môn</Text>
+          </View>
+          <Text style={styles.sheetSubtitle}>
+            Chọn các kỹ năng bạn có đủ điều kiện và tự tin tham gia tác chiến
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.sheetCloseBtn}
+          onPress={() => setIsSkillSheetOpen(false)}
+          activeOpacity={0.7}
+        >
+          <Feather name="x" size={18} color="#64748B" />
         </TouchableOpacity>
-      </Modal>
-    </SafeAreaView>
+      </View>
+
+      {/* Danh sách kỹ năng trong Bottom Sheet */}
+      <ScrollView
+        style={{ maxHeight: 360 }}
+        contentContainerStyle={styles.skillSheetList}
+        showsVerticalScrollIndicator={false}
+      >
+        {RESCUE_SKILLS.map((skill) => {
+          const isSelected = selectedSkills.includes(skill.id);
+          return (
+            <TouchableOpacity
+              key={skill.id}
+              style={[
+                styles.skillSheetItem,
+                isSelected && styles.skillSheetItemActive,
+              ]}
+              onPress={() => handleToggleSkill(skill.id)}
+              activeOpacity={0.7}
+            >
+              <View
+                style={[
+                  styles.skillSheetIconCircle,
+                  isSelected && styles.skillSheetIconCircleActive,
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name={skill.icon as any}
+                  size={19}
+                  color={isSelected ? '#0066FF' : '#64748B'}
+                />
+              </View>
+
+              <View style={styles.skillSheetInfo}>
+                <Text
+                  style={[
+                    styles.skillSheetLabel,
+                    isSelected && styles.skillSheetLabelActive,
+                  ]}
+                >
+                  {skill.label}
+                </Text>
+                <Text style={styles.skillSheetDesc}>{skill.desc}</Text>
+              </View>
+
+              <View
+                style={[
+                  styles.skillCheckCircle,
+                  isSelected && styles.skillCheckCircleActive,
+                ]}
+              >
+                {isSelected && <Feather name="check" size={11} color="#FFFFFF" />}
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {/* Nút xác nhận hoàn tất chọn kỹ năng */}
+      <TouchableOpacity
+        style={styles.sheetConfirmBtn}
+        onPress={() => setIsSkillSheetOpen(false)}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.sheetConfirmBtnText}>
+          Xác nhận ({selectedSkills.length} kỹ năng đã chọn)
+        </Text>
+      </TouchableOpacity>
+    </TouchableOpacity>
+  </TouchableOpacity>
+      </Modal >
+
+  {/* 13. Modal Quét mã QR thẻ CCCD gắn chip */ }
+  < CccdQrScannerModal
+visible = { isQrScannerOpen }
+onClose = {() => setIsQrScannerOpen(false)}
+onSuccess = { handleScanCccdSuccess }
+userFullName = { userData?.fullName || user?.fullName}
+      />
+    </SafeAreaView >
   );
 };
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F2F4F7',
   },
   header: {
     flexDirection: 'row',
@@ -1393,7 +1254,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F2F4F7',
   },
   loadingText: {
     marginTop: 12,
@@ -1401,7 +1262,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   scrollContent: {
-    padding: 14,
+    padding: 16,
   },
 
   // Status Alert
@@ -1435,9 +1296,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     padding: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 12,
+    marginBottom: 16,
     gap: 10,
   },
   applicantAvatarBox: {
@@ -1453,66 +1312,107 @@ const styles = StyleSheet.create({
   applicantAvatarPlaceholder: {
     width: 40,
     height: 40,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
   },
   applicantAvatarText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0066FF',
+    color: '#475569',
   },
   applicantInfo: {
     flex: 1,
   },
-  applicantNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   applicantName: {
-    fontSize: 14,
+    fontSize: 14.5,
     fontWeight: '700',
     color: '#0F172A',
-    flex: 1,
-    marginRight: 6,
   },
   applicantBadge: {
     backgroundColor: '#F1F5F9',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 6,
   },
   applicantBadgeText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '600',
     color: '#64748B',
   },
   applicantContact: {
-    fontSize: 11.5,
+    fontSize: 12,
     color: '#64748B',
     marginTop: 2,
   },
 
-  // BENTO CARD GENERAL
-  bentoCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 12,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+  // INSET GROUPED FORM (Apple iOS / VNeID Minimalist Style)
+  insetSectionTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    letterSpacing: 0.5,
+    marginLeft: 12,
+    marginBottom: 6,
+    marginTop: 4,
   },
-  cardHeaderRow: {
+  insetGroupCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  insetRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 9,
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    minHeight: 50,
+    gap: 12,
+  },
+  insetRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  insetRowLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#334155',
+    flexShrink: 0,
+  },
+  insetRowRight: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+  },
+  insetRowValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  insetRowPlaceholder: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#94A3B8',
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  insetRowActionText: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#0066FF',
+    flexShrink: 0,
+  },
+  insetRowVerifiedText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#059669',
+    flexShrink: 0,
   },
   cardHeaderIcon: {
     width: 32,
@@ -1521,119 +1421,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardHeaderTitleCol: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  cardSubtitle: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 1,
-  },
-  subFieldGroup: {
-    marginTop: 2,
-  },
-  fieldLabel: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 6,
-  },
   requiredStar: {
     color: '#DC2626',
     fontWeight: '700',
-  },
-
-  // CCCD Box
-  maskedNumberBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  maskedNumberText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#0F172A',
-    letterSpacing: 1.5,
-  },
-  verifiedTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  verifiedTagText: {
-    fontSize: 10.5,
-    fontWeight: '600',
-    color: '#059669',
-  },
-  inputBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-  },
-  inputBoxValid: {
-    borderColor: '#93C5FD',
-    backgroundColor: '#F0F7FF',
-  },
-  textInput: {
-    flex: 1,
-    fontSize: 13,
-    color: '#0F172A',
-    paddingVertical: 10,
-    fontWeight: '600',
-    letterSpacing: 1,
-  },
-  charCounter: {
-    fontSize: 11.5,
-    color: '#94A3B8',
-    fontWeight: '600',
-  },
-  charCounterComplete: {
-    color: '#0066FF',
-    fontWeight: '700',
-  },
-
-  // INLINE AREA SELECTOR
-  inlineAreaBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    gap: 8,
-  },
-  inlineAreaBoxActive: {
-    backgroundColor: '#F0F7FF',
-    borderColor: '#93C5FD',
-  },
-  inlineAreaBoxEmpty: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#CBD5E1',
-  },
-  inlineAreaText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#0F172A',
   },
 
   // 2-Step Area Navigation
@@ -1777,33 +1567,7 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
   },
 
-  // VEHICLE TRIGGER CARD (Compact on Main Form)
-  vehicleTriggerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F7FF',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#93C5FD',
-    gap: 8,
-  },
-  vehicleTriggerInfo: {
-    flex: 1,
-  },
-  vehicleTriggerLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  vehicleTriggerDesc: {
-    fontSize: 11.5,
-    color: '#64748B',
-    fontWeight: '400',
-  },
-
-  // BOTTOM SHEET POPUP (Vehicle Picker)
+  // BOTTOM SHEET POPUP COMMON STYLES
   bottomSheetOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
@@ -1871,55 +1635,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  vehicleSheetList: {
-    gap: 9,
-  },
-  vehicleSheetItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    gap: 10,
-  },
-  vehicleSheetItemActive: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#0066FF',
-  },
-  vehicleSheetIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  vehicleSheetIconCircleActive: {
-    backgroundColor: '#DBEAFE',
-    borderColor: '#BFDBFE',
-  },
-  vehicleSheetInfo: {
-    flex: 1,
-  },
-  vehicleSheetLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1E293B',
-    marginBottom: 2,
-  },
-  vehicleSheetLabelActive: {
-    color: '#0066FF',
-  },
-  vehicleSheetDesc: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  vehicleRadioDot: {
+  radioDot: {
     width: 18,
     height: 18,
     borderRadius: 9,
@@ -1929,95 +1645,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
   },
-  vehicleRadioDotActive: {
+  radioDotActive: {
     borderColor: '#0066FF',
   },
-  vehicleRadioInner: {
+  radioInner: {
     width: 9,
     height: 9,
     borderRadius: 4.5,
     backgroundColor: '#0066FF',
   },
 
-  skillsCountBadge: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  skillsCountText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0066FF',
-  },
 
-  // SKILL TRIGGER CARD (Compact on Main Form)
-  skillTriggerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    gap: 8,
-  },
-  skillTriggerIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F0FDF4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  skillTriggerInfo: {
-    flex: 1,
-  },
-  skillSelectedChipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 5,
-  },
-  skillMiniChip: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  skillMiniChipText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#0066FF',
-  },
-  skillMoreChip: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
-    paddingVertical: 2.5,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  skillMoreChipText: {
-    fontSize: 10.5,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  skillEmptyText: {
-    fontSize: 13,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
-  skillTriggerHint: {
-    fontSize: 11,
-    color: '#64748B',
-  },
 
   // SKILLS BOTTOM SHEET
   skillSheetList: {
@@ -2097,57 +1735,63 @@ const styles = StyleSheet.create({
   },
 
   // EXPERIENCE
-  quickTagsWrapper: {
-    marginTop: 8,
+  insetTextArea: {
+    minHeight: 82,
+    fontSize: 13.5,
+    color: '#0F172A',
+    lineHeight: 19,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  quickTagsSection: {
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   quickTagsTitle: {
-    fontSize: 11,
+    fontSize: 11.5,
     color: '#64748B',
-    marginBottom: 5,
+    marginBottom: 6,
   },
-  quickTagsRow: {
+  quickTagsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    justifyContent: 'space-between',
+    rowGap: 8,
   },
   quickTagBtn: {
+    width: '48.8%',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    gap: 5,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 9,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: '#E2E8F0',
+  },
+  quickTagBtnActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#93C5FD',
   },
   quickTagBtnText: {
-    fontSize: 10.5,
+    flex: 1,
+    fontSize: 11.5,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  quickTagBtnTextActive: {
     color: '#0066FF',
     fontWeight: '600',
   },
-  textAreaBox: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  textArea: {
-    minHeight: 70,
-    fontSize: 12.5,
-    color: '#0F172A',
-    lineHeight: 18,
-  },
 
-  // Pledge Card
-  pledgeCard: {
+  // Pledge Group
+  pledgeGroupCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    padding: 14,
     marginBottom: 10,
   },
   pledgeRow: {

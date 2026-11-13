@@ -134,7 +134,7 @@ export const DashboardViews: React.FC<DashboardViewsProps> = ({
 
     // 11. Quản lý & Xác minh cứu hộ viên (Admin)
     case 'rescuers_admin':
-      return <RescuersView mode="admin" />;
+      return <RescuersView mode="admin" user={user} />;
 
     // 12. Quản lý cán bộ & địa bàn phụ trách
     case 'authorities':
