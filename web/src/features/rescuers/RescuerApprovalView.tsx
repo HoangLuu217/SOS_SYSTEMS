@@ -10,20 +10,16 @@ import {
   MapPin,
   Phone,
   Mail,
-  UserCheck,
-  Award,
   FileCheck,
   X,
   ChevronLeft,
   ChevronRight,
   AlertCircle,
   ZoomIn,
-  Calendar,
   Compass,
   FilterX,
 } from 'lucide-react';
 import type { User } from '@/types/auth';
-import type { AdministrativeAreaItem } from '@/types/dashboard';
 import { fetchAdminUsers, verifyRescuer, fetchAdministrativeAreas } from '@/api';
 import { domainDService } from '@/services/domainDService';
 import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
@@ -74,7 +70,16 @@ export interface RescuerApplicant {
   // Năng lực cứu hộ
   skills: string[];
   experience: string;
-  specialization: 'FLOOD_RESCUE' | 'SEARCH_RESCUE' | 'MEDICAL_RESCUE' | 'FIRE_RESCUE' | 'VEHICLE_OP' | 'OTHER';
+  specialization:
+    | 'FLOOD_RESCUE'
+    | 'SEARCH_RESCUE'
+    | 'MEDICAL_RESCUE'
+    | 'FIRE_RESCUE'
+    | 'EVACUATION'
+    | 'COMMUNICATION'
+    | 'LOGISTICS'
+    | 'VEHICLE_OP'
+    | 'OTHER';
   certificates: string[];
   equipment: string[];
   vehicleType?: string;
@@ -114,22 +119,6 @@ const getApplicantInitials = (fullName?: string): string => {
   return (fullName || 'CH').slice(0, 2).toUpperCase();
 };
 
-const SPECIALIZATION_LABELS: Record<string, string> = {
-  WATER_RESCUE: 'Đội cứu hộ đường thủy',
-  EVACUATION: 'Đội sơ tán dân',
-  MEDICAL_RESCUE: 'Đội y tế',
-  LOGISTICS: 'Đội hậu cần',
-  SEARCH_RESCUE: 'Đội tìm kiếm cứu nạn',
-  COMMUNICATION: 'Đội thông tin liên lạc',
-  SECURITY: 'Đội an ninh',
-  // Tương thích ngược
-  FLOOD_RESCUE: 'Đội cứu hộ đường thủy',
-  FIRE_RESCUE: 'PCCC & Cứu sập',
-  VEHICLE_OP: 'Vận hành phương tiện',
-  OTHER: 'Cứu hộ tổng hợp',
-};
-
-
 export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }) => {
   // 1. Phân quyền và Địa bàn Local Authority vs Admin
   const activeOfficer = domainDService.getActiveOfficer();
@@ -137,12 +126,6 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
   const isAdmin = Boolean(
     user?.roles?.includes('ADMIN') ||
     (user as any)?.role === 'ADMIN'
-  );
-
-  const isAuthority = !isAdmin && Boolean(
-    user?.roles?.includes('LOCAL_AUTHORITY') ||
-    user?.roles?.includes('AUTHORITY') ||
-    Boolean(user?.authority?.areaId || user?.authority?.areaName)
   );
 
   const userAreaId =
@@ -284,7 +267,7 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
   const loadApplicants = useCallback(async () => {
     try {
       setLoading(true);
-      const [usersRes, areasRes] = await Promise.allSettled([
+      const [usersRes] = await Promise.allSettled([
         fetchAdminUsers({ role: 'RESCUER', limit: '100' }),
         fetchAdministrativeAreas(),
       ]);
@@ -930,9 +913,12 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
             >
               <option value="ALL">Tất cả chuyên môn</option>
               <option value="FLOOD_RESCUE">Thủy bộ vượt lũ</option>
-              <option value="SEARCH_RESCUE">Tìm kiếm & Cứu nạn</option>
+              <option value="SEARCH_RESCUE">Tìm kiếm &amp; Cứu nạn</option>
               <option value="MEDICAL_RESCUE">Sơ cấp cứu y tế</option>
-              <option value="FIRE_RESCUE">PCCC & Cứu sập</option>
+              <option value="FIRE_RESCUE">PCCC &amp; Cứu sập</option>
+              <option value="EVACUATION">Sơ tán người dân</option>
+              <option value="COMMUNICATION">Thông tin liên lạc</option>
+              <option value="LOGISTICS">Hậu cần &amp; Tiếp tế</option>
               <option value="VEHICLE_OP">Vận hành phương tiện</option>
               <option value="OTHER">Chuyên môn khác</option>
             </select>
