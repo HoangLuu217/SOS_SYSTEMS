@@ -134,48 +134,70 @@ class UserService {
       if (!user.authority) {
         user.authority = {};
       }
+      const isUserAdmin = (user.roles || []).includes('ADMIN');
+      const isLocalAuthorityOnly = (user.roles || []).includes('LOCAL_AUTHORITY') && !isUserAdmin;
+
       if (authority.position !== undefined) {
         user.authority.position = authority.position ? String(authority.position).trim() : null;
       }
       if (authority.organizationName !== undefined) {
         user.authority.organizationName = authority.organizationName ? String(authority.organizationName).trim() : null;
       }
-      if (authority.areaName !== undefined) {
-        user.authority.areaName = authority.areaName ? String(authority.areaName).trim() : null;
-        if (user.authority.areaName) {
-          const cleanName = user.authority.areaName.split(',')[0].trim();
-          const strippedName = cleanName.replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '').trim();
-          try {
-            const matchedArea =
-              (await AdministrativeArea.findOne({ name: new RegExp(`^${cleanName}$`, 'i') })) ||
-              (await AdministrativeArea.findOne({ name: new RegExp(strippedName, 'i') }));
-            if (matchedArea) {
-              user.authority.areaId = matchedArea._id;
-              if (!authority.department && (!user.authority.department || user.authority.department.includes('Ban Chỉ Huy PCTT'))) {
-                user.authority.department = `Ban Chỉ Huy PCTT ${matchedArea.name}`;
+
+      // Tài khoản địa phương (LOCAL_AUTHORITY) bị khóa không được tự đổi phường/xã/địa bàn phân quyền
+      if (!isLocalAuthorityOnly) {
+        if (authority.areaName !== undefined) {
+          user.authority.areaName = authority.areaName ? String(authority.areaName).trim() : null;
+          if (user.authority.areaName) {
+            const cleanName = user.authority.areaName.split(',')[0].trim();
+            const strippedName = cleanName.replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '').trim();
+            try {
+              const matchedArea =
+                (await AdministrativeArea.findOne({ name: new RegExp(`^${cleanName}$`, 'i') })) ||
+                (await AdministrativeArea.findOne({ name: new RegExp(strippedName, 'i') }));
+              if (matchedArea) {
+                user.authority.areaId = matchedArea._id;
+                if (!authority.department && (!user.authority.department || user.authority.department.includes('Ban Chỉ Huy PCTT'))) {
+                  user.authority.department = `Ban Chỉ Huy PCTT ${matchedArea.name}`;
+                }
+              } else {
+                user.authority.areaId = null;
+                if (!authority.department && (!user.authority.department || user.authority.department.includes('Ban Chỉ Huy PCTT'))) {
+                  user.authority.department = `Ban Chỉ Huy PCTT ${cleanName}`;
+                }
               }
-            } else {
+            } catch (e) {
               user.authority.areaId = null;
-              if (!authority.department && (!user.authority.department || user.authority.department.includes('Ban Chỉ Huy PCTT'))) {
-                user.authority.department = `Ban Chỉ Huy PCTT ${cleanName}`;
-              }
             }
-          } catch (e) {
-            user.authority.areaId = null;
           }
         }
+        if (authority.areaId !== undefined && authority.areaId) {
+          user.authority.areaId = authority.areaId;
+        }
+        if (authority.department !== undefined) {
+          user.authority.department = authority.department ? String(authority.department).trim() : null;
+        }
+        if (authority.provinceCode !== undefined) {
+          user.authority.provinceCode = authority.provinceCode ? Number(authority.provinceCode) : null;
+        }
+        if (authority.wardCode !== undefined) {
+          user.authority.wardCode = authority.wardCode ? Number(authority.wardCode) : null;
+        }
       }
-      if (authority.areaId !== undefined && authority.areaId) {
-        user.authority.areaId = authority.areaId;
+
+      if (authority.mapUrl !== undefined) {
+        user.authority.mapUrl = authority.mapUrl ? String(authority.mapUrl).trim() : null;
       }
-      if (authority.department !== undefined) {
-        user.authority.department = authority.department ? String(authority.department).trim() : null;
+      if (authority.latitude !== undefined) {
+        const parsedLat = Number(authority.latitude);
+        user.authority.latitude = Number.isFinite(parsedLat) ? parsedLat : null;
       }
-      if (authority.provinceCode !== undefined) {
-        user.authority.provinceCode = authority.provinceCode ? Number(authority.provinceCode) : null;
+      if (authority.longitude !== undefined) {
+        const parsedLng = Number(authority.longitude);
+        user.authority.longitude = Number.isFinite(parsedLng) ? parsedLng : null;
       }
-      if (authority.wardCode !== undefined) {
-        user.authority.wardCode = authority.wardCode ? Number(authority.wardCode) : null;
+      if (authority.officeAddress !== undefined) {
+        user.authority.officeAddress = authority.officeAddress ? String(authority.officeAddress).trim() : null;
       }
     }
 

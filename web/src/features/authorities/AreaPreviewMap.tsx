@@ -64,13 +64,27 @@ export function getAreaCoordinates(areaName: string, department?: string): { lat
 
 // Component hiển thị bản đồ địa bàn tác chiến với ranh giới khu đỏ chuẩn GeoJSON
 // Component hiển thị bản đồ địa bàn tác chiến với ranh giới khu đỏ chuẩn GeoJSON (Đa giác thực tế, không dùng hình tròn)
-export const AreaPreviewMap: React.FC<{
+export interface AreaPreviewMapProps {
   lat: number;
   lng: number;
   areaName: string;
   areaId?: string;
   department?: string;
-}> = ({ lat, lng, areaName, areaId, department }) => {
+  isPinnedLocation?: boolean;
+  officeAddress?: string;
+  mapUrl?: string;
+}
+
+export const AreaPreviewMap: React.FC<AreaPreviewMapProps> = ({
+  lat,
+  lng,
+  areaName,
+  areaId,
+  department,
+  isPinnedLocation = false,
+  officeAddress,
+  mapUrl,
+}) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
 
@@ -122,16 +136,23 @@ export const AreaPreviewMap: React.FC<{
     });
 
     const marker = L.marker([lat, lng], { icon: redPinIcon }).addTo(map);
-    marker
-      .bindPopup(
-        `<div style="font-family: inherit; font-size: 13px; font-weight: 700; color: #0f172a; line-height: 1.4; padding: 2px 4px;">
+    const popupHtml = isPinnedLocation
+      ? `<div style="font-family: inherit; font-size: 12.5px; color: #0f172a; line-height: 1.45; padding: 2px 4px; max-width: 240px;">
+          <div style="color: #dc2626; font-size: 11px; font-weight: 800; text-transform: uppercase; margin-bottom: 3px;">
+            📍 Vị trí trụ sở Ủy ban đã ghim
+          </div>
+          <div style="font-weight: 700;">${areaName}</div>
+          ${officeAddress ? `<div style="font-size: 11.5px; color: #475569; margin-top: 3px;">${officeAddress}</div>` : ''}
+          ${mapUrl ? `<a href="${mapUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block; margin-top:6px; color:#2563eb; font-weight:700; font-size:11.5px; text-decoration:none;">Mở Google Maps ↗</a>` : ''}
+        </div>`
+      : `<div style="font-family: inherit; font-size: 13px; font-weight: 700; color: #0f172a; line-height: 1.4; padding: 2px 4px;">
           <div style="color: #dc2626; font-size: 11px; font-weight: 800; text-transform: uppercase; margin-bottom: 2px;">
             🛡️ Vùng ranh giới tác chiến
           </div>
           <div>${areaName}</div>
-        </div>`
-      )
-      .openPopup();
+        </div>`;
+
+    marker.bindPopup(popupHtml).openPopup();
 
     const renderBoundary = (boundary: any) => {
       if (!isSubscribed || !mapRef.current) return;
@@ -155,8 +176,13 @@ export const AreaPreviewMap: React.FC<{
 
         const bounds = geoLayer.getBounds();
         if (bounds.isValid()) {
-          marker.setLatLng(bounds.getCenter());
-          mapRef.current.fitBounds(bounds, { padding: [32, 32] });
+          if (isPinnedLocation) {
+            // Giữ nguyên ghim tại vị trí Ủy ban đã chọn và phóng tới vị trí đó
+            mapRef.current.setView([lat, lng], 15);
+          } else {
+            marker.setLatLng(bounds.getCenter());
+            mapRef.current.fitBounds(bounds, { padding: [32, 32] });
+          }
         }
       } catch (err) {
         console.warn('Lỗi vẽ boundary GeoJSON:', err);
@@ -241,7 +267,7 @@ export const AreaPreviewMap: React.FC<{
         mapRef.current = null;
       }
     };
-  }, [lat, lng, areaName, areaId, department]);
+  }, [lat, lng, areaName, areaId, department, isPinnedLocation, officeAddress, mapUrl]);
 
   return <div ref={containerRef} style={{ width: '100%', height: '100%', minHeight: '400px', background: '#f1f5f9' }} />;
 };

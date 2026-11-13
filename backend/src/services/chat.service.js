@@ -323,16 +323,17 @@ class ChatService {
     const isUserAdmin = (currentUser.roles || []).includes('ADMIN');
     const isAuthority = (currentUser.roles || []).includes('LOCAL_AUTHORITY');
 
-    // 1. Kênh tác chiến chung COMMAND_GENERAL
-    const generalLatest = await ChatMessage.findOne({ channel: 'COMMAND_GENERAL' })
-      .sort({ createdAt: -1 })
-      .populate('senderId', 'fullName roles');
-
-    const generalUnread = await ChatMessage.countDocuments({
-      channel: 'COMMAND_GENERAL',
-      senderId: { $ne: currentUser._id },
-      readBy: { $ne: currentUser._id },
-    });
+    // 1. Kênh tác chiến chung COMMAND_GENERAL (truy vấn song song)
+    const [generalLatest, generalUnread] = await Promise.all([
+      ChatMessage.findOne({ channel: 'COMMAND_GENERAL' })
+        .sort({ createdAt: -1 })
+        .populate('senderId', 'fullName roles'),
+      ChatMessage.countDocuments({
+        channel: 'COMMAND_GENERAL',
+        senderId: { $ne: currentUser._id },
+        readBy: { $ne: currentUser._id },
+      }),
+    ]);
 
     const conversations = [
       {
@@ -386,90 +387,95 @@ class ChatService {
       }
     }
 
-    for (const ch of areaChannelsSet) {
-      // Tìm tin nhắn mới nhất trong kênh của tài khoản này
-      const areaLatest = await ChatMessage.findOne({ channel: ch })
-        .sort({ createdAt: -1 })
-        .populate('senderId', 'fullName phone email roles avatarUrl address');
+    // Tải dữ liệu các kênh area_ song song (Parallel)
+    if (areaChannelsSet.size > 0) {
+      const areaPromises = Array.from(areaChannelsSet).map(async (ch) => {
+        const [areaLatest, areaUnread] = await Promise.all([
+          ChatMessage.findOne({ channel: ch })
+            .sort({ createdAt: -1 })
+            .populate('senderId', 'fullName phone email roles avatarUrl address'),
+          ChatMessage.countDocuments({
+            channel: ch,
+            senderId: { $ne: currentUser._id },
+            readBy: { $ne: currentUser._id },
+          }),
+        ]);
 
-      // Nếu kênh không có bất kỳ tin nhắn nào thì bỏ qua
-      if (!areaLatest) continue;
+        if (!areaLatest) return null;
 
-      const areaUnread = await ChatMessage.countDocuments({
-        channel: ch,
-        senderId: { $ne: currentUser._id },
-        readBy: { $ne: currentUser._id },
-      });
+        // Xác định đối tượng người dân / cứu hộ viên trong kênh
+        const cleanSlugParts = ch.replace(/^area_/, '').split('_');
+        const possibleUserId = cleanSlugParts[cleanSlugParts.length - 1];
+        let partnerUser = null;
 
-      // Xác định đối tượng người dân / cứu hộ viên trong kênh
-      const cleanSlugParts = ch.replace(/^area_/, '').split('_');
-      const possibleUserId = cleanSlugParts[cleanSlugParts.length - 1];
-      let partnerUser = null;
-
-      if (possibleUserId && mongoose.Types.ObjectId.isValid(possibleUserId)) {
-        partnerUser = await User.findById(possibleUserId).select('fullName phone email roles avatarUrl authority address citizen');
-      }
-
-      if (!partnerUser && areaLatest && areaLatest.senderId) {
-        const senderRoles = areaLatest.senderId.roles || [];
-        if (!senderRoles.includes('LOCAL_AUTHORITY') && !senderRoles.includes('ADMIN')) {
-          partnerUser = areaLatest.senderId;
+        if (possibleUserId && mongoose.Types.ObjectId.isValid(possibleUserId)) {
+          partnerUser = await User.findById(possibleUserId).select('fullName phone email roles avatarUrl authority address citizen');
         }
-      }
 
-      // Xác định tên địa bàn thực tế của người dân
-      let channelAreaName = partnerUser?.address || '';
-      if (!channelAreaName) {
-        const words = cleanSlugParts.filter((p) => !/^[0-9a-fA-F]{24}$/.test(p));
-        channelAreaName = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      }
+        if (!partnerUser && areaLatest && areaLatest.senderId) {
+          const senderRoles = areaLatest.senderId.roles || [];
+          if (!senderRoles.includes('LOCAL_AUTHORITY') && !senderRoles.includes('ADMIN')) {
+            partnerUser = areaLatest.senderId;
+          }
+        }
 
-      let convName = `Cứu Hộ - ${channelAreaName}`;
-      let convDesc = `Kênh tiếp nhận người dân phản ánh & cầu cứu tại ${channelAreaName}`;
-      let convRole = 'CITIZEN';
+        // Xác định tên địa bàn thực tế của người dân
+        let channelAreaName = partnerUser?.address || '';
+        if (!channelAreaName) {
+          const words = cleanSlugParts.filter((p) => !/^[0-9a-fA-F]{24}$/.test(p));
+          channelAreaName = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
 
-      if (partnerUser) {
-        const isRescuer = (partnerUser.roles || []).includes('RESCUER');
-        const roleLabel = isRescuer ? 'Cứu hộ viên' : 'Người dân';
-        convName = `${partnerUser.fullName || 'Người dùng'} (${roleLabel})`;
-        convDesc = `SĐT: ${partnerUser.phone || 'Chưa cập nhật'} • Địa bàn: ${channelAreaName}`;
-        convRole = isRescuer ? 'RESCUER' : 'CITIZEN';
-      }
+        let convName = `Cứu Hộ - ${channelAreaName}`;
+        let convDesc = `Kênh tiếp nhận người dân phản ánh & cầu cứu tại ${channelAreaName}`;
+        let convRole = 'CITIZEN';
 
-      conversations.push({
-        type: 'CHANNEL',
-        channel: ch,
-        name: convName,
-        description: convDesc,
-        role: convRole,
-        partnerId: partnerUser?._id,
-        avatarUrl: partnerUser?.avatarUrl,
-        phone: partnerUser?.phone,
-        areaName: channelAreaName,
-        address: partnerUser?.address || channelAreaName,
-        partnerUser: partnerUser
-          ? {
-              _id: partnerUser._id,
-              fullName: partnerUser.fullName,
-              phone: partnerUser.phone,
-              email: partnerUser.email,
-              address: partnerUser.address,
-              roles: partnerUser.roles,
-              emergencyContact: partnerUser.citizen?.emergencyContact || null,
-              emergencyContacts: partnerUser.citizen?.emergencyContacts || [],
-            }
-          : null,
-        unreadCount: areaUnread,
-        latestMessage: {
-          content: areaLatest.content,
-          senderName: areaLatest.senderName,
-          createdAt: areaLatest.createdAt,
-        },
+        if (partnerUser) {
+          const isRescuer = (partnerUser.roles || []).includes('RESCUER');
+          const roleLabel = isRescuer ? 'Cứu hộ viên' : 'Người dân';
+          convName = `${partnerUser.fullName || 'Người dùng'} (${roleLabel})`;
+          convDesc = `SĐT: ${partnerUser.phone || 'Chưa cập nhật'} • Địa bàn: ${channelAreaName}`;
+          convRole = isRescuer ? 'RESCUER' : 'CITIZEN';
+        }
+
+        return {
+          type: 'CHANNEL',
+          channel: ch,
+          name: convName,
+          description: convDesc,
+          role: convRole,
+          partnerId: partnerUser?._id,
+          avatarUrl: partnerUser?.avatarUrl,
+          phone: partnerUser?.phone,
+          areaName: channelAreaName,
+          address: partnerUser?.address || channelAreaName,
+          partnerUser: partnerUser
+            ? {
+                _id: partnerUser._id,
+                fullName: partnerUser.fullName,
+                phone: partnerUser.phone,
+                email: partnerUser.email,
+                address: partnerUser.address,
+                roles: partnerUser.roles,
+                emergencyContact: partnerUser.citizen?.emergencyContact || null,
+                emergencyContacts: partnerUser.citizen?.emergencyContacts || [],
+              }
+            : null,
+          unreadCount: areaUnread,
+          latestMessage: {
+            content: areaLatest.content,
+            senderName: areaLatest.senderName,
+            createdAt: areaLatest.createdAt,
+          },
+        };
       });
+
+      const resolvedAreaConvs = (await Promise.all(areaPromises)).filter(Boolean);
+      conversations.push(...resolvedAreaConvs);
     }
 
-    // 3. Lấy danh sách đối tác chat trực tiếp (Admin hoặc đồng nghiệp có tin nhắn)
-    let userFilter = {
+    // 3. Lấy danh sách đối tác chat trực tiếp (Admin hoặc đồng nghiệp) - TỐI ƯU CỰC ĐẠI
+    const userFilter = {
       _id: { $ne: currentUser._id },
       status: { $ne: 'SUSPENDED' },
       roles: { $in: ['ADMIN', 'LOCAL_AUTHORITY'] },
@@ -478,39 +484,63 @@ class ChatService {
     const potentialPartners = await User.find(userFilter)
       .select('fullName phone email roles authority avatarUrl status createdAt')
       .sort({ 'roles.0': 1, fullName: 1 })
-      .limit(100);
+      .limit(60);
 
-    for (const partner of potentialPartners) {
-      const channel = this.getDirectChannelId(currentUser._id, partner._id);
+    // Xác định kênh chat 1-1 cho mỗi đối tác
+    const partnerChannelMap = new Map();
+    potentialPartners.forEach((p) => {
+      const ch = this.getDirectChannelId(currentUser._id, p._id);
+      partnerChannelMap.set(String(p._id), ch);
+    });
 
-      const latestMsg = await ChatMessage.findOne({ channel })
-        .sort({ createdAt: -1 })
-        .populate('senderId', 'fullName roles');
+    const allDirectChannels = Array.from(partnerChannelMap.values());
+    // Kiểm tra nhanh trong 1 truy vấn duy nhất xem những kênh nào thực sự đã có tin nhắn
+    const activeDirectChannels = await ChatMessage.distinct('channel', {
+      channel: { $in: allDirectChannels },
+    });
+    const activeDirectSet = new Set(activeDirectChannels);
 
+    // Tải thông tin chi tiết song song cho các đối tác
+    const directPromises = potentialPartners.map(async (partner) => {
+      const channel = partnerChannelMap.get(String(partner._id));
+      const hasMessages = activeDirectSet.has(channel);
       const partnerRole = partner.roles?.includes('ADMIN') ? 'ADMIN' : 'LOCAL_AUTHORITY';
 
       // Điều kiện hiển thị cuộc trò chuyện 1-1 (Direct):
-      // 1. Đã từng có trao đổi tin nhắn (latestMsg !== null)
+      // 1. Đã từng có trao đổi tin nhắn (hasMessages === true)
       // 2. HOẶC đối tác là Quản trị viên hệ thống (ADMIN) để tiện liên hệ chỉ đạo
-      // 3. HOẶC người xem là ADMIN và đối tác là LOCAL_AUTHORITY (để Admin luôn có thể chủ động nhắn tin chỉ đạo các cán bộ địa phương)
-      // 4. HOẶC người xem là LOCAL_AUTHORITY và đối tác là LOCAL_AUTHORITY (để các cán bộ địa phương có thể chủ động nhắn tin phối hợp liên phường/xã)
+      // 3. HOẶC người xem là ADMIN và đối tác là LOCAL_AUTHORITY
+      // 4. HOẶC người xem là LOCAL_AUTHORITY và đối tác là LOCAL_AUTHORITY
       const isVisible =
-        Boolean(latestMsg) ||
+        hasMessages ||
         partnerRole === 'ADMIN' ||
         (isUserAdmin && partnerRole === 'LOCAL_AUTHORITY') ||
         (isAuthority && partnerRole === 'LOCAL_AUTHORITY');
 
       if (!isVisible) {
-        continue;
+        return null;
       }
 
-      const unreadCount = await ChatMessage.countDocuments({
-        channel,
-        senderId: partner._id,
-        readBy: { $ne: currentUser._id },
-      });
+      let latestMsg = null;
+      let unreadCount = 0;
 
-      conversations.push({
+      // CHỈ query tin nhắn & số lượng chưa đọc nếu kênh THỰC SỰ có tin nhắn!
+      if (hasMessages) {
+        const [msg, unread] = await Promise.all([
+          ChatMessage.findOne({ channel })
+            .sort({ createdAt: -1 })
+            .populate('senderId', 'fullName roles'),
+          ChatMessage.countDocuments({
+            channel,
+            senderId: partner._id,
+            readBy: { $ne: currentUser._id },
+          }),
+        ]);
+        latestMsg = msg;
+        unreadCount = unread;
+      }
+
+      return {
         type: 'DIRECT',
         channel,
         partnerId: partner._id,
@@ -528,8 +558,11 @@ class ChatService {
               createdAt: latestMsg.createdAt,
             }
           : null,
-      });
-    }
+      };
+    });
+
+    const resolvedDirectConvs = (await Promise.all(directPromises)).filter(Boolean);
+    conversations.push(...resolvedDirectConvs);
 
     // 4. Sắp xếp: Kênh tác chiến chung và kênh địa bàn ưu tiên trước, sau đó theo thời gian tin nhắn mới nhất
     const channels = conversations.filter((c) => c.type === 'CHANNEL');

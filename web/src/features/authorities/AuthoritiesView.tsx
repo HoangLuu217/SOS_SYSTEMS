@@ -21,7 +21,11 @@ import {
   ShieldCheck,
   Calendar,
   Navigation,
+  ExternalLink,
+  Eye,
+  Info,
 } from 'lucide-react';
+import { OfficeMapPicker, parseCoordsFromGoogleMapsUrl } from '@/components/common/OfficeMapPicker';
 import type { User } from '@/types/auth';
 import type { AuthorityOrgItem, AdministrativeAreaItem } from '@/types/dashboard';
 import {
@@ -475,8 +479,10 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
   const [authSearchQuery, setAuthSearchQuery] = useState('');
   const [authStatusFilter, setAuthStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
 
-  // State phục vụ modal chỉnh sửa Cán bộ & thay đổi địa bàn quản lý
-  const [editingAuthority, setEditingAuthority] = useState<any | null>(null);
+  // State phục vụ Slide-Over Drawer xem chi tiết & chỉnh sửa Cán bộ + Bản đồ
+  const [detailAuthority, setDetailAuthority] = useState<any | null>(null);
+  const [detailTab, setDetailTab] = useState<'overview' | 'map'>('overview');
+  const [isDetailEditing, setIsDetailEditing] = useState(false);
   const [editAuthSubmitting, setEditAuthSubmitting] = useState(false);
   const [editAuthError, setEditAuthError] = useState<string | null>(null);
   const [editAuthSuccess, setEditAuthSuccess] = useState<string | null>(null);
@@ -490,6 +496,17 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
     department: '',
     position: '',
     password: '',
+  });
+  const [detailMapState, setDetailMapState] = useState<{
+    mapUrl: string;
+    latitude: number | null;
+    longitude: number | null;
+    officeAddress: string;
+  }>({
+    mapUrl: '',
+    latitude: null,
+    longitude: null,
+    officeAddress: '',
   });
 
   // Tải danh sách cán bộ, tổ chức, và danh mục tỉnh thành
@@ -645,8 +662,23 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
     }
   };
 
-  const handleOpenEditAuthority = (a: any) => {
-    setEditingAuthority(a);
+  const handleOpenDetailAuthority = (a: any, startEditing = false) => {
+    const officerArea = a.authority?.areaName || '';
+    const officerDept = a.authority?.department || '';
+    const hasPinned =
+      typeof a.authority?.latitude === 'number' &&
+      typeof a.authority?.longitude === 'number';
+    const parsedFromUrl =
+      !hasPinned && a.authority?.mapUrl
+        ? parseCoordsFromGoogleMapsUrl(a.authority.mapUrl)
+        : null;
+    const fallback = getAreaCoordinates(officerArea, officerDept);
+    const lat = hasPinned ? a.authority.latitude : parsedFromUrl ? parsedFromUrl.lat : fallback.lat;
+    const lng = hasPinned ? a.authority.longitude : parsedFromUrl ? parsedFromUrl.lng : fallback.lng;
+
+    setDetailAuthority(a);
+    setDetailTab('overview');
+    setIsDetailEditing(startEditing);
     setEditAuthError(null);
     setEditAuthSuccess(null);
     setEditAuthForm({
@@ -655,16 +687,22 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
       email: a.email || '',
       status: a.status || 'ACTIVE',
       areaId: String(a.authority?.areaId || ''),
-      areaName: a.authority?.areaName || '',
-      department: a.authority?.department || '',
+      areaName: officerArea,
+      department: officerDept,
       position: a.authority?.position || 'Chỉ Huy Trực Ban Tác Chiến',
       password: '',
+    });
+    setDetailMapState({
+      mapUrl: a.authority?.mapUrl || (hasPinned || parsedFromUrl ? `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}` : ''),
+      latitude: lat,
+      longitude: lng,
+      officeAddress: a.authority?.officeAddress || '',
     });
   };
 
   const handleEditAuthoritySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingAuthority) return;
+    if (!detailAuthority) return;
     setEditAuthSubmitting(true);
     setEditAuthError(null);
     setEditAuthSuccess(null);
@@ -689,14 +727,24 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
         payload.password = editAuthForm.password.trim();
       }
 
-      const res = await updateAdminUser(editingAuthority._id, payload);
+      const res = await updateAdminUser(detailAuthority._id, payload);
       if (res.success) {
-        setEditAuthSuccess(`✅ Đã cập nhật thông tin và địa bàn cho cán bộ ${payload.fullName} thành công!`);
+        const updatedOfficer = res.data || {
+          ...detailAuthority,
+          fullName: payload.fullName,
+          phone: payload.phone,
+          email: payload.email,
+          status: payload.status,
+          authority: {
+            ...(detailAuthority.authority || {}),
+            ...payload.authority,
+          },
+        };
+        setDetailAuthority(updatedOfficer);
+        setIsDetailEditing(false);
+        setEditAuthSuccess(`Đã cập nhật thông tin cho cán bộ ${payload.fullName}!`);
+        toast.success(`Đã cập nhật thông tin cho cán bộ ${payload.fullName}`, 'Cập nhật thành công');
         refreshData();
-        setTimeout(() => {
-          setEditingAuthority(null);
-          setEditAuthSuccess(null);
-        }, 1200);
       } else {
         setEditAuthError(res.message || 'Không thể cập nhật tài khoản cán bộ.');
       }
@@ -943,10 +991,10 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                           <button
                             type="button"
                             className="officer-action-btn edit"
-                            title="Chỉnh sửa thông tin cán bộ"
-                            onClick={() => handleOpenEditAuthority(a)}
+                            title="Xem chi tiết & chỉnh sửa cán bộ"
+                            onClick={() => handleOpenDetailAuthority(a)}
                           >
-                            <Edit size={14} />
+                            <Eye size={14} />
                           </button>
                           <button
                             type="button"
@@ -967,246 +1015,505 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
         </div>
       </div>
 
-      {/* MODAL: CHỈNH SỬA THÔNG TIN CÁN BỘ & THAY ĐỔI ĐỊA BÀN QUẢN LÝ */}
-      {editingAuthority && (
-        <div className="executive-modal-backdrop" onClick={() => setEditingAuthority(null)}>
-          <div className="executive-modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 580 }}>
-            <div className="executive-modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div className="metric-icon-box blue" style={{ width: 36, height: 36 }}>
-                  <Edit size={20} />
-                </div>
-                <div>
-                  <h3 className="executive-modal-title">Chỉnh Sửa Cán Bộ & Thay Đổi Địa Bàn</h3>
-                  <p style={{ margin: 0, fontSize: '12px', color: '#64748b' }}>
-                    Cán bộ: {editingAuthority.fullName}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="executive-modal-close"
-                onClick={() => setEditingAuthority(null)}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {editAuthError && (
-              <div
-                style={{
-                  backgroundColor: '#fee2e2',
-                  border: '1px solid #fca5a5',
-                  color: '#b91c1c',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  margin: '12px 24px 0',
-                }}
-              >
-                {editAuthError}
-              </div>
-            )}
-
-            {editAuthSuccess && (
-              <div
-                style={{
-                  backgroundColor: '#dcfce7',
-                  border: '1px solid #86efac',
-                  color: '#15803d',
-                  padding: '10px 14px',
-                  borderRadius: '8px',
-                  fontSize: '13px',
-                  margin: '12px 24px 0',
-                }}
-              >
-                {editAuthSuccess}
-              </div>
-            )}
-
-            <form onSubmit={handleEditAuthoritySubmit}>
-              <div className="executive-modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div className="executive-modal-field">
-                    <label className="executive-modal-label">Họ và tên cán bộ (*)</label>
-                    <input
-                      type="text"
-                      required
-                      className="executive-modal-input"
-                      value={editAuthForm.fullName}
-                      onChange={(e) => setEditAuthForm({ ...editAuthForm, fullName: e.target.value })}
-                    />
+      {/* SLIDE-OVER DRAWER: XEM CHI TIẾT & CHỈNH SỬA CÁN BỘ + BẢN ĐỒ (Chuẩn design.md) */}
+      {detailAuthority &&
+        createPortal(
+          <div className="auth-drawer-backdrop" onClick={() => setDetailAuthority(null)}>
+            <div className="auth-drawer-panel" onClick={(e) => e.stopPropagation()}>
+              {/* Header */}
+              <div className="auth-drawer-header">
+                <div className="auth-drawer-header-top">
+                  <div className="auth-drawer-title-group">
+                    <div className="auth-drawer-icon">
+                      <ShieldCheck size={20} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="auth-drawer-title-row">
+                        <h3 className="auth-drawer-title">{detailAuthority.fullName}</h3>
+                        <span
+                          className={`officer-status-badge ${detailAuthority.status === 'ACTIVE' ? 'active' : 'inactive'}`}
+                          style={{ cursor: 'default' }}
+                        >
+                          <span
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: '50%',
+                              background: detailAuthority.status === 'ACTIVE' ? '#16a34a' : '#94a3b8',
+                            }}
+                          />
+                          <span>{detailAuthority.status === 'ACTIVE' ? 'Đang hoạt động' : 'Tạm khóa'}</span>
+                        </span>
+                      </div>
+                      <p className="auth-drawer-subtitle">
+                        {detailAuthority.authority?.department || 'Ban Chỉ Huy PCTT & TKCN'} •{' '}
+                        {detailAuthority.authority?.areaName || 'Chưa gán địa bàn'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="executive-modal-field">
-                    <label className="executive-modal-label">Số điện thoại đăng nhập (*)</label>
-                    <input
-                      type="tel"
-                      required
-                      className="executive-modal-input"
-                      value={editAuthForm.phone}
-                      onChange={(e) => setEditAuthForm({ ...editAuthForm, phone: e.target.value })}
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    className="auth-drawer-close-btn"
+                    onClick={() => setDetailAuthority(null)}
+                    aria-label="Đóng chi tiết"
+                  >
+                    <X size={18} />
+                  </button>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div className="executive-modal-field">
-                    <label className="executive-modal-label">Gmail / Email cán bộ (*)</label>
-                    <input
-                      type="email"
-                      required
-                      className="executive-modal-input"
-                      placeholder="VD: canbo.hoangsa@gmail.com"
-                      value={editAuthForm.email}
-                      onChange={(e) => setEditAuthForm({ ...editAuthForm, email: e.target.value })}
-                    />
-                  </div>
-                  <div className="executive-modal-field">
-                    <label className="executive-modal-label">Trạng thái tài khoản (*)</label>
-                    <select
-                      className="executive-modal-select"
-                      value={editAuthForm.status}
-                      onChange={(e) => setEditAuthForm({ ...editAuthForm, status: e.target.value })}
-                    >
-                      <option value="ACTIVE">🟢 ACTIVE - Đang hoạt động tác chiến</option>
-                      <option value="INACTIVE">🔴 INACTIVE - Tạm khóa / Ngừng điều hành</option>
-                      <option value="SUSPENDED">⛔ SUSPENDED - Đình chỉ tác chiến</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="executive-modal-field">
-                  <label className="executive-modal-label">
-                    Khu vực phụ trách (Thay đổi địa bàn điều phối) (*)
-                  </label>
-                  <BoundedAreaSelect
-                    value={editAuthForm.areaId}
-                    options={[
-                      ...(editAuthForm.areaName
-                        ? [
-                            {
-                              id: editAuthForm.areaId,
-                              label: editAuthForm.areaName,
-                              badgeText: 'Địa bàn hiện tại',
-                              isCurrent: true,
-                            },
-                          ]
-                        : []),
-                      ...modalProvinceSubUnits
-                        .filter((ar) => ar.id !== editAuthForm.areaId)
-                        .map((ar: any) => ({
-                          id: ar.id,
-                          label: ar.name,
-                          subLabel: getDistinctAreaSubLabel(ar.district),
-                        })),
-                    ]}
-                    onChange={(targetId) => {
-                      const match = modalProvinceSubUnits.find((a) => a.id === targetId);
-                      const areaName = match ? match.name : '';
-                      setEditAuthForm({
-                        ...editAuthForm,
-                        areaId: targetId,
-                        areaName: areaName,
-                        department: `Ban Chỉ Huy PCTT ${areaName}`,
-                      });
+                {/* Tabs */}
+                <div className="auth-drawer-tabs">
+                  <button
+                    type="button"
+                    className={`auth-drawer-tab ${detailTab === 'overview' ? 'active' : ''}`}
+                    onClick={() => setDetailTab('overview')}
+                  >
+                    <Info size={14} />
+                    <span>Tổng quan</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`auth-drawer-tab ${detailTab === 'map' ? 'active' : ''}`}
+                    onClick={() => {
+                      setDetailTab('map');
+                      setIsDetailEditing(false);
                     }}
-                  />
-                  <div style={{ fontSize: '11px', color: '#64748b', marginTop: 4 }}>
-                    * Chọn địa bàn mới để chuyển quyền điều phối tác chiến của cán bộ này sang khu vực đó.
-                  </div>
+                  >
+                    <MapPin size={14} />
+                    <span>Bản đồ &amp; Vị trí Ủy ban</span>
+                  </button>
                 </div>
+              </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div className="executive-modal-field">
-                    <label className="executive-modal-label">Đơn vị / Cơ quan</label>
-                    <input
-                      type="text"
-                      className="executive-modal-input"
-                      value={editAuthForm.department}
-                      onChange={(e) => setEditAuthForm({ ...editAuthForm, department: e.target.value })}
-                    />
-                  </div>
-                  <div className="executive-modal-field">
-                    <label className="executive-modal-label">Chức vụ</label>
-                    <input
-                      type="text"
-                      className="executive-modal-input"
-                      value={editAuthForm.position}
-                      onChange={(e) => setEditAuthForm({ ...editAuthForm, position: e.target.value })}
-                    />
-                  </div>
-                </div>
+              {/* Body */}
+              <div className="auth-drawer-body">
+                {detailTab === 'overview' ? (
+                  <>
+                    {/* Top 4 Summary Cards */}
+                    <div className="auth-drawer-kpi-strip">
+                      <div className="auth-drawer-kpi-card">
+                        <span className="auth-drawer-kpi-label">Khu vực phụ trách</span>
+                        <span
+                          className="auth-drawer-kpi-value"
+                          title={detailAuthority.authority?.areaName || 'Chưa gán'}
+                        >
+                          {detailAuthority.authority?.areaName || 'Chưa gán'}
+                        </span>
+                        <span className="auth-drawer-kpi-sub">Địa bàn điều phối</span>
+                      </div>
+                      <div className="auth-drawer-kpi-card">
+                        <span className="auth-drawer-kpi-label">Đơn vị / Cơ quan</span>
+                        <span
+                          className="auth-drawer-kpi-value"
+                          title={detailAuthority.authority?.department || 'Ban Chỉ Huy PCTT'}
+                        >
+                          {detailAuthority.authority?.department || 'Ban Chỉ Huy PCTT'}
+                        </span>
+                        <span className="auth-drawer-kpi-sub">Trực ban cứu hộ</span>
+                      </div>
+                      <div className="auth-drawer-kpi-card">
+                        <span className="auth-drawer-kpi-label">Chức vụ</span>
+                        <span
+                          className="auth-drawer-kpi-value"
+                          title={detailAuthority.authority?.position || 'Chỉ huy trực ban'}
+                        >
+                          {detailAuthority.authority?.position || 'Chỉ huy trực ban'}
+                        </span>
+                        <span className="auth-drawer-kpi-sub">Cán bộ địa phương</span>
+                      </div>
+                      <div className="auth-drawer-kpi-card">
+                        <span className="auth-drawer-kpi-label">Vị trí trụ sở</span>
+                        <span className="auth-drawer-kpi-value">
+                          {detailMapState.latitude && detailAuthority.authority?.mapUrl ? 'Đã ghim' : 'Chưa ghim'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setDetailTab('map')}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            textAlign: 'left',
+                            color: '#0284c7',
+                            fontSize: '11.5px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Xem vị trí bản đồ →
+                        </button>
+                      </div>
+                    </div>
 
-                <div className="executive-modal-field">
-                  <label className="executive-modal-label">
-                    Đặt mật khẩu mới (Bỏ trống nếu không muốn đổi mật khẩu)
-                  </label>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      type="text"
-                      className="executive-modal-input"
-                      placeholder="Để trống nếu giữ nguyên mật khẩu cũ"
-                      value={editAuthForm.password}
-                      onChange={(e) => setEditAuthForm({ ...editAuthForm, password: e.target.value })}
-                      style={{ paddingRight: 38, fontFamily: editAuthForm.password ? 'monospace' : 'inherit' }}
-                    />
+                    {/* Section Card: Thông tin cán bộ & Chỉnh sửa */}
+                    <div className="auth-drawer-section-card">
+                      <div className="auth-drawer-section-header">
+                        <div className="auth-drawer-section-title">
+                          <ShieldCheck size={14} color="#0284c7" />
+                          <span>Thông tin cán bộ &amp; tài khoản</span>
+                        </div>
+                        {!isDetailEditing ? (
+                          <button
+                            type="button"
+                            className="auth-drawer-inline-edit-btn"
+                            onClick={() => {
+                              setEditAuthError(null);
+                              setEditAuthSuccess(null);
+                              setIsDetailEditing(true);
+                            }}
+                          >
+                            <Edit size={13} />
+                            <span>Chỉnh sửa</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="auth-drawer-inline-edit-btn"
+                            style={{ color: '#64748b' }}
+                            onClick={() => setIsDetailEditing(false)}
+                          >
+                            <X size={13} />
+                            <span>Hủy chỉnh sửa</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {editAuthError && (
+                        <div
+                          style={{
+                            backgroundColor: '#fee2e2',
+                            border: '1px solid #fca5a5',
+                            color: '#b91c1c',
+                            padding: '10px 14px',
+                            borderRadius: '8px',
+                            fontSize: '13px',
+                            margin: '12px 18px 0',
+                          }}
+                        >
+                          {editAuthError}
+                        </div>
+                      )}
+
+                      {editAuthSuccess && (
+                        <div
+                          style={{
+                            backgroundColor: '#dcfce7',
+                            border: '1px solid #86efac',
+                            color: '#15803d',
+                            padding: '10px 14px',
+                            borderRadius: '8px',
+                            fontSize: '13px',
+                            margin: '12px 18px 0',
+                          }}
+                        >
+                          {editAuthSuccess}
+                        </div>
+                      )}
+
+                      {!isDetailEditing ? (
+                        <div className="auth-drawer-kv-list">
+                          <div className="auth-drawer-kv-row">
+                            <span className="auth-drawer-kv-label">Họ và tên cán bộ</span>
+                            <span className="auth-drawer-kv-value">{detailAuthority.fullName || '--'}</span>
+                          </div>
+                          <div className="auth-drawer-kv-row">
+                            <span className="auth-drawer-kv-label">Số điện thoại trực ban</span>
+                            <span className="auth-drawer-kv-value link">{detailAuthority.phone || '--'}</span>
+                          </div>
+                          <div className="auth-drawer-kv-row">
+                            <span className="auth-drawer-kv-label">Gmail / Email công vụ</span>
+                            <span className="auth-drawer-kv-value">{detailAuthority.email || '--'}</span>
+                          </div>
+                          <div className="auth-drawer-kv-row">
+                            <span className="auth-drawer-kv-label">Khu vực phụ trách (Địa bàn)</span>
+                            <span className="auth-drawer-kv-value">
+                              {detailAuthority.authority?.areaName || 'Chưa gán địa bàn'}
+                            </span>
+                          </div>
+                          <div className="auth-drawer-kv-row">
+                            <span className="auth-drawer-kv-label">Đơn vị / Cơ quan</span>
+                            <span className="auth-drawer-kv-value">
+                              {detailAuthority.authority?.department || 'Ban Chỉ Huy PCTT'}
+                            </span>
+                          </div>
+                          <div className="auth-drawer-kv-row">
+                            <span className="auth-drawer-kv-label">Chức vụ / Vị trí</span>
+                            <span className="auth-drawer-kv-value">
+                              {detailAuthority.authority?.position || 'Chỉ Huy Trực Ban Tác Chiến'}
+                            </span>
+                          </div>
+                          <div className="auth-drawer-kv-row">
+                            <span className="auth-drawer-kv-label">Địa chỉ Ủy ban &amp; Google Maps</span>
+                            <span className="auth-drawer-kv-value">
+                              {detailMapState.officeAddress ? (
+                                <span>{detailMapState.officeAddress} </span>
+                              ) : (
+                                <span style={{ color: '#64748b', fontWeight: 500 }}>Chưa cập nhật </span>
+                              )}
+                              {detailMapState.mapUrl && (
+                                <a
+                                  href={detailMapState.mapUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ color: '#0284c7', textDecoration: 'none', marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                                >
+                                  <span>Mở Maps</span>
+                                  <ExternalLink size={12} />
+                                </a>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <form onSubmit={handleEditAuthoritySubmit} className="auth-drawer-edit-grid">
+                          <div className="auth-drawer-edit-row">
+                            <div className="executive-modal-field">
+                              <label className="executive-modal-label">Họ và tên cán bộ (*)</label>
+                              <input
+                                type="text"
+                                required
+                                className="executive-modal-input"
+                                value={editAuthForm.fullName}
+                                onChange={(e) => setEditAuthForm({ ...editAuthForm, fullName: e.target.value })}
+                              />
+                            </div>
+                            <div className="executive-modal-field">
+                              <label className="executive-modal-label">Số điện thoại đăng nhập (*)</label>
+                              <input
+                                type="tel"
+                                required
+                                className="executive-modal-input"
+                                value={editAuthForm.phone}
+                                onChange={(e) => setEditAuthForm({ ...editAuthForm, phone: e.target.value })}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="auth-drawer-edit-row">
+                            <div className="executive-modal-field">
+                              <label className="executive-modal-label">Gmail / Email cán bộ (*)</label>
+                              <input
+                                type="email"
+                                required
+                                className="executive-modal-input"
+                                value={editAuthForm.email}
+                                onChange={(e) => setEditAuthForm({ ...editAuthForm, email: e.target.value })}
+                              />
+                            </div>
+                            <div className="executive-modal-field">
+                              <label className="executive-modal-label">Trạng thái tài khoản (*)</label>
+                              <select
+                                className="executive-modal-select"
+                                value={editAuthForm.status}
+                                onChange={(e) => setEditAuthForm({ ...editAuthForm, status: e.target.value })}
+                              >
+                                <option value="ACTIVE">🟢 ACTIVE - Đang hoạt động tác chiến</option>
+                                <option value="INACTIVE">🔴 INACTIVE - Tạm khóa / Ngừng điều hành</option>
+                                <option value="SUSPENDED">⛔ SUSPENDED - Đình chỉ tác chiến</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="executive-modal-field">
+                            <label className="executive-modal-label">
+                              Khu vực phụ trách (Thay đổi địa bàn điều phối) (*)
+                            </label>
+                            <BoundedAreaSelect
+                              value={editAuthForm.areaId}
+                              options={[
+                                ...(editAuthForm.areaName
+                                  ? [
+                                      {
+                                        id: editAuthForm.areaId,
+                                        label: editAuthForm.areaName,
+                                        badgeText: 'Địa bàn hiện tại',
+                                        isCurrent: true,
+                                      },
+                                    ]
+                                  : []),
+                                ...modalProvinceSubUnits
+                                  .filter((ar) => ar.id !== editAuthForm.areaId)
+                                  .map((ar: any) => ({
+                                    id: ar.id,
+                                    label: ar.name,
+                                    subLabel: getDistinctAreaSubLabel(ar.district),
+                                  })),
+                              ]}
+                              onChange={(targetId) => {
+                                const match = modalProvinceSubUnits.find((a) => a.id === targetId);
+                                const areaName = match ? match.name : '';
+                                setEditAuthForm({
+                                  ...editAuthForm,
+                                  areaId: targetId,
+                                  areaName: areaName,
+                                  department: `Ban Chỉ Huy PCTT ${areaName}`,
+                                });
+                              }}
+                            />
+                          </div>
+
+                          <div className="auth-drawer-edit-row">
+                            <div className="executive-modal-field">
+                              <label className="executive-modal-label">Đơn vị / Cơ quan</label>
+                              <input
+                                type="text"
+                                className="executive-modal-input"
+                                value={editAuthForm.department}
+                                onChange={(e) => setEditAuthForm({ ...editAuthForm, department: e.target.value })}
+                              />
+                            </div>
+                            <div className="executive-modal-field">
+                              <label className="executive-modal-label">Chức vụ</label>
+                              <input
+                                type="text"
+                                className="executive-modal-input"
+                                value={editAuthForm.position}
+                                onChange={(e) => setEditAuthForm({ ...editAuthForm, position: e.target.value })}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="executive-modal-field">
+                            <label className="executive-modal-label">
+                              Đặt mật khẩu mới (Bỏ trống nếu không muốn đổi mật khẩu)
+                            </label>
+                            <div style={{ position: 'relative' }}>
+                              <input
+                                type="text"
+                                className="executive-modal-input"
+                                placeholder="Để trống nếu giữ nguyên mật khẩu cũ"
+                                value={editAuthForm.password}
+                                onChange={(e) => setEditAuthForm({ ...editAuthForm, password: e.target.value })}
+                                style={{ paddingRight: 38, fontFamily: editAuthForm.password ? 'monospace' : 'inherit' }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditAuthForm((prev) => ({
+                                    ...prev,
+                                    password: generateRandomPassword(8),
+                                  }))
+                                }
+                                style={{
+                                  position: 'absolute',
+                                  right: 8,
+                                  top: '50%',
+                                  transform: 'translateY(-50%)',
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#0284c7',
+                                  cursor: 'pointer',
+                                  padding: 4,
+                                }}
+                                title="Sinh mật khẩu ngẫu nhiên"
+                              >
+                                <RefreshCw size={14} />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+                            <button
+                              type="button"
+                              className="executive-btn-outline"
+                              onClick={() => setIsDetailEditing(false)}
+                            >
+                              Hủy
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={editAuthSubmitting}
+                              className="executive-btn-primary"
+                            >
+                              {editAuthSubmitting ? (
+                                <>
+                                  <Loader2 size={15} className="animate-spin" />
+                                  <span>Đang lưu...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Check size={15} />
+                                  <span>Lưu thay đổi</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </form>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  /* TAB 2: BẢN ĐỒ & CHỈNH SỬA VỊ TRÍ ỦY BAN */
+                  <div className="auth-drawer-section-card">
+                    <div className="auth-drawer-section-header">
+                      <div className="auth-drawer-section-title">
+                        <MapPin size={14} color="#0284c7" />
+                        <span>Bản đồ &amp; Vị trí trụ sở Ủy ban ({detailAuthority.authority?.areaName || 'Địa bàn'})</span>
+                      </div>
+                    </div>
+                    <div className="auth-drawer-map-wrap">
+                      <OfficeMapPicker
+                        readOnly={true}
+                        mapUrl={detailMapState.mapUrl}
+                        latitude={detailMapState.latitude}
+                        longitude={detailMapState.longitude}
+                        officeAddress={detailMapState.officeAddress}
+                        defaultCenter={getAreaCoordinates(
+                          detailAuthority.authority?.areaName || '',
+                          detailAuthority.authority?.department || ''
+                        )}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="auth-drawer-footer">
+                <span className="auth-drawer-footer-meta">
+                  Mã cán bộ: {detailAuthority._id}
+                </span>
+                <div className="auth-drawer-footer-actions">
+                  <button
+                    type="button"
+                    className="executive-btn-outline"
+                    style={{
+                      color: detailAuthority.status === 'ACTIVE' ? '#dc2626' : '#16a34a',
+                      borderColor: detailAuthority.status === 'ACTIVE' ? '#fecaca' : '#bbf7d0',
+                    }}
+                    onClick={async () => {
+                      await handleQuickToggleAuthStatus(detailAuthority);
+                      setDetailAuthority((prev: any) =>
+                        prev ? { ...prev, status: prev.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' } : null
+                      );
+                    }}
+                  >
+                    {detailAuthority.status === 'ACTIVE' ? <Lock size={14} /> : <Unlock size={14} />}
+                    <span>{detailAuthority.status === 'ACTIVE' ? 'Khóa tài khoản' : 'Mở khóa'}</span>
+                  </button>
+                  {detailTab === 'overview' && !isDetailEditing && (
                     <button
                       type="button"
-                      onClick={() =>
-                        setEditAuthForm((prev) => ({
-                          ...prev,
-                          password: generateRandomPassword(8),
-                        }))
-                      }
-                      style={{
-                        position: 'absolute',
-                        right: 8,
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        background: 'none',
-                        border: 'none',
-                        color: '#0284c7',
-                        cursor: 'pointer',
-                        padding: 4,
-                      }}
-                      title="Sinh mật khẩu ngẫu nhiên"
+                      className="executive-btn-outline"
+                      onClick={() => setIsDetailEditing(true)}
                     >
-                      <RefreshCw size={14} />
+                      <Edit size={14} />
+                      <span>Chỉnh sửa</span>
                     </button>
-                  </div>
+                  )}
+                  <button
+                    type="button"
+                    className="executive-btn-primary"
+                    onClick={() => setDetailAuthority(null)}
+                  >
+                    <span>Đóng</span>
+                  </button>
                 </div>
               </div>
-
-              <div className="executive-modal-footer">
-                <button
-                  type="button"
-                  className="executive-btn-outline"
-                  onClick={() => setEditingAuthority(null)}
-                >
-                  Hủy bỏ
-                </button>
-                <button
-                  type="submit"
-                  disabled={editAuthSubmitting}
-                  className="executive-btn-primary"
-                >
-                  {editAuthSubmitting ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      <span>Đang lưu...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check size={16} />
-                      <span>Lưu Thay Đổi & Cập Nhật</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </div>
+          </div>,
+          document.body
+        )}
 
       {/* MODAL: TẠO TÀI KHOẢN CÁN BỘ ĐỊA PHƯƠNG */}
       {showCreateAuthModal && (
@@ -1514,7 +1821,22 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
       {selectedMapOfficer && (() => {
         const officerArea = selectedMapOfficer.authority?.areaName || selectedMapOfficer.authority?.areaId || 'Địa bàn quản lý';
         const officerDept = selectedMapOfficer.authority?.department || '';
-        const coords = getAreaCoordinates(officerArea, officerDept);
+        const hasPinnedCoords =
+          typeof selectedMapOfficer.authority?.latitude === 'number' &&
+          typeof selectedMapOfficer.authority?.longitude === 'number';
+        const parsedFromMapUrl =
+          !hasPinnedCoords && selectedMapOfficer.authority?.mapUrl
+            ? parseCoordsFromGoogleMapsUrl(selectedMapOfficer.authority.mapUrl)
+            : null;
+        const fallbackCoords = getAreaCoordinates(officerArea, officerDept);
+        const coords = hasPinnedCoords
+          ? { lat: selectedMapOfficer.authority!.latitude!, lng: selectedMapOfficer.authority!.longitude! }
+          : parsedFromMapUrl || fallbackCoords;
+        const isPinnedLocation = Boolean(hasPinnedCoords || parsedFromMapUrl);
+        const officerOfficeAddress = selectedMapOfficer.authority?.officeAddress || '';
+        const officerMapUrl =
+          selectedMapOfficer.authority?.mapUrl ||
+          (isPinnedLocation ? `https://www.google.com/maps?q=${coords.lat.toFixed(6)},${coords.lng.toFixed(6)}` : '');
         const isOfficerActive = selectedMapOfficer.status === 'ACTIVE';
 
         return (
@@ -1589,6 +1911,9 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                     areaName={officerArea}
                     areaId={selectedMapOfficer.authority?.areaId}
                     department={officerDept}
+                    isPinnedLocation={isPinnedLocation}
+                    officeAddress={officerOfficeAddress}
+                    mapUrl={officerMapUrl}
                   />
                 </div>
 
@@ -1820,11 +2145,40 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                           {officerArea}
                         </span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '11px', color: '#64748b' }}>
-                        <div style={{ width: 20, height: 20, borderRadius: 5, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                          <Navigation size={11} color="#64748b" />
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 7, fontSize: '11px', color: '#64748b' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                          <div style={{ width: 20, height: 20, borderRadius: 5, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Navigation size={11} color="#64748b" />
+                          </div>
+                          <span
+                            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            title={officerOfficeAddress || `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`}
+                          >
+                            {isPinnedLocation
+                              ? (officerOfficeAddress || `Đã ghim: ${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`)
+                              : `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`}
+                          </span>
                         </div>
-                        <span>{coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}</span>
+                        {officerMapUrl && (
+                          <a
+                            href={officerMapUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              color: '#2563eb',
+                              fontWeight: 700,
+                              textDecoration: 'none',
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <span>Google Maps</span>
+                            <ExternalLink size={11} />
+                          </a>
+                        )}
                       </div>
                     </div>
 
