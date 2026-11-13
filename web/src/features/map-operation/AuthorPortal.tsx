@@ -1056,14 +1056,14 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
           <div className="author-jurisdiction-badge" title="Địa bàn tác chiến được giao quản lý">
             <ShieldAlert size={14} className="author-shield-icon" />
             <span className="author-jurisdiction-name">
-              {activeOfficer.role === 'ADMIN' ? 'Toàn TP Đà Nẵng' : (activeOfficer.jurisdictionAreaName || 'Phường An Hải')}
+              {activeOfficer.role === 'ADMIN' ? 'Toàn quốc' : (activeOfficer.jurisdictionAreaName || 'Phường An Hải')}
             </span>
           </div>
 
           <span className="author-header-divider">/</span>
 
           <span className="author-view-label">
-            {activeOfficer.role === 'ADMIN' ? 'Giám sát cứu nạn toàn thành phố' : 'Điều hành tác chiến SOS'}
+            {activeOfficer.role === 'ADMIN' ? 'Giám sát cứu nạn toàn quốc' : 'Điều hành tác chiến SOS'}
           </span>
 
           {/* Integrated live status (immediately next to sector, not floating in the middle!) */}

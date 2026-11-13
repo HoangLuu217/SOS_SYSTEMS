@@ -24,6 +24,7 @@ import {
   joinChannelRoom,
   leaveChannelRoom,
   registerUserSocket,
+  onSosUpdated,
 } from '@/services/socketService';
 import './TacticalChat.css';
 
@@ -63,11 +64,12 @@ export const SOS_STATUS_CONFIG: Record<
   RESCUING: { label: 'Đang cứu nạn', color: '#DC2626', bgColor: '#FEE2E2' },
   COMPLETED: { label: 'Hoàn thành', color: '#16A34A', bgColor: '#DCFCE7' },
   RESOLVED: { label: 'Đã giải quyết', color: '#16A34A', bgColor: '#DCFCE7' },
-  CANCELLED: { label: 'Đã hủy', color: '#64748B', bgColor: '#F1F5F9' },
+  CANCELLED: { label: 'Đã hủy', color: '#DC2626', bgColor: '#FEE2E2' },
+  REJECTED: { label: 'Từ chối', color: '#DC2626', bgColor: '#FEE2E2' },
 };
 
 // Trích xuất thông tin SOS từ tin nhắn
-const parseSosMessage = (msg: ChatMessageItem) => {
+const parseSosMessage = (msg: ChatMessageItem, liveStatusMap?: Record<string, string>) => {
   const isSos =
     Boolean(msg.sosRequestId) ||
     Boolean(msg.sosData) ||
@@ -88,7 +90,11 @@ const parseSosMessage = (msg: ChatMessageItem) => {
     const coords = s.location?.coordinates;
     const lat = typeof coords?.[1] === 'number' ? coords[1] : undefined;
     const lng = typeof coords?.[0] === 'number' ? coords[0] : undefined;
-    const statusCfg = SOS_STATUS_CONFIG[s.status] || SOS_STATUS_CONFIG['PENDING'];
+
+    const rawId = String(s._id || (typeof msg.sosRequestId === 'object' ? (msg.sosRequestId as any)?._id : msg.sosRequestId) || '');
+    const rawCode = String(s.sosCode || '');
+    const liveStatus = (liveStatusMap && ((rawId && liveStatusMap[rawId]) || (rawCode && liveStatusMap[rawCode]))) || s.status || 'PENDING';
+    const statusCfg = SOS_STATUS_CONFIG[liveStatus] || SOS_STATUS_CONFIG['PENDING'];
 
     return {
       sosId: s._id || msg.sosRequestId,
@@ -98,7 +104,7 @@ const parseSosMessage = (msg: ChatMessageItem) => {
       address: s.address || '',
       phone: s.contactPhone || '',
       description: s.description || '',
-      status: s.status || 'PENDING',
+      status: liveStatus,
       statusLabel: statusCfg.label,
       statusColor: statusCfg.color,
       statusBgColor: statusCfg.bgColor,
@@ -106,8 +112,8 @@ const parseSosMessage = (msg: ChatMessageItem) => {
       images: Array.isArray(s.images)
         ? s.images
         : Array.isArray(msg.attachments)
-        ? msg.attachments.map((a) => a.url).filter(Boolean)
-        : [],
+          ? msg.attachments.map((a) => a.url).filter(Boolean)
+          : [],
     };
   }
 
@@ -126,17 +132,21 @@ const parseSosMessage = (msg: ChatMessageItem) => {
     Object.keys(SOS_STATUS_CONFIG).find(
       (k) => SOS_STATUS_CONFIG[k].label.toLowerCase() === rawStatus.toLowerCase()
     ) || 'PENDING';
-  const statusCfg = SOS_STATUS_CONFIG[matchedKey] || SOS_STATUS_CONFIG['PENDING'];
+
+  const rawCode = codeMatch ? codeMatch[1].trim() : '';
+  const rawId = String((typeof msg.sosRequestId === 'object' ? (msg.sosRequestId as any)?._id : msg.sosRequestId) || '');
+  const liveStatus = (liveStatusMap && ((rawId && liveStatusMap[rawId]) || (rawCode && liveStatusMap[rawCode]))) || matchedKey;
+  const statusCfg = SOS_STATUS_CONFIG[liveStatus] || SOS_STATUS_CONFIG['PENDING'];
 
   return {
     sosId: msg.sosRequestId || undefined,
-    sosCode: codeMatch ? codeMatch[1].trim() : 'SOS',
+    sosCode: rawCode || 'SOS',
     typeLabel: typeMatch ? typeMatch[1].trim() : 'Cứu hộ khẩn cấp',
     people: peopleMatch ? parseInt(peopleMatch[1], 10) : 1,
     address: addrMatch ? addrMatch[1].trim() : '',
     phone: phoneMatch ? phoneMatch[1].trim() : '',
     description: descMatch ? descMatch[1].trim() : '',
-    status: matchedKey,
+    status: liveStatus,
     statusLabel: statusCfg.label,
     statusColor: statusCfg.color,
     statusBgColor: statusCfg.bgColor,
@@ -178,6 +188,11 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
   const [filterRole, setFilterRole] = useState<'ALL' | 'CITIZEN' | 'LOCAL_AUTHORITY' | 'ADMIN'>('ALL');
   const [realtimeConnected, setRealtimeConnected] = useState(true);
   const [mobileShowChat, setMobileShowChat] = useState(false);
+  const [sosStatusMap, setSosStatusMap] = useState<Record<string, string>>({});
+  const sosStatusMapRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    sosStatusMapRef.current = sosStatusMap;
+  }, [sosStatusMap]);
 
   // Xem chi tiết thông tin người dân (SĐT, Địa chỉ, Người thân, Ca SOS)
   const [citizenModalData, setCitizenModalData] = useState<CitizenProfileInfo | null>(null);
@@ -185,6 +200,22 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
   const [isDrawerClosing, setIsDrawerClosing] = useState(false);
   const [copiedPhoneText, setCopiedPhoneText] = useState(false);
   const [showDropdownMenu, setShowDropdownMenu] = useState(false);
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const filterDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target as Node)) {
+        setShowFilterDropdown(false);
+      }
+    };
+    if (showFilterDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showFilterDropdown]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -209,7 +240,7 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 0.22);
-    } catch (_) {}
+    } catch (_) { }
   }, []);
 
   // Tự động cuộn xuống tin nhắn mới nhất
@@ -249,6 +280,15 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
       }
       const res = await fetchChatMessages(params);
       if (res.success && res.data?.messages) {
+        const newMap: Record<string, string> = { ...sosStatusMapRef.current };
+        res.data.messages.forEach((m: any) => {
+          const sId = m.sosData?._id || (typeof m.sosRequestId === 'object' ? m.sosRequestId?._id : m.sosRequestId);
+          const sCode = m.sosData?.sosCode;
+          const st = m.sosData?.status || (typeof m.sosRequestId === 'object' ? m.sosRequestId?.status : undefined);
+          if (sId && st) newMap[String(sId)] = st;
+          if (sCode && st) newMap[String(sCode)] = st;
+        });
+        setSosStatusMap(newMap);
         setMessages(res.data.messages);
         setTimeout(() => scrollToBottom(false), 80);
 
@@ -307,7 +347,7 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
     };
     try {
       sessionStorage.setItem('sos_highlight_chat_location', JSON.stringify(detail));
-    } catch {}
+    } catch { }
 
     window.dispatchEvent(new CustomEvent('sos_navigate_tab', { detail: { key: 'map' } }));
 
@@ -465,7 +505,7 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
               markChatMessagesRead({
                 channel: currentActive.channel,
                 partnerId: currentActive.partnerId,
-              }).catch(() => {});
+              }).catch(() => { });
             }
           } else {
             playChime();
@@ -503,6 +543,59 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
     };
   }, [currentUser?._id, loadConversations, playChime, scrollToBottom]);
 
+  // Lắng nghe sự kiện SOS cập nhật trạng thái realtime (đặc biệt khi người dân bấm HỦY)
+  useEffect(() => {
+    const unsubSos = onSosUpdated((updatedSos: any) => {
+      if (!updatedSos) return;
+      const sId = String(updatedSos._id || '');
+      const sCode = String(updatedSos.sosCode || '');
+      const newStatus = updatedSos.status;
+      if (!newStatus) return;
+
+      setSosStatusMap((prev) => {
+        const next = { ...prev };
+        if (sId) next[sId] = newStatus;
+        if (sCode) next[sCode] = newStatus;
+        return next;
+      });
+
+      setMessages((prevMsgs) =>
+        prevMsgs.map((m) => {
+          const msgSosId = String(
+            m.sosData?._id ||
+            (typeof m.sosRequestId === 'object' ? (m.sosRequestId as any)?._id : m.sosRequestId) ||
+            ''
+          );
+          const msgSosCode = String(m.sosData?.sosCode || '');
+          const isMatch =
+            (sId && msgSosId === sId) ||
+            (sCode && msgSosCode === sCode) ||
+            (sCode && typeof m.content === 'string' && m.content.includes(sCode));
+          if (!isMatch) return m;
+
+          const nextSosData = m.sosData ? { ...m.sosData, status: newStatus } : undefined;
+          const nextContent =
+            typeof m.content === 'string' && m.content.includes('Trạng thái hiện tại:')
+              ? m.content.replace(
+                /Trạng thái hiện tại:\s*[^\n]+/i,
+                `Trạng thái hiện tại: ${SOS_STATUS_CONFIG[newStatus]?.label || newStatus}`
+              )
+              : m.content;
+
+          return {
+            ...m,
+            sosData: nextSosData,
+            content: nextContent,
+          };
+        })
+      );
+    });
+
+    return () => {
+      unsubSos();
+    };
+  }, []);
+
   // Gửi tin nhắn
   const handleSend = async (contentToSend?: string) => {
     const text = (contentToSend || inputContent).trim();
@@ -536,13 +629,13 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
           prev.map((c) =>
             c.channel === activeConv.channel
               ? {
-                  ...c,
-                  latestMessage: {
-                    content: res.data.content,
-                    senderName: res.data.senderName,
-                    createdAt: res.data.createdAt,
-                  },
-                }
+                ...c,
+                latestMessage: {
+                  content: res.data.content,
+                  senderName: res.data.senderName,
+                  createdAt: res.data.createdAt,
+                },
+              }
               : c
           )
         );
@@ -632,11 +725,32 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
     target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
   };
 
-  // Lọc cuộc hội thoại
+  // Phân loại cuộc hội thoại cho menu mục lục
+  const citizenCount = conversations.filter((c) => c.role === 'CITIZEN').length;
+  const authorityCount = conversations.filter((c) => c.role === 'LOCAL_AUTHORITY').length;
+  const adminCount = conversations.filter((c) => c.role === 'ADMIN' || c.channel === 'COMMAND_GENERAL').length;
+
+  const filterOptions = [
+    { key: 'ALL' as const, label: 'Tất cả cuộc hội thoại', shortLabel: 'Tất cả', count: conversations.length, icon: 'bi bi-grid-fill' },
+    ...(citizenCount > 0
+      ? [{ key: 'CITIZEN' as const, label: 'Người dân địa bàn', shortLabel: 'Người dân', count: citizenCount, icon: 'bi bi-people-fill' }]
+      : []),
+    { key: 'LOCAL_AUTHORITY' as const, label: 'Cán bộ chính quyền', shortLabel: 'Chính quyền', count: authorityCount, icon: 'bi bi-building' },
+    { key: 'ADMIN' as const, label: 'Ban chỉ huy', shortLabel: 'Ban chỉ huy', count: adminCount, icon: 'bi bi-shield-check' },
+  ];
+
+  const currentFilter = filterOptions.find((o) => o.key === filterRole) || filterOptions[0];
+
+  // Lọc cuộc hội thoại (đảm bảo Người dân không xuất hiện trong Chính quyền hoặc Ban chỉ huy)
   const filteredConversations = conversations.filter((c) => {
-    if (filterRole === 'CITIZEN' && c.role !== 'CITIZEN') return false;
-    if (filterRole === 'ADMIN' && c.role !== 'ADMIN' && c.type !== 'CHANNEL') return false;
-    if (filterRole === 'LOCAL_AUTHORITY' && c.role !== 'LOCAL_AUTHORITY' && c.type !== 'CHANNEL') return false;
+    if (filterRole === 'CITIZEN') {
+      if (c.role !== 'CITIZEN') return false;
+    } else if (filterRole === 'LOCAL_AUTHORITY') {
+      if (c.role !== 'LOCAL_AUTHORITY') return false;
+    } else if (filterRole === 'ADMIN') {
+      if (c.role !== 'ADMIN' && c.channel !== 'COMMAND_GENERAL') return false;
+    }
+
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -679,36 +793,49 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
             </div>
           </div>
 
-          {/* BỘ LỌC TAB */}
-          <div className="sos-chat-filter-pills" role="tablist">
+          {/* MỤC LỤC / BỘ LỌC HỘI THOẠI (ẤN VÀO ĐỂ CHỌN) */}
+          <div className="sos-chat-filter-select-container" ref={filterDropdownRef}>
             <button
               type="button"
-              className={`sos-chat-filter-pill ${filterRole === 'ALL' ? 'active' : ''}`}
-              onClick={() => setFilterRole('ALL')}
+              className="sos-chat-filter-select-trigger"
+              onClick={() => setShowFilterDropdown((prev) => !prev)}
+              aria-expanded={showFilterDropdown}
+              title="Nhấn để chọn phân loại cuộc trò chuyện"
             >
-              Tất cả ({conversations.length})
+              <div className="sos-chat-filter-trigger-content">
+                <i className={currentFilter.icon} />
+                <span className="sos-chat-filter-trigger-text">
+                  Mục lục: <strong>{currentFilter.shortLabel}</strong>
+                </span>
+                <span className="sos-chat-filter-badge">{currentFilter.count}</span>
+              </div>
+              <i className={`bi bi-chevron-${showFilterDropdown ? 'up' : 'down'} sos-chat-filter-chevron`} />
             </button>
-            <button
-              type="button"
-              className={`sos-chat-filter-pill ${filterRole === 'CITIZEN' ? 'active' : ''}`}
-              onClick={() => setFilterRole('CITIZEN')}
-            >
-              Người dân ({conversations.filter((c) => c.role === 'CITIZEN').length})
-            </button>
-            <button
-              type="button"
-              className={`sos-chat-filter-pill ${filterRole === 'LOCAL_AUTHORITY' ? 'active' : ''}`}
-              onClick={() => setFilterRole('LOCAL_AUTHORITY')}
-            >
-              Chính quyền
-            </button>
-            <button
-              type="button"
-              className={`sos-chat-filter-pill ${filterRole === 'ADMIN' ? 'active' : ''}`}
-              onClick={() => setFilterRole('ADMIN')}
-            >
-              Ban chỉ huy
-            </button>
+
+            {showFilterDropdown && (
+              <div className="sos-chat-filter-dropdown-menu">
+                {filterOptions.map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    className={`sos-chat-filter-menu-item ${filterRole === opt.key ? 'active' : ''}`}
+                    onClick={() => {
+                      setFilterRole(opt.key);
+                      setShowFilterDropdown(false);
+                    }}
+                  >
+                    <div className="sos-chat-filter-menu-item-left">
+                      <i className={opt.icon} />
+                      <span>{opt.label}</span>
+                    </div>
+                    <div className="sos-chat-filter-menu-item-right">
+                      <span className="sos-chat-filter-item-count">{opt.count}</span>
+                      {filterRole === opt.key && <i className="bi bi-check2 text-primary" />}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* DANH SÁCH HỘI THOẠI */}
@@ -729,10 +856,10 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                 const avatarClass = isCitizen
                   ? 'sos-chat-avatar citizen'
                   : isChannel
-                  ? 'sos-chat-avatar channel'
-                  : conv.role === 'ADMIN'
-                  ? 'sos-chat-avatar admin'
-                  : 'sos-chat-avatar authority';
+                    ? 'sos-chat-avatar channel'
+                    : conv.role === 'ADMIN'
+                      ? 'sos-chat-avatar admin'
+                      : 'sos-chat-avatar authority';
 
                 return (
                   <div
@@ -785,8 +912,8 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                           {conv.latestMessage
                             ? `${conv.latestMessage.senderName}: ${conv.latestMessage.content}`
                             : isChannel
-                            ? 'Phòng trao đổi khẩn cấp chung'
-                            : conv.areaName || 'Cán bộ địa phương'}
+                              ? 'Phòng trao đổi khẩn cấp chung'
+                              : conv.areaName || 'Cán bộ địa phương'}
                         </span>
                         {conv.unreadCount > 0 && (
                           <span className="sos-chat-unread-badge">{conv.unreadCount}</span>
@@ -823,10 +950,10 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                       activeConv.role === 'CITIZEN'
                         ? 'sos-chat-avatar citizen'
                         : activeConv.type === 'CHANNEL'
-                        ? 'sos-chat-avatar channel'
-                        : activeConv.role === 'ADMIN'
-                        ? 'sos-chat-avatar admin'
-                        : 'sos-chat-avatar authority'
+                          ? 'sos-chat-avatar channel'
+                          : activeConv.role === 'ADMIN'
+                            ? 'sos-chat-avatar admin'
+                            : 'sos-chat-avatar authority'
                     }
                   >
                     {activeConv.role === 'CITIZEN' ? (
@@ -874,35 +1001,27 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                           }}
                           title="Xem hồ sơ, số điện thoại và địa chỉ người dân"
                         >
-                          <i className="bi bi-person-lines-fill" /> Xem thông tin
+                          <i className="bi bi-person-lines-fill" /> Thông tin
                         </button>
                       )}
                     </div>
-                    <div className="sos-chat-main-subtitle">
-                      {activeConv.role === 'CITIZEN' ? (
-                        <span>
-                          <i className="bi bi-geo-alt" style={{ marginRight: '4px' }} />
-                          {activeConv.address || activeConv.areaName || 'Cứu trợ người dân địa bàn'}
-                          {activeConv.phone && (
-                            <span className="sos-chat-header-phone-badge">
-                              &bull; <i className="bi bi-telephone-fill" /> SĐT: {activeConv.phone}
-                            </span>
-                          )}
-                        </span>
-                      ) : activeConv.type === 'CHANNEL' ? (
-                        <span>Tất cả ban chỉ huy và cán bộ địa phương</span>
-                      ) : (
-                        <>
-                          {activeConv.areaName && (
-                            <span>
-                              <i className="bi bi-building" style={{ marginRight: '4px' }} />
-                              {activeConv.areaName}
-                            </span>
-                          )}
-                          {activeConv.phone && <span>&bull; SĐT: {activeConv.phone}</span>}
-                        </>
-                      )}
-                    </div>
+                    {activeConv.role !== 'CITIZEN' && (
+                      <div className="sos-chat-main-subtitle">
+                        {activeConv.type === 'CHANNEL' ? (
+                          <span>Tất cả ban chỉ huy và cán bộ địa phương</span>
+                        ) : (
+                          <>
+                            {activeConv.areaName && (
+                              <span>
+                                <i className="bi bi-building" style={{ marginRight: '4px' }} />
+                                {activeConv.areaName}
+                              </span>
+                            )}
+                            {activeConv.phone && <span>&bull; SĐT: {activeConv.phone}</span>}
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1020,7 +1139,7 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                                     const uId =
                                       typeof msg.senderId === 'object' && msg.senderId !== null
                                         ? msg.senderId._id
-                                        : msg.senderId;
+                                        : (msg.senderId as string);
                                     handleOpenCitizenInfo(uId, {
                                       fullName: msg.senderName,
                                       phone: (typeof msg.senderId === 'object' && msg.senderId?.phone) || activeConv?.phone,
@@ -1047,7 +1166,7 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
 
                           <div className="sos-chat-msg-card">
                             {(() => {
-                              const sos = parseSosMessage(msg);
+                              const sos = parseSosMessage(msg, sosStatusMap);
                               if (sos) {
                                 return (
                                   <div className="sos-chat-sos-card">
@@ -1066,7 +1185,9 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                                     </div>
 
                                     <div className="sos-chat-sos-code-row">
-                                      <span className="sos-chat-sos-code">{sos.sosCode}</span>
+                                      <span className={`sos-chat-sos-code ${sos.status === 'CANCELLED' ? 'cancelled' : ''}`}>
+                                        {sos.sosCode}
+                                      </span>
                                       <span className="sos-chat-sos-type-tag">{sos.typeLabel}</span>
                                     </div>
 
@@ -1188,12 +1309,12 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                               const hasAttachments = Array.isArray(msg.attachments) && msg.attachments.length > 0;
                               const imageAttachments = hasAttachments
                                 ? msg.attachments!.filter(
-                                    (att) =>
-                                      att.url &&
-                                      (!att.fileType ||
-                                        att.fileType.toUpperCase().includes('IMAGE') ||
-                                        /\.(jpg|jpeg|png|webp|gif)/i.test(att.url))
-                                  )
+                                  (att) =>
+                                    att.url &&
+                                    (!att.fileType ||
+                                      att.fileType.toUpperCase().includes('IMAGE') ||
+                                      /\.(jpg|jpeg|png|webp|gif)/i.test(att.url))
+                                )
                                 : [];
                               const showText = msg.content && msg.content.trim() !== '[Hình ảnh]';
 
@@ -1494,7 +1615,7 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                 </div>
                 <div className="ra-section-body">
                   {citizenModalData.emergencyContact?.name ||
-                  (citizenModalData.emergencyContacts && citizenModalData.emergencyContacts.length > 0) ? (
+                    (citizenModalData.emergencyContacts && citizenModalData.emergencyContacts.length > 0) ? (
                     <>
                       <div className="ra-kv-grid">
                         <div className="ra-kv-item">

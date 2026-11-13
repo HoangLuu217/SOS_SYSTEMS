@@ -21,7 +21,8 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA"
       ]
     },
     "web": {
@@ -40,7 +41,13 @@
       ],
       "@react-native-community/datetimepicker",
       "expo-status-bar",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Ứng dụng SOS cần quyền truy cập camera để quét mã QR trên thẻ CCCD định danh cứu hộ viên."
+        }
+      ]
     ],
     "extra": {
       "eas": {

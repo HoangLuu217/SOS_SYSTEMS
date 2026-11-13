@@ -44,6 +44,7 @@ import {
   fetchAdminUsers,
   verifyRescuer,
   fetchAdministrativeAreas,
+  updateRescueTeam,
   updateRescueTeamStatus,
   updateTeamMemberStatus,
   createRescueTeam,
@@ -67,13 +68,19 @@ export interface RescuersViewProps {
   user?: User;
 }
 
-// Chuyên môn cứu hộ chuẩn
+// Chuyên môn cứu hộ chuẩn theo 7 nhóm tác chiến
 export type RescueSpecialization =
-  | 'FLOOD_RESCUE'
-  | 'SEARCH_RESCUE'
+  | 'WATER_RESCUE'
+  | 'EVACUATION'
   | 'MEDICAL_RESCUE'
+  | 'LOGISTICS'
+  | 'SEARCH_RESCUE'
+  | 'COMMUNICATION'
+  | 'SECURITY'
+  | 'FLOOD_RESCUE'
   | 'FIRE_RESCUE'
-  | 'GENERAL_RESCUE';
+  | 'GENERAL_RESCUE'
+  | 'OTHER';
 
 // Trạng thái vận hành của đội cứu hộ
 export type OperationalStatus = 'READY' | 'ON_MISSION' | 'LIMITED' | 'INACTIVE';
@@ -158,11 +165,18 @@ export interface EnrichedRescueTeam extends RescueTeamItem {
 }
 
 const SPECIALIZATION_LABELS: Record<RescueSpecialization, string> = {
-  FLOOD_RESCUE: 'Thủy bộ vượt lũ',
-  SEARCH_RESCUE: 'Tìm kiếm và cứu nạn',
-  MEDICAL_RESCUE: 'Y tế cứu thương',
-  FIRE_RESCUE: 'PCCC và cứu nạn cứu hộ',
+  WATER_RESCUE: 'Đội cứu hộ đường thủy',
+  EVACUATION: 'Đội sơ tán dân',
+  MEDICAL_RESCUE: 'Đội y tế',
+  LOGISTICS: 'Đội hậu cần',
+  SEARCH_RESCUE: 'Đội tìm kiếm cứu nạn',
+  COMMUNICATION: 'Đội thông tin liên lạc',
+  SECURITY: 'Đội an ninh',
+  // Tương thích ngược với dữ liệu cũ
+  FLOOD_RESCUE: 'Đội cứu hộ đường thủy',
+  FIRE_RESCUE: 'PCCC & CNCH',
   GENERAL_RESCUE: 'Cứu hộ tổng hợp',
+  OTHER: 'Khác',
 };
 
 const OPERATIONAL_STATUS_LABELS: Record<OperationalStatus, { label: string; color: string; desc: string }> = {
@@ -329,6 +343,122 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
     }
   };
 
+  // Đổi nhanh trạng thái vận hành tác chiến của đội từ Drawer
+  const handleQuickChangeTeamStatus = async (newOpStatus: OperationalStatus) => {
+    if (!selectedTeamDetail) return;
+    const teamId = selectedTeamDetail._id;
+    const oldOpStatus = selectedTeamDetail.operationalStatus;
+    const newDbStatus = newOpStatus === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE';
+
+    try {
+      // Optimistic update
+      setSelectedTeamDetail((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          operationalStatus: newOpStatus,
+          status: newDbStatus,
+        };
+      });
+
+      setRawTeams((prev) =>
+        prev.map((t) => (t._id === teamId ? ({ ...t, status: newDbStatus, operationalStatus: newOpStatus } as any) : t))
+      );
+
+      const res = await updateRescueTeam(teamId, {
+        operationalStatus: newOpStatus,
+        status: newDbStatus,
+      });
+
+      if (res?.success === false) {
+        throw new Error(res.message || 'Không thể đổi trạng thái đội');
+      }
+
+      const statusMeta = OPERATIONAL_STATUS_LABELS[newOpStatus];
+      toast.success(
+        `Đã chuyển trạng thái đội thành "${statusMeta?.label || newOpStatus}"`,
+        'Cập nhật thành công'
+      );
+      await loadData();
+    } catch (err: any) {
+      console.error('Lỗi khi đổi trạng thái đội:', err);
+      // Revert on error
+      setSelectedTeamDetail((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          operationalStatus: oldOpStatus,
+          status: oldOpStatus === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
+        };
+      });
+      setRawTeams((prev) =>
+        prev.map((t) =>
+          t._id === teamId
+            ? { ...t, status: oldOpStatus === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE', operationalStatus: oldOpStatus }
+            : t
+        )
+      );
+      toast.error(err.message || 'Không thể đổi trạng thái đội', 'Lỗi');
+    }
+  };
+
+  // Mở modal Chỉnh sửa thông tin đội
+  const handleOpenEditTeamModal = (team: EnrichedRescueTeam) => {
+    setEditTeamName(team.name || '');
+    setEditTeamSpec(team.specialization || 'WATER_RESCUE');
+    const currLeaderId = team.leaderId
+      ? String(typeof team.leaderId === 'object' ? (team.leaderId as any)._id : team.leaderId)
+      : '';
+    setEditTeamLeader(currLeaderId);
+    setEditTeamPhone(team.leaderPhone || '');
+    setEditTeamSector(team.assignedSector || team.description || '');
+    setEditTeamHeadquarters(team.headquartersAddress || '');
+    setIsEditTeamModalOpen(true);
+  };
+
+  // Lưu chỉnh sửa thông tin đội
+  const handleSaveEditTeam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTeamDetail) return;
+    if (!editTeamName.trim()) {
+      toast.error('Vui lòng nhập tên đội cứu hộ!', 'Lỗi nhập liệu');
+      return;
+    }
+
+    setIsSavingEditTeam(true);
+    try {
+      const payload: any = {
+        name: editTeamName.trim(),
+        type: editTeamSpec,
+        description: editTeamSector.trim() || undefined,
+        headquartersAddress: editTeamHeadquarters.trim() || undefined,
+        phone: editTeamPhone.trim() || undefined,
+      };
+
+      const currLeaderId = selectedTeamDetail.leaderId
+        ? String(typeof selectedTeamDetail.leaderId === 'object' ? (selectedTeamDetail.leaderId as any)._id : selectedTeamDetail.leaderId)
+        : '';
+
+      if (editTeamLeader && editTeamLeader !== currLeaderId) {
+        payload.leaderId = editTeamLeader;
+      }
+
+      const res = await updateRescueTeam(selectedTeamDetail._id, payload);
+      if (res?.success === false) {
+        throw new Error(res.message || 'Không thể cập nhật thông tin đội cứu hộ');
+      }
+
+      toast.success(`Đã cập nhật thông tin đội "${editTeamName.trim()}" thành công!`, 'Thành công');
+      setIsEditTeamModalOpen(false);
+      await loadData();
+    } catch (err: any) {
+      console.error('Lỗi khi cập nhật đội:', err);
+      toast.error(err.message || 'Không thể cập nhật đội cứu hộ', 'Lỗi');
+    } finally {
+      setIsSavingEditTeam(false);
+    }
+  };
+
   // Phê duyệt hoặc Từ chối thành viên xin vào đội
   const handleUpdateMemberStatus = async (teamId: string, rescuerId: string, status: 'APPROVED' | 'REJECTED') => {
     try {
@@ -456,7 +586,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
   // Form thêm đội cứu hộ mới
   const [newTeamName, setNewTeamName] = useState('');
-  const [newTeamSpec, setNewTeamSpec] = useState<RescueSpecialization>('FLOOD_RESCUE');
+  const [newTeamSpec, setNewTeamSpec] = useState<RescueSpecialization>('WATER_RESCUE');
   const [newTeamLeader, setNewTeamLeader] = useState('');
   const [selectedLeaderId, setSelectedLeaderId] = useState('');
   const [newTeamPhone, setNewTeamPhone] = useState('');
@@ -467,6 +597,16 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
   const [newVehiclePlate, setNewVehiclePlate] = useState('');
   const [newVehicleCapacity, setNewVehicleCapacity] = useState(6);
   const [newTeamNotes, setNewTeamNotes] = useState('');
+
+  // Modal chỉnh sửa thông tin đội cứu hộ
+  const [isEditTeamModalOpen, setIsEditTeamModalOpen] = useState(false);
+  const [editTeamName, setEditTeamName] = useState('');
+  const [editTeamSpec, setEditTeamSpec] = useState<RescueSpecialization>('WATER_RESCUE');
+  const [editTeamLeader, setEditTeamLeader] = useState('');
+  const [editTeamPhone, setEditTeamPhone] = useState('');
+  const [editTeamSector, setEditTeamSector] = useState('');
+  const [editTeamHeadquarters, setEditTeamHeadquarters] = useState('');
+  const [isSavingEditTeam, setIsSavingEditTeam] = useState(false);
 
   const [filterSameCommuneOnly, setFilterSameCommuneOnly] = useState(true);
 
@@ -693,19 +833,37 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
       const teamName = teamDisplayName;
       const leaderObj = typeof rawTeam.leaderId === 'object' && rawTeam.leaderId !== null ? rawTeam.leaderId : null;
       const leaderName = leaderObj?.fullName || '';
-      const leaderPhone = leaderObj?.phone || '';
+      const leaderPhone = (rawTeam as any).phone || leaderObj?.phone || '';
 
       // Chuyên môn
-      let specialization: RescueSpecialization = 'GENERAL_RESCUE';
+      let specialization: RescueSpecialization;
       const rawType = (rawTeam.type || '').toUpperCase();
-      if (rawType.includes('FLOOD') || teamName.toLowerCase().includes('ca-nô') || teamName.toLowerCase().includes('lũ')) {
-        specialization = 'FLOOD_RESCUE';
-      } else if (rawType.includes('FIRE') || teamName.toLowerCase().includes('pccc') || teamName.toLowerCase().includes('sập')) {
-        specialization = 'FIRE_RESCUE';
-      } else if (rawType.includes('MEDICAL') || teamName.toLowerCase().includes('y tế') || teamName.toLowerCase().includes('thương')) {
+      if (
+        rawType === 'WATER_RESCUE' ||
+        rawType.includes('WATER') ||
+        rawType === 'FLOOD_RESCUE' ||
+        rawType.includes('FLOOD') ||
+        teamName.toLowerCase().includes('ca-nô') ||
+        teamName.toLowerCase().includes('lũ') ||
+        teamName.toLowerCase().includes('đường thủy')
+      ) {
+        specialization = 'WATER_RESCUE';
+      } else if (rawType === 'EVACUATION' || rawType.includes('EVAC') || teamName.toLowerCase().includes('sơ tán')) {
+        specialization = 'EVACUATION';
+      } else if (rawType === 'MEDICAL_RESCUE' || rawType.includes('MEDIC') || teamName.toLowerCase().includes('y tế') || teamName.toLowerCase().includes('thương')) {
         specialization = 'MEDICAL_RESCUE';
-      } else if (rawType.includes('SEARCH') || teamName.toLowerCase().includes('tìm kiếm') || teamName.toLowerCase().includes('sạt lở')) {
+      } else if (rawType === 'LOGISTICS' || rawType.includes('LOGIS') || teamName.toLowerCase().includes('hậu cần') || teamName.toLowerCase().includes('tiếp tế')) {
+        specialization = 'LOGISTICS';
+      } else if (rawType === 'SEARCH_RESCUE' || rawType.includes('SEARCH') || teamName.toLowerCase().includes('tìm kiếm') || teamName.toLowerCase().includes('sạt lở')) {
         specialization = 'SEARCH_RESCUE';
+      } else if (rawType === 'COMMUNICATION' || rawType.includes('COMMUN') || teamName.toLowerCase().includes('thông tin') || teamName.toLowerCase().includes('liên lạc')) {
+        specialization = 'COMMUNICATION';
+      } else if (rawType === 'SECURITY' || rawType.includes('SECUR') || teamName.toLowerCase().includes('an ninh')) {
+        specialization = 'SECURITY';
+      } else if (rawType === 'FIRE_RESCUE' || rawType.includes('FIRE') || teamName.toLowerCase().includes('pccc') || teamName.toLowerCase().includes('sập')) {
+        specialization = 'FIRE_RESCUE';
+      } else {
+        specialization = 'WATER_RESCUE';
       }
 
       // Địa bàn
@@ -827,9 +985,11 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
       }));
 
       // Tính toán Trạng thái vận hành thực tế
-      let operationalStatus: OperationalStatus = 'READY';
+      let operationalStatus: OperationalStatus;
       if (rawTeam.status === 'INACTIVE' || rawTeam.status === 'SUSPENDED') {
         operationalStatus = 'INACTIVE';
+      } else if ((rawTeam as any).operationalStatus) {
+        operationalStatus = (rawTeam as any).operationalStatus;
       } else if (activeMissions.length > 0) {
         operationalStatus = 'ON_MISSION';
       } else if (
@@ -843,7 +1003,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
       }
 
       // Điểm sẵn sàng tác chiến tính toán tự động từ số liệu thực tế DB
-      let readinessScore = 100;
+      let readinessScore: number;
       if (operationalStatus === 'INACTIVE') {
         readinessScore = 0;
       } else {
@@ -862,10 +1022,16 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
         }))
         : [];
 
+      const headquartersAddress =
+        (rawTeam as any).headquartersAddress ||
+        (rawTeam as any).base ||
+        (typeof rawTeam.authorityId === 'object' && rawTeam.authorityId?.name ? rawTeam.authorityId.name : '');
+
       return {
         ...rawTeam,
         name: teamDisplayName,
         assignedSector,
+        headquartersAddress,
         operationalStatus,
         specialization,
         areaName,
@@ -898,10 +1064,6 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
           (acc: number, curr: any) => acc + (typeof curr.quantity === 'number' ? curr.quantity : parseInt(curr.quantity, 10) || 1),
           0
         ),
-        headquartersAddress:
-          (typeof rawTeam.authorityId === 'object' && rawTeam.authorityId?.name)
-            ? rawTeam.authorityId.name
-            : (rawTeam.description || ''),
         readinessScore,
       };
     });
@@ -999,7 +1161,13 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
   const filteredTeams = useMemo(() => {
     return authorizedTeams.filter((team) => {
       // 1. Lọc theo chuyên môn
-      if (specFilter !== 'ALL' && team.specialization !== specFilter) return false;
+      if (specFilter !== 'ALL') {
+        if (specFilter === 'WATER_RESCUE') {
+          if (team.specialization !== 'WATER_RESCUE' && (team.specialization as any) !== 'FLOOD_RESCUE') return false;
+        } else if (team.specialization !== specFilter) {
+          return false;
+        }
+      }
 
       // 2. Lọc theo từ khóa tìm kiếm
       if (searchQuery.trim()) {
@@ -1008,7 +1176,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
         const lName = team.leaderName.toLowerCase();
         const lPhone = team.leaderPhone.toLowerCase();
         const aName = team.areaName.toLowerCase();
-        const specName = SPECIALIZATION_LABELS[team.specialization].toLowerCase();
+        const specName = (SPECIALIZATION_LABELS[team.specialization] || '').toLowerCase();
         const hasMember = team.detailedMembers.some((m) => m.fullName.toLowerCase().includes(q));
 
         return (
@@ -1230,28 +1398,57 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
     }
   };
 
-  // Helper render huy hiệu chuyên môn
+  // Helper render huy hiệu chuyên môn tác chiến
   const renderSpecializationBadge = (spec: RescueSpecialization) => {
     switch (spec) {
+      case 'WATER_RESCUE':
       case 'FLOOD_RESCUE':
         return (
-          <span className="spec-badge flood">
+          <span className="spec-badge water">
             <Sailboat size={12} />
-            <span>Thủy bộ vượt lũ</span>
+            <span>Đội cứu hộ đường thủy</span>
           </span>
         );
-      case 'SEARCH_RESCUE':
+      case 'EVACUATION':
         return (
-          <span className="spec-badge search">
-            <Compass size={12} />
-            <span>Tìm kiếm &amp; Sạt lở</span>
+          <span className="spec-badge evacuation">
+            <Users size={12} />
+            <span>Đội sơ tán dân</span>
           </span>
         );
       case 'MEDICAL_RESCUE':
         return (
           <span className="spec-badge medical">
             <HeartPulse size={12} />
-            <span>Y tế cứu thương</span>
+            <span>Đội y tế</span>
+          </span>
+        );
+      case 'LOGISTICS':
+        return (
+          <span className="spec-badge logistics">
+            <Package size={12} />
+            <span>Đội hậu cần</span>
+          </span>
+        );
+      case 'SEARCH_RESCUE':
+        return (
+          <span className="spec-badge search">
+            <Compass size={12} />
+            <span>Đội tìm kiếm cứu nạn</span>
+          </span>
+        );
+      case 'COMMUNICATION':
+        return (
+          <span className="spec-badge communication">
+            <Radio size={12} />
+            <span>Đội thông tin liên lạc</span>
+          </span>
+        );
+      case 'SECURITY':
+        return (
+          <span className="spec-badge security">
+            <ShieldCheck size={12} />
+            <span>Đội an ninh</span>
           </span>
         );
       case 'FIRE_RESCUE':
@@ -1265,30 +1462,10 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
         return (
           <span className="spec-badge general">
             <Shield size={12} />
-            <span>Cứu hộ tổng hợp</span>
+            <span>{SPECIALIZATION_LABELS[spec] || 'Cứu hộ tổng hợp'}</span>
           </span>
         );
     }
-  };
-
-  // Helper render huy hiệu trạng thái vận hành
-  const renderOperationalStatus = (status: OperationalStatus) => {
-    const meta = OPERATIONAL_STATUS_LABELS[status] || OPERATIONAL_STATUS_LABELS.READY;
-    return (
-      <span className={`operational-status-pill ${meta.color}`}>
-        <span
-          className={`pulse-dot ${status === 'READY'
-            ? 'green'
-            : status === 'ON_MISSION'
-              ? 'amber'
-              : status === 'LIMITED'
-                ? 'red'
-                : 'gray'
-            }`}
-        />
-        <span>{meta.label}</span>
-      </span>
-    );
   };
 
   // Xử lý phê duyệt cứu hộ viên (Admin mode)
@@ -1360,7 +1537,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   )}
                 </div>
 
-                {/* Bộ lọc chuyên môn */}
+                {/* Bộ lọc chuyên môn tác chiến */}
                 <select
                   className="ra-filter-select"
                   value={specFilter}
@@ -1370,10 +1547,13 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                   }}
                 >
                   <option value="ALL">Tất cả chuyên môn</option>
-                  <option value="FLOOD_RESCUE">Thủy bộ vượt lũ</option>
-                  <option value="FIRE_RESCUE">PCCC &amp; CNCH</option>
-                  <option value="MEDICAL_RESCUE">Y tế cứu thương</option>
-                  <option value="SEARCH_RESCUE">Tìm kiếm cứu nạn</option>
+                  <option value="WATER_RESCUE">Đội cứu hộ đường thủy</option>
+                  <option value="EVACUATION">Đội sơ tán dân</option>
+                  <option value="MEDICAL_RESCUE">Đội y tế</option>
+                  <option value="LOGISTICS">Đội hậu cần</option>
+                  <option value="SEARCH_RESCUE">Đội tìm kiếm cứu nạn</option>
+                  <option value="COMMUNICATION">Đội thông tin liên lạc</option>
+                  <option value="SECURITY">Đội an ninh</option>
                 </select>
 
                 {/* Bộ lọc địa bàn: Chỉ hiển thị khi là Admin quản lý nhiều địa phương */}
@@ -1500,10 +1680,14 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                       const hasActiveMission = team.activeMissions && team.activeMissions.length > 0;
                       const primaryMission = hasActiveMission ? team.activeMissions[0] : null;
 
-                      let specClass = '';
-                      if (team.specialization === 'FLOOD_RESCUE') specClass = 'flood';
-                      else if (team.specialization === 'SEARCH_RESCUE') specClass = 'search';
+                      let specClass = 'general';
+                      if (team.specialization === 'WATER_RESCUE' || team.specialization === 'FLOOD_RESCUE') specClass = 'water';
+                      else if (team.specialization === 'EVACUATION') specClass = 'evacuation';
                       else if (team.specialization === 'MEDICAL_RESCUE') specClass = 'medical';
+                      else if (team.specialization === 'LOGISTICS') specClass = 'logistics';
+                      else if (team.specialization === 'SEARCH_RESCUE') specClass = 'search';
+                      else if (team.specialization === 'COMMUNICATION') specClass = 'communication';
+                      else if (team.specialization === 'SECURITY') specClass = 'security';
                       else if (team.specialization === 'FIRE_RESCUE') specClass = 'fire';
 
                       return (
@@ -1870,50 +2054,14 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {selectedTeamDetail.status === 'ACTIVE' ? (
-                  <button
-                    type="button"
-                    className="coordination-action-btn outline compact"
-                    onClick={() => handleUpdateTeamStatus(selectedTeamDetail._id, 'INACTIVE')}
-                    disabled={actionInProgress === selectedTeamDetail._id}
-                    title="Tạm ngưng hoạt động của đội"
-                    style={{ fontSize: 11.5, color: '#DC2626', borderColor: '#FECACA' }}
-                  >
-                    Tạm dừng đội
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="coordination-action-btn primary compact"
-                    onClick={() => handleUpdateTeamStatus(selectedTeamDetail._id, 'ACTIVE')}
-                    disabled={actionInProgress === selectedTeamDetail._id}
-                    title="Kích hoạt lại đội sẵn sàng tác chiến"
-                    style={{ fontSize: 11.5 }}
-                  >
-                    Kích hoạt đội
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="coordination-action-btn outline compact"
-                  onClick={() => handleDeleteTeam(selectedTeamDetail)}
-                  disabled={actionInProgress === selectedTeamDetail._id}
-                  title="Giải thể và xóa đội cứu hộ này"
-                  style={{ fontSize: 11.5, color: '#DC2626', borderColor: '#FECACA', background: '#FEF2F2' }}
-                >
-                  <Trash2 size={13} />
-                  <span>Xóa đội</span>
-                </button>
-                <button
-                  type="button"
-                  className="executive-toggle-btn"
-                  onClick={handleCloseTeamDetail}
-                  title="Đóng hồ sơ (Esc)"
-                >
-                  <X size={16} />
-                </button>
-              </div>
+              <button
+                type="button"
+                className="executive-toggle-btn"
+                onClick={handleCloseTeamDetail}
+                title="Đóng hồ sơ (Esc)"
+              >
+                <X size={16} />
+              </button>
             </div>
 
 
@@ -2056,16 +2204,83 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     <div className="drawer-stat-card">
                       <span className="drawer-stat-label">Trạng thái</span>
                       <div style={{ marginTop: 4 }}>
-                        {renderOperationalStatus(selectedTeamDetail.operationalStatus)}
+                        <select
+                          value={selectedTeamDetail.operationalStatus}
+                          onChange={(e) => handleQuickChangeTeamStatus(e.target.value as OperationalStatus)}
+                          style={{
+                            padding: '3px 8px',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            borderRadius: 6,
+                            border: `1px solid ${selectedTeamDetail.operationalStatus === 'READY'
+                                ? '#BBF7D0'
+                                : selectedTeamDetail.operationalStatus === 'ON_MISSION'
+                                  ? '#FED7AA'
+                                  : selectedTeamDetail.operationalStatus === 'LIMITED'
+                                    ? '#FECACA'
+                                    : '#E2E8F0'
+                              }`,
+                            background:
+                              selectedTeamDetail.operationalStatus === 'READY'
+                                ? '#F0FDF4'
+                                : selectedTeamDetail.operationalStatus === 'ON_MISSION'
+                                  ? '#FFF7ED'
+                                  : selectedTeamDetail.operationalStatus === 'LIMITED'
+                                    ? '#FEF2F2'
+                                    : '#F8FAFC',
+                            color:
+                              selectedTeamDetail.operationalStatus === 'READY'
+                                ? '#166534'
+                                : selectedTeamDetail.operationalStatus === 'ON_MISSION'
+                                  ? '#C2410C'
+                                  : selectedTeamDetail.operationalStatus === 'LIMITED'
+                                    ? '#B91C1C'
+                                    : '#64748B',
+                            cursor: 'pointer',
+                            outline: 'none',
+                          }}
+                          title="Bấm để chuyển nhanh trạng thái vận hành của đội"
+                        >
+                          <option value="READY">🟢 Sẵn sàng</option>
+                          <option value="ON_MISSION">🟡 Đang làm nhiệm vụ</option>
+                          <option value="LIMITED">🔴 Hạn chế hoạt động</option>
+                          <option value="INACTIVE">⚪ Tạm dừng hoạt động</option>
+                        </select>
                       </div>
+                      <span className="drawer-stat-hint" style={{ marginTop: 2, fontSize: 11, color: '#64748B' }}>
+                        Bấm để đổi nhanh
+                      </span>
                     </div>
                   </div>
 
                   {/* Thông tin chỉ huy & Trụ sở */}
                   <div className="dossier-card">
-                    <div className="dossier-card-title">
-                      <Shield size={14} color="#0284C7" />
-                      <span>Thông tin tổ chức &amp; Trực chiến</span>
+                    <div className="dossier-card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Shield size={14} color="#0284C7" />
+                        <span>Thông tin tổ chức &amp; Trực chiến</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditTeamModal(selectedTeamDetail)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#0284C7',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                        }}
+                        title="Bấm để chỉnh sửa thông tin đội"
+                      >
+                        <Wrench size={12} />
+                        <span>Chỉnh sửa</span>
+                      </button>
                     </div>
                     <div className="dossier-item">
                       <span className="dossier-item-label">Chỉ huy Đội trưởng</span>
@@ -2865,16 +3080,49 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 Mã đội: {selectedTeamDetail._id} • Cập nhật lúc {new Date().toLocaleTimeString('vi-VN')}
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {selectedTeamDetail.status === 'ACTIVE' ? (
+                  <button
+                    type="button"
+                    className="coordination-action-btn outline"
+                    onClick={() => handleUpdateTeamStatus(selectedTeamDetail._id, 'INACTIVE')}
+                    disabled={actionInProgress === selectedTeamDetail._id}
+                    title="Tạm ngưng hoạt động của đội"
+                    style={{ color: '#DC2626', borderColor: '#FECACA', background: '#FFFFFF' }}
+                  >
+                    <span>Tạm dừng đội</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="coordination-action-btn outline"
+                    onClick={() => handleUpdateTeamStatus(selectedTeamDetail._id, 'ACTIVE')}
+                    disabled={actionInProgress === selectedTeamDetail._id}
+                    title="Kích hoạt lại đội sẵn sàng tác chiến"
+                    style={{ color: '#16A34A', borderColor: '#BBF7D0', background: '#F0FDF4' }}
+                  >
+                    <span>Kích hoạt lại</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="coordination-action-btn outline"
+                  onClick={() => handleOpenEditTeamModal(selectedTeamDetail)}
+                  style={{ color: '#0284C7', borderColor: '#BAE6FD', background: '#F0F9FF' }}
+                  title="Chỉnh sửa thông tin, chuyên môn tác chiến và trụ sở của đội"
+                >
+                  <Wrench size={14} />
+                  <span>Sửa đội</span>
+                </button>
                 <button
                   type="button"
                   className="coordination-action-btn outline"
                   onClick={() => handleDeleteTeam(selectedTeamDetail)}
                   disabled={actionInProgress === selectedTeamDetail._id}
-                  style={{ color: '#DC2626', borderColor: '#FECACA', background: '#FEF2F2' }}
                   title="Giải thể và xóa đội cứu hộ này"
+                  style={{ color: '#DC2626', borderColor: '#FECACA', background: '#FEF2F2' }}
                 >
                   <Trash2 size={14} />
-                  <span>Xóa đội cứu hộ</span>
+                  <span>Xóa đội</span>
                 </button>
                 <button
                   type="button"
@@ -2964,11 +3212,13 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                         background: '#FFFFFF',
                       }}
                     >
-                      <option value="FLOOD_RESCUE">Thủy bộ vượt lũ</option>
-                      <option value="SEARCH_RESCUE">Tìm kiếm và cứu nạn</option>
-                      <option value="MEDICAL_RESCUE">Y tế cứu thương</option>
-                      <option value="FIRE_RESCUE">PCCC và cứu nạn cứu hộ</option>
-                      <option value="GENERAL_RESCUE">Cứu hộ tổng hợp</option>
+                      <option value="WATER_RESCUE">Đội cứu hộ đường thủy</option>
+                      <option value="EVACUATION">Đội sơ tán dân</option>
+                      <option value="MEDICAL_RESCUE">Đội y tế</option>
+                      <option value="LOGISTICS">Đội hậu cần</option>
+                      <option value="SEARCH_RESCUE">Đội tìm kiếm cứu nạn</option>
+                      <option value="COMMUNICATION">Đội thông tin liên lạc</option>
+                      <option value="SECURITY">Đội an ninh</option>
                     </select>
                   </div>
 
@@ -3240,6 +3490,284 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                 <button type="submit" className="coordination-action-btn primary" disabled={isSubmittingTeam}>
                   {isSubmittingTeam ? <Loader2 size={14} className="ra-spin" /> : <CheckCircle2 size={14} />}
                   <span>{isSubmittingTeam ? 'Đang lưu vào hệ thống...' : 'Xác nhận tạo đội cứu hộ'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================== */}
+      {/* MODAL CHỈNH SỬA THÔNG TIN ĐỘI CỨU HỘ                     */}
+      {/* ======================================================== */}
+      {isEditTeamModalOpen && selectedTeamDetail && (
+        <div className="executive-modal-backdrop" onClick={() => !isSavingEditTeam && setIsEditTeamModalOpen(false)}>
+          <div
+            className="executive-modal-card"
+            style={{ maxWidth: 640, width: '92%' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="executive-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div className="executive-icon-squircle" style={{ background: '#E0F2FE', color: '#0284C7' }}>
+                  <Wrench size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0F172A' }}>
+                    Chỉnh Sửa Thông Tin Đội Cứu Hộ
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: 12, color: '#64748B' }}>
+                    Cập nhật tên đội, chuyên môn tác chiến, chỉ huy và điểm tập kết
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="executive-toggle-btn"
+                onClick={() => setIsEditTeamModalOpen(false)}
+                disabled={isSavingEditTeam}
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditTeam}>
+              <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '72vh', overflowY: 'auto' }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                    Tên Đội Cứu Hộ *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editTeamName}
+                    onChange={(e) => setEditTeamName(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #CBD5E1',
+                      borderRadius: 6,
+                      fontSize: 13,
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                      Chuyên Môn Tác Chiến *
+                    </label>
+                    <select
+                      value={editTeamSpec}
+                      onChange={(e) => setEditTeamSpec(e.target.value as RescueSpecialization)}
+                      style={{
+                        width: '100%',
+                        height: 38,
+                        boxSizing: 'border-box',
+                        padding: '8px 12px',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: 6,
+                        fontSize: 13,
+                        outline: 'none',
+                        background: '#FFFFFF',
+                      }}
+                    >
+                      <option value="WATER_RESCUE">Đội cứu hộ đường thủy</option>
+                      <option value="EVACUATION">Đội sơ tán dân</option>
+                      <option value="MEDICAL_RESCUE">Đội y tế</option>
+                      <option value="LOGISTICS">Đội hậu cần</option>
+                      <option value="SEARCH_RESCUE">Đội tìm kiếm cứu nạn</option>
+                      <option value="COMMUNICATION">Đội thông tin liên lạc</option>
+                      <option value="SECURITY">Đội an ninh</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                      Địa Bàn Phụ Trách
+                    </label>
+                    <input
+                      type="text"
+                      disabled
+                      value={selectedTeamDetail.areaName || 'Địa bàn phụ trách'}
+                      style={{
+                        width: '100%',
+                        height: 38,
+                        boxSizing: 'border-box',
+                        padding: '8px 12px',
+                        border: '1px solid #E2E8F0',
+                        borderRadius: 6,
+                        fontSize: 13,
+                        background: '#F8FAFC',
+                        color: '#64748B',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                      Chỉ Huy Đội Trưởng
+                    </label>
+                    <select
+                      value={editTeamLeader}
+                      onChange={(e) => {
+                        const newLId = e.target.value;
+                        setEditTeamLeader(newLId);
+                        const cand = leaderCandidates.find((c) => c.id === newLId);
+                        if (cand) {
+                          setEditTeamPhone(cand.phone);
+                        }
+                      }}
+                      style={{
+                        width: '100%',
+                        height: 38,
+                        boxSizing: 'border-box',
+                        padding: '8px 12px',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: 6,
+                        fontSize: 13,
+                        outline: 'none',
+                        background: '#FFFFFF',
+                      }}
+                    >
+                      <option value="">-- Giữ nguyên chỉ huy hiện tại --</option>
+                      {selectedTeamDetail.leaderId && (
+                        <option value={String(typeof selectedTeamDetail.leaderId === 'object' ? (selectedTeamDetail.leaderId as any)._id : selectedTeamDetail.leaderId)}>
+                          ⭐ {selectedTeamDetail.leaderName} (Đội trưởng hiện tại)
+                        </option>
+                      )}
+                      {displayedLeaderCandidates
+                        .filter((c) => c.id !== String(typeof selectedTeamDetail.leaderId === 'object' ? (selectedTeamDetail.leaderId as any)._id : selectedTeamDetail.leaderId))
+                        .map((cand) => (
+                          <option
+                            key={cand.id}
+                            value={cand.id}
+                            disabled={!!cand.assignedTeamName && cand.assignedTeamName !== selectedTeamDetail.name}
+                          >
+                            {cand.fullName} {cand.assignedTeamName && cand.assignedTeamName !== selectedTeamDetail.name ? `(⚠️ Đã thuộc: ${cand.assignedTeamName})` : ''}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                      Số Điện Thoại Trực Ban
+                    </label>
+                    <input
+                      type="tel"
+                      value={editTeamPhone}
+                      onChange={(e) => setEditTeamPhone(e.target.value)}
+                      placeholder="Số điện thoại liên hệ trực ban"
+                      style={{
+                        width: '100%',
+                        height: 38,
+                        boxSizing: 'border-box',
+                        padding: '8px 12px',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: 6,
+                        fontSize: 13,
+                        outline: 'none',
+                        background: editTeamPhone ? '#F0F9FF' : '#FFFFFF',
+                        fontWeight: editTeamPhone ? 700 : 400,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                    Trụ Sở Trực Chiến / Điểm Tập Kết
+                  </label>
+                  <input
+                    type="text"
+                    value={editTeamHeadquarters}
+                    onChange={(e) => setEditTeamHeadquarters(e.target.value)}
+                    placeholder="VD: Ban Chỉ Huy PCTT Xã, Nhà văn hóa cộng đồng..."
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #CBD5E1',
+                      borderRadius: 6,
+                      fontSize: 13,
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#0F172A', display: 'block', marginBottom: 5 }}>
+                    Phân Vùng / Ghi Chú Phụ Trách Cụ Thể
+                  </label>
+                  <input
+                    type="text"
+                    value={editTeamSector}
+                    onChange={(e) => setEditTeamSector(e.target.value)}
+                    placeholder="VD: Phụ trách khu vực hạ lưu sông, vùng trũng ven đê..."
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #CBD5E1',
+                      borderRadius: 6,
+                      fontSize: 13,
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div
+                style={{
+                  padding: '16px 24px',
+                  background: '#F8FAFC',
+                  borderTop: '1px solid #E2E8F0',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: 10,
+                  borderRadius: '0 0 12px 12px',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setIsEditTeamModalOpen(false)}
+                  disabled={isSavingEditTeam}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    border: '1px solid #CBD5E1',
+                    background: '#FFFFFF',
+                    color: '#475569',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingEditTeam}
+                  style={{
+                    padding: '8px 18px',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    border: 'none',
+                    background: '#0284C7',
+                    color: '#FFFFFF',
+                    cursor: isSavingEditTeam ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    boxShadow: '0 1px 2px rgba(2, 132, 199, 0.25)',
+                  }}
+                >
+                  {isSavingEditTeam ? <Loader2 size={14} className="ra-spin" /> : <CheckCircle2 size={14} />}
+                  <span>{isSavingEditTeam ? 'Đang lưu...' : 'Lưu thay đổi'}</span>
                 </button>
               </div>
             </form>
