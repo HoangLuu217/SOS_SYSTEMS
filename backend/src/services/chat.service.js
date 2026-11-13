@@ -181,29 +181,24 @@ class ChatService {
           io.to(`user_${recipientObjectId}`).emit('new_message', populated);
         }
 
-        // Nếu là kênh area_..., phát tới các cán bộ địa phương phụ trách & ban chỉ huy
+        // Nếu là kênh area_..., phát tới các cán bộ địa phương phụ trách (không phát tới Admin)
         if (channel.startsWith('area_')) {
           const staffUsers = await User.find({
-            roles: { $in: ['LOCAL_AUTHORITY', 'ADMIN'] },
+            roles: { $in: ['LOCAL_AUTHORITY'] },
             status: { $ne: 'SUSPENDED' },
           }).select('_id authority roles');
           const chClean = channel.replace(/^area_/, '');
 
           for (const u of staffUsers) {
-            const isAdmin = u.roles?.includes('ADMIN');
-            if (isAdmin) {
-              io.to(`user_${u._id}`).emit('new_message', populated);
-            } else {
-              const { specificSlug, broadSlug } = this.extractAuthorityScope(u.authority);
-              const isMatched = specificSlug
-                ? chClean.includes(specificSlug)
-                : broadSlug
-                ? chClean.includes(broadSlug)
-                : false;
+            const { specificSlug, broadSlug } = this.extractAuthorityScope(u.authority);
+            const isMatched = specificSlug
+              ? chClean.includes(specificSlug)
+              : broadSlug
+              ? chClean.includes(broadSlug)
+              : false;
 
-              if (isMatched) {
-                io.to(`user_${u._id}`).emit('new_message', populated);
-              }
+            if (isMatched) {
+              io.to(`user_${u._id}`).emit('new_message', populated);
             }
           }
         }
@@ -254,9 +249,70 @@ class ChatService {
       .sort({ createdAt: 1 })
       .limit(Math.min(limit, 300));
 
+    // Tự động kiểm tra và đồng bộ trạng thái thực tế mới nhất của các ca SOS vào tin nhắn
+    const sosIdsToFetch = [];
+    const sosCodesToFetch = [];
+    messages.forEach((m) => {
+      const rawId = (m.sosRequestId && typeof m.sosRequestId === 'object' ? m.sosRequestId._id : m.sosRequestId) || m.sosData?._id;
+      if (rawId && mongoose.isValidObjectId(rawId)) {
+        sosIdsToFetch.push(rawId);
+      }
+      const rawCode = m.sosData?.sosCode || m.content?.match(/Mã cứu trợ:\s*(SOS-[A-Z0-9\-]+)/i)?.[1]?.trim();
+      if (rawCode) {
+        sosCodesToFetch.push(rawCode);
+      }
+    });
+
+    const liveStatusMap = new Map();
+    if (sosIdsToFetch.length > 0 || sosCodesToFetch.length > 0) {
+      try {
+        const liveSosList = await SosRequest.find({
+          $or: [
+            ...(sosIdsToFetch.length > 0 ? [{ _id: { $in: sosIdsToFetch } }] : []),
+            ...(sosCodesToFetch.length > 0 ? [{ sosCode: { $in: sosCodesToFetch } }] : []),
+          ],
+        }).select('_id sosCode status');
+
+        liveSosList.forEach((s) => {
+          liveStatusMap.set(String(s._id), s.status);
+          if (s.sosCode) liveStatusMap.set(s.sosCode, s.status);
+        });
+      } catch (sosLookupErr) {
+        console.warn('Sync live SOS status in getMessages error:', sosLookupErr);
+      }
+    }
+
+    const processedMessages = messages.map((m) => {
+      const rawId = (m.sosRequestId && typeof m.sosRequestId === 'object' ? m.sosRequestId._id : m.sosRequestId) || m.sosData?._id;
+      const rawCode = m.sosData?.sosCode || m.content?.match(/Mã cứu trợ:\s*(SOS-[A-Z0-9\-]+)/i)?.[1]?.trim();
+      const liveStatus = (rawId && liveStatusMap.get(String(rawId))) || (rawCode && liveStatusMap.get(rawCode));
+
+      if (liveStatus) {
+        const mObj = m.toObject ? m.toObject() : { ...m };
+        if (!mObj.sosData) mObj.sosData = {};
+        mObj.sosData.status = liveStatus;
+        if (mObj.sosRequestId && typeof mObj.sosRequestId === 'object') {
+          mObj.sosRequestId.status = liveStatus;
+        }
+        if (mObj.content && mObj.content.includes('Trạng thái hiện tại:')) {
+          const statusLabel =
+            liveStatus === 'CANCELLED'
+              ? 'Đã hủy'
+              : liveStatus === 'COMPLETED'
+              ? 'Hoàn thành'
+              : liveStatus === 'VERIFIED'
+              ? 'Đã xác minh'
+              : liveStatus;
+          mObj.content = mObj.content.replace(/Trạng thái hiện tại:\s*[^\n]+/i, `Trạng thái hiện tại: ${statusLabel}`);
+        }
+        return mObj;
+      }
+      return m;
+    });
+
     return {
       channel: targetChannel,
-      messages,
+      messages: processedMessages,
     };
   }
 
@@ -297,20 +353,20 @@ class ChatService {
     ];
 
     // 2. Kênh Địa Bàn Quản Lý (Người dân liên hệ cứu hộ địa phương)
+    // CHỈ CÁN BỘ ĐỊA PHƯƠNG (LOCAL_AUTHORITY) MỚI TIẾP NHẬN KÊNH AREA_ CỨU NẠN CỦA NGƯỜI DÂN
+    // Tài khoản Ban chỉ huy (ADMIN) không hiển thị kênh chat riêng giữa người dân và địa phương
     const areaChannelsSet = new Set();
 
-    // Tìm tất cả các kênh area_ có tin nhắn trong database
-    const distinctAreaChannels = await ChatMessage.distinct('channel', {
-      channel: { $regex: '^area_' },
-    });
+    if (isAuthority && !isUserAdmin) {
+      // Tìm tất cả các kênh area_ có tin nhắn trong database
+      const distinctAreaChannels = await ChatMessage.distinct('channel', {
+        channel: { $regex: '^area_' },
+      });
 
-    // Lấy phạm vi quản lý của cán bộ hiện tại
-    const { specificSlug, broadSlug } = this.extractAuthorityScope(currentUser.authority);
+      // Lấy phạm vi quản lý của cán bộ hiện tại
+      const { specificSlug, broadSlug } = this.extractAuthorityScope(currentUser.authority);
 
-    for (const ch of distinctAreaChannels) {
-      if (isUserAdmin) {
-        areaChannelsSet.add(ch);
-      } else if (isAuthority) {
+      for (const ch of distinctAreaChannels) {
         const chClean = ch.replace(/^area_/, '');
 
         let isMatched = false;
@@ -433,10 +489,18 @@ class ChatService {
 
       const partnerRole = partner.roles?.includes('ADMIN') ? 'ADMIN' : 'LOCAL_AUTHORITY';
 
-      // Chỉ hiển thị trong danh sách nếu:
+      // Điều kiện hiển thị cuộc trò chuyện 1-1 (Direct):
       // 1. Đã từng có trao đổi tin nhắn (latestMsg !== null)
       // 2. HOẶC đối tác là Quản trị viên hệ thống (ADMIN) để tiện liên hệ chỉ đạo
-      if (!latestMsg && partnerRole !== 'ADMIN') {
+      // 3. HOẶC người xem là ADMIN và đối tác là LOCAL_AUTHORITY (để Admin luôn có thể chủ động nhắn tin chỉ đạo các cán bộ địa phương)
+      // 4. HOẶC người xem là LOCAL_AUTHORITY và đối tác là LOCAL_AUTHORITY (để các cán bộ địa phương có thể chủ động nhắn tin phối hợp liên phường/xã)
+      const isVisible =
+        Boolean(latestMsg) ||
+        partnerRole === 'ADMIN' ||
+        (isUserAdmin && partnerRole === 'LOCAL_AUTHORITY') ||
+        (isAuthority && partnerRole === 'LOCAL_AUTHORITY');
+
+      if (!isVisible) {
         continue;
       }
 
@@ -1089,9 +1153,9 @@ class ChatService {
             }
           }
         } else {
-          // Nếu người gửi là Người dân => Gửi thông báo đến Cán bộ địa phương phụ trách địa bàn đó
+          // Nếu người gửi là Người dân => Gửi thông báo đến Cán bộ địa phương phụ trách địa bàn đó (không gửi Admin)
           const staffUsers = await User.find({
-            roles: { $in: ['LOCAL_AUTHORITY', 'ADMIN'] },
+            roles: { $in: ['LOCAL_AUTHORITY'] },
             status: { $ne: 'SUSPENDED' },
           }).select('_id authority roles');
 

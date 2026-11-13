@@ -943,16 +943,15 @@
   gap: 8px;
   min-width: 290px;
   max-width: 380px;
-  background: #fff8f8;
-  border: 1px solid #fecdd3;
-  border-left: 4px solid #e11d48;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 10px;
   padding: 10px 12px;
 }
 
 .sos-chat-msg-row.own .sos-chat-sos-card {
-  background: #fff5f5;
-  border-color: #fca5a5;
+  background: #ffffff;
+  border-color: #cbd5e1;
 }
 
 .sos-chat-sos-header {
@@ -961,7 +960,7 @@
   justify-content: space-between;
   gap: 8px;
   padding-bottom: 6px;
-  border-bottom: 1px dashed #fecdd3;
+  border-bottom: 1px dashed #e2e8f0;
 }
 
 .sos-chat-sos-badge {
@@ -1009,6 +1008,11 @@
   font-weight: 900;
   color: #9f1239;
   font-family: monospace;
+}
+
+.sos-chat-sos-code.cancelled {
+  text-decoration: line-through;
+  color: #94a3b8;
 }
 
 .sos-chat-sos-type-tag {
