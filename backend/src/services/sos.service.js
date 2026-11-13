@@ -425,6 +425,7 @@ const getSosRequestById = async (id) => {
     $or: [{ sosRequestId: id }, { sosId: id }],
     status: { $nin: ['CANCELLED', 'REJECTED'] },
   })
+    .sort({ createdAt: -1 })
     .populate('rescueTeamId', 'name type areaId status')
     .populate('rescuerId', 'fullName phone roles')
     .populate('vehicleId', 'plateNumber type capacity')
