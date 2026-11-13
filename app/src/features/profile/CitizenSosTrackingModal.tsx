@@ -119,6 +119,12 @@ const TYPE_CONFIG: Record<string, { label: string; icon: string }> = {
   MEDICAL: { label: 'Cấp cứu y tế / Bị thương', icon: 'medical-bag' },
   FIRE: { label: 'Hỏa hoạn / Cháy nổ', icon: 'fire' },
   FLOOD: { label: 'Cứu hộ ngập lụt / Mắc kẹt', icon: 'water' },
+  FOOD: { label: 'Tiếp tế lương thực & Nước uống', icon: 'food' },
+  EVACUATION: { label: 'Sơ tán khẩn cấp', icon: 'run-fast' },
+  SUPPLIES: { label: 'Tiếp tế nhu yếu phẩm', icon: 'package-variant' },
+  RESCUE: { label: 'Cứu hộ khẩn cấp', icon: 'lifebuoy' },
+  WATER: { label: 'Nước uống sinh hoạt', icon: 'water' },
+  SHELTER: { label: 'Tìm nơi trú ẩn an toàn', icon: 'home-heart' },
   LANDSLIDE: { label: 'Sạt lở đất / Đổ sập', icon: 'image-filter-hdr' },
   STORM: { label: 'Bão lốc / Cây đổ', icon: 'weather-windy' },
   ACCIDENT: { label: 'Tai nạn khẩn cấp', icon: 'car-emergency' },
@@ -142,7 +148,7 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
   onSosCompleted,
 }) => {
   const [sos, setSos] = useState<any>(initialSosData || null);
-  const [assignment, setAssignment] = useState<any>(null);
+  const [assignment, setAssignment] = useState<any>(initialSosData?.assignment || null);
   const [loading, setLoading] = useState<boolean>(!initialSosData);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [isCompleting, setIsCompleting] = useState<boolean>(false);
@@ -159,7 +165,15 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
     onConfirm?: () => Promise<void> | void;
   } | null>(null);
   const [inAppAlertLoading, setInAppAlertLoading] = useState<boolean>(false);
+  const [showFullMapModal, setShowFullMapModal] = useState<boolean>(false);
+  const [fullMapType, setFullMapType] = useState<'standard' | 'satellite'>('standard');
+  const [routeData, setRouteData] = useState<{
+    distanceKm: string;
+    durationMin: string;
+    coordinates: [number, number][];
+  } | null>(null);
   const webViewRef = useRef<WebView>(null);
+  const fullMapWebViewRef = useRef<WebView>(null);
   const insets = useSafeAreaInsets();
   const iosHeaderPaddingTop = Platform.OS === 'ios' ? (insets.top > 20 ? insets.top + 6 : 50) : 12;
 
@@ -169,23 +183,50 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
     if (showLoadingIndicator) setLoading(true);
 
     try {
+      let activeAssign: any = null;
+      let hasValidResponse = false;
+
+      const [sosResult, assignResult] = await Promise.allSettled([
+        backendApi.get(`/sos/${sosId}`),
+        backendApi.get(`/sos/${sosId}/assignments`),
+      ]);
+
       // 1. Lấy chi tiết ca SOS
-      const sosRes = await backendApi.get(`/sos/${sosId}`);
-      if (sosRes.success && sosRes.data) {
-        setSos(sosRes.data);
+      if (sosResult.status === 'fulfilled' && sosResult.value?.success && sosResult.value?.data) {
+        hasValidResponse = true;
+        const freshSos = sosResult.value.data;
+        setSos(freshSos);
+        if (freshSos.assignment) {
+          activeAssign = freshSos.assignment;
+        }
       }
 
-      // 2. Lấy thông tin phân công (Assignment) nếu có
-      try {
-        const assignRes = await backendApi.get(`/sos/${sosId}/assignments`);
-        if (assignRes.success && Array.isArray(assignRes.data) && assignRes.data.length > 0) {
-          // Lấy phân công mới nhất
-          setAssignment(assignRes.data[0]);
-        } else {
-          setAssignment(null);
+      // 2. Luôn đối chiếu thêm /assignments để lấy lệnh phân công mới nhất (ưu tiên lệnh còn hiệu lực & có vật tư)
+      if (assignResult.status === 'fulfilled') {
+        const assignRes = assignResult.value;
+        if (assignRes?.success && Array.isArray(assignRes.data)) {
+          hasValidResponse = true;
+          if (assignRes.data.length > 0) {
+            const validList = assignRes.data
+              .filter((a: any) => !['CANCELLED', 'REJECTED'].includes(a.status))
+              .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+            if (validList.length > 0) {
+              const newest = validList[0];
+              const withSupplies = validList.find((a: any) => Array.isArray(a.supplies) && a.supplies.length > 0);
+              // Nếu lệnh mới nhất có vật tư thì lấy luôn, hoặc nếu activeAssign hiện tại chưa có vật tư thì ưu tiên lệnh mới nhất/có vật tư
+              if (Array.isArray(newest.supplies) && newest.supplies.length > 0) {
+                activeAssign = newest;
+              } else if (!activeAssign || !Array.isArray(activeAssign.supplies) || activeAssign.supplies.length === 0) {
+                activeAssign = withSupplies || newest;
+              }
+            }
+          }
         }
-      } catch (assignErr) {
-        console.warn('Lỗi lấy assignment:', assignErr);
+      }
+
+      if (hasValidResponse) {
+        setAssignment(activeAssign);
       }
     } catch (err: any) {
       console.warn('Lỗi tải thông tin theo dõi SOS:', err);
@@ -196,12 +237,27 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
   };
 
   useEffect(() => {
-    if (!visible || !sosId) return;
+    if (!visible || !sosId) {
+      if (!visible) {
+        setShowFullMapModal(false);
+      }
+      return;
+    }
 
     if (initialSosData) {
-      setSos(initialSosData);
+      setSos((prev: any) => (prev?._id === initialSosData._id ? { ...prev, ...initialSosData } : initialSosData));
+      if (initialSosData.assignment) {
+        setAssignment(initialSosData.assignment);
+      }
+      loadData(false);
+    } else {
+      const isDifferentSos = sos?._id !== sosId;
+      if (isDifferentSos) {
+        setSos(null);
+        setAssignment(null);
+      }
+      loadData(isDifferentSos || !sos);
     }
-    loadData(!initialSosData);
 
     // Lắng nghe sự kiện realtime khi Ban chỉ huy điều phối hoặc Cứu hộ viên cập nhật tiến trình
     const subSync = DeviceEventEmitter.addListener('sos:sync', () => {
@@ -222,6 +278,64 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
       clearInterval(pollInterval);
     };
   }, [visible, sosId]);
+
+  // Tính toán tọa độ người dân & đội cứu hộ (dùng trước conditional return để đảm bảo đúng Rules of Hooks)
+  const victimLng = sos?.location?.coordinates?.[0] || 108.26054;
+  const victimLat = sos?.location?.coordinates?.[1] || 15.96836;
+  const teamRawCoords =
+    assignment?.teamLocation?.coordinates ||
+    assignment?.rescuerId?.location?.coordinates ||
+    assignment?.rescueTeamId?.currentLocation?.coordinates ||
+    assignment?.rescueTeamId?.baseLocation?.coordinates;
+  const rescuerLng =
+    Array.isArray(teamRawCoords) && teamRawCoords.length === 2 ? teamRawCoords[0] : victimLng - 0.0055;
+  const rescuerLat =
+    Array.isArray(teamRawCoords) && teamRawCoords.length === 2 ? teamRawCoords[1] : victimLat + 0.0072;
+
+  useEffect(() => {
+    if (!visible || !victimLat || !victimLng) return;
+    const statusNow = sos?.status || 'PENDING';
+    if (!assignment && !['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(statusNow) && !showFullMapModal) {
+      return;
+    }
+
+    let cancelled = false;
+    const fetchOsrm = async () => {
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${rescuerLng},${rescuerLat};${victimLng},${victimLat}?overview=full&geometries=geojson`;
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(url, {
+          headers: { Accept: 'application/json', 'User-Agent': 'SOS-Citizen-App/1.0' },
+          signal: controller.signal,
+        });
+        clearTimeout(tid);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data.code === 'Ok' && data.routes?.[0]) {
+          const r = data.routes[0];
+          const rawMeters = r.distance || 0;
+          const distKm =
+            rawMeters < 1000 ? `${Math.round(rawMeters)} m` : `${(rawMeters / 1000).toFixed(1)} km`;
+          const totalMin = Math.max(1, Math.round((r.duration || 0) / 60));
+          const durMin =
+            totalMin >= 60
+              ? `${Math.floor(totalMin / 60)} giờ ${totalMin % 60 > 0 ? `${totalMin % 60} phút` : ''}`.trim()
+              : `${totalMin} phút`;
+          const coords: [number, number][] = (r.geometry?.coordinates || []).map(
+            (c: [number, number]) => [c[1], c[0]]
+          );
+          setRouteData({ distanceKm: distKm, durationMin: durMin, coordinates: coords });
+        }
+      } catch {
+        // Fallback giữ nguyên đường thẳng nếu OSRM timeout
+      }
+    };
+    void fetchOsrm();
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, victimLat, victimLng, rescuerLat, rescuerLng, assignment, sos?.status, showFullMapModal]);
 
   // Xử lý khi người dân nhấn "Tôi đã được cứu an toàn" (Custom Alert Popup)
   const handleConfirmSafety = () => {
@@ -409,14 +523,6 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
   const typeLabelText = Array.isArray(sos?.emergencyTypes) && sos.emergencyTypes.length > 0
     ? sos.emergencyTypes.map((t: string) => TYPE_CONFIG[t]?.label || t).join(', ')
     : typeCfg.label;
-
-  // Tọa độ người dân
-  const victimLng = sos?.location?.coordinates?.[0] || 108.26054;
-  const victimLat = sos?.location?.coordinates?.[1] || 15.96836;
-
-  // Tọa độ giả định / thực tế của đội cứu hộ (dịch chuyển nhẹ về hướng trạm cứu nạn nếu chưa có GPS)
-  const rescuerLat = victimLat + 0.0072;
-  const rescuerLng = victimLng - 0.0055;
 
   const hasAssignedTeam = Boolean(
     assignment?.rescueTeamId ||
@@ -607,22 +713,113 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
           iconAnchor: [16, 38]
         });
 
+        var routeCoords = ${JSON.stringify(routeData?.coordinates || [])};
+
         ${assignment || currentStatus === 'ON_THE_WAY' || currentStatus === 'ARRIVED' ? `
           var markerRescuer = L.marker([rLat, rLng], { icon: rescuerIcon }).addTo(map)
             .bindPopup('<b>🚤 Đội Cứu Hộ Tiếp Ứng</b><br/>Đang di chuyển tiếp cận');
 
-          var polyline = L.polyline([[rLat, rLng], [vLat, vLng]], {
+          var polylinePoints = (routeCoords && routeCoords.length > 1) ? routeCoords : [[rLat, rLng], [vLat, vLng]];
+          var polyline = L.polyline(polylinePoints, {
             color: '#2563EB',
-            weight: 4,
-            dashArray: '6, 8',
-            opacity: 0.9
+            weight: 5,
+            opacity: 0.92
           }).addTo(map);
 
-          var group = new L.featureGroup([markerVictim, markerRescuer]);
-          map.fitBounds(group.getBounds().pad(0.35));
+          map.fitBounds(polyline.getBounds().pad(0.28));
         ` : `
           map.setView([vLat, vLng], 15);
         `}
+      </script>
+    </body>
+    </html>
+  `;
+
+  // Bản đồ toàn màn hình chi tiết tuyến đường (lấy giao diện dẫn đường giống bên Rescuer)
+  const fullMapHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+      <style>
+        html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #f1f5f9; font-family: -apple-system, sans-serif; }
+        .leaflet-control-attribution { display: none !important; }
+        @keyframes pulseWave {
+          0% { transform: scale(0.6); opacity: 0.95; }
+          70% { transform: scale(1.7); opacity: 0; }
+          100% { transform: scale(1.9); opacity: 0; }
+        }
+        .sos-radar-container { position: relative; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
+        .sos-radar-wave { position: absolute; width: 38px; height: 38px; border-radius: 50%; background-color: rgba(220,38,38,0.45); border: 2px solid #DC2626; animation: pulseWave 1.6s ease-out infinite; }
+        .sos-radar-core { position: relative; width: 28px; height: 28px; background: #DC2626; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; box-shadow: 0 0 10px rgba(220,38,38,0.8); border: 2px solid white; z-index: 2; }
+        .rescuer-nav-wrap { display: flex; flex-direction: column; align-items: center; }
+        .rescuer-nav-dot { width: 36px; height: 36px; border-radius: 50%; background: #FFFFFF; border: 3px solid #2563EB; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 10px rgba(37,99,235,0.45); }
+        .rescuer-eta-pill { margin-top: 4px; background: #FFFFFF; color: #0F172A; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 10px; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.22); border: 1px solid #E2E8F0; }
+      </style>
+    </head>
+    <body>
+      <div id="map"></div>
+      <script>
+        var map = L.map('map', { zoomControl: false, preferCanvas: true, attributionControl: false });
+        var stdOverview = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&apistyle=s.t:33|p.v:off%2Cs.t:21|s.e:l|p.v:off&x={x}&y={y}&z={z}', { subdomains: ['0','1','2','3'], minZoom: 1, maxZoom: 15 });
+        var stdDetail = L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&apistyle=s.t:33|p.v:off%2Cs.t:22|s.e:l|p.v:off&x={x}&y={y}&z={z}', { subdomains: ['0','1','2','3'], minZoom: 16, maxZoom: 20 });
+        var satLayer = L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { subdomains: ['0','1','2','3'], maxZoom: 20 });
+
+        stdOverview.addTo(map);
+        stdDetail.addTo(map);
+
+        window.setFullMapType = function(type) {
+          if (type === 'satellite') {
+            if (map.hasLayer(stdOverview)) map.removeLayer(stdOverview);
+            if (map.hasLayer(stdDetail)) map.removeLayer(stdDetail);
+            if (!map.hasLayer(satLayer)) satLayer.addTo(map);
+          } else {
+            if (map.hasLayer(satLayer)) map.removeLayer(satLayer);
+            if (!map.hasLayer(stdOverview)) stdOverview.addTo(map);
+            if (!map.hasLayer(stdDetail)) stdDetail.addTo(map);
+          }
+        };
+
+        var vLat = ${victimLat};
+        var vLng = ${victimLng};
+        var rLat = ${rescuerLat};
+        var rLng = ${rescuerLng};
+        var routeCoords = ${JSON.stringify(routeData?.coordinates || [])};
+        var etaLabel = ${JSON.stringify(routeData ? `${routeData.durationMin} • ${routeData.distanceKm}` : 'Đang định tuyến')};
+
+        var victimRadarIcon = L.divIcon({
+          html: '<div class="sos-radar-container"><div class="sos-radar-wave"></div><div class="sos-radar-core"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M7 12a5 5 0 0 1 5-5v0a5 5 0 0 1 5 5v6H7v-6Z"/><path d="M5 20a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v2H5v-2Z"/><path d="M21 12h1"/><path d="M18.5 4.5 19 4"/><path d="M2 12h1"/><path d="M12 2v1"/><path d="M4.5 4.5 5 4"/><path d="M12 11v3"/></svg></div></div>',
+          className: '',
+          iconSize: [44, 44],
+          iconAnchor: [22, 22]
+        });
+
+        L.circle([vLat, vLng], { color: '#DC2626', fillColor: '#EF4444', fillOpacity: 0.12, radius: 220, weight: 1.5 }).addTo(map);
+        var markerVictim = L.marker([vLat, vLng], { icon: victimRadarIcon }).addTo(map);
+
+        var polylinePoints = (routeCoords && routeCoords.length > 1) ? routeCoords : [[rLat, rLng], [vLat, vLng]];
+        L.polyline(polylinePoints, { color: '#FFFFFF', weight: 9, opacity: 0.95 }).addTo(map);
+        var routeLine = L.polyline(polylinePoints, { color: '#2563EB', weight: 6, opacity: 1 }).addTo(map);
+
+        var rescuerNavIcon = L.divIcon({
+          html: '<div class="rescuer-nav-wrap"><div class="rescuer-nav-dot"><svg width="18" height="18" viewBox="0 0 24 24" fill="#2563EB"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg></div><div class="rescuer-eta-pill">' + etaLabel + '</div></div>',
+          className: '',
+          iconSize: [140, 62],
+          iconAnchor: [70, 18]
+        });
+        var markerRescuer = L.marker([rLat, rLng], { icon: rescuerNavIcon, zIndexOffset: 1000 }).addTo(map);
+
+        window.fitRoute = function() {
+          map.fitBounds(routeLine.getBounds(), { paddingTopLeft: [40, 120], paddingBottomRight: [40, 260], animate: true });
+        };
+        window.flyToVictim = function() {
+          map.flyTo([vLat, vLng], 17, { animate: true, duration: 0.9 });
+        };
+
+        setTimeout(function() { window.fitRoute(); }, 120);
       </script>
     </body>
     </html>
@@ -740,10 +937,12 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                   <Feather name="compass" size={16} color="#0066FF" />
                   <Text style={styles.mapCardTitle}>Bản đồ định vị tác chiến</Text>
                 </View>
-                {assignment || currentStatus === 'ON_THE_WAY' ? (
+                {assignment || currentStatus === 'ON_THE_WAY' || currentStatus === 'ARRIVED' ? (
                   <View style={styles.liveIndicator}>
                     <View style={styles.pulseDot} />
-                    <Text style={styles.liveText}>Đang di chuyển (~650m)</Text>
+                    <Text style={styles.liveText}>
+                      {routeData ? `${routeData.durationMin} • ${routeData.distanceKm}` : 'Đang tính tuyến đường...'}
+                    </Text>
                   </View>
                 ) : (
                   <Text style={styles.mapCoordsText}>
@@ -763,6 +962,34 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                   androidLayerType="hardware"
                   originWhitelist={['*']}
                 />
+                {/* Lớp phủ bấm vào bản đồ để mở toàn màn hình xem đường đi chi tiết giống bên Rescuer */}
+                <TouchableOpacity
+                  style={StyleSheet.absoluteFill}
+                  activeOpacity={0.9}
+                  onPress={() => setShowFullMapModal(true)}
+                >
+                  <View
+                    style={{
+                      position: 'absolute',
+                      bottom: 10,
+                      right: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 5,
+                      backgroundColor: 'rgba(15, 23, 42, 0.86)',
+                      paddingHorizontal: 11,
+                      paddingVertical: 6,
+                      borderRadius: 20,
+                      borderWidth: 1,
+                      borderColor: 'rgba(255,255,255,0.25)',
+                    }}
+                  >
+                    <Feather name="maximize-2" size={13} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '700' }}>
+                      Xem đường đi chi tiết
+                    </Text>
+                  </View>
+                </TouchableOpacity>
               </View>
 
               {/* Chú thích trên bản đồ */}
@@ -826,43 +1053,62 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                 </View>
               )}
 
-              {/* Danh sách vật phẩm cứu trợ mang theo */}
+              {/* Danh sách vật tư kho khu vực đã cấp phát thực tế */}
               <View style={styles.gearBox}>
-                <Text style={styles.gearBoxTitle}>🎒 Trang bị & Vật phẩm cứu trợ mang theo:</Text>
+                <Text style={styles.gearBoxTitle}>📦 Vật tư kho khu vực đã cấp phát:</Text>
 
-                <View style={styles.gearGrid}>
-                  <View style={styles.gearItem}>
-                    <Text style={styles.gearIcon}>🦺</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.gearName}>Áo phao cứu sinh</Text>
-                      <Text style={styles.gearDesc}>Chuẩn bị theo số người ({peopleCount} áo phao)</Text>
-                    </View>
-                  </View>
+                {(() => {
+                  const activeAssignObj = assignment || sos?.assignment;
+                  const allocatedSupplies =
+                    Array.isArray(activeAssignObj?.supplies) && activeAssignObj.supplies.length > 0
+                      ? activeAssignObj.supplies
+                      : Array.isArray(activeAssignObj?.requestedSupplies)
+                        ? activeAssignObj.requestedSupplies.filter((r: any) => r.status === 'APPROVED')
+                        : [];
 
-                  <View style={styles.gearItem}>
-                    <Text style={styles.gearIcon}>💧</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.gearName}>Nước uống & Lương khô</Text>
-                      <Text style={styles.gearDesc}>Thùng nước khoáng, bánh mì, lương khô tiếp tế</Text>
-                    </View>
-                  </View>
+                  if (allocatedSupplies.length > 0) {
+                    return (
+                      <View style={styles.gearGrid}>
+                        {allocatedSupplies.map((sup: any, idx: number) => (
+                          <View key={sup.supplyId || sup._id || idx} style={styles.gearItem}>
+                            <Text style={styles.gearIcon}>📦</Text>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.gearName}>{sup.name || 'Vật tư cứu trợ'}</Text>
+                              <Text style={styles.gearDesc}>
+                                Số lượng cấp phát:{' '}
+                                <Text style={{ fontWeight: '800', color: '#0369A1' }}>
+                                  {sup.quantity || 0} {sup.unit || 'Đơn vị'}
+                                </Text>
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    );
+                  }
 
-                  <View style={styles.gearItem}>
-                    <Text style={styles.gearIcon}>🩹</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.gearName}>Túi y tế khẩn cấp</Text>
-                      <Text style={styles.gearDesc}>Bông băng sát trùng, thuốc hạ sốt, giữ ấm</Text>
+                  return (
+                    <View
+                      style={{
+                        backgroundColor: '#F8FAFC',
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                        borderRadius: 10,
+                        padding: 12,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      <Feather name="package" size={16} color="#64748B" />
+                      <Text style={{ fontSize: 12.5, color: '#64748B', flex: 1, lineHeight: 18 }}>
+                        {hasAssignedTeam
+                          ? 'Ban chỉ huy chưa xuất vật tư kho kèm theo cho ca này.'
+                          : 'Danh sách vật tư cấp phát sẽ hiển thị sau khi Ban chỉ huy điều phối.'}
+                      </Text>
                     </View>
-                  </View>
-
-                  <View style={styles.gearItem}>
-                    <Text style={styles.gearIcon}>🔦</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.gearName}>Đèn pin & Dây cứu nạn</Text>
-                      <Text style={styles.gearDesc}>Đèn rọi công suất lớn, dây thừng kéo vượt lũ</Text>
-                    </View>
-                  </View>
-                </View>
+                  );
+                })()}
               </View>
             </View>
 
@@ -1162,6 +1408,260 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
             </View>
           </Modal>
         ) : null}
+
+        {/* MODAL BẢN ĐỒ DẪN ĐƯỜNG CHI TIẾT TOÀN MÀN HÌNH (ĐỒNG BỘ GIAO DIỆN RESCUER) */}
+        <Modal
+          visible={showFullMapModal}
+          animationType="slide"
+          statusBarTranslucent
+          onRequestClose={() => setShowFullMapModal(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: '#F1F5F9' }}>
+            <WebView
+              ref={fullMapWebViewRef}
+              source={{ html: fullMapHtml }}
+              style={{ flex: 1 }}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              androidLayerType="hardware"
+              originWhitelist={['*']}
+            />
+
+            {/* Thanh điều hướng nổi phía trên (Giống Hình 1 bên Rescuer) */}
+            <View
+              style={{
+                position: 'absolute',
+                top: Platform.OS === 'ios' ? insets.top + 8 : 36,
+                left: 14,
+                right: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <TouchableOpacity
+                onPress={() => setShowFullMapModal(false)}
+                activeOpacity={0.85}
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 21,
+                  backgroundColor: '#FFFFFF',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.16,
+                  shadowRadius: 6,
+                  elevation: 5,
+                }}
+              >
+                <Feather name="x" size={20} color="#0F172A" />
+              </TouchableOpacity>
+
+              <View
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 16,
+                  paddingHorizontal: 12,
+                  paddingVertical: 9,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 6,
+                  elevation: 5,
+                }}
+              >
+                <View
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 10,
+                    backgroundColor: '#2563EB',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="navigate" size={18} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                    {routeData
+                      ? `${routeData.durationMin} • ${routeData.distanceKm}`
+                      : 'Đang định tuyến đường đi...'}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#64748B' }} numberOfLines={1}>
+                    {hasAssignedTeam ? `${teamName} đang di chuyển tới bạn` : 'Vị trí hiện trường SOS của bạn'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Cụm nút công cụ bên phải */}
+            <View
+              style={{
+                position: 'absolute',
+                top: (Platform.OS === 'ios' ? insets.top + 8 : 36) + 64,
+                right: 14,
+                gap: 10,
+              }}
+            >
+              <TouchableOpacity
+                onPress={() => fullMapWebViewRef.current?.injectJavaScript('window.fitRoute && window.fitRoute(); true;')}
+                activeOpacity={0.85}
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 21,
+                  backgroundColor: '#FFFFFF',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#000',
+                  shadowOpacity: 0.15,
+                  shadowRadius: 5,
+                  elevation: 4,
+                }}
+              >
+                <MaterialCommunityIcons name="routes" size={20} color="#2563EB" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => fullMapWebViewRef.current?.injectJavaScript('window.flyToVictim && window.flyToVictim(); true;')}
+                activeOpacity={0.85}
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 21,
+                  backgroundColor: '#FFFFFF',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#000',
+                  shadowOpacity: 0.15,
+                  shadowRadius: 5,
+                  elevation: 4,
+                }}
+              >
+                <MaterialCommunityIcons name="crosshairs-gps" size={20} color="#DC2626" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  const next = fullMapType === 'standard' ? 'satellite' : 'standard';
+                  setFullMapType(next);
+                  fullMapWebViewRef.current?.injectJavaScript(`window.setFullMapType && window.setFullMapType('${next}'); true;`);
+                }}
+                activeOpacity={0.85}
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 21,
+                  backgroundColor: '#FFFFFF',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#000',
+                  shadowOpacity: 0.15,
+                  shadowRadius: 5,
+                  elevation: 4,
+                }}
+              >
+                <MaterialCommunityIcons
+                  name="layers-outline"
+                  size={20}
+                  color={fullMapType === 'satellite' ? '#2563EB' : '#475569'}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Thẻ thông tin nổi phía dưới (Giống Hình 1 bên Rescuer) */}
+            <View
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                backgroundColor: '#FFFFFF',
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+                paddingHorizontal: 18,
+                paddingTop: 12,
+                paddingBottom: Math.max(insets.bottom, 18),
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -4 },
+                shadowOpacity: 0.14,
+                shadowRadius: 12,
+                elevation: 12,
+              }}
+            >
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#CBD5E1', alignSelf: 'center', marginBottom: 12 }} />
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>1</Text>
+                  </View>
+                  <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#DC2626' }}>
+                    Điểm cứu hộ • #{sos?.sosCode || 'SOS'}
+                  </Text>
+                </View>
+                {routeData && (
+                  <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#15803D' }}>
+                      {routeData.durationMin} ({routeData.distanceKm})
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <Text style={{ fontSize: 17, fontWeight: '800', color: '#0F172A', marginBottom: 4 }} numberOfLines={1}>
+                {hasAssignedTeam ? teamName : 'Đang chờ điều phối đội cứu hộ'}
+              </Text>
+              <Text style={{ fontSize: 13, color: '#475569', marginBottom: 4 }} numberOfLines={2}>
+                📍 {sos?.location?.address || 'Vị trí GPS hiện trường'}
+              </Text>
+              <Text style={{ fontSize: 12.5, color: '#64748B', marginBottom: 14 }}>
+                {peopleCount} người cần cứu · {hasAssignedTeam ? `Chỉ huy: ${rescuerName} (${vehicleName})` : 'Đang kết nối lực lượng gần nhất'}
+              </Text>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  onPress={() => Linking.openURL(`tel:${rescuerPhone}`)}
+                  activeOpacity={0.85}
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    backgroundColor: '#16A34A',
+                    paddingVertical: 13,
+                    borderRadius: 14,
+                  }}
+                >
+                  <Feather name="phone-call" size={17} color="#FFFFFF" />
+                  <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '800' }}>
+                    {hasAssignedTeam ? 'Gọi đội cứu hộ' : 'Gọi khẩn cấp 112'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setShowFullMapModal(false)}
+                  activeOpacity={0.85}
+                  style={{
+                    paddingHorizontal: 18,
+                    paddingVertical: 13,
+                    borderRadius: 14,
+                    backgroundColor: '#F1F5F9',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#334155', fontSize: 14, fontWeight: '700' }}>Đóng</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </Modal>
   );
