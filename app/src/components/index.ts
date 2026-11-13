@@ -6,3 +6,4 @@ export * from './GoogleIcon';
 export * from './InAppNotificationBanner';
 export * from './LogoSOS';
 export * from './PrimaryButton';
+export * from './FloatingActiveSosWidget';

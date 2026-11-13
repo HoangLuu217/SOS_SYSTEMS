@@ -749,7 +749,7 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
             activeOpacity={0.7}
             accessibilityLabel="Gọi trực ban cứu nạn địa phương"
           >
-            <Feather name="phone-call" size={18} color="#16A34A" />
+            <Feather name="phone-call" size={18} color="#0066FF" />
           </TouchableOpacity>
 
           {/* Nút ba chấm */}

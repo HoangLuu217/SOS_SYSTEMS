@@ -19,6 +19,7 @@ import {
   ChevronRight,
   ShieldCheck,
   Trash2,
+  XCircle,
 } from 'lucide-react';
 import type { User } from '@/types/auth';
 import type { SosRequestItem, AdministrativeAreaItem, VehicleItem } from '@/types';
@@ -41,13 +42,68 @@ export interface SosRequestsViewProps {
   user?: User;
 }
 
+// Helper lấy 2 chữ cái đầu làm Avatar đại diện
+const getInitials = (name?: string | null) => {
+  if (!name) return 'ND';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+// Component Avatar an toàn: Tự động gắn referrerPolicy="no-referrer" và tự fallback về Initials nếu link ảnh hỏng/403
+const SafeAvatar: React.FC<{
+  src?: string | null;
+  name: string;
+  style?: React.CSSProperties;
+}> = ({ src, name, style }) => {
+  const [hasError, setHasError] = useState(false);
+  const initials = getInitials(name);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [src]);
+
+  if (!src || hasError) {
+    return <span style={{ fontWeight: 800 }}>{initials}</span>;
+  }
+
+  return (
+    <img
+      src={src}
+      alt={name}
+      referrerPolicy="no-referrer"
+      onError={() => setHasError(true)}
+      style={{
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        borderRadius: 'inherit',
+        display: 'block',
+        ...style,
+      }}
+    />
+  );
+};
+
 // Module-level in-memory cache để chuyển tab tức thì 0ms, không bị nhấp nháy/giật lag dữ liệu
 let memoryCachedSosList: SosRequestItem[] | null = null;
 let memoryCachedAreas: AdministrativeAreaItem[] | null = null;
 let memoryCachedVehicles: VehicleItem[] | null = null;
 
+// Khôi phục từ sessionStorage để ngay cả khi vừa mở lại trang / F5 vẫn nạp dữ liệu tức thì 0ms
+try {
+  const savedSos = sessionStorage.getItem('sos_requests_cache');
+  if (savedSos) {
+    memoryCachedSosList = JSON.parse(savedSos);
+  }
+  const savedAreas = sessionStorage.getItem('sos_areas_cache');
+  if (savedAreas) {
+    memoryCachedAreas = JSON.parse(savedAreas);
+  }
+} catch { }
+
 export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, user }) => {
-  const [loading, setLoading] = useState(() => !memoryCachedSosList);
+  const [loading, setLoading] = useState(() => !memoryCachedSosList || memoryCachedSosList.length === 0);
   const [sosList, setSosList] = useState<SosRequestItem[]>(() => memoryCachedSosList || []);
   const [areas, setAreas] = useState<AdministrativeAreaItem[]>(() => memoryCachedAreas || []);
   const [, setVehicles] = useState<VehicleItem[]>(() => memoryCachedVehicles || []);
@@ -60,6 +116,19 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
 
   // State phục vụ modal nhận SOS hotline thủ công (UC-L02)
   const [showHotlineModal, setShowHotlineModal] = useState(false);
+
+  // State phục vụ Modal Popup xác nhận chuẩn hiện đại thay cho window.confirm / alert cũ
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    highlightText?: string;
+    confirmText?: string;
+    cancelText?: string;
+    variant?: 'danger' | 'warning' | 'primary';
+    isSubmitting?: boolean;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
   const [hotlineForm, setHotlineForm] = useState({
     name: '',
     phone: '',
@@ -73,33 +142,60 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
 
   const loadData = useCallback(async () => {
     try {
-      if (!memoryCachedSosList) {
+      if (!memoryCachedSosList || memoryCachedSosList.length === 0) {
         setLoading(true);
       }
-      const [sosRes, areaRes, vehRes] = await Promise.allSettled([
-        fetchSosRequests({ limit: '100' }),
-        fetchAdministrativeAreas(),
-        fetchVehicles(),
-      ]);
 
-      if (sosRes.status === 'fulfilled' && sosRes.value.success && Array.isArray(sosRes.value.data)) {
-        memoryCachedSosList = sosRes.value.data;
-        setSosList(sosRes.value.data);
-      }
-      if (areaRes.status === 'fulfilled' && areaRes.value.success && areaRes.value.data) {
-        memoryCachedAreas = areaRes.value.data;
-        setAreas(areaRes.value.data);
-        const defaultAreaId = user?.authority?.areaId || (areaRes.value.data[0]?._id ?? '');
-        if (areaRes.value.data.length > 0) {
-          setHotlineForm((f) => ({ ...f, areaId: f.areaId || defaultAreaId }));
-        }
-      }
-      if (vehRes.status === 'fulfilled' && vehRes.value.success && vehRes.value.data) {
-        memoryCachedVehicles = vehRes.value.data;
-        setVehicles(vehRes.value.data);
-      } else {
-        setVehicles([]);
-      }
+      // 1. Ưu tiên nạp danh sách SOS ngay lập tức, render bảng tức thì không đợi areas/vehicles
+      const sosPromise = fetchSosRequests({ limit: '100' })
+        .then((res) => {
+          if (res.success && Array.isArray(res.data)) {
+            memoryCachedSosList = res.data;
+            try {
+              sessionStorage.setItem('sos_requests_cache', JSON.stringify(res.data));
+            } catch { }
+            setSosList(res.data);
+            setLoading(false);
+          }
+          return res;
+        })
+        .catch((err) => {
+          console.error('Lỗi khi tải dữ liệu SOS:', err);
+          setLoading(false);
+        });
+
+      // 2. Tải khu vực hành chính (chạy ngầm, không block giao diện)
+      const areaPromise = fetchAdministrativeAreas()
+        .then((res) => {
+          if (res.success && res.data) {
+            memoryCachedAreas = res.data;
+            try {
+              sessionStorage.setItem('sos_areas_cache', JSON.stringify(res.data));
+            } catch { }
+            setAreas(res.data);
+            const defaultAreaId = user?.authority?.areaId || (res.data[0]?._id ?? '');
+            if (res.data.length > 0) {
+              setHotlineForm((f) => ({ ...f, areaId: f.areaId || defaultAreaId }));
+            }
+          }
+        })
+        .catch(() => {});
+
+      // 3. Tải phương tiện (chạy ngầm)
+      const vehPromise = fetchVehicles()
+        .then((res) => {
+          if (res.success && res.data) {
+            memoryCachedVehicles = res.data;
+            setVehicles(res.data);
+          } else {
+            setVehicles([]);
+          }
+        })
+        .catch(() => {
+          setVehicles([]);
+        });
+
+      await Promise.allSettled([sosPromise, areaPromise, vehPromise]);
     } catch (err) {
       console.error('Lỗi khi tải dữ liệu SOS:', err);
     } finally {
@@ -152,39 +248,83 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     };
   }, [loadData]);
 
-  // Hành động xóa 1 ca SOS đã đóng / đã hủy
-  const handleDeleteSingleSos = async (sosId: string, sosCode?: string) => {
-    const confirmed = window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn ca ${sosCode || 'này'} khỏi hệ thống?`);
-    if (!confirmed) return;
-    try {
-      setLoading(true);
-      await deleteSosRequestApi(sosId);
-      toast.success(`Đã xóa vĩnh viễn ca ${sosCode || 'cứu hộ'} thành công!`, 'Đã xóa');
-      loadData();
-    } catch (err: any) {
-      toast.error(err?.message || 'Không thể xóa ca cứu hộ', 'Lỗi');
-    } finally {
-      setLoading(false);
-    }
+  // Hành động xóa 1 ca SOS đã đóng / đã hủy (Mở Modal Popup phong cách Mobile App)
+  const handleDeleteSingleSos = (sosId: string, sosCode?: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Xóa ca cứu hộ',
+      description: `Bạn có chắc chắn muốn xóa ca cứu hộ ${sosCode ? `#${sosCode}` : 'này'}?`,
+      confirmText: 'Xóa',
+      cancelText: 'Hủy',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          setConfirmDialog((prev) => (prev ? { ...prev, isSubmitting: true } : null));
+          setLoading(true);
+
+          // Cập nhật bộ nhớ đệm và giao diện ngay lập tức 0ms
+          memoryCachedSosList = (memoryCachedSosList || []).filter((s) => s._id !== sosId);
+          try {
+            sessionStorage.setItem('sos_requests_cache', JSON.stringify(memoryCachedSosList));
+          } catch { }
+          setSosList((prev) => prev.filter((s) => s._id !== sosId));
+
+          await deleteSosRequestApi(sosId);
+          toast.success(`Đã xóa ca ${sosCode || 'cứu hộ'} thành công!`, 'Đã xóa');
+          setConfirmDialog(null);
+          await loadData();
+        } catch (err: any) {
+          toast.error(err?.message || 'Không thể xóa ca cứu hộ', 'Lỗi');
+          setConfirmDialog(null);
+          loadData();
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
   };
 
-  // Hành động dọn sạch tất cả các ca đã hủy (Clear Trash)
-  const handleClearAllCancelled = async () => {
-    const currentCancelled = sosList.filter((s) => s.status === 'CANCELLED').length;
-    const confirmed = window.confirm(
-      `Bạn có chắc chắn muốn dọn dẹp và xóa sạch toàn bộ ${currentCancelled} ca đã hủy khỏi hệ thống? Thao tác này sẽ làm sạch danh sách và không thể khôi phục.`
-    );
-    if (!confirmed) return;
-    try {
-      setLoading(true);
-      const res = await clearCancelledSosApi();
-      toast.success(res?.message || `Đã dọn dẹp sạch ${currentCancelled} ca đã hủy!`, 'Dọn dẹp thành công');
-      loadData();
-    } catch (err: any) {
-      toast.error(err?.message || 'Không thể dọn dẹp các ca đã hủy', 'Lỗi');
-    } finally {
-      setLoading(false);
-    }
+  // Hành động dọn sạch tất cả các ca đã hủy (Clear Trash) - (Mở Modal Popup phong cách Mobile App)
+  const handleClearAllCancelled = () => {
+    const cancelledItems = sosList.filter((s) => s.status === 'CANCELLED' || s.status === 'REJECTED');
+    const currentCancelled = cancelledItems.length;
+    if (currentCancelled === 0) return;
+
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Dọn sạch ca đã hủy',
+      description: `Bạn có chắc chắn muốn xóa toàn bộ ${currentCancelled} ca đã hủy khỏi hệ thống?`,
+      confirmText: 'Xóa',
+      cancelText: 'Hủy',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          setConfirmDialog((prev) => (prev ? { ...prev, isSubmitting: true } : null));
+          setLoading(true);
+          const ids = cancelledItems.map((s) => s._id);
+
+          // Cập nhật ngay bộ nhớ đệm và giao diện tức thì 0ms
+          memoryCachedSosList = (memoryCachedSosList || []).filter(
+            (s) => !ids.includes(s._id) && s.status !== 'CANCELLED' && s.status !== 'REJECTED'
+          );
+          try {
+            sessionStorage.setItem('sos_requests_cache', JSON.stringify(memoryCachedSosList));
+          } catch { }
+          setSosList(memoryCachedSosList);
+
+          const res = await clearCancelledSosApi(ids);
+          toast.success(res?.message || `Đã dọn dẹp sạch ${res?.data?.deletedCount ?? currentCancelled} ca đã hủy!`, 'Dọn dẹp thành công');
+          setConfirmDialog(null);
+          await loadData();
+        } catch (err: any) {
+          toast.error(err?.message || 'Không thể dọn dẹp các ca đã hủy', 'Lỗi');
+          setConfirmDialog(null);
+          loadData();
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
   };
 
   // Hành động 3: Tiếp nhận SOS qua Hotline
@@ -247,6 +387,8 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
 
   const getEffectiveStatus = (sos?: SosRequestItem | null): string => {
     if (!sos) return 'PENDING';
+    if (sos.status === 'CANCELLED') return 'CANCELLED';
+    if (sos.status === 'REJECTED') return 'REJECTED';
     const sRank = normalizeStatusRank(sos.status);
     const aRank = normalizeStatusRank(sos.assignment?.status);
 
@@ -329,6 +471,15 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
   };
 
   const renderStepper = (effectiveStatus: string) => {
+    if (effectiveStatus === 'CANCELLED' || effectiveStatus === 'REJECTED') {
+      return (
+        <div style={{ padding: '10px 14px', background: '#f8fafc', borderRadius: 8, border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: 8, color: '#64748b', fontSize: 12.5, fontWeight: 600 }}>
+          <XCircle size={16} color="#64748b" />
+          <span>Yêu cầu cứu nạn đã được hủy (Người dân báo đã an toàn hoặc hủy bỏ)</span>
+        </div>
+      );
+    }
+
     const stepRank = (() => {
       switch (effectiveStatus) {
         case 'COMPLETED': return 4;
@@ -419,13 +570,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     }
     return true;
   });
-
-  const getInitials = (name: string) => {
-    if (!name) return 'ND';
-    const parts = name.trim().split(/\s+/);
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  };
 
   const formatTimeAgo = (dateStr: string) => {
     if (!dateStr) return 'Vừa xong';
@@ -550,6 +694,21 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
               Đã xong ({completedCount})
             </button>
 
+            {/* 7. Đã hủy / Tự an toàn */}
+            <button
+              type="button"
+              className={`triage-btn ${triageFilter === 'CANCELLED' ? 'active' : ''}`}
+              style={{
+                color: triageFilter === 'CANCELLED' ? '#475569' : '#64748b',
+                borderColor: triageFilter === 'CANCELLED' ? '#94a3b8' : '#cbd5e1',
+                backgroundColor: triageFilter === 'CANCELLED' ? '#f1f5f9' : '#ffffff',
+              }}
+              onClick={() => setTriageFilter('CANCELLED')}
+            >
+              <span className="dot-mini gray" style={{ backgroundColor: '#94a3b8' }} />
+              Đã hủy ({cancelledCount})
+            </button>
+
           </div>
 
           {/* Ô tìm kiếm bên phải */}
@@ -627,26 +786,26 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
           <table className="executive-table">
             <thead>
               <tr>
-                <th style={{ width: '14%' }}>Mã sự cố</th>
-                <th style={{ width: '19%' }}>Người dân &amp; Liên hệ</th>
-                <th style={{ width: '22%' }}>Địa điểm hiện trường</th>
-                <th style={{ width: '10%' }}>Nạn nhân</th>
-                <th style={{ width: '16%' }}>Đội phụ trách</th>
-                <th style={{ width: '11%' }}>Tiến trình</th>
-                <th style={{ width: '8%', textAlign: 'center' }}>Thao tác</th>
+                <th style={{ width: '13%' }}>Mã sự cố</th>
+                <th style={{ width: '18%' }}>Người dân &amp; Liên hệ</th>
+                <th style={{ width: '21%' }}>Địa điểm hiện trường</th>
+                <th style={{ width: '9%' }}>Nạn nhân</th>
+                <th style={{ width: '15%' }}>Đội phụ trách</th>
+                <th style={{ width: '13%', textAlign: 'center' }}>Tiến trình</th>
+                <th style={{ width: '11%', textAlign: 'center' }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {loading && displaySosList.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '45px 20px' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '45px 20px' }}>
                     <Loader2 size={26} className="animate-spin" style={{ margin: '0 auto 10px', color: '#0284C7' }} />
                     <p style={{ margin: 0, fontWeight: 600, color: '#64748B' }}>Đang nạp dữ liệu cứu nạn...</p>
                   </td>
                 </tr>
               ) : filteredSosList.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '45px 20px' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '45px 20px' }}>
                     <div style={{ maxWidth: 460, margin: '0 auto' }}>
                       <span style={{ fontSize: 36, display: 'block', marginBottom: 8 }}>
                         {triageFilter === 'ACTIVE_ALL' && totalCount > 0 ? '✨' : '🛡️'}
@@ -708,7 +867,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                   const citizenName = citizenInfo?.fullName || 'Người dân';
                   const citizenPhone = citizenInfo?.phone;
                   const citizenAvatar = citizenInfo?.avatarUrl;
-                  const initials = getInitials(citizenName);
                   const isCritical = sos.priority === 'CRITICAL';
                   const hasPhoto = Boolean(sos.imageUrl || (sos.images && sos.images.length > 0));
                   const photoUrl = sos.imageUrl || (sos.images && sos.images[0]);
@@ -768,15 +926,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                       <td>
                         <div className="table-citizen-cell">
                           <div className="citizen-avatar">
-                            {citizenAvatar ? (
-                              <img
-                                src={citizenAvatar}
-                                alt={citizenName}
-                                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
-                              />
-                            ) : (
-                              initials
-                            )}
+                            <SafeAvatar src={citizenAvatar} name={citizenName} />
                           </div>
                           <div className="citizen-meta">
                             <span className="citizen-name" title={citizenName}>{citizenName}</span>
@@ -891,7 +1041,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                       </td>
 
                       {/* 6. Tiến trình tác chiến */}
-                      <td>
+                      <td style={{ textAlign: 'center' }}>
                         {(() => {
                           const effStatus = getEffectiveStatus(sos);
                           if (effStatus === 'COMPLETED') {
@@ -919,6 +1069,16 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                             return (
                               <span className="table-progress-pill enroute" style={{ background: '#f0f9ff', color: '#0284c7', borderColor: '#bae6fd' }}>
                                 <Clock size={11} /> Đã giao đội
+                              </span>
+                            );
+                          }
+                          if (effStatus === 'CANCELLED' || effStatus === 'REJECTED') {
+                            return (
+                              <span 
+                                className="table-progress-pill cancelled"
+                                title="Người dân đã xác nhận an toàn hoặc hủy yêu cầu"
+                              >
+                                <XCircle size={11} /> Đã hủy
                               </span>
                             );
                           }
@@ -996,7 +1156,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
               </button>
             </div>
             <div className="executive-photo-lightbox-body">
-              <img src={previewPhoto} alt="Hiện trường cứu nạn" />
+              <img src={previewPhoto} alt="Hiện trường cứu nạn" referrerPolicy="no-referrer" />
             </div>
           </div>
         </div>
@@ -1081,7 +1241,17 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                   <span>LỰC LƯỢNG CỨU HỘ PHỤ TRÁCH (XUẤT KÍCH)</span>
                 </div>
 
-                {selectedSosDetail.assignment ? (
+                {getEffectiveStatus(selectedSosDetail) === 'CANCELLED' ? (
+                  <div style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 8, padding: '12px 14px', marginTop: 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569', fontWeight: 800, fontSize: 13 }}>
+                      <XCircle size={15} color="#64748b" />
+                      <span>Yêu cầu cứu nạn đã hủy (An toàn)</span>
+                    </div>
+                    <p style={{ margin: '6px 0 0', fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
+                      Người dân đã xác nhận tự thoát hiểm an toàn hoặc hủy bỏ yêu cầu cứu nạn trên ứng dụng di động. Không cần điều động thêm lực lượng.
+                    </p>
+                  </div>
+                ) : selectedSosDetail.assignment ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                       <div>
@@ -1096,7 +1266,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                         )}
                       </div>
                       <span className="sos-team-status-badge">
-                        {getEffectiveStatus(selectedSosDetail) === 'COMPLETED' ? 'Đã xong' : 'Đang tác chiến'}
+                        {getEffectiveStatus(selectedSosDetail) === 'COMPLETED' ? 'Đã xong' : getEffectiveStatus(selectedSosDetail) === 'CANCELLED' ? 'Đã hủy' : 'Đang tác chiến'}
                       </span>
                     </div>
 
@@ -1183,15 +1353,10 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 {/* Banner Profile Người Dân */}
                 <div className="sos-citizen-profile-banner">
                   <div className="sos-citizen-avatar-large">
-                    {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.avatarUrl ? (
-                      <img
-                        src={selectedSosDetail.citizenId.avatarUrl}
-                        alt={selectedSosDetail.citizenId.fullName}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'inherit' }}
-                      />
-                    ) : (
-                      getInitials(typeof selectedSosDetail.citizenId === 'object' ? selectedSosDetail.citizenId?.fullName || '' : '')
-                    )}
+                    <SafeAvatar
+                      src={typeof selectedSosDetail.citizenId === 'object' ? selectedSosDetail.citizenId?.avatarUrl : undefined}
+                      name={typeof selectedSosDetail.citizenId === 'object' ? selectedSosDetail.citizenId?.fullName || '' : ''}
+                    />
                   </div>
                   <div className="sos-citizen-profile-info">
                     <div className="profile-name-row">
@@ -1365,8 +1530,8 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 const rawCitizenPhotos: string[] = Array.isArray(selectedSosDetail.images) && selectedSosDetail.images.length > 0
                   ? selectedSosDetail.images
                   : selectedSosDetail.imageUrl
-                  ? [selectedSosDetail.imageUrl]
-                  : [];
+                    ? [selectedSosDetail.imageUrl]
+                    : [];
 
                 const teamProofPhotos: string[] = [
                   ...new Set([
@@ -1412,7 +1577,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                               onClick={() => setPreviewPhoto(imgUrl)}
                               title="Bấm để xem ảnh phóng to"
                             >
-                              <img src={imgUrl} alt={`Ảnh người dân gửi ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              <img src={imgUrl} alt={`Ảnh người dân gửi ${i + 1}`} referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             </div>
                           ))}
                         </div>
@@ -1466,7 +1631,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                                 onClick={() => setPreviewPhoto(imgUrl)}
                                 title="Bấm để phóng to ảnh nghiệm thu hoàn tất"
                               >
-                                <img src={imgUrl} alt={`Ảnh đội cứu hộ ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                <img src={imgUrl} alt={`Ảnh đội cứu hộ ${i + 1}`} referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                               </div>
                             ))}
                           </div>
@@ -1571,21 +1736,25 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
               </span>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {getEffectiveStatus(selectedSosDetail) !== 'COMPLETED' ? (
-                  <button
-                    type="button"
-                    className="btn-panel-action primary"
-                    onClick={() => {
-                      const targetId = selectedSosDetail._id;
-                      setSelectedSosDetail(null);
-                      onOpenMap(targetId);
+                {getEffectiveStatus(selectedSosDetail) === 'CANCELLED' ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '8px 14px',
+                      borderRadius: 8,
+                      background: '#f1f5f9',
+                      border: '1px solid #cbd5e1',
+                      color: '#475569',
+                      fontSize: 12.5,
+                      fontWeight: 700,
                     }}
-                    title="Mở ngay trên Bản đồ tác chiến"
                   >
-                    <Compass size={15} />
-                    <span>Bản đồ tác chiến</span>
-                  </button>
-                ) : (
+                    <XCircle size={16} color="#64748b" />
+                    <span>Đã hủy / Tự an toàn</span>
+                  </div>
+                ) : getEffectiveStatus(selectedSosDetail) === 'COMPLETED' ? (
                   <div
                     style={{
                       display: 'flex',
@@ -1603,23 +1772,36 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                     <CheckCircle2 size={16} color="#16a34a" />
                     <span>Đã hoàn tất &amp; Lưu trữ</span>
                   </div>
-                )}
-
-                {getEffectiveStatus(selectedSosDetail) !== 'COMPLETED' && (
-                  <button
-                    type="button"
-                    className="btn-panel-action success"
-                    onClick={() => handleCompleteSosFromPanel(selectedSosDetail._id)}
-                    disabled={completingId === selectedSosDetail._id}
-                    title="Xác nhận hoàn tất ca cứu nạn"
-                  >
-                    {completingId === selectedSosDetail._id ? (
-                      <Loader2 size={15} className="animate-spin" />
-                    ) : (
-                      <CheckCircle2 size={15} />
-                    )}
-                    <span>Hoàn tất nhiệm vụ</span>
-                  </button>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="btn-panel-action primary"
+                      onClick={() => {
+                        const targetId = selectedSosDetail._id;
+                        setSelectedSosDetail(null);
+                        onOpenMap(targetId);
+                      }}
+                      title="Mở ngay trên Bản đồ tác chiến"
+                    >
+                      <Compass size={15} />
+                      <span>Bản đồ tác chiến</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-panel-action success"
+                      onClick={() => handleCompleteSosFromPanel(selectedSosDetail._id)}
+                      disabled={completingId === selectedSosDetail._id}
+                      title="Xác nhận hoàn tất ca cứu nạn"
+                    >
+                      {completingId === selectedSosDetail._id ? (
+                        <Loader2 size={15} className="animate-spin" />
+                      ) : (
+                        <CheckCircle2 size={15} />
+                      )}
+                      <span>Hoàn tất nhiệm vụ</span>
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -1746,6 +1928,176 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Popup xác nhận hành động nguy hiểm (Đồng bộ 100% phong cách Mobile App) */}
+      {confirmDialog?.isOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(5px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            padding: '20px',
+          }}
+          onClick={() => {
+            if (!confirmDialog.isSubmitting) setConfirmDialog(null);
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '24px',
+              padding: '24px 22px',
+              maxWidth: '340px',
+              width: '100%',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.22)',
+              border: '1.5px solid #E2E8F0',
+              textAlign: 'center',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Icon vòng đỏ chấm than chuẩn phong cách Mobile App */}
+            <div
+              style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '32px',
+                backgroundColor: '#FEE2E2',
+                border: '2px solid #FCA5A5',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px',
+              }}
+            >
+              <div
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '16px',
+                  backgroundColor: '#DC2626',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#FFFFFF',
+                  fontSize: '20px',
+                  fontWeight: '800',
+                  lineHeight: 1,
+                  boxShadow: '0 2px 6px rgba(220, 38, 38, 0.3)',
+                }}
+              >
+                !
+              </div>
+            </div>
+
+            {/* Tiêu đề Modal */}
+            <h3
+              style={{
+                fontSize: '18px',
+                fontWeight: '800',
+                color: '#0F172A',
+                textAlign: 'center',
+                marginBottom: '8px',
+                lineHeight: 1.3,
+              }}
+            >
+              {confirmDialog.title}
+            </h3>
+
+            {/* Mô tả chi tiết ngắn gọn */}
+            <p
+              style={{
+                fontSize: '14px',
+                color: '#475569',
+                textAlign: 'center',
+                lineHeight: '21px',
+                marginBottom: '22px',
+                padding: '0 4px',
+              }}
+            >
+              {confirmDialog.description}
+            </p>
+
+            {/* Hàng nút bấm chuẩn tỉ lệ App: [Hủy] [Xóa] */}
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '10px',
+                width: '100%',
+              }}
+            >
+              <button
+                type="button"
+                disabled={confirmDialog.isSubmitting}
+                onClick={() => setConfirmDialog(null)}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#F1F5F9',
+                  padding: '13px 16px',
+                  borderRadius: '14px',
+                  border: '1px solid #E2E8F0',
+                  color: '#64748B',
+                  fontSize: '14px',
+                  fontWeight: '700',
+                  textAlign: 'center',
+                  cursor: confirmDialog.isSubmitting ? 'not-allowed' : 'pointer',
+                  transition: 'background-color 0.15s ease',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#E2E8F0')}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#F1F5F9')}
+              >
+                {confirmDialog.cancelText || 'Hủy'}
+              </button>
+
+              <button
+                type="button"
+                disabled={confirmDialog.isSubmitting}
+                onClick={() => confirmDialog.onConfirm()}
+                style={{
+                  flex: 1.15,
+                  backgroundColor: '#DC2626',
+                  padding: '13px 16px',
+                  borderRadius: '14px',
+                  border: 'none',
+                  color: '#FFFFFF',
+                  fontSize: '14px',
+                  fontWeight: '800',
+                  textAlign: 'center',
+                  cursor: confirmDialog.isSubmitting ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 4px 12px rgba(220, 38, 38, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  transition: 'background-color 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!confirmDialog.isSubmitting) e.currentTarget.style.backgroundColor = '#B91C1C';
+                }}
+                onMouseLeave={(e) => {
+                  if (!confirmDialog.isSubmitting) e.currentTarget.style.backgroundColor = '#DC2626';
+                }}
+              >
+                {confirmDialog.isSubmitting ? (
+                  <>
+                    <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                    <span>Đang xóa...</span>
+                  </>
+                ) : (
+                  <span>{confirmDialog.confirmText || 'Xóa'}</span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

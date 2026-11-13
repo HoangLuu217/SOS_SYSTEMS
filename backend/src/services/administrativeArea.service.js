@@ -165,7 +165,12 @@ class AdministrativeAreaService {
       filter.type = query.type;
     }
 
-    if (query.parentId !== undefined) {
+    if (query.provinceId && mongoose.Types.ObjectId.isValid(query.provinceId)) {
+      // Lấy toàn bộ các quận/huyện trực thuộc tỉnh này
+      const districts = await AdministrativeArea.find({ parentId: query.provinceId, status: 'ACTIVE' }).select('_id');
+      const districtIds = districts.map((d) => d._id);
+      filter.parentId = { $in: [query.provinceId, ...districtIds] };
+    } else if (query.parentId !== undefined) {
       if (query.parentId === 'null' || query.parentId === null) {
         filter.parentId = null;
       } else if (mongoose.Types.ObjectId.isValid(query.parentId)) {
@@ -181,8 +186,10 @@ class AdministrativeAreaService {
     }
 
     const areas = await AdministrativeArea.find(filter)
+      .select('-boundary')
       .populate('parentId', 'name code type')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     return areas;
   }

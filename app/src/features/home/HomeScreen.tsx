@@ -13,6 +13,7 @@ import {
   ImageBackground,
   ActivityIndicator,
   Modal,
+  Pressable,
   Linking,
   RefreshControl,
   Alert,
@@ -28,6 +29,7 @@ import { BACKGROUND_APP_SOURCE } from '@/constants/backgroundBase64';
 import { SOSMapScreen, ContributeHazardModal } from '@/features/sos';
 import { LocalAuthorityChatModal } from './LocalAuthorityChatModal';
 import { SafetyCheckModal } from './SafetyCheckModal';
+import { EmergencyDirectoryModal } from '@/features/auth/EmergencyDirectoryModal';
 import { TabName } from '@/types';
 import { backendApi, safetyCheckApi, SafetyCheckItem, bloodDonationApi } from '@/api';
 
@@ -321,6 +323,39 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     areaName: string;
   } | null>(null);
 
+  // Phân tách rõ ràng: Ban chỉ huy theo Hồ sơ (user.address) vs Ban chỉ huy theo GPS thực tế
+  const [profileAuthority, setProfileAuthority] = useState<{
+    name: string;
+    department: string;
+    phone: string;
+    areaName: string;
+  } | null>(null);
+
+  const [gpsAuthority, setGpsAuthority] = useState<{
+    name: string;
+    department: string;
+    phone: string;
+    areaName: string;
+  } | null>(null);
+
+  const [showCallChoiceModal, setShowCallChoiceModal] = useState<boolean>(false);
+  const [showEmergencyDirectory, setShowEmergencyDirectory] = useState<boolean>(false);
+  const [directoryInitialMode, setDirectoryInitialMode] = useState<'GPS' | 'PROFILE' | 'ALL'>('ALL');
+
+  // Hàm quay số an toàn
+  const callPhoneNumber = (phone?: string) => {
+    if (!phone) {
+      Alert.alert('Chưa có số điện thoại', 'Hệ thống chưa tìm thấy số liên lạc của chính quyền địa phương này.');
+      return;
+    }
+    const clean = phone.replace(/[^0-9+]/g, '');
+    if (clean) {
+      Linking.openURL(`tel:${clean}`).catch(() => {
+        Alert.alert('Lỗi', `Không thể mở ứng dụng quay số với số điện thoại: ${phone}`);
+      });
+    }
+  };
+
   // Lấy số lượng thông báo chưa đọc từ máy chủ
   useEffect(() => {
     let isMounted = true;
@@ -529,12 +564,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       });
 
       if (res.success && res.data?.authority) {
-        setNearestAuthority({
+        const authData = {
           name: res.data.authority.name || 'Cán bộ trực ban',
           department: res.data.authority.department || `UBND ${res.data.areaName || queryArea || 'Địa phương'}`,
           phone: res.data.authority.phone || '',
           areaName: res.data.areaName || queryArea || 'Địa chỉ của bạn',
-        });
+        };
+        setNearestAuthority(authData);
+        if (user?.address) {
+          setProfileAuthority(authData);
+        }
       }
     } catch (err) {
       console.log('[HomeScreen] Lỗi lấy thông tin chính quyền theo địa chỉ customer:', err);
@@ -575,6 +614,23 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             place.district ||
             'Vị trí hiện tại';
         }
+
+        // Tự động nạp hotline Ban chỉ huy theo tọa độ GPS thực tế
+        try {
+          const resGps = await backendApi.getLocalAuthority({
+            lat,
+            lng: lon,
+            areaName: detectedCity,
+          });
+          if (resGps.success && resGps.data?.authority) {
+            setGpsAuthority({
+              name: resGps.data.authority.name || 'Ban chỉ huy PCTT & TKCN địa phương',
+              department: resGps.data.authority.department || `UBND ${resGps.data.areaName || detectedCity}`,
+              phone: resGps.data.authority.phone || '112',
+              areaName: resGps.data.areaName || detectedCity || 'Vị trí hiện tại',
+            });
+          }
+        } catch {}
       }
 
       // 2. Gọi Open-Meteo API lấy dữ liệu thời tiết thời gian thực
@@ -816,14 +872,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
               {/* Thanh điều khiển trên cùng: Gọi khẩn cấp địa phương + Thông báo + Cài đặt */}
               <View style={styles.topBar}>
                 <View style={styles.topBarRight}>
-                  {/* Nút Gọi Cứu Hộ / Chính Quyền Địa Phương Khẩn Cấp (Nằm ngay cạnh chuông thông báo) */}
+                  {/* Nút Gọi Cứu Hộ / Chính Quyền Địa Phương Khẩn Cấp (Đồng bộ kính mờ trắng như Chuông & Cài đặt) */}
                   <TouchableOpacity
-                    style={[styles.circleIconButton, styles.phoneCallButton]}
-                    onPress={handleCallLocalAuthority}
+                    style={styles.circleIconButton}
+                    onPress={() => setShowCallChoiceModal(true)}
                     activeOpacity={0.75}
-                    accessibilityLabel="Gọi khẩn cấp chính quyền địa phương"
+                    accessibilityLabel="Gọi khẩn cấp cứu nạn & chính quyền địa phương"
                   >
-                    <Ionicons name="call" size={17} color="#22C55E" />
+                    <Ionicons name="call-outline" size={19} color="#FFFFFF" />
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -1300,6 +1356,256 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </View>
         </View>
       </Modal>
+
+      {/* Modal Lựa chọn Gọi Khẩn Cấp: Theo GPS thực tế vs Theo Hồ sơ */}
+      <Modal
+        visible={showCallChoiceModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCallChoiceModal(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.65)', justifyContent: 'flex-end' }}
+          onPress={() => setShowCallChoiceModal(false)}
+        >
+          <Pressable
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              padding: 20,
+              paddingBottom: Math.max(insets.bottom + 14, 24),
+              maxHeight: '85%',
+            }}
+            onPress={(e) => e.stopPropagation()}
+          >
+            {/* Thanh kéo gạt */}
+            <View
+              style={{
+                width: 38,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: '#CBD5E1',
+                alignSelf: 'center',
+                marginBottom: 14,
+              }}
+            />
+
+            {/* Header Modal */}
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 16,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 19,
+                    backgroundColor: '#EFF6FF',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="call" size={18} color="#0066FF" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>
+                    Đường Dây Nóng Khẩn Cấp
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setShowCallChoiceModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={22} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Tùy chọn 1: Theo GPS hiện tại */}
+            <View
+              style={{
+                backgroundColor: '#F0F9FF',
+                borderRadius: 16,
+                borderWidth: 1.5,
+                borderColor: '#BAE6FD',
+                padding: 14,
+                marginBottom: 12,
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="location" size={16} color="#0284C7" />
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#0369A1' }}>
+                    Gọi Theo Vị Trí GPS Hiện Tại
+                  </Text>
+                </View>
+                <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#0284C7' }}>KHUYÊN DÙNG</Text>
+                </View>
+              </View>
+
+              <Text style={{ fontSize: 12, color: '#475569', marginBottom: 2 }}>
+                Đang đứng tại: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{gpsAuthority?.areaName || weatherData.city || 'Đang định vị GPS...'}</Text>
+              </Text>
+              <Text style={{ fontSize: 12, color: '#475569', marginBottom: 2 }} numberOfLines={1}>
+                {gpsAuthority?.department || 'Ban chỉ huy PCTT & TKCN địa phương'}
+              </Text>
+              <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 10 }}>
+                Hotline: <Text style={{ fontWeight: '800', color: '#0284C7' }}>{gpsAuthority?.phone || '112'}</Text>
+              </Text>
+
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    backgroundColor: '#0066FF',
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                  }}
+                  onPress={() => {
+                    setShowCallChoiceModal(false);
+                    callPhoneNumber(gpsAuthority?.phone || '112');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="call" size={14} color="#FFFFFF" />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>
+                    Gọi số này ngay
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={{
+                    paddingHorizontal: 12,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: '#BAE6FD',
+                  }}
+                  onPress={() => {
+                    setShowCallChoiceModal(false);
+                    setDirectoryInitialMode('GPS');
+                    setShowEmergencyDirectory(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#0284C7' }}>
+                    Danh bạ gần
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Tùy chọn 2: Theo Hồ sơ đã lưu */}
+            <View
+              style={{
+                backgroundColor: '#F8FAFC',
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                padding: 14,
+                marginBottom: 6,
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="home" size={16} color="#475569" />
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#334155' }}>
+                    Gọi Theo Địa Chỉ Trong Hồ Sơ
+                  </Text>
+                </View>
+                <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B' }}>NƠI CƯ TRÚ</Text>
+                </View>
+              </View>
+
+              <Text style={{ fontSize: 12, color: '#475569', marginBottom: 2 }} numberOfLines={1}>
+                Địa chỉ lưu: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{user?.address || 'Chưa cập nhật địa chỉ'}</Text>
+              </Text>
+              <Text style={{ fontSize: 12, color: '#475569', marginBottom: 2 }} numberOfLines={1}>
+                {profileAuthority?.department || 'UBND / Ban chỉ huy nơi cư trú'}
+              </Text>
+              <Text style={{ fontSize: 12, color: '#64748B', marginBottom: 10 }}>
+                Hotline: <Text style={{ fontWeight: '800', color: '#334155' }}>{profileAuthority?.phone || (user?.address ? '112' : 'Chưa có')}</Text>
+              </Text>
+
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  style={{
+                    flex: 1,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    backgroundColor: user?.address ? '#0F172A' : '#94A3B8',
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                  }}
+                  onPress={() => {
+                    setShowCallChoiceModal(false);
+                    if (user?.address) {
+                      callPhoneNumber(profileAuthority?.phone || '112');
+                    } else {
+                      Alert.alert('Chưa có địa chỉ', 'Vui lòng vào Cài đặt / Hồ sơ cá nhân để cập nhật địa chỉ nơi cư trú của bạn.');
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name={user?.address ? 'call' : 'settings-outline'} size={14} color="#FFFFFF" />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFFFFF' }}>
+                    {user?.address ? 'Gọi số này ngay' : 'Cập nhật địa chỉ'}
+                  </Text>
+                </TouchableOpacity>
+
+                {user?.address ? (
+                  <TouchableOpacity
+                    style={{
+                      paddingHorizontal: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: '#CBD5E1',
+                    }}
+                    onPress={() => {
+                      setShowCallChoiceModal(false);
+                      setDirectoryInitialMode('PROFILE');
+                      setShowEmergencyDirectory(true);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>
+                      Danh bạ nơi cư trú
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Modal Danh bạ Cứu nạn Toàn quốc */}
+      <EmergencyDirectoryModal
+        visible={showEmergencyDirectory}
+        onClose={() => setShowEmergencyDirectory(false)}
+        userAddress={user?.address}
+        initialMode={directoryInitialMode}
+      />
     </View>
   );
 };

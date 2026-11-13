@@ -19,7 +19,7 @@ import { NewsScreen } from '@/features/news';
 import { ProfileScreen, MandatoryOnboardingModal } from '@/features/profile';
 import { RescuerMissionScreen } from '@/features/mission';
 import { backendApi } from '@/api';
-import { AlertModal, BottomNav, LogoSOS, InAppNotificationBanner } from '@/components';
+import { AlertModal, BottomNav, LogoSOS, InAppNotificationBanner, FloatingActiveSosWidget } from '@/components';
 import { SafetyCheckModal } from '@/features/home/SafetyCheckModal';
 import { BloodDonationModal } from '@/features/home/BloodDonationModal';
 import { io } from 'socket.io-client';
@@ -108,8 +108,10 @@ export function AuthenticatedApp() {
       });
     }
 
-    const onSignal = () => {
+    const onSignal = (payload?: any) => {
       loadMissionsCount();
+      DeviceEventEmitter.emit('sos:sync', payload);
+      DeviceEventEmitter.emit('sos:updated', payload);
     };
 
     s.on('assignment:new', onSignal);
@@ -118,7 +120,9 @@ export function AuthenticatedApp() {
     s.on('assignment:cancelled', onSignal);
     s.on('assignment:deleted', onSignal);
     s.on('assignment:updated', onSignal);
+    s.on('sos:created', onSignal);
     s.on('sos:updated', onSignal);
+    s.on('sos:status_changed', onSignal);
     s.on('sos:sync', onSignal);
 
     return () => {
@@ -233,6 +237,9 @@ export function AuthenticatedApp() {
         visible={configVisible}
         onClose={() => setConfigVisible(false)}
       />
+
+      {/* Widget Bong Bóng Cứu Nạn SOS Nổi Toàn Cục (Kéo thả tự do, đếm số ca đang kích hoạt) */}
+      <FloatingActiveSosWidget />
     </View>
   );
 }

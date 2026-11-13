@@ -25,9 +25,9 @@
    ========================================================================== */
 
 .sos-chat-sidebar {
-  width: 340px;
-  min-width: 320px;
-  max-width: 360px;
+  width: 360px;
+  min-width: 340px;
+  max-width: 400px;
   flex-shrink: 0;
   border-right: 1px solid #e2e8f0;
   background: #ffffff;
@@ -112,23 +112,30 @@
 /* Filter pills */
 .sos-chat-filter-pills {
   display: flex;
-  gap: 6px;
-  padding: 10px 16px;
+  gap: 4px;
+  padding: 8px 6px;
   border-bottom: 1px solid #e2e8f0;
   background: #f7f9fb;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.sos-chat-filter-pills::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
 }
 
 .sos-chat-filter-pill {
-  flex: 1;
+  flex: 1 0 auto;
   text-align: center;
-  padding: 6px 8px;
+  padding: 6px 7px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
   background: #ffffff;
   border: 1px solid #e2e8f0;
-  color: #718096;
+  color: #64748b;
   white-space: nowrap;
   transition: all 0.15s ease;
 }
