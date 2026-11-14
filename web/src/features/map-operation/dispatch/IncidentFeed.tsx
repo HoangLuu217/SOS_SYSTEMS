@@ -155,8 +155,9 @@ export const IncidentFeed = ({
   }, [scopedIncidents]);
 
   // Filter incidents based on search query & selected status tab (chỉ hiển thị các ca đang diễn ra)
+  // Ưu tiên SOS chưa được AI phân loại để cán bộ kiểm tra, sau đó theo mức AI/authority đã gán.
   const filteredIncidents = useMemo(() => {
-    return scopedIncidents.filter((s) => {
+    const filtered = scopedIncidents.filter((s) => {
       const st = String(s.status || '').toUpperCase();
       if (['COMPLETED', 'RESOLVED', 'CANCELLED', 'REJECTED'].includes(st)) return false;
 
@@ -198,6 +199,12 @@ export const IncidentFeed = ({
       }
 
       return true;
+    });
+
+    const priorityOrder: Record<string, number> = { UNASSESSED: 0, CRITICAL: 1, HIGH: 2, MEDIUM: 3, LOW: 4 };
+    return [...filtered].sort((a, b) => {
+      const orderDiff = (priorityOrder[a.priority] ?? 0) - (priorityOrder[b.priority] ?? 0);
+      return orderDiff || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
   }, [scopedIncidents, searchQuery, statusFilter]);
 
@@ -362,8 +369,9 @@ export const IncidentFeed = ({
       <div className="feed-card-list">
         {filteredIncidents.map((sos) => {
           const isSelected = selectedSos?.id === sos.id;
-          const priorityClass =
-            sos.priority === 'CRITICAL' ? 'critical' : sos.priority === 'HIGH' ? 'high' : 'medium';
+          const priorityClass = sos.priority === 'UNASSESSED'
+            ? 'unassessed'
+            : sos.priority === 'CRITICAL' ? 'critical' : sos.priority === 'HIGH' ? 'high' : 'medium';
 
           // Chỉ hiển thị Loại yêu cầu cứu trợ (ngắn gọn, chuẩn chỉ, không hiển thị text mô tả dài dòng)
           const emergencyTypeLabel = (() => {
@@ -377,10 +385,13 @@ export const IncidentFeed = ({
 
             const typeMap: Record<string, string> = {
               FLOOD: 'Cứu hộ ngập lụt / Mắc kẹt',
-              FIRE: 'Hỏa hoạn / Cháy nổ',
               MEDICAL: 'Cấp cứu y tế / Thương tích',
-              RESCUE: 'Cứu nạn sông nước',
               LANDSLIDE: 'Sạt lở đất đá',
+              EVACUATION: 'Sơ tán khẩn cấp',
+              FOOD: 'Tiếp tế lương thực',
+              RELIEF: 'Cứu trợ nhu yếu phẩm',
+              FIRE: 'Hỏa hoạn / Cháy nổ',
+              RESCUE: 'Cứu nạn sông nước',
               STORM: 'Bão lũ thiên tai',
               ACCIDENT: 'Tai nạn sập đổ / Giao thông',
               MISSING_PERSON: 'Tìm kiếm người mất tích',
@@ -440,6 +451,22 @@ export const IncidentFeed = ({
                 </div>
 
                 <div className="card-meta-top">
+                  {sos.priority === 'UNASSESSED' && (
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 900,
+                        padding: '1.5px 5px',
+                        borderRadius: 4,
+                        background: '#fff7ed',
+                        color: '#c2410c',
+                        border: '1px solid #fed7aa',
+                      }}
+                      title="AI chưa phân loại; cán bộ cần xem xét"
+                    >
+                      {sos.aiAssessment?.status === 'PENDING' ? 'AI đang phân tích' : 'Cần phân loại'}
+                    </span>
+                  )}
                   <span className={`compact-priority-badge ${priorityClass}`}>
                     {sos.priority === 'CRITICAL'
                       ? 'Nguy cấp'
@@ -447,6 +474,8 @@ export const IncidentFeed = ({
                       ? 'Khẩn cấp'
                       : sos.priority === 'LOW'
                       ? 'Thấp'
+                      : sos.priority === 'UNASSESSED'
+                      ? 'Chờ phân loại'
                       : 'Trung bình'}
                   </span>
                   <span className="compact-time-ago">{sos.timeAgo}</span>

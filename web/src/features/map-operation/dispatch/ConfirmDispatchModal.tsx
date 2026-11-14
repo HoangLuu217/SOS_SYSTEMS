@@ -43,31 +43,6 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
   const activeSupplies = Object.entries(allocatedSupplies || {}).filter(([_, qty]) => qty > 0);
   const totalSupplyUnits = activeSupplies.reduce((acc, [_, qty]) => acc + qty, 0);
 
-  // Tính ETA tiếp cận dự kiến thực tế
-  const estimatedEtaText = (() => {
-    const sosLat = selectedSos?.coordinates?.lat ?? (selectedSos as any)?.location?.coordinates?.[1];
-    const sosLng = selectedSos?.coordinates?.lng ?? (selectedSos as any)?.location?.coordinates?.[0];
-    if (typeof sosLat === 'number' && typeof sosLng === 'number') {
-      const firstTeam = selectedTeams[0];
-      const lead = firstTeam?.rescuers?.find((r) => r.coordinates?.lat && r.coordinates?.lng);
-      if (lead?.coordinates) {
-        const R = 6371;
-        const dLat = ((sosLat - lead.coordinates.lat) * Math.PI) / 180;
-        const dLon = ((sosLng - lead.coordinates.lng) * Math.PI) / 180;
-        const a =
-          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos((lead.coordinates.lat * Math.PI) / 180) *
-            Math.cos((sosLat * Math.PI) / 180) *
-            Math.sin(dLon / 2) *
-            Math.sin(dLon / 2);
-        const distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        const min = Math.max(3, Math.round((distKm / 25) * 60 + 2));
-        return `~${min} phút (${distKm < 1 ? Math.round(distKm * 1000) + ' m' : distKm.toFixed(1) + ' km'})`;
-      }
-    }
-    return '~5-7 phút';
-  })();
-
   return (
     <div
       className="sos-modal-overlay"
@@ -311,7 +286,7 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
                 }}
               >
                 <Clock size={11} />
-                <span>Dự kiến tiếp cận (ETA): {estimatedEtaText}</span>
+                <span>ETA định tuyến: Chưa có dữ liệu</span>
               </div>
             </div>
 
@@ -319,8 +294,8 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7, maxHeight: 180, overflowY: 'auto' }}>
               {selectedTeams.map((team, idx) => {
                 const lead = team.rescuers?.[0];
-                const veh = vehicles.find((v) => v.teamId === team.id || v.id === (team as any).vehicleId) || vehicles[0];
-                const vehName = veh ? `${veh.name}${veh.plate ? ` (${veh.plate})` : ''}` : 'Phương tiện chuyên dụng';
+                const veh = vehicles.find((v) => v.teamId === team.id && v.status === 'Available');
+                const vehName = veh ? `${veh.name}${veh.plate ? ` (${veh.plate})` : ''}` : 'Chưa có phương tiện khả dụng';
 
                 return (
                   <div
