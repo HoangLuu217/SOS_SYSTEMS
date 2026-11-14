@@ -118,6 +118,7 @@ const equipmentSchema = new mongoose.Schema(
           "DAMAGED",      // Hu hong, khong dung duoc
           "LOST",         // Mat mat
           "EXPIRED",      // Het han su dung
+          "OUT_OF_STOCK", // Da xuat het ton kho
         ],
         message: "Trang thai vat tu {VALUE} khong hop le",
       },

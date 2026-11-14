@@ -46,6 +46,13 @@ const vehicleSchema = new mongoose.Schema(
       min: [0, 'Sức chứa không được là số âm'],
       default: 1,
     },
+    terrainCapabilities: {
+      type: [{
+        type: String,
+        enum: ['ROAD', 'OFF_ROAD', 'SHALLOW_FLOOD', 'DEEP_FLOOD', 'WATERWAY', 'AIR'],
+      }],
+      default: [],
+    },
     status: {
       type: String,
       enum: {

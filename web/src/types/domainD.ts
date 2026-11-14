@@ -56,12 +56,18 @@ export interface AuthorityOrganization {
   activeRescueTeams?: number;
 }
 
-export type EmergencyPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type EmergencyPriority = 'UNASSESSED' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type EmergencyType =
   | 'MEDICAL'          // 🚑 Y tế (Mặc định)
   | 'FIRE'             // 🔥 Cháy
   | 'POLICE'           // 🚓 An ninh
   | 'RESCUE'           // 🛟 Cứu hộ
+  | 'FLOOD'            // 🌊 Ngập lụt
+  | 'LANDSLIDE'        // ⚠️ Sạt lở đất
+  | 'EVACUATION'       // 👵 Sơ tán khẩn cấp
+  | 'FOOD'             // 🍞 Tiếp tế lương thực
+  | 'RELIEF'           // 📦 Cứu trợ nhu yếu phẩm
+  | 'OTHER'            // ❓ Yêu cầu khác
   | 'Flood'
   | 'Medical Emergency'
   | 'Trapped Person'
@@ -92,13 +98,177 @@ export type SosRequestStatus =
   | 'COMPLETED'
   | 'CANCELLED';
 
+export interface SosRiskBreakdown {
+  emergencyWeight?: number;
+  vulnerabilityScore?: number;
+  peopleScore?: number;
+  keywordScore?: number;
+  spatialHazardScore?: number;
+  weatherScore?: number;
+  clusterScore?: number;
+  repeatBonus?: number;
+}
+
+export interface SosOperationalNeeds {
+  requiredCapabilities?: string[];
+  recommendedVehicles?: string[];
+  recommendedEquipments?: string[];
+  estimatedWaterDepth?: string;
+  urgentNotes?: string | null;
+}
+
+export interface SosAiAssessment {
+  status?: 'PENDING' | 'COMPLETED' | 'FAILED' | 'SKIPPED' | 'UNAVAILABLE';
+  model?: string;
+  analyzedAt?: string;
+  aiScore?: number;
+  deterministicScore?: number;
+  recommendedPriority?: EmergencyPriority;
+  confidence?: 'LOW' | 'MEDIUM' | 'HIGH';
+  reasons?: string[];
+  extractedSignals?: string[];
+  evidence?: string[];
+  unknowns?: string[];
+  priorityMismatch?: boolean;
+  priorityScoreMismatch?: boolean;
+  operationalNeeds?: SosOperationalNeeds;
+}
+
+export interface SosRiskAssessment {
+  status?: 'PENDING' | 'COMPLETED' | 'VERIFIED' | 'NEEDS_HUMAN_REVIEW';
+  source?: 'AI' | 'AUTHORITY';
+  modelVersion?: string;
+  inputHash?: string;
+  evaluatedAt?: string;
+  suggestedPriority?: EmergencyPriority;
+  reasons?: string[];
+  extractedSignals?: string[];
+  evidence?: string[];
+  unknowns?: string[];
+  operationalNeeds?: SosOperationalNeeds;
+  needsHumanReview?: boolean;
+  verifiedPriority?: EmergencyPriority;
+  verifiedBy?: string;
+  verifiedAt?: string;
+  verificationNote?: string | null;
+  priorityOutdatedByNewInfo?: boolean;
+}
+
+export interface DispatchSuggestedSupply {
+  supplyId: string;
+  name: string;
+  category?: string;
+  quantity: number;
+  unit: string;
+  availableStock?: number;
+  fromTeamInventory?: boolean;
+}
+
+export interface DispatchTeamCandidate {
+  teamId: string;
+  teamName: string;
+  teamType: string;
+  areaId?: string | null;
+  areaName?: string | null;
+  isCrossArea: boolean;
+  isBusy: boolean;
+  dispatchEligible?: boolean;
+  hasCompleteCapabilityMatch?: boolean;
+  matchedCapabilities?: string[];
+  busyMission?: {
+    assignmentId: string;
+    status: string;
+    sosCode?: string | null;
+  } | null;
+  distanceKm: number | null;
+  etaMinutes: number | null;
+  etaText: string;
+  locationSource: string;
+  gpsAgeMinutes: number | null;
+  teamSkills: string[];
+  memberCount: number;
+  primaryVehicle?: {
+    id: string;
+    type: string;
+    plateNumber: string;
+    capacity: number;
+    status: string;
+    terrainCapabilities?: string[];
+  } | null;
+  availableVehicles?: Array<{
+    id: string;
+    type: string;
+    plateNumber?: string;
+    capacity: number;
+    terrainCapabilities?: string[];
+  }>;
+  totalCapacity: number;
+  capacityShortfall: number;
+  nearbyHazards: Array<{
+    title: string;
+    hazardType: string;
+    severity: string;
+    distanceToIncidentMeters: number;
+  }>;
+  matchReasons: string[];
+  warnings: string[];
+  suggestedSupplies: DispatchSuggestedSupply[];
+}
+
+export interface DispatchConflict {
+  type: string;
+  severity: 'HIGH' | 'MEDIUM' | 'LOW';
+  message: string;
+  competingSosCodes: string[];
+}
+
+export interface AiDispatchAdvisor {
+  model: string;
+  generatedAt: string;
+  summary: string;
+  recommendedPlanType: 'SINGLE_TEAM' | 'MULTI_TEAM' | 'CROSS_AREA_BACKUP';
+  recommendedTeamIds: string[];
+  rankedTeamIds?: string[];
+  teamEvaluations?: Array<{
+    teamId: string;
+    matchReasons?: string[];
+    warnings?: string[];
+  }>;
+  recommendedSupplies?: DispatchSuggestedSupply[];
+  tacticalReasons: string[];
+  routeWarnings: string[];
+  validationIssues?: string[];
+  suggestedSupplyNote?: string | null;
+  suggestedDispatchNote?: string | null;
+}
+
+export interface DispatchRecommendationsData {
+  sosId: string;
+  sosCode: string;
+  priority: EmergencyPriority;
+  operationalNeeds: SosOperationalNeeds;
+  candidates: DispatchTeamCandidate[];
+  conflicts: DispatchConflict[];
+  aiAdvisor: AiDispatchAdvisor | null;
+  aiAdvisorStatus: 'COMPLETED' | 'FAILED' | 'UNAVAILABLE' | 'NOT_REQUESTED' | 'TRIAGE_PENDING' | 'NEEDS_HUMAN_REVIEW' | 'NO_ELIGIBLE_TEAMS';
+  generatedAt: string;
+}
+
 export interface SosRequest {
   id: string;
   sosCode: string; // e.g. #8921
   timeAgo: string;
   createdAt: string;
   emergencyType: EmergencyType;
+  emergencyTypes?: string[];
   priority: EmergencyPriority;
+  priorityLockedByAuthority?: boolean;
+  riskScore?: number | null;
+  effectiveRiskScore?: number | null;
+  waitEscalationBonus?: number;
+  riskBreakdown?: SosRiskBreakdown | null;
+  riskAssessment?: SosRiskAssessment | null;
+  aiAssessment?: SosAiAssessment | null;
   title: string;
   description: string;
   locationName: string;
@@ -193,6 +363,9 @@ export interface RescueTeam {
   wardId?: string;
   wardName?: string;
   districtName?: string;
+  skills?: string[];
+  equipments?: Array<{ _id: string; name: string; category: string; quantity: number; unit?: string; status: string }>;
+  baseCoordinates?: { lat: number; lng: number } | null;
 }
 
 export interface RescuerProfile {
@@ -204,6 +377,7 @@ export interface RescuerProfile {
   phone: string;
   email?: string;
   specialty?: string;
+  skills?: string[];
   coordinates?: {
     lat: number;
     lng: number;
@@ -215,8 +389,11 @@ export interface Vehicle {
   name: string;
   plate: string;
   type: 'Inflatable Boat' | 'Tactical Truck' | 'Ambulance' | 'Amphibious Vehicle';
+  rawType?: string;
   status: 'Available' | 'In Mission' | 'Maintenance';
   capacity: string;
+  numericCapacity?: number;
+  terrainCapabilities?: string[];
   teamId: string;
   teamName?: string;
   districtId?: string;

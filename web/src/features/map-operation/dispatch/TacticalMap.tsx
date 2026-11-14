@@ -1217,7 +1217,7 @@ export const TacticalMap = ({
                   👤 {selectedSos.citizenName} ({selectedSos.citizenPhone})
                 </div>
                 <div style={{ fontSize: '12px', color: '#b91c1c', fontWeight: 700, marginTop: '2px' }}>
-                  ⚠️ {selectedSos.affectedPeople} người gặp nạn [{selectedSos.priority === 'CRITICAL' ? 'Nguy cấp' : selectedSos.priority === 'HIGH' ? 'Khẩn cấp' : selectedSos.priority === 'LOW' ? 'Thấp' : 'Trung bình'}]
+                  ⚠️ {selectedSos.affectedPeople} người gặp nạn [{selectedSos.priority === 'CRITICAL' ? 'Nguy cấp' : selectedSos.priority === 'HIGH' ? 'Khẩn cấp' : selectedSos.priority === 'LOW' ? 'Thấp' : selectedSos.priority === 'UNASSESSED' ? 'Đang chờ phân loại AI' : 'Trung bình'}]
                 </div>
                 {selectedSos.description && (
                   <div style={{ fontSize: '11px', color: '#475569', marginTop: '4px', fontStyle: 'italic', lineHeight: '1.3' }}>

@@ -91,6 +91,30 @@ export const CitizenDistressProfile: React.FC<Props> = ({
         : null;
 
   const hasExtraDetail = Boolean(selectedSos.description || selectedSos.imageUrl);
+  const aiReasons = selectedSos.riskAssessment?.reasons || selectedSos.aiAssessment?.reasons || [];
+  const isAiCompleted = selectedSos.aiAssessment?.status === 'COMPLETED';
+  const cleanLocationName = (() => {
+    const raw = selectedSos.locationName || '';
+    const parts = raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const deduped: string[] = [];
+    for (const p of parts) {
+      if (!deduped.some((existing) => existing.toLowerCase() === p.toLowerCase())) {
+        deduped.push(p);
+      }
+    }
+    return deduped.join(', ') || raw;
+  })();
+  const priorityViLabel =
+    selectedSos.priority === 'CRITICAL'
+      ? 'Nguy cấp'
+      : selectedSos.priority === 'HIGH'
+      ? 'Khẩn cấp'
+      : selectedSos.priority === 'LOW'
+      ? 'Thấp'
+      : 'Trung bình';
 
   const uniformBoxStyle: React.CSSProperties = {
     minWidth: 0,
@@ -113,14 +137,14 @@ export const CitizenDistressProfile: React.FC<Props> = ({
     <>
       <div
         style={{
-          padding: '8px 11px',
+          padding: '8px 10px',
           background: '#ffffff',
-          border: '1px solid #cbd5e1',
-          borderRadius: 10,
+          border: '1.5px solid #cbd5e1',
+          borderRadius: 9,
           display: 'flex',
           flexDirection: 'column',
-          gap: 6,
-          boxShadow: '0 1px 4px rgba(15, 23, 42, 0.04)',
+          gap: 5,
+          boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
         }}
       >
         {/* Section 0: Mã SOS, loại sự cố & thời gian */}
@@ -168,7 +192,7 @@ export const CitizenDistressProfile: React.FC<Props> = ({
 
         {/* Section 1: Tên người dân & Số điện thoại đường dây nóng trên 1 hàng */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <div style={{ fontWeight: 800, color: '#0f172a', fontSize: 15, letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontWeight: 900, color: '#0f172a', fontSize: 14, letterSpacing: '-0.2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {selectedSos.citizenName}
           </div>
 
@@ -177,74 +201,148 @@ export const CitizenDistressProfile: React.FC<Props> = ({
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 5,
-              color: '#1e293b',
-              fontWeight: 700,
+              gap: 4,
+              color: '#0284c7',
+              fontWeight: 800,
               textDecoration: 'none',
-              background: '#f8fafc',
-              padding: '4px 9px',
+              background: '#f0f9ff',
+              padding: '2.5px 8px',
               borderRadius: 6,
-              border: '1px solid #e2e8f0',
-              fontSize: 12,
+              border: '1px solid #bae6fd',
+              fontSize: 11.5,
               flexShrink: 0,
               transition: 'all 0.15s ease',
             }}
             title="Gọi trực tiếp cho người dân"
           >
-            <Phone size={12} style={{ color: '#475569' }} />
+            <Phone size={11.5} style={{ color: '#0284c7' }} />
             <span>{selectedSos.citizenPhone}</span>
           </a>
         </div>
 
-        {/* Section 2: Vị trí hiện trường */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-          <MapPin size={14} style={{ color: '#64748b', flexShrink: 0, marginTop: 2 }} />
-          <div style={{ fontSize: 12.5, fontWeight: 600, color: '#334155', lineHeight: 1.35, wordBreak: 'break-word' }}>
-            {selectedSos.locationName}
-          </div>
-        </div>
-
-        {/* Section 3: Hai ô thông tin nạn nhân kích thước đều nhau & không cắt chữ */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: secondaryTagLabel ? '1fr 1fr' : '1fr',
-            alignItems: 'stretch',
-            gap: 6,
-          }}
-        >
-          <div
+        {/* Section 2: Địa chỉ gọn + Huy hiệu nạn nhân & đối tượng ưu tiên */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+          <span
             style={{
-              ...uniformBoxStyle,
-              background: '#f8fafc',
-              color: '#0f172a',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+              fontSize: 11.5,
+              fontWeight: 700,
+              color: '#334155',
+              maxWidth: '100%',
+            }}
+            title={cleanLocationName}
+          >
+            <MapPin size={13} style={{ color: '#dc2626', flexShrink: 0 }} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cleanLocationName}</span>
+          </span>
+
+          <span style={{ color: '#cbd5e1', fontSize: 11 }}>•</span>
+
+          {/* Huy hiệu chính (Đỏ) */}
+          <span
+            style={{
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              padding: '1.5px 6px',
+              borderRadius: 4,
+              fontWeight: 900,
+              color: '#dc2626',
+              fontSize: 11,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
             }}
             title={`${selectedSos.affectedPeople} người gặp nạn`}
           >
-            <Users size={12.5} style={{ color: '#475569', flexShrink: 0 }} />
-            <span style={{ whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center' }}>
-              {selectedSos.affectedPeople} người gặp nạn
-            </span>
-          </div>
+            <span>🚨</span>
+            <span>{selectedSos.affectedPeople} người</span>
+          </span>
 
-          {secondaryTagLabel && (
-            <div
+          {secondaryTagLabel ? (
+            <span
               style={{
-                ...uniformBoxStyle,
-                background: '#f8fafc',
-                color: '#334155',
+                background: '#fefce8',
+                border: '1px solid #fde68a',
+                color: '#b45309',
+                fontSize: 11,
+                fontWeight: 800,
+                padding: '1.5px 6px',
+                borderRadius: 4,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 3,
               }}
               title={`Đối tượng ưu tiên: ${secondaryTagLabel}`}
             >
-              <AlertCircle size={12.5} style={{ color: '#64748b', flexShrink: 0 }} />
-              <span style={{ whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center' }}>
-                {secondaryTagLabel}
-              </span>
-            </div>
-          )}
+              <span>⚠️</span>
+              <span>{secondaryTagLabel}</span>
+            </span>
+          ) : null}
         </div>
 
-        {/* Section 5: Buttons Action Bar - Bằng kích thước với hàng ô phía trên */}
+        {/* Section 3: AI triage summary gọn 1-2 dòng */}
+        {(selectedSos.aiAssessment || selectedSos.riskAssessment) && (
+          <div
+            style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: 6,
+              padding: '4px 7px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 6,
+            }}
+            title={aiReasons.join(' • ')}
+          >
+            <div
+              style={{
+                fontSize: 10.5,
+                color: '#334155',
+                lineHeight: 1.35,
+                flex: 1,
+                minWidth: 0,
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}
+            >
+              <strong style={{ color: '#0f172a', fontWeight: 800 }}>
+                {isAiCompleted
+                  ? '✨ AI: '
+                  : selectedSos.aiAssessment?.status === 'PENDING'
+                  ? '⏳ AI đang phân tích...'
+                  : '⚠ Cần cán bộ phân loại: '}
+              </strong>
+              {selectedSos.aiAssessment?.status === 'UNAVAILABLE'
+                ? 'AI chưa khả dụng.'
+                : selectedSos.aiAssessment?.status === 'FAILED'
+                ? 'AI phân tích thất bại.'
+                : aiReasons.slice(0, 2).join(' • ')}
+            </div>
+            {selectedSos.priority !== 'UNASSESSED' && (
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 900,
+                  padding: '1px 5px',
+                  borderRadius: 4,
+                  background: '#eef2ff',
+                  color: '#3730a3',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                {selectedSos.priorityLockedByAuthority ? 'Đã xác minh' : `AI: ${priorityViLabel}`}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Section 5: Buttons Action Bar - Nằm gọn trên 1 dòng duy nhất không rớt chữ */}
         <div
           style={{
             display: 'grid',

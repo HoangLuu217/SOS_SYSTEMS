@@ -12,6 +12,7 @@ const {
 } = require('../models');
 const { emitSosUpdated } = require('../socket');
 const ApiError = require('../utils/apiError');
+const auditService = require('./audit.service');
 
 /**
  * Hàm trừ trực tiếp số lượng vật tư / trang thiết bị trong kho (Collection Equipment)
@@ -84,7 +85,7 @@ async function deductSuppliesFromEquipment(suppliesList, contextNote = '') {
       io.emit('equipment:updated');
       io.emit('equipment:change');
     }
-  } catch (e) {}
+  } catch (e) { }
 }
 
 class SosAssignmentService {
@@ -208,6 +209,15 @@ class SosAssignmentService {
     if (!team) {
       throw new ApiError(404, 'Không tìm thấy đội cứu hộ (Rescue Team)');
     }
+    if (!['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(String(sos.priority || '').toUpperCase())) {
+      throw new ApiError(400, 'SOS chưa có mức ưu tiên từ AI hoặc cán bộ xác minh; chưa thể điều động');
+    }
+    if (team.status !== 'ACTIVE' || team.operationalStatus === 'INACTIVE') {
+      throw new ApiError(400, 'Đội cứu hộ hiện không hoạt động và không thể nhận nhiệm vụ');
+    }
+    if (team.operationalStatus && team.operationalStatus !== 'READY') {
+      throw new ApiError(400, 'Đội cứu hộ chưa ở trạng thái sẵn sàng xuất phát; cần cập nhật trạng thái trước khi phân công');
+    }
 
     // 3. Kiểm tra Authority tồn tại (tự động kế thừa từ Team nếu thiếu)
     let authOrgId = authorityOrganizationId;
@@ -247,6 +257,7 @@ class SosAssignmentService {
 
     if (activeAssignment) {
       const activeCode =
+        activeAssignment.dispatchCode ||
         activeAssignment.sosRequestId?.sosCode ||
         activeAssignment.sosId?.sosCode ||
         'đang thực hiện';
@@ -256,20 +267,31 @@ class SosAssignmentService {
       );
     }
 
-    // 5. Kiểm tra Vehicle tồn tại (nếu có truyền hoặc lấy theo Đội)
+    // Revalidate phương tiện ngay lúc điều động; tình trạng có thể đã đổi sau khi
+    // dashboard tải danh sách gợi ý.
     let validVehicleId = null;
-    if (vehicleId && mongoose.Types.ObjectId.isValid(vehicleId)) {
-      const vehicle = await Vehicle.findById(vehicleId);
-      if (vehicle) validVehicleId = vehicle._id;
+    if (vehicleId) {
+      if (!mongoose.Types.ObjectId.isValid(vehicleId)) {
+        throw new ApiError(400, 'ID phương tiện không hợp lệ');
+      }
+      const vehicle = await Vehicle.findOne({
+        _id: vehicleId,
+        teamId: team._id,
+        status: 'AVAILABLE',
+      });
+      if (!vehicle) {
+        throw new ApiError(400, 'Phương tiện đã chọn không thuộc đội này hoặc hiện không sẵn sàng');
+      }
+      validVehicleId = vehicle._id;
     }
     if (!validVehicleId) {
-      const teamVehicle = await Vehicle.findOne({ teamId: team._id });
+      const teamVehicle = await Vehicle.findOne({ teamId: team._id, status: 'AVAILABLE' });
       if (teamVehicle) validVehicleId = teamVehicle._id;
     }
 
-    // Validate priority nếu có truyền
+    // Validate priority nếu có truyền (mặc định kế thừa priority đã chấm điểm từ SosRequest)
     const validPriorities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
-    const chosenPriority = priority ? String(priority).toUpperCase() : 'MEDIUM';
+    const chosenPriority = priority ? String(priority).toUpperCase() : sos.priority || 'MEDIUM';
     if (priority && !validPriorities.includes(chosenPriority)) {
       throw new ApiError(
         400,
@@ -313,7 +335,7 @@ class SosAssignmentService {
           changedBy: assignerId || rescuer._id,
           note: note || 'Điều phối phân công lực lượng cứu hộ',
         });
-      } catch (err) {}
+      } catch (err) { }
 
       emitSosUpdated(sos);
     }
@@ -336,7 +358,7 @@ class SosAssignmentService {
       (teamDoc?.members || []).forEach((m) => {
         if (m.rescuerId) targetUserIds.add(m.rescuerId.toString());
       });
-    } catch (_) {}
+    } catch (_) { }
 
     const assignPayload = assignment.toObject ? assignment.toObject() : { ...assignment };
     assignPayload.targetUserIds = Array.from(targetUserIds);
@@ -404,7 +426,7 @@ class SosAssignmentService {
               assignmentId: assignment._id,
             },
           });
-        } catch (_) {}
+        } catch (_) { }
       }
 
       // 2. Gửi Push Notification ra màn hình khóa điện thoại (Expo Push Service)
@@ -673,7 +695,7 @@ class SosAssignmentService {
               changedBy: currentUser?._id || assignment.rescuerId,
               note: 'Cứu hộ viên đã tiếp nhận nhiệm vụ',
             });
-          } catch (err) {}
+          } catch (err) { }
         }
 
         try {
@@ -683,7 +705,7 @@ class SosAssignmentService {
             { path: 'vehicleId', select: 'plateNumber type capacity' },
             { path: 'authorityOrganizationId', select: 'name code' },
           ]);
-        } catch (popErr) {}
+        } catch (popErr) { }
 
         const sosObj = sos.toObject ? sos.toObject() : { ...sos };
         if (assignment.missionType === 'SHORE_HANDOFF') {
@@ -702,10 +724,125 @@ class SosAssignmentService {
       if (io) {
         io.emit('assignment:status_updated', assignment);
         io.emit('assignment:updated', assignment);
+        if (assignment.missionType === 'RELIEF_DISPATCH' || !sosId) {
+          io.emit('sos:sync', {
+            type: 'RELIEF_MISSION',
+            assignmentId: assignment._id.toString(),
+            status: 'ACCEPTED',
+          });
+          io.emit('equipment:updated');
+        }
       }
-    } catch (err) {}
+    } catch (err) { }
 
     return assignment;
+  }
+
+  /**
+   * Tự động hoàn trả thiết bị / nhu yếu phẩm về kho khi lệnh điều phối bị từ chối hoặc hủy
+   */
+  async restoreReliefSuppliesToWarehouse(assignment, currentUser = null, reason = '', targetStatus = 'REJECTED') {
+    if (!assignment || assignment.inventoryRestored) {
+      return { restoredCount: 0, restoredItems: [] };
+    }
+    const supplies = Array.isArray(assignment.supplies) ? assignment.supplies : [];
+    if (supplies.length === 0) {
+      return { restoredCount: 0, restoredItems: [] };
+    }
+
+    const reasonText = String(reason || '').trim();
+    const actionLabel = targetStatus === 'REJECTED' ? 'Leader từ chối lệnh' : 'Hủy lệnh điều phối';
+    const restoreNote = `[Hoàn kho - ${actionLabel}${reasonText ? `: ${reasonText}` : ''}]`;
+
+    const restoredItems = [];
+    const updatedWarehouseDocs = [];
+    let resolvedAreaId = null;
+
+    for (const item of supplies) {
+      const qty = Number(item?.quantity) || 0;
+      const supplyId = item?.supplyId;
+      if (qty <= 0 || !supplyId || !mongoose.Types.ObjectId.isValid(supplyId)) {
+        continue;
+      }
+
+      const warehouseDoc = await Equipment.findById(supplyId);
+      if (!warehouseDoc) continue;
+
+      if (!resolvedAreaId && warehouseDoc.areaId) {
+        resolvedAreaId = warehouseDoc.areaId;
+      }
+
+      warehouseDoc.quantity = (Number(warehouseDoc.quantity) || 0) + qty;
+      if ((warehouseDoc.status === 'DAMAGED' || warehouseDoc.status === 'OUT_OF_STOCK') && warehouseDoc.quantity > 0) {
+        warehouseDoc.status = 'AVAILABLE';
+      }
+      const itemTag = `${restoreNote} +${qty} ${warehouseDoc.unit || item.unit || 'cái'}`;
+      warehouseDoc.note = warehouseDoc.note ? `${warehouseDoc.note} | ${itemTag}` : itemTag;
+      await warehouseDoc.save();
+      updatedWarehouseDocs.push(warehouseDoc);
+
+      // Nếu thiết bị DURABLE đã cấp tạm trạng thái IN_USE cho đội, thu hồi / giảm lại tương ứng
+      if (warehouseDoc.supplyType === 'DURABLE' && assignment.rescueTeamId) {
+        const teamId = assignment.rescueTeamId._id || assignment.rescueTeamId;
+        const teamInUseDoc = await Equipment.findOne({
+          teamId,
+          category: warehouseDoc.category,
+          name: warehouseDoc.name,
+          status: 'IN_USE',
+        });
+        if (teamInUseDoc) {
+          if ((Number(teamInUseDoc.quantity) || 0) <= qty) {
+            await teamInUseDoc.deleteOne();
+          } else {
+            teamInUseDoc.quantity -= qty;
+            await teamInUseDoc.save();
+          }
+        }
+      }
+
+      restoredItems.push({
+        equipmentId: warehouseDoc._id.toString(),
+        name: warehouseDoc.name || item.name || 'Vật tư',
+        category: warehouseDoc.category || null,
+        supplyType: warehouseDoc.supplyType || null,
+        quantity: qty,
+        unit: warehouseDoc.unit || item.unit || 'cái',
+      });
+    }
+
+    if (restoredItems.length > 0) {
+      try {
+        await auditService.log({
+          actorId: currentUser?._id || assignment.rescuerId,
+          actorRole: currentUser?.role || 'RESCUE_LEADER',
+          action: 'RELIEF_DISPATCH_INVENTORY_RESTORED',
+          entityType: 'Equipment',
+          entityId: assignment._id,
+          areaId: resolvedAreaId,
+          metadata: {
+            assignmentId: assignment._id.toString(),
+            assignmentCode: assignment.code || null,
+            missionType: assignment.missionType,
+            triggerStatus: targetStatus,
+            reason: reasonText || null,
+            restoredItems,
+          },
+        });
+      } catch (_) { }
+
+      try {
+        const { getIO } = require('../socket');
+        const io = getIO();
+        if (io) {
+          for (const doc of updatedWarehouseDocs) {
+            io.emit('equipment:updated', doc);
+          }
+          io.emit('sos:sync', { type: 'RELIEF_INVENTORY_RESTORED', assignmentId: assignment._id });
+        }
+      } catch (_) { }
+    }
+
+    return { restoredCount: restoredItems.length, restoredItems };
   }
 
   /**
@@ -855,8 +992,30 @@ class SosAssignmentService {
     if (targetStatus === 'COMPLETED' && !assignment.completedAt) {
       assignment.completedAt = now;
     }
-    if (targetStatus === 'CANCELLED' && !assignment.cancelledAt) {
+    if ((targetStatus === 'CANCELLED' || targetStatus === 'REJECTED') && !assignment.cancelledAt) {
       assignment.cancelledAt = now;
+    }
+    if ((targetStatus === 'CANCELLED' || targetStatus === 'REJECTED') && (note || extraData?.reason) && !assignment.cancelReason) {
+      assignment.cancelReason = String(note || extraData.reason).trim();
+    }
+
+    // Tự động hoàn kho khi Leader từ chối hoặc lệnh điều phối bị hủy
+    if (
+      (targetStatus === 'REJECTED' || targetStatus === 'CANCELLED') &&
+      !assignment.inventoryRestored &&
+      (assignment.missionType === 'RELIEF_DISPATCH' ||
+        (Array.isArray(assignment.supplies) && assignment.supplies.length > 0))
+    ) {
+      const { restoredCount } = await this.restoreReliefSuppliesToWarehouse(
+        assignment,
+        currentUser,
+        note || extraData?.reason || assignment.cancelReason || '',
+        targetStatus
+      );
+      if (restoredCount > 0) {
+        assignment.inventoryRestored = true;
+        assignment.inventoryRestoredAt = now;
+      }
     }
 
     // Lưu các thông tin minh bạch bàn giao vật tư / hiện trường nếu có
@@ -1016,7 +1175,7 @@ class SosAssignmentService {
                   : note || `Cứu hộ viên cập nhật tiến trình: ${targetStatus}`,
               images: extraData?.proofImages || [],
             });
-          } catch (err) {}
+          } catch (err) { }
         }
 
         try {
@@ -1026,7 +1185,7 @@ class SosAssignmentService {
             { path: 'vehicleId', select: 'plateNumber type capacity' },
             { path: 'authorityOrganizationId', select: 'name code' },
           ]);
-        } catch (popErr) {}
+        } catch (popErr) { }
 
         const sosObj = sos.toObject ? sos.toObject() : { ...sos };
         if (assignment.missionType === 'SHORE_HANDOFF') {
@@ -1045,8 +1204,16 @@ class SosAssignmentService {
       if (io) {
         io.emit('assignment:status_updated', assignment);
         io.emit('assignment:updated', assignment);
+        if (assignment.missionType === 'RELIEF_DISPATCH' || !sosId) {
+          io.emit('sos:sync', {
+            type: 'RELIEF_MISSION',
+            assignmentId: assignment._id.toString(),
+            status: targetStatus,
+          });
+          io.emit('equipment:updated');
+        }
       }
-    } catch (err) {}
+    } catch (err) { }
 
     return assignment;
   }
@@ -1428,7 +1595,7 @@ class SosAssignmentService {
             images: extraData?.proofImages || [],
           });
         }
-      } catch (err) {}
+      } catch (err) { }
 
       emitSosUpdated(sos);
       return { sos };
@@ -1493,6 +1660,8 @@ class SosAssignmentService {
           assignmentId: assignment._id,
           sosId: assignment.sosRequestId,
           sosCode: populated?.sosRequestId?.sosCode,
+          sosId: assignment.sosRequestId || null,
+          sosCode: populated?.dispatchCode || populated?.sosRequestId?.sosCode || null,
           teamName: populated?.rescueTeamId?.name,
           requestedSupplies: assignment.requestedSupplies,
         });
@@ -1503,7 +1672,7 @@ class SosAssignmentService {
         });
         io.emit('sos:sync');
       }
-    } catch (e) {}
+    } catch (e) { }
 
     return populated || assignment;
   }
@@ -1553,7 +1722,7 @@ class SosAssignmentService {
       }));
       await deductSuppliesFromEquipment(
         approvedItemsToDeduct,
-        "Chi viện bổ sung ca " + (assignment.sosRequestId?.sosCode || assignment.sosRequestId || assignment._id)
+        "Chi viện bổ sung ca " + (assignment.dispatchCode || assignment.sosRequestId?.sosCode || assignment.sosRequestId || assignment._id)
       );
     } catch (e) {
       console.warn("Lỗi trừ kho vật tư khi duyệt chi viện:", e);
@@ -1575,7 +1744,7 @@ class SosAssignmentService {
         });
         io.emit('sos:sync');
       }
-    } catch (e) {}
+    } catch (e) { }
 
     return populated || assignment;
   }
@@ -1609,7 +1778,7 @@ class SosAssignmentService {
         });
         io.emit('sos:sync');
       }
-    } catch (e) {}
+    } catch (e) { }
 
     return assignment;
   }

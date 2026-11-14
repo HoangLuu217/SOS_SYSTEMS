@@ -1133,6 +1133,86 @@ export const CitizenSosTrackingModal: React.FC<CitizenSosTrackingModalProps> = (
                 </View>
               </View>
 
+              {/* Đánh giá mức độ nguy hiểm từ hệ thống AI & Thuật toán */}
+              {(() => {
+                const prio = sos?.priority || 'UNASSESSED';
+                const reasons: string[] = Array.isArray(sos?.riskAssessment?.reasons)
+                  ? sos.riskAssessment.reasons
+                  : Array.isArray(sos?.aiAssessment?.reasons)
+                    ? sos.aiAssessment.reasons
+                  : [];
+                const aiIsPending = sos?.aiAssessment?.status === 'PENDING';
+                const prioLabel =
+                  prio === 'CRITICAL'
+                    ? 'NGUY CẤP'
+                    : prio === 'HIGH'
+                      ? 'KHẨN CẤP'
+                    : prio === 'LOW'
+                        ? 'MỨC THẤP'
+                      : prio === 'UNASSESSED'
+                        ? 'ĐANG PHÂN LOẠI'
+                        : 'TRUNG BÌNH';
+                const prioColor =
+                  prio === 'CRITICAL'
+                    ? '#DC2626'
+                    : prio === 'HIGH'
+                      ? '#EA580C'
+                      : prio === 'LOW'
+                        ? '#0284C7'
+                        : '#CA8A04';
+                const prioBg =
+                  prio === 'CRITICAL'
+                    ? '#FEF2F2'
+                    : prio === 'HIGH'
+                      ? '#FFF7ED'
+                      : prio === 'LOW'
+                        ? '#F0F9FF'
+                        : '#FEFCE8';
+
+                return (
+                  <View
+                    style={{
+                      marginTop: 10,
+                      padding: 10,
+                      borderRadius: 10,
+                      backgroundColor: prioBg,
+                      borderWidth: 1,
+                      borderColor: prioColor + '33',
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
+                        Mức SOS {sos?.priorityLockedByAuthority ? '(Cán bộ xác minh)' : '(AI đề xuất)'}:
+                      </Text>
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: prioColor }}>
+                        {prioLabel}
+                      </Text>
+                    </View>
+                    {reasons.length > 0 && (
+                      <Text style={{ fontSize: 11.5, color: '#475569', marginTop: 4, lineHeight: 16 }}>
+                        • {reasons.slice(0, 2).join('\n• ')}
+                      </Text>
+                    )}
+                    {aiIsPending && (
+                      <Text style={{ fontSize: 10.5, color: '#64748B', marginTop: 4 }}>
+                        AI đang phân tích SOS; mức ưu tiên sẽ được cập nhật khi có kết quả.
+                      </Text>
+                    )}
+                    {sos?.aiAssessment?.status === 'UNAVAILABLE' && (
+                      <Text style={{ fontSize: 10.5, color: '#92400e', marginTop: 4 }}>AI chưa khả dụng; cán bộ cần phân loại SOS.</Text>
+                    )}
+                    {sos?.aiAssessment?.status === 'FAILED' && (
+                      <Text style={{ fontSize: 10.5, color: '#b91c1c', marginTop: 4 }}>AI chưa phân tích được; cán bộ cần xem xét SOS.</Text>
+                    )}
+                    {sos?.aiAssessment?.status === 'COMPLETED' && (
+                      <Text style={{ fontSize: 10.5, color: '#4338CA', marginTop: 4 }}>
+                        AI đề xuất: {sos.aiAssessment.recommendedPriority || 'chưa phân loại'}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })()}
+
               {/* Danh sách đối tượng ưu tiên */}
               {priorityGroups && priorityGroups.length > 0 && (
                 <View style={styles.priorityBox}>

@@ -149,6 +149,7 @@ function mapBackendTeamToDomain(t: any): RescueTeam {
       status: mapRescuerStatus(rescuerObj?.status),
       teamId: t._id,
       phone: rPhone,
+      skills: Array.isArray(rescuerObj?.rescuer?.skills) ? rescuerObj.rescuer.skills : [],
       email: rescuerObj?.email || (isLeaderMember ? leaderObj?.email : undefined),
       specialty: rescuerObj?.rescuer?.specialty,
       coordinates: rCoords,
@@ -179,6 +180,7 @@ function mapBackendTeamToDomain(t: any): RescueTeam {
       status: mapRescuerStatus(leaderObj?.status),
       teamId: t._id,
       phone: leaderPhone,
+      skills: Array.isArray(leaderObj?.rescuer?.skills) ? leaderObj.rescuer.skills : [],
       email: leaderObj?.email,
       specialty: leaderObj?.rescuer?.specialty,
       coordinates: leaderCoords,
@@ -203,11 +205,20 @@ function mapBackendTeamToDomain(t: any): RescueTeam {
       )
     : undefined;
 
+  const aggregatedSkills = Array.from(
+    new Set(rescuers.flatMap((r: any) => (Array.isArray(r.skills) ? r.skills : [])))
+  ) as string[];
+
+  const baseCoords =
+    t.baseLocation?.coordinates && Array.isArray(t.baseLocation.coordinates) && t.baseLocation.coordinates.length === 2
+      ? { lat: Number(t.baseLocation.coordinates[1]), lng: Number(t.baseLocation.coordinates[0]) }
+      : null;
+
   return {
     id: t._id,
     name: t.name,
     code: extractedCode,
-    teamType: t.type,
+    teamType: t.type || 'WATER_RESCUE',
     teamStatus: t.status,
     description: t.description,
     authorityOrganizationId: authObj?._id || t.authorityId || '',
@@ -220,6 +231,9 @@ function mapBackendTeamToDomain(t: any): RescueTeam {
     wardId: rawAreaId,
     wardName: areaName,
     districtName: parentAreaObj?.name || areaName,
+    skills: aggregatedSkills,
+    equipments: Array.isArray(t.equipments) ? t.equipments : [],
+    baseCoordinates: baseCoords,
   };
 }
 
@@ -234,20 +248,43 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
   const resolvedParentId =
     teamParentAreaObj?._id || (typeof teamAreaObj?.parentId === 'string' ? teamAreaObj.parentId : '') || '';
 
+  const rawType = String(v.type || 'OTHER').toUpperCase();
   let vType: 'Inflatable Boat' | 'Tactical Truck' | 'Ambulance' | 'Amphibious Vehicle' = 'Inflatable Boat';
-  if (v.type === 'BOAT') vType = 'Inflatable Boat';
-  else if (v.type === 'AMBULANCE') vType = 'Ambulance';
-  else if (v.type === 'TRUCK') vType = 'Tactical Truck';
+  if (['BOAT', 'MOTORBOAT', 'COMPOSITE_BOAT', 'RUBBER_BOAT', 'INFLATABLE_BOAT', 'ROWBOAT', 'LIFE_RAFT', 'JET_SKI'].includes(rawType)) {
+    vType = 'Inflatable Boat';
+  } else if (rawType === 'AMBULANCE') {
+    vType = 'Ambulance';
+  } else if (rawType === 'AMPHIBIOUS_VEHICLE') {
+    vType = 'Amphibious Vehicle';
+  } else if (['TRUCK', 'PICKUP_4X4', 'PICKUP_TRUCK', 'HIGH_CLEARANCE_TRUCK'].includes(rawType)) {
+    vType = 'Tactical Truck';
+  }
 
-  const typeLabel = v.type === 'BOAT' ? 'Ca-nô' : v.type === 'AMBULANCE' ? 'Xe Cứu Thương' : 'Xe Tác Chiến';
+  const typeLabelMap: Record<string, string> = {
+    BOAT: 'Ca-nô',
+    MOTORBOAT: 'Xuồng máy',
+    COMPOSITE_BOAT: 'Xuồng Composite',
+    RUBBER_BOAT: 'Xuồng cao su',
+    INFLATABLE_BOAT: 'Thuyền hơi',
+    JET_SKI: 'Mô-tô nước',
+    AMPHIBIOUS_VEHICLE: 'Xe lội nước',
+    AMBULANCE: 'Xe Cứu Thương',
+    PICKUP_4X4: 'Bán tải 4x4',
+    HIGH_CLEARANCE_TRUCK: 'Xe tải gầm cao',
+    TRUCK: 'Xe Tác Chiến',
+  };
+  const typeLabel = typeLabelMap[rawType] || 'Phương tiện';
 
   return {
     id: v._id,
     name: `${typeLabel} ${v.plateNumber}`,
     plate: v.plateNumber,
     type: vType,
-    status: v.status === 'AVAILABLE' ? 'Available' : 'In Mission',
+    rawType,
+    status: v.status === 'AVAILABLE' ? 'Available' : v.status === 'MAINTENANCE' ? 'Maintenance' : 'In Mission',
     capacity: `${v.capacity || 6} người`,
+    numericCapacity: Number(v.capacity) || 6,
+    terrainCapabilities: Array.isArray(v.terrainCapabilities) ? v.terrainCapabilities : [],
     teamId,
     teamName,
     districtId: resolvedParentId || resolvedAreaId,
@@ -301,18 +338,18 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
           const itemAreaId = areaObj?._id || (typeof item.areaId === 'string' ? item.areaId : '') || '';
           const itemAreaName = areaObj?.name || item.address || '';
 
-          // Chuẩn hóa loại khẩn cấp sang định dạng UPPERCASE chuẩn (MEDICAL, FLOOD, FIRE, RESCUE, ...)
-          const rawType = (item.emergencyType || 'RESCUE').toUpperCase();
+          // Chuẩn hóa loại khẩn cấp sang định dạng UPPERCASE giữ nguyên đúng loại từ Backend (FLOOD, MEDICAL, LANDSLIDE, EVACUATION, FOOD, RELIEF, OTHER...)
+          const rawType = (item.emergencyType || 'FLOOD').toUpperCase();
           const emergencyType =
-            rawType === 'FLOOD' || rawType === 'NGAP_LUT'
+            rawType === 'NGAP_LUT'
               ? 'FLOOD'
-              : rawType === 'FIRE' || rawType === 'CHAY'
+              : rawType === 'CHAY'
               ? 'FIRE'
-              : rawType === 'MEDICAL' || rawType === 'Y_TE'
+              : rawType === 'Y_TE'
               ? 'MEDICAL'
-              : rawType === 'POLICE'
-              ? 'POLICE'
-              : 'RESCUE';
+              : ['FLOOD', 'MEDICAL', 'LANDSLIDE', 'EVACUATION', 'FOOD', 'RELIEF', 'OTHER', 'FIRE', 'POLICE', 'RESCUE'].includes(rawType)
+              ? rawType
+              : 'OTHER';
 
 
           // Đồng bộ thông tin khu vực hành chính từ CSDL của chính ca SOS (không gán đè bằng khu vực của cán bộ)
@@ -335,7 +372,15 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
             timeAgo,
             createdAt: item.createdAt,
             emergencyType: emergencyType as any,
-            priority: (item.priority || 'HIGH') as any,
+            emergencyTypes: Array.isArray(item.emergencyTypes) ? item.emergencyTypes : undefined,
+            priority: (item.priority || 'UNASSESSED') as any,
+            priorityLockedByAuthority: Boolean(item.priorityLockedByAuthority),
+            riskScore: typeof item.riskScore === 'number' ? item.riskScore : undefined,
+            effectiveRiskScore: typeof item.effectiveRiskScore === 'number' ? item.effectiveRiskScore : undefined,
+            waitEscalationBonus: typeof item.waitEscalationBonus === 'number' ? item.waitEscalationBonus : undefined,
+            riskBreakdown: item.riskBreakdown || null,
+            riskAssessment: item.riskAssessment || null,
+            aiAssessment: item.aiAssessment || null,
             title: (() => {
               const rawDesc = item.description || '';
               if (rawDesc.includes('[Loại yêu cầu:')) {
@@ -987,39 +1032,59 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
   }) => {
     if (!selectedSos) return;
 
-    // Đồng bộ lên backend trước nếu là ca SOS thật để tránh báo xuất kích thành công giả khi server lỗi
+    // Đồng bộ lên backend trước nếu là ca SOS thật (hỗ trợ điều phối đơn đội hoặc phối hợp đa đội)
     if (selectedSos.id && !selectedSos.id.startsWith('sos-')) {
-      const primaryTeamId = params.rescueTeamId.split(',')[0].trim();
-      const foundTeam = rescueTeams.find((t) => t.id === primaryTeamId);
-      const realTeamId = foundTeam?.id && !foundTeam.id.startsWith('team-') ? foundTeam.id : '';
+      const selectedIds = params.rescueTeamId
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean);
 
-      if (!realTeamId) {
+      if (selectedIds.length === 0) {
         showToast('Đội cứu hộ được chọn chưa đồng bộ từ máy chủ hoặc không tồn tại!', 'error');
         return;
       }
 
-      const realRescuerId =
-        params.rescuerId && !params.rescuerId.startsWith('rescuer-')
-          ? params.rescuerId
-          : foundTeam?.rescuers?.find((r) => r.id && !r.id.startsWith('rescuer-'))?.id;
-
-      const realVehicleId =
-        params.vehicleId && !params.vehicleId.startsWith('veh-')
-          ? params.vehicleId
-          : undefined;
-
       try {
-        await assignSosApi(selectedSos.id, {
-          authorityOrganizationId:
-            params.authorityOrganizationId && !params.authorityOrganizationId.startsWith('auth-')
-              ? params.authorityOrganizationId
-              : undefined,
-          rescueTeamId: realTeamId,
-          rescuerId: realRescuerId,
-          vehicleId: realVehicleId,
-          note: `Lệnh điều động khẩn cấp từ Ban Chỉ Huy PCTT ${activeOfficer.jurisdictionAreaName || ''}`,
-          supplies: params.supplies,
-        });
+        for (let idx = 0; idx < selectedIds.length; idx++) {
+          const teamIdItem = selectedIds[idx];
+          const foundTeam = rescueTeams.find((t) => t.id === teamIdItem);
+          const realTeamId = foundTeam?.id && !foundTeam.id.startsWith('team-') ? foundTeam.id : '';
+
+          if (!realTeamId) {
+            showToast('Đội cứu hộ được chọn chưa đồng bộ từ máy chủ hoặc không tồn tại!', 'error');
+            return;
+          }
+
+          const realRescuerId =
+            idx === 0 && params.rescuerId && !params.rescuerId.startsWith('rescuer-')
+              ? params.rescuerId
+              : foundTeam?.rescuers?.find((r) => r.id && !r.id.startsWith('rescuer-'))?.id;
+
+          const teamVehicle =
+            vehicles.find((v) => v.teamId === teamIdItem && v.status === 'Available') ||
+            vehicles.find((v) => v.teamId === teamIdItem);
+          const realVehicleId =
+            idx === 0 && params.vehicleId && !params.vehicleId.startsWith('veh-')
+              ? params.vehicleId
+              : teamVehicle?.id && !teamVehicle.id.startsWith('veh-')
+              ? teamVehicle.id
+              : undefined;
+
+          await assignSosApi(selectedSos.id, {
+            authorityOrganizationId:
+              params.authorityOrganizationId && !params.authorityOrganizationId.startsWith('auth-')
+                ? params.authorityOrganizationId
+                : undefined,
+            rescueTeamId: realTeamId,
+            rescuerId: realRescuerId,
+            vehicleId: realVehicleId,
+            note:
+              selectedIds.length > 1
+                ? `Phối hợp đa đội (${idx + 1}/${selectedIds.length}) từ Ban Chỉ Huy PCTT ${activeOfficer.jurisdictionAreaName || ''}`
+                : `Lệnh điều động khẩn cấp từ Ban Chỉ Huy PCTT ${activeOfficer.jurisdictionAreaName || ''}`,
+            supplies: idx === 0 ? params.supplies : [],
+          });
+        }
         domainDService.assignSos(selectedSos.id, params);
         setSosRequests(domainDService.getSosRequests());
         showToast(`Đã xuất kích ${params.rescueTeamName} ứng cứu ca ${selectedSos.sosCode}!`, 'success');

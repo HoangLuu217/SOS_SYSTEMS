@@ -17,6 +17,12 @@ router.get('/', equipmentController.getEquipments);
 router.get('/summary/:teamId', equipmentController.getTeamSummary);
 
 /**
+ * @route  GET /equipments/dispatch-history
+ * @desc   Lịch sử Phiếu xuất kho & Lệnh điều phối tiếp tế
+ */
+router.get('/dispatch-history', authenticate, authorize('LOCAL_AUTHORITY', 'ADMIN'), equipmentController.getDispatchHistory);
+
+/**
  * @route  GET /equipments/:id
  * @desc   Lay chi tiet 1 vat tu
  */

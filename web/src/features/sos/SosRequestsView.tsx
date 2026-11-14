@@ -31,6 +31,7 @@ import {
   fetchVehicles,
   deleteSosRequestApi,
   clearCancelledSosApi,
+  reanalyzeSosAiApi,
 } from '@/api';
 import { onSosCreated, onSosUpdated, onSosDeleted, getSocket } from '@/services/socketService';
 import { EMERGENCY_TYPE_LABELS } from '@/features/hazards';
@@ -968,6 +969,24 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           <div className="code-line">
                             {isCritical && <span className="beacon-radar-dot" />}
                             <span className="code-mono">{sos.sosCode}</span>
+                            {(sos.priority === 'UNASSESSED' || sos.aiAssessment?.status === 'COMPLETED') && (
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 800,
+                                  padding: '1px 5px',
+                                  borderRadius: 4,
+                                  marginLeft: 4,
+                                  background: sos.priority === 'UNASSESSED' ? '#fff7ed' : '#eef2ff',
+                                  color: sos.priority === 'UNASSESSED' ? '#c2410c' : '#3730a3',
+                                }}
+                                title={(sos.riskAssessment?.reasons || sos.aiAssessment?.reasons || []).join(' • ')}
+                              >
+                                {sos.priority === 'UNASSESSED'
+                                  ? sos.aiAssessment?.status === 'PENDING' ? 'AI đang phân tích' : 'Cần phân loại'
+                                  : 'AI'}
+                              </span>
+                            )}
                           </div>
                           <div className="meta-line">
                             <span className="time-text">{timeAgoText}</span>
@@ -1251,7 +1270,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 ) : null}
 
                 <span className={`sos-panel-priority ${selectedSosDetail.priority.toLowerCase()}`}>
-                  {selectedSosDetail.priority === 'CRITICAL' ? 'NGUY CẤP' : selectedSosDetail.priority === 'HIGH' ? 'KHẨN CẤP' : 'TRUNG BÌNH'}
+                  {selectedSosDetail.priority === 'UNASSESSED' ? 'CHỜ PHÂN LOẠI' : selectedSosDetail.priority === 'CRITICAL' ? 'NGUY CẤP' : selectedSosDetail.priority === 'HIGH' ? 'KHẨN CẤP' : selectedSosDetail.priority === 'LOW' ? 'THẤP' : 'TRUNG BÌNH'}
                 </span>
               </div>
               <button
@@ -1266,6 +1285,98 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
 
             {/* Body Panel Cuộn */}
             <div className="sos-panel-body">
+              {/* BLOCK 0: PHÂN TÍCH SOS BẰNG AI */}
+              {(selectedSosDetail.aiAssessment || selectedSosDetail.riskAssessment) && (
+                <div className="sos-panel-card" style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%)', borderColor: '#bae6fd' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <div className="sos-panel-card-title" style={{ marginBottom: 0 }}>
+                      <span>✨</span>
+                      <span>PHÂN TÍCH SOS BẰNG AI</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span
+                        style={{
+                          fontSize: 11.5,
+                          fontWeight: 900,
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          background:
+                            selectedSosDetail.priority === 'CRITICAL'
+                              ? '#fee2e2'
+                              : selectedSosDetail.priority === 'HIGH'
+                              ? '#ffedd5'
+                              : '#fef3c7',
+                          color:
+                            selectedSosDetail.priority === 'CRITICAL'
+                              ? '#b91c1c'
+                              : selectedSosDetail.priority === 'HIGH'
+                              ? '#c2410c'
+                              : '#b45309',
+                        }}
+                      >
+                        {selectedSosDetail.priority === 'UNASSESSED' ? 'CHƯA PHÂN LOẠI' : selectedSosDetail.priority}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const res = await reanalyzeSosAiApi(selectedSosDetail._id);
+                            if (res?.success && res.data) {
+                              setSelectedSosDetail(res.data);
+                              loadData();
+                            }
+                          } catch {}
+                        }}
+                        style={{
+                          fontSize: 10.5,
+                          fontWeight: 800,
+                          padding: '2px 7px',
+                          borderRadius: 5,
+                          border: '1px solid #c7d2fe',
+                          background: '#ffffff',
+                          color: '#3730a3',
+                          cursor: 'pointer',
+                        }}
+                        title="Chạy lại phân tích AI Gemini cho ca này"
+                      >
+                        Phân tích lại AI
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 5, fontSize: 10.5, color: '#475569' }}>
+                    {selectedSosDetail.priorityLockedByAuthority
+                      ? 'Mức ưu tiên đã được cán bộ xác minh.'
+                      : selectedSosDetail.priority === 'UNASSESSED'
+                        ? 'Chưa có mức ưu tiên; cần AI phân tích hoặc cán bộ phân loại thủ công.'
+                        : 'Mức ưu tiên hiện tại do AI đề xuất.'}
+                    {selectedSosDetail.riskAssessment?.priorityOutdatedByNewInfo &&
+                      ' Thông tin SOS đã thay đổi sau khi xác minh; cần cán bộ xem lại mức ưu tiên.'}
+                    {selectedSosDetail.aiAssessment?.status === 'PENDING' && ' AI đang phân tích; kết quả chưa hoàn tất.'}
+                    {selectedSosDetail.aiAssessment?.status === 'FAILED' && ' AI phân tích thất bại; cần cán bộ đánh giá thủ công.'}
+                    {selectedSosDetail.aiAssessment?.status === 'UNAVAILABLE' && ' AI chưa được cấu hình; cần cán bộ đánh giá thủ công.'}
+                  </div>
+                  {(selectedSosDetail.riskAssessment?.reasons || selectedSosDetail.aiAssessment?.reasons || []).length > 0 && (
+                    <ul style={{ margin: '8px 0 0', paddingLeft: 16, fontSize: 12, color: '#334155', lineHeight: 1.45 }}>
+                      {(selectedSosDetail.riskAssessment?.reasons || selectedSosDetail.aiAssessment?.reasons || []).map((r, i) => (
+                        <li key={i}>{r}</li>
+                      ))}
+                    </ul>
+                  )}
+                  {selectedSosDetail.aiAssessment?.status === 'COMPLETED' && (
+                    <div style={{ marginTop: 7, paddingTop: 6, borderTop: '1px solid #dbeafe', fontSize: 11, color: '#3730a3' }}>
+                      AI đề xuất: {selectedSosDetail.aiAssessment.recommendedPriority || 'chưa phân loại'}
+                      {selectedSosDetail.aiAssessment.confidence && ` • Mức chắc chắn tự đánh giá: ${selectedSosDetail.aiAssessment.confidence.toLowerCase()} (chưa hiệu chuẩn)`}
+                      {selectedSosDetail.aiAssessment.evidence?.length ? (
+                        <div style={{ marginTop: 3, color: '#475569' }}>Căn cứ AI: {selectedSosDetail.aiAssessment.evidence.join(' • ')}</div>
+                      ) : null}
+                      {selectedSosDetail.aiAssessment.unknowns?.length ? (
+                        <div style={{ marginTop: 3, color: '#92400e' }}>Chưa rõ: {selectedSosDetail.aiAssessment.unknowns.join(' • ')}</div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* BLOCK 1: LỰC LƯỢNG CỨU HỘ PHỤ TRÁCH (THÔNG TIN ĐỘI NÀO ĐI CỨU) */}
               <div className="sos-panel-card rescue-team-card">
                 <div className="sos-panel-card-title">
