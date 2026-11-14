@@ -1,10 +1,11 @@
 import type { AdministrativeArea, GeoJsonPolygon } from '@/types/domainD';
-import { fetchAreaBoundary, syncAdministrativeAreasToBackend } from '@/api';
+import { fetchAreaBoundary, fetchProvinceMapBundle, syncAdministrativeAreasToBackend } from '@/api';
+import { SOVEREIGN_ISLANDS_GEOJSON } from '@/constants/sovereignIslandsGeoJSON';
 
 export const GEOAPIFY_BOUNDARIES_URL =
   'https://api.geoapify.com/v1/boundaries/consists-of?id=51ce209969560e5b405949be124889113040f00101f9015adc1c0000000000c002089203185468c3a06e68207068e1bb9120c490c3a0204ee1bab56e67&boundary=administrative&sublevel=1&geometry=geometry_1000&lang=vi&apiKey=3383e3ba2267489985bbe6d9bf7aa05d';
 
-export const GEOAPIFY_CACHE_KEY = 'rescuesos_geoapify_areas_cache_v2';
+export const GEOAPIFY_CACHE_KEY = 'rescuesos_geoapify_areas_cache_v4';
 
 // 24 Curated Modern Cartographic Color Schemes to clearly distinguish regions visually
 export const REGION_COLOR_PALETTES = [
@@ -58,10 +59,20 @@ export function slugifyVietnamese(text: string): string {
     .replace(/^-|-$/g, '');
 }
 
+const HOANG_SA_ISLAND_MULTI_COORDS: number[][][][] = SOVEREIGN_ISLANDS_GEOJSON.features
+  .filter(
+    (f) =>
+      f.properties?.archipelago === 'Hoàng Sa' &&
+      f.properties?.type === 'island' &&
+      f.geometry?.type === 'Polygon' &&
+      Array.isArray((f.geometry as any).coordinates)
+  )
+  .map((f) => (f.geometry as any).coordinates as number[][][]);
+
 export const HOANG_SA_ISLAND_AREA: AdministrativeArea = {
   id: 'area-hs',
-  name: 'Huyện Hoàng Sa',
-  code: 'VN-HS',
+  name: 'Đặc khu Hoàng Sa',
+  code: 'VN48-20333',
   type: 'DISTRICT',
   parentId: null,
   status: 'ACTIVE',
@@ -70,16 +81,8 @@ export const HOANG_SA_ISLAND_AREA: AdministrativeArea = {
   population: 500,
   activeRescueTeams: 6,
   boundary: {
-    type: 'Polygon',
-    coordinates: [
-      [
-        [111.0, 15.5],
-        [113.0, 15.5],
-        [113.0, 17.5],
-        [111.0, 17.5],
-        [111.0, 15.5],
-      ],
-    ],
+    type: 'MultiPolygon',
+    coordinates: HOANG_SA_ISLAND_MULTI_COORDS,
   },
 };
 
@@ -202,6 +205,12 @@ export const INITIAL_GEOAPIFY_AREAS: AdministrativeArea[] = [];
 // Fetch live from the Geoapify API URL
 export async function fetchGeoapifyBoundaries(forceRefresh: boolean = false): Promise<AdministrativeArea[]> {
   try {
+    try {
+      localStorage.removeItem('rescuesos_geoapify_areas_cache_v2');
+    } catch {
+      // Ignore storage cleanup error
+    }
+
     if (!forceRefresh) {
       const cached = localStorage.getItem(GEOAPIFY_CACHE_KEY);
       if (cached) {
@@ -486,19 +495,18 @@ export async function fetchProvinceSubUnitsService(
     );
     if (firstMatch) provCode = firstMatch.code;
   }
-  const cacheKey = `rescuesos_subunits_v7_p${provCode}`;
-  const isExcludedSpecialIsland = (name?: string) => (name || '').toLowerCase().includes('hoàng sa');
+  const cacheKey = `rescuesos_subunits_v9_p${provCode}`;
 
   try {
+    localStorage.removeItem(`rescuesos_subunits_v8_p${provCode}`);
+    localStorage.removeItem(`rescuesos_subunits_v7_p${provCode}`);
     localStorage.removeItem(`rescuesos_subunits_v6_p${provCode}`);
     localStorage.removeItem(`rescuesos_subunits_v3_p${provCode}`);
     localStorage.removeItem(`rescuesos_subunits_v2_p${provCode}`);
 
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
-      const parsed: ProvinceSubUnitItem[] = JSON.parse(cached).filter(
-        (u: ProvinceSubUnitItem) => !isExcludedSpecialIsland(u.name)
-      );
+      const parsed: ProvinceSubUnitItem[] = JSON.parse(cached);
       const isOldDistrictsOnly = parsed.length <= 8 && parsed.every((u) => u.type === 'DISTRICT');
       if (Array.isArray(parsed) && parsed.length > 0 && !isOldDistrictsOnly) {
         syncAdministrativeAreasToBackend({
@@ -526,7 +534,7 @@ export async function fetchProvinceSubUnitsService(
 
         apiWards.forEach((w: any) => {
           const exactName = sanitizeWardName(w.name);
-          if (exactName && !isExcludedSpecialIsland(exactName) && !officialWardsMap.has(exactName)) {
+          if (exactName && !officialWardsMap.has(exactName)) {
             officialWardsMap.set(exactName, {
               ...w,
               exactName,
@@ -542,7 +550,13 @@ export async function fetchProvinceSubUnitsService(
           const nameLower = (w.exactName || '').toLowerCase();
 
           let type: 'DISTRICT' | 'WARD' | 'COMMUNE' | 'TOWN' = 'WARD';
-          if (nameLower.startsWith('quận') || nameLower.startsWith('huyện') || nameLower.startsWith('thị xã')) {
+          if (
+            nameLower.startsWith('đặc khu') ||
+            typeLower.includes('đặc khu') ||
+            nameLower.startsWith('quận') ||
+            nameLower.startsWith('huyện') ||
+            nameLower.startsWith('thị xã')
+          ) {
             type = 'DISTRICT';
           } else if (nameLower.startsWith('xã') || typeLower.includes('xã')) {
             type = 'COMMUNE';
@@ -550,10 +564,15 @@ export async function fetchProvinceSubUnitsService(
             type = 'TOWN';
           }
 
+          const officialWardCode =
+            w.code !== undefined && w.code !== null && String(w.code).trim()
+              ? String(w.code).trim()
+              : `W${String(wardIdx).padStart(2, '0')}`;
+
           units.push({
             id: `w-${w.code}`,
             name: w.exactName,
-            code: `${codePrefix}-W${String(wardIdx).padStart(2, '0')}`,
+            code: `${codePrefix}-${officialWardCode}`,
             type,
             parentName: provinceName,
             status: 'ACTIVE',
@@ -759,5 +778,155 @@ export function extractPolygonLatLngRings(boundary?: GeoJsonPolygon): [number, n
   }
 
   return [];
+}
+
+const MAP_BUNDLE_CACHE_PREFIX = 'rescuesos_province_map_bundle_v2_';
+const mapBundleMemoryCache = new Map<
+  string,
+  { province: AdministrativeArea | null; wards: AdministrativeArea[] }
+>();
+const mapBundleInFlight = new Map<
+  string,
+  Promise<{ province: AdministrativeArea | null; wards: AdministrativeArea[] } | null>
+>();
+
+export function getCachedProvinceMapBundleSync(
+  provinceName: string
+): { province: AdministrativeArea | null; wards: AdministrativeArea[] } | null {
+  const slug = slugifyVietnamese(provinceName);
+  const mem = mapBundleMemoryCache.get(slug);
+  if (mem?.province?.boundary?.coordinates?.length && mem.wards.length > 0) {
+    return mem;
+  }
+
+  try {
+    const raw = localStorage.getItem(`${MAP_BUNDLE_CACHE_PREFIX}${slug}`);
+    if (raw) {
+      const parsed = JSON.parse(raw) as {
+        timestamp: number;
+        province: AdministrativeArea | null;
+        wards: AdministrativeArea[];
+      };
+      if (
+        parsed?.province?.boundary?.coordinates?.length &&
+        Array.isArray(parsed.wards) &&
+        parsed.wards.length > 0 &&
+        Date.now() - parsed.timestamp < PROVINCE_BOUNDARY_TTL_MS
+      ) {
+        const bundle = { province: parsed.province, wards: parsed.wards };
+        mapBundleMemoryCache.set(slug, bundle);
+        provinceBoundaryMemoryCache.set(slug, parsed.province);
+        registerCentroidsFromAreas(parsed.wards);
+        return bundle;
+      }
+    }
+  } catch {
+    // Bỏ qua lỗi đọc cache localStorage
+  }
+
+  return null;
+}
+
+/**
+ * Tải đồng thời ranh giới tỉnh + toàn bộ phường/xã/đặc khu từ CSDL MongoDB (nhanh, không phụ thuộc Geoapify mỗi lần mở trang).
+ */
+export async function fetchProvinceMapBundleFromDb(
+  provinceName: string
+): Promise<{ province: AdministrativeArea | null; wards: AdministrativeArea[] } | null> {
+  const slug = slugifyVietnamese(provinceName);
+  const cachedSync = getCachedProvinceMapBundleSync(provinceName);
+  if (cachedSync) return cachedSync;
+
+  const existing = mapBundleInFlight.get(slug);
+  if (existing) return existing;
+
+  const loader = (async () => {
+    try {
+      const res = await fetchProvinceMapBundle(provinceName);
+      if (!res.success || !res.data) return null;
+
+      const dbProv = res.data.province;
+      const provinceArea: AdministrativeArea | null =
+        dbProv && dbProv.boundary?.coordinates?.length
+          ? {
+              id: String(dbProv._id),
+              name: dbProv.name || provinceName,
+              code: dbProv.code || `VN-${slug.toUpperCase()}`,
+              type: 'PROVINCE',
+              parentId: null,
+              status: 'ACTIVE',
+              boundary: dbProv.boundary,
+            }
+          : null;
+
+      const wardAreas: AdministrativeArea[] = (res.data.wards || [])
+        .filter((w) => w.boundary?.coordinates?.length)
+        .map((w, idx) => {
+          const isHoangSaSeaBox =
+            (/hoàng\s*sa/i.test(w.name || '') || w.code === 'VN48-20333') &&
+            w.boundary?.type === 'Polygon' &&
+            Array.isArray(w.boundary.coordinates?.[0]) &&
+            w.boundary.coordinates[0].length <= 6;
+          const normalizedBoundary = isHoangSaSeaBox
+            ? (HOANG_SA_ISLAND_AREA.boundary as GeoJsonPolygon)
+            : w.boundary;
+          return {
+            id: String(w._id),
+            name: w.name,
+            code: w.code,
+            type: w.type === 'DISTRICT' ? 'DISTRICT' : 'WARD',
+            parentId: w.parentId ? String(w.parentId) : null,
+            status: 'ACTIVE',
+            boundaryRef: w.code,
+            boundary: normalizedBoundary,
+            areaKm2: normalizedBoundary ? calculatePolygonAreaKm2(normalizedBoundary) : 8.0,
+            population: 45000 + ((idx * 2317) % 35000),
+            activeRescueTeams: 2 + (idx % 4),
+          };
+        });
+
+      if (provinceArea) {
+        provinceBoundaryMemoryCache.set(slug, provinceArea);
+        try {
+          localStorage.setItem(
+            `${PROVINCE_BOUNDARY_CACHE_PREFIX}${slug}`,
+            JSON.stringify({ timestamp: Date.now(), area: provinceArea })
+          );
+        } catch {
+          // ignore
+        }
+      }
+
+      if (provinceArea && wardAreas.length > 0) {
+        const bundle = { province: provinceArea, wards: wardAreas };
+        mapBundleMemoryCache.set(slug, bundle);
+        registerCentroidsFromAreas(wardAreas);
+        try {
+          localStorage.setItem(
+            `${MAP_BUNDLE_CACHE_PREFIX}${slug}`,
+            JSON.stringify({ timestamp: Date.now(), ...bundle })
+          );
+        } catch {
+          // Bỏ qua lỗi khi vượt hạn mức localStorage
+        }
+        return bundle;
+      }
+
+      if (provinceArea || wardAreas.length > 0) {
+        registerCentroidsFromAreas(wardAreas);
+        return { province: provinceArea, wards: wardAreas };
+      }
+
+      return null;
+    } catch (err) {
+      console.warn(`Lỗi tải map bundle ${provinceName} từ CSDL:`, err);
+      return null;
+    }
+  })().finally(() => {
+    mapBundleInFlight.delete(slug);
+  });
+
+  mapBundleInFlight.set(slug, loader);
+  return loader;
 }
 

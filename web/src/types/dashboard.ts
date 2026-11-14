@@ -106,6 +106,7 @@ export interface SosRequestItem {
   assignmentId?: string;
   assignment?: any;
   shoreHandoff?: any;
+  shoreHandoffAssignment?: any;
   createdAt: string;
   updatedAt: string;
 }

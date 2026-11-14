@@ -40,6 +40,13 @@ export class NotificationApi {
   }
 
   /**
+   * Hủy Expo Push Token của thiết bị khi tắt thông báo ứng dụng
+   */
+  async unregisterPushToken(): Promise<ApiResponse> {
+    return await this.client.delete('/notifications/register-push-token');
+  }
+
+  /**
    * Đánh dấu tất cả thông báo đã đọc
    */
   async markAllNotificationsAsRead(): Promise<ApiResponse> {

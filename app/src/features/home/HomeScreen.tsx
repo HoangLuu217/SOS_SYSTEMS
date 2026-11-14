@@ -24,6 +24,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 import * as Location from 'expo-location';
 import { useAuth } from '@/context/AuthContext';
+import { useNotifications } from '@/context/NotificationContext';
 import { LogoSOS } from '@/components';
 import { BACKGROUND_APP_SOURCE } from '@/constants/backgroundBase64';
 import { SOSMapScreen, ContributeHazardModal } from '@/features/sos';
@@ -36,6 +37,7 @@ import { backendApi, safetyCheckApi, SafetyCheckItem, bloodDonationApi } from '@
 
 export interface HomeScreenProps {
   onOpenSettings: () => void;
+  onOpenNotifications?: () => void;
   onNavigateToTab?: (tab: TabName, options?: { filter?: 'ALL' | 'HAZARD' | 'SAFE' | 'RELIEF'; areaId?: string }) => void;
   onNavigateToSos?: () => void;
 }
@@ -280,10 +282,12 @@ function mapWmoToWeather(code: number, isDay: number) {
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   onOpenSettings,
+  onOpenNotifications,
   onNavigateToTab,
 }) => {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { unreadCount: unreadNotifCount, refreshNotifications } = useNotifications();
   const [showSOSMap, setShowSOSMap] = useState(false);
   const [showHazardModal, setShowHazardModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
@@ -294,7 +298,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [unrespondedSafetyCount, setUnrespondedSafetyCount] = useState<number>(0);
   const [myPrimaryResponse, setMyPrimaryResponse] = useState<any>(null);
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
-  const [unreadNotifCount, setUnreadNotifCount] = useState<number>(0);
 
   interface ConfirmModalState {
     visible: boolean;
@@ -356,28 +359,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       });
     }
   };
-
-  // Lấy số lượng thông báo chưa đọc từ máy chủ
-  useEffect(() => {
-    let isMounted = true;
-    const fetchUnread = async () => {
-      try {
-        const res = await backendApi.getNotifications({ isRead: false });
-        if (isMounted && res.success && Array.isArray(res.data)) {
-          setUnreadNotifCount(res.data.length);
-        }
-      } catch {
-        // Ignored
-      }
-    };
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 30000);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, []);
-
   // Trạng thái Thời tiết thật từ API Open-Meteo & GPS
   const [weatherData, setWeatherData] = useState<WeatherState>(() => {
     const currentHour = new Date().getHours();
@@ -720,9 +701,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       fetchActiveSafetyCheck(),
       fetchBloodDonationStatus(),
       fetchNearestAuthority(),
+      refreshNotifications(),
     ]);
     setRefreshing(false);
-  }, [fetchRealWeather, fetchFeaturedWeatherNews, fetchActiveSafetyCheck, fetchBloodDonationStatus, fetchNearestAuthority]);
+  }, [fetchRealWeather, fetchFeaturedWeatherNews, fetchActiveSafetyCheck, fetchBloodDonationStatus, fetchNearestAuthority, refreshNotifications]);
 
   // Cập nhật GPS khi người dùng quay lại app; không bật theo dõi vị trí nền.
   useEffect(() => {
@@ -892,7 +874,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
                   <TouchableOpacity
                     style={styles.circleIconButton}
-                    onPress={() => onNavigateToTab?.('news')}
+                    onPress={() => (onOpenNotifications ? onOpenNotifications() : onNavigateToTab?.('news'))}
                     activeOpacity={0.75}
                   >
                     <Ionicons name="notifications-outline" size={20} color="#FFFFFF" />

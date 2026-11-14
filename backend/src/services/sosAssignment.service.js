@@ -90,6 +90,98 @@ async function deductSuppliesFromEquipment(suppliesList, contextNote = '') {
 
 class SosAssignmentService {
   /**
+   * Hủy toàn bộ yêu cầu & phân công xe đón bờ (SHORE_HANDOFF) gắn với ca SOS
+   * khi ca điều động chính bị hủy.
+   */
+  async cancelActiveShoreHandoffForSos(sos, reason = '') {
+    if (!sos || !sos._id) return;
+    const now = new Date();
+
+    if (sos.shoreHandoff) {
+      if (sos.shoreHandoff.assignedVehicleId && mongoose.isValidObjectId(sos.shoreHandoff.assignedVehicleId)) {
+        await Vehicle.findByIdAndUpdate(sos.shoreHandoff.assignedVehicleId, { status: 'AVAILABLE' });
+      }
+      sos.shoreHandoff.status = 'NONE';
+      sos.shoreHandoff.requestedAt = null;
+      sos.shoreHandoff.requestedByRescuerName = null;
+      sos.shoreHandoff.rescueTeamName = null;
+      sos.shoreHandoff.rescueTeamId = null;
+      sos.shoreHandoff.assignedVehicleId = null;
+      sos.shoreHandoff.assignedVehicleName = null;
+      sos.shoreHandoff.assignedVehiclePlate = null;
+      sos.shoreHandoff.assignedRoadTeamName = null;
+      sos.shoreHandoff.assignedDriverName = null;
+      sos.shoreHandoff.assignedDriverPhone = null;
+      sos.shoreHandoff.assignedAt = null;
+      sos.shoreHandoff.completedAt = null;
+      if (typeof sos.markModified === 'function') {
+        sos.markModified('shoreHandoff');
+      }
+    }
+
+    const openHandoffs = await SosAssignment.find({
+      $or: [{ sosRequestId: sos._id }, { sosId: sos._id }],
+      missionType: 'SHORE_HANDOFF',
+      status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+    });
+
+    for (const ha of openHandoffs) {
+      ha.status = 'CANCELLED';
+      ha.cancelledAt = now;
+      ha.cancelReason = reason
+        ? `Hủy cùng lệnh điều động chính: ${String(reason).trim()}`
+        : 'Hủy tự động do ban chỉ huy đã hủy điều động ca SOS';
+      await ha.save();
+
+      if (ha.vehicleId && mongoose.isValidObjectId(ha.vehicleId)) {
+        await Vehicle.findByIdAndUpdate(ha.vehicleId, { status: 'AVAILABLE' });
+      }
+
+      try {
+        const { getIO } = require('../socket');
+        const io = getIO();
+        if (io) {
+          const payload = {
+            assignmentId: ha._id.toString(),
+            sosId: sos._id.toString(),
+            missionType: 'SHORE_HANDOFF',
+            reason: ha.cancelReason,
+            status: 'CANCELLED',
+          };
+          io.emit('assignment:cancelled', payload);
+          io.emit('assignment:deleted', payload);
+          io.emit('assignment:updated', payload);
+          if (ha.rescuerId) {
+            io.to(`user_${ha.rescuerId}`).emit('assignment:cancelled', payload);
+            io.to(`user_${ha.rescuerId}`).emit('sos:sync');
+          }
+        }
+
+        const eventBus = require('./eventBus');
+        if (ha.rescuerId) {
+          const cancelTitle = '⚠️ LỆNH ĐIỀU XE ĐÓN BỜ ĐÃ BỊ HỦY';
+          const cancelContent = 'Ban chỉ huy đã hủy điều động ca cứu nạn nên nhiệm vụ xe đón bờ cũng đã được hủy.';
+          eventBus.emit('notification_event', {
+            action: 'USER',
+            userId: ha.rescuerId.toString(),
+            title: cancelTitle,
+            content: cancelContent,
+            data: {
+              title: cancelTitle,
+              content: cancelContent,
+              type: 'ALERT',
+              action: 'CANCELLED',
+              priority: 'HIGH',
+              assignmentId: ha._id.toString(),
+              status: 'CANCELLED',
+            },
+          });
+        }
+      } catch (_) {}
+    }
+  }
+
+  /**
    * POST /sos/:id/assign
    */
   async assignSos(sosId, data, currentUser = null) {
@@ -359,14 +451,14 @@ class SosAssignmentService {
 
         const uniqueTokens = [...new Set(pushTokens)];
         if (uniqueTokens.length > 0) {
-          const { sendExpoPushNotification } = require('../utils/expoPush');
+          const { sendExpoPushNotification, NORMAL_CHANNEL_ID } = require('../utils/expoPush');
           await sendExpoPushNotification({
             tokens: uniqueTokens,
             title: notifTitle,
             body: notifContent,
             priority: 'CRITICAL',
             sound: 'default',
-            channelId: 'emergency-alerts',
+            channelId: NORMAL_CHANNEL_ID,
             data: {
               type: 'SOS_SYNC',
               action: 'ASSIGNED',
@@ -403,15 +495,14 @@ class SosAssignmentService {
       ],
     }).select('_id');
 
-    // Fallback: nếu tài khoản Rescuer vừa chạy lại seed nên đổi ObjectId hoặc chưa gán vào mảng members của đội tại khu vực
+    // Fallback: nếu tài khoản Rescuer vừa chạy lại seed nên đổi ObjectId tại khu vực đã gán
     if (teams.length === 0) {
       const userDoc = await User.findById(userId).select('roles areaId rescuer');
       const isRescuer =
         userDoc?.roles?.includes('RESCUER') ||
         userDoc?.rescuer?.verificationStatus === 'VERIFIED';
-      if (isRescuer) {
-        const teamQuery = userDoc?.areaId ? { areaId: userDoc.areaId } : {};
-        teams = await RescueTeam.find(teamQuery).select('_id');
+      if (isRescuer && userDoc?.areaId) {
+        teams = await RescueTeam.find({ areaId: userDoc.areaId }).select('_id');
       }
     }
 
@@ -617,8 +708,12 @@ class SosAssignmentService {
         } catch (popErr) { }
 
         const sosObj = sos.toObject ? sos.toObject() : { ...sos };
-        sosObj.assignment = assignment.toObject ? assignment.toObject() : assignment;
-        sosObj.assignmentId = assignment._id;
+        if (assignment.missionType === 'SHORE_HANDOFF') {
+          sosObj.shoreHandoffAssignment = assignment.toObject ? assignment.toObject() : assignment;
+        } else {
+          sosObj.assignment = assignment.toObject ? assignment.toObject() : assignment;
+          sosObj.assignmentId = assignment._id;
+        }
         emitSosUpdated(sosObj);
       }
     }
@@ -961,34 +1056,103 @@ class SosAssignmentService {
         .populate('areaId', 'name code');
       if (sos) {
         if (assignment.missionType === 'SHORE_HANDOFF') {
-          if (sos.shoreHandoff) {
-            if (targetStatus === 'COMPLETED') {
-              sos.shoreHandoff.status = 'COMPLETED';
-              sos.shoreHandoff.completedAt = now;
-              if (assignment.vehicleId) {
-                await Vehicle.findByIdAndUpdate(assignment.vehicleId, { status: 'AVAILABLE' });
-              }
-            } else if (targetStatus === 'CANCELLED' || targetStatus === 'REJECTED') {
-              sos.shoreHandoff.status = 'REQUESTED';
-              if (assignment.vehicleId) {
-                await Vehicle.findByIdAndUpdate(assignment.vehicleId, { status: 'AVAILABLE' });
-              }
-            }
-            await sos.save();
-          }
-        } else {
-          const oldStatus = sos.status;
-          sos.status = targetSosStatus;
-          if (targetSosStatus === 'COMPLETED' || targetSosStatus === 'RESOLVED' || targetSosStatus === 'CANCELLED') {
-            sos.resolvedAt = now;
+          if (targetStatus === 'COMPLETED') {
             if (sos.shoreHandoff) {
-              if (targetSosStatus === 'COMPLETED' || targetSosStatus === 'RESOLVED') {
-                sos.shoreHandoff.status = 'COMPLETED';
-                sos.shoreHandoff.completedAt = sos.shoreHandoff.completedAt || now;
-              }
-              if (sos.shoreHandoff?.assignedVehicleId && mongoose.isValidObjectId(sos.shoreHandoff.assignedVehicleId)) {
+              sos.shoreHandoff.status = 'COMPLETED';
+              sos.shoreHandoff.completedAt = sos.shoreHandoff.completedAt || now;
+              if (sos.shoreHandoff.assignedVehicleId && mongoose.isValidObjectId(sos.shoreHandoff.assignedVehicleId)) {
                 await Vehicle.findByIdAndUpdate(sos.shoreHandoff.assignedVehicleId, { status: 'AVAILABLE' });
               }
+            }
+            if (assignment.vehicleId) {
+              await Vehicle.findByIdAndUpdate(assignment.vehicleId, { status: 'AVAILABLE' });
+            }
+            if (extraData?.proofImages && Array.isArray(extraData.proofImages) && extraData.proofImages.length > 0) {
+              sos.proofImages = [
+                ...new Set([...(sos.proofImages || []), ...extraData.proofImages]),
+              ];
+              sos.images = (sos.images || []).filter((img) => !extraData.proofImages.includes(img));
+            }
+
+            // Chỉ chuyển SOS sang COMPLETED khi đội đi cứu chính đã hoàn thành (không còn assignment chính nào đang mở)
+            const remainingActivePrimary = await SosAssignment.countDocuments({
+              _id: { $ne: assignment._id },
+              $or: [{ sosRequestId: sos._id }, { sosId: sos._id }],
+              missionType: { $ne: 'SHORE_HANDOFF' },
+              status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+            });
+
+            const oldStatus = sos.status;
+            if (remainingActivePrimary === 0) {
+              sos.status = 'COMPLETED';
+              sos.resolvedAt = sos.resolvedAt || now;
+            }
+            await sos.save();
+
+            try {
+              await SosStatusHistory.create({
+                sosId: sos._id,
+                oldStatus,
+                newStatus: sos.status,
+                changedBy: currentUser?._id || assignment.rescuerId,
+                note:
+                  remainingActivePrimary === 0
+                    ? note || 'Đội xe tiếp vận đã đưa nạn nhân tới nơi an toàn — hoàn tất toàn bộ ca SOS'
+                    : note || 'Đội xe tiếp vận đã xác nhận hoàn tất đón bờ, chờ đội cứu hộ hoàn thành phần việc',
+                images: extraData?.proofImages || [],
+              });
+            } catch (err) {}
+          } else if (targetStatus === 'CANCELLED' || targetStatus === 'REJECTED') {
+            if (sos.shoreHandoff) {
+              sos.shoreHandoff.status = 'REQUESTED';
+              await sos.save();
+            }
+            if (assignment.vehicleId) {
+              await Vehicle.findByIdAndUpdate(assignment.vehicleId, { status: 'AVAILABLE' });
+            }
+          }
+        } else {
+          if ((targetStatus === 'COMPLETED' || targetStatus === 'CANCELLED') && assignment.vehicleId) {
+            await Vehicle.findByIdAndUpdate(assignment.vehicleId, { status: 'AVAILABLE' });
+          }
+
+          const isPrimaryCompleting = targetSosStatus === 'COMPLETED' || targetSosStatus === 'RESOLVED';
+          let hasPendingShoreHandoff = false;
+          if (isPrimaryCompleting) {
+            const activeHandoffAssign = await SosAssignment.findOne({
+              _id: { $ne: assignment._id },
+              $or: [{ sosRequestId: sos._id }, { sosId: sos._id }],
+              missionType: 'SHORE_HANDOFF',
+              status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+            }).select('_id status');
+            hasPendingShoreHandoff =
+              Boolean(activeHandoffAssign) ||
+              Boolean(
+                sos.shoreHandoff &&
+                ['REQUESTED', 'ASSIGNED'].includes(String(sos.shoreHandoff.status || '').toUpperCase()) &&
+                !sos.shoreHandoff.completedAt
+              );
+          }
+
+          const oldStatus = sos.status;
+          if (isPrimaryCompleting && hasPendingShoreHandoff) {
+            // Đội cứu hộ đã xong phần việc & được giải phóng để nhận ca mới,
+            // nhưng SOS phải đợi đội xe tiếp vận (SHORE_HANDOFF) xác nhận hoàn thành mới đóng hoàn toàn.
+            sos.status = 'RESCUING';
+          } else {
+            sos.status = targetSosStatus;
+            if (isPrimaryCompleting) {
+              sos.resolvedAt = now;
+              if (sos.shoreHandoff) {
+                sos.shoreHandoff.status = 'COMPLETED';
+                sos.shoreHandoff.completedAt = sos.shoreHandoff.completedAt || now;
+                if (sos.shoreHandoff?.assignedVehicleId && mongoose.isValidObjectId(sos.shoreHandoff.assignedVehicleId)) {
+                  await Vehicle.findByIdAndUpdate(sos.shoreHandoff.assignedVehicleId, { status: 'AVAILABLE' });
+                }
+              }
+            } else if (targetSosStatus === 'CANCELLED') {
+              sos.resolvedAt = now;
+              await this.cancelActiveShoreHandoffForSos(sos, note);
             }
           }
           if (extraData?.proofImages && Array.isArray(extraData.proofImages) && extraData.proofImages.length > 0) {
@@ -1003,9 +1167,12 @@ class SosAssignmentService {
             await SosStatusHistory.create({
               sosId: sos._id,
               oldStatus,
-              newStatus: targetSosStatus,
+              newStatus: sos.status,
               changedBy: currentUser?._id || assignment.rescuerId,
-              note: note || `Cứu hộ viên cập nhật tiến trình: ${targetStatus}`,
+              note:
+                isPrimaryCompleting && hasPendingShoreHandoff
+                  ? note || 'Đội cứu hộ đã giải cứu xong & sẵn sàng nhận ca mới — chờ xe tiếp vận xác nhận đưa nạn nhân tới nơi an toàn'
+                  : note || `Cứu hộ viên cập nhật tiến trình: ${targetStatus}`,
               images: extraData?.proofImages || [],
             });
           } catch (err) { }
@@ -1021,8 +1188,12 @@ class SosAssignmentService {
         } catch (popErr) { }
 
         const sosObj = sos.toObject ? sos.toObject() : { ...sos };
-        sosObj.assignment = assignment.toObject ? assignment.toObject() : assignment;
-        sosObj.assignmentId = assignment._id;
+        if (assignment.missionType === 'SHORE_HANDOFF') {
+          sosObj.shoreHandoffAssignment = assignment.toObject ? assignment.toObject() : assignment;
+        } else {
+          sosObj.assignment = assignment.toObject ? assignment.toObject() : assignment;
+          sosObj.assignmentId = assignment._id;
+        }
         emitSosUpdated(sosObj);
       }
     }
@@ -1158,7 +1329,7 @@ class SosAssignmentService {
   /**
    * PATCH /assignments/:id/cancel
    */
-  async cancelAssignment(id, cancelReason) {
+  async cancelAssignment(id, cancelReason, cancelledBy = null) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new ApiError(400, 'ID phân công không phải là ObjectId hợp lệ');
     }
@@ -1167,19 +1338,49 @@ class SosAssignmentService {
     if (!assignment) {
       assignment = await SosAssignment.findOne({
         $or: [{ sosRequestId: id }, { sosId: id }],
+        missionType: { $ne: 'SHORE_HANDOFF' },
         status: { $nin: ['CANCELLED', 'REJECTED'] },
-      });
+      }).sort({ createdAt: -1 });
+    }
+    if (!assignment) {
+      assignment = await SosAssignment.findOne({
+        $or: [{ sosRequestId: id }, { sosId: id }],
+        status: { $nin: ['CANCELLED', 'REJECTED'] },
+      }).sort({ createdAt: -1 });
     }
     if (!assignment) {
       // Tìm xem có assignment nào đã CANCELLED trước đó không để trả về mà không ném lỗi 404
       const existing = await SosAssignment.findOne({
         $or: [{ _id: id }, { sosRequestId: id }, { sosId: id }],
-      });
+      }).sort({ createdAt: -1 });
       if (existing) return existing;
       throw new ApiError(404, 'Không tìm thấy phân công cứu hộ (Assignment)');
     }
 
     if (assignment.status === 'CANCELLED') {
+      // Đảm bảo nếu ca điều động chính đã hủy nhưng xe đón bờ vẫn còn kẹt trạng thái cũ thì dọn nốt
+      const alreadySosId = assignment.sosRequestId || assignment.sosId;
+      if (assignment.missionType !== 'SHORE_HANDOFF' && alreadySosId) {
+        const activePrimaryCount = await SosAssignment.countDocuments({
+          $or: [{ sosRequestId: alreadySosId }, { sosId: alreadySosId }],
+          missionType: { $ne: 'SHORE_HANDOFF' },
+          status: { $nin: ['CANCELLED', 'REJECTED', 'COMPLETED'] },
+        });
+        if (activePrimaryCount === 0) {
+          const staleSos = await SosRequest.findById(alreadySosId)
+            .populate('citizenId', 'fullName phone avatarUrl email address')
+            .populate('areaId', 'name code');
+          if (
+            staleSos &&
+            staleSos.shoreHandoff &&
+            ['REQUESTED', 'ASSIGNED'].includes(String(staleSos.shoreHandoff.status || '').toUpperCase())
+          ) {
+            await this.cancelActiveShoreHandoffForSos(staleSos, cancelReason);
+            await staleSos.save();
+            emitSosUpdated(staleSos);
+          }
+        }
+      }
       return assignment;
     }
 
@@ -1207,24 +1408,54 @@ class SosAssignmentService {
 
     await assignment.save();
 
+    if (assignment.vehicleId && mongoose.isValidObjectId(assignment.vehicleId)) {
+      await Vehicle.findByIdAndUpdate(assignment.vehicleId, { status: 'AVAILABLE' });
+    }
+
     const sosId = assignment.sosRequestId || assignment.sosId;
     if (sosId) {
       const sos = await SosRequest.findById(sosId)
         .populate('citizenId', 'fullName phone avatarUrl email address')
         .populate('areaId', 'name code');
       if (sos) {
-        const oldStatus = sos.status;
-        sos.status = 'VERIFIED';
-        await sos.save();
+        if (assignment.missionType === 'SHORE_HANDOFF') {
+          if (sos.shoreHandoff) {
+            if (sos.shoreHandoff.assignedVehicleId && mongoose.isValidObjectId(sos.shoreHandoff.assignedVehicleId)) {
+              await Vehicle.findByIdAndUpdate(sos.shoreHandoff.assignedVehicleId, { status: 'AVAILABLE' });
+            }
+            sos.shoreHandoff.status = 'REQUESTED';
+            sos.shoreHandoff.assignedVehicleId = null;
+            sos.shoreHandoff.assignedVehicleName = null;
+            sos.shoreHandoff.assignedVehiclePlate = null;
+            sos.shoreHandoff.assignedRoadTeamName = null;
+            sos.shoreHandoff.assignedDriverName = null;
+            sos.shoreHandoff.assignedDriverPhone = null;
+            sos.shoreHandoff.assignedAt = null;
+            sos.shoreHandoff.completedAt = null;
+            if (typeof sos.markModified === 'function') {
+              sos.markModified('shoreHandoff');
+            }
+            await sos.save();
+          }
+        } else {
+          const oldStatus = sos.status;
+          sos.status = 'VERIFIED';
+          await this.cancelActiveShoreHandoffForSos(sos, cancelReason);
+          await sos.save();
 
-        try {
-          await SosStatusHistory.create({
-            sosId: sos._id,
-            oldStatus,
-            newStatus: 'VERIFIED',
-            note: cancelReason ? `Hủy điều động: ${cancelReason}` : 'Hủy phân công điều động, chuyển ca về trạng thái Đã Xác Minh để điều phối lại',
-          });
-        } catch (err) { }
+          try {
+            const historyChangedBy = cancelledBy || assignment.assignedBy || assignment.rescuerId;
+            if (historyChangedBy) {
+              await SosStatusHistory.create({
+                sosId: sos._id,
+                oldStatus,
+                newStatus: 'VERIFIED',
+                changedBy: historyChangedBy,
+                note: cancelReason ? `Hủy điều động: ${cancelReason}` : 'Hủy phân công điều động (kèm hủy điều xe tiếp vận nếu có), chuyển ca về Đã Xác Minh để điều phối lại',
+              });
+            }
+          } catch (err) {}
+        }
 
         emitSosUpdated(sos);
       }
@@ -1287,11 +1518,34 @@ class SosAssignmentService {
       throw new ApiError(400, 'ID SOS không hợp lệ');
     }
 
-    // Tìm assignment đang hoạt động của SOS này
-    let assignment = await SosAssignment.findOne({
-      $or: [{ sosRequestId: sosId }, { sosId: sosId }],
-      status: { $nin: ['CANCELLED', 'REJECTED'] },
-    }).sort({ createdAt: -1 });
+    // Tìm assignment đang hoạt động của SOS này (ưu tiên đúng assignment của user/đội hiện tại)
+    let assignment = null;
+    if (currentUser?._id) {
+      const userTeams = await RescueTeam.find({
+        $or: [{ leaderId: currentUser._id }, { 'members.rescuerId': currentUser._id }],
+      }).select('_id');
+      const userTeamIds = userTeams.map((t) => t._id);
+      assignment = await SosAssignment.findOne({
+        $or: [{ sosRequestId: sosId }, { sosId: sosId }],
+        status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+        $and: [
+          {
+            $or: [
+              { rescuerId: currentUser._id },
+              ...(userTeamIds.length > 0
+                ? [{ rescueTeamId: { $in: userTeamIds } }, { teamId: { $in: userTeamIds } }]
+                : []),
+            ],
+          },
+        ],
+      }).sort({ createdAt: -1 });
+    }
+    if (!assignment) {
+      assignment = await SosAssignment.findOne({
+        $or: [{ sosRequestId: sosId }, { sosId: sosId }],
+        status: { $nin: ['CANCELLED', 'REJECTED'] },
+      }).sort({ createdAt: -1 });
+    }
 
     if (assignment) {
       assignment = await this.updateStatus(assignment._id, newStatus, currentUser, note, extraData);

@@ -34,7 +34,7 @@ export const TeamSelectorCard: React.FC<Props> = ({
   onViewMembers,
 }) => {
   const leadRescuer = team.rescuers?.[0];
-  const memberCount = team.rescuers?.length || team.availableRescuersCount || 4;
+  const memberCount = team.rescuers?.length ?? team.availableRescuersCount ?? 0;
 
   // Tách mã đội (nếu nằm trong dấu ngoặc) để hiển thị thành tag xám nhỏ gọn, tránh rớt dòng
   const [isBusyModalOpen, setIsBusyModalOpen] = useState(false);
@@ -42,9 +42,9 @@ export const TeamSelectorCard: React.FC<Props> = ({
   const { title: cleanTeamName, codeTag } = (() => {
     const match = teamDisplayName.match(/^(.*?)(?:\s*\(([^)]+)\))?$/);
     if (match && match[2]) {
-      return { title: match[1].trim(), codeTag: match[2].trim() };
+      return { title: match[1].trim(), codeTag: team.code || match[2].trim() };
     }
-    return { title: teamDisplayName, codeTag: (team as any).code || '' };
+    return { title: teamDisplayName, codeTag: team.code || '' };
   })();
 
   const handleClick = () => {
@@ -95,7 +95,7 @@ export const TeamSelectorCard: React.FC<Props> = ({
         transition: 'all 0.15s ease',
         display: 'flex',
         alignItems: 'flex-start',
-        gap: 8,
+        gap: 9,
       }}
     >
       {/* CỘT TRÁI: Checkbox chọn đội */}
@@ -154,6 +154,23 @@ export const TeamSelectorCard: React.FC<Props> = ({
                 {codeTag}
               </span>
             )}
+            {team.wardName && (
+              <span
+                style={{
+                  background: '#f0f9ff',
+                  color: '#0369a1',
+                  fontSize: 9.5,
+                  fontWeight: 700,
+                  padding: '0.5px 4px',
+                  borderRadius: 4,
+                  border: '1px solid #bae6fd',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                {team.wardName}
+              </span>
+            )}
           </div>
 
           {isBusy ? (
@@ -171,6 +188,23 @@ export const TeamSelectorCard: React.FC<Props> = ({
               }}
             >
               {busyMissionCode ? `BẬN (${busyMissionCode})` : 'BẬN'}
+            </span>
+          ) : team.status === 'Off-duty' ? (
+            <span
+              style={{
+                fontSize: 9.5,
+                fontWeight: 800,
+                background: '#f1f5f9',
+                color: '#64748b',
+                border: '1px solid #cbd5e1',
+                padding: '1px 5px',
+                borderRadius: 4,
+                letterSpacing: '0.2px',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              NGỪNG TRỰC
             </span>
           ) : (
             <span
@@ -317,7 +351,7 @@ export const TeamSelectorCard: React.FC<Props> = ({
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 3,
+              gap: 4,
               flexShrink: 0,
             }}
           >

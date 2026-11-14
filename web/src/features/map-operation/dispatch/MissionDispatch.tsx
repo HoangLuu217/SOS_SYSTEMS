@@ -10,6 +10,7 @@ import type {
   AuthorityOfficer,
   AdministrativeArea,
 } from '@/types/domainD';
+import type { HazardReportItem, SafeLocationItem } from '@/types/dashboard';
 import { IncidentFeed } from './IncidentFeed';
 import { TacticalMap } from './TacticalMap';
 import { DispatchWorkflow } from './DispatchWorkflow';
@@ -57,6 +58,8 @@ interface Props {
   showToast: (msg: string, type?: 'success' | 'error') => void;
   activeOfficer?: AuthorityOfficer;
   areas?: AdministrativeArea[];
+  hazards?: HazardReportItem[];
+  shelters?: SafeLocationItem[];
 }
 
 export const MissionDispatch = ({
@@ -75,6 +78,8 @@ export const MissionDispatch = ({
   showToast,
   activeOfficer,
   areas,
+  hazards = [],
+  shelters = [],
 }: Props) => {
   const [isReassignOpen, setIsReassignOpen] = useState(false);
   const [isCancelOpen, setIsCancelOpen] = useState(false);
@@ -156,6 +161,8 @@ export const MissionDispatch = ({
           previewTeamIds={selectedTeamIds}
           rescueTeams={rescueTeams}
           vehicles={vehicles}
+          hazards={hazards}
+          shelters={shelters}
         />
 
 
@@ -165,11 +172,11 @@ export const MissionDispatch = ({
             className="floating-incident-overlay-card"
             style={{
               position: 'absolute',
-              top: 14,
-              left: 14,
-              maxHeight: 'calc(100% - 28px)',
-              width: 365,
-              maxWidth: 'calc(100% - 28px)',
+              top: 10,
+              left: 10,
+              maxHeight: 'calc(100% - 20px)',
+              width: 392,
+              maxWidth: 'calc(100% - 20px)',
               zIndex: 450,
               display: 'flex',
               flexDirection: 'column',

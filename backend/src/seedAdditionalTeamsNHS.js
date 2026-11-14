@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 require('dotenv').config({ path: '.env' });
 const {
   User,
@@ -23,30 +24,68 @@ async function seedAdditionalTeamsNHS() {
   });
 
   const districtNHS = await AdministrativeArea.findOne({
-    $or: [{ code: 'DAD-NHS' }, { name: /Ngũ Hành Sơn/i, type: 'DISTRICT' }],
+    $or: [{ code: 'DAD-NHS' }, { code: 'VN48-20285' }, { name: /Ngũ Hành Sơn/i }],
   });
 
-  const wardKhueMy = await AdministrativeArea.findOne({
-    $or: [{ code: 'DAD-NHS-02' }, { name: /Khuê Mỹ/i }],
-  });
-  const wardHoaHai = await AdministrativeArea.findOne({
-    $or: [{ code: 'DAD-NHS-04' }, { name: /Hòa Hải/i }],
-  });
-  const wardHoaQuy = await AdministrativeArea.findOne({
-    $or: [{ code: 'DAD-NHS-03' }, { name: /Hòa Quý/i }],
-  });
-  const wardMyAn = await AdministrativeArea.findOne({
-    $or: [{ code: 'DAD-NHS-05' }, { name: /Mỹ An/i }],
-  });
+  const wardKhueMy =
+    (await AdministrativeArea.findOne({ $or: [{ code: 'DAD-NHS-02' }, { name: /Khuê Mỹ/i }] })) || districtNHS;
+  const wardHoaHai =
+    (await AdministrativeArea.findOne({ $or: [{ code: 'DAD-NHS-04' }, { name: /Hòa Hải/i }] })) || districtNHS;
+  const wardHoaQuy =
+    (await AdministrativeArea.findOne({ $or: [{ code: 'DAD-NHS-03' }, { name: /Hòa Quý/i }] })) || districtNHS;
+  const wardMyAn =
+    (await AdministrativeArea.findOne({ $or: [{ code: 'DAD-NHS-05' }, { name: /Mỹ An/i }] })) || districtNHS;
 
   // Tìm các user cứu hộ viên để làm đội trưởng & thành viên
   const leCuuNan = await User.findOne({ phone: '0903000003' });
   const dangVanLong = await User.findOne({ phone: '0905999881' });
   const leVanHai = await User.findOne({ phone: '0905999882' });
   const nguyenDucNam = await User.findOne({ phone: '0905999883' });
-  const bsNghia = (await User.findOne({ phone: '0905555666' })) || nguyenDucNam;
-  const dsTrang = (await User.findOne({ phone: '0905555667' })) || leVanHai;
-  const ddToan = (await User.findOne({ phone: '0905555668' })) || dangVanLong;
+  const ensureMedRescuer = async ({ fullName, phone, email, skills, experience }) => {
+    let u = await User.findOne({ $or: [{ phone }, { email }] });
+    if (!u) {
+      const passwordHash = await bcrypt.hash('Password@123', 10);
+      u = await User.create({
+        fullName,
+        phone,
+        email,
+        passwordHash,
+        roles: ['RESCUER'],
+        status: 'ACTIVE',
+        isVerified: true,
+        rescuer: {
+          skills,
+          experience,
+          vehicleType: 'AMBULANCE',
+          verificationStatus: 'VERIFIED',
+          availabilityStatus: 'AVAILABLE',
+        },
+      });
+    }
+    return u;
+  };
+
+  const bsNghia = await ensureMedRescuer({
+    fullName: 'Bác sĩ Nguyễn Trọng Nghĩa',
+    phone: '0905555666',
+    email: 'nguyentrongnghia.med@sos.vn',
+    skills: ['Bác sĩ Trưởng Đội', 'Hồi sức cấp cứu ngạt nước', 'Tiểu phẫu dã chiến'],
+    experience: '11 năm công tác BV Đa Khoa',
+  });
+  const dsTrang = await ensureMedRescuer({
+    fullName: 'Dược sĩ Lê Thu Trang',
+    phone: '0905555667',
+    email: 'lethutrang.med@sos.vn',
+    skills: ['Dược Sĩ Dã Chiến', 'Bảo quản huyết thanh & vắc-xin', 'Khử trùng nước sinh hoạt'],
+    experience: '5 năm dược lâm sàng',
+  });
+  const ddToan = await ensureMedRescuer({
+    fullName: 'Điều dưỡng Trịnh Quốc Toàn',
+    phone: '0905555668',
+    email: 'trinhquoctoan.med@sos.vn',
+    skills: ['Điều Dưỡng Cấp Cứu', 'Cố định cột sống trên cáng nổi', 'Tiêm truyền ven'],
+    experience: '4 năm khoa hồi sức',
+  });
 
   // Cập nhật vị trí GPS thực tế cho các bác sĩ & nhân viên y tế tại TTYT Ngũ Hành Sơn (Lê Văn Hiến)
   if (nguyenDucNam) {
@@ -73,12 +112,16 @@ async function seedAdditionalTeamsNHS() {
     $or: [{ name: /43-MED-NHS/i }, { name: /Xe Cứu Thương 115 Ngũ Hành Sơn/i }],
   });
 
+  const seenMedIds = new Set();
   const medMembers = [
     { rescuerId: nguyenDucNam._id, role: 'LEADER', joinedAt: new Date(), status: 'APPROVED' },
-    { rescuerId: bsNghia._id, role: 'MEMBER', joinedAt: new Date(), status: 'APPROVED' },
-    { rescuerId: dsTrang._id, role: 'MEMBER', joinedAt: new Date(), status: 'APPROVED' },
     { rescuerId: ddToan._id, role: 'MEMBER', joinedAt: new Date(), status: 'APPROVED' },
-  ];
+  ].filter((m) => {
+    const idStr = String(m.rescuerId);
+    if (seenMedIds.has(idStr)) return false;
+    seenMedIds.add(idStr);
+    return true;
+  });
 
   if (!teamMedNHS) {
     teamMedNHS = await RescueTeam.create({
@@ -155,8 +198,6 @@ async function seedAdditionalTeamsNHS() {
 
   const hoaHaiMembers = [
     { rescuerId: leVanHai._id, role: 'LEADER', joinedAt: new Date(), status: 'APPROVED' },
-    { rescuerId: dangVanLong._id, role: 'MEMBER', joinedAt: new Date(), status: 'APPROVED' },
-    { rescuerId: leCuuNan._id, role: 'MEMBER', joinedAt: new Date(), status: 'APPROVED' },
   ];
 
   if (!teamHoaHai) {
@@ -226,7 +267,6 @@ async function seedAdditionalTeamsNHS() {
 
   const hoaQuyMembers = [
     { rescuerId: dangVanLong._id, role: 'LEADER', joinedAt: new Date(), status: 'APPROVED' },
-    { rescuerId: leVanHai._id, role: 'MEMBER', joinedAt: new Date(), status: 'APPROVED' },
   ];
 
   if (!teamHoaQuy) {

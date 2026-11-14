@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { SafeLocation, AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
 const { findAreaByCoordinates, checkPointInAuthorityJurisdiction } = require('../utils/geoUtils');
+const eventBus = require('./eventBus');
 
 class SafeLocationService {
   /**
@@ -119,6 +120,9 @@ class SafeLocationService {
       { path: 'areaId', select: 'name code type' },
       { path: 'createdBy', select: 'fullName phone email' },
     ]);
+
+    // Bắn sự kiện realtime cho Web và các bên liên quan
+    eventBus.emit('safe_location_event', { action: 'CREATED', data: populated });
 
     // Tự động phát thông báo theo GPS trong khu vực mục tiêu khi tạo điểm trú ẩn an toàn
     if (populated.status !== 'CLOSED' && creatorUser) {
@@ -275,10 +279,15 @@ class SafeLocationService {
 
     await safeLocation.save();
 
-    return safeLocation.populate([
+    const populated = await safeLocation.populate([
       { path: 'areaId', select: 'name code type' },
       { path: 'createdBy', select: 'fullName phone email' },
     ]);
+
+    // Bắn sự kiện realtime cập nhật điểm an toàn
+    eventBus.emit('safe_location_event', { action: 'UPDATED', data: populated });
+
+    return populated;
   }
 
   /**
@@ -291,6 +300,9 @@ class SafeLocationService {
     }
 
     await SafeLocation.findByIdAndDelete(id);
+
+    // Bắn sự kiện realtime xóa điểm an toàn
+    eventBus.emit('safe_location_event', { action: 'DELETED', data: { _id: id } });
 
     return { message: 'Đã xóa địa điểm an toàn thành công' };
   }

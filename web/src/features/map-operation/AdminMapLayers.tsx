@@ -1,14 +1,15 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { Polygon, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Polygon, Polyline, Marker, Popup, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Eye,
-  Layers,
   ListFilter,
   MapPin,
   Phone,
   Search,
-  ShieldAlert,
   Users,
   X,
   Clock,
@@ -17,10 +18,12 @@ import {
 import type { SosRequestItem } from '@/types/dashboard';
 import type { AdministrativeArea } from '@/types/domainD';
 import { EMERGENCY_TYPE_LABELS } from '@/features/hazards';
+import { DANANG_EXTERIOR_LAND_MASK } from '@/constants/danangExteriorLandMask';
+import { SOVEREIGN_ISLANDS_GEOJSON, SOVEREIGN_LABELS_GEOJSON } from '@/constants/sovereignIslandsGeoJSON';
 import { isPointInAreaBoundary } from '@/services/mapGeoService';
 import { extractPolygonLatLngRings } from '@/services/geoapifyBoundariesService';
 
-function isCoordsInsideArea(
+export function isCoordsInsideArea(
   coords: { lat: number; lng: number },
   area: AdministrativeArea | null,
   addressOrAreaText?: string
@@ -52,6 +55,101 @@ function isCoordsInsideArea(
   }
 
   return false;
+}
+
+function normalizeMatchText(value?: string | null): string {
+  return (value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function stripWardPrefix(name: string): string {
+  return normalizeMatchText(name).replace(
+    /^(phường|xã|thị\s*trấn|quận|huyện|thị\s*xã|thành\s*phố|tỉnh|tp\.?|p\.?|x\.?)\s+/i,
+    ''
+  ).trim();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hasBoundaryTokenMatch(normalizedText: string, phrase: string): boolean {
+  if (!normalizedText || !phrase) return false;
+  const pattern = new RegExp(`(?:^|[\\s,;.(/\\-])${escapeRegExp(phrase)}(?:$|[\\s,;.)/\\-])`, 'i');
+  return pattern.test(normalizedText);
+}
+
+function doesTextMentionWard(
+  normalizedText: string,
+  ward: AdministrativeArea,
+  requirePrefix: boolean
+): boolean {
+  if (!normalizedText || !ward?.name) return false;
+  const fullName = normalizeMatchText(ward.name);
+  const baseName = stripWardPrefix(ward.name);
+  if (!baseName) return false;
+
+  const isCommune = /^xã\s+/i.test(fullName);
+  const shortPrefixes = isCommune ? ['xã', 'x.', 'x'] : ['phường', 'p.', 'p', 'quận', 'q.'];
+  const prefixedCandidates = [fullName, ...shortPrefixes.map((p) => `${p} ${baseName}`)];
+
+  if (prefixedCandidates.some((c) => hasBoundaryTokenMatch(normalizedText, c))) {
+    return true;
+  }
+
+  return !requirePrefix && hasBoundaryTokenMatch(normalizedText, baseName);
+}
+
+/**
+ * Xác định duy nhất 1 xã/phường mà ca SOS thuộc về (đồng nhất giữa bộ đếm dropdown và danh sách lọc).
+ * Ưu tiên khớp đồng thuận giữa tọa độ GPS và địa chỉ/areaName; nếu địa chỉ ghi rõ tên xã/phường
+ * khác với GPS (VD: dữ liệu test chọn địa bàn ở Duy Nghĩa nhưng GPS đặt ở tọa độ khác), tôn trọng
+ * tên xã/phường ghi rõ trong địa bàn/địa chỉ để tránh đếm lệch sang xã khác.
+ */
+export function resolveSosWard(
+  sos: Pick<AdminSosItem, 'lat' | 'lng' | 'areaName' | 'address'>,
+  wardAreas: AdministrativeArea[]
+): AdministrativeArea | null {
+  if (!wardAreas.length) return null;
+
+  const hasValidCoords =
+    typeof sos.lat === 'number' &&
+    typeof sos.lng === 'number' &&
+    !Number.isNaN(sos.lat) &&
+    !Number.isNaN(sos.lng) &&
+    !(sos.lat === 0 && sos.lng === 0);
+
+  const gpsWard = hasValidCoords
+    ? wardAreas.find((w) => w.boundary?.coordinates && isPointInAreaBoundary({ lat: sos.lat, lng: sos.lng }, w)) || null
+    : null;
+
+  const areaText = normalizeMatchText(sos.areaName);
+  const addressText = normalizeMatchText(sos.address);
+  const combinedText = `${areaText} ${addressText}`.trim();
+
+  if (gpsWard && doesTextMentionWard(combinedText, gpsWard, false)) {
+    return gpsWard;
+  }
+
+  const wardsBySpecificity = [...wardAreas].sort(
+    (a, b) => stripWardPrefix(b.name).length - stripWardPrefix(a.name).length
+  );
+
+  if (areaText) {
+    const byAreaName = wardsBySpecificity.find((w) => doesTextMentionWard(areaText, w, false));
+    if (byAreaName) return byAreaName;
+  }
+
+  if (addressText) {
+    const byPrefixedAddress = wardsBySpecificity.find((w) => doesTextMentionWard(addressText, w, true));
+    if (byPrefixedAddress) return byPrefixedAddress;
+
+    if (!gpsWard) {
+      const byBareAddress = wardsBySpecificity.find((w) => doesTextMentionWard(addressText, w, false));
+      if (byBareAddress) return byBareAddress;
+    }
+  }
+
+  return gpsWard;
 }
 
 export type AdminSosFilterMode = 'ALL' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
@@ -212,18 +310,18 @@ export function mapBackendSosForAdmin(
         Array.isArray(item.images) && item.images.length > 0
           ? item.images
           : item.imageUrl
-          ? [item.imageUrl]
-          : [];
+            ? [item.imageUrl]
+            : [];
 
       const assign = item.assignment;
       const assignmentSummary = assign
         ? {
-            status: assign.status || item.status,
-            teamName: assign.rescueTeamId?.name || assign.rescueTeamName || undefined,
-            rescuerName: assign.rescuerId?.fullName || assign.rescuerName || undefined,
-            vehiclePlate: assign.vehicleId?.plateNumber || assign.vehicleName || undefined,
-            orgName: assign.authorityOrganizationId?.name || undefined,
-          }
+          status: assign.status || item.status,
+          teamName: assign.rescueTeamId?.name || assign.rescueTeamName || undefined,
+          rescuerName: assign.rescuerId?.fullName || assign.rescuerName || undefined,
+          vehiclePlate: assign.vehicleId?.plateNumber || assign.vehicleName || undefined,
+          orgName: assign.authorityOrganizationId?.name || undefined,
+        }
         : null;
 
       return {
@@ -267,9 +365,8 @@ function createAdminSosPinIcon(sos: AdminSosItem, isSelected: boolean): L.DivIco
     popupAnchor: [0, -24],
     html: `
       <div style="position:relative;width:110px;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;cursor:pointer;">
-        ${
-          showCodeBadge
-            ? `<div style="
+        ${showCodeBadge
+        ? `<div style="
                 position:absolute;
                 top:0;
                 background:${isSelected ? '#0f172a' : statusMeta.pinColor};
@@ -284,12 +381,11 @@ function createAdminSosPinIcon(sos: AdminSosItem, isSelected: boolean): L.DivIco
                 letter-spacing:0.2px;
                 z-index:20;
               ">${sos.sosCode}</div>`
-            : ''
-        }
+        : ''
+      }
         <div style="position:relative;width:36px;height:36px;display:flex;align-items:center;justify-content:center;">
-          ${
-            haloSize > 0
-              ? `<div style="
+          ${haloSize > 0
+        ? `<div style="
                   position:absolute;
                   width:${haloSize}px;
                   height:${haloSize}px;
@@ -298,8 +394,8 @@ function createAdminSosPinIcon(sos: AdminSosItem, isSelected: boolean): L.DivIco
                   border:1.5px solid ${statusMeta.pinColor};
                   animation:admin-sos-pulse 1.6s infinite ease-out;
                 "></div>`
-              : ''
-          }
+        : ''
+      }
           <div style="
             position:relative;
             width:${dotSize}px;
@@ -319,17 +415,64 @@ function createAdminSosPinIcon(sos: AdminSosItem, isSelected: boolean): L.DivIco
 interface AdminMapContentProps {
   boundaryArea: AdministrativeArea | null;
   wardAreas: AdministrativeArea[];
+  selectedWard: AdministrativeArea | null;
   showWardBoundaries: boolean;
+  theme?: 'light' | 'dark';
   sosList: AdminSosItem[];
   selectedSos: AdminSosItem | null;
   onSelectSos: (sos: AdminSosItem | null) => void;
   focusRequest: { lat: number; lng: number; seq: number } | null;
 }
 
+const HOANG_SA_ISLAND_POLYGONS = SOVEREIGN_ISLANDS_GEOJSON.features
+  .filter(
+    (f) =>
+      f.properties?.archipelago === 'Hoàng Sa' &&
+      f.geometry?.type === 'Polygon' &&
+      Array.isArray((f.geometry as any).coordinates?.[0])
+  )
+  .map((f) => ({
+    id: String(f.id || f.properties?.id || f.properties?.name),
+    name: String(f.properties?.name || ''),
+    kind: String(f.properties?.type || 'island'),
+    positions: ((f.geometry as any).coordinates[0] as number[][]).map(
+      ([lng, lat]) => [lat, lng] as [number, number]
+    ),
+  }));
+
+const HOANG_SA_LABEL_MARKERS = SOVEREIGN_LABELS_GEOJSON.features
+  .filter((f) => {
+    if (f.properties?.level === 'archipelago') return false;
+    const title = String(f.properties?.title || '').toUpperCase();
+    return (
+      title.includes('HOÀNG SA') ||
+      title.includes('PHÚ LÂM') ||
+      title.includes('TRI TÔN')
+    );
+  })
+  .map((f, idx) => {
+    const [lng, lat] = (f.geometry as any).coordinates as [number, number];
+    const title = String(f.properties?.title || '');
+    return {
+      id: `hs-lbl-${idx}`,
+      lat,
+      lng,
+      isArchipelago: false,
+      icon: L.divIcon({
+        className: 'admin-hoang-sa-label',
+        iconSize: [110, 22],
+        iconAnchor: [55, 11],
+        html: `<div style="text-align:center;pointer-events:none;font-size:10px;font-weight:700;color:#0f172a;text-shadow:0 1px 3px rgba(255,255,255,0.95);white-space:nowrap;">${title}</div>`,
+      }),
+    };
+  });
+
 export const AdminMapContent = ({
   boundaryArea,
   wardAreas,
+  selectedWard,
   showWardBoundaries,
+  theme = 'light',
   sosList,
   selectedSos,
   onSelectSos,
@@ -337,21 +480,92 @@ export const AdminMapContent = ({
 }: AdminMapContentProps) => {
   const map = useMap();
   const hasFittedInitialRef = useRef(false);
+  const prevSelectedWardIdRef = useRef<string | null>(null);
 
   const areaRings = useMemo(
     () => extractPolygonLatLngRings(boundaryArea?.boundary),
     [boundaryArea]
   );
 
+  // Tách bỏ các đoạn đường thẳng nối trên biển (nhảy tọa độ > ~0.05°) để chỉ vẽ đường biên giới đất liền mở dọc theo bờ biển
+  const inlandBorderPolylines = useMemo(() => {
+    const MAX_INLAND_STEP_DEG = 0.05;
+    const result: [number, number][][] = [];
+
+    for (const ring of areaRings) {
+      if (ring.length < 2) continue;
+
+      const segments: [number, number][][] = [[ring[0]]];
+      for (let i = 1; i < ring.length; i++) {
+        const prev = ring[i - 1];
+        const curr = ring[i];
+        if (Math.hypot(curr[0] - prev[0], curr[1] - prev[1]) > MAX_INLAND_STEP_DEG) {
+          segments.push([curr]);
+        } else {
+          segments[segments.length - 1].push(curr);
+        }
+      }
+
+      if (segments.length > 1) {
+        const firstSeg = segments[0];
+        const lastSeg = segments[segments.length - 1];
+        const firstPt = firstSeg[0];
+        const lastPt = lastSeg[lastSeg.length - 1];
+        if (Math.hypot(firstPt[0] - lastPt[0], firstPt[1] - lastPt[1]) <= MAX_INLAND_STEP_DEG) {
+          const isExactClose = firstPt[0] === lastPt[0] && firstPt[1] === lastPt[1];
+          segments[0] = isExactClose
+            ? [...lastSeg.slice(0, -1), ...firstSeg]
+            : [...lastSeg, ...firstSeg];
+          segments.pop();
+        }
+      }
+
+      for (const seg of segments) {
+        if (seg.length >= 2) result.push(seg);
+      }
+    }
+
+    return result;
+  }, [areaRings]);
+
   // Tự động căn khung bản đồ theo boundary khu vực mục tiêu khi tải xong từ API
   useEffect(() => {
-    if (hasFittedInitialRef.current || areaRings.length === 0) return;
+    if (hasFittedInitialRef.current || selectedWard || areaRings.length === 0) return;
     const allPoints = areaRings.flat();
     if (allPoints.length >= 3) {
       map.fitBounds(L.latLngBounds(allPoints), { padding: [32, 32], maxZoom: 12 });
       hasFittedInitialRef.current = true;
     }
-  }, [map, areaRings]);
+  }, [map, areaRings, selectedWard]);
+
+  // Zoom vào đúng ranh giới xã/phường được chọn, hoặc quay về toàn thành phố khi bỏ chọn
+  useEffect(() => {
+    const nextWardId = selectedWard?.id || null;
+    if (prevSelectedWardIdRef.current === nextWardId) return;
+    prevSelectedWardIdRef.current = nextWardId;
+
+    if (selectedWard) {
+      const wardRings = extractPolygonLatLngRings(selectedWard.boundary);
+      const wardPoints = wardRings.flat();
+      if (wardPoints.length >= 3) {
+        map.fitBounds(L.latLngBounds(wardPoints), {
+          padding: [56, 56],
+          maxZoom: 15,
+          animate: true,
+        });
+        return;
+      }
+    }
+
+    const allPoints = areaRings.flat();
+    if (allPoints.length >= 3) {
+      map.fitBounds(L.latLngBounds(allPoints), {
+        padding: [32, 32],
+        maxZoom: 12,
+        animate: true,
+      });
+    }
+  }, [map, selectedWard, areaRings]);
 
   useEffect(() => {
     if (!focusRequest) return;
@@ -367,27 +581,93 @@ export const AdminMapContent = ({
 
   const wardPolygons = useMemo(() => {
     if (!showWardBoundaries || wardAreas.length === 0) return [];
-    return wardAreas.flatMap((area) =>
-      extractPolygonLatLngRings(area.boundary).map((positions, idx) => ({
+    return wardAreas.flatMap((area) => {
+      if (selectedWard && area.id === selectedWard.id) return [];
+      return extractPolygonLatLngRings(area.boundary).map((positions, idx) => ({
         key: `${area.id}-${idx}`,
         name: area.name,
         positions,
-      }))
-    );
-  }, [showWardBoundaries, wardAreas]);
+      }));
+    });
+  }, [showWardBoundaries, wardAreas, selectedWard]);
+
+  const selectedWardPolygons = useMemo(() => {
+    if (!selectedWard) return [];
+    return extractPolygonLatLngRings(selectedWard.boundary).map((positions, idx) => ({
+      key: `selected-${selectedWard.id}-${idx}`,
+      name: selectedWard.name,
+      positions,
+    }));
+  }, [selectedWard]);
 
   return (
     <>
+      {/* Chỉ làm mờ phần đất liền bên ngoài ranh giới TP. Đà Nẵng (giữ nguyên biển Đông & Hoàng Sa sáng rõ) */}
+      <Polygon
+        positions={DANANG_EXTERIOR_LAND_MASK}
+        interactive={false}
+        pathOptions={{
+          stroke: false,
+          fillColor: theme === 'dark' ? '#020617' : '#e2e8f0',
+          fillOpacity: theme === 'dark' ? 0.72 : 0.66,
+        }}
+      />
+
+      {/* Đường biên giới đất liền TP. Đà Nẵng (mở dọc theo bờ biển, không vẽ đường nối ngoài biển) */}
+      {inlandBorderPolylines.map((line, idx) => (
+        <Polyline
+          key={`danang-inland-border-${idx}`}
+          positions={line}
+          interactive={false}
+          pathOptions={{
+            color: theme === 'dark' ? '#38bdf8' : '#0369a1',
+            weight: 2.6,
+            opacity: 0.92,
+            lineJoin: 'round',
+            lineCap: 'round',
+          }}
+        />
+      ))}
+
+      {/* Các đảo, rạn san hô & nhãn chủ quyền Đặc khu Hoàng Sa (TP. Đà Nẵng) trên nền biển tự nhiên */}
+      {HOANG_SA_ISLAND_POLYGONS.map((isl) => (
+        <Polygon
+          key={isl.id}
+          positions={isl.positions}
+          interactive={false}
+          pathOptions={{
+            color: isl.kind === 'reef_atoll' ? '#0284c7' : '#b45309',
+            weight: isl.kind === 'reef_atoll' ? 1 : 1.5,
+            opacity: 0.65,
+            fillColor: isl.kind === 'reef_atoll' ? '#bae6fd' : '#fde68a',
+            fillOpacity: isl.kind === 'reef_atoll' ? 0.28 : 0.75,
+          }}
+        />
+      ))}
+
+      {HOANG_SA_LABEL_MARKERS.map((lbl) => (
+        <Marker
+          key={lbl.id}
+          position={[lbl.lat, lbl.lng]}
+          icon={lbl.icon}
+          interactive={false}
+          zIndexOffset={100}
+        />
+      ))}
+
       {wardPolygons.map((ward) => (
         <Polygon
           key={ward.key}
           positions={ward.positions}
           pathOptions={{
-            color: '#475569',
-            weight: 1.1,
-            dashArray: '3, 4',
-            fillColor: '#3b82f6',
-            fillOpacity: 0.03,
+            color: theme === 'dark' ? '#7dd3fc' : '#60a5fa',
+            weight: 1.7,
+            opacity: selectedWard ? 0.3 : 0.78,
+            dashArray: '2, 5',
+            lineCap: 'round',
+            lineJoin: 'round',
+            fillColor: '#93c5fd',
+            fillOpacity: selectedWard ? 0.01 : 0.03,
           }}
         >
           <Tooltip sticky direction="center" opacity={0.9}>
@@ -396,32 +676,25 @@ export const AdminMapContent = ({
         </Polygon>
       ))}
 
-      {areaRings.map((ring, idx) => (
-        <Fragment key={`area-perimeter-${idx}`}>
-          <Polygon
-            positions={ring}
-            interactive={false}
-            pathOptions={{
-              color: '#ffffff',
-              weight: 5,
-              opacity: 0.65,
-              fill: false,
-            }}
-          />
-          <Polygon
-            positions={ring}
-            interactive={false}
-            pathOptions={{
-              color: '#dc2626',
-              weight: 2.8,
-              dashArray: '8, 6',
-              lineCap: 'round',
-              lineJoin: 'round',
-              fillColor: '#ef4444',
-              fillOpacity: 0.04,
-            }}
-          />
-        </Fragment>
+      {selectedWardPolygons.map((ward) => (
+        <Polygon
+          key={ward.key}
+          positions={ward.positions}
+          pathOptions={{
+            color: theme === 'dark' ? '#38bdf8' : '#1d4ed8',
+            weight: 2.6,
+            opacity: 0.94,
+            dashArray: '3, 5',
+            lineCap: 'round',
+            lineJoin: 'round',
+            fillColor: '#60a5fa',
+            fillOpacity: 0.08,
+          }}
+        >
+          <Tooltip sticky direction="center" opacity={0.95}>
+            <span style={{ fontWeight: 800, fontSize: 11.5 }}>{ward.name}</span>
+          </Tooltip>
+        </Polygon>
       ))}
 
       {sosList.map((sos) => {
@@ -504,9 +777,11 @@ interface AdminMapHudProps {
   selectedSos: AdminSosItem | null;
   onSelectSos: (sos: AdminSosItem | null) => void;
   onFocusSos: (sos: AdminSosItem) => void;
-  showWardBoundaries: boolean;
-  onToggleWardBoundaries: () => void;
   wardsLoading: boolean;
+  wardAreas: AdministrativeArea[];
+  selectedWard: AdministrativeArea | null;
+  onSelectWard: (wardId: string | null) => void;
+  wardSosCountMap: Record<string, number>;
 }
 
 export const AdminMapHud = ({
@@ -519,12 +794,47 @@ export const AdminMapHud = ({
   selectedSos,
   onSelectSos,
   onFocusSos,
-  showWardBoundaries,
-  onToggleWardBoundaries,
   wardsLoading,
+  wardAreas,
+  selectedWard,
+  onSelectWard,
+  wardSosCountMap,
 }: AdminMapHudProps) => {
+  const [hudCollapsed, setHudCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [wardDropdownOpen, setWardDropdownOpen] = useState(false);
+  const [wardSearch, setWardSearch] = useState('');
+  const wardDropdownRef = useRef<HTMLDivElement | null>(null);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const statusDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!wardDropdownOpen && !statusDropdownOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (wardDropdownOpen && wardDropdownRef.current && !wardDropdownRef.current.contains(target)) {
+        setWardDropdownOpen(false);
+      }
+      if (statusDropdownOpen && statusDropdownRef.current && !statusDropdownRef.current.contains(target)) {
+        setStatusDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [wardDropdownOpen, statusDropdownOpen]);
+
+  const filteredWards = useMemo(() => {
+    const q = wardSearch.trim().toLowerCase();
+    const list = !q
+      ? wardAreas
+      : wardAreas.filter((w) => w.name.toLowerCase().includes(q));
+    return [...list].sort((a, b) => {
+      const countDiff = (wardSosCountMap[b.id] || 0) - (wardSosCountMap[a.id] || 0);
+      if (countDiff !== 0) return countDiff;
+      return a.name.localeCompare(b.name, 'vi');
+    });
+  }, [wardAreas, wardSearch, wardSosCountMap]);
 
   const searchedList = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -543,8 +853,8 @@ export const AdminMapHud = ({
     { id: 'ALL', label: 'Tất cả', count: counts.all, dot: '#0f172a' },
     { id: 'ACTIVE', label: 'Đang mở / Xử lý', count: counts.active, dot: '#dc2626' },
     { id: 'COMPLETED', label: 'Hoàn thành', count: counts.completed, dot: '#16a34a' },
-    { id: 'CANCELLED', label: 'Đã hủy', count: counts.cancelled, dot: '#64748b' },
   ];
+  const activeFilterChip = filterChips.find((chip) => chip.id === filterMode) || filterChips[0];
 
   const selectedStatus = selectedSos ? getAdminSosStatusMeta(selectedSos.status) : null;
   const selectedPriority = selectedSos
@@ -553,144 +863,443 @@ export const AdminMapHud = ({
 
   return (
     <>
-      <div
-        style={{
-          position: 'absolute',
-          top: 16,
-          left: 16,
-          zIndex: 1000,
-          maxWidth: 'calc(100% - 245px)',
-          background: 'rgba(255, 255, 255, 0.96)',
-          backdropFilter: 'blur(10px)',
-          borderRadius: 12,
-          border: '1px solid #e2e8f0',
-          boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)',
-          padding: '10px 12px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-            <span
+      {hudCollapsed ? (
+        <button
+          type="button"
+          onClick={() => setHudCollapsed(false)}
+          title="Mở rộng thanh giám sát SOS"
+          style={{
+            position: 'absolute',
+            top: 16,
+            left: 16,
+            zIndex: 1000,
+            background: 'rgba(255, 255, 255, 0.46)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            border: '1px solid rgba(226, 232, 240, 0.65)',
+            boxShadow: '0 2px 8px rgba(15, 23, 42, 0.06)',
+            borderRadius: 10,
+            padding: '7px 12px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            cursor: 'pointer',
+            fontWeight: 600,
+            fontSize: 12.5,
+            color: 'rgba(15, 23, 42, 0.52)',
+            opacity: 0.72,
+            transition: 'opacity 0.15s ease, background 0.15s ease, color 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.opacity = '1';
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.88)';
+            e.currentTarget.style.color = '#0f172a';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.opacity = '0.72';
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.46)';
+            e.currentTarget.style.color = 'rgba(15, 23, 42, 0.52)';
+          }}
+        >
+          <span>
+            {selectedWard ? `Giám sát — ${selectedWard.name}` : 'Giám sát SOS'} ({totalInArea})
+          </span>
+          <ChevronRight size={14} style={{ opacity: 0.75 }} />
+        </button>
+      ) : (
+        <div
+          style={{
+            position: 'absolute',
+            top: 16,
+            left: 16,
+            zIndex: 1000,
+            width: 460,
+            maxWidth: 'calc(100% - 32px)',
+            background: 'rgba(255, 255, 255, 0.96)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: 12,
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)',
+            padding: '12px 14px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 9,
+          }}
+        >
+          {/* Hàng 1: Tiêu đề + nút thu gọn */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', lineHeight: 1.25 }}>
+                Giám sát SOS — {selectedWard ? selectedWard.name : targetAreaName}
+              </div>
+              <div style={{ fontSize: 11.5, color: '#64748b', fontWeight: 500, marginTop: 2 }}>
+                {totalInArea} yêu cầu {selectedWard ? `tại ${selectedWard.name}` : `trong ranh giới ${targetAreaName}`}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setWardDropdownOpen(false);
+                setStatusDropdownOpen(false);
+                setHudCollapsed(true);
+              }}
               style={{
-                width: 28,
-                height: 28,
-                borderRadius: 8,
-                background: '#fee2e2',
-                color: '#dc2626',
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                width: 30,
+                height: 30,
+                borderRadius: 8,
+                border: '1px solid #cbd5e1',
+                background: '#ffffff',
+                color: '#475569',
+                cursor: 'pointer',
                 flexShrink: 0,
               }}
+              title="Thu gọn thanh giám sát"
+              aria-label="Thu gọn thanh giám sát"
             >
-              <ShieldAlert size={15} />
-            </span>
-            <div>
-              <div style={{ fontSize: 13.5, fontWeight: 800, color: '#0f172a', lineHeight: 1.2 }}>
-                Giám sát SOS — {targetAreaName}
-              </div>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span>{totalInArea} yêu cầu trong ranh giới {targetAreaName}</span>
-              </div>
-            </div>
+              <ChevronLeft size={15} />
+            </button>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
-            <button
-              type="button"
-              onClick={onToggleWardBoundaries}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '5px 10px',
-                borderRadius: 8,
-                border: showWardBoundaries ? '1px solid #2563eb' : '1px solid #cbd5e1',
-                background: showWardBoundaries ? '#eff6ff' : '#ffffff',
-                color: showWardBoundaries ? '#1d4ed8' : '#334155',
-                fontSize: 11.5,
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-              title="Bật/tắt ranh giới các xã/phường"
-            >
-              <Layers size={13} />
-              {wardsLoading ? 'Đang tải...' : 'Ranh giới Xã/Phường'}
-            </button>
+          {/* Hàng 2: Lọc xã/phường, trạng thái và danh sách */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1.12fr 1.4fr 0.88fr', gap: 6, width: '100%' }}>
+            {/* Bộ lọc theo Xã/Phường Đà Nẵng */}
+            <div ref={wardDropdownRef} style={{ position: 'relative', minWidth: 0 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusDropdownOpen(false);
+                  setWardDropdownOpen((prev) => !prev);
+                }}
+                style={{
+                  width: '100%',
+                  height: 31,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 4,
+                  padding: '0 8px',
+                  borderRadius: 8,
+                  border: selectedWard ? '1px solid #0f172a' : '1px solid #cbd5e1',
+                  background: selectedWard ? '#f1f5f9' : '#ffffff',
+                  color: '#0f172a',
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+                title="Lọc và phóng to theo xã/phường Đà Nẵng"
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+                  <MapPin size={11} style={{ flexShrink: 0, color: selectedWard ? '#dc2626' : '#475569' }} />
+                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {selectedWard ? selectedWard.name : wardsLoading && wardAreas.length === 0 ? 'Đang tải...' : 'Tất cả xã/phường'}
+                  </span>
+                </span>
+                {selectedWard ? (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectWard(null);
+                      setWardDropdownOpen(false);
+                    }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginLeft: 2,
+                      color: '#64748b',
+                    }}
+                    title="Bỏ lọc xã/phường"
+                  >
+                    <X size={11} />
+                  </span>
+                ) : (
+                  <ChevronDown size={12} style={{ flexShrink: 0, color: '#64748b' }} />
+                )}
+              </button>
+
+              {wardDropdownOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    left: 0,
+                    width: 265,
+                    maxHeight: 320,
+                    background: '#ffffff',
+                    borderRadius: 10,
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 12px 28px rgba(15, 23, 42, 0.16)',
+                    zIndex: 1200,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div style={{ padding: 8, borderBottom: '1px solid #f1f5f9' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        background: '#f8fafc',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: 7,
+                        padding: '5px 8px',
+                      }}
+                    >
+                      <Search size={12.5} color="#64748b" />
+                      <input
+                        type="text"
+                        value={wardSearch}
+                        onChange={(e) => setWardSearch(e.target.value)}
+                        placeholder="Tìm xã, phường..."
+                        autoFocus
+                        style={{
+                          border: 'none',
+                          outline: 'none',
+                          background: 'transparent',
+                          fontSize: 12,
+                          color: '#0f172a',
+                          width: '100%',
+                        }}
+                      />
+                      {wardSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setWardSearch('')}
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, color: '#64748b', display: 'flex' }}
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ overflowY: 'auto', padding: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {filteredWards.length === 0 ? (
+                      <div style={{ padding: '14px 8px', textAlign: 'center', fontSize: 11.5, color: '#64748b' }}>
+                        {wardsLoading ? 'Đang tải danh sách xã/phường...' : 'Không tìm thấy xã/phường phù hợp'}
+                      </div>
+                    ) : (
+                      filteredWards.map((ward) => {
+                        const isSelected = selectedWard?.id === ward.id;
+                        const sosCount = wardSosCountMap[ward.id] || 0;
+                        return (
+                          <button
+                            key={ward.id}
+                            type="button"
+                            onClick={() => {
+                              onSelectWard(isSelected ? null : ward.id);
+                              setWardDropdownOpen(false);
+                              setWardSearch('');
+                            }}
+                            style={{
+                              textAlign: 'left',
+                              width: '100%',
+                              padding: '7px 9px',
+                              borderRadius: 7,
+                              border: 'none',
+                              background: isSelected ? '#f1f5f9' : 'transparent',
+                              color: '#0f172a',
+                              fontSize: 12,
+                              fontWeight: isSelected ? 800 : sosCount > 0 ? 700 : 500,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 8,
+                            }}
+                          >
+                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {ward.name}
+                            </span>
+                            {sosCount > 0 && (
+                              <span
+                                style={{
+                                  fontSize: 10.5,
+                                  fontWeight: 800,
+                                  color: '#0f172a',
+                                  background: '#e2e8f0',
+                                  padding: '1px 6px',
+                                  borderRadius: 999,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {sosCount} SOS
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Bộ lọc trạng thái SOS gộp (Tất cả / Đang mở / Hoàn thành) */}
+            <div ref={statusDropdownRef} style={{ position: 'relative', minWidth: 0 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setWardDropdownOpen(false);
+                  setStatusDropdownOpen((prev) => !prev);
+                }}
+                style={{
+                  width: '100%',
+                  height: 31,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 4,
+                  padding: '0 8px',
+                  borderRadius: 8,
+                  border:
+                    statusDropdownOpen || filterMode !== 'ALL'
+                      ? `1px solid ${activeFilterChip.dot}`
+                      : '1px solid #cbd5e1',
+                  background: filterMode !== 'ALL' ? '#f8fafc' : '#ffffff',
+                  color: '#0f172a',
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+                title="Lọc theo trạng thái yêu cầu SOS"
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                  <span
+                    style={{
+                      width: 6.5,
+                      height: 6.5,
+                      borderRadius: '50%',
+                      background: activeFilterChip.dot,
+                      display: 'inline-block',
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {activeFilterChip.label} ({activeFilterChip.count})
+                  </span>
+                </span>
+                <ChevronDown size={12} style={{ flexShrink: 0, color: '#64748b' }} />
+              </button>
+
+              {statusDropdownOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    left: 0,
+                    minWidth: 190,
+                    background: '#ffffff',
+                    borderRadius: 10,
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 12px 28px rgba(15, 23, 42, 0.16)',
+                    zIndex: 1200,
+                    padding: 5,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
+                  }}
+                >
+                  {filterChips.map((chip) => {
+                    const active = filterMode === chip.id;
+                    return (
+                      <button
+                        key={chip.id}
+                        type="button"
+                        onClick={() => {
+                          onFilterModeChange(chip.id);
+                          setStatusDropdownOpen(false);
+                        }}
+                        style={{
+                          width: '100%',
+                          textAlign: 'left',
+                          padding: '7px 9px',
+                          borderRadius: 7,
+                          border: 'none',
+                          background: active ? '#f1f5f9' : 'transparent',
+                          color: active ? '#0f172a' : '#334155',
+                          fontSize: 12,
+                          fontWeight: active ? 800 : 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 8,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span
+                            style={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: '50%',
+                              background: chip.dot,
+                              display: 'inline-block',
+                              flexShrink: 0,
+                            }}
+                          />
+                          {chip.label}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: '#64748b',
+                          }}
+                        >
+                          ({chip.count})
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             <button
               type="button"
               onClick={() => setDrawerOpen((prev) => !prev)}
               style={{
+                width: '100%',
+                height: 31,
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 5,
-                padding: '5px 10px',
+                justifyContent: 'center',
+                gap: 4,
+                padding: '0 8px',
                 borderRadius: 8,
                 border: drawerOpen ? '1px solid #0f172a' : '1px solid #cbd5e1',
                 background: drawerOpen ? '#0f172a' : '#ffffff',
                 color: drawerOpen ? '#ffffff' : '#334155',
                 fontSize: 11.5,
                 fontWeight: 700,
+                whiteSpace: 'nowrap',
                 cursor: 'pointer',
               }}
             >
-              <ListFilter size={13} />
+              <ListFilter size={12} style={{ flexShrink: 0 }} />
               Danh sách ({filteredSosList.length})
             </button>
           </div>
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-          {filterChips.map((chip) => {
-            const active = filterMode === chip.id;
-            return (
-              <button
-                key={chip.id}
-                type="button"
-                onClick={() => onFilterModeChange(chip.id)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  padding: '4px 10px',
-                  borderRadius: 999,
-                  border: active ? `1px solid ${chip.dot}` : '1px solid #e2e8f0',
-                  background: active ? '#f8fafc' : '#ffffff',
-                  color: active ? '#0f172a' : '#475569',
-                  fontSize: 11.5,
-                  fontWeight: active ? 800 : 600,
-                  cursor: 'pointer',
-                }}
-              >
-                <span
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: '50%',
-                    background: chip.dot,
-                    display: 'inline-block',
-                  }}
-                />
-                {chip.label} ({chip.count})
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      )}
 
       {drawerOpen && (
         <div
           style={{
             position: 'absolute',
-            top: 118,
+            top: hudCollapsed ? 60 : 124,
             left: 16,
             zIndex: 999,
             width: 330,
-            maxHeight: 'calc(100% - 140px)',
+            maxHeight: hudCollapsed ? 'calc(100% - 82px)' : 'calc(100% - 144px)',
             background: 'rgba(255, 255, 255, 0.97)',
             backdropFilter: 'blur(10px)',
             borderRadius: 12,

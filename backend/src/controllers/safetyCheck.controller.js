@@ -121,6 +121,19 @@ class SafetyCheckController {
       next(error);
     }
   }
+
+  /**
+   * DELETE /safety-checks/:id
+   * Xóa đợt kiểm tra an toàn
+   */
+  async deleteSafetyCheck(req, res, next) {
+    try {
+      const result = await safetyCheckService.deleteSafetyCheck(req.user, req.params.id);
+      return sendSuccess(res, 200, result.message, result);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 module.exports = new SafetyCheckController();

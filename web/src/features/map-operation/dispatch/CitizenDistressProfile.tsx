@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Phone, MapPin, Maximize2, X, ChevronDown, ChevronUp, MessageSquareText, Package, Plus, Minus } from 'lucide-react';
+import { Phone, MapPin, Maximize2, X, ChevronDown, ChevronUp, MessageSquareText, Package, Plus, Minus, Users, AlertCircle } from 'lucide-react';
 import type { SosRequest } from '@/types/domainD';
 import type { EquipmentItem } from '@/api/equipment.api';
 
@@ -83,16 +83,12 @@ export const CitizenDistressProfile: React.FC<Props> = ({
     return keywords;
   })();
 
-  const getPriorityEmoji = (group: string) => {
-    const g = group.toLowerCase();
-    if (g.includes("trẻ") || g.includes("em bé") || g.includes("sơ sinh")) return "👶";
-    if (g.includes("già") || g.includes("cao tuổi")) return "👴";
-    if (g.includes("thai") || g.includes("bầu")) return "🤰";
-    if (g.includes("khuyết tật") || g.includes("tàn tật")) return "♿";
-    if (g.includes("bệnh") || g.includes("thương") || g.includes("oxy")) return "🏥";
-    if (g.includes("khó khăn") || g.includes("nghèo") || g.includes("hộ")) return "🏡";
-    return "⭐";
-  };
+  const secondaryTagLabel =
+    priorityList.length > 0
+      ? priorityList.join(', ')
+      : selectedSos.affectedPeople > 1
+        ? 'Hộ gia đình'
+        : null;
 
   const hasExtraDetail = Boolean(selectedSos.description || selectedSos.imageUrl);
   const aiReasons = selectedSos.riskAssessment?.reasons || selectedSos.aiAssessment?.reasons || [];
@@ -120,6 +116,23 @@ export const CitizenDistressProfile: React.FC<Props> = ({
       ? 'Thấp'
       : 'Trung bình';
 
+  const uniformBoxStyle: React.CSSProperties = {
+    minWidth: 0,
+    minHeight: 32,
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    padding: '6px 8px',
+    borderRadius: 6,
+    fontSize: 11.5,
+    fontWeight: 700,
+    lineHeight: 1.3,
+    border: '1px solid #e2e8f0',
+    boxSizing: 'border-box',
+  };
+
   return (
     <>
       <div
@@ -134,6 +147,49 @@ export const CitizenDistressProfile: React.FC<Props> = ({
           boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
         }}
       >
+        {/* Section 0: Mã SOS, loại sự cố & thời gian */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            paddingBottom: 5,
+            borderBottom: '1px dashed #e2e8f0',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flexWrap: 'wrap' }}>
+            <span
+              style={{
+                fontSize: 15,
+                fontWeight: 900,
+                fontFamily: 'var(--sos-font-mono, monospace)',
+                fontVariantNumeric: 'tabular-nums',
+                color: '#0f172a',
+                letterSpacing: '-0.3px',
+              }}
+            >
+              {selectedSos.sosCode}
+            </span>
+            <span
+              style={{
+                fontSize: 10.5,
+                fontWeight: 800,
+                color: 'var(--sos-primary, #0284c7)',
+                background: 'var(--sos-primary-soft, #e0f2fe)',
+                border: '1px solid var(--sos-primary-border, #7dd3fc)',
+                padding: '1px 6px',
+                borderRadius: 4,
+              }}
+            >
+              {selectedSos.emergencyType}
+            </span>
+          </div>
+          <span style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600, flexShrink: 0 }}>
+            • {selectedSos.timeAgo || 'Vừa xong'}
+          </span>
+        </div>
+
         {/* Section 1: Tên người dân & Số điện thoại đường dây nóng trên 1 hàng */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <div style={{ fontWeight: 900, color: '#0f172a', fontSize: 14, letterSpacing: '-0.2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -198,13 +254,13 @@ export const CitizenDistressProfile: React.FC<Props> = ({
               alignItems: 'center',
               gap: 3,
             }}
+            title={`${selectedSos.affectedPeople} người gặp nạn`}
           >
             <span>🚨</span>
             <span>{selectedSos.affectedPeople} người</span>
           </span>
 
-          {/* Huy hiệu đối tượng ưu tiên thực tế từ ca SOS */}
-          {priorityList.length > 0 ? (
+          {secondaryTagLabel ? (
             <span
               style={{
                 background: '#fefce8',
@@ -218,28 +274,10 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                 alignItems: 'center',
                 gap: 3,
               }}
-              title={`Đối tượng ưu tiên: ${priorityList.join(', ')}`}
+              title={`Đối tượng ưu tiên: ${secondaryTagLabel}`}
             >
-              <span>{priorityList.map(getPriorityEmoji).join('')}</span>
-              <span>{priorityList.join(', ')}</span>
-            </span>
-          ) : selectedSos.affectedPeople > 1 ? (
-            <span
-              style={{
-                background: '#fefce8',
-                border: '1px solid #fde68a',
-                color: '#b45309',
-                fontSize: 11,
-                fontWeight: 800,
-                padding: '1.5px 6px',
-                borderRadius: 4,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 3,
-              }}
-            >
-              <span>👥</span>
-              <span>Hộ gia đình</span>
+              <span>⚠️</span>
+              <span>{secondaryTagLabel}</span>
             </span>
           ) : null}
         </div>
@@ -305,7 +343,14 @@ export const CitizenDistressProfile: React.FC<Props> = ({
         )}
 
         {/* Section 5: Buttons Action Bar - Nằm gọn trên 1 dòng duy nhất không rớt chữ */}
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: hasExtraDetail ? '1fr 1fr' : '1fr',
+            alignItems: 'stretch',
+            gap: 6,
+          }}
+        >
           {hasExtraDetail && (
             <button
               type="button"
@@ -314,26 +359,19 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                 if (!isDetailExpanded) setIsSuppliesExpanded(false);
               }}
               style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 4,
-                padding: '5px 6px',
-                background: isDetailExpanded ? '#f0f9ff' : '#ffffff',
-                border: isDetailExpanded ? '1.5px solid #0284c7' : '1px solid #e2e8f0',
-                borderRadius: 6,
+                ...uniformBoxStyle,
+                background: isDetailExpanded ? '#f1f5f9' : '#ffffff',
+                border: isDetailExpanded ? '1px solid #94a3b8' : '1px solid #e2e8f0',
                 cursor: 'pointer',
-                fontSize: 11,
-                fontWeight: 800,
-                color: isDetailExpanded ? '#0369a1' : '#334155',
-                whiteSpace: 'nowrap',
+                color: isDetailExpanded ? '#0f172a' : '#334155',
                 transition: 'all 0.15s ease',
               }}
               title="Nhấn để xem lời nhắn chi tiết từ hiện trường"
             >
-              <MessageSquareText size={12.5} style={{ color: isDetailExpanded ? '#0284c7' : '#64748b', flexShrink: 0 }} />
-              <span style={{ whiteSpace: 'nowrap' }}>{isDetailExpanded ? 'Thu gọn lời nhắn' : 'Xem lời nhắn & ảnh'}</span>
+              <MessageSquareText size={12.5} style={{ color: isDetailExpanded ? '#0f172a' : '#64748b', flexShrink: 0 }} />
+              <span style={{ whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center' }}>
+                {isDetailExpanded ? 'Thu gọn lời nhắn' : 'Xem lời nhắn & ảnh'}
+              </span>
               {isDetailExpanded ? <ChevronUp size={12} style={{ flexShrink: 0 }} /> : <ChevronDown size={12} style={{ flexShrink: 0 }} />}
             </button>
           )}
@@ -345,26 +383,17 @@ export const CitizenDistressProfile: React.FC<Props> = ({
               if (!isSuppliesExpanded) setIsDetailExpanded(false);
             }}
             style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 4,
-              padding: '5px 6px',
-              background: isSuppliesExpanded ? '#f0fdf4' : '#ffffff',
-              border: isSuppliesExpanded ? '1.5px solid #16a34a' : '1px solid #e2e8f0',
-              borderRadius: 6,
+              ...uniformBoxStyle,
+              background: isSuppliesExpanded ? '#f1f5f9' : '#ffffff',
+              border: isSuppliesExpanded ? '1px solid #94a3b8' : '1px solid #e2e8f0',
               cursor: 'pointer',
-              fontSize: 11,
-              fontWeight: 800,
-              color: isSuppliesExpanded ? '#15803d' : '#334155',
-              whiteSpace: 'nowrap',
+              color: isSuppliesExpanded ? '#0f172a' : '#334155',
               transition: 'all 0.15s ease',
             }}
             title="Quản lý vật tư và trang thiết bị cấp phát cho ca cứu nạn"
           >
-            <Package size={12.5} style={{ color: isSuppliesExpanded ? '#16a34a' : '#64748b', flexShrink: 0 }} />
-            <span style={{ whiteSpace: 'nowrap' }}>
+            <Package size={12.5} style={{ color: isSuppliesExpanded ? '#0f172a' : '#64748b', flexShrink: 0 }} />
+            <span style={{ whiteSpace: 'normal', wordBreak: 'break-word', textAlign: 'center' }}>
               {isSuppliesExpanded ? 'Đóng kho vật tư' : 'Cấp vật tư'}
             </span>
             {isSuppliesExpanded ? <ChevronUp size={12} style={{ flexShrink: 0 }} /> : <ChevronDown size={12} style={{ flexShrink: 0 }} />}
@@ -386,7 +415,7 @@ export const CitizenDistressProfile: React.FC<Props> = ({
                 style={{
                   padding: '8px 11px',
                   background: '#f8fafc',
-                  borderLeft: '3.5px solid #ef4444',
+                  borderLeft: '3px solid #64748b',
                   borderRadius: '0 6px 6px 0',
                   borderTop: '1px solid #e2e8f0',
                   borderRight: '1px solid #e2e8f0',

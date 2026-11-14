@@ -36,8 +36,8 @@ class WeatherNotificationController {
       ? req.body.executionId.slice(0, 120)
       : undefined;
 
-    // Tự động dọn dẹp các bản tin chưa duyệt (pending) quá 2 ngày
-    weatherNotificationService.cleanupExpiredPendingArticles(2).catch((err) => {
+    // Tự động dọn dẹp các bản tin cũ và bài lưu trữ quá 2 ngày
+    weatherNotificationService.cleanupExpiredWeatherArticles(2).catch((err) => {
       console.warn('Lỗi dọn dẹp bản tin cũ sau workflow n8n:', err);
     });
 
@@ -131,11 +131,22 @@ class WeatherNotificationController {
   /**
    * DELETE /weather-notifications/:id
    * (Chỉ ADMIN và LOCAL_AUTHORITY)
+   * Query: ?permanent=true để xóa vĩnh viễn khỏi CSDL
    */
   async deleteWeatherNotification(req, res, next) {
     try {
-      const item = await weatherNotificationService.deleteWeatherNotification(req.params.id);
-      return sendSuccess(res, 200, 'Hủy thông báo thời tiết thành công', item);
+      const isPermanent = req.query.permanent === 'true';
+      const item = await weatherNotificationService.deleteWeatherNotification(req.params.id, {
+        permanent: isPermanent,
+      });
+      return sendSuccess(
+        res,
+        200,
+        isPermanent
+          ? 'Đã xóa vĩnh viễn thông báo thời tiết'
+          : 'Đã chuyển thông báo thời tiết vào kho lưu trữ (tự động xóa sau 2 ngày)',
+        item
+      );
     } catch (error) {
       next(error);
     }
@@ -148,8 +159,13 @@ class WeatherNotificationController {
   async cleanupExpiredArticles(req, res, next) {
     try {
       const days = parseInt(req.body?.days, 10) || 2;
-      const deletedCount = await weatherNotificationService.cleanupExpiredPendingArticles(days);
-      return sendSuccess(res, 200, `Đã dọn dẹp thành công ${deletedCount} bản tin pending cũ quá ${days} ngày.`, { deletedCount });
+      const stats = await weatherNotificationService.cleanupExpiredWeatherArticles(days);
+      return sendSuccess(
+        res,
+        200,
+        `Đã dọn dẹp thành công ${stats.totalDeleted} bản tin (${stats.archivedDeleted} tin lưu trữ, ${stats.pendingDeleted} tin chờ duyệt) quá ${days} ngày.`,
+        stats
+      );
     } catch (error) {
       next(error);
     }

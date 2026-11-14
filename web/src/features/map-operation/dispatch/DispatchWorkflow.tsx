@@ -73,7 +73,22 @@ export const DispatchWorkflow = ({
   const { lang: _lang } = useApp();
   const isAdmin = activeOfficer?.role === 'ADMIN';
 
-// Kho vật tư & trang thiết bị PCTT theo khu vực thực tế từ Database
+  // Hàm tính khoảng cách địa lý chính xác (Haversine Formula) tính bằng km
+  function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // km
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  // Kho vật tư & trang thiết bị PCTT theo khu vực thực tế từ Database
   const [areaSupplies, setAreaSupplies] = useState<EquipmentItem[]>([]);
   const [isLoadingSupplies, setIsLoadingSupplies] = useState<boolean>(false);
 
@@ -288,9 +303,33 @@ export const DispatchWorkflow = ({
     assignment?.rescuerId || availableRescuers[0]?.id || ''
   );
 
-  // Vehicles under primary team
-  const teamVehicles = vehicles.filter((v) => v.teamId === currentTeam?.id);
-  const availableVehicles = teamVehicles.filter((vehicle) => vehicle.status === 'Available');
+  // Vehicles under primary team (chỉ lấy đúng phương tiện thuộc đội trong DB, không lấy nhầm xe đội khác)
+  const getVehiclesForTeam = (team?: RescueTeam | null): Vehicle[] => {
+    if (!team) return [];
+    const matched = vehicles.filter((v) => v.teamId === team.id || v.id === (team as any).vehicleId);
+    const fromTeam = Array.isArray(team.vehicles) ? team.vehicles : [];
+    if (matched.length === 0) return fromTeam;
+    const byId = new Map<string, Vehicle>();
+    for (const v of [...matched, ...fromTeam]) {
+      if (v?.id && !byId.has(v.id)) byId.set(v.id, v);
+    }
+    return Array.from(byId.values());
+  };
+
+  const formatVehicleDisplay = (v: Vehicle, includeCapacityLabel: boolean = false): string => {
+    const rawName = (v.name || 'Phương tiện').trim();
+    const plate = (v.plate || '').trim();
+    const label = plate && !rawName.toUpperCase().includes(plate.toUpperCase())
+      ? `${rawName} (${plate})`
+      : rawName;
+    const capRaw = String(v.capacity || '').trim();
+    if (!capRaw) return label;
+    const capText = /người/i.test(capRaw) ? capRaw : `${capRaw} người`;
+    return includeCapacityLabel ? `${label} • Sức chứa: ${capText}` : `${label} (${capText})`;
+  };
+
+  const teamVehicles = getVehiclesForTeam(currentTeam);
+  const availableVehicles = teamVehicles;
   const [_selectedVehicleId, setSelectedVehicleId] = useState<string>(
     assignment?.vehicleId || availableVehicles[0]?.id || ''
   );
@@ -362,7 +401,7 @@ export const DispatchWorkflow = ({
 
     const primaryTeam = selectedTeams[0];
     const primaryRescuer = primaryTeam.rescuers[0];
-    const primaryVehicle = vehicles.find((v) => v.teamId === primaryTeam.id && v.status === 'Available');
+    const primaryVehicle = getVehiclesForTeam(primaryTeam)[0];
 
     const supplyList = Object.entries(allocatedSupplies)
       .filter(([_, qty]) => qty > 0)
@@ -377,21 +416,21 @@ export const DispatchWorkflow = ({
       });
 
     onConfirmAssign({
-      authorityOrganizationId: matchedAuthority?.id || 'auth-general',
-      authorityOrganizationName: matchedAuthority?.name || 'Cơ quan Cứu Hộ & Phòng Chống Thiên Tai',
+      authorityOrganizationId: matchedAuthority?.id || '',
+      authorityOrganizationName: matchedAuthority?.name || primaryTeam.authorityName || 'Cơ quan Cứu Hộ & Phòng Chống Thiên Tai',
       rescueTeamId: activeSelectedTeamIds.join(','),
       rescueTeamName: selectedTeams.map((t) => t.name).join(' & '),
-      rescuerId: primaryRescuer?.id || 'rescuer-lead',
+      rescuerId: primaryRescuer?.id || '',
       rescuerName: selectedTeams.map((t) => t.rescuers[0]?.name).filter(Boolean).join(', ') || 'Chỉ huy trưởng',
-      rescuerRole: primaryRescuer?.role || 'Chỉ Huy Trưởng',
+      rescuerRole: primaryRescuer?.role || 'Chỉ Huy Đội',
       vehicleId: primaryVehicle?.id || '',
-      vehicleName: selectedTeams
-        .map((t) => {
-          const v = vehicles.find((veh) => veh.teamId === t.id);
-          return v?.name || 'Ca-nô';
-        })
-        .join(' + '),
-      vehicleCapacity: `${selectedTeams.reduce((acc, t) => acc + (t.availableRescuersCount || 4), 0)} chiến sĩ`,
+      vehicleName:
+        selectedTeams
+          .flatMap((t) => getVehiclesForTeam(t))
+          .map((v) => formatVehicleDisplay(v, false))
+          .filter(Boolean)
+          .join(' + ') || 'Chưa gán phương tiện',
+      vehicleCapacity: `${selectedTeams.reduce((acc, t) => acc + (t.rescuers?.length ?? t.availableRescuersCount ?? 0), 0)} chiến sĩ`,
       supplies: supplyList,
     });
     setIsConfirmModalOpen(false);
@@ -417,7 +456,7 @@ export const DispatchWorkflow = ({
         {onToggleCollapse && (
           <button
             type="button"
-            className="btn-feed-collapse"
+            className="sos-btn sos-btn--ghost sos-btn--icon-xs"
             onClick={onToggleCollapse}
             style={{
               position: 'absolute',
@@ -425,6 +464,7 @@ export const DispatchWorkflow = ({
               right: 12,
             }}
             title="Thu gọn bảng tác chiến để mở rộng bản đồ"
+            aria-label="Thu gọn bảng tác chiến"
           >
             <ChevronRight size={16} />
           </button>
@@ -499,7 +539,7 @@ export const DispatchWorkflow = ({
         }}
       >
         {/* Header Sự Cố */}
-        <div style={{ padding: '9px 12px 6px 12px' }}>
+        <div style={{ padding: '7px 10px 5px 10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
               <span
@@ -512,10 +552,10 @@ export const DispatchWorkflow = ({
                   boxShadow: isCompleted
                     ? '0 0 0 2px rgba(22, 163, 74, 0.2)'
                     : isCancelled
-                    ? '0 0 0 2px rgba(100, 116, 139, 0.2)'
-                    : isAssigned
-                    ? '0 0 0 2px rgba(30, 41, 59, 0.2)'
-                    : '0 0 0 2px rgba(220, 38, 38, 0.2)',
+                      ? '0 0 0 2px rgba(100, 116, 139, 0.2)'
+                      : isAssigned
+                        ? '0 0 0 2px rgba(30, 41, 59, 0.2)'
+                        : '0 0 0 2px rgba(220, 38, 38, 0.2)',
                 }}
               />
               <span
@@ -530,10 +570,10 @@ export const DispatchWorkflow = ({
                 {isCompleted
                   ? 'Hồ Sơ Cứu Nạn (Đã Hoàn Thành)'
                   : isCancelled
-                  ? 'Hồ Sơ Cứu Nạn (Đã Hủy)'
-                  : isAssigned
-                  ? 'Hỗ Trợ Cứu Nạn (Đã Điều Động)'
-                  : 'Hỗ Trợ Cứu Nạn (Chờ Phân Công)'}
+                    ? 'Hồ Sơ Cứu Nạn (Đã Hủy)'
+                    : isAssigned
+                      ? 'Hỗ Trợ Cứu Nạn (Đã Điều Động)'
+                      : 'Hỗ Trợ Cứu Nạn (Chờ Phân Công)'}
               </span>
             </div>
 
@@ -575,41 +615,20 @@ export const DispatchWorkflow = ({
               {onToggleCollapse && (
                 <button
                   type="button"
-                  className="btn-feed-collapse"
+                  className="sos-btn sos-btn--ghost sos-btn--icon-xs"
                   onClick={onToggleCollapse}
                   title="Thu gọn bảng tác chiến để mở rộng bản đồ"
+                  aria-label="Thu gọn bảng tác chiến"
                 >
                   <ChevronRight size={16} />
                 </button>
               )}
             </div>
           </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 900, color: '#0f172a', margin: 0, letterSpacing: '-0.3px' }}>
-              {selectedSos.sosCode}
-            </h2>
-            <span style={{ fontSize: 10.5, fontWeight: 800, color: '#0369a1', background: '#f0f9ff', border: '1.5px solid #bae6fd', padding: '1px 6px', borderRadius: 4 }}>
-              {({
-                FLOOD: 'Ngập lụt',
-                MEDICAL: 'Cấp cứu y tế',
-                LANDSLIDE: 'Sạt lở',
-                EVACUATION: 'Sơ tán',
-                FOOD: 'Lương thực',
-                RELIEF: 'Cứu trợ',
-                FIRE: 'Hỏa hoạn',
-                RESCUE: 'Cứu nạn',
-                OTHER: 'Khác',
-              } as Record<string, string>)[String(selectedSos.emergencyType || '').toUpperCase()] || selectedSos.emergencyType}
-            </span>
-            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>
-              • {selectedSos.timeAgo || 'Vừa xong'}
-            </span>
-          </div>
         </div>
 
         {/* Khung Thông Tin Nạn Nhân / Hiện Trường (CỐ ĐỊNH Ở VÙNG 1) */}
-        <div style={{ padding: '0 12px 8px 12px' }}>
+        <div style={{ padding: '0 10px 6px 10px' }}>
           <CitizenDistressProfile
             selectedSos={selectedSos}
             allocatedSupplies={allocatedSupplies}
@@ -683,15 +702,20 @@ export const DispatchWorkflow = ({
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            padding: '10px 12px 0 12px',
+            padding: '6px 10px 0 10px',
           }}
         >
           {/* Header tiêu đề phân công CỐ ĐỊNH (shrink-0) */}
           <div
             style={{
               flexShrink: 0,
-              paddingBottom: 7,
-              borderBottom: '1px solid #f1f5f9',
+              paddingBottom: 6,
+              borderBottom: '1px solid var(--sos-border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+              flexWrap: 'wrap',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
@@ -699,7 +723,7 @@ export const DispatchWorkflow = ({
                 style={{
                   fontSize: 12.5,
                   fontWeight: 900,
-                  color: '#0f172a',
+                  color: 'var(--sos-text-primary, #0f172a)',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 5,
@@ -736,16 +760,18 @@ export const DispatchWorkflow = ({
                 </button>
               )}
             </div>
-            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginTop: 1 }}>
-              {busyTeamsCount === 0
-                ? `(${readyTeamsCount} đội trực chiến sẵn sàng xuất kích)`
-                : readyTeamsCount === 0
-                ? `(Tất cả ${availableTeams.length} đội đang bận nhiệm vụ)`
-                : `(${readyTeamsCount}/${availableTeams.length} đội sẵn sàng xuất kích • ${busyTeamsCount} đội bận)`}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, color: 'var(--sos-text-muted)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                {busyTeamsCount === 0
+                  ? `${readyTeamsCount} đội sẵn sàng`
+                  : readyTeamsCount === 0
+                    ? `${availableTeams.length} đội đang bận`
+                    : `${readyTeamsCount}/${availableTeams.length} sẵn sàng • ${busyTeamsCount} bận`}
+              </span>
             </div>
           </div>
 
-          {/* DANH SÁCH THẺ ĐỘI CỨU HỘ: DUY NHẤT VÙNG NÀY ĐƯỢC PHÉP CUỘN (flex-1 min-h-0 overflow-y-auto) */}
+          {/* DANH SÁCH THẺ ĐỘI CỨU HỘ: CUỘN DỌC */}
           <div className="dispatch-teams-scroll-list">
             {/* Cảnh báo xung đột tài nguyên toàn cục */}
             {smartRecs?.conflicts && smartRecs.conflicts.length > 0 && (
@@ -965,7 +991,7 @@ export const DispatchWorkflow = ({
                   borderRadius: 8,
                   border: '1px dashed #cbd5e1',
                   color: '#64748b',
-                  fontSize: 12,
+                  fontSize: 12.5,
                 }}
               >
                 Chưa có đội cứu hộ nào thuộc địa bàn {activeOfficer?.jurisdictionAreaName || 'quản lý'}.
@@ -974,7 +1000,8 @@ export const DispatchWorkflow = ({
               availableTeams.map((team) => {
                 const isSelected = activeSelectedTeamIds.includes(team.id);
                 const smartCand = candidateByTeamId.get(team.id);
-                const teamVeh = vehicles.find((v) => v.teamId === team.id && v.status === 'Available') || vehicles.find((v) => v.teamId === team.id);
+                const tVehicles = getVehiclesForTeam(team);
+                const teamVeh = tVehicles.find((v) => v.status === 'Available') || tVehicles[0];
                 const isRecommended = Boolean(smartRecs?.aiAdvisor?.recommendedTeamIds?.includes(team.id));
 
                 const vehicleTypeViMap: Record<string, string> = {
@@ -993,6 +1020,7 @@ export const DispatchWorkflow = ({
                 };
 
                 const vehicleSpec = (() => {
+                  if (!smartCand?.primaryVehicle && tVehicles.length === 0) return 'Chưa gán phương tiện';
                   const rawType = smartCand?.primaryVehicle?.type || teamVeh?.rawType || '';
                   const typeLabel = vehicleTypeViMap[rawType] || (teamVeh?.name ? teamVeh.name.replace(/^Phương tiện\s+/i, '') : 'Ca-nô');
                   const plate = smartCand?.primaryVehicle?.plateNumber || teamVeh?.plate || '';
@@ -1003,10 +1031,7 @@ export const DispatchWorkflow = ({
 
                 const etaText = smartCand?.etaText || 'Chưa có ETA định tuyến';
 
-                const teamDisplayName =
-                  team.id === 'team-hc-htd'
-                    ? 'Đội Cứu Hộ Phường Hòa Cường'
-                    : team.name;
+                const teamDisplayName = team.name;
 
                 const teamTypeLabelMap: Record<string, string> = {
                   WATER_RESCUE: 'Đường thủy',
@@ -1072,13 +1097,10 @@ export const DispatchWorkflow = ({
         <div
           style={{
             flexShrink: 0,
-            padding: '10px 14px 12px 14px',
+            padding: '8px 10px',
             borderTop: '1px solid var(--sos-border)',
             background: 'var(--sos-surface)',
-            boxShadow: '0 -4px 14px rgba(0,0,0,0.06)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 5,
+            boxShadow: '0 -4px 12px rgba(0,0,0,0.05)',
           }}
         >
           <button
@@ -1087,26 +1109,26 @@ export const DispatchWorkflow = ({
             onClick={() => setIsConfirmModalOpen(true)}
             style={{
               width: '100%',
-              padding: '11px 16px',
+              padding: '9px 14px',
               background:
                 activeSelectedTeamIds.length === 0
                   ? '#94a3b8'
-                  : '#dc2626', // Màu đỏ khẩn cấp theo yêu cầu
+                  : '#dc2626',
               color: '#ffffff',
               border: 'none',
               borderRadius: 8,
-              fontSize: 13,
-              fontWeight: 900,
+              fontSize: 12.5,
+              fontWeight: 800,
               cursor: activeSelectedTeamIds.length === 0 ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 8,
-              letterSpacing: '0.4px',
+              gap: 6,
+              letterSpacing: '0.35px',
               boxShadow:
                 activeSelectedTeamIds.length === 0
                   ? 'none'
-                  : '0 3px 12px rgba(220, 38, 38, 0.35)',
+                  : '0 3px 10px rgba(220, 38, 38, 0.3)',
               transition: 'all 0.15s ease',
             }}
           >
@@ -1116,9 +1138,6 @@ export const DispatchWorkflow = ({
                 : '⚡ XÁC NHẬN PHÂN CÔNG'}
             </span>
           </button>
-          <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--sos-text-muted)' }}>
-            Lệnh phân công sẽ truyền tức thời đến máy bộ đàm &amp; App cứu hộ viên
-          </div>
         </div>
       )}
 

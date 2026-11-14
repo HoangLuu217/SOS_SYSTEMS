@@ -109,6 +109,22 @@ const bloodDonationRegistrationSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    reminded1DayBefore: {
+      type: Boolean,
+      default: false,
+    },
+    reminded1DayAt: {
+      type: Date,
+      default: null,
+    },
+    remindedUpcoming: {
+      type: Boolean,
+      default: false,
+    },
+    remindedUpcomingAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -120,6 +136,8 @@ bloodDonationRegistrationSchema.index({ userId: 1, registrationType: 1 });
 bloodDonationRegistrationSchema.index({ eventId: 1, userId: 1 });
 bloodDonationRegistrationSchema.index({ status: 1, createdAt: -1 });
 bloodDonationRegistrationSchema.index({ areaId: 1, status: 1 });
+bloodDonationRegistrationSchema.index({ eventId: 1, status: 1, reminded1DayBefore: 1 });
+bloodDonationRegistrationSchema.index({ eventId: 1, status: 1, remindedUpcoming: 1 });
 
 module.exports = mongoose.model('BloodDonationRegistration', bloodDonationRegistrationSchema);
 

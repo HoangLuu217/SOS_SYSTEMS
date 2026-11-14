@@ -37,6 +37,7 @@ export interface BloodDonationEventItem {
   description?: string;
   locationName: string;
   address: string;
+  googleMapsUrl?: string;
   eventDate: string;
   startTime: string;
   endTime: string;

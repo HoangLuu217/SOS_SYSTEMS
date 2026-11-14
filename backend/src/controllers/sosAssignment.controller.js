@@ -250,7 +250,7 @@ class SosAssignmentController {
   async cancelAssignment(req, res, next) {
     try {
       const cancelReason = req.body.cancelReason || req.body.reason;
-      const assignment = await sosAssignmentService.cancelAssignment(req.params.id, cancelReason);
+      const assignment = await sosAssignmentService.cancelAssignment(req.params.id, cancelReason, req.user?._id || null);
 
       const actorRole = req.user?.roles?.includes('LOCAL_AUTHORITY')
         ? 'LOCAL_AUTHORITY'

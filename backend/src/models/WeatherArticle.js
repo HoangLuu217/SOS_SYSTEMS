@@ -107,6 +107,10 @@ const weatherArticleSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    archivedAt: {
+      type: Date,
+      default: null,
+    },
 
     // Compatibility fields used by the current SOS weather-notification API.
     imageUrl: {
@@ -193,6 +197,8 @@ weatherArticleSchema.index({ category: 1, published_at: -1 });
 weatherArticleSchema.index({ regions: 1 });
 weatherArticleSchema.index({ relevance_score: -1 });
 weatherArticleSchema.index({ status: 1, created_at: -1 });
+weatherArticleSchema.index({ status: 1, archivedAt: -1 });
+weatherArticleSchema.index({ status: 1, updatedAt: -1 });
 weatherArticleSchema.index({ source_url: 1 });
 
 const WeatherArticle =

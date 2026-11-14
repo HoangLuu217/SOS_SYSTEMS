@@ -15,6 +15,12 @@ export interface User {
     areaName?: string;
     position?: string;
     department?: string;
+    provinceCode?: number;
+    wardCode?: number;
+    mapUrl?: string;
+    latitude?: number;
+    longitude?: number;
+    officeAddress?: string;
   };
   lastLoginAt?: string;
   createdAt?: string;

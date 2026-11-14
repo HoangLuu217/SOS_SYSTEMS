@@ -18,8 +18,9 @@ router.post('/broadcast', authorize('ADMIN', 'LOCAL_AUTHORITY'), notificationCon
 router.get('/broadcasts', authorize('ADMIN', 'LOCAL_AUTHORITY'), notificationController.getBroadcastHistory);
 router.delete('/broadcasts/:id', authorize('ADMIN', 'LOCAL_AUTHORITY'), notificationController.deleteBroadcast);
 
-// 3. Đăng ký Expo Push Token cho thiết bị điện thoại
+// 3. Đăng ký / hủy Expo Push Token cho thiết bị điện thoại
 router.post('/register-push-token', notificationController.registerPushToken);
+router.delete('/register-push-token', notificationController.unregisterPushToken);
 router.patch('/location', notificationController.updateCurrentLocation);
 
 // 4. Quản lý trạng thái thông báo cá nhân

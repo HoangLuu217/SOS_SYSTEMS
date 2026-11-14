@@ -7,6 +7,7 @@ import {
   Keyboard,
   LogBox,
   DeviceEventEmitter,
+  BackHandler,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '@/context/AuthContext';
@@ -16,7 +17,7 @@ import { HomeScreen, ConfigModal } from '@/features/home';
 import { MapScreen } from '@/features/map';
 import { SosScreen } from '@/features/sos';
 import { NewsScreen } from '@/features/news';
-import { ProfileScreen, MandatoryOnboardingModal } from '@/features/profile';
+import { ProfileScreen, NotificationsScreen, MandatoryOnboardingModal } from '@/features/profile';
 import { RescuerMissionScreen } from '@/features/mission';
 import { backendApi } from '@/api';
 import { AlertModal, BottomNav, LogoSOS, InAppNotificationBanner, FloatingActiveSosWidget } from '@/components';
@@ -39,33 +40,58 @@ LogBox.ignoreLogs([
 export function AuthenticatedApp() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabName>('home');
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [safetyCheckModalVisible, setSafetyCheckModalVisible] = useState(false);
   const [safetyCheckId, setSafetyCheckId] = useState<string | undefined>(undefined);
   const [bloodDonationModalVisible, setBloodDonationModalVisible] = useState(false);
   const [bloodDonationEventId, setBloodDonationEventId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
+    if (!notificationsOpen) return;
+    const backSub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setNotificationsOpen(false);
+      return true;
+    });
+    return () => backSub.remove();
+  }, [notificationsOpen]);
+
+  useEffect(() => {
     const sub = DeviceEventEmitter.addListener('open:safety_check', (data: any) => {
       const sid = data?.safetyCheckId || data?._id;
+      setNotificationsOpen(false);
       setSafetyCheckId(sid || undefined);
       setSafetyCheckModalVisible(true);
     });
     const subBlood = DeviceEventEmitter.addListener('open:blood_donation', (data: any) => {
       const eid = data?.eventId || data?.bloodDonationEventId || data?._id;
+      setNotificationsOpen(false);
       setActiveTab('home');
       setBloodDonationEventId(eid || undefined);
       setBloodDonationModalVisible(true);
     });
+    const subSos = DeviceEventEmitter.addListener('navigate:sos', (data: any) => {
+      setNotificationsOpen(false);
+      setSafetyCheckModalVisible(false);
+      setActiveTab('sos');
+      if (data) {
+        setTimeout(() => {
+          DeviceEventEmitter.emit('sos:prefill', data);
+        }, 120);
+      }
+    });
     const subMission = DeviceEventEmitter.addListener('open:mission_tab', () => {
+      setNotificationsOpen(false);
       setActiveTab('sos');
       DeviceEventEmitter.emit('sos:sync');
     });
     const subChat = DeviceEventEmitter.addListener('open:local_authority_chat', () => {
+      setNotificationsOpen(false);
       setActiveTab('home');
     });
     return () => {
       sub.remove();
       subBlood.remove();
+      subSos.remove();
       subMission.remove();
       subChat.remove();
     };
@@ -81,7 +107,7 @@ export function AuthenticatedApp() {
     roles.includes('LEADER') ||
     (roles.includes('RESCUER') && user?.rescuer?.verificationStatus !== 'REJECTED');
 
-  const { unreadCount, setNavigateHandler } = useNotifications();
+  const { setNavigateHandler } = useNotifications();
 
   // Tải số lượng nhiệm vụ đang xử lý cho Cứu hộ viên & tự động điều hướng sang tab SOS tác chiến
   const hasAutoSwitchedToSosRef = React.useRef(false);
@@ -140,7 +166,12 @@ export function AuthenticatedApp() {
     };
   }, [isRescuer, user?._id]);
 
-  const handleNavigateToTab = React.useCallback((tab: TabName, options?: { filter?: MapFilterType; areaId?: string }) => {
+  const handleNavigateToTab = React.useCallback((tab: TabName | 'notifications', options?: { filter?: MapFilterType; areaId?: string }) => {
+    if (tab === 'notifications') {
+      setNotificationsOpen(true);
+      return;
+    }
+    setNotificationsOpen(false);
     setActiveTab(tab);
     if (tab === 'sos') {
       DeviceEventEmitter.emit('sos:sync');
@@ -160,11 +191,12 @@ export function AuthenticatedApp() {
   }, [activeTab]);
 
   const handleNavigateToHome = React.useCallback(() => {
+    setNotificationsOpen(false);
     setActiveTab('home');
   }, []);
 
   React.useEffect(() => {
-    setNavigateHandler((tab) => handleNavigateToTab(tab as TabName));
+    setNavigateHandler((tab) => handleNavigateToTab(tab as TabName | 'notifications'));
   }, [setNavigateHandler, handleNavigateToTab]);
 
   return (
@@ -179,7 +211,8 @@ export function AuthenticatedApp() {
           <HomeScreen
             onOpenSettings={() => setConfigVisible(true)}
             onNavigateToTab={handleNavigateToTab}
-            onNavigateToSos={() => setActiveTab('sos')}
+            onNavigateToSos={() => handleNavigateToTab('sos')}
+            onOpenNotifications={() => setNotificationsOpen(true)}
           />
         </View>
 
@@ -205,27 +238,44 @@ export function AuthenticatedApp() {
           )}
         </View>
 
-        {/* Tab Tin tức & Thông báo */}
+        {/* Tab Tin tức (chỉ hiển thị bài viết thời tiết) */}
         <View style={[styles.tabScreenWrap, activeTab !== 'news' && styles.hiddenTabScreen]}>
           <NewsScreen
             onNavigateToTab={(tab) => handleNavigateToTab(tab as TabName)}
-            onOpenSettings={() => setActiveTab('profile')}
+            onOpenSettings={() => handleNavigateToTab('profile')}
+            isActive={!notificationsOpen && activeTab === 'news'}
           />
         </View>
 
         {/* Tab Hồ sơ người dùng */}
         <View style={[styles.tabScreenWrap, activeTab !== 'profile' && styles.hiddenTabScreen]}>
           <ProfileScreen
-            onNavigateToTab={(tab) => setActiveTab(tab as TabName)}
+            onNavigateToTab={(tab) => handleNavigateToTab(tab as TabName)}
+            onOpenNotifications={() => setNotificationsOpen(true)}
+            isActive={!notificationsOpen && activeTab === 'profile'}
           />
         </View>
+
+        {/* Màn hình Thông báo dùng chung cho cả Chuông ở Trang chủ và Cá nhân */}
+        {notificationsOpen && (
+          <View style={styles.notificationsOverlay}>
+            <NotificationsScreen
+              onBack={() => setNotificationsOpen(false)}
+              onNavigateToTab={(tab, options) => handleNavigateToTab(tab as TabName, options)}
+              onNavigateToProfile={() => {
+                setNotificationsOpen(false);
+                setActiveTab('profile');
+              }}
+            />
+          </View>
+        )}
       </View>
 
       <View style={styles.bottomNavWrapper}>
         <BottomNav
           activeTab={activeTab}
-          onTabPress={setActiveTab}
-          unreadNewsCount={unreadCount}
+          onTabPress={handleNavigateToTab}
+          unreadNewsCount={0}
           isRescuer={isRescuer}
           activeMissionsCount={activeMissionsCount}
         />
@@ -235,6 +285,15 @@ export function AuthenticatedApp() {
       <SafetyCheckModal
         visible={safetyCheckModalVisible}
         safetyCheckId={safetyCheckId}
+        onNavigateToSos={(data) => {
+          setSafetyCheckModalVisible(false);
+          setActiveTab('sos');
+          if (data) {
+            setTimeout(() => {
+              DeviceEventEmitter.emit('sos:prefill', data);
+            }, 120);
+          }
+        }}
         onClose={() => {
           setSafetyCheckModalVisible(false);
           setSafetyCheckId(undefined);
@@ -449,6 +508,15 @@ const styles = StyleSheet.create({
   },
   hiddenTabScreen: {
     display: 'none',
+  },
+  notificationsOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#F6F7F9',
+    zIndex: 20,
   },
   bottomNavWrapper: {
     zIndex: 100,

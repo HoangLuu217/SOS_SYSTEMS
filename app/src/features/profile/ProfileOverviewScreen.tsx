@@ -24,7 +24,7 @@ export const ProfileOverviewScreen: React.FC<ProfileOverviewScreenProps> = ({
   onNavigateToSecurity,
   onNavigateToNotificationSettings,
   onNavigateToNotifications,
-  unreadNotificationsCount = 3,
+  unreadNotificationsCount = 0,
   refreshTrigger,
   onNavigateToTab,
 }) => {

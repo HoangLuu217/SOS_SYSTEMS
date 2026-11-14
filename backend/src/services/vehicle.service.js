@@ -111,7 +111,11 @@ class VehicleService {
           select: 'name type areaId status leaderId',
           populate: [
             { path: 'leaderId', select: 'fullName phone email' },
-            { path: 'areaId', select: 'name code' },
+            {
+              path: 'areaId',
+              select: 'name code type parentId',
+              populate: { path: 'parentId', select: 'name code type' },
+            },
           ],
         })
         .sort({ createdAt: -1 })

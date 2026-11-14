@@ -8,7 +8,7 @@ import { ProfessionalProfileScreen } from './ProfessionalProfileScreen';
 import { AccountSecurityScreen } from './AccountSecurityScreen';
 import { NotificationSettingsScreen } from './NotificationSettingsScreen';
 import { NotificationsScreen } from './NotificationsScreen';
-import { backendApi } from '@/api';
+import { useNotifications } from '@/context/NotificationContext';
 
 export type ProfileSubScreen =
   | 'overview'
@@ -23,14 +23,18 @@ export type ProfileSubScreen =
 interface ProfileScreenProps {
   initialScreen?: ProfileSubScreen;
   onNavigateToTab?: (tab: string) => void;
+  onOpenNotifications?: () => void;
+  isActive?: boolean;
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   initialScreen = 'overview',
   onNavigateToTab,
+  onOpenNotifications,
+  isActive = true,
 }) => {
   const [currentScreen, setCurrentScreen] = useState<ProfileSubScreen>(initialScreen);
-  const [unreadCount, setUnreadCount] = useState<number>(3);
+  const { unreadCount } = useNotifications();
 
   // Tự động đồng bộ khi initialScreen từ bên ngoài thay đổi (ví dụ: chuyển tab)
   useEffect(() => {
@@ -39,25 +43,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     }
   }, [initialScreen]);
 
-  // Tải số lượng thông báo chưa đọc
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const notifRes = await backendApi.getNotifications();
-        if (notifRes.success && Array.isArray(notifRes.data)) {
-          const unread = notifRes.data.filter((n) => !n.isRead).length;
-          setUnreadCount(unread > 0 ? unread : 3);
-        }
-      } catch {
-        // Fallback giữ nguyên 3 thông báo mẫu
-      }
-    };
-
-    fetchData();
-  }, [currentScreen]);
-
   // Xử lý nút Back phần cứng của Android
   useEffect(() => {
+    if (!isActive) return;
     const onBackPress = () => {
       if (currentScreen !== 'overview') {
         setCurrentScreen('overview');
@@ -68,7 +56,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => backHandler.remove();
-  }, [currentScreen]);
+  }, [currentScreen, isActive]);
 
   const [overviewRefreshKey, setOverviewRefreshKey] = useState<number>(0);
 
@@ -94,7 +82,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           onNavigateToSosHistory={() => setCurrentScreen('sos_history')}
           onNavigateToSecurity={() => setCurrentScreen('security')}
           onNavigateToNotificationSettings={() => setCurrentScreen('notification_settings')}
-          onNavigateToNotifications={() => setCurrentScreen('notifications')}
+          onNavigateToNotifications={() => {
+            if (onOpenNotifications) {
+              onOpenNotifications();
+            } else {
+              setCurrentScreen('notifications');
+            }
+          }}
           unreadNotificationsCount={unreadCount}
           refreshTrigger={overviewRefreshKey}
         />

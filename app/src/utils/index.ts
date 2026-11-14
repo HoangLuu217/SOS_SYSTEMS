@@ -3,3 +3,4 @@ export * from './geo';
 export * from './validation';
 export * from './storage';
 export * from './notificationClassifier';
+export * from './notificationDedupe';

@@ -18,6 +18,64 @@ const initSocket = (httpServer) => {
     pingInterval: 25000,
   });
 
+  try {
+    const eventBus = require('./services/eventBus');
+    eventBus.on('hazard_event', (payload) => {
+      if (io) {
+        io.emit('hazard:event', payload);
+        io.emit('hazard:sync', payload);
+
+        // Phát riêng cho room khu vực tương ứng
+        const rawAreaId = payload?.data?.areaId?._id || payload?.data?.areaId;
+        if (rawAreaId) {
+          const areaKey = typeof rawAreaId === 'object' ? rawAreaId._id : rawAreaId;
+          io.to(`area:${areaKey}`).emit('hazard:area:event', payload);
+          if (payload.action === 'CREATED') {
+            io.to(`area:${areaKey}`).emit('hazard:area:created', payload.data || payload);
+          }
+        }
+      }
+    });
+
+    eventBus.on('safe_location_event', (payload) => {
+      if (io) {
+        io.emit('shelter:event', payload);
+        io.emit('shelter:sync', payload);
+
+        // Phát riêng cho room khu vực tương ứng
+        const rawAreaId = payload?.data?.areaId?._id || payload?.data?.areaId;
+        if (rawAreaId) {
+          const areaKey = typeof rawAreaId === 'object' ? rawAreaId._id : rawAreaId;
+          io.to(`area:${areaKey}`).emit('shelter:area:event', payload);
+          if (payload.action === 'CREATED') {
+            io.to(`area:${areaKey}`).emit('shelter:area:created', payload.data || payload);
+          }
+        }
+      }
+    });
+
+    eventBus.on('notification_event', (payload) => {
+      if (!io || !payload) return;
+      if (payload.action === 'USER' && payload.userId) {
+        io.to(`user_${payload.userId}`).emit('notification:new', payload.data || payload);
+        io.to(`user_${payload.userId}`).emit('notification:event', payload);
+      } else if (payload.action === 'BROADCAST') {
+        io.emit('notification:broadcast', payload.data || payload);
+        io.emit('notification:new', payload.data || payload);
+      } else if (payload.action === 'DELETED') {
+        io.emit('notification:deleted', payload);
+      }
+
+      const rawAreaId = payload?.data?.areaId || payload?.areaId;
+      if (rawAreaId) {
+        const areaKey = typeof rawAreaId === 'object' ? rawAreaId._id : rawAreaId;
+        io.to(`area:${areaKey}`).emit('notification:area', payload.data || payload);
+      }
+    });
+  } catch (busErr) {
+    console.warn('⚠️ [Socket.IO] Không thể gắn eventBus listeners:', busErr.message);
+  }
+
   io.on('connection', (socket) => {
     console.log(`🔌 [Socket.IO] Thiết bị kết nối mới: ${socket.id}`);
 
@@ -65,6 +123,14 @@ const initSocket = (httpServer) => {
     // Luồng hiệp đồng 2 giai đoạn: Ca-nô yêu cầu xe đường bộ đón bờ
     socket.on('rescuer:request_shore_handoff', (data) => {
       if (data) {
+        const handoff = data.shoreHandoff;
+        if (handoff && handoff.rescueTeamId && typeof handoff.rescueTeamId === 'object') {
+          const teamObj = handoff.rescueTeamId;
+          handoff.rescueTeamId = String(teamObj._id || teamObj.id || '');
+          if ((!handoff.rescueTeamName || handoff.rescueTeamName === 'Đội Cứu Hộ') && teamObj.name) {
+            handoff.rescueTeamName = teamObj.name;
+          }
+        }
         console.log(`⚡ [Socket.IO] Nhận yêu cầu xe đón bờ từ Ca-nô:`, data);
         io.emit('sos:shore_handoff_requested', data);
       }
@@ -130,7 +196,7 @@ const emitSosCreated = (sosData) => {
         },
       });
     }
-  } catch (err) {}
+  } catch (err) { }
 };
 
 /**
@@ -160,7 +226,7 @@ const emitSosUpdated = (sosData) => {
         },
       });
     }
-  } catch (err) {}
+  } catch (err) { }
 };
 
 /**
@@ -183,7 +249,7 @@ const emitSosDeleted = (sosId) => {
         sosId,
       },
     });
-  } catch (err) {}
+  } catch (err) { }
 };
 
 module.exports = {

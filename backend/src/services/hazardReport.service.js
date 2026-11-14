@@ -184,7 +184,7 @@ class HazardReportService {
           : (data.notifyAreaId || data.areaId || targetAreaId);
         const areaName = populated.areaId?.name || 'khu vực quản lý';
         const sevMap = {
-          CRITICAL: 'URGENT',
+          CRITICAL: 'CRITICAL',
           HIGH: 'HIGH',
           MEDIUM: 'HIGH',
           LOW: 'NORMAL',
@@ -473,7 +473,7 @@ class HazardReportService {
           : (data.notifyAreaId || data.areaId || populated.areaId?._id || populated.areaId);
         const areaName = populated.areaId?.name || 'khu vực quản lý';
         const sevMap = {
-          CRITICAL: 'URGENT',
+          CRITICAL: 'CRITICAL',
           HIGH: 'HIGH',
           MEDIUM: 'HIGH',
           LOW: 'NORMAL',
