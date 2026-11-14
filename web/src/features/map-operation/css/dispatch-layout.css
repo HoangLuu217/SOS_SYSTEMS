@@ -296,6 +296,11 @@
   border-left-color: #64748b;
 }
 
+.compact-incident-card.unassessed {
+  border-left-color: #ea580c;
+  background: #fff7ed;
+}
+
 .compact-incident-card:hover {
   border-color: #94a3b8;
 }
@@ -425,6 +430,12 @@
   background: #e0f2fe;
   color: #0284c7;
   border: 1px solid #bae6fd;
+}
+
+.compact-priority-badge.unassessed {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
 }
 
 .compact-time-ago {

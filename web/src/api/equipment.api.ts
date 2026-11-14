@@ -49,6 +49,7 @@ export interface EquipmentItem {
     | 'LOST'
     | 'DAMAGED'
     | 'EXPIRED'
+    | 'OUT_OF_STOCK'
     | (string & {});
   note?: string | null;
   createdAt?: string;
@@ -168,6 +169,108 @@ export async function deleteEquipment(
   return fetchWithAuth(`/equipments/${id}`, { method: 'DELETE' });
 }
 
+export interface DispatchHistorySupplyItem {
+  supplyId?: string;
+  name: string;
+  category?: string | null;
+  supplyType?: string | null;
+  quantity: number;
+  unit: string;
+}
+
+export interface DispatchHistoryRecord {
+  id: string;
+  assignmentId: string | null;
+  sosRequestId: string | null;
+  dispatchCode: string;
+  sosCode: string | null;
+  mode: 'ASSIGN_TEAM' | 'DIRECT';
+  status: string;
+  priority: string;
+  areaId: string | null;
+  destination: string;
+  recipientName: string | null;
+  actualRecipient: string | null;
+  teamId: string | null;
+  teamName: string | null;
+  teamPhone: string | null;
+  leaderName: string | null;
+  actorName: string | null;
+  note: string | null;
+  cancelReason: string | null;
+  inventoryRestored: boolean;
+  inventoryRestoredAt: string | null;
+  proofImages: string[];
+  items: DispatchHistorySupplyItem[];
+  createdAt: string;
+  acceptedAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+}
+
+export interface DispatchHistorySummary {
+  total: number;
+  assignTeamCount: number;
+  directCount: number;
+  pendingCount: number;
+  inProgressCount: number;
+  completedCount: number;
+  rejectedCount: number;
+  restoredCount: number;
+}
+
+export interface DispatchHistoryResponse {
+  success: boolean;
+  data: DispatchHistoryRecord[];
+  summary: DispatchHistorySummary;
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+export async function fetchEquipmentDispatchHistory(params?: {
+  mode?: string;
+  status?: string;
+  search?: string;
+  areaId?: string;
+  page?: number;
+  limit?: number;
+}): Promise<DispatchHistoryResponse> {
+  const sp = new URLSearchParams();
+  if (params?.mode) sp.set('mode', params.mode);
+  if (params?.status) sp.set('status', params.status);
+  if (params?.search) sp.set('search', params.search);
+  if (params?.areaId) sp.set('areaId', params.areaId);
+  if (params?.page) sp.set('page', String(params.page));
+  if (params?.limit) sp.set('limit', String(params.limit));
+  const qs = sp.toString();
+  const raw: any = await fetchWithAuth(`/equipments/dispatch-history${qs ? `?${qs}` : ''}`);
+  const payload = Array.isArray(raw?.data) ? raw : (raw?.data || raw);
+  return {
+    success: Boolean(raw?.success),
+    data: Array.isArray(payload?.data) ? payload.data : [],
+    summary: payload?.summary || {
+      total: 0,
+      assignTeamCount: 0,
+      directCount: 0,
+      pendingCount: 0,
+      inProgressCount: 0,
+      completedCount: 0,
+      rejectedCount: 0,
+      restoredCount: 0,
+    },
+    pagination: payload?.pagination || raw?.meta || {
+      total: 0,
+      page: params?.page || 1,
+      limit: params?.limit || 20,
+      totalPages: 1,
+    },
+  };
+}
+
 export const EQUIPMENT_CATEGORY_LABELS: Record<string, string> = {
   LIFE_VEST: 'Áo phao cứu sinh',
   LIFE_SAVING: 'Cứu sinh chuyên dụng',
@@ -192,4 +295,5 @@ export const EQUIPMENT_STATUS_LABELS: Record<string, string> = {
   LOST: 'Thất lạc / Báo mất',
   DAMAGED: 'Hư hỏng kỹ thuật',
   EXPIRED: 'Hết hạn sử dụng',
+  OUT_OF_STOCK: 'Hết tồn kho',
 };

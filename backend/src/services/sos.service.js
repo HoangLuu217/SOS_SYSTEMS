@@ -1,6 +1,8 @@
 const mongoose = require('mongoose');
 const { SosRequest, SosStatusHistory, AdministrativeArea, SosAssignment, Vehicle } = require('../models');
 const ApiError = require('../utils/apiError');
+const sosTriageService = require('./sosTriage.service');
+const geminiService = require('./gemini.service');
 
 /**
  * Tự động phân giải khu vực hành chính (AdministrativeArea) dựa vào địa chỉ & tọa độ
@@ -170,28 +172,62 @@ const createSosRequest = async (citizenId, sosData) => {
 
   // Tự động gán đúng khu vực hành chính dựa trên địa chỉ GPS thực tế
   const assignedAreaId = await resolveAdministrativeArea(address, location, areaId);
+  const normalizedAddress = address || 'Khu vực cứu nạn (Định vị GPS)';
+
+  // Lưu SOS trước; AI phân tích bất đồng bộ để không chặn việc gửi tín hiệu.
+  const cleanDescription = description ? description.replace(/⚡\s*/g, '').trim() : null;
+  const normalizedGroups = Array.isArray(priorityGroups) ? priorityGroups : [];
+  const normalizedPeople = people ? Number(people) : 1;
+  const isSecondary = activeSosList.length > 0;
+
+  const triageInput = {
+    location,
+    areaId: assignedAreaId,
+    address: normalizedAddress,
+    emergencyType: primaryEmergencyType,
+    emergencyTypes: normalizedEmergencyTypes,
+    people: normalizedPeople,
+    description: cleanDescription,
+    priorityGroups: normalizedGroups,
+    images: normalizedImages,
+    repeatCount: 1,
+  };
 
   // TRƯỜNG HỢP B: Tạo ca mới bình thường (hoặc ca Báo hộ bạn bè ở địa điểm khác >= 50m)
-  const isSecondary = activeSosList.length > 0;
   const newSos = await SosRequest.create({
     citizenId,
     location,
     areaId: assignedAreaId,
-    address: address || 'Khu vực cứu nạn (Định vị GPS)',
+    address: normalizedAddress,
     emergencyType: primaryEmergencyType,
     emergencyTypes: normalizedEmergencyTypes,
-    priority: priority || 'HIGH',
-    people: people ? Number(people) : 1,
-    description: description ? description.replace(/⚡\s*/g, '').trim() : null,
+    priority: 'UNASSESSED',
+    citizenReportedPriority: priority || null,
+    riskScore: null,
+    riskBreakdown: null,
+    riskAssessment: {
+      status: 'PENDING',
+      modelVersion: sosTriageService.TRIAGE_MODEL_VERSION,
+      inputHash: sosTriageService.createTriageInputHash(triageInput),
+      needsHumanReview: true,
+    },
+    aiAssessment: {
+      status: geminiService.isConfigured() ? 'PENDING' : 'UNAVAILABLE',
+    },
+    people: normalizedPeople,
+    description: cleanDescription,
     contactPhone: contactPhone || null,
     secondaryPhone: secondaryPhone ? secondaryPhone.trim() : null,
-    priorityGroups: Array.isArray(priorityGroups) ? priorityGroups : [],
+    priorityGroups: normalizedGroups,
     images: normalizedImages,
     status: 'PENDING',
     repeatCount: 1,
     isSecondaryRequest: isSecondary,
     primarySosId: isSecondary ? activeSosList[0]._id : null,
   });
+
+  // Tầng 2: Chạy phân tích Gemini AI bất đồng bộ (text + ảnh) và emit cập nhật qua Socket.IO
+  sosTriageService.scheduleAiTriage(newSos._id);
 
   // Tạo history cho trạng thái khởi tạo
   await SosStatusHistory.create({
@@ -392,20 +428,38 @@ const getSosRequests = async (query = {}, user = null) => {
       .lean();
 
     const assignmentMap = new Map();
+    const assignmentsListMap = new Map();
     assignments.forEach(a => {
       const targetId = (a.sosRequestId || a.sosId)?.toString();
       if (targetId) {
         assignmentMap.set(targetId, a);
+        if (!assignmentsListMap.has(targetId)) assignmentsListMap.set(targetId, []);
+        assignmentsListMap.get(targetId).push(a);
       }
     });
 
     sosList.forEach(s => {
-      const a = assignmentMap.get(s._id.toString());
+      const sId = s._id.toString();
+      const a = assignmentMap.get(sId);
+      const aList = assignmentsListMap.get(sId) || [];
       if (a) {
         s.assignmentId = a._id;
         s.assignment = a;
       }
+      if (aList.length > 0) {
+        s.assignments = aList;
+      }
     });
+
+    if (query.sortBy === 'risk') {
+      // Unassessed cases are surfaced first for human review; this is queue ordering, not a danger score.
+      const priorityOrder = { UNASSESSED: 0, CRITICAL: 1, HIGH: 2, MEDIUM: 3, LOW: 4 };
+      sosList.sort((a, b) => {
+        const diff = (priorityOrder[a.priority] ?? 4) - (priorityOrder[b.priority] ?? 4);
+        if (diff !== 0) return diff;
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      });
+    }
   }
 
   return sosList;
@@ -421,7 +475,7 @@ const getSosRequestById = async (id) => {
     throw new ApiError(404, 'Không tìm thấy yêu cầu SOS');
   }
 
-  const assignment = await SosAssignment.findOne({
+  const activeAssignments = await SosAssignment.find({
     $or: [{ sosRequestId: id }, { sosId: id }],
     status: { $nin: ['CANCELLED', 'REJECTED'] },
   })
@@ -431,9 +485,11 @@ const getSosRequestById = async (id) => {
     .populate('authorityOrganizationId', 'name code')
     .lean();
 
+  const assignment = activeAssignments[activeAssignments.length - 1] || null;
   if (assignment) {
     sos.assignmentId = assignment._id;
     sos.assignment = assignment;
+    sos.assignments = activeAssignments;
   }
 
   return sos;
@@ -503,13 +559,46 @@ const verifyAndClassifySos = async (id, verifyData, authorityId) => {
   const { priority, emergencyType, note } = verifyData;
   const oldStatus = sos.status;
 
-  if (oldStatus !== 'PENDING') {
-    throw new ApiError(400, 'Chỉ có thể xác minh SOS đang ở trạng thái PENDING');
+  if (!['PENDING', 'VERIFIED'].includes(oldStatus)) {
+    throw new ApiError(400, 'Chỉ có thể xác minh SOS đang chờ hoặc cần xác minh lại');
+  }
+
+  const validPriorities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+  const existingPriority = sos.priorityLockedByAuthority && ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(String(sos.priority || '').toUpperCase())
+    ? sos.priority
+    : '';
+  const selectedPriority = String(priority || sos.aiAssessment?.recommendedPriority || existingPriority).toUpperCase();
+  if (!validPriorities.includes(selectedPriority)) {
+    throw new ApiError(400, `Mức ưu tiên không hợp lệ. Cho phép: ${validPriorities.join(', ')}`);
   }
 
   sos.status = 'VERIFIED';
-  if (priority) sos.priority = priority;
-  if (emergencyType) sos.emergencyType = emergencyType;
+  sos.priority = selectedPriority;
+  if (emergencyType) {
+    sos.emergencyType = emergencyType;
+    sos.emergencyTypes = [emergencyType];
+  }
+  sos.priorityLockedByAuthority = true;
+
+  sos.riskAssessment = {
+    status: 'VERIFIED',
+    source: 'AUTHORITY',
+    modelVersion: sosTriageService.TRIAGE_MODEL_VERSION,
+    inputHash: sosTriageService.createTriageInputHash(sos.toObject()),
+    evaluatedAt: new Date(),
+    needsHumanReview: false,
+    verifiedPriority: sos.priority,
+    suggestedPriority: sos.aiAssessment?.recommendedPriority || null,
+    reasons: sos.aiAssessment?.reasons || [],
+    extractedSignals: sos.aiAssessment?.extractedSignals || [],
+    evidence: sos.aiAssessment?.evidence || [],
+    unknowns: sos.aiAssessment?.unknowns || [],
+    operationalNeeds: sos.aiAssessment?.operationalNeeds || null,
+    verifiedBy: authorityId,
+    verifiedAt: new Date(),
+    verificationNote: note || null,
+    priorityOutdatedByNewInfo: false,
+  };
   
   await sos.save();
 
@@ -531,11 +620,13 @@ const updateSosRequest = async (id, updateData, userId) => {
   if (sos.status === 'COMPLETED' || sos.status === 'CANCELLED') {
     throw new ApiError(400, 'Không thể cập nhật yêu cầu cứu nạn đã kết thúc');
   }
+  if (updateData.priority !== undefined) {
+    throw new ApiError(400, 'Không thể tự sửa mức ưu tiên qua cập nhật SOS; chính quyền cần xác minh mức này');
+  }
 
   const allowedFields = [
     'location',
     'address',
-    'priority',
     'description',
     'people',
     'priorityGroups',
@@ -561,7 +652,47 @@ const updateSosRequest = async (id, updateData, userId) => {
     sos.secondaryPhone = null;
   }
 
+  const contentChanged = ['location', 'address', 'description', 'people', 'priorityGroups', 'emergencyType', 'emergencyTypes', 'images'].some(
+    (f) => updateData[f] !== undefined
+  );
+
+  if (contentChanged) {
+    if (!sos.priorityLockedByAuthority) {
+      sos.priority = 'UNASSESSED';
+    }
+    sos.riskAssessment = {
+      status: 'PENDING',
+      modelVersion: sosTriageService.TRIAGE_MODEL_VERSION,
+      inputHash: sosTriageService.createTriageInputHash(sos.toObject()),
+      evaluatedAt: new Date(),
+      needsHumanReview: true,
+      verifiedPriority: sos.riskAssessment?.verifiedPriority || null,
+      verifiedBy: sos.riskAssessment?.verifiedBy || null,
+      verifiedAt: sos.riskAssessment?.verifiedAt || null,
+      verificationNote: sos.riskAssessment?.verificationNote || null,
+      priorityOutdatedByNewInfo: Boolean(sos.priorityLockedByAuthority),
+    };
+    sos.aiAssessment = {
+      status: geminiService.isConfigured() ? 'PENDING' : 'UNAVAILABLE',
+      model: null,
+      analyzedAt: null,
+      recommendedPriority: null,
+      confidence: null,
+      reasons: [],
+      extractedSignals: [],
+      evidence: [],
+      unknowns: [],
+      operationalNeeds: null,
+    };
+    sos.riskScore = null;
+    sos.riskBreakdown = null;
+  }
+
   await sos.save();
+
+  if (contentChanged) {
+    sosTriageService.scheduleAiTriage(sos._id);
+  }
 
   const populated = await SosRequest.findById(sos._id)
     .populate('citizenId', 'fullName phone avatarUrl email address citizenProfile roles')

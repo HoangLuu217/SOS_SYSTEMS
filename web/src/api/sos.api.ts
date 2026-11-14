@@ -132,3 +132,24 @@ export async function clearCancelledSosApi(sosIds?: string[]): Promise<{ success
     body: JSON.stringify({ sosIds: sosIds || [] }),
   });
 }
+
+export async function fetchDispatchRecommendationsApi(
+  sosId: string,
+  params: { ai?: boolean; areaId?: string; forceRefresh?: boolean } = {}
+): Promise<{ success: boolean; data: import('@/types/domainD').DispatchRecommendationsData }> {
+  const qs = new URLSearchParams();
+  if (params.ai) qs.set('ai', 'true');
+  if (params.areaId) qs.set('areaId', params.areaId);
+  if (params.forceRefresh) qs.set('forceRefresh', 'true');
+  const query = qs.toString();
+  return fetchWithAuth(`/sos/${sosId}/dispatch-recommendations${query ? `?${query}` : ''}`, {
+    method: 'GET',
+  });
+}
+
+export async function reanalyzeSosAiApi(sosId: string): Promise<{ success: boolean; data: SosRequestItem }> {
+  return fetchWithAuth(`/sos/${sosId}/reanalyze-ai`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
