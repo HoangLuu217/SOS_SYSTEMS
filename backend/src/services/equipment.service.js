@@ -1,8 +1,9 @@
-const { Equipment, RescueTeam, AuthorityOrganization, AdministrativeArea, SosAssignment, SosRequest, User, Notification } = require('../models');
+const { Equipment, RescueTeam, AuthorityOrganization, AdministrativeArea, SosAssignment, User, Notification, AuditLog } = require('../models');
 const ApiError = require('../utils/apiError');
 const mongoose = require('mongoose');
 const { sendExpoPushNotification } = require('../utils/expoPush');
 const eventBus = require('./eventBus');
+const auditService = require('./audit.service');
 
 class EquipmentService {
   /**
@@ -405,7 +406,7 @@ class EquipmentService {
   /**
    * Xuat cap cuu tro / Tieu hao vat tu (giam so luong kho)
    */
-  async consumeEquipment(id, { quantity, destination, note }) {
+  async consumeEquipment(id, { quantity, destination, note, user = null }) {
     let equipment = null;
     if (id && mongoose.Types.ObjectId.isValid(id)) {
       equipment = await Equipment.findById(id);
@@ -432,14 +433,60 @@ class EquipmentService {
     equipment.note = equipment.note ? `${equipment.note} | ${consumeLog}` : consumeLog;
 
     if (equipment.quantity === 0) {
-      equipment.status = 'DAMAGED'; // Danh dau da het ton kho
+      equipment.status = 'OUT_OF_STOCK'; // Danh dau da het ton kho
     }
 
     await equipment.save();
-    return equipment.populate([
+
+    const populated = await equipment.populate([
       { path: 'teamId', select: 'name type areaId status leaderId', populate: { path: 'areaId', select: 'name code' } },
       { path: 'providedBy', select: 'name shortName type' },
     ]);
+
+    try {
+      await auditService.log({
+        actorId: user?._id || null,
+        actorRole: user?.role || 'LOCAL_AUTHORITY',
+        action: 'RELIEF_BATCH_DISPATCH',
+        entityType: 'Equipment',
+        entityId: equipment._id,
+        areaId: equipment.areaId || user?.areaId || null,
+        metadata: {
+          dispatchCode: `XK-${Date.now().toString().slice(-6)}`,
+          mode: 'DIRECT',
+          destination: destination ? String(destination).trim() : 'Xuất trực tiếp tại kho',
+          recipientName: null,
+          note: note ? String(note).trim() : null,
+          priority: 'NORMAL',
+          teamId: null,
+          teamName: null,
+          assignmentId: null,
+          sosRequestId: null,
+          sosCode: null,
+          actorName: user?.fullName || null,
+          items: [
+            {
+              supplyId: equipment._id.toString(),
+              name: equipment.name,
+              category: equipment.category || null,
+              supplyType: equipment.supplyType || null,
+              quantity: consumeQty,
+              unit: equipment.unit || 'món',
+            },
+          ],
+        },
+      });
+    } catch (_) {}
+
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (io) {
+        io.emit('equipment:updated', populated);
+      }
+    } catch (_) {}
+
+    return populated;
   }
 
   /**
@@ -473,11 +520,46 @@ class EquipmentService {
         const statusLabel = statusMap[team.status] || team.status;
         throw new ApiError(400, `Đội cứu hộ "${team.name}" hiện đang ở trạng thái "${statusLabel}", không thể tiếp nhận lệnh điều phối.`);
       }
+      if (team.operationalStatus === 'INACTIVE') {
+        throw new ApiError(400, `Đội cứu hộ "${team.name}" hiện không sẵn sàng hoạt động, không thể tiếp nhận lệnh điều phối.`);
+      }
+      if (team.operationalStatus === 'ON_MISSION') {
+        throw new ApiError(
+          400,
+          `Đội cứu hộ "${team.name}" đang thực hiện nhiệm vụ. Mỗi đội chỉ được phép thực hiện 1 nhiệm vụ tại một thời điểm! Vui lòng hoàn thành nhiệm vụ hiện tại trước khi phân công lệnh điều phối mới.`
+        );
+      }
+
       if (team.leaderId) {
         chosenRescuerId = team.leaderId._id || team.leaderId;
       } else if (Array.isArray(team.members) && team.members.length > 0) {
         const approvedMember = team.members.find((m) => m.status === 'APPROVED') || team.members[0];
         chosenRescuerId = approvedMember?.rescuerId?._id || approvedMember?.rescuerId;
+      }
+
+      // Quy tắc tác chiến: Mỗi đội chỉ được thực hiện 1 nhiệm vụ tại một thời điểm
+      const leaderOrChosenIds = [];
+      if (team.leaderId) leaderOrChosenIds.push(team.leaderId._id || team.leaderId);
+      if (chosenRescuerId) leaderOrChosenIds.push(chosenRescuerId);
+
+      const activeAssignment = await SosAssignment.findOne({
+        $or: [
+          { rescueTeamId: team._id },
+          { teamId: team._id },
+          ...(leaderOrChosenIds.length > 0 ? [{ rescuerId: { $in: leaderOrChosenIds } }] : []),
+        ],
+        status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+      }).populate('sosRequestId', 'sosCode');
+
+      if (activeAssignment) {
+        const activeCode =
+          activeAssignment.dispatchCode ||
+          activeAssignment.sosRequestId?.sosCode ||
+          (activeAssignment.missionType === 'RELIEF_DISPATCH' ? 'Điều phối tiếp tế' : 'đang thực hiện');
+        throw new ApiError(
+          400,
+          `Đội cứu hộ "${team.name}" đang thực hiện nhiệm vụ (${activeCode}). Mỗi đội chỉ được phép thực hiện 1 nhiệm vụ tại một thời điểm! Vui lòng hoàn thành nhiệm vụ hiện tại trước khi phân công lệnh điều phối mới.`
+        );
       }
 
       if (!chosenRescuerId) {
@@ -536,7 +618,7 @@ class EquipmentService {
         const dispatchLog = `[Điều động tác chiến: ${consumeQty} ${equipment.unit} -> Đội ${team.name} đi ${destText}${noteText}]`;
         equipment.note = equipment.note ? `${equipment.note} | ${dispatchLog}` : dispatchLog;
         if (equipment.quantity === 0) {
-          equipment.status = 'DAMAGED'; // Đánh dấu đã hết tồn kho tại nguồn
+          equipment.status = 'OUT_OF_STOCK'; // Đánh dấu đã hết tồn kho tại nguồn
         }
         await equipment.save();
 
@@ -584,7 +666,7 @@ class EquipmentService {
         equipment.note = equipment.note ? `${equipment.note} | ${consumeLog}` : consumeLog;
 
         if (equipment.quantity === 0) {
-          equipment.status = 'DAMAGED'; // Đánh dấu đã hết tồn kho
+          equipment.status = 'OUT_OF_STOCK'; // Đánh dấu đã hết tồn kho
         }
 
         await equipment.save();
@@ -597,9 +679,9 @@ class EquipmentService {
       updatedEquipments.push(equipment);
     }
 
-    // 3. Nếu có gán cho Đội cứu hộ: Tạo nhiệm vụ điều phối (Assignment) và phiếu cứu trợ (SosRequest)
+    // 3. Nếu có gán cho Đội cứu hộ: Tạo trực tiếp lệnh điều phối trong SosAssignment (không tạo bản ghi giả trong SosRequest)
     let createdAssignment = null;
-    let createdSosRequest = null;
+    let generatedDispatchCode = null;
     if (team && chosenRescuerId) {
       const suppliesList = equipmentDocs.map(({ doc, consumeQty }) => ({
         supplyId: doc._id.toString(),
@@ -640,27 +722,13 @@ class EquipmentService {
           targetCoordinates = team.areaId.centerPoint.coordinates;
         }
 
-        // Tạo SosRequest thể hiện điểm cứu trợ
-        createdSosRequest = await SosRequest.create({
-          citizenId: creatorId,
-          location: {
-            type: 'Point',
-            coordinates: targetCoordinates, // Tọa độ khu vực tác chiến chính xác
-          },
-          areaId,
-          address: destText,
-          emergencyType: 'RELIEF',
-          priority: chosenPriority,
-          people: 1,
-          description: `[Nhiệm vụ xuất cấp cứu trợ] Tiếp tế khẩn cấp tới ${destText}.${recipText ? ` Người nhận: ${recipientName.trim()}.` : ''}${noteText ? ` Ghi chú: ${note.trim()}` : ''}`,
-          status: 'ASSIGNED',
-          supplies: suppliesList,
-        });
+        const randSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+        generatedDispatchCode = `LP-${randSuffix}`;
 
-        // Tạo SosAssignment cho Đội cứu hộ
+        // Tạo trực tiếp SosAssignment độc lập (sosRequestId: null)
         createdAssignment = await SosAssignment.create({
-          sosRequestId: createdSosRequest._id,
-          sosId: createdSosRequest._id,
+          sosRequestId: null,
+          sosId: null,
           authorityOrganizationId: authorityOrgId,
           rescueTeamId: team._id,
           teamId: team._id,
@@ -670,6 +738,8 @@ class EquipmentService {
           status: 'PENDING',
           assignedAt: new Date(),
           missionType: 'RELIEF_DISPATCH',
+          dispatchCode: generatedDispatchCode,
+          areaId: areaId || null,
           destination: destText,
           location: {
             type: 'Point',
@@ -681,9 +751,10 @@ class EquipmentService {
         });
 
         await createdAssignment.populate([
-          { path: 'sosRequestId' },
-          { path: 'rescueTeamId', select: 'name type leaderId' },
-          { path: 'rescuerId', select: 'name phone email role' },
+          { path: 'authorityOrganizationId', select: 'name code type phone' },
+          { path: 'rescueTeamId', select: 'name type leaderId phone areaId' },
+          { path: 'rescuerId', select: '_id fullName name phone email role' },
+          { path: 'assignedBy', select: '_id fullName phone email roles' },
         ]);
 
         // 4. Gửi thông báo & Phát tín hiệu Realtime cho toàn bộ thành viên trong Đội cứu hộ
@@ -717,15 +788,15 @@ class EquipmentService {
             createdBy: user?._id || creatorId,
             areaId: areaId || null,
             areaName: team.areaId?.name || null,
-            sosId: createdSosRequest._id,
+            sosId: null,
             type: 'RESCUE',
-            title: `📦 LỆNH TIẾP TẾ CỨU TRỢ: ${team.name}`,
+            title: `📦 LỆNH TIẾP TẾ CỨU TRỢ (${generatedDispatchCode}): ${team.name}`,
             content: `Đội "${team.name}" vừa nhận lệnh xuất kho tiếp tế [${itemsSummary}] đến "${destText}". Yêu cầu các thành viên sẵn sàng cơ động thực hiện nhiệm vụ!`,
             priority: chosenPriority,
             data: {
               type: 'RELIEF_MISSION',
+              dispatchCode: generatedDispatchCode,
               assignmentId: createdAssignment._id.toString(),
-              sosId: createdSosRequest._id.toString(),
               teamId: team._id.toString(),
               teamName: team.name,
               destination: destText,
@@ -774,13 +845,12 @@ class EquipmentService {
             }
           });
 
-          // B. Phát qua Socket.IO tới toàn hệ thống và các thành viên
+          // B. Phát qua Socket.IO tới toàn hệ thống (không phát sos:created giả vào bản đồ SOS)
           const { getIO } = require('../socket');
           const io = getIO();
           if (io) {
             io.emit('assignment:created', createdAssignment);
             io.emit('assignment:new', createdAssignment);
-            io.emit('sos:created', createdSosRequest);
 
             savedNotifications.forEach((notification) => {
               const uid = notification.userId.toString();
@@ -809,13 +879,13 @@ class EquipmentService {
           if (uniquePushTokens.length > 0) {
             sendExpoPushNotification({
               tokens: uniquePushTokens,
-              title: `🚨 [ĐIỀU ĐỘNG TIẾP TẾ] ${team.name}`,
+              title: `🚨 [ĐIỀU ĐỘNG TIẾP TẾ ${generatedDispatchCode}] ${team.name}`,
               body: `Lệnh xuất kho tiếp tế đến "${destText}". Sẵn sàng tác chiến!`,
               priority: chosenPriority === 'CRITICAL' ? 'CRITICAL' : 'HIGH',
               data: {
                 type: 'RESCUE',
+                dispatchCode: generatedDispatchCode,
                 assignmentId: createdAssignment._id.toString(),
-                sosId: createdSosRequest._id.toString(),
                 teamId: team._id.toString(),
                 destination: destText,
               },
@@ -831,10 +901,328 @@ class EquipmentService {
       }
     }
 
+    // 4. Ghi nhận lịch sử xuất cấp & Lệnh điều phối vào AuditLog (cả ASSIGN_TEAM lẫn DIRECT)
+    try {
+      const dispatchItems = equipmentDocs.map(({ doc, consumeQty }) => ({
+        supplyId: doc._id.toString(),
+        name: doc.name,
+        category: doc.category || null,
+        supplyType: doc.supplyType || null,
+        quantity: consumeQty,
+        unit: doc.unit || 'món',
+      }));
+      const dispatchAreaId =
+        createdAssignment?.areaId ||
+        team?.areaId?._id ||
+        team?.areaId ||
+        equipmentDocs[0]?.doc?.areaId ||
+        user?.areaId ||
+        null;
+      const dispatchCode =
+        createdAssignment?.dispatchCode ||
+        generatedDispatchCode ||
+        `XK-${Date.now().toString().slice(-6)}`;
+
+      await auditService.log({
+        actorId: user?._id || null,
+        actorRole: user?.role || 'LOCAL_AUTHORITY',
+        action: 'RELIEF_BATCH_DISPATCH',
+        entityType: createdAssignment ? 'SosAssignment' : 'Equipment',
+        entityId: createdAssignment?._id || equipmentDocs[0]?.doc?._id || null,
+        areaId: dispatchAreaId,
+        metadata: {
+          dispatchCode,
+          mode: team && createdAssignment ? 'ASSIGN_TEAM' : 'DIRECT',
+          destination: destText,
+          recipientName: recipientName && String(recipientName).trim() ? String(recipientName).trim() : null,
+          note: note && String(note).trim() ? String(note).trim() : null,
+          priority: priority ? String(priority).toUpperCase() : 'HIGH',
+          teamId: team ? team._id.toString() : null,
+          teamName: team ? team.name : null,
+          assignmentId: createdAssignment ? createdAssignment._id.toString() : null,
+          sosRequestId: null,
+          sosCode: null,
+          actorName: user?.fullName || null,
+          items: dispatchItems,
+        },
+      });
+    } catch (auditErr) {
+      console.warn('[batchConsumeEquipments] Lỗi ghi AuditLog xuất cấp:', auditErr?.message);
+    }
+
+    // Phát sự kiện đồng bộ kho theo thời gian thực cho các client web
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (io) {
+        updatedEquipments.forEach((doc) => io.emit('equipment:updated', doc));
+      }
+    } catch (_) {}
+
     return {
       updatedEquipments,
       assignment: createdAssignment,
-      sosRequest: createdSosRequest,
+    };
+  }
+
+  /**
+   * Lấy lịch sử Phiếu xuất kho & Lệnh điều phối tiếp tế (kết hợp AuditLog + trạng thái realtime của SosAssignment)
+   */
+  async getDispatchHistory(query = {}, currentUser = null) {
+    const {
+      mode = 'ALL',
+      status = 'ALL',
+      search = '',
+      areaId: queryAreaId,
+      page = 1,
+      limit = 20,
+    } = query;
+
+    const isAdmin = currentUser?.role === 'ADMIN' || (Array.isArray(currentUser?.roles) && currentUser.roles.includes('ADMIN'));
+    const scopedAreaId =
+      queryAreaId && mongoose.Types.ObjectId.isValid(queryAreaId)
+        ? String(queryAreaId)
+        : !isAdmin && currentUser?.areaId
+          ? String(currentUser.areaId?._id || currentUser.areaId)
+          : null;
+
+    const [dispatchLogs, restoreLogs, assignments] = await Promise.all([
+      AuditLog.find({ action: 'RELIEF_BATCH_DISPATCH' })
+        .populate('actorId', 'fullName phone role')
+        .sort({ createdAt: -1 })
+        .limit(500)
+        .lean(),
+      AuditLog.find({ action: 'RELIEF_DISPATCH_INVENTORY_RESTORED' })
+        .sort({ createdAt: -1 })
+        .limit(500)
+        .lean(),
+      SosAssignment.find({ missionType: 'RELIEF_DISPATCH' })
+        .populate('rescueTeamId', 'name code phone areaId')
+        .populate('assignedBy', 'fullName phone role')
+        .populate('rescuerId', 'fullName phone')
+        .populate('sosRequestId', 'sosCode address priority status areaId note')
+        .sort({ createdAt: -1 })
+        .limit(500)
+        .lean(),
+    ]);
+
+    const assignmentMap = new Map();
+    assignments.forEach((a) => {
+      assignmentMap.set(String(a._id), a);
+    });
+
+    const restoreLogByAssignment = new Map();
+    restoreLogs.forEach((log) => {
+      const aid = log.metadata?.assignmentId || (log.entityId ? String(log.entityId) : null);
+      if (aid && !restoreLogByAssignment.has(String(aid))) {
+        restoreLogByAssignment.set(String(aid), log);
+      }
+    });
+
+    const seenAssignmentIds = new Set();
+    const mergedRecords = [];
+
+    const buildAssignmentRecord = (assignment, log = null) => {
+      const aid = String(assignment._id);
+      const restoreLog = restoreLogByAssignment.get(aid);
+      const meta = log?.metadata || {};
+      const recordAreaId =
+        assignment.areaId ||
+        log?.areaId ||
+        assignment.sosRequestId?.areaId ||
+        assignment.rescueTeamId?.areaId ||
+        null;
+
+      const items =
+        Array.isArray(meta.items) && meta.items.length > 0
+          ? meta.items
+          : Array.isArray(assignment.supplies)
+            ? assignment.supplies
+            : [];
+
+      const createdAt = log?.createdAt || assignment.assignedAt || assignment.createdAt;
+      const sosCode = meta.sosCode || assignment.sosRequestId?.sosCode || null;
+      const dispatchCode = assignment.dispatchCode || meta.dispatchCode || sosCode || `LP-${aid.slice(-6).toUpperCase()}`;
+
+      let resolvedCancelReason = assignment.cancelReason || restoreLog?.metadata?.reason || null;
+      if (!resolvedCancelReason && ['REJECTED', 'CANCELLED'].includes(assignment.status) && assignment.note) {
+        const noteParts = String(assignment.note)
+          .split(' | ')
+          .map((p) => p.trim())
+          .filter((p) => p && !p.startsWith('[Lệnh xuất cấp cứu trợ]'));
+        if (noteParts.length > 0) {
+          resolvedCancelReason = noteParts[noteParts.length - 1];
+        }
+      }
+
+      return {
+        id: log?._id ? String(log._id) : aid,
+        assignmentId: aid,
+        sosRequestId: assignment.sosRequestId?._id ? String(assignment.sosRequestId._id) : meta.sosRequestId || null,
+        dispatchCode,
+        sosCode,
+        mode: 'ASSIGN_TEAM',
+        status: assignment.status || 'PENDING',
+        priority: assignment.priority || meta.priority || assignment.sosRequestId?.priority || 'HIGH',
+        areaId: recordAreaId ? String(recordAreaId) : null,
+        destination: assignment.destination || meta.destination || assignment.sosRequestId?.address || '',
+        recipientName: assignment.recipientName || meta.recipientName || null,
+        actualRecipient: assignment.actualRecipient || null,
+        teamId: assignment.rescueTeamId?._id ? String(assignment.rescueTeamId._id) : meta.teamId || null,
+        teamName: assignment.rescueTeamId?.name || meta.teamName || null,
+        teamPhone: assignment.rescueTeamId?.phone || assignment.rescuerId?.phone || null,
+        leaderName: assignment.rescuerId?.fullName || null,
+        actorName: log?.actorId?.fullName || meta.actorName || assignment.assignedBy?.fullName || null,
+        note: meta.note || assignment.note || null,
+        cancelReason: resolvedCancelReason,
+        inventoryRestored: Boolean(assignment.inventoryRestored || restoreLog),
+        inventoryRestoredAt: assignment.inventoryRestoredAt || restoreLog?.createdAt || null,
+        proofImages: Array.isArray(assignment.proofImages) ? assignment.proofImages : [],
+        items,
+        createdAt,
+        acceptedAt: assignment.acceptedAt || null,
+        completedAt: assignment.completedAt || null,
+        cancelledAt: assignment.cancelledAt || null,
+      };
+    };
+
+    for (const log of dispatchLogs) {
+      const meta = log.metadata || {};
+      const aid = meta.assignmentId ? String(meta.assignmentId) : null;
+      if (aid && assignmentMap.has(aid)) {
+        seenAssignmentIds.add(aid);
+        mergedRecords.push(buildAssignmentRecord(assignmentMap.get(aid), log));
+      } else {
+        mergedRecords.push({
+          id: String(log._id),
+          assignmentId: aid,
+          sosRequestId: meta.sosRequestId || null,
+          dispatchCode: meta.dispatchCode || meta.sosCode || `XK-${String(log._id).slice(-6).toUpperCase()}`,
+          sosCode: meta.sosCode || null,
+          mode: meta.mode || (aid ? 'ASSIGN_TEAM' : 'DIRECT'),
+          status: aid ? 'UNKNOWN' : 'DIRECT',
+          priority: meta.priority || 'HIGH',
+          areaId: log.areaId ? String(log.areaId) : null,
+          destination: meta.destination || '',
+          recipientName: meta.recipientName || null,
+          actualRecipient: null,
+          teamId: meta.teamId || null,
+          teamName: meta.teamName || null,
+          teamPhone: null,
+          leaderName: null,
+          actorName: log.actorId?.fullName || meta.actorName || null,
+          note: meta.note || null,
+          cancelReason: null,
+          inventoryRestored: false,
+          inventoryRestoredAt: null,
+          proofImages: [],
+          items: Array.isArray(meta.items) ? meta.items : [],
+          createdAt: log.createdAt,
+          acceptedAt: null,
+          completedAt: log.createdAt,
+          cancelledAt: null,
+        });
+      }
+    }
+
+    // Bổ sung các lệnh RELIEF_DISPATCH cũ chưa có AuditLog
+    for (const assignment of assignments) {
+      const aid = String(assignment._id);
+      if (seenAssignmentIds.has(aid)) continue;
+      mergedRecords.push(buildAssignmentRecord(assignment, null));
+    }
+
+    // Lọc theo khu vực
+    const areaFiltered = scopedAreaId
+      ? mergedRecords.filter((rec) => !rec.areaId || rec.areaId === scopedAreaId)
+      : mergedRecords;
+
+    // Sắp xếp mới nhất lên đầu
+    areaFiltered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const IN_PROGRESS_STATUSES = new Set([
+      'ACCEPTED',
+      'DISPATCHED',
+      'EN_ROUTE',
+      'ON_THE_WAY',
+      'ARRIVED',
+      'IN_PROGRESS',
+      'RESCUING',
+    ]);
+    const REJECTED_STATUSES = new Set(['REJECTED', 'CANCELLED']);
+
+    // Thống kê tổng quan trước khi lọc chế độ/từ khóa
+    const summary = {
+      total: areaFiltered.length,
+      assignTeamCount: 0,
+      directCount: 0,
+      pendingCount: 0,
+      inProgressCount: 0,
+      completedCount: 0,
+      rejectedCount: 0,
+      restoredCount: 0,
+    };
+
+    areaFiltered.forEach((rec) => {
+      if (rec.mode === 'DIRECT') summary.directCount += 1;
+      else summary.assignTeamCount += 1;
+
+      if (rec.status === 'PENDING') summary.pendingCount += 1;
+      else if (IN_PROGRESS_STATUSES.has(rec.status)) summary.inProgressCount += 1;
+      else if (rec.status === 'COMPLETED' || rec.status === 'DIRECT') summary.completedCount += 1;
+      else if (REJECTED_STATUSES.has(rec.status)) summary.rejectedCount += 1;
+
+      if (rec.inventoryRestored) summary.restoredCount += 1;
+    });
+
+    // Áp dụng các bộ lọc giao diện
+    const normalizedSearch = String(search || '').trim().toLowerCase();
+    const filtered = areaFiltered.filter((rec) => {
+      if (mode && mode !== 'ALL' && rec.mode !== mode) return false;
+      if (status && status !== 'ALL') {
+        if (status === 'IN_PROGRESS') {
+          if (!IN_PROGRESS_STATUSES.has(rec.status)) return false;
+        } else if (status === 'REJECTED') {
+          if (!REJECTED_STATUSES.has(rec.status)) return false;
+        } else if (rec.status !== status) {
+          return false;
+        }
+      }
+      if (normalizedSearch) {
+        const itemNames = (rec.items || []).map((i) => i.name || '').join(' ');
+        const haystack = [
+          rec.dispatchCode,
+          rec.sosCode,
+          rec.destination,
+          rec.recipientName,
+          rec.actualRecipient,
+          rec.teamName,
+          rec.actorName,
+          itemNames,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(normalizedSearch)) return false;
+      }
+      return true;
+    });
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / limitNum));
+    const paginated = filtered.slice((pageNum - 1) * limitNum, pageNum * limitNum);
+
+    return {
+      data: paginated,
+      summary,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages,
+      },
     };
   }
 }

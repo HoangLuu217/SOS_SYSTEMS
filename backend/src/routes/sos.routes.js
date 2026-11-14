@@ -34,6 +34,12 @@ router.patch('/:id/verify', authorize('LOCAL_AUTHORITY', 'ADMIN'), sosController
 // GET /api/sos/:id/files - Lấy toàn bộ file đính kèm của SOS để xác minh
 router.get('/:id/files', authorize('LOCAL_AUTHORITY', 'ADMIN', 'CITIZEN', 'RESCUER'), sosController.getSosFiles);
 
+// GET /api/sos/:id/dispatch-recommendations - Thuật toán + AI gợi ý điều phối đội cứu hộ thông minh
+router.get('/:id/dispatch-recommendations', authorize('LOCAL_AUTHORITY', 'ADMIN'), sosController.getDispatchRecommendations);
+
+// POST /api/sos/:id/reanalyze-ai - Chạy lại phân tích AI Gemini cho ca SOS
+router.post('/:id/reanalyze-ai', authorize('LOCAL_AUTHORITY', 'ADMIN'), sosController.reanalyzeSosAi);
+
 
 // POST /api/sos/:id/shore-handoff/request - Cứu hộ viên yêu cầu xe đón bờ
 router.post('/:id/shore-handoff/request', authorize('RESCUER', 'LOCAL_AUTHORITY', 'ADMIN'), sosController.requestShoreHandoff);
