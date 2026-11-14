@@ -80,4 +80,121 @@
 [data-theme="light"] .sos-occupancy-bar-bg {
   background: #e2e8f0;
 }
-
+
+
+/* Compact layout overrides scoped to SheltersView */
+.sos-shelters-compact .sos-shelters-header-card button {
+  padding: 5px 10px !important;
+  font-size: 12px !important;
+  gap: 5px !important;
+}
+
+.sos-shelters-compact .sos-scope-tabs {
+  gap: 6px !important;
+}
+
+.sos-shelters-compact .sos-scope-tab {
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  gap: 6px;
+}
+
+.sos-shelters-compact .sos-scope-badge {
+  padding: 1px 6px;
+  font-size: 11px;
+}
+
+.sos-shelters-compact .sos-clean-toolbar {
+  padding: 5px 10px;
+  gap: 6px;
+}
+
+.sos-shelters-compact .sos-clean-tabs {
+  gap: 4px;
+}
+
+.sos-shelters-compact .sos-clean-tab {
+  padding: 4px 9px;
+  font-size: 12px;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.sos-shelters-compact .sos-clean-tab-count {
+  padding: 1px 5px;
+  font-size: 10.5px;
+}
+
+.sos-shelters-compact .sos-clean-sort-select {
+  padding: 4px 6px;
+  font-size: 12px;
+  max-width: 145px;
+}
+
+.sos-shelters-compact .sos-clean-search {
+  min-width: 145px;
+  width: 165px;
+  height: 28px;
+  padding: 0 8px;
+}
+
+.sos-shelters-compact .sos-clean-search input {
+  font-size: 12px;
+}
+
+.sos-shelters-compact .sos-clean-table {
+  font-size: 12px;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.sos-shelters-compact .sos-clean-table th {
+  padding: 6px 7px;
+  font-size: 11px;
+  white-space: normal;
+  line-height: 1.25;
+  vertical-align: middle;
+}
+
+.sos-shelters-compact .sos-clean-table th svg {
+  flex-shrink: 0;
+}
+
+.sos-shelters-compact .sos-clean-table td {
+  padding: 6px 7px;
+  font-size: 12px;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.sos-shelters-compact .sos-clean-table td:first-child {
+  width: 36px !important;
+  padding: 6px 6px !important;
+}
+
+.sos-shelters-compact .sos-clean-table td:nth-child(7) {
+  white-space: normal !important;
+}
+
+.sos-shelters-compact .sos-btn-flat {
+  padding: 3px 6px;
+  font-size: 11px;
+  gap: 3px;
+  border-radius: 5px;
+}
+
+.sos-shelters-compact .sos-clean-pagination {
+  padding: 6px 12px;
+  gap: 8px;
+}
+
+.sos-shelters-compact .sos-pagination-info {
+  font-size: 12px;
+}
+
+.sos-shelters-compact .sos-pagination-btn {
+  padding: 3px 8px;
+  font-size: 11.5px;
+  min-width: 26px;
+}

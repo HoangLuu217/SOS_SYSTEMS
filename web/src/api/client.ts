@@ -131,3 +131,15 @@ export async function fetchWithAuth<T>(
     throw err;
   }
 }
+
+/**
+ * Tải lên tệp hình ảnh/media lên máy chủ thông qua endpoint `/files`
+ */
+export async function uploadMediaFile(file: File): Promise<{ success: boolean; url: string; data?: any }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return fetchWithAuth<{ success: boolean; url: string; data?: any }>('/files', {
+    method: 'POST',
+    body: formData,
+  });
+}

@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { SafeLocation, AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
 const { findAreaByCoordinates, checkPointInAuthorityJurisdiction } = require('../utils/geoUtils');
+const { sanitizeImages } = require('../utils/validation.util');
 const eventBus = require('./eventBus');
 
 class SafeLocationService {
@@ -10,7 +11,7 @@ class SafeLocationService {
    * Bắt buộc có tọa độ GPS hợp lệ và thuộc khu vực quản lý đối với Cán bộ địa phương
    */
   async createSafeLocation(data, actorId, creatorUser = null) {
-    const { name, type, location, areaId, address, capacity, currentOccupancy, status } = data;
+    const { name, type, location, areaId, address, capacity, currentOccupancy, status, images } = data;
 
     if (!name || !String(name).trim()) {
       throw new ApiError(400, 'Tên địa điểm an toàn là bắt buộc');
@@ -113,6 +114,7 @@ class SafeLocationService {
       capacity: capacity ?? 0,
       currentOccupancy: currentOccupancy ?? 0,
       status: status || 'ACTIVE',
+      images: sanitizeImages(images),
       createdBy: actorId,
     });
 
@@ -260,6 +262,10 @@ class SafeLocationService {
       if (updateData[field] !== undefined) {
         safeLocation[field] = updateData[field];
       }
+    }
+
+    if (updateData.images !== undefined) {
+      safeLocation.images = sanitizeImages(updateData.images);
     }
 
     if (updateData.areaId) {

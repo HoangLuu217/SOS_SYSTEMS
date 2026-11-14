@@ -148,15 +148,13 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
     const active = safetyChecks.filter((c) => c.status === 'ACTIVE').length;
     let totalSafe = 0;
     let totalNeedHelp = 0;
-    let totalTargeted = 0;
 
     safetyChecks.forEach((c) => {
       totalSafe += c.stats?.safeCount || 0;
       totalNeedHelp += c.stats?.needHelpCount || 0;
-      totalTargeted += c.stats?.totalTargeted || 0;
     });
 
-    return { total, active, totalSafe, totalNeedHelp, totalTargeted };
+    return { total, active, totalSafe, totalNeedHelp };
   }, [safetyChecks]);
 
   // Helper hiển thị loại thiên tai
@@ -445,7 +443,6 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
       'Số người An toàn',
       'Số người Cần cứu hộ',
       'Tổng phản hồi',
-      'Tổng người mục tiêu',
       'Thời gian tạo',
     ];
     const rows = filteredAndSortedChecks.map((c, idx) => [
@@ -460,7 +457,6 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
       c.stats?.safeCount || 0,
       c.stats?.needHelpCount || 0,
       c.stats?.totalResponses || 0,
-      c.stats?.totalTargeted || 0,
       new Date(c.createdAt).toLocaleString('vi-VN'),
     ]);
     const csvContent =
@@ -863,10 +859,10 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                   className={`sortable ${sortField === 'responses' ? 'sorted' : ''}`}
                   onClick={() => handleSort('responses')}
                   style={{ width: '20%' }}
-                  title="Nhấn để sắp xếp theo tiến độ phản hồi"
+                  title="Nhấn để sắp xếp theo số lượt phản hồi"
                 >
                   <div style={{ display: 'inline-flex', alignItems: 'center' }}>
-                    <span>Tiến độ phản hồi</span>
+                    <span>Phản hồi</span>
                     {renderSortIcon('responses')}
                   </div>
                 </th>
@@ -929,13 +925,9 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
               ) : (
                 paginatedChecks.map((check, idx) => {
                   const disasterInfo = getDisasterTypeInfo(check.disasterType);
-                  const totalTargeted = check.stats?.totalTargeted || 0;
                   const totalResp = check.stats?.totalResponses || 0;
                   const safeCount = check.stats?.safeCount || 0;
                   const needHelpCount = check.stats?.needHelpCount || 0;
-                  const percent = totalTargeted > 0 ? Math.min(100, Math.round((totalResp / totalTargeted) * 100)) : 0;
-                  const safePercent = totalTargeted > 0 ? Math.min(100, Math.round((safeCount / totalTargeted) * 100)) : 0;
-                  const needHelpPercent = totalTargeted > 0 ? Math.min(100 - safePercent, Math.round((needHelpCount / totalTargeted) * 100)) : 0;
 
                   return (
                     <tr
@@ -1043,10 +1035,10 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                         </div>
                       </td>
 
-                      {/* 3. Tiến độ phản hồi (Occupancy bar style) */}
+                      {/* 3. Thống kê phản hồi */}
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                          <div style={{ fontSize: '12px' }}>
                             <span style={{ color: '#0f172a', fontWeight: 600 }}>
                               <strong style={{ color: '#16a34a' }}>{safeCount}</strong> an toàn •{' '}
                               <strong style={{ color: needHelpCount > 0 ? '#dc2626' : '#64748b' }}>
@@ -1054,50 +1046,10 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                               </strong>{' '}
                               cần trợ giúp
                             </span>
-                            <span
-                              style={{
-                                fontSize: '11px',
-                                fontWeight: 700,
-                                color: needHelpCount > 0 ? '#dc2626' : '#15803d',
-                              }}
-                            >
-                              {percent}%
-                            </span>
-                          </div>
-
-                          {/* Dual-color Progress Bar */}
-                          <div
-                            style={{
-                              width: '100%',
-                              height: 6,
-                              background: '#e2e8f0',
-                              borderRadius: 3,
-                              overflow: 'hidden',
-                              display: 'flex',
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: `${safePercent}%`,
-                                height: '100%',
-                                background: '#22c55e',
-                                transition: 'width 0.3s ease',
-                              }}
-                              title={`An toàn: ${safeCount} người (${safePercent}%)`}
-                            />
-                            <div
-                              style={{
-                                width: `${needHelpPercent}%`,
-                                height: '100%',
-                                background: '#ef4444',
-                                transition: 'width 0.3s ease',
-                              }}
-                              title={`Cần cứu trợ: ${needHelpCount} người (${needHelpPercent}%)`}
-                            />
                           </div>
 
                           <div style={{ fontSize: '11px', color: '#64748b' }}>
-                            Đã phản hồi: <strong>{totalResp}</strong> / {totalTargeted} người dân
+                            Đã phản hồi: <strong>{totalResp}</strong> người dân
                           </div>
                         </div>
                       </td>
@@ -1350,8 +1302,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                 </p>
 
                 <p style={{ margin: '4px 0 0 0', fontSize: '12.5px', color: '#64748b' }}>
-                  Tổng phản hồi: <strong>{viewingCheck.stats?.totalResponses || 0}</strong> /{' '}
-                  {viewingCheck.stats?.totalTargeted || 0} người mục tiêu | An toàn:{' '}
+                  Tổng phản hồi: <strong>{viewingCheck.stats?.totalResponses || 0}</strong> | An toàn:{' '}
                   <strong style={{ color: '#16a34a' }}>{viewingCheck.stats?.safeCount || 0}</strong> | Cần cứu hộ:{' '}
                   <strong style={{ color: '#dc2626' }}>{viewingCheck.stats?.needHelpCount || 0}</strong>
                 </p>
@@ -1807,7 +1758,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                         ))}
                       </select>
                       <p className="sc-form-hint">
-                        Khu vực áp dụng: <strong>{daNangProvince?.name || 'Thành phố Đà Nẵng'}</strong> — Dữ liệu Phường/Xã tải trực tiếp từ CSDL.
+                        Khu vực áp dụng: <strong>{daNangProvince?.name || 'Thành phố Đà Nẵng'}</strong>
                       </p>
                     </div>
                   )}
@@ -1857,9 +1808,6 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                     onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
                     required
                   />
-                  <p className="sc-form-hint">
-                    🔔 Thông báo này sẽ được gửi Push Notification trực tiếp đến điện thoại người dân. Khi người dân bấm vào, ứng dụng sẽ mở ngay trang đánh dấu an toàn.
-                  </p>
                 </div>
               </div>
 

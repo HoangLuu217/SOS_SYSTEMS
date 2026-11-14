@@ -59,11 +59,20 @@ const isStrongPassword = (password) => {
   return validatePasswordStrength(password).valid;
 };
 
+/**
+ * Chuẩn hóa danh sách URL/đường dẫn ảnh hợp lệ
+ */
+const sanitizeImages = (images) =>
+  Array.isArray(images)
+    ? images.filter((u) => typeof u === 'string' && u.trim()).map((u) => u.trim())
+    : [];
+
 module.exports = {
   isValidEmail,
   isValidPhone,
   isValidPassword,
   validatePasswordStrength,
   isStrongPassword,
+  sanitizeImages,
 };
 

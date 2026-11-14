@@ -7,7 +7,7 @@ const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: 'sos_systems', // Tên thư mục sẽ tạo trên Cloudinary
-    allowed_formats: ['jpg', 'jpeg', 'png', 'mp4'], // Chỉ cho phép ảnh và video
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'mp4'], // Chỉ cho phép ảnh và video
     resource_type: 'auto', // Tự động nhận diện (ảnh hay video)
   },
 });
