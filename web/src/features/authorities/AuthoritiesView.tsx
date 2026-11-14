@@ -849,7 +849,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
 
             <button
               type="button"
-              className="coordination-action-btn primary"
+              className="sos-btn sos-btn--primary sos-btn--sm"
               onClick={() => {
                 setAuthSubmitError(null);
                 const defaultCity = 'Thành phố Đà Nẵng';
@@ -884,7 +884,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--sos-text-secondary)' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
                       <Loader2 size={16} className="executive-spin" />
                       <span>Đang tải danh sách cán bộ...</span>
@@ -893,7 +893,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                 </tr>
               ) : filteredAuthorities.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--sos-text-secondary)' }}>
                     {authorities.length === 0
                       ? 'Chưa có tài khoản cán bộ địa phương nào. Nhấn "+ Tạo Tài Khoản Cán Bộ" để tạo mới!'
                       : 'Không tìm thấy cán bộ nào phù hợp với bộ lọc tìm kiếm.'}
@@ -906,49 +906,36 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
 
                   return (
                     <tr key={a._id}>
-                      {/* Cán bộ chỉ huy (Đã xóa avatar, tên to và in đậm) */}
+                      {/* Cán bộ chỉ huy */}
                       <td>
                         <div>
-                          <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '14.5px', lineHeight: 1.3 }}>
-                            {a.fullName}
-                          </div>
-                          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
+                          <div className="officer-name-main">{a.fullName}</div>
+                          <span className="officer-role-sub">
                             {a.role === 'LOCAL_AUTHORITY' ? 'Chỉ huy địa phương' : a.role}
                           </span>
                         </div>
                       </td>
 
-                      {/* SĐT / Email (SĐT in đậm, Gmail hiển thị đầy đủ không bị cắt ...) */}
+                      {/* SĐT / Email */}
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                          <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '14px' }}>
-                            {a.phone || '--'}
-                          </span>
-                          <span
-                            style={{
-                              color: '#334155',
-                              fontSize: '12.5px',
-                              fontWeight: 500,
-                              wordBreak: 'break-all',
-                              lineHeight: 1.3,
-                            }}
-                            title={a.email}
-                          >
+                          <span className="officer-phone-main">{a.phone || '--'}</span>
+                          <span className="officer-email-sub" title={a.email}>
                             {a.email || '--'}
                           </span>
                         </div>
                       </td>
 
-                      {/* Khu vực phụ trách (Địa bàn) & Nút Xem Bản đồ tích hợp trực tiếp, không bị dính cột */}
+                      {/* Khu vực phụ trách */}
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#0f172a', fontWeight: 600, fontSize: '13.5px', minWidth: 0, flex: 1 }}>
-                            <MapPin size={15} color="#0284c7" style={{ flexShrink: 0 }} />
+                          <div className="officer-area-cell">
+                            <MapPin size={14} />
                             <span style={{ wordBreak: 'break-word', lineHeight: 1.3 }}>{areaName}</span>
                           </div>
                           <button
                             type="button"
-                            className="map-preview-btn"
+                            className="sos-btn sos-btn--outline sos-btn--xs"
                             onClick={() => setSelectedMapOfficer(a)}
                             title={`Xem bản đồ địa bàn ${areaName}`}
                           >
@@ -960,7 +947,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
 
                       {/* Đơn vị / Cơ quan */}
                       <td>
-                        <span style={{ color: '#1e293b', fontSize: '13px', fontWeight: 600, lineHeight: 1.35, display: 'block' }}>
+                        <span className="officer-dept-main">
                           {a.authority?.department || 'Ban chỉ huy PCTT'}
                         </span>
                       </td>
@@ -973,24 +960,18 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                           onClick={() => handleQuickToggleAuthStatus(a)}
                           title="Bấm để chuyển trạng thái kích hoạt"
                         >
-                          <span
-                            style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: '50%',
-                              background: isActive ? '#16a34a' : '#94a3b8',
-                            }}
-                          />
+                          <span className="officer-status-dot" />
                           <span>{isActive ? 'HOẠT ĐỘNG' : 'TẠM KHÓA'}</span>
                         </button>
                       </td>
 
-                      {/* Hành động tối ưu: gọn gàng, vừa vặn không tràn khung */}
+                      {/* Hành động (chuẩn .sos-btn--xs theo design.md §5.1) */}
                       <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'inline-flex', gap: 5, justifyContent: 'center', alignItems: 'center' }}>
+                        <div style={{ display: 'inline-flex', gap: 6, justifyContent: 'center', alignItems: 'center' }}>
                           <button
                             type="button"
-                            className="officer-action-btn edit"
+                            className="sos-btn sos-btn--soft-primary sos-btn--xs"
+                            style={{ width: 28, padding: 0 }}
                             title="Xem chi tiết & chỉnh sửa cán bộ"
                             onClick={() => handleOpenDetailAuthority(a)}
                           >
@@ -998,7 +979,12 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                           </button>
                           <button
                             type="button"
-                            className={`officer-action-btn ${isActive ? 'lock' : 'unlock'}`}
+                            className={
+                              isActive
+                                ? 'sos-btn sos-btn--soft-danger sos-btn--xs'
+                                : 'sos-btn sos-btn--soft-success sos-btn--xs'
+                            }
+                            style={{ width: 28, padding: 0 }}
                             title={isActive ? 'Khóa tài khoản cán bộ' : 'Mở khóa kích hoạt lại'}
                             onClick={() => handleQuickToggleAuthStatus(a)}
                           >
@@ -1034,14 +1020,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                           className={`officer-status-badge ${detailAuthority.status === 'ACTIVE' ? 'active' : 'inactive'}`}
                           style={{ cursor: 'default' }}
                         >
-                          <span
-                            style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: '50%',
-                              background: detailAuthority.status === 'ACTIVE' ? '#16a34a' : '#94a3b8',
-                            }}
-                          />
+                          <span className="officer-status-dot" />
                           <span>{detailAuthority.status === 'ACTIVE' ? 'Đang hoạt động' : 'Tạm khóa'}</span>
                         </span>
                       </div>
@@ -1415,7 +1394,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
                             <button
                               type="button"
-                              className="executive-btn-outline"
+                              className="sos-btn sos-btn--outline sos-btn--md"
                               onClick={() => setIsDetailEditing(false)}
                             >
                               Hủy
@@ -1423,7 +1402,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                             <button
                               type="submit"
                               disabled={editAuthSubmitting}
-                              className="executive-btn-primary"
+                              className="sos-btn sos-btn--primary sos-btn--md"
                             >
                               {editAuthSubmitting ? (
                                 <>
@@ -1476,11 +1455,11 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                 <div className="auth-drawer-footer-actions">
                   <button
                     type="button"
-                    className="executive-btn-outline"
-                    style={{
-                      color: detailAuthority.status === 'ACTIVE' ? '#dc2626' : '#16a34a',
-                      borderColor: detailAuthority.status === 'ACTIVE' ? '#fecaca' : '#bbf7d0',
-                    }}
+                    className={
+                      detailAuthority.status === 'ACTIVE'
+                        ? 'sos-btn sos-btn--outline-danger sos-btn--md'
+                        : 'sos-btn sos-btn--soft-success sos-btn--md'
+                    }
                     onClick={async () => {
                       await handleQuickToggleAuthStatus(detailAuthority);
                       setDetailAuthority((prev: any) =>
@@ -1494,7 +1473,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                   {detailTab === 'overview' && !isDetailEditing && (
                     <button
                       type="button"
-                      className="executive-btn-outline"
+                      className="sos-btn sos-btn--outline sos-btn--md"
                       onClick={() => setIsDetailEditing(true)}
                     >
                       <Edit size={14} />
@@ -1503,7 +1482,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                   )}
                   <button
                     type="button"
-                    className="executive-btn-primary"
+                    className="sos-btn sos-btn--primary sos-btn--md"
                     onClick={() => setDetailAuthority(null)}
                   >
                     <span>Đóng</span>
@@ -1725,7 +1704,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                     <div className="executive-modal-footer">
                       <button
                         type="button"
-                        className="executive-btn-outline"
+                        className="sos-btn sos-btn--outline sos-btn--md"
                         onClick={() => setShowCreateAuthModal(false)}
                       >
                         Hủy bỏ
@@ -1733,7 +1712,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                       <button
                         type="submit"
                         disabled={authSubmitting || modalSubUnitsLoading}
-                        className="executive-btn-primary"
+                        className="sos-btn sos-btn--primary sos-btn--md"
                       >
                         {authSubmitting ? (
                           <>
@@ -1806,7 +1785,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
 
               <button
                 type="button"
-                className="executive-btn-primary"
+                className="sos-btn sos-btn--primary sos-btn--md"
                 style={{ width: '100%', marginTop: 8 }}
                 onClick={() => setCreatedOfficerSuccess(null)}
               >

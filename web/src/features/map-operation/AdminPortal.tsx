@@ -8,6 +8,7 @@ import {
   RotateCcw,
   ExternalLink,
   LogOut,
+  Layers,
   Shield,
   AlertTriangle,
 } from 'lucide-react';
@@ -22,7 +23,10 @@ import {
   extractPolygonLatLngRings,
   fetchGeoapifyBoundaries,
   fetchProvinceBoundaryFromApi,
+  fetchProvinceMapBundleFromDb,
   getCachedProvinceBoundarySync,
+  getCachedProvinceMapBundleSync,
+  HOANG_SA_ISLAND_AREA,
 } from '@/services/geoapifyBoundariesService';
 import {
   getSocket,
@@ -52,38 +56,73 @@ interface Props {
 
 const FALLBACK_DANANG_BOUNDS: L.LatLngBoundsExpression = [
   [14.94, 107.18],
-  [16.25, 108.78],
+  [16.34, 109.05],
 ];
 
-// Controller component điều khiển Leaflet map và khóa phạm vi zoom/kéo trong khu vực Đà Nẵng
+const DANANG_WITH_HOANG_SA_BOUNDS: L.LatLngBoundsExpression = [
+  [14.7, 107.0],
+  [17.7, 113.45],
+];
+
+const filterAdminDaNangWards = (rawWards: AdministrativeArea[]): AdministrativeArea[] =>
+  rawWards
+    .filter((w) => {
+      const name = (w.name || '').trim();
+      if (!name) return false;
+      if (/mở\s*rộng|lân\s*cận|geoapify/i.test(name)) return false;
+      if (/^(thành\s*phố\s*|tp\.?\s*)?đà\s*nẵng$/i.test(name)) return false;
+      if (/hoàng\s*sa|đặc\s*khu/i.test(name)) return true;
+      if (/^(quận|huyện|thị\s*xã)\s+/i.test(name)) return false;
+      return /^(phường|xã|thị\s*trấn)\s+/i.test(name);
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+
+// Controller component điều khiển Leaflet map, cho phép kéo xem cả Đà Nẵng đất liền lẫn Đặc khu Hoàng Sa
 const MapController = ({
   onMount,
   boundaryArea,
+  hoangSaArea,
 }: {
   onMount?: (map: L.Map) => void;
   boundaryArea: AdministrativeArea | null;
+  hoangSaArea?: AdministrativeArea | null;
 }) => {
   const map = useMap();
 
   const applyDanangBoundsLock = useCallback(() => {
-    const rings = extractPolygonLatLngRings(boundaryArea?.boundary);
-    const points = rings.flat();
-    const coreBounds =
-      points.length >= 3 ? L.latLngBounds(points) : L.latLngBounds(FALLBACK_DANANG_BOUNDS);
-    // Đệm nhẹ 5% quanh ranh giới để không bị cắt mất nhãn/ghim ở sát mép Đà Nẵng
-    const lockedBounds = coreBounds.pad(0.05);
+    const mainlandPoints = extractPolygonLatLngRings(boundaryArea?.boundary).flat();
+    const hoangSaPoints = extractPolygonLatLngRings(
+      (hoangSaArea || HOANG_SA_ISLAND_AREA).boundary
+    ).flat();
 
-    map.options.maxBoundsViscosity = 1.0;
+    const coreBounds =
+      mainlandPoints.length >= 3
+        ? L.latLngBounds(mainlandPoints)
+        : L.latLngBounds(FALLBACK_DANANG_BOUNDS);
+
+    const combinedBounds = L.latLngBounds(
+      coreBounds.getSouthWest(),
+      coreBounds.getNorthEast()
+    );
+    if (hoangSaPoints.length >= 3) {
+      combinedBounds.extend(L.latLngBounds(hoangSaPoints));
+    } else {
+      combinedBounds.extend(DANANG_WITH_HOANG_SA_BOUNDS);
+    }
+
+    // Đệm nhẹ quanh toàn vùng Đà Nẵng + Hoàng Sa để kéo xem ngoài khơi mượt mà
+    const lockedBounds = combinedBounds.pad(0.06);
+
+    map.options.maxBoundsViscosity = 0.9;
     map.setMaxBounds(lockedBounds);
 
-    const fitZoom = map.getBoundsZoom(coreBounds, false, L.point(24, 24));
-    const minZoom = Number.isFinite(fitZoom) ? Math.max(9, fitZoom) : 9.5;
+    const minZoom = 7.5;
     map.setMinZoom(minZoom);
 
     if (map.getZoom() < minZoom) {
       map.setZoom(minZoom);
     }
-  }, [map, boundaryArea]);
+  }, [map, boundaryArea, hoangSaArea]);
 
   useEffect(() => {
     if (onMount) onMount(map);
@@ -111,11 +150,9 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
   const defaultCenter: [number, number] = [16.0544, 108.2022];
   const defaultZoom = 12;
 
-  // Ghim Điểm An Toàn & Điểm Nguy Hiểm
+  // Danh sách Điểm An Toàn & Điểm Nguy Hiểm (hiển thị đồng bộ khi lọc tab "Tất cả")
   const [hazards, setHazards] = useState<HazardReportItem[]>([]);
   const [shelters, setShelters] = useState<SafeLocationItem[]>([]);
-  const [showHazards, setShowHazards] = useState<boolean>(true);
-  const [showShelters, setShowShelters] = useState<boolean>(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -296,10 +333,17 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
     });
   };
 
-  const [boundaryArea, setBoundaryArea] = useState<AdministrativeArea | null>(() =>
-    getCachedProvinceBoundarySync(TARGET_PROVINCE_NAME)
+  const initialMapBundle = useMemo(
+    () => getCachedProvinceMapBundleSync(TARGET_PROVINCE_NAME),
+    []
   );
-  const [wardAreas, setWardAreas] = useState<AdministrativeArea[]>([]);
+
+  const [boundaryArea, setBoundaryArea] = useState<AdministrativeArea | null>(
+    () => initialMapBundle?.province || getCachedProvinceBoundarySync(TARGET_PROVINCE_NAME)
+  );
+  const [wardAreas, setWardAreas] = useState<AdministrativeArea[]>(() =>
+    initialMapBundle?.wards ? filterAdminDaNangWards(initialMapBundle.wards) : []
+  );
   const [selectedWardId, setSelectedWardId] = useState<string | null>(null);
   const [showWardBoundaries, setShowWardBoundaries] = useState(false);
   const [wardsLoading, setWardsLoading] = useState(false);
@@ -309,22 +353,36 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
   const [selectedSosId, setSelectedSosId] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState<{ lat: number; lng: number; seq: number } | null>(null);
 
+  const hoangSaArea = useMemo(
+    () => wardAreas.find((w) => /hoàng\s*sa/i.test(w.name || '')) || HOANG_SA_ISLAND_AREA,
+    [wardAreas]
+  );
+
+  const [showShelters, setShowShelters] = useState(false);
+  const [showHazards, setShowHazards] = useState(false);
+
   const loadDaNangWards = useCallback(async () => {
     setWardsLoading(true);
     try {
+      // 1. Ưu tiên đọc đồng thời ranh giới tỉnh + xã/phường/đặc khu từ CSDL MongoDB cho tốc độ mở trang nhanh
+      const dbBundle = await fetchProvinceMapBundleFromDb(TARGET_PROVINCE_NAME);
+      if (dbBundle?.province?.boundary) {
+        setBoundaryArea(dbBundle.province);
+      }
+      if (dbBundle?.wards && dbBundle.wards.length > 0) {
+        setWardAreas(filterAdminDaNangWards(dbBundle.wards));
+        return;
+      }
+
+      // 2. Fallback sang Geoapify / API riêng lẻ chỉ khi DB bundle chưa có đủ dữ liệu
+      if (!dbBundle?.province?.boundary) {
+        const fallbackProv = await fetchProvinceBoundaryFromApi(TARGET_PROVINCE_NAME);
+        if (fallbackProv?.boundary) {
+          setBoundaryArea(fallbackProv);
+        }
+      }
       const rawWards = await fetchGeoapifyBoundaries();
-      const mainlandWards = rawWards
-        .filter((w) => {
-          const name = (w.name || '').trim();
-          if (!name) return false;
-          if (w.id === 'area-hs' || /hoàng\s*sa/i.test(name)) return false;
-          if (/mở\s*rộng|lân\s*cận|geoapify/i.test(name)) return false;
-          if (/^(thành\s*phố\s*|tp\.?\s*)?đà\s*nẵng$/i.test(name)) return false;
-          if (/^(quận|huyện|thị\s*xã)\s+/i.test(name)) return false;
-          return /^(phường|xã|thị\s*trấn)\s+/i.test(name);
-        })
-        .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
-      setWardAreas(mainlandWards);
+      setWardAreas(filterAdminDaNangWards(rawWards));
     } catch (err) {
       console.warn('Không thể tải ranh giới xã/phường từ API:', err);
     } finally {
@@ -345,21 +403,9 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
 
   // Tải boundary khu vực mục tiêu, danh sách xã/phường Đà Nẵng & danh sách SOS ban đầu
   useEffect(() => {
-    let mounted = true;
-    if (!boundaryArea?.boundary) {
-      fetchProvinceBoundaryFromApi(TARGET_PROVINCE_NAME)
-        .then((area) => {
-          if (mounted && area?.boundary) {
-            setBoundaryArea(area);
-          }
-        });
-    }
     loadAreaSos();
     loadDaNangWards();
-    return () => {
-      mounted = false;
-    };
-  }, [loadAreaSos, loadDaNangWards, boundaryArea?.boundary]);
+  }, [loadAreaSos, loadDaNangWards]);
 
   // Đồng bộ dữ liệu SOS thời gian thực qua Socket.IO (chỉ xem)
   useEffect(() => {
@@ -547,8 +593,6 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
           selectedSos={selectedSos}
           onSelectSos={handleSelectSos}
           onFocusSos={handleFocusSos}
-          showWardBoundaries={showWardBoundaries}
-          onToggleWardBoundaries={handleToggleWardBoundaries}
           wardsLoading={wardsLoading}
           wardAreas={wardAreas}
           selectedWard={selectedWard}
@@ -556,111 +600,67 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
           wardSosCountMap={wardSosCountMap}
         />
 
-        {/* Thanh điều khiển nổi góc trên phải: Bật/tắt Trú ẩn, Nguy hiểm và nút cổng/đăng xuất (khi độc lập) */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 16,
-            right: 16,
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            background: theme === 'dark' ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(8px)',
-            border: '1px solid var(--sos-border)',
-            borderRadius: 8,
-            padding: 3,
-            gap: 3,
-            boxShadow: '0 4px 16px rgba(15, 23, 42, 0.15), 0 1px 3px rgba(0, 0, 0, 0.05)',
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setShowShelters((prev) => !prev)}
+        {/* Thanh điều khiển nổi góc trên phải: Nút chuyển cổng / đăng xuất (khi chạy độc lập) */}
+        {!embedded && (onSwitchToAuthor || onLogout) && (
+          <div
             style={{
+              position: 'absolute',
+              top: 16,
+              right: 16,
+              zIndex: 1000,
               display: 'flex',
               alignItems: 'center',
-              gap: 5,
-              padding: '5px 10px',
-              borderRadius: 6,
-              border: `1px solid ${showShelters ? '#059669' : '#cbd5e1'}`,
-              background: showShelters ? '#10b981' : 'transparent',
-              color: showShelters ? '#ffffff' : 'var(--sos-text-secondary)',
-              fontWeight: 700,
-              fontSize: 11.5,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
+              background: theme === 'dark' ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(8px)',
+              border: '1px solid var(--sos-border)',
+              borderRadius: 8,
+              padding: 3,
+              gap: 3,
+              boxShadow: '0 4px 16px rgba(15, 23, 42, 0.15), 0 1px 3px rgba(0, 0, 0, 0.05)',
             }}
-            title={showShelters ? 'Ẩn điểm trú ẩn' : 'Hiện điểm trú ẩn'}
           >
-            <Shield size={13} />
-            <span>Trú ẩn ({shelters.length})</span>
-          </button>
+            {onSwitchToAuthor && (
+              <button
+                type="button"
+                onClick={onSwitchToAuthor}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  background: 'rgba(220, 38, 38, 0.08)',
+                  border: '1px solid rgba(220, 38, 38, 0.3)',
+                  color: '#dc2626',
+                  borderRadius: 6,
+                  padding: '5px 10px',
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <span>🛡️ Cổng Địa Phương</span>
+                <ExternalLink size={12} />
+              </button>
+            )}
 
-          <button
-            type="button"
-            onClick={() => setShowHazards((prev) => !prev)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-              padding: '5px 10px',
-              borderRadius: 6,
-              border: `1px solid ${showHazards ? '#b91c1c' : '#cbd5e1'}`,
-              background: showHazards ? '#dc2626' : 'transparent',
-              color: showHazards ? '#ffffff' : 'var(--sos-text-secondary)',
-              fontWeight: 700,
-              fontSize: 11.5,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-            title={showHazards ? 'Ẩn điểm nguy hiểm' : 'Hiện điểm nguy hiểm'}
-          >
-            <AlertTriangle size={13} />
-            <span>Nguy hiểm ({hazards.length})</span>
-          </button>
-
-          {!embedded && onSwitchToAuthor && (
-            <button
-              type="button"
-              onClick={onSwitchToAuthor}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-                background: 'rgba(220, 38, 38, 0.08)',
-                border: '1px solid rgba(220, 38, 38, 0.3)',
-                color: '#dc2626',
-                borderRadius: 6,
-                padding: '5px 10px',
-                fontSize: 11.5,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <span>🛡️ Cổng Địa Phương</span>
-              <ExternalLink size={12} />
-            </button>
-          )}
-
-          {!embedded && onLogout && (
-            <button
-              type="button"
-              onClick={onLogout}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--sos-text-muted)',
-                cursor: 'pointer',
-                padding: 6,
-              }}
-              title="Đăng xuất"
-            >
-              <LogOut size={16} />
-            </button>
-          )}
-        </div>
-        {/* Nút điều khiển Zoom và Về trung tâm */}
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--sos-text-muted)',
+                  cursor: 'pointer',
+                  padding: 6,
+                }}
+                title="Đăng xuất"
+              >
+                <LogOut size={16} />
+              </button>
+            )}
+          </div>
+        )}
+        {/* Cụm nút điều khiển bản đồ góc dưới phải: Bật/tắt lớp (Ranh giới xã/phường, Trú ẩn, Nguy hiểm) + Zoom & Về trung tâm */}
         <div
           style={{
             position: 'absolute',
@@ -669,78 +669,167 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
             zIndex: 1000,
             display: 'flex',
             flexDirection: 'column',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            borderRadius: 8,
-            overflow: 'hidden',
+            gap: 8,
           }}
         >
-          <button
-            type="button"
-            onClick={() => handleZoom(1)}
+          <div
             style={{
-              width: 36,
-              height: 36,
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
-              borderBottom: 'none',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: '#334155',
+              flexDirection: 'column',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              borderRadius: 8,
+              overflow: 'hidden',
             }}
-            title="Phóng to"
           >
-            <Plus size={18} />
-          </button>
-          <button
-            type="button"
-            onClick={() => handleZoom(-1)}
+            <button
+              type="button"
+              onClick={handleToggleWardBoundaries}
+              style={{
+                width: 36,
+                height: 36,
+                background: showWardBoundaries ? '#2563eb' : '#ffffff',
+                border: `1px solid ${showWardBoundaries ? '#1d4ed8' : '#e2e8f0'}`,
+                borderBottom: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: showWardBoundaries ? '#ffffff' : '#334155',
+                opacity: wardsLoading ? 0.65 : 1,
+                transition: 'all 0.15s ease',
+              }}
+              title={
+                wardsLoading
+                  ? 'Đang tải ranh giới các xã/phường...'
+                  : `Ranh giới Xã/Phường — ${showWardBoundaries ? 'Bấm để ẩn' : 'Bấm để hiện'}`
+              }
+              aria-label="Bật/tắt ranh giới các xã/phường"
+              aria-pressed={showWardBoundaries}
+            >
+              <Layers size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowShelters((prev) => !prev)}
+              style={{
+                width: 36,
+                height: 36,
+                background: showShelters ? '#10b981' : '#ffffff',
+                border: `1px solid ${showShelters ? '#059669' : '#e2e8f0'}`,
+                borderBottom: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: showShelters ? '#ffffff' : '#334155',
+                transition: 'all 0.15s ease',
+              }}
+              title={`Trú ẩn (${shelters.length}) — ${showShelters ? 'Bấm để ẩn điểm an toàn' : 'Bấm để hiện điểm an toàn'}`}
+              aria-label={`Trú ẩn (${shelters.length})`}
+              aria-pressed={showShelters}
+            >
+              <Shield size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowHazards((prev) => !prev)}
+              style={{
+                width: 36,
+                height: 36,
+                background: showHazards ? '#dc2626' : '#ffffff',
+                border: `1px solid ${showHazards ? '#b91c1c' : '#e2e8f0'}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: showHazards ? '#ffffff' : '#334155',
+                transition: 'all 0.15s ease',
+              }}
+              title={`Nguy hiểm (${hazards.length}) — ${showHazards ? 'Bấm để ẩn điểm nguy hiểm' : 'Bấm để hiện điểm nguy hiểm'}`}
+              aria-label={`Nguy hiểm (${hazards.length})`}
+              aria-pressed={showHazards}
+            >
+              <AlertTriangle size={16} />
+            </button>
+          </div>
+
+          <div
             style={{
-              width: 36,
-              height: 36,
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
-              borderBottom: 'none',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: '#334155',
+              flexDirection: 'column',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              borderRadius: 8,
+              overflow: 'hidden',
             }}
-            title="Thu nhỏ"
           >
-            <Minus size={18} />
-          </button>
-          <button
-            type="button"
-            onClick={handleReset}
-            style={{
-              width: 36,
-              height: 36,
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: '#334155',
-            }}
-            title="Đưa về toàn cảnh bản đồ Đà Nẵng"
-          >
-            <RotateCcw size={15} />
-          </button>
+            <button
+              type="button"
+              onClick={() => handleZoom(1)}
+              style={{
+                width: 36,
+                height: 36,
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderBottom: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#334155',
+              }}
+              title="Phóng to"
+            >
+              <Plus size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleZoom(-1)}
+              style={{
+                width: 36,
+                height: 36,
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderBottom: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#334155',
+              }}
+              title="Thu nhỏ"
+            >
+              <Minus size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={handleReset}
+              style={{
+                width: 36,
+                height: 36,
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#334155',
+              }}
+              title="Đưa về toàn cảnh bản đồ Đà Nẵng"
+            >
+              <RotateCcw size={15} />
+            </button>
+          </div>
         </div>
 
         <MapContainer
           center={defaultCenter}
           zoom={defaultZoom}
-          minZoom={9}
+          minZoom={7}
           maxZoom={20}
           zoomSnap={0.5}
           zoomDelta={0.5}
-          maxBounds={FALLBACK_DANANG_BOUNDS}
-          maxBoundsViscosity={1.0}
+          maxBounds={DANANG_WITH_HOANG_SA_BOUNDS}
+          maxBoundsViscosity={0.9}
           preferCanvas={true}
           zoomControl={false}
           attributionControl={false}
@@ -755,6 +844,7 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
           />
           <MapController
             boundaryArea={boundaryArea}
+            hoangSaArea={hoangSaArea}
             onMount={(m) => {
               mapRef.current = m;
             }}
@@ -765,6 +855,7 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
             wardAreas={wardAreas}
             selectedWard={selectedWard}
             showWardBoundaries={showWardBoundaries}
+            theme={theme}
             sosList={filteredSosList}
             selectedSos={selectedSos}
             onSelectSos={handleSelectSos}

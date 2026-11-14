@@ -144,31 +144,18 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
   }, [subUnits, getSubUnitManager, subUnitManagerFilter, subUnitTypeFilter, subUnitSearchQuery]);
 
   return (
-    <div className="sos-views-container sos-light-view administrative-areas-container">
+    <div className="sos-views-container administrative-areas-container">
       <div className="sos-view-card administrative-areas-card">
         <div className="sos-view-card-header">
           <div>
             <div className="sos-view-card-title">
-              <Building2 size={18} color="#0284c7" />
+              <Building2 size={18} color="var(--sos-primary)" />
               <span>
                 Phường / Xã Trực Thuộc: {DA_NANG_PROVINCE_NAME} ({filteredSubUnits.length}/{subUnits.length} địa bàn)
               </span>
             </div>
-            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  color: '#0369a1',
-                  background: '#f0f9ff',
-                  border: '1px solid #bae6fd',
-                  padding: '2px 8px',
-                  borderRadius: '6px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                }}
-              >
+            <div className="areas-subtitle-row">
+              <span className="areas-scope-chip">
                 <MapPin size={11} />
                 Phạm vi hoạt động: TP. Đà Nẵng (VN-DN)
               </span>
@@ -278,18 +265,18 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
             <tbody>
               {subUnitsLoading && subUnits.length === 0 ? (
                 <tr>
-                  <td colSpan={4} style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                  <td colSpan={4} style={{ textAlign: 'center', padding: '40px', color: 'var(--sos-text-secondary)' }}>
                     <Loader2
                       size={24}
                       className="animate-spin"
-                      style={{ margin: '0 auto 8px auto', display: 'block', color: '#0284c7' }}
+                      style={{ margin: '0 auto 8px auto', display: 'block', color: 'var(--sos-primary)' }}
                     />
                     Đang tải danh sách phường, xã trực thuộc Thành phố Đà Nẵng...
                   </td>
                 </tr>
               ) : filteredSubUnits.length === 0 ? (
                 <tr>
-                  <td colSpan={4} style={{ textAlign: 'center', padding: '30px', color: '#64748b' }}>
+                  <td colSpan={4} style={{ textAlign: 'center', padding: '30px', color: 'var(--sos-text-secondary)' }}>
                     Không có phường / xã nào phù hợp với bộ lọc tìm kiếm.
                   </td>
                 </tr>
@@ -300,7 +287,6 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
                   const isTown = u.type === 'TOWN';
 
                   let typeLabel = 'Phường';
-                  let typeBadgeClass = 'green';
                   if (isDistrict) {
                     if (u.name.startsWith('Đặc khu')) typeLabel = 'Đặc khu';
                     else if (u.name.startsWith('Quận')) typeLabel = 'Quận';
@@ -308,13 +294,10 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
                     else if (u.name.startsWith('Thành phố') || u.name.startsWith('TP')) typeLabel = 'Thành phố';
                     else if (u.name.startsWith('Thị xã')) typeLabel = 'Thị xã';
                     else typeLabel = 'Quận / Huyện';
-                    typeBadgeClass = 'yellow';
                   } else if (isCommune) {
                     typeLabel = 'Xã';
-                    typeBadgeClass = 'blue';
                   } else if (isTown) {
                     typeLabel = 'Thị trấn';
-                    typeBadgeClass = 'purple';
                   }
 
                   const mgr = getSubUnitManager(u);
@@ -322,117 +305,50 @@ export const AdministrativeAreasView: React.FC<AdministrativeAreasViewProps> = (
                   return (
                     <tr key={u.id} style={{ height: '56px' }}>
                       <td>
-                        <span
-                          style={{
-                            color: '#0f172a',
-                            fontSize: '13.5px',
-                            fontWeight: 600,
-                          }}
-                        >
-                          {u.name}
-                        </span>
+                        <span className="areas-unit-name">{u.name}</span>
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        <span
-                          className={`sos-badge ${typeBadgeClass}`}
-                          style={{ fontSize: '11.5px', padding: '3px 10px', fontWeight: 600, whiteSpace: 'nowrap', borderRadius: '6px' }}
-                        >
-                          {typeLabel}
-                        </span>
+                        <span className="areas-level-tag">{typeLabel}</span>
                       </td>
                       <td>
                         {mgr ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
-                              <span style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px' }}>
-                                {mgr.managerName}
-                              </span>
-                              <span
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '3px',
-                                  fontSize: '10.5px',
-                                  fontWeight: 600,
-                                  padding: '1px 6px',
-                                  borderRadius: '4px',
-                                  background: '#dcfce7',
-                                  color: '#15803d',
-                                  border: '1px solid #bbf7d0',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                <CheckCircle2 size={10} color="#15803d" />
+                          <div className="areas-manager-cell">
+                            <div className="areas-manager-top">
+                              <span className="areas-manager-name">{mgr.managerName}</span>
+                              <span className="areas-assign-pill managed">
+                                <CheckCircle2 size={10} />
                                 Đã có quản lý
                               </span>
                             </div>
-                            <div
-                              style={{
-                                fontSize: '12px',
-                                color: '#64748b',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                flexWrap: 'wrap',
-                              }}
-                            >
+                            <div className="areas-manager-meta">
                               <span>{mgr.position || mgr.department || 'Cán bộ phụ trách'}</span>
                               {mgr.phone && (
-                                <span style={{ color: '#0284c7', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                <span className="areas-manager-phone">
                                   • {mgr.phone}
                                 </span>
                               )}
                             </div>
                           </div>
                         ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap' }}>
-                              <span style={{ fontWeight: 500, color: '#64748b', fontSize: '13px' }}>
+                          <div className="areas-manager-cell">
+                            <div className="areas-manager-top">
+                              <span className="areas-manager-empty">
                                 Chưa có cán bộ quản lý
                               </span>
-                              <span
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '3px',
-                                  fontSize: '10.5px',
-                                  fontWeight: 600,
-                                  padding: '1px 6px',
-                                  borderRadius: '4px',
-                                  background: '#fef2f2',
-                                  color: '#b91c1c',
-                                  border: '1px solid #fecaca',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                <UserX size={10} color="#b91c1c" />
+                              <span className="areas-assign-pill unmanaged">
+                                <UserX size={10} />
                                 Chưa phân công
                               </span>
                             </div>
-                            <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                            <div style={{ fontSize: '13px', color: 'var(--sos-text-muted)' }}>
                               Chưa gán tài khoản địa phương phụ trách
                             </div>
                           </div>
                         )}
                       </td>
                       <td style={{ textAlign: 'center' }}>
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5.5px',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            color: '#15803d',
-                            background: '#f0fdf4',
-                            border: '1px solid #bbf7d0',
-                            padding: '4px 9px',
-                            borderRadius: '6px',
-                            whiteSpace: 'nowrap',
-                            letterSpacing: '0.2px',
-                          }}
-                        >
-                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a' }} />
+                        <span className="areas-status-pill">
+                          <span className="areas-status-dot" />
                           HOẠT ĐỘNG
                         </span>
                       </td>

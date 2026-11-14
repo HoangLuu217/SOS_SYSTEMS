@@ -16,6 +16,7 @@ import {
   Truck,
   Shield,
   Package,
+  ChevronLeft,
   ChevronRight,
   ShieldCheck,
   Trash2,
@@ -34,6 +35,7 @@ import {
 import { onSosCreated, onSosUpdated, onSosDeleted, getSocket } from '@/services/socketService';
 import { EMERGENCY_TYPE_LABELS } from '@/features/hazards';
 import { toast } from '@/components/common/toast';
+import { getShoreHandoffVehicleStatusMeta } from '@/utils/shoreHandoffStatus';
 import './SosRequestsView.css';
 
 export interface SosRequestsViewProps {
@@ -109,7 +111,11 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
 
   const [triageFilter, setTriageFilter] = useState<'ALL' | 'ACTIVE_ALL' | 'CRITICAL' | 'HIGH' | 'PENDING' | 'RESCUING' | 'COMPLETED' | 'CANCELLED'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+  const [previewPhotos, setPreviewPhotos] = useState<{
+    images: string[];
+    activeIndex: number;
+    title?: string;
+  } | null>(null);
   const [selectedSosDetail, setSelectedSosDetail] = useState<SosRequestItem | null>(null);
 
   // State phục vụ modal nhận SOS hotline thủ công (UC-L02)
@@ -187,7 +193,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
             }
           }
         })
-        .catch(() => {});
+        .catch(() => { });
 
       // 3. Tải phương tiện (chạy ngầm)
       const vehPromise = fetchVehicles()
@@ -235,6 +241,8 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     };
     s.on('sos:shore_handoff_requested', handleHandoff);
     s.on('sos:shore_handoff_assigned', handleHandoff);
+    s.on('assignment:updated', handleHandoff);
+    s.on('assignment:completed', handleHandoff);
 
 
     const unsubDeleted = onSosDeleted((deletedData) => {
@@ -249,12 +257,37 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
 
       s.off('sos:shore_handoff_requested', handleHandoff);
       s.off('sos:shore_handoff_assigned', handleHandoff);
+      s.off('assignment:updated', handleHandoff);
+      s.off('assignment:completed', handleHandoff);
 
 
       unsubDeleted();
 
     };
   }, [loadData]);
+
+  useEffect(() => {
+    if (!previewPhotos) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPreviewPhotos(null);
+      } else if (e.key === 'ArrowLeft') {
+        setPreviewPhotos((prev) =>
+          prev && prev.images.length > 1
+            ? { ...prev, activeIndex: (prev.activeIndex - 1 + prev.images.length) % prev.images.length }
+            : prev
+        );
+      } else if (e.key === 'ArrowRight') {
+        setPreviewPhotos((prev) =>
+          prev && prev.images.length > 1
+            ? { ...prev, activeIndex: (prev.activeIndex + 1) % prev.images.length }
+            : prev
+        );
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [Boolean(previewPhotos)]);
 
   // Hành động xóa 1 ca SOS đã đóng / đã hủy (Mở Modal Popup phong cách Mobile App)
   const handleDeleteSingleSos = (sosId: string, sosCode?: string) => {
@@ -397,8 +430,19 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
     if (!sos) return 'PENDING';
     if (sos.status === 'CANCELLED') return 'CANCELLED';
     if (sos.status === 'REJECTED') return 'REJECTED';
+    const hasPendingShoreHandoff = Boolean(
+      sos.status !== 'COMPLETED' &&
+      (sos.status as string) !== 'RESOLVED' &&
+      sos.shoreHandoff &&
+      ['REQUESTED', 'ASSIGNED'].includes(String(sos.shoreHandoff.status || '').toUpperCase()) &&
+      !sos.shoreHandoff.completedAt
+    );
+
     const sRank = normalizeStatusRank(sos.status);
-    const aRank = normalizeStatusRank(sos.assignment?.status);
+    let aRank = normalizeStatusRank(sos.assignment?.status);
+    if (hasPendingShoreHandoff && aRank === 6) {
+      aRank = 5; // Đội cứu hộ đã xong nhưng vẫn đợi xe tiếp vận -> giữ trạng thái Đang cứu hộ
+    }
 
     if (sRank === -1 && aRank === -1) return 'REJECTED';
     if (aRank === -1 && sRank <= 1) return 'REJECTED';
@@ -681,39 +725,27 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
   return (
     <div className="sos-views-container warm-executive-theme">
       {/* ============================================================
-          THANH CHỈ SỐ NHANH: NÚT BẢN ĐỒ CHI TIẾT & SỐ NGƯỜI GẶP NẠN (BACKGROUND KHÔNG MÀU)
+          THANH CHỈ SỐ NHANH: NÚT BẢN ĐỒ CHI TIẾT & SỐ NGƯỜI GẶP NẠN
           ============================================================ */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '12px',
-          padding: '4px 2px',
-          marginBottom: '16px',
-          flexShrink: 0,
-        }}
-      >
-        {/* Nút Bản đồ chi tiết bên trái (Background không màu, viền xám theo đúng nút thứ 2 trong ảnh mẫu) */}
+      <div className="sos-top-strip">
         <div className="sos-scope-tabs">
           <button
             type="button"
-            className="sos-scope-tab btn-dark-blue"
+            className="sos-btn sos-btn--primary sos-btn--sm"
             onClick={() => onOpenMap()}
             title="Mở ngay Bản đồ Điều hành Tác chiến"
           >
-            <span style={{ fontWeight: 700 }}>Bản đồ chi tiết</span>
+            <Compass size={14} />
+            <span>Bản đồ chi tiết</span>
             <span className="sos-scope-badge" title="Số lượng ca khẩn cấp đang diễn ra trên bản đồ">
               {activeCount}
             </span>
           </button>
         </div>
 
-        {/* Duy nhất 1 trường số lượng người gặp nạn ĐANG CẦN CỨU bên phải */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px' }}>
-          <strong style={{ color: '#0f172a', fontWeight: 700 }}>Tổng số người cần cứu:</strong>
-          <strong style={{ color: '#0284c7', fontWeight: 800, fontSize: '15px' }}>
+        <div className="sos-victims-summary">
+          <strong>Tổng số người cần cứu:</strong>
+          <strong className="sos-victims-summary-value">
             {activeVictims} người
           </strong>
         </div>
@@ -779,11 +811,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
             <button
               type="button"
               className={`triage-btn ${triageFilter === 'COMPLETED' ? 'active' : ''}`}
-              style={{
-                color: triageFilter === 'COMPLETED' ? '#15803d' : '#64748b',
-                borderColor: triageFilter === 'COMPLETED' ? '#86efac' : '#cbd5e1',
-                backgroundColor: triageFilter === 'COMPLETED' ? '#f0fdf4' : '#ffffff',
-              }}
               onClick={() => setTriageFilter('COMPLETED')}
             >
               <span className="dot-mini green" />
@@ -794,14 +821,9 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
             <button
               type="button"
               className={`triage-btn ${triageFilter === 'CANCELLED' ? 'active' : ''}`}
-              style={{
-                color: triageFilter === 'CANCELLED' ? '#475569' : '#64748b',
-                borderColor: triageFilter === 'CANCELLED' ? '#94a3b8' : '#cbd5e1',
-                backgroundColor: triageFilter === 'CANCELLED' ? '#f1f5f9' : '#ffffff',
-              }}
               onClick={() => setTriageFilter('CANCELLED')}
             >
-              <span className="dot-mini gray" style={{ backgroundColor: '#94a3b8' }} />
+              <span className="dot-mini gray" />
               Đã hủy ({cancelledCount})
             </button>
 
@@ -832,47 +854,21 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
 
         {/* Banner tác vụ dọn dẹp khi đang xem các ca đã hủy */}
         {triageFilter === 'CANCELLED' && cancelledCount > 0 && (
-          <div
-            style={{
-              margin: '0 0 14px 0',
-              padding: '10px 16px',
-              backgroundColor: '#FEF2F2',
-              border: '1px solid #FECACA',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              fontSize: '13px',
-              color: '#991B1B',
-            }}
-          >
+          <div className="sos-cancelled-banner">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <AlertTriangle size={16} color="#DC2626" />
+              <AlertTriangle size={16} color="#dc2626" />
               <span>
                 Đang hiển thị <strong>{cancelledCount} ca</strong> đã hủy/báo nhầm. Bạn có thể dọn dẹp để làm sạch danh sách.
               </span>
             </div>
             <button
               type="button"
+              className="sos-btn sos-btn--danger sos-btn--sm"
               onClick={handleClearAllCancelled}
-              style={{
-                backgroundColor: '#DC2626',
-                color: '#FFFFFF',
-                border: 'none',
-                borderRadius: '6px',
-                padding: '6px 14px',
-                fontSize: '12px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: '0 1px 2px rgba(220, 38, 38, 0.2)',
-              }}
               title="Xóa vĩnh viễn toàn bộ các ca đã hủy để làm sạch danh sách"
             >
-              <Trash2 size={13} color="#FFFFFF" />
-              Dọn sạch {cancelledCount} ca đã hủy
+              <Trash2 size={13} />
+              <span>Dọn sạch {cancelledCount} ca đã hủy</span>
             </button>
           </div>
         )}
@@ -882,9 +878,9 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
           <table className="executive-table">
             <thead>
               <tr>
-                <th style={{ width: '13%' }}>Mã sự cố</th>
+                <th style={{ width: '14%' }}>Mã sự cố</th>
                 <th style={{ width: '18%' }}>Người dân &amp; Liên hệ</th>
-                <th style={{ width: '21%' }}>Địa điểm hiện trường</th>
+                <th style={{ width: '20%' }}>Địa điểm hiện trường</th>
                 <th style={{ width: '9%' }}>Nạn nhân</th>
                 <th style={{ width: '15%' }}>Đội phụ trách</th>
                 <th style={{ width: '13%', textAlign: 'center' }}>Tiến trình</th>
@@ -906,12 +902,12 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                       <span style={{ fontSize: 36, display: 'block', marginBottom: 8 }}>
                         {triageFilter === 'ACTIVE_ALL' && totalCount > 0 ? '✨' : '🛡️'}
                       </span>
-                      <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: '#0F172A' }}>
+                      <p style={{ margin: 0, fontWeight: 800, fontSize: 16, color: 'var(--sos-text-primary)' }}>
                         {triageFilter === 'ACTIVE_ALL' && totalCount > 0
                           ? 'Hiện không có ca cứu nạn nào đang diễn ra'
                           : 'Không có yêu cầu cứu hộ nào phù hợp với bộ lọc hiện tại'}
                       </p>
-                      <p style={{ margin: '8px 0 16px', fontSize: 13, color: '#64748B', lineHeight: 1.5 }}>
+                      <p style={{ margin: '8px 0 16px', fontSize: 13, color: 'var(--sos-text-secondary)', lineHeight: 1.5 }}>
                         {triageFilter === 'ACTIVE_ALL' && totalCount > 0
                           ? `Khu vực hiện tại an toàn. Đang có ${totalCount} ca được lưu trữ trong hệ thống (${completedCount} ca đã hoàn thành). Dữ liệu vẫn còn nguyên vẹn.`
                           : 'Thử chuyển sang tab khác hoặc xóa từ khóa tìm kiếm.'}
@@ -921,34 +917,16 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           {completedCount > 0 && (
                             <button
                               type="button"
+                              className="sos-btn sos-btn--outline sos-btn--sm"
                               onClick={() => setTriageFilter('COMPLETED')}
-                              style={{
-                                padding: '8px 16px',
-                                borderRadius: 8,
-                                backgroundColor: '#F0FDF4',
-                                color: '#16A34A',
-                                border: '1px solid #BBF7D0',
-                                fontWeight: 700,
-                                fontSize: 13,
-                                cursor: 'pointer',
-                              }}
                             >
                               Xem {completedCount} ca đã hoàn thành
                             </button>
                           )}
                           <button
                             type="button"
+                            className="sos-btn sos-btn--outline sos-btn--sm"
                             onClick={() => setTriageFilter('ALL')}
-                            style={{
-                              padding: '8px 16px',
-                              borderRadius: 8,
-                              backgroundColor: '#F8FAFC',
-                              color: '#334155',
-                              border: '1px solid #CBD5E1',
-                              fontWeight: 700,
-                              fontSize: 13,
-                              cursor: 'pointer',
-                            }}
                           >
                             Xem tất cả lịch sử ({totalCount} ca)
                           </button>
@@ -964,11 +942,17 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                   const citizenPhone = citizenInfo?.phone;
                   const citizenAvatar = citizenInfo?.avatarUrl;
                   const isCritical = sos.priority === 'CRITICAL';
-                  const hasPhoto = Boolean(sos.imageUrl || (sos.images && sos.images.length > 0));
-                  const photoUrl = sos.imageUrl || (sos.images && sos.images[0]);
+                  const rowPhotos = Array.from(
+                    new Set(
+                      [
+                        ...(Array.isArray(sos.images) ? sos.images : []),
+                        ...(sos.imageUrl ? [sos.imageUrl] : []),
+                      ].filter((url): url is string => Boolean(url && typeof url === 'string'))
+                    )
+                  );
+                  const hasPhoto = rowPhotos.length > 0;
                   const timeAgoText = formatTimeAgo(sos.createdAt);
                   const isRescuer = Array.isArray(citizenInfo?.roles) && citizenInfo.roles.includes('RESCUER');
-                  const areaName = typeof sos.areaId === 'object' && sos.areaId !== null ? (sos.areaId as any)?.name : null;
 
                   return (
                     <tr
@@ -987,33 +971,27 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           </div>
                           <div className="meta-line">
                             <span className="time-text">{timeAgoText}</span>
-                            <span
-                              className="source-pill"
-                              style={{
-                                backgroundColor: isRescuer ? '#eff6ff' : '#f0fdf4',
-                                borderColor: isRescuer ? '#bfdbfe' : '#bbf7d0',
-                                color: isRescuer ? '#1d4ed8' : '#15803d',
-                                fontWeight: 700,
-                              }}
-                            >
-                              {isRescuer ? 'RESCUER' : 'CITIZEN'}
-                            </span>
-                            {sos.repeatCount && sos.repeatCount > 1 ? (
-                              <span
-                                className="source-pill repeat-pill"
-                                title={`Người dân đã gửi lại ${sos.repeatCount} lần tại cùng vị trí này`}
-                              >
-                                BÁO LẠI {sos.repeatCount} LẦN
+                            <div className="meta-badges-row">
+                              <span className="source-pill">
+                                {isRescuer ? 'RESCUER' : 'CITIZEN'}
                               </span>
-                            ) : null}
-                            {sos.isSecondaryRequest ? (
-                              <span
-                                className="source-pill secondary-pill"
-                                title="Ca cứu hộ bổ sung / Báo nạn hộ người thân tại vị trí khác"
-                              >
-                                BÁO HỘ
-                              </span>
-                            ) : null}
+                              {sos.isSecondaryRequest ? (
+                                <span
+                                  className="source-pill secondary-pill"
+                                  title="Ca cứu hộ bổ sung / Báo nạn hộ người thân tại vị trí khác"
+                                >
+                                  BÁO HỘ
+                                </span>
+                              ) : null}
+                              {sos.repeatCount && sos.repeatCount > 1 ? (
+                                <span
+                                  className="source-pill repeat-pill"
+                                  title={`Người dân đã gửi lại ${sos.repeatCount} lần tại cùng vị trí này`}
+                                >
+                                  BÁO LẠI {sos.repeatCount} LẦN
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -1031,7 +1009,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                               <a
                                 href={`tel:${sos.contactPhone}`}
                                 className="citizen-phone-link"
-                                style={{ color: '#0284c7', fontWeight: 700 }}
                                 title="Số chính liên hệ trực tiếp tại điểm ngập"
                                 onClick={(e) => e.stopPropagation()}
                               >
@@ -1078,24 +1055,24 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                             <MapPin size={13} className="pin-icon" />
                             <span className="address-text">{sos.address}</span>
                           </div>
-                          {areaName && (
-                            <div className="area-sub-badge" title="Đơn vị hành chính trực thuộc">
-                              <Compass size={10} />
-                              <span>{areaName}</span>
-                            </div>
-                          )}
                           {hasPhoto && (
                             <button
                               type="button"
                               className="photo-preview-chip"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (photoUrl) setPreviewPhoto(photoUrl);
+                                if (rowPhotos.length > 0) {
+                                  setPreviewPhotos({
+                                    images: rowPhotos,
+                                    activeIndex: 0,
+                                    title: `Sự cố ${sos.sosCode}`,
+                                  });
+                                }
                               }}
                               title="Bấm để xem ảnh hiện trường"
                             >
                               <Camera size={11} />
-                              <span>Xem ảnh ({sos.images?.length || 1})</span>
+                              <span>Xem ảnh ({rowPhotos.length})</span>
                             </button>
                           )}
                         </div>
@@ -1115,22 +1092,25 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           const teamName = getAssignedTeamName(sos);
                           const leader = getAssignedLeader(sos);
                           if (teamName) {
+                            const displayTeamName =
+                              teamName.replace(/\s*\([^)]*\)\s*$/, '').trim() || teamName;
                             return (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                <span style={{ fontWeight: 800, color: '#0369a1', fontSize: 12, lineHeight: 1.3 }} className="line-clamp-1" title={teamName}>
-                                  🛡️ {teamName}
+                              <div className="table-team-cell">
+                                <span className="table-team-name" title={teamName}>
+                                  <span className="line-clamp-1">{displayTeamName}</span>
                                 </span>
                                 {leader?.name && (
-                                  <span style={{ fontSize: 11, color: '#64748b' }} className="line-clamp-1">
-                                    👤 {leader.name}
+                                  <span className="table-team-leader line-clamp-1">
+                                    Chỉ huy: {leader.name}
                                   </span>
                                 )}
                               </div>
                             );
                           }
                           return (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2.5px 7px', borderRadius: 4, background: '#fef3c7', color: '#b45309', fontSize: 11, fontWeight: 700, border: '1px solid #fde68a' }}>
-                              ⏳ Chờ điều đội
+                            <span className="table-team-unassigned">
+                              <Clock size={11} />
+                              <span>Chờ điều đội</span>
                             </span>
                           );
                         })()}
@@ -1163,14 +1143,14 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           }
                           if (effStatus === 'ACCEPTED' || effStatus === 'ASSIGNED') {
                             return (
-                              <span className="table-progress-pill enroute" style={{ background: '#f0f9ff', color: '#0284c7', borderColor: '#bae6fd' }}>
+                              <span className="table-progress-pill assigned">
                                 <Clock size={11} /> Đã giao đội
                               </span>
                             );
                           }
                           if (effStatus === 'CANCELLED' || effStatus === 'REJECTED') {
                             return (
-                              <span 
+                              <span
                                 className="table-progress-pill cancelled"
                                 title="Người dân đã xác nhận an toàn hoặc hủy yêu cầu"
                               >
@@ -1189,36 +1169,34 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
 
                       {/* 7. Thao tác mở panel 4/10 */}
                       <td style={{ textAlign: 'center' }}>
-                        <button
-                          type="button"
-                          style={{
-                            background: selectedSosDetail?._id === sos._id ? '#0284c7' : '#f0f9ff',
-                            border: '1px solid #bae6fd',
-                            color: selectedSosDetail?._id === sos._id ? '#ffffff' : '#0284c7',
-                            padding: '4px 8px',
-                            borderRadius: 6,
-                            fontSize: 11,
-                            fontWeight: 800,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 2,
-                            whiteSpace: 'nowrap',
-                            transition: 'all 0.15s ease',
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedSosDetail(sos);
-                          }}
-                          title="Xem đầy đủ chi tiết điều phối bên phải (4/10)"
-                        >
-                          <span>Chi tiết</span>
-                          <ChevronRight size={12} />
-                        </button>
-                        {['CANCELLED', 'REJECTED'].includes(sos.status) && (
-                          <button type="button" onClick={(e) => { e.stopPropagation(); handleDeleteSingleSos(sos._id, sos.sosCode); }} style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', padding: '2px 4px' }} title="Xóa ca"><Trash2 size={12} /></button>
-                        )}
-
+                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                          <button
+                            type="button"
+                            className={
+                              selectedSosDetail?._id === sos._id
+                                ? 'sos-btn sos-btn--primary sos-btn--xs'
+                                : 'sos-btn sos-btn--outline sos-btn--xs'
+                            }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedSosDetail(sos);
+                            }}
+                            title="Xem đầy đủ chi tiết điều phối bên phải (4/10)"
+                          >
+                            <span>Chi tiết</span>
+                            <ChevronRight size={12} />
+                          </button>
+                          {['CANCELLED', 'REJECTED'].includes(sos.status) && (
+                            <button
+                              type="button"
+                              className="sos-btn sos-btn--ghost sos-btn--xs"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteSingleSos(sos._id, sos.sosCode); }}
+                              title="Xóa ca"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1252,13 +1230,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                   const detailCitizen = typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId !== null ? selectedSosDetail.citizenId : null;
                   const isDetailRescuer = Array.isArray(detailCitizen?.roles) && detailCitizen.roles.includes('RESCUER');
                   return (
-                    <span
-                      className="source-tag"
-                      style={{
-                        backgroundColor: isDetailRescuer ? '#2563eb' : '#16a34a',
-                        color: '#ffffff',
-                      }}
-                    >
+                    <span className="source-tag">
                       {isDetailRescuer ? 'RESCUER' : 'CITIZEN'}
                     </span>
                   );
@@ -1281,9 +1253,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 <span className={`sos-panel-priority ${selectedSosDetail.priority.toLowerCase()}`}>
                   {selectedSosDetail.priority === 'CRITICAL' ? 'NGUY CẤP' : selectedSosDetail.priority === 'HIGH' ? 'KHẨN CẤP' : 'TRUNG BÌNH'}
                 </span>
-                <span className="sos-panel-type">
-                  {EMERGENCY_TYPE_LABELS[selectedSosDetail.emergencyType] || selectedSosDetail.emergencyType}
-                </span>
               </div>
               <button
                 type="button"
@@ -1300,7 +1269,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
               {/* BLOCK 1: LỰC LƯỢNG CỨU HỘ PHỤ TRÁCH (THÔNG TIN ĐỘI NÀO ĐI CỨU) */}
               <div className="sos-panel-card rescue-team-card">
                 <div className="sos-panel-card-title">
-                  <Shield size={15} color="#0284c7" />
                   <span>LỰC LƯỢNG CỨU HỘ PHỤ TRÁCH (XUẤT KÍCH)</span>
                 </div>
 
@@ -1316,21 +1284,22 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                   </div>
                 ) : selectedSosDetail.assignment ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                      <div>
-                        <div style={{ fontWeight: 800, fontSize: 13.5, color: '#0369a1' }}>
-                          🛡️ {getAssignedTeamName(selectedSosDetail) || 'Đội cứu hộ tác chiến'}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 13.5, color: '#0f172a', minWidth: 0 }}>
+                          <Shield size={14} color="#0284c7" style={{ flexShrink: 0 }} />
+                          <span>{getAssignedTeamName(selectedSosDetail) || 'Đội cứu hộ tác chiến'}</span>
                         </div>
-                        {getAssignedVehicle(selectedSosDetail) && (
-                          <div style={{ fontSize: 12, color: '#475569', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <Truck size={12} color="#0284c7" />
-                            <span>Phương tiện: <strong>{getAssignedVehicle(selectedSosDetail)}</strong></span>
-                          </div>
-                        )}
+                        <span className="sos-team-status-badge" style={{ flexShrink: 0 }}>
+                          {getEffectiveStatus(selectedSosDetail) === 'COMPLETED' ? 'Đã xong' : getEffectiveStatus(selectedSosDetail) === 'CANCELLED' ? 'Đã hủy' : 'Đang tác chiến'}
+                        </span>
                       </div>
-                      <span className="sos-team-status-badge">
-                        {getEffectiveStatus(selectedSosDetail) === 'COMPLETED' ? 'Đã xong' : getEffectiveStatus(selectedSosDetail) === 'CANCELLED' ? 'Đã hủy' : 'Đang tác chiến'}
-                      </span>
+                      {getAssignedVehicle(selectedSosDetail) && (
+                        <div style={{ fontSize: 12, color: '#0f172a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Truck size={14} color="#0284c7" style={{ flexShrink: 0 }} />
+                          <span>Phương tiện: <strong>{getAssignedVehicle(selectedSosDetail)}</strong></span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Chỉ huy đội & SĐT gọi trực tiếp */}
@@ -1375,7 +1344,6 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 ) : (
                   <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '10px 12px', marginTop: 4 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#b45309', fontWeight: 800, fontSize: 12.5 }}>
-                      <AlertTriangle size={14} />
                       <span>Chưa phân công đội cứu hộ</span>
                     </div>
                     <p style={{ margin: '4px 0 8px', fontSize: 11.5, color: '#92400e', lineHeight: 1.4 }}>
@@ -1452,10 +1420,10 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                     <span className="info-label">SĐT tài khoản người gửi</span>
                     <span className="info-value">
                       {typeof selectedSosDetail.citizenId === 'object' && selectedSosDetail.citizenId?.phone ? (
-                        <a href={`tel:${selectedSosDetail.citizenId.phone}`} className="phone-clickable">
+                        <span className="phone-static">
                           <Phone size={13} />
                           <span>{selectedSosDetail.citizenId.phone}</span>
-                        </a>
+                        </span>
                       ) : (
                         <span className="text-muted" style={{ fontSize: 12, color: '#94a3b8' }}>Chưa cập nhật SĐT</span>
                       )}
@@ -1467,11 +1435,10 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                     <span className="info-label">SĐT khẩn cấp (Hiện trường)</span>
                     <span className="info-value">
                       {selectedSosDetail.contactPhone ? (
-                        <a href={`tel:${selectedSosDetail.contactPhone}`} className="phone-clickable emergency">
-                          <Phone size={14} />
-                          <strong>{selectedSosDetail.contactPhone}</strong>
-                          <span className="badge-call">Gọi ngay</span>
-                        </a>
+                        <span className="phone-static">
+                          <Phone size={13} />
+                          <span>{selectedSosDetail.contactPhone}</span>
+                        </span>
                       ) : (
                         <span className="text-muted" style={{ fontSize: 12, color: '#94a3b8' }}>Dùng SĐT tài khoản người gửi</span>
                       )}
@@ -1495,9 +1462,8 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                   {/* Số lượng nạn nhân mắc kẹt */}
                   <div className="sos-info-box">
                     <span className="info-label">Số nạn nhân mắc kẹt</span>
-                    <span className="info-value victims-count">
-                      <Users size={14} />
-                      <strong>{selectedSosDetail.people} người</strong>
+                    <span className="info-value" style={{ fontSize: 12 }}>
+                      {selectedSosDetail.people} người
                     </span>
                   </div>
 
@@ -1563,7 +1529,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
               {/* BLOCK 6: TÌNH HUỐNG KHẨN CẤP & MÔ TẢ TỪ NGƯỜI DÂN */}
               <div className="sos-panel-card">
                 <div className="sos-panel-card-title">
-                  <AlertTriangle size={15} color="#f59e0b" />
+                  <AlertTriangle size={15} color="#dc2626" />
                   <span>TÌNH HUỐNG KHẨN CẤP &amp; DIỄN BIẾN</span>
                 </div>
 
@@ -1583,7 +1549,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 </div>
 
                 {selectedSosDetail.description && (
-                  <div style={{ padding: '8px 12px', background: '#f8fafc', borderLeft: '3px solid #ef4444', borderRadius: '0 6px 6px 0', fontSize: 12, fontStyle: 'italic', color: '#334155', lineHeight: 1.5 }}>
+                  <div style={{ padding: '8px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, fontStyle: 'italic', color: '#334155', lineHeight: 1.5 }}>
                     "{selectedSosDetail.description.replace(/⚡\s*/g, '').trim()}"
                   </div>
                 )}
@@ -1596,12 +1562,64 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                     ? [selectedSosDetail.imageUrl]
                     : [];
 
+                const rescueTeamPhotos: string[] = Array.from(
+                  new Set<string>(
+                    Array.isArray(selectedSosDetail.assignment?.proofImages)
+                      ? selectedSosDetail.assignment.proofImages.filter(Boolean)
+                      : []
+                  )
+                );
+                const handoffTeamPhotos: string[] = Array.from(
+                  new Set<string>(
+                    Array.isArray(selectedSosDetail.shoreHandoffAssignment?.proofImages)
+                      ? selectedSosDetail.shoreHandoffAssignment.proofImages.filter(Boolean)
+                      : []
+                  )
+                );
+                const sosLevelProofPhotos: string[] = Array.from(
+                  new Set<string>(
+                    Array.isArray((selectedSosDetail as any).proofImages)
+                      ? (selectedSosDetail as any).proofImages.filter(Boolean)
+                      : []
+                  )
+                );
+                const extraSosProofPhotos = sosLevelProofPhotos.filter(
+                  (url) => !rescueTeamPhotos.includes(url) && !handoffTeamPhotos.includes(url)
+                );
+
+                const hasShoreHandoffTeam = Boolean(
+                  selectedSosDetail.shoreHandoffAssignment ||
+                  (selectedSosDetail.shoreHandoff &&
+                    ['ASSIGNED', 'COMPLETED'].includes(String(selectedSosDetail.shoreHandoff.status || '').toUpperCase())) ||
+                  selectedSosDetail.shoreHandoff?.assignedVehiclePlate ||
+                  selectedSosDetail.shoreHandoff?.assignedVehicleName
+                );
+
+                const primarySectionPhotos = [
+                  ...new Set([...rescueTeamPhotos, ...extraSosProofPhotos]),
+                ];
+                const combinedSectionPhotos = hasShoreHandoffTeam
+                  ? [...primarySectionPhotos, ...handoffTeamPhotos]
+                  : [...new Set([...primarySectionPhotos, ...handoffTeamPhotos])];
+
                 const teamProofPhotos: string[] = [
                   ...new Set([
-                    ...(Array.isArray(selectedSosDetail.assignment?.proofImages) ? selectedSosDetail.assignment.proofImages : []),
-                    ...(Array.isArray((selectedSosDetail as any).proofImages) ? (selectedSosDetail as any).proofImages : []),
+                    ...rescueTeamPhotos,
+                    ...handoffTeamPhotos,
+                    ...sosLevelProofPhotos,
                   ]),
                 ].filter(Boolean);
+
+                const rescueTeamLabel =
+                  selectedSosDetail.assignment?.rescueTeamId?.name || 'Đội đi cứu trực tiếp';
+                const handoffVehiclePlate =
+                  selectedSosDetail.shoreHandoffAssignment?.vehicleId?.plateNumber ||
+                  selectedSosDetail.shoreHandoff?.assignedVehiclePlate ||
+                  '';
+                const handoffTeamLabel =
+                  selectedSosDetail.shoreHandoff?.assignedRoadTeamName ||
+                  selectedSosDetail.shoreHandoffAssignment?.rescueTeamId?.name ||
+                  'Đội xe tiếp vận / cứu thương';
 
                 // Tách bạch: ảnh người dân gửi lúc tạo SOS không bị trùng với ảnh nghiệm thu của đội cứu hộ
                 const citizenPhotos = rawCitizenPhotos.filter((url) => !teamProofPhotos.includes(url));
@@ -1609,14 +1627,22 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 return (
                   <>
                     {/* BLOCK 7A: HÌNH ẢNH DO NGƯỜI DÂN GỬI LÚC BÁO SOS */}
-                    <div className="sos-panel-card">
+                    <div
+                      className="sos-panel-card"
+                      style={{
+                        background: citizenPhotos.length > 0 ? '#f0fdf4' : '#f8fafc',
+                        borderColor: citizenPhotos.length > 0 ? '#bbf7d0' : '#e2e8f0',
+                      }}
+                    >
                       <div className="sos-panel-card-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Camera size={15} color="#0284c7" />
-                          <span>ẢNH NGƯỜI DÂN GỬI (LÚC BÁO SOS)</span>
+                          <Camera size={16} color={citizenPhotos.length > 0 ? '#16a34a' : '#64748b'} />
+                          <span style={{ color: citizenPhotos.length > 0 ? '#15803d' : '#475569', fontWeight: 800 }}>
+                            ẢNH NGƯỜI DÂN GỬI (LÚC BÁO SOS)
+                          </span>
                         </div>
                         {citizenPhotos.length > 0 && (
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#0369a1', background: '#e0f2fe', padding: '1px 7px', borderRadius: 10 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '1px 7px', borderRadius: 10, border: '1px solid #86efac' }}>
                             {citizenPhotos.length} ảnh
                           </span>
                         )}
@@ -1632,12 +1658,19 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                                 height: 64,
                                 borderRadius: 8,
                                 overflow: 'hidden',
-                                border: '1.5px solid #cbd5e1',
+                                border: '1.5px solid #86efac',
                                 cursor: 'pointer',
                                 flexShrink: 0,
                                 position: 'relative',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                               }}
-                              onClick={() => setPreviewPhoto(imgUrl)}
+                              onClick={() =>
+                                setPreviewPhotos({
+                                  images: citizenPhotos,
+                                  activeIndex: i,
+                                  title: `Ảnh người dân gửi (${selectedSosDetail.sosCode})`,
+                                })
+                              }
                               title="Bấm để xem ảnh phóng to"
                             >
                               <img src={imgUrl} alt={`Ảnh người dân gửi ${i + 1}`} referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -1645,14 +1678,13 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           ))}
                         </div>
                       ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#94a3b8', fontSize: 12, padding: '4px 0' }}>
-                          <Camera size={15} />
+                        <div style={{ display: 'flex', alignItems: 'center', color: '#94a3b8', fontSize: 12, padding: '4px 0' }}>
                           <span>Người dân không đính kèm hình ảnh khi phát tín hiệu SOS</span>
                         </div>
                       )}
                     </div>
 
-                    {/* BLOCK 7B: HÌNH ẢNH DO ĐỘI CỨU HỘ CHỤP KHI HOÀN THÀNH NHIỆM VỤ */}
+                    {/* BLOCK 7B: HÌNH ẢNH DO ĐỘI CỨU HỘ & XE TIẾP VẬN CHỤP KHI HOÀN THÀNH NHIỆM VỤ */}
                     <div
                       className="sos-panel-card"
                       style={{
@@ -1674,7 +1706,110 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                         )}
                       </div>
 
-                      {teamProofPhotos.length > 0 ? (
+                      {hasShoreHandoffTeam ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {/* Nhóm ảnh 1: Đội đi cứu */}
+                          <div>
+                            <div style={{ fontSize: 11.5, fontWeight: 800, color: '#166534', marginBottom: 5 }}>
+                              🛟 Đội đi cứu: {rescueTeamLabel} ({primarySectionPhotos.length} ảnh)
+                            </div>
+                            {primarySectionPhotos.length > 0 ? (
+                              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
+                                {primarySectionPhotos.map((imgUrl, i) => (
+                                  <div
+                                    key={`rescue-${i}`}
+                                    style={{
+                                      width: 84,
+                                      height: 64,
+                                      borderRadius: 8,
+                                      overflow: 'hidden',
+                                      border: '1.5px solid #86efac',
+                                      cursor: 'pointer',
+                                      flexShrink: 0,
+                                      position: 'relative',
+                                      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                                    }}
+                                    onClick={() =>
+                                      setPreviewPhotos({
+                                        images: combinedSectionPhotos,
+                                        activeIndex: i,
+                                        title: `Ảnh nghiệm thu (${selectedSosDetail.sosCode})`,
+                                      })
+                                    }
+                                    title="Bấm để phóng to ảnh đội đi cứu"
+                                  >
+                                    <img src={imgUrl} alt={`Ảnh đội cứu ${i + 1}`} referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: 11.5, color: '#64748b' }}>
+                                {selectedSosDetail.assignment?.status === 'COMPLETED'
+                                  ? 'Đội đi cứu chưa tải ảnh nghiệm thu'
+                                  : 'Chờ đội đi cứu hoàn tất & tải ảnh nghiệm thu'}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Nhóm ảnh 2: Đội xe cứu thương / tiếp vận */}
+                          <div style={{ borderTop: '1px dashed #bbf7d0', paddingTop: 8 }}>
+                            <div style={{ fontSize: 11.5, fontWeight: 800, color: '#0369a1', marginBottom: 5 }}>
+                              🚑 Đội xe tiếp vận: {handoffTeamLabel}
+                              {handoffVehiclePlate ? ` (${handoffVehiclePlate})` : ''} ({handoffTeamPhotos.length} ảnh)
+                            </div>
+                            {handoffTeamPhotos.length > 0 ? (
+                              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
+                                {handoffTeamPhotos.map((imgUrl, i) => (
+                                  <div
+                                    key={`handoff-${i}`}
+                                    style={{
+                                      width: 84,
+                                      height: 64,
+                                      borderRadius: 8,
+                                      overflow: 'hidden',
+                                      border: '1.5px solid #7dd3fc',
+                                      cursor: 'pointer',
+                                      flexShrink: 0,
+                                      position: 'relative',
+                                      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+                                    }}
+                                    onClick={() =>
+                                      setPreviewPhotos({
+                                        images: combinedSectionPhotos,
+                                        activeIndex: primarySectionPhotos.length + i,
+                                        title: `Ảnh nghiệm thu (${selectedSosDetail.sosCode})`,
+                                      })
+                                    }
+                                    title="Bấm để phóng to ảnh đội xe tiếp vận"
+                                  >
+                                    <img src={imgUrl} alt={`Ảnh đội xe ${i + 1}`} referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div style={{ fontSize: 11.5, color: '#64748b' }}>
+                                {selectedSosDetail.shoreHandoff?.status === 'COMPLETED' ||
+                                  selectedSosDetail.shoreHandoffAssignment?.status === 'COMPLETED'
+                                  ? 'Đội xe tiếp vận chưa tải ảnh nghiệm thu'
+                                  : 'Chờ đội xe tiếp vận hoàn tất & tải ảnh nghiệm thu'}
+                              </div>
+                            )}
+                          </div>
+
+                          {(selectedSosDetail.assignment?.actualRecipient ||
+                            selectedSosDetail.shoreHandoffAssignment?.actualRecipient ||
+                            (selectedSosDetail as any).actualRecipient) && (
+                              <div style={{ fontSize: 11.5, color: '#166534', fontWeight: 600 }}>
+                                ✓ Người tiếp nhận:{' '}
+                                <strong>
+                                  {selectedSosDetail.assignment?.actualRecipient ||
+                                    selectedSosDetail.shoreHandoffAssignment?.actualRecipient ||
+                                    (selectedSosDetail as any).actualRecipient}
+                                </strong>
+                              </div>
+                            )}
+                        </div>
+                      ) : teamProofPhotos.length > 0 ? (
                         <>
                           <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
                             {teamProofPhotos.map((imgUrl, i) => (
@@ -1691,7 +1826,13 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                                   position: 'relative',
                                   boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
                                 }}
-                                onClick={() => setPreviewPhoto(imgUrl)}
+                                onClick={() =>
+                                  setPreviewPhotos({
+                                    images: teamProofPhotos,
+                                    activeIndex: i,
+                                    title: `Ảnh nghiệm thu cứu hộ (${selectedSosDetail.sosCode})`,
+                                  })
+                                }
                                 title="Bấm để phóng to ảnh nghiệm thu hoàn tất"
                               >
                                 <img src={imgUrl} alt={`Ảnh đội cứu hộ ${i + 1}`} referrerPolicy="no-referrer" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -1705,8 +1846,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           )}
                         </>
                       ) : (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#94a3b8', fontSize: 12, padding: '4px 0' }}>
-                          <Clock size={15} />
+                        <div style={{ display: 'flex', alignItems: 'center', color: '#94a3b8', fontSize: 12, padding: '4px 0' }}>
                           <span>
                             {getEffectiveStatus(selectedSosDetail) === 'COMPLETED'
                               ? 'Đội cứu hộ chưa tải ảnh nghiệm thu bàn giao'
@@ -1721,75 +1861,151 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
 
 
               {/* ĐIỂM HẸN XE ĐÓN BỜ TIẾP VẬN (ĐƯỢC CHUYỂN XUỐNG DƯỚI CÙNG VỚI TONE MÀU NHẸ NHÀNG, KHÔNG CHÓI) */}
-              {selectedSosDetail.shoreHandoff && selectedSosDetail.shoreHandoff.status !== 'NONE' && (
-                <div
-                  className="sos-panel-card"
-                  style={{
-                    background: '#f8fafc',
-                    borderColor: '#e2e8f0',
-                    borderStyle: 'solid',
-                  }}
-                >
-                  <div className="sos-panel-card-title" style={{ color: '#475569', marginBottom: 6 }}>
-                    <span style={{ fontSize: 13 }}>🚗</span>
-                    <span>ĐIỂM HẸN XE ĐÓN BỜ TIẾP VẬN</span>
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>
-                    {selectedSosDetail.shoreHandoff.landingPoint?.name || 'Điểm đón ven bờ'}
-                  </div>
-                  {selectedSosDetail.shoreHandoff.landingPoint?.address && (
-                    <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
-                      {selectedSosDetail.shoreHandoff.landingPoint.address}
-                    </div>
-                  )}
+              {selectedSosDetail.shoreHandoff &&
+                !['NONE', 'CANCELLED'].includes(String(selectedSosDetail.shoreHandoff.status || '').toUpperCase()) && (
                   <div
+                    className="sos-panel-card"
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      marginTop: 8,
-                      background: '#ffffff',
-                      padding: '7px 10px',
-                      borderRadius: 6,
-                      border: '1px solid #e2e8f0',
+                      background: '#f8fafc',
+                      borderColor: '#e2e8f0',
+                      borderStyle: 'solid',
                     }}
                   >
-                    <span style={{ fontSize: 11.5, fontWeight: 700, color: '#334155' }}>
-                      {selectedSosDetail.shoreHandoff.vehicleTypeNeeded === 'AMBULANCE' ? '🚑 Xe Cứu Thương 115' : '🚒 Xe Tải Cứu Hộ'}{' '}
-                      ({selectedSosDetail.shoreHandoff.peopleCount} người)
-                    </span>
-                    {selectedSosDetail.shoreHandoff.status === 'ASSIGNED' ? (
-                      <span
-                        style={{
-                          fontSize: 10.5,
-                          fontWeight: 800,
-                          color: '#166534',
-                          background: '#f0fdf4',
-                          border: '1px solid #bbf7d0',
-                          padding: '2px 8px',
-                          borderRadius: 4,
-                        }}
-                      >
-                        ✓ ĐÃ ĐIỀU XE ({selectedSosDetail.shoreHandoff.assignedVehiclePlate || 'Đã phân bổ'})
-                      </span>
-                    ) : (
-                      <span
-                        style={{
-                          fontSize: 10.5,
-                          fontWeight: 700,
-                          color: '#64748b',
-                          background: '#f1f5f9',
-                          border: '1px solid #e2e8f0',
-                          padding: '2px 8px',
-                          borderRadius: 4,
-                        }}
-                      >
-                        ⏳ Chờ xe đón
-                      </span>
+                    <div className="sos-panel-card-title" style={{ color: '#475569', marginBottom: 6 }}>
+                      <span>ĐIỂM HẸN XE ĐÓN BỜ TIẾP VẬN</span>
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>
+                      {selectedSosDetail.shoreHandoff.landingPoint?.name || 'Điểm đón ven bờ'}
+                    </div>
+                    {selectedSosDetail.shoreHandoff.landingPoint?.address && (
+                      <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
+                        {selectedSosDetail.shoreHandoff.landingPoint.address}
+                      </div>
                     )}
+                    {(() => {
+                      const handoff = selectedSosDetail.shoreHandoff;
+                      const hasVehicleAssigned =
+                        handoff.status === 'ASSIGNED' ||
+                        handoff.status === 'COMPLETED' ||
+                        Boolean(handoff.assignedVehiclePlate || handoff.assignedVehicleId || handoff.assignedVehicleName);
+                      const handoffMeta = getShoreHandoffVehicleStatusMeta(
+                        handoff.status,
+                        selectedSosDetail.shoreHandoffAssignment?.status
+                      );
+                      const hasDetailInfo = Boolean(
+                        handoff.assignedVehiclePlate ||
+                        handoff.assignedVehicleName ||
+                        handoff.assignedRoadTeamName ||
+                        handoff.assignedDriverName
+                      );
+
+                      return (
+                        <>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 8,
+                              flexWrap: 'wrap',
+                              marginTop: 8,
+                              background: '#ffffff',
+                              padding: '7px 10px',
+                              borderRadius: 6,
+                              border: '1px solid #e2e8f0',
+                            }}
+                          >
+                            <span style={{ fontSize: 11.5, fontWeight: 700, color: '#334155' }}>
+                              {handoff.vehicleTypeNeeded === 'AMBULANCE' ? '🚑 Xe Cứu Thương 115' : '🚒 Xe Tải Cứu Hộ'}{' '}
+                              ({handoff.peopleCount} người)
+                            </span>
+                            {hasVehicleAssigned ? (
+                              <span
+                                style={{
+                                  fontSize: 10.5,
+                                  fontWeight: 800,
+                                  color: handoffMeta.color,
+                                  background: handoffMeta.bg,
+                                  border: `1px solid ${handoffMeta.borderColor}`,
+                                  padding: '2px 8px',
+                                  borderRadius: 4,
+                                }}
+                              >
+                                {handoffMeta.label} (
+                                {handoff.assignedVehiclePlate || handoff.assignedVehicleName || 'Đã phân bổ'})
+                              </span>
+                            ) : (
+                              <span
+                                style={{
+                                  fontSize: 10.5,
+                                  fontWeight: 700,
+                                  color: '#64748b',
+                                  background: '#f1f5f9',
+                                  border: '1px solid #e2e8f0',
+                                  padding: '2px 8px',
+                                  borderRadius: 4,
+                                }}
+                              >
+                                ⏳ Chờ xe đón
+                              </span>
+                            )}
+                          </div>
+
+                          {hasVehicleAssigned && hasDetailInfo && (
+                            <div
+                              style={{
+                                marginTop: 6,
+                                background: '#ffffff',
+                                padding: '7px 10px',
+                                borderRadius: 6,
+                                border: '1px solid #bbf7d0',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 3,
+                                fontSize: 11.5,
+                                color: '#334155',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <strong style={{ color: '#0f172a' }}>
+                                  {handoff.assignedVehicleName ||
+                                    (handoff.vehicleTypeNeeded === 'AMBULANCE' ? 'Xe Cứu Thương 115' : 'Xe Tải Cứu Hộ')}
+                                </strong>
+                                {handoff.assignedVehiclePlate && (
+                                  <span
+                                    style={{
+                                      fontSize: 10.5,
+                                      fontWeight: 800,
+                                      fontFamily: 'monospace',
+                                      padding: '1px 6px',
+                                      borderRadius: 4,
+                                      background: '#f1f5f9',
+                                      border: '1px solid #cbd5e1',
+                                      color: '#0f172a',
+                                    }}
+                                  >
+                                    {handoff.assignedVehiclePlate}
+                                  </span>
+                                )}
+                              </div>
+                              {handoff.assignedRoadTeamName && (
+                                <div style={{ fontSize: 11, color: '#475569' }}>
+                                  Đội tiếp ứng: <strong style={{ color: '#1e293b' }}>{handoff.assignedRoadTeamName}</strong>
+                                </div>
+                              )}
+                              {handoff.assignedDriverName && (
+                                <div style={{ fontSize: 11, color: '#64748b' }}>
+                                  Phụ trách / Tài xế: <strong style={{ color: '#334155' }}>{handoff.assignedDriverName}</strong>
+                                  {handoff.assignedDriverPhone ? ` (${handoff.assignedDriverPhone})` : ''}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
-                </div>
-              )}
+                )}
             </div>
 
             {/* Footer Quick Action Buttons */}
@@ -1817,7 +2033,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                   ) : (
                     <button
                       type="button"
-                      className="btn-panel-action primary"
+                      className="sos-btn sos-btn--primary sos-btn--sm"
                       onClick={() => {
                         const targetId = selectedSosDetail._id;
                         setSelectedSosDetail(null);
@@ -1940,16 +2156,15 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
                 <button
                   type="button"
-                  className="sos-btn-action sos-btn-refresh"
-                  style={{ padding: '8px 16px', borderRadius: '6px' }}
+                  className="sos-btn sos-btn--outline sos-btn--md"
                   onClick={() => setShowHotlineModal(false)}
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
+                  className="sos-btn sos-btn--danger sos-btn--md"
                   disabled={loading}
-                  style={{ padding: '8px 16px', borderRadius: '6px', background: '#dc2626', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700 }}
                 >
                   {loading ? 'Đang lưu vào DB...' : 'Lưu Vào Database'}
                 </button>
@@ -2065,55 +2280,20 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
             >
               <button
                 type="button"
+                className="sos-btn sos-btn--outline sos-btn--lg"
+                style={{ flex: 1, justifyContent: 'center' }}
                 disabled={confirmDialog.isSubmitting}
                 onClick={() => setConfirmDialog(null)}
-                style={{
-                  flex: 1,
-                  backgroundColor: '#F1F5F9',
-                  padding: '13px 16px',
-                  borderRadius: '14px',
-                  border: '1px solid #E2E8F0',
-                  color: '#64748B',
-                  fontSize: '14px',
-                  fontWeight: '700',
-                  textAlign: 'center',
-                  cursor: confirmDialog.isSubmitting ? 'not-allowed' : 'pointer',
-                  transition: 'background-color 0.15s ease',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#E2E8F0')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#F1F5F9')}
               >
                 {confirmDialog.cancelText || 'Hủy'}
               </button>
 
               <button
                 type="button"
+                className="sos-btn sos-btn--danger sos-btn--lg"
+                style={{ flex: 1.15, justifyContent: 'center' }}
                 disabled={confirmDialog.isSubmitting}
                 onClick={() => confirmDialog.onConfirm()}
-                style={{
-                  flex: 1.15,
-                  backgroundColor: '#DC2626',
-                  padding: '13px 16px',
-                  borderRadius: '14px',
-                  border: 'none',
-                  color: '#FFFFFF',
-                  fontSize: '14px',
-                  fontWeight: '800',
-                  textAlign: 'center',
-                  cursor: confirmDialog.isSubmitting ? 'not-allowed' : 'pointer',
-                  boxShadow: '0 4px 12px rgba(220, 38, 38, 0.3)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  transition: 'background-color 0.15s ease',
-                }}
-                onMouseEnter={(e) => {
-                  if (!confirmDialog.isSubmitting) e.currentTarget.style.backgroundColor = '#B91C1C';
-                }}
-                onMouseLeave={(e) => {
-                  if (!confirmDialog.isSubmitting) e.currentTarget.style.backgroundColor = '#DC2626';
-                }}
               >
                 {confirmDialog.isSubmitting ? (
                   <>
@@ -2130,32 +2310,97 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
       )}
 
       {/* ============================================================
-          MODAL PHÓNG TO ẢNH HIỆN TRƯỜNG & NGHIỆM THU
+          MODAL PHÓNG TO ẢNH HIỆN TRƯỜNG & NGHIỆM THU (HỖ TRỢ NHIỀU ẢNH)
           (Được đặt ở cuối DOM với z-index 20000 để phủ lên toàn bộ màn hình, bao gồm cả side-panel bên phải)
           ============================================================ */}
-      {previewPhoto && (
+      {previewPhotos && previewPhotos.images.length > 0 && (
         <div
           className="executive-photo-lightbox-backdrop"
-          onClick={() => setPreviewPhoto(null)}
+          onClick={() => setPreviewPhotos(null)}
         >
           <div className="executive-photo-lightbox-modal" onClick={(e) => e.stopPropagation()}>
             <div className="executive-photo-lightbox-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <Camera size={16} color="#0284C7" />
                 <strong style={{ letterSpacing: 0.3 }}>ẢNH HIỆN TRƯỜNG &amp; NGHIỆM THU CỨU NẠN</strong>
+                <span className="executive-photo-lightbox-count">
+                  ({previewPhotos.activeIndex + 1}/{previewPhotos.images.length})
+                </span>
+                {previewPhotos.title && (
+                  <span className="executive-photo-lightbox-subtitle">• {previewPhotos.title}</span>
+                )}
               </div>
               <button
                 type="button"
                 className="executive-photo-lightbox-close"
-                onClick={() => setPreviewPhoto(null)}
+                onClick={() => setPreviewPhotos(null)}
                 title="Đóng (Esc)"
               >
                 <X size={18} />
               </button>
             </div>
             <div className="executive-photo-lightbox-body">
-              <img src={previewPhoto} alt="Hiện trường cứu nạn phóng to" referrerPolicy="no-referrer" />
+              <img
+                src={previewPhotos.images[previewPhotos.activeIndex]}
+                alt={`Hiện trường cứu nạn ${previewPhotos.activeIndex + 1}`}
+                referrerPolicy="no-referrer"
+              />
+              {previewPhotos.images.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    className="executive-photo-lightbox-nav prev"
+                    onClick={() =>
+                      setPreviewPhotos((prev) =>
+                        prev
+                          ? {
+                            ...prev,
+                            activeIndex: (prev.activeIndex - 1 + prev.images.length) % prev.images.length,
+                          }
+                          : null
+                      )
+                    }
+                    title="Ảnh trước (←)"
+                  >
+                    <ChevronLeft size={22} />
+                  </button>
+                  <button
+                    type="button"
+                    className="executive-photo-lightbox-nav next"
+                    onClick={() =>
+                      setPreviewPhotos((prev) =>
+                        prev
+                          ? {
+                            ...prev,
+                            activeIndex: (prev.activeIndex + 1) % prev.images.length,
+                          }
+                          : null
+                      )
+                    }
+                    title="Ảnh tiếp theo (→)"
+                  >
+                    <ChevronRight size={22} />
+                  </button>
+                </>
+              )}
             </div>
+            {previewPhotos.images.length > 1 && (
+              <div className="executive-photo-lightbox-thumbs">
+                {previewPhotos.images.map((imgUrl, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className={`executive-photo-lightbox-thumb ${idx === previewPhotos.activeIndex ? 'active' : ''}`}
+                    onClick={() =>
+                      setPreviewPhotos((prev) => (prev ? { ...prev, activeIndex: idx } : null))
+                    }
+                    title={`Xem ảnh ${idx + 1}`}
+                  >
+                    <img src={imgUrl} alt={`Ảnh thu nhỏ ${idx + 1}`} referrerPolicy="no-referrer" />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
