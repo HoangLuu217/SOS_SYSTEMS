@@ -17,6 +17,7 @@ import { approveSuppliesApi, rejectSuppliesApi } from '@/api';
 import type { SosRequest, AuthorityOfficer } from '@/types/domainD';
 import { useApp } from '@/context/AppContext';
 import { toast } from '@/components/common/toast';
+import { getShoreHandoffVehicleStatusMeta, formatCompactLandingPointName } from '@/utils/shoreHandoffStatus';
 
 interface Props {
   sosRequests: SosRequest[];
@@ -557,24 +558,31 @@ export const IncidentFeed = ({
                       {sos.shoreHandoff.vehicleTypeNeeded === 'AMBULANCE' ? 'Xe cứu thương' : 'Xe tải'}
                     </div>
                     <div className="feed-handoff-sub">
-                      {sos.shoreHandoff.landingPoint?.name || 'Bến cập bờ'} · {sos.shoreHandoff.peopleCount} người
+                      {formatCompactLandingPointName(sos.shoreHandoff.landingPoint?.name)} · {sos.shoreHandoff.peopleCount} người
                     </div>
                   </div>
                 </div>
               )}
 
-              {sos.shoreHandoff?.status === 'ASSIGNED' && (
+              {sos.shoreHandoff?.status === 'ASSIGNED' && (() => {
+                const handoffMeta = getShoreHandoffVehicleStatusMeta(
+                  sos.shoreHandoff?.status,
+                  sos.shoreHandoffAssignment?.status
+                );
+                const landingLabel = formatCompactLandingPointName(sos.shoreHandoff.landingPoint?.name, '');
+                return (
                 <div className="feed-handoff-box is-success">
                   <Truck size={13} className="feed-handoff-icon" />
                   <div className="feed-handoff-content">
-                    <div className="feed-handoff-title">Xe đang đến bến đón</div>
+                    <div className="feed-handoff-title">{handoffMeta.feedTitle}</div>
                     <div className="feed-handoff-sub">
-                      {sos.shoreHandoff.assignedVehiclePlate || sos.shoreHandoff.assignedVehicleName} (
-                      {sos.shoreHandoff.landingPoint?.name})
+                      {sos.shoreHandoff.assignedVehiclePlate || sos.shoreHandoff.assignedVehicleName}
+                      {landingLabel ? ` (${landingLabel})` : ''}
                     </div>
                   </div>
                 </div>
-              )}
+                );
+              })()}
 
               {/* Card Middle: Request Type + Priority Targets + Side Thumbnail */}
               <div className="compact-card-content">

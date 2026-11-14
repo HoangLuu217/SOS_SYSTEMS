@@ -5,7 +5,6 @@ import type { RescueTeam } from '@/types/domainD';
 interface Props {
   team: RescueTeam;
   isSelected: boolean;
-  isRecommended: boolean;
   vehicleSpec: string;
   etaText: string;
   teamDisplayName: string;
@@ -18,7 +17,6 @@ interface Props {
 export const TeamSelectorCard: React.FC<Props> = ({
   team,
   isSelected,
-  isRecommended,
   vehicleSpec,
   etaText,
   teamDisplayName,
@@ -28,7 +26,7 @@ export const TeamSelectorCard: React.FC<Props> = ({
   onViewMembers,
 }) => {
   const leadRescuer = team.rescuers?.[0];
-  const memberCount = team.rescuers?.length || team.availableRescuersCount || 4;
+  const memberCount = team.rescuers?.length ?? team.availableRescuersCount ?? 0;
 
   // Tách mã đội (nếu nằm trong dấu ngoặc) để hiển thị thành tag xám nhỏ gọn, tránh rớt dòng
   const [isBusyModalOpen, setIsBusyModalOpen] = useState(false);
@@ -36,9 +34,9 @@ export const TeamSelectorCard: React.FC<Props> = ({
   const { title: cleanTeamName, codeTag } = (() => {
     const match = teamDisplayName.match(/^(.*?)(?:\s*\(([^)]+)\))?$/);
     if (match && match[2]) {
-      return { title: match[1].trim(), codeTag: match[2].trim() };
+      return { title: match[1].trim(), codeTag: team.code || match[2].trim() };
     }
-    return { title: teamDisplayName, codeTag: (team as any).code || '' };
+    return { title: teamDisplayName, codeTag: team.code || '' };
   })();
 
   const handleClick = () => {
@@ -94,7 +92,7 @@ export const TeamSelectorCard: React.FC<Props> = ({
 
       {/* CỘT PHẢI: TOÀN BỘ NỘI DUNG CĂN THẲNG HÀNG BÊN PHẢI CHECKBOX */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {/* HÀNG 1: TÊN ĐỘI + CODE TAG + KHUYẾN NGHỊ + TRẠNG THÁI */}
+        {/* HÀNG 1: TÊN ĐỘI + CODE TAG + TRẠNG THÁI */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 7 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, rowGap: 4, minWidth: 0, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 14.5, fontWeight: 800, color: '#0f172a', lineHeight: 1.28 }}>
@@ -116,21 +114,20 @@ export const TeamSelectorCard: React.FC<Props> = ({
                 {codeTag}
               </span>
             )}
-            {isRecommended && (
+            {team.wardName && (
               <span
                 style={{
-                  background: '#fef3c7',
-                  color: '#b45309',
-                  border: '1px solid #fde68a',
+                  background: '#f0f9ff',
+                  color: '#0369a1',
                   fontSize: 10.5,
-                  fontWeight: 800,
+                  fontWeight: 700,
                   padding: '2px 6px',
                   borderRadius: 4,
-                  letterSpacing: '0.2px',
+                  border: '1px solid #bae6fd',
                   whiteSpace: 'nowrap',
                 }}
               >
-                ★ KHUYẾN NGHỊ
+                {team.wardName}
               </span>
             )}
           </div>
@@ -152,6 +149,23 @@ export const TeamSelectorCard: React.FC<Props> = ({
               }}
             >
               {busyMissionCode ? `BẬN (${busyMissionCode})` : 'BẬN NHIỆM VỤ'}
+            </span>
+          ) : team.status === 'Off-duty' ? (
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 800,
+                background: '#f1f5f9',
+                color: '#64748b',
+                border: '1px solid #cbd5e1',
+                padding: '2px 7px',
+                borderRadius: 4,
+                letterSpacing: '0.2px',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              NGỪNG TRỰC
             </span>
           ) : (
             <span

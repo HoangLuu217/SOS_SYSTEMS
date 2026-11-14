@@ -146,7 +146,77 @@ const cancelSos = async (req, res, next) => {
 
 const completeSos = async (req, res, next) => {
   try {
-    const note = req.body.note || 'Đã hoàn thành cứu nạn';
+    const note = req.body.note || req.body.notes || 'Đã hoàn thành cứu nạn';
+    const userRoles = req.user?.roles || [];
+    const isAuthorityOrAdmin =
+      userRoles.includes('ADMIN') ||
+      userRoles.includes('LOCAL_AUTHORITY') ||
+      userRoles.includes('AUTHORITY');
+
+    // Nếu là cứu hộ viên hoàn tất từ App: định tuyến qua updateStatus của đúng assignment của đội mình
+    // để đảm bảo khi có cả đội cứu hộ & đội xe tiếp vận (SHORE_HANDOFF), SOS chỉ hoàn thành khi cả hai xong.
+    if (!isAuthorityOrAdmin && req.user?._id) {
+      const userTeams = await RescueTeam.find({
+        $or: [
+          { leaderId: req.user._id },
+          { 'members.rescuerId': req.user._id },
+        ],
+      }).select('_id');
+      const teamIds = userTeams.map((t) => t._id);
+
+      const myActiveAssign = await SosAssignment.findOne({
+        $or: [{ sosRequestId: req.params.id }, { sosId: req.params.id }],
+        status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+        $and: [
+          {
+            $or: [
+              { rescuerId: req.user._id },
+              ...(teamIds.length > 0
+                ? [{ rescueTeamId: { $in: teamIds } }, { teamId: { $in: teamIds } }]
+                : []),
+            ],
+          },
+        ],
+      }).sort({ createdAt: -1 });
+
+      if (myActiveAssign) {
+        const sosAssignmentService = require('../services/sosAssignment.service');
+        await sosAssignmentService.updateStatus(myActiveAssign._id, 'COMPLETED', req.user, note, {
+          proofImages: req.body?.proofImages,
+          actualRecipient: req.body?.actualRecipient,
+        });
+        const refreshedSos = await sosService.getSosRequestById(req.params.id);
+        await auditService.log({
+          actorId: req.user._id,
+          actorRole: req.user.roles?.[0] || 'RESCUER',
+          action: 'COMPLETE_SOS_ASSIGNMENT',
+          entityType: 'SosRequest',
+          entityId: req.params.id,
+          areaId: refreshedSos?.areaId || null,
+          metadata: { note, status: refreshedSos?.status, assignmentId: myActiveAssign._id },
+        });
+        emitSosUpdated(refreshedSos);
+        return res.status(200).json({ success: true, data: refreshedSos });
+      }
+
+      // Nếu đội của rescuer vừa hoàn thành assignment trước đó nhưng vẫn còn đội khác (VD: xe tiếp vận SHORE_HANDOFF)
+      // hoặc shoreHandoff đang REQUESTED/ASSIGNED chưa xong -> KHÔNG được đóng sớm toàn bộ SOS!
+      const currentSos = await sosService.getSosRequestById(req.params.id);
+      const hasOtherActiveAssignment = await SosAssignment.exists({
+        $or: [{ sosRequestId: req.params.id }, { sosId: req.params.id }],
+        status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+      });
+      const hasPendingHandoff = Boolean(
+        currentSos?.shoreHandoff &&
+        ['REQUESTED', 'ASSIGNED'].includes(String(currentSos.shoreHandoff.status || '').toUpperCase()) &&
+        !currentSos.shoreHandoff.completedAt
+      );
+      if (hasOtherActiveAssignment || hasPendingHandoff) {
+        emitSosUpdated(currentSos);
+        return res.status(200).json({ success: true, data: currentSos });
+      }
+    }
+
     const updatedSos = await sosService.changeStatus(req.params.id, 'COMPLETED', req.user._id, note);
 
     await auditService.log({

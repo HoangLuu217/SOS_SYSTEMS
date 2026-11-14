@@ -13,8 +13,6 @@ import {
   INITIAL_AREAS,
   INITIAL_AUTHORITIES,
   INITIAL_SOS_REQUESTS,
-  INITIAL_RESCUE_TEAMS,
-  INITIAL_VEHICLES,
   INITIAL_ASSIGNMENTS,
   SAMPLE_OFFICERS,
 } from '@/constants/mockData';
@@ -67,8 +65,8 @@ class DomainDService {
     this.areas = this.load(STORAGE_AREAS, INITIAL_AREAS);
     this.authorities = this.load(STORAGE_AUTHORITIES, INITIAL_AUTHORITIES);
     this.sosRequests = [];
-    this.rescueTeams = INITIAL_RESCUE_TEAMS;
-    this.vehicles = INITIAL_VEHICLES;
+    this.rescueTeams = [];
+    this.vehicles = [];
     this.assignments = {};
     this.officers = SAMPLE_OFFICERS;
     this.activeOfficerId = this.load(STORAGE_ACTIVE_OFFICER, SAMPLE_OFFICERS[0].id);
@@ -218,10 +216,8 @@ class DomainDService {
   }
 
   syncRealRescueTeams(teams: RescueTeam[]): RescueTeam[] {
-    if (!teams || teams.length === 0) return [...this.rescueTeams];
-    const realIds = new Set(teams.map((t) => t.id));
-    const kept = this.rescueTeams.filter((t) => !realIds.has(t.id));
-    this.rescueTeams = [...teams, ...kept];
+    if (!teams) return [...this.rescueTeams];
+    this.rescueTeams = [...teams];
     return [...this.rescueTeams];
   }
 
@@ -232,10 +228,8 @@ class DomainDService {
   }
 
   syncRealVehicles(vehicles: Vehicle[]): Vehicle[] {
-    if (!vehicles || vehicles.length === 0) return [...this.vehicles];
-    const realIds = new Set(vehicles.map((v) => v.id));
-    const kept = this.vehicles.filter((v) => !realIds.has(v.id));
-    this.vehicles = [...vehicles, ...kept];
+    if (!vehicles) return [...this.vehicles];
+    this.vehicles = [...vehicles];
     return [...this.vehicles];
   }
 
@@ -261,7 +255,7 @@ class DomainDService {
    */
   getActiveAssignmentForTeam(teamId: string, currentSosId?: string): SosAssignment | null {
     if (!teamId) return null;
-    const busyStatuses = ['PENDING', 'ACCEPTED', 'EN_ROUTE', 'ARRIVED', 'RESCUING', 'IN_PROGRESS', 'ASSIGNED'];
+    const busyStatuses = ['PENDING', 'ACCEPTED', 'DISPATCHED', 'EN_ROUTE', 'ON_THE_WAY', 'ARRIVED', 'RESCUING', 'IN_PROGRESS', 'ASSIGNED'];
     const activeAssign = Object.values(this.assignments).find((a) => {
       if (!busyStatuses.includes(a.status)) return false;
       if (currentSosId && a.sosRequestId === currentSosId) return false;
@@ -275,7 +269,42 @@ class DomainDService {
       const teamIds = a.rescueTeamId ? a.rescueTeamId.split(',').map((id) => id.trim()) : [];
       return teamIds.includes(teamId) || a.rescueTeamId === teamId;
     });
-    return activeAssign || null;
+    if (activeAssign) return activeAssign;
+
+    // Kiểm tra thêm nhiệm vụ xe đón bờ (SHORE_HANDOFF) đang hoạt động trên các ca SOS
+    const activeHandoffSos = this.sosRequests.find((s) => {
+      if (currentSosId && s.id === currentSosId) return false;
+      if (['COMPLETED', 'CANCELLED', 'REJECTED', 'RESOLVED'].includes(s.status)) return false;
+      const ha = s.shoreHandoffAssignment;
+      if (!ha) return false;
+      const haStatus = String(ha.status || '').toUpperCase();
+      if (!busyStatuses.includes(haStatus)) return false;
+      const haTeamId = typeof ha.rescueTeamId === 'object' && ha.rescueTeamId ? ha.rescueTeamId._id : ha.rescueTeamId;
+      return Boolean(haTeamId && String(haTeamId) === String(teamId));
+    });
+    if (activeHandoffSos?.shoreHandoffAssignment) {
+      const ha = activeHandoffSos.shoreHandoffAssignment;
+      const haTeamId = typeof ha.rescueTeamId === 'object' && ha.rescueTeamId ? ha.rescueTeamId._id : ha.rescueTeamId || teamId;
+      return {
+        id: ha._id || ha.id || `handoff-${activeHandoffSos.id}`,
+        sosRequestId: activeHandoffSos.id,
+        authorityOrganizationId: '',
+        authorityOrganizationName: '',
+        rescueTeamId: String(haTeamId),
+        rescueTeamName: typeof ha.rescueTeamId === 'object' ? ha.rescueTeamId?.name || '' : '',
+        rescuerId: '',
+        rescuerName: '',
+        rescuerRole: '',
+        vehicleId: typeof ha.vehicleId === 'object' ? ha.vehicleId?._id || '' : ha.vehicleId || '',
+        vehicleName: typeof ha.vehicleId === 'object' ? ha.vehicleId?.plateNumber || '' : '',
+        vehicleCapacity: '',
+        status: (ha.status as AssignmentStatus) || 'ASSIGNED',
+        priority: activeHandoffSos.priority,
+        assignedAt: ha.updatedAt || activeHandoffSos.createdAt,
+      };
+    }
+
+    return null;
   }
 
   updateSosStatus(sosId: string, nextStatus: any): void {
@@ -284,6 +313,41 @@ class DomainDService {
       this.sosRequests[sosIdx] = {
         ...this.sosRequests[sosIdx],
         status: nextStatus,
+      };
+      this.save(STORAGE_SOS, this.sosRequests);
+    }
+  }
+
+  updateShoreHandoffState(sosId: string, shoreHandoff: any): void {
+    const sosIdx = this.sosRequests.findIndex((s) => s.id === sosId);
+    if (sosIdx === -1) return;
+    const hStatus = String(shoreHandoff?.status || '').toUpperCase();
+    const isCleared = !shoreHandoff || hStatus === 'NONE' || hStatus === 'CANCELLED';
+    this.sosRequests[sosIdx] = {
+      ...this.sosRequests[sosIdx],
+      shoreHandoff: isCleared ? undefined : shoreHandoff,
+      ...(isCleared ? { shoreHandoffAssignment: undefined } : {}),
+    };
+    this.save(STORAGE_SOS, this.sosRequests);
+  }
+
+  updateShoreHandoffAssignment(sosId: string, handoffAssign: any): void {
+    const sosIdx = this.sosRequests.findIndex((s) => s.id === sosId);
+    if (sosIdx !== -1 && handoffAssign) {
+      const current = this.sosRequests[sosIdx];
+      const nextHandoff = current.shoreHandoff
+        ? {
+            ...current.shoreHandoff,
+            ...(handoffAssign.status === 'COMPLETED' ? { status: 'COMPLETED' as const } : {}),
+          }
+        : current.shoreHandoff;
+      this.sosRequests[sosIdx] = {
+        ...current,
+        shoreHandoff: nextHandoff,
+        shoreHandoffAssignment: {
+          ...(current.shoreHandoffAssignment || {}),
+          ...handoffAssign,
+        },
       };
       this.save(STORAGE_SOS, this.sosRequests);
     }
@@ -470,6 +534,8 @@ class DomainDService {
         ...this.sosRequests[sosIdx],
         status: 'VERIFIED',
         assignmentId: null,
+        shoreHandoff: undefined,
+        shoreHandoffAssignment: undefined,
       };
       updatedSos = this.sosRequests[sosIdx];
       this.save(STORAGE_SOS, this.sosRequests);

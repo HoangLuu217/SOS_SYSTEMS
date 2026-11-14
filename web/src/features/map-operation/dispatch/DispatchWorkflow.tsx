@@ -71,19 +71,19 @@ export const DispatchWorkflow = ({
   const isAdmin = activeOfficer?.role === 'ADMIN';
 
   // Hàm tính khoảng cách địa lý chính xác (Haversine Formula) tính bằng km
-function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
+  function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // km
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
       Math.cos((lat2 * Math.PI) / 180) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
 
   // Kho vật tư & trang thiết bị PCTT theo khu vực thực tế từ Database
   const [areaSupplies, setAreaSupplies] = useState<EquipmentItem[]>([]);
@@ -273,9 +273,33 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
     assignment?.rescuerId || availableRescuers[0]?.id || ''
   );
 
-  // Vehicles under primary team
-  const teamVehicles = vehicles.filter((v) => v.teamId === currentTeam?.id);
-  const availableVehicles = teamVehicles.length > 0 ? teamVehicles : vehicles;
+  // Vehicles under primary team (chỉ lấy đúng phương tiện thuộc đội trong DB, không lấy nhầm xe đội khác)
+  const getVehiclesForTeam = (team?: RescueTeam | null): Vehicle[] => {
+    if (!team) return [];
+    const matched = vehicles.filter((v) => v.teamId === team.id || v.id === (team as any).vehicleId);
+    const fromTeam = Array.isArray(team.vehicles) ? team.vehicles : [];
+    if (matched.length === 0) return fromTeam;
+    const byId = new Map<string, Vehicle>();
+    for (const v of [...matched, ...fromTeam]) {
+      if (v?.id && !byId.has(v.id)) byId.set(v.id, v);
+    }
+    return Array.from(byId.values());
+  };
+
+  const formatVehicleDisplay = (v: Vehicle, includeCapacityLabel: boolean = false): string => {
+    const rawName = (v.name || 'Phương tiện').trim();
+    const plate = (v.plate || '').trim();
+    const label = plate && !rawName.toUpperCase().includes(plate.toUpperCase())
+      ? `${rawName} (${plate})`
+      : rawName;
+    const capRaw = String(v.capacity || '').trim();
+    if (!capRaw) return label;
+    const capText = /người/i.test(capRaw) ? capRaw : `${capRaw} người`;
+    return includeCapacityLabel ? `${label} • Sức chứa: ${capText}` : `${label} (${capText})`;
+  };
+
+  const teamVehicles = getVehiclesForTeam(currentTeam);
+  const availableVehicles = teamVehicles;
   const [_selectedVehicleId, setSelectedVehicleId] = useState<string>(
     assignment?.vehicleId || availableVehicles[0]?.id || ''
   );
@@ -347,7 +371,7 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
 
     const primaryTeam = selectedTeams[0];
     const primaryRescuer = primaryTeam.rescuers[0];
-    const primaryVehicle = vehicles.find((v) => v.teamId === primaryTeam.id) || vehicles[0];
+    const primaryVehicle = getVehiclesForTeam(primaryTeam)[0];
 
     const supplyList = Object.entries(allocatedSupplies)
       .filter(([_, qty]) => qty > 0)
@@ -362,21 +386,21 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
       });
 
     onConfirmAssign({
-      authorityOrganizationId: matchedAuthority?.id || 'auth-general',
-      authorityOrganizationName: matchedAuthority?.name || 'Cơ quan Cứu Hộ & Phòng Chống Thiên Tai',
+      authorityOrganizationId: matchedAuthority?.id || '',
+      authorityOrganizationName: matchedAuthority?.name || primaryTeam.authorityName || 'Cơ quan Cứu Hộ & Phòng Chống Thiên Tai',
       rescueTeamId: activeSelectedTeamIds.join(','),
       rescueTeamName: selectedTeams.map((t) => t.name).join(' & '),
-      rescuerId: primaryRescuer?.id || 'rescuer-lead',
+      rescuerId: primaryRescuer?.id || '',
       rescuerName: selectedTeams.map((t) => t.rescuers[0]?.name).filter(Boolean).join(', ') || 'Chỉ huy trưởng',
-      rescuerRole: primaryRescuer?.role || 'Chỉ Huy Trưởng',
-      vehicleId: primaryVehicle?.id || 'veh-main',
-      vehicleName: selectedTeams
-        .map((t) => {
-          const v = vehicles.find((veh) => veh.teamId === t.id);
-          return v?.name || 'Ca-nô';
-        })
-        .join(' + '),
-      vehicleCapacity: `${selectedTeams.reduce((acc, t) => acc + (t.availableRescuersCount || 4), 0)} chiến sĩ`,
+      rescuerRole: primaryRescuer?.role || 'Chỉ Huy Đội',
+      vehicleId: primaryVehicle?.id || '',
+      vehicleName:
+        selectedTeams
+          .flatMap((t) => getVehiclesForTeam(t))
+          .map((v) => formatVehicleDisplay(v, false))
+          .filter(Boolean)
+          .join(' + ') || 'Chưa gán phương tiện',
+      vehicleCapacity: `${selectedTeams.reduce((acc, t) => acc + (t.rescuers?.length ?? t.availableRescuersCount ?? 0), 0)} chiến sĩ`,
       supplies: supplyList,
     });
     setIsConfirmModalOpen(false);
@@ -496,10 +520,10 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
                   boxShadow: isCompleted
                     ? '0 0 0 2px rgba(22, 163, 74, 0.2)'
                     : isCancelled
-                    ? '0 0 0 2px rgba(100, 116, 139, 0.2)'
-                    : isAssigned
-                    ? '0 0 0 2px rgba(30, 41, 59, 0.2)'
-                    : '0 0 0 2px rgba(220, 38, 38, 0.2)',
+                      ? '0 0 0 2px rgba(100, 116, 139, 0.2)'
+                      : isAssigned
+                        ? '0 0 0 2px rgba(30, 41, 59, 0.2)'
+                        : '0 0 0 2px rgba(220, 38, 38, 0.2)',
                 }}
               />
               <span
@@ -514,10 +538,10 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
                 {isCompleted
                   ? 'Hồ Sơ Cứu Nạn (Đã Hoàn Thành)'
                   : isCancelled
-                  ? 'Hồ Sơ Cứu Nạn (Đã Hủy)'
-                  : isAssigned
-                  ? 'Hỗ Trợ Cứu Nạn (Đã Điều Động)'
-                  : 'Hỗ Trợ Cứu Nạn (Chờ Phân Công)'}
+                    ? 'Hồ Sơ Cứu Nạn (Đã Hủy)'
+                    : isAssigned
+                      ? 'Hỗ Trợ Cứu Nạn (Đã Điều Động)'
+                      : 'Hỗ Trợ Cứu Nạn (Chờ Phân Công)'}
               </span>
             </div>
 
@@ -534,10 +558,10 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
                     selectedSos.priority === 'CRITICAL'
                       ? '#dc2626'
                       : selectedSos.priority === 'HIGH'
-                      ? '#ea580c'
-                      : selectedSos.priority === 'LOW'
-                      ? '#16a34a'
-                      : '#d97706',
+                        ? '#ea580c'
+                        : selectedSos.priority === 'LOW'
+                          ? '#16a34a'
+                          : '#d97706',
                   boxShadow:
                     selectedSos.priority === 'CRITICAL'
                       ? '0 1px 4px rgba(220, 38, 38, 0.4)'
@@ -547,10 +571,10 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
                 {selectedSos.priority === 'CRITICAL'
                   ? 'NGUY CẤP'
                   : selectedSos.priority === 'HIGH'
-                  ? 'KHẨN CẤP'
-                  : selectedSos.priority === 'LOW'
-                  ? 'THẤP'
-                  : 'TRUNG BÌNH'}
+                    ? 'KHẨN CẤP'
+                    : selectedSos.priority === 'LOW'
+                      ? 'THẤP'
+                      : 'TRUNG BÌNH'}
               </span>
               {onToggleCollapse && (
                 <button
@@ -676,8 +700,8 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
                 {busyTeamsCount === 0
                   ? `${readyTeamsCount} đội sẵn sàng`
                   : readyTeamsCount === 0
-                  ? `${availableTeams.length} đội đang bận`
-                  : `${readyTeamsCount}/${availableTeams.length} sẵn sàng • ${busyTeamsCount} bận`}
+                    ? `${availableTeams.length} đội đang bận`
+                    : `${readyTeamsCount}/${availableTeams.length} sẵn sàng • ${busyTeamsCount} bận`}
               </span>
             </div>
           </div>
@@ -701,26 +725,19 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
             ) : (
               availableTeams.map((team, index) => {
                 const isSelected = activeSelectedTeamIds.includes(team.id);
-                const teamVeh = vehicles.find((v) => v.teamId === team.id) || vehicles[0];
-                const isRecommended = index === 0;
+                const tVehicles = getVehiclesForTeam(team);
 
-                const capacityRaw = String(teamVeh?.capacity || '4').trim();
-                const capacityLabel = /người/i.test(capacityRaw) ? capacityRaw : `${capacityRaw} người`;
-                const vehicleSpec = teamVeh
-                  ? `${teamVeh.name || 'Ca-nô'}${teamVeh.plate ? ` (${teamVeh.plate})` : ''} • Sức chứa: ${capacityLabel}`
-                  : (team.id === 'team-water-alpha'
-                    ? 'Ca-nô 50HP + Bán tải (Sức chứa: 5 người)'
-                    : team.id === 'team-qr-bravo'
-                    ? 'Xe lội nước 4x4 (Sức chứa: 4 người)'
-                    : 'Ca-nô cứu nạn • Sức chứa: 4-6 người');
+                const vehicleSpec =
+                  tVehicles.length === 1
+                    ? formatVehicleDisplay(tVehicles[0], true)
+                    : tVehicles.length > 1
+                      ? tVehicles.map((v) => formatVehicleDisplay(v, false)).join(' • ')
+                      : 'Chưa gán phương tiện';
 
                 const etaInfo = calculateTeamEtaInfo(team, index);
                 const etaText = etaInfo.text;
 
-                const teamDisplayName =
-                  team.id === 'team-hc-htd'
-                    ? 'Đội Cứu Hộ Phường Hòa Cường'
-                    : team.name;
+                const teamDisplayName = team.name;
 
                 const activeTask = domainDService.getActiveAssignmentForTeam(team.id, selectedSos?.id);
                 const isBusy = !!activeTask;
@@ -731,7 +748,6 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
                     key={team.id}
                     team={team}
                     isSelected={isSelected}
-                    isRecommended={isRecommended && !isBusy}
                     vehicleSpec={vehicleSpec}
                     etaText={etaText}
                     teamDisplayName={teamDisplayName}

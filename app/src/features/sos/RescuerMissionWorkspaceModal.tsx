@@ -1190,8 +1190,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
       completedProofImagesRef.current = proofImages;
 
-      // 2. Hoàn tất đón bờ với bằng chứng hình ảnh thực tế
-      if (targetSosId && shoreHandoffData && shoreHandoffData.status === 'ASSIGNED') {
+      // 2. Chỉ đội xe tiếp vận đón bờ (isShoreHandoffMission) mới hoàn tất trạng thái đón bờ.
+      // Đội đi cứu chính không được tự động đóng thay nhiệm vụ xe tiếp vận.
+      if (isShoreHandoffMission && targetSosId && shoreHandoffData && shoreHandoffData.status === 'ASSIGNED') {
         try {
           await backendApi.completeShoreHandoff(targetSosId, { proofImages });
           setShoreHandoffData((prev: any) => (prev ? { ...prev, status: 'COMPLETED' } : null));
@@ -1202,16 +1203,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
       const recipientName = citizenName || 'Người nhận tại hiện trường';
       if (assignment?._id) {
-        try {
-          await backendApi.updateAssignmentStatus(assignment._id, 'COMPLETED', notePayload, {
-            proofImages,
-            actualRecipient: recipientName,
-          });
-        } catch (assignErr) {
-          console.warn('Cập nhật trạng thái phân công thất bại, tiếp tục hoàn tất ca SOS:', assignErr);
-        }
-      }
-      if (sos?._id) {
+        await backendApi.updateAssignmentStatus(assignment._id, 'COMPLETED', notePayload, {
+          proofImages,
+          actualRecipient: recipientName,
+        });
+      } else if (sos?._id) {
         await backendApi.post(`/sos/${sos._id}/complete`, {
           note: notePayload,
           notes: notePayload,
@@ -1310,14 +1306,33 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         address: landingAddress.trim() || `Tọa độ: ${landingCoords.lat.toFixed(5)}, ${landingCoords.lng.toFixed(5)}`,
         coordinates: [landingCoords.lng, landingCoords.lat] as [number, number],
       };
+      const resolvedRescueTeamId =
+        typeof assignment?.rescueTeamId === 'object' && assignment?.rescueTeamId
+          ? String(assignment.rescueTeamId._id || assignment.rescueTeamId.id || '') || undefined
+          : assignment?.rescueTeamId
+            ? String(assignment.rescueTeamId)
+            : undefined;
+      const resolvedRescueTeamName =
+        (typeof assignment?.rescueTeamId === 'object' && assignment?.rescueTeamId?.name) ||
+        assignment?.rescueTeamName ||
+        'Đội Cứu Hộ';
+
       const payload = {
         landingPoint: landing,
         vehicleTypeNeeded: selectedRelayVehicleType,
         peopleCount: relayVictimCount,
         notes: relayNotes,
-        rescueTeamName: assignment?.rescueTeamName || 'Đội Cứu Hộ',
-        rescueTeamId: assignment?.rescueTeamId || null,
+        rescueTeamName: resolvedRescueTeamName,
+        rescueTeamId: resolvedRescueTeamId,
       };
+
+      if (targetSosId) {
+        try {
+          await backendApi.requestShoreHandoff(targetSosId, payload);
+        } catch (err) {
+          console.warn('Backend requestShoreHandoff error:', err);
+        }
+      }
 
       if (socketRef.current && socketRef.current.connected) {
         socketRef.current.emit('rescuer:request_shore_handoff', {
@@ -1328,14 +1343,6 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             ...payload,
           },
         });
-      }
-
-      if (targetSosId) {
-        try {
-          await backendApi.requestShoreHandoff(targetSosId, payload);
-        } catch (err) {
-          console.warn('Backend requestShoreHandoff error:', err);
-        }
       }
 
       setShoreHandoffData({
@@ -1366,8 +1373,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
   const isShoreHandoffMission =
     assignment?.missionType === 'SHORE_HANDOFF' ||
-    (typeof assignment?.note === 'string' && assignment.note.toLowerCase().includes('đón bờ')) ||
-    (assignment?.vehicleId?.type === 'AMBULANCE' && Boolean(sos?.shoreHandoff?.status && sos.shoreHandoff.status !== 'NONE'));
+    (!assignment?.missionType &&
+      typeof assignment?.note === 'string' &&
+      assignment.note.toLowerCase().includes('đón bờ'));
 
   const sosCode = sos?.sosCode || 'SOS';
   const recipientName =
@@ -4095,10 +4103,18 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   <Ionicons name="checkmark-circle" size={42} color="#16A34A" />
                 </View>
                 <Text style={[styles.centeredModalTitle, { color: '#16A34A', fontSize: 19 }]}>
-                  Hoàn Tất Cứu Hộ Xuất Sắc! 🎉
+                  {!isShoreHandoffMission &&
+                  shoreHandoffData &&
+                  ['REQUESTED', 'ASSIGNED'].includes(String(shoreHandoffData.status || '').toUpperCase())
+                    ? 'Hoàn Thành Phần Giải Cứu! 🛟'
+                    : 'Hoàn Tất Cứu Hộ Xuất Sắc! 🎉'}
                 </Text>
                 <Text style={styles.centeredModalDesc}>
-                  Toàn bộ {rescuedHeadcount} người dân đã được đưa về nơi an toàn. Trạng thái đội đã tự động chuyển về SẴN SÀNG tác chiến.
+                  {!isShoreHandoffMission &&
+                  shoreHandoffData &&
+                  ['REQUESTED', 'ASSIGNED'].includes(String(shoreHandoffData.status || '').toUpperCase())
+                    ? `Đã giải cứu ${rescuedHeadcount} người dân đến điểm hẹn bờ. Đội của bạn đã chuyển sang SẴN SÀNG nhận ca mới; ca SOS sẽ hoàn tất hoàn toàn khi xe tiếp vận đưa nạn nhân tới nơi an toàn.`
+                    : `Toàn bộ ${rescuedHeadcount} người dân đã được đưa về nơi an toàn. Trạng thái đội đã tự động chuyển về SẴN SÀNG tác chiến.`}
                 </Text>
 
                 <TouchableOpacity

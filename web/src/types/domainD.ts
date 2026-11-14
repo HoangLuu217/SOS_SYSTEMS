@@ -125,6 +125,18 @@ export interface SosRequest {
   isSecondaryRequest?: boolean;
   primarySosId?: string;
   shoreHandoff?: ShoreHandoffRequest;
+  shoreHandoffAssignment?: {
+    _id?: string;
+    id?: string;
+    status?: string;
+    missionType?: string;
+    rescueTeamId?: any;
+    vehicleId?: any;
+    acceptedAt?: string;
+    startedAt?: string;
+    completedAt?: string;
+    updatedAt?: string;
+  } | null;
   requestedSupplies?: {
     name: string;
     quantity: number;
@@ -167,12 +179,20 @@ export interface ShoreHandoffRequest {
 export interface RescueTeam {
   id: string;
   name: string;
+  code?: string;
+  teamType?: string;
+  teamStatus?: string;
+  description?: string;
   authorityOrganizationId: string;
+  authorityName?: string;
   status: 'Available' | 'Busy' | 'Off-duty';
   availableRescuersCount: number;
   rescuers: RescuerProfile[];
+  vehicles?: Vehicle[];
   districtId?: string;
   wardId?: string;
+  wardName?: string;
+  districtName?: string;
 }
 
 export interface RescuerProfile {
@@ -182,6 +202,8 @@ export interface RescuerProfile {
   status: 'Online' | 'In Mission' | 'Offline';
   teamId: string;
   phone: string;
+  email?: string;
+  specialty?: string;
   coordinates?: {
     lat: number;
     lng: number;

@@ -875,7 +875,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
       let pendingMembersCount = 0;
       let availableMembersCount = 0;
 
-      const detailedMembers: TeamMemberDetail[] = membersList.map((m: any, mIdx: number) => {
+      const rawDetailedMembers: TeamMemberDetail[] = membersList.map((m: any, mIdx: number) => {
         const rescuerObj = typeof m.rescuerId === 'object' && m.rescuerId !== null ? m.rescuerId : null;
         const actualRescuerId = rescuerObj?._id || (typeof m.rescuerId === 'string' ? m.rescuerId : m._id || String(mIdx));
         const name = rescuerObj?.fullName || m.fullName || (mIdx === 0 && leaderName ? leaderName : '');
@@ -896,12 +896,6 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
           availabilityStatus = m.availabilityStatus;
         } else if (rescuerObj?.rescuer?.availabilityStatus) {
           availabilityStatus = rescuerObj.rescuer.availabilityStatus === 'BUSY' ? 'BUSY' : 'AVAILABLE';
-        }
-
-        if (memberStatus === 'PENDING') {
-          pendingMembersCount++;
-        } else if (availabilityStatus === 'AVAILABLE') {
-          availableMembersCount++;
         }
 
         const rawSkills = rescuerObj?.rescuer?.skills || m.skills || [];
@@ -925,6 +919,22 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
           joinedAt,
         };
       });
+
+      const detailedMemberMap = new Map<string, TeamMemberDetail>();
+      for (const m of rawDetailedMembers) {
+        const existing = detailedMemberMap.get(m.rescuerId);
+        if (!existing || (m.role === 'LEADER' && existing.role !== 'LEADER')) {
+          detailedMemberMap.set(m.rescuerId, m);
+        }
+      }
+      const detailedMembers = Array.from(detailedMemberMap.values());
+      for (const m of detailedMembers) {
+        if (m.status === 'PENDING') {
+          pendingMembersCount++;
+        } else if (m.availabilityStatus === 'AVAILABLE') {
+          availableMembersCount++;
+        }
+      }
 
       const totalMembersCount = detailedMembers.filter((m) => m.status !== 'PENDING').length;
 

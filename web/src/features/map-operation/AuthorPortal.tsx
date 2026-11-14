@@ -22,9 +22,6 @@ import { MissionDispatch } from './dispatch/MissionDispatch';
 import {
   ShieldAlert,
   LogOut,
-  Map as MapIcon,
-  Layers,
-  AlertTriangle,
   X,
   CheckCircle2,
   AlertCircle,
@@ -32,7 +29,7 @@ import {
 import { useApp } from '@/context/AppContext';
 import { isSosInOfficerJurisdiction } from '@/services/mapGeoService';
 import { navigateTo, getCurrentSosIdFromUrl } from '@/services/appRouter';
-import { onSosCreated, onSosUpdated, onAssignmentUpdated, getSocket } from '@/services/socketService';
+import { onSosCreated, onSosUpdated, onAssignmentUpdated, onRescueTeamsUpdated, getSocket } from '@/services/socketService';
 import { EMERGENCY_TYPE_LABELS } from '@/features/hazards';
 import './RescueSos.css';
 
@@ -52,7 +49,7 @@ interface Props {
 }
 
 export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
-  const { mapMode, setMapMode } = useApp();
+  const { mapMode } = useApp();
 
   // Domain D data
   const [areas, setAreas] = useState<AdministrativeArea[]>([]);
@@ -105,10 +102,24 @@ export const AuthorPortal = ({ user, onLogout, embedded = false }: Props) => {
     };
   }, []);
 
+function mapRescuerStatus(rawStatus?: string): 'Online' | 'In Mission' | 'Offline' {
+  const norm = String(rawStatus || '').toUpperCase();
+  if (norm === 'ON_MISSION' || norm === 'BUSY' || norm === 'IN_MISSION') return 'In Mission';
+  if (norm === 'INACTIVE' || norm === 'OFFLINE' || norm === 'OFF_DUTY') return 'Offline';
+  return 'Online';
+}
+
+function mapTeamStatus(rawStatus?: string): 'Available' | 'Busy' | 'Off-duty' {
+  const norm = String(rawStatus || '').toUpperCase();
+  if (norm === 'ACTIVE' || norm === 'AVAILABLE') return 'Available';
+  if (norm === 'INACTIVE' || norm === 'OFF_DUTY' || norm === 'MAINTENANCE') return 'Off-duty';
+  return 'Busy';
+}
+
 // Hàm ánh xạ Đội Cứu Hộ từ MongoDB sang định dạng chuẩn Web tác chiến
 function mapBackendTeamToDomain(t: any): RescueTeam {
   const leaderObj = typeof t.leaderId === 'object' && t.leaderId ? t.leaderId : null;
-  const leaderId = leaderObj?._id || (typeof t.leaderId === 'string' ? t.leaderId : 'rescuer-lead');
+  const leaderId = leaderObj?._id || (typeof t.leaderId === 'string' ? t.leaderId : '');
   const leaderName = leaderObj?.fullName || 'Đội Trưởng';
   const leaderPhone = leaderObj?.phone || '';
   const leaderCoords =
@@ -116,56 +127,99 @@ function mapBackendTeamToDomain(t: any): RescueTeam {
       ? { lat: leaderObj.currentLocation.coordinates[1], lng: leaderObj.currentLocation.coordinates[0] }
       : leaderObj?.coordinates;
 
-  const rescuers = (t.members || []).map((m: any, idx: number) => {
+  const approvedMembers = (t.members || []).filter(
+    (m: any) => !m.status || m.status === 'APPROVED'
+  );
+
+  const rawRescuers = approvedMembers.map((m: any, idx: number) => {
     const rescuerObj = typeof m.rescuerId === 'object' && m.rescuerId ? m.rescuerId : null;
     const rId = rescuerObj?._id || (typeof m.rescuerId === 'string' ? m.rescuerId : `rescuer-${t._id}-${idx}`);
-    const rName = rescuerObj?.fullName || (m.role === 'LEADER' ? leaderName : `Cứu hộ viên ${idx + 1}`);
-    const rPhone = rescuerObj?.phone || leaderPhone;
+    const isLeaderMember = m.role === 'LEADER' || (leaderId && String(rId) === String(leaderId));
+    const rName = rescuerObj?.fullName || (isLeaderMember ? leaderName : `Cứu hộ viên ${idx + 1}`);
+    const rPhone = rescuerObj?.phone || (isLeaderMember ? leaderPhone : '');
     const rCoords =
       rescuerObj?.currentLocation?.coordinates && Array.isArray(rescuerObj.currentLocation.coordinates) && rescuerObj.currentLocation.coordinates.length === 2
         ? { lat: rescuerObj.currentLocation.coordinates[1], lng: rescuerObj.currentLocation.coordinates[0] }
-        : rescuerObj?.coordinates || (m.role === 'LEADER' ? leaderCoords : undefined);
+        : rescuerObj?.coordinates || (isLeaderMember ? leaderCoords : undefined);
 
     return {
       id: rId,
       name: rName,
-      role: m.role === 'LEADER' ? 'Chỉ Huy Đội' : 'Chiến Sĩ Cứu Hộ',
-      status: 'Online' as const,
+      role: isLeaderMember ? 'Chỉ Huy Đội' : rescuerObj?.rescuer?.specialty || 'Chiến Sĩ Cứu Hộ',
+      status: mapRescuerStatus(rescuerObj?.status),
       teamId: t._id,
       phone: rPhone,
+      email: rescuerObj?.email || (isLeaderMember ? leaderObj?.email : undefined),
+      specialty: rescuerObj?.rescuer?.specialty,
       coordinates: rCoords,
     };
   });
 
-  if (rescuers.length === 0 && leaderName) {
-    rescuers.push({
+  // Loại bỏ bản ghi trùng rescuerId nếu dữ liệu đội bị nhân bản thành viên
+  const rescuersMap = new Map<string, (typeof rawRescuers)[number]>();
+  for (const r of rawRescuers) {
+    const key = String(r.id);
+    const existing = rescuersMap.get(key);
+    if (!existing || (r.role === 'Chỉ Huy Đội' && existing.role !== 'Chỉ Huy Đội')) {
+      rescuersMap.set(key, r);
+    }
+  }
+  const rescuers = Array.from(rescuersMap.values());
+
+  // Đảm bảo Chỉ huy / Đội trưởng luôn nằm ở vị trí đầu tiên (rescuers[0]) khi điều phối
+  const leaderIdx = leaderId ? rescuers.findIndex((r: any) => String(r.id) === String(leaderId)) : -1;
+  if (leaderIdx > 0) {
+    const [leaderItem] = rescuers.splice(leaderIdx, 1);
+    rescuers.unshift(leaderItem);
+  } else if (leaderIdx === -1 && leaderName && leaderId) {
+    rescuers.unshift({
       id: leaderId,
       name: leaderName,
       role: 'Chỉ Huy Đội',
-      status: 'Online' as const,
+      status: mapRescuerStatus(leaderObj?.status),
       teamId: t._id,
       phone: leaderPhone,
+      email: leaderObj?.email,
+      specialty: leaderObj?.rescuer?.specialty,
       coordinates: leaderCoords,
     });
   }
 
   const areaObj = typeof t.areaId === 'object' && t.areaId ? t.areaId : null;
-  const areaName = areaObj?.name || '';
-  const isLienChieu = t.name.toLowerCase().includes('liên chiểu') || areaName.toLowerCase().includes('liên chiểu');
-  const isNguHanhSon = t.name.toLowerCase().includes('ngũ hành sơn') || areaName.toLowerCase().includes('ngũ hành sơn') || t.name.toLowerCase().includes('43-nhs');
+  const rawAreaId = areaObj?._id || (typeof t.areaId === 'string' ? t.areaId : '') || undefined;
+  const areaName = areaObj?.name || undefined;
+  const parentAreaObj = typeof areaObj?.parentId === 'object' && areaObj.parentId ? areaObj.parentId : null;
+  const rawParentId =
+    parentAreaObj?._id || (typeof areaObj?.parentId === 'string' ? areaObj.parentId : '') || undefined;
 
-  const resolvedDistrictId = isNguHanhSon ? 'area-nhs' : isLienChieu ? 'area-lc' : (t.areaId?._id || t.areaId || 'area-nhs');
-  const resolvedWardId = isNguHanhSon ? 'area-nhs' : isLienChieu ? 'area-lc' : (t.areaId?._id || t.areaId || 'area-nhs');
+  const authObj = typeof t.authorityId === 'object' && t.authorityId ? t.authorityId : null;
+  const extractedCode = t.code || t.name?.match(/\(([^)]+)\)\s*$/)?.[1] || undefined;
+  const mappedVehicles = Array.isArray(t.vehicles)
+    ? t.vehicles.map((v: any) =>
+        mapBackendVehicleToDomain({
+          ...v,
+          teamId: v.teamId || { _id: t._id, name: t.name, areaId: t.areaId },
+        })
+      )
+    : undefined;
 
   return {
     id: t._id,
     name: t.name,
-    authorityOrganizationId: typeof t.authorityId === 'object' && t.authorityId ? t.authorityId._id : t.authorityId || 'auth-hccd',
-    status: t.status === 'ACTIVE' || t.status === 'AVAILABLE' ? 'Available' : 'Busy',
-    availableRescuersCount: rescuers.length || 4,
+    code: extractedCode,
+    teamType: t.type,
+    teamStatus: t.status,
+    description: t.description,
+    authorityOrganizationId: authObj?._id || t.authorityId || '',
+    authorityName: authObj?.name || undefined,
+    status: mapTeamStatus(t.status),
+    availableRescuersCount: rescuers.length,
     rescuers,
-    districtId: resolvedDistrictId,
-    wardId: resolvedWardId,
+    vehicles: mappedVehicles,
+    districtId: rawParentId || rawAreaId,
+    wardId: rawAreaId,
+    wardName: areaName,
+    districtName: parentAreaObj?.name || areaName,
   };
 }
 
@@ -175,10 +229,10 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
   const teamId = teamObj ? teamObj._id : v.teamId || '';
   const teamName = teamObj?.name || '';
   const teamAreaObj = typeof teamObj?.areaId === 'object' && teamObj?.areaId ? teamObj.areaId : null;
-  const areaName = teamAreaObj?.name || '';
-  const isLienChieu = teamName.toLowerCase().includes('liên chiểu') || areaName.toLowerCase().includes('liên chiểu');
-  const isNguHanhSon = teamName.toLowerCase().includes('ngũ hành sơn') || areaName.toLowerCase().includes('ngũ hành sơn') || teamName.toLowerCase().includes('43-nhs');
-  const resolvedDistrictId = isNguHanhSon ? 'area-nhs' : isLienChieu ? 'area-lc' : (teamAreaObj?._id || teamObj?.areaId || '');
+  const resolvedAreaId = teamAreaObj?._id || (typeof teamObj?.areaId === 'string' ? teamObj.areaId : '') || '';
+  const teamParentAreaObj = typeof teamAreaObj?.parentId === 'object' && teamAreaObj?.parentId ? teamAreaObj.parentId : null;
+  const resolvedParentId =
+    teamParentAreaObj?._id || (typeof teamAreaObj?.parentId === 'string' ? teamAreaObj.parentId : '') || '';
 
   let vType: 'Inflatable Boat' | 'Tactical Truck' | 'Ambulance' | 'Amphibious Vehicle' = 'Inflatable Boat';
   if (v.type === 'BOAT') vType = 'Inflatable Boat';
@@ -196,8 +250,8 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     capacity: `${v.capacity || 6} người`,
     teamId,
     teamName,
-    districtId: resolvedDistrictId,
-    areaId: teamAreaObj?._id || teamObj?.areaId || '',
+    districtId: resolvedParentId || resolvedAreaId,
+    areaId: resolvedAreaId,
   };
 }
 
@@ -263,24 +317,16 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
 
           // Đồng bộ thông tin khu vực hành chính từ CSDL của chính ca SOS (không gán đè bằng khu vực của cán bộ)
           const cleanItemAreaName =
-            itemAreaName && itemAreaName.toLowerCase() !== 'thành phố đà nẵng' ? itemAreaName : '';
-          const fullText = (cleanItemAreaName + ' ' + (item.address || '')).toLowerCase();
-          const isNHS =
-            fullText.includes('ngũ hành sơn') ||
-            fullText.includes('mỹ an') ||
-            fullText.includes('khuê mỹ') ||
-            fullText.includes('hòa quý') ||
-            fullText.includes('hòa hải');
-          const isLC =
-            fullText.includes('liên chiểu') ||
-            fullText.includes('mẹ suốt') ||
-            fullText.includes('hòa khánh') ||
-            fullText.includes('hòa minh');
-
-          const wardId = cleanItemAreaName ? itemAreaId : isNHS ? 'area-nhs' : isLC ? 'area-lc' : '';
-          const wardName = cleanItemAreaName || (isNHS ? 'Phường Ngũ Hành Sơn' : isLC ? 'Quận Liên Chiểu' : '');
-          const districtId = areaObj?.parentId || wardId || '';
-          const districtName = isNHS ? 'Quận Ngũ Hành Sơn' : isLC ? 'Quận Liên Chiểu' : cleanItemAreaName;
+            areaObj?.name && areaObj.name.toLowerCase() !== 'thành phố đà nẵng'
+              ? areaObj.name
+              : (item.address || '');
+          const parentAreaObj =
+            typeof areaObj?.parentId === 'object' && areaObj.parentId ? areaObj.parentId : null;
+          const wardId = itemAreaId;
+          const wardName = cleanItemAreaName;
+          const districtId =
+            parentAreaObj?._id || (typeof areaObj?.parentId === 'string' ? areaObj.parentId : '') || wardId || '';
+          const districtName = parentAreaObj?.name || cleanItemAreaName;
 
 
           return {
@@ -349,6 +395,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
               return 'CITIZEN';
             })(),
             shoreHandoff: item.shoreHandoff || undefined,
+            shoreHandoffAssignment: item.shoreHandoffAssignment || undefined,
             requestedSupplies: Array.isArray(item.assignment?.requestedSupplies)
               ? item.assignment.requestedSupplies
               : Array.isArray(item.requestedSupplies)
@@ -411,13 +458,15 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       }
 
       // Đồng bộ danh sách Đội cứu hộ thật từ MongoDB
+      let syncedTeamVehicles: Vehicle[] = [];
       try {
-        const teamsRes = await fetchRescueTeams();
+        const teamsRes = await fetchRescueTeams({ limit: '100' });
         const rawTeams = Array.isArray(teamsRes?.data)
           ? teamsRes.data
           : (teamsRes?.data as any)?.teams || [];
-        if (teamsRes?.success && rawTeams.length > 0) {
+        if (teamsRes?.success) {
           const mappedTeams = rawTeams.map(mapBackendTeamToDomain);
+          syncedTeamVehicles = mappedTeams.flatMap((team: RescueTeam) => team.vehicles || []);
           domainDService.syncRealRescueTeams(mappedTeams);
           setRescueTeams(domainDService.getRescueTeams());
         }
@@ -427,16 +476,29 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
 
       // Đồng bộ danh sách Phương tiện cứu hộ thật từ MongoDB
       try {
-        const vehRes = await fetchVehicles();
+        const vehRes = await fetchVehicles({ limit: '100' });
         const rawVehs = Array.isArray(vehRes?.data)
           ? vehRes.data
           : (vehRes?.data as any)?.vehicles || [];
-        if (vehRes?.success && rawVehs.length > 0) {
+        if (vehRes?.success) {
           const mappedVehs = rawVehs.map(mapBackendVehicleToDomain);
-          domainDService.syncRealVehicles(mappedVehs);
+          const mergedVehMap = new Map<string, Vehicle>();
+          for (const v of [...mappedVehs, ...syncedTeamVehicles]) {
+            if (v?.id && !mergedVehMap.has(v.id)) {
+              mergedVehMap.set(v.id, v);
+            }
+          }
+          domainDService.syncRealVehicles(Array.from(mergedVehMap.values()));
+          setVehicles(domainDService.getVehicles());
+        } else if (syncedTeamVehicles.length > 0) {
+          domainDService.syncRealVehicles(syncedTeamVehicles);
           setVehicles(domainDService.getVehicles());
         }
       } catch (err) {
+        if (syncedTeamVehicles.length > 0) {
+          domainDService.syncRealVehicles(syncedTeamVehicles);
+          setVehicles(domainDService.getVehicles());
+        }
         console.warn('Lỗi đồng bộ phương tiện từ API:', err);
       }
     } catch (err) {
@@ -468,6 +530,12 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         const uId = updatedSos._id || updatedSos.id;
         const rawStatus = String(updatedSos.status || '').toUpperCase();
         domainDService.updateSosStatus(uId, rawStatus as any);
+        if ('shoreHandoff' in updatedSos) {
+          domainDService.updateShoreHandoffState(uId, updatedSos.shoreHandoff);
+        }
+        if (updatedSos.shoreHandoffAssignment) {
+          domainDService.updateShoreHandoffAssignment(uId, updatedSos.shoreHandoffAssignment);
+        }
         if (updatedSos.assignment) {
           const assign = updatedSos.assignment;
           domainDService.syncRealAssignment({
@@ -502,8 +570,25 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       const assignId = assignmentData._id || assignmentData.id;
       const targetSosId = assignmentData.sosRequestId || assignmentData.sosId || (assignmentData.sosRequest?._id || assignmentData.sosRequest?.id);
       const newStatus = assignmentData.status;
+      const isShoreHandoffAssign = assignmentData.missionType === 'SHORE_HANDOFF';
 
-      if (assignId && targetSosId) {
+      if (assignId && targetSosId && isShoreHandoffAssign) {
+        domainDService.updateShoreHandoffAssignment(targetSosId, {
+          _id: assignId,
+          id: assignId,
+          status: newStatus,
+          missionType: 'SHORE_HANDOFF',
+          rescueTeamId: assignmentData.rescueTeamId,
+          vehicleId: assignmentData.vehicleId,
+          acceptedAt: assignmentData.acceptedAt,
+          startedAt: assignmentData.startedAt,
+          completedAt: assignmentData.completedAt,
+          updatedAt: assignmentData.updatedAt,
+        });
+        setSosRequests([...domainDService.getSosRequests()]);
+      }
+
+      if (assignId && targetSosId && !isShoreHandoffAssign) {
         const teamObj = assignmentData.rescueTeamId;
         const rescuerObj = assignmentData.rescuerId;
         const vehicleObj = assignmentData.vehicleId;
@@ -536,6 +621,13 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
           requestedSupplies: Array.isArray(assignmentData.requestedSupplies) ? assignmentData.requestedSupplies : existingAssign?.requestedSupplies || [],
         });
 
+        const existingSos = domainDService.getSosRequests().find((s) => s.id === targetSosId);
+        const hasPendingShoreRelay = Boolean(
+          existingSos?.shoreHandoff &&
+          ['REQUESTED', 'ASSIGNED'].includes(String(existingSos.shoreHandoff.status || '').toUpperCase()) &&
+          !existingSos.shoreHandoff.completedAt
+        );
+
         const mappedSosStatus =
           newStatus === 'ACCEPTED'
             ? 'ACCEPTED'
@@ -546,7 +638,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
             : ['IN_PROGRESS', 'RESCUING'].includes(newStatus)
             ? 'RESCUING'
             : ['COMPLETED', 'RESOLVED'].includes(newStatus)
-            ? 'COMPLETED'
+            ? (hasPendingShoreRelay ? 'RESCUING' : 'COMPLETED')
             : newStatus === 'REJECTED'
             ? 'REJECTED'
             : undefined;
@@ -561,6 +653,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     };
 
     const unsubAssignment = onAssignmentUpdated(handleAssignmentRealtime);
+    const unsubTeams = onRescueTeamsUpdated(() => syncRealSosFromApi(activeOfficer));
 
     const socket = getSocket();
     const handleRealtimeSync = () => syncRealSosFromApi(activeOfficer);
@@ -658,6 +751,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       unsubCreated();
       unsubUpdated();
       unsubAssignment();
+      unsubTeams();
       socket.off('connect', handleRealtimeSync);
       socket.off('assignment:created', handleRealtimeSync);
       socket.off('assignment:new', handleRealtimeSync);
@@ -811,22 +905,24 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     return areas.length > 0 ? [areas[0]] : [];
   }, [areas, activeOfficer, selectedSosId, sosRequests]);
 
-  // Hàm kiểm tra ca SOS đã hoàn thành cứu hộ hay chưa
+  // Hàm kiểm tra ca SOS đã hoàn thành cứu hộ hoàn toàn hay chưa
   const isSosCompleted = (s: SosRequest | null | undefined): boolean => {
     if (!s || !s.id) return false;
     const st = String(s.status || '').toUpperCase();
     if (st === 'COMPLETED' || st === 'RESOLVED') return true;
+
+    // Nếu còn yêu cầu / điều xe tiếp vận đón bờ chưa hoàn tất -> SOS vẫn CHƯA hoàn thành
+    const shoreStatus = String(s.shoreHandoff?.status || '').toUpperCase();
+    const hasPendingOrActiveShoreRelay = Boolean(
+      s.shoreHandoff &&
+      ['REQUESTED', 'ASSIGNED'].includes(shoreStatus) &&
+      !s.shoreHandoff.completedAt
+    );
+    if (hasPendingOrActiveShoreRelay) return false;
+
     const assign = domainDService.getAssignmentBySosId(s.id);
     const assignSt = String(assign?.status || '').toUpperCase();
     if (assignSt === 'COMPLETED') return true;
-
-    const hasActiveShoreRelay = Boolean(
-      s.shoreHandoff && s.shoreHandoff.status === 'ASSIGNED' && !s.shoreHandoff.completedAt
-    );
-    const hasPendingShoreRelay = Boolean(
-      s.shoreHandoff && s.shoreHandoff.status === 'REQUESTED' && !s.shoreHandoff.completedAt
-    );
-    if (hasActiveShoreRelay || hasPendingShoreRelay) return false;
 
     return false;
   };
@@ -890,30 +986,29 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     supplies?: import('@/types/domainD').AssignedSupplyItem[];
   }) => {
     if (!selectedSos) return;
-    domainDService.assignSos(selectedSos.id, params);
-    setSosRequests(domainDService.getSosRequests());
-    showToast(`Đã xuất kích ${params.rescueTeamName} ứng cứu ca ${selectedSos.sosCode}!`, 'success');
 
-    // Đồng bộ lên backend nếu là ca SOS thật
-    try {
-      if (selectedSos.id && !selectedSos.id.startsWith('sos-')) {
-        const primaryTeamId = params.rescueTeamId.split(',')[0].trim();
-        const foundTeam = rescueTeams.find((t) => t.id === primaryTeamId);
-        const realTeamId =
-          foundTeam?.id && !foundTeam.id.startsWith('team-')
-            ? foundTeam.id
-            : '6acf2d296102c44874cc2b43';
+    // Đồng bộ lên backend trước nếu là ca SOS thật để tránh báo xuất kích thành công giả khi server lỗi
+    if (selectedSos.id && !selectedSos.id.startsWith('sos-')) {
+      const primaryTeamId = params.rescueTeamId.split(',')[0].trim();
+      const foundTeam = rescueTeams.find((t) => t.id === primaryTeamId);
+      const realTeamId = foundTeam?.id && !foundTeam.id.startsWith('team-') ? foundTeam.id : '';
 
-        const realRescuerId =
-          params.rescuerId && !params.rescuerId.startsWith('rescuer-')
-            ? params.rescuerId
-            : (foundTeam?.rescuers?.[0]?.id || '6ad4c91546705c7dadf70b3d');
+      if (!realTeamId) {
+        showToast('Đội cứu hộ được chọn chưa đồng bộ từ máy chủ hoặc không tồn tại!', 'error');
+        return;
+      }
 
-        const realVehicleId =
-          params.vehicleId && !params.vehicleId.startsWith('veh-')
-            ? params.vehicleId
-            : undefined;
+      const realRescuerId =
+        params.rescuerId && !params.rescuerId.startsWith('rescuer-')
+          ? params.rescuerId
+          : foundTeam?.rescuers?.find((r) => r.id && !r.id.startsWith('rescuer-'))?.id;
 
+      const realVehicleId =
+        params.vehicleId && !params.vehicleId.startsWith('veh-')
+          ? params.vehicleId
+          : undefined;
+
+      try {
         await assignSosApi(selectedSos.id, {
           authorityOrganizationId:
             params.authorityOrganizationId && !params.authorityOrganizationId.startsWith('auth-')
@@ -925,11 +1020,21 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
           note: `Lệnh điều động khẩn cấp từ Ban Chỉ Huy PCTT ${activeOfficer.jurisdictionAreaName || ''}`,
           supplies: params.supplies,
         });
+        domainDService.assignSos(selectedSos.id, params);
+        setSosRequests(domainDService.getSosRequests());
+        showToast(`Đã xuất kích ${params.rescueTeamName} ứng cứu ca ${selectedSos.sosCode}!`, 'success');
+        await syncRealSosFromApi(activeOfficer);
+      } catch (err: any) {
+        console.warn('Lỗi gọi API điều động lên server:', err);
+        showToast(err?.message || 'Không thể phân công đội cứu hộ trên máy chủ!', 'error');
         await syncRealSosFromApi(activeOfficer);
       }
-    } catch (err) {
-      console.warn('Lỗi gọi API điều động lên server:', err);
+      return;
     }
+
+    domainDService.assignSos(selectedSos.id, params);
+    setSosRequests(domainDService.getSosRequests());
+    showToast(`Đã xuất kích ${params.rescueTeamName} ứng cứu ca ${selectedSos.sosCode}!`, 'success');
   };
 
   const handleUpdateAssignmentStatus = async (assignmentId: string, nextStatus: AssignmentStatus) => {
@@ -1075,85 +1180,36 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
                 : 'Trực ban 24/7'}
             </span>
           </div>
-
-          {/* Live Connection Status Indicator */}
-          <div className={`author-live-connection-chip ${isOnline ? '' : 'offline'}`} title={isOnline ? 'Đang kết nối máy chủ theo thời gian thực' : 'Mất kết nối - đang thử lại'}>
-            <span className="author-live-connection-dot" />
-            <span>{isOnline ? 'LIVE' : 'OFFLINE'}</span>
-          </div>
         </div>
 
-        {/* Right: Map Mode, Theme, Officer Profile, Logout */}
-        <div className="author-right-controls">
-          {/* Map Mode Segmented Control */}
-          <div className="author-segmented-map" title="Chế độ hiển thị bản đồ tác chiến">
-            <button
-              type="button"
-              onClick={() => setMapMode('street')}
-              className={`author-map-btn ${mapMode === 'street' ? 'active' : ''}`}
-              title="Bản đồ đường phố"
-            >
-              <MapIcon size={12} />
-              <span>Đường phố</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMapMode('satellite')}
-              className={`author-map-btn ${mapMode === 'satellite' ? 'active' : ''}`}
-              title="Bản đồ vệ tinh"
-            >
-              <Layers size={12} />
-              <span>Vệ tinh</span>
-            </button>
-          </div>
-
-          {/* Điểm Nguy Hiểm Shortcut */}
-          <button
-            type="button"
-            onClick={() => navigateTo('hazard_reports', user ?? null)}
-            className="author-map-btn"
-            style={{
-              borderColor: '#f97316',
-              color: '#ea580c',
-              fontWeight: 600,
-              gap: '5px',
-            }}
-            title="Quản lý & Tạo Điểm Nguy Hiểm trên địa bàn (UC-L15)"
-          >
-            <AlertTriangle size={12} color="#ea580c" />
-            <span>Điểm Nguy Hiểm</span>
-          </button>
-
-
-          {/* Officer Profile Badge & Logout (Only if not embedded in main dashboard sidebar) */}
-          {!embedded && (
-            <>
-              <div className="author-officer-chip" title={`${activeOfficer.fullName} • ${activeOfficer.jurisdictionAreaName}`}>
-                <div className="author-officer-avatar">
-                  <span>{officerInitials}</span>
-                  <span className="author-officer-online-dot" title="Đang trực tuyến" />
-                </div>
-                <div className="author-officer-meta">
-                  <div className="author-officer-name">{activeOfficer.fullName}</div>
-                  <div className="author-officer-role">
-                    {activeOfficer.position?.replace(` ${activeOfficer.jurisdictionAreaName}`, '') || 'Chỉ Huy Trực Ban'}
-                  </div>
+        {/* Right: Officer Profile & Logout (Only if not embedded in main dashboard sidebar) */}
+        {!embedded && (
+          <div className="author-right-controls">
+            <div className="author-officer-chip" title={`${activeOfficer.fullName} • ${activeOfficer.jurisdictionAreaName}`}>
+              <div className="author-officer-avatar">
+                <span>{officerInitials}</span>
+                <span className="author-officer-online-dot" title="Đang trực tuyến" />
+              </div>
+              <div className="author-officer-meta">
+                <div className="author-officer-name">{activeOfficer.fullName}</div>
+                <div className="author-officer-role">
+                  {activeOfficer.position?.replace(` ${activeOfficer.jurisdictionAreaName}`, '') || 'Chỉ Huy Trực Ban'}
                 </div>
               </div>
+            </div>
 
-              {onLogout && (
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  className="author-logout-btn"
-                  title="Đăng xuất khỏi phiên trực"
-                >
-                  <LogOut size={15} />
-                </button>
-              )}
-            </>
-          )}
-        </div>
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="author-logout-btn"
+                title="Đăng xuất khỏi phiên trực"
+              >
+                <LogOut size={15} />
+              </button>
+            )}
+          </div>
+        )}
       </header>
 
       {/* Mission Dispatch for AUTHOR (Scoped to Local Sector) */}

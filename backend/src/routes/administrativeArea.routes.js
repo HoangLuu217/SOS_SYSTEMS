@@ -18,6 +18,12 @@ router.post('/', administrativeAreaController.createArea);
 router.get('/', administrativeAreaController.getAreas);
 
 /**
+ * @route   GET /administrative-areas/map-bundle
+ * @desc    Lấy ranh giới cấp tỉnh và toàn bộ xã/phường/đặc khu trực thuộc từ CSDL (phục vụ tải bản đồ Admin nhanh)
+ */
+router.get('/map-bundle', administrativeAreaController.getProvinceMapBundle);
+
+/**
  * @route   GET /administrative-areas/boundary
  * @desc    Lấy ranh giới GeoJSON polygon của khu vực hành chính (tự động truy vấn và cache CSDL)
  */
