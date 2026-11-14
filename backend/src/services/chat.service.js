@@ -241,13 +241,36 @@ class ChatService {
       targetChannel = channel;
     }
 
+    let channelQuery = { channel: targetChannel };
+    if (targetChannel.startsWith('area_')) {
+      const parts = targetChannel.split('_');
+      const uId = parts[parts.length - 1];
+      if (mongoose.isValidObjectId(uId)) {
+        const slugWithoutAreaAndUser = parts.slice(1, -1).join('_');
+        const wardKw = slugWithoutAreaAndUser.split('_')[0];
+        if (wardKw && wardKw.length >= 2) {
+          channelQuery = {
+            $or: [
+              { channel: targetChannel },
+              { channel: new RegExp(`area_.*${wardKw}.*_${uId}$`, 'i') },
+            ],
+          };
+        }
+      }
+    }
+
     // Lấy tin nhắn theo đúng kênh riêng biệt của từng tài khoản
-    const messages = await ChatMessage.find({ channel: targetChannel })
+    const messages = await ChatMessage.find(channelQuery)
       .populate('senderId', 'fullName phone email roles authority avatarUrl address citizen')
       .populate('recipientId', 'fullName phone email roles authority avatarUrl address citizen')
       .populate('sosRequestId')
       .sort({ createdAt: 1 })
       .limit(Math.min(limit, 300));
+
+    // Tự động chuẩn hóa các tin nhắn cũ về targetChannel nếu cần
+    if (targetChannel.startsWith('area_') && messages.some((m) => m.channel !== targetChannel)) {
+      ChatMessage.updateMany(channelQuery, { $set: { channel: targetChannel } }).catch(() => {});
+    }
 
     // Tự động kiểm tra và đồng bộ trạng thái thực tế mới nhất của các ca SOS vào tin nhắn
     const sosIdsToFetch = [];
@@ -487,6 +510,30 @@ class ChatService {
         }
       }
 
+      // Tránh trùng lặp cuộc hội thoại của cùng 1 người dân (gộp tin nhắn từ các kênh legacy cũ)
+      const partnerKey = partnerUser?._id ? String(partnerUser._id) : (possibleUserId || null);
+      if (partnerKey) {
+        const existingIdx = conversations.findIndex(
+          (c) => c.type === 'CHANNEL' && (String(c.partnerId) === partnerKey || c.channel.endsWith(`_${partnerKey}`))
+        );
+        if (existingIdx !== -1) {
+          const existingTime = conversations[existingIdx].latestMessage
+            ? new Date(conversations[existingIdx].latestMessage.createdAt).getTime()
+            : 0;
+          const newTime = areaLatest ? new Date(areaLatest.createdAt).getTime() : 0;
+          if (newTime > existingTime) {
+            conversations[existingIdx].channel = ch;
+            conversations[existingIdx].latestMessage = {
+              content: areaLatest.content,
+              senderName: areaLatest.senderName,
+              createdAt: areaLatest.createdAt,
+            };
+          }
+          conversations[existingIdx].unreadCount = (conversations[existingIdx].unreadCount || 0) + areaUnread;
+          continue;
+        }
+      }
+
       let channelAreaName = partnerUser?.address || '';
       if (!channelAreaName) {
         const words = cleanSlugParts.filter((p) => !/^[0-9a-fA-F]{24}$/.test(p));
@@ -680,15 +727,6 @@ class ChatService {
       resolvedAreaName = `${ward}, ${province}`;
     }
 
-    // Địa bàn chính thức: BẮT BUỘC LUÔN LÀ ĐỊA BÀN THỰC TẾ CỦA NGƯỜI DÂN
-    const officialAreaName = resolvedAreaName;
-    const safeSlug = this.toAreaSlug(officialAreaName);
-
-    // Mỗi tài khoản người dùng có một kênh trao đổi riêng biệt với chính quyền địa phương
-    const targetUserId = currentUser?._id || userId;
-    const userSuffix = targetUserId ? `_${targetUserId}` : '';
-    const channel = `area_${safeSlug || 'local'}${userSuffix}`;
-
     let cleanWard = '';
     let cleanDistrict = '';
     let cleanProvince = '';
@@ -733,6 +771,35 @@ class ChatService {
     }
     if (areaName) {
       cleanArea = areaName.replace(/^(phường|xã|quận|huyện|thị xã|thành phố|tp\.)\s+/i, '').trim();
+    }
+
+    // Địa bàn chính thức: BẮT BUỘC LUÔN LÀ ĐỊA BÀN THỰC TẾ CỦA NGƯỜI DÂN
+    const officialAreaName = resolvedAreaName;
+
+    // Định danh kênh chat chuẩn hóa theo Cấp Phường / Xã và Tỉnh / TP
+    // Đảm bảo cùng 1 Phường / Xã luôn dùng chung 1 kênh duy nhất cho mỗi người dùng (tránh tạo nhiều kênh theo từng tên đường)
+    const wardSlug = cleanWard ? this.toAreaSlug(cleanWard) : this.toAreaSlug(cleanArea || 'local');
+    const provSlug = cleanProvince ? this.toAreaSlug(cleanProvince) : 'thanh_pho_da_nang';
+    const safeSlug = `${wardSlug}_${provSlug}`;
+
+    // Mỗi tài khoản người dùng có một kênh trao đổi riêng biệt với chính quyền địa phương
+    const targetUserId = currentUser?._id || userId;
+    const userSuffix = targetUserId ? `_${targetUserId}` : '';
+    const channel = `area_${safeSlug}${userSuffix}`;
+
+    // Tự động gộp / đồng bộ tất cả tin nhắn cũ của user này thuộc phường này về kênh chuẩn channel
+    if (targetUserId && wardSlug && wardSlug.length >= 2) {
+      try {
+        const legacyPattern = new RegExp(`area_.*${wardSlug}.*_${targetUserId}$`, 'i');
+        await ChatMessage.updateMany(
+          {
+            channel: { $regex: legacyPattern, $ne: channel },
+          },
+          { $set: { channel } }
+        );
+      } catch (err) {
+        console.warn('[Sync legacy chat channel error]:', err.message);
+      }
     }
 
     let manager = null;

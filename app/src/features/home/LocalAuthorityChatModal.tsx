@@ -326,6 +326,12 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
         detectedProvince = fullAddress;
       }
 
+      // Ưu tiên trích xuất chuẩn xác Phường / Xã
+      const wMatch = fullAddress.match(/(phường|xã|thị trấn|p\.|x\.|tt\.)\s+([^,]+)/i);
+      if (wMatch && wMatch[0]) {
+        detectedWard = wMatch[0].trim();
+      }
+
       // Tự động geocode toạ độ [lat, lng] của địa chỉ Customer
       try {
         const geoList = await Location.geocodeAsync(fullAddress);
@@ -1350,17 +1356,18 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
             />
           </View>
 
-          {/* Tiêu đề & phụ đề địa phương (nhấn để đổi phường/xã) */}
+          {/* Tiêu đề & phụ đề địa phương (nhấn để đổi địa phương) */}
           <TouchableOpacity
             style={styles.headerTextWrap}
             onPress={() => setShowWardPicker(true)}
             activeOpacity={0.7}
+            accessibilityLabel="Nhấn để đổi địa phương"
           >
             <View style={styles.headerTitleRow}>
               <Text style={styles.headerTitle} numberOfLines={1}>
                 {headerDepartmentTitle}
               </Text>
-              <Ionicons name="chevron-down" size={14} color="#64748B" style={{ marginLeft: 3 }} />
+              <Ionicons name="chevron-down" size={14} color="#64748B" style={{ marginLeft: 4 }} />
             </View>
             <View style={styles.headerSubRow}>
               <View
@@ -1372,19 +1379,7 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
               <Text style={styles.headerSubtitle} numberOfLines={1}>
                 {isConnected ? headerSubtitleText : 'Đang kết nối lại...'}
               </Text>
-              <Text style={styles.headerChangeBadge}>Đổi</Text>
             </View>
-          </TouchableOpacity>
-
-          {/* Nút chọn phường / xã */}
-          <TouchableOpacity
-            style={styles.headerActionBtn}
-            onPress={() => setShowWardPicker(true)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            activeOpacity={0.7}
-            accessibilityLabel="Đổi Phường / Xã"
-          >
-            <Ionicons name="map-outline" size={18} color="#0066FF" />
           </TouchableOpacity>
 
           {/* Nút gọi điện khẩn cấp đến chính quyền địa phương */}
@@ -1774,18 +1769,6 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
                           <Text style={styles.sosDetailText}>
                             <Text style={styles.sosDetailLabel}>Địa chỉ: </Text>
                             <Text style={styles.sosDetailValue}>{selectedSosDetail.address}</Text>
-                          </Text>
-                        </View>
-                      ) : null}
-
-                      {typeof selectedSosDetail.lat === 'number' && typeof selectedSosDetail.lng === 'number' ? (
-                        <View style={styles.sosCardDetailItem}>
-                          <Feather name="crosshair" size={14} color="#64748B" style={styles.sosDetailIcon} />
-                          <Text style={styles.sosDetailText}>
-                            <Text style={styles.sosDetailLabel}>GPS: </Text>
-                            <Text style={styles.sosDetailValueMono}>
-                              {selectedSosDetail.lat.toFixed(6)}, {selectedSosDetail.lng.toFixed(6)}
-                            </Text>
                           </Text>
                         </View>
                       ) : null}

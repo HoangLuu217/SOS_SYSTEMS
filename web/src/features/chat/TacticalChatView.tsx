@@ -1260,12 +1260,6 @@ export const TacticalChatView: React.FC<TacticalChatViewProps> = ({ currentUser 
                                           <span className="sos-sos-val">{sos.address}</span>
                                         </div>
                                       )}
-                                      {sos.coords && (
-                                        <div className="sos-chat-sos-detail-row">
-                                          <span className="sos-sos-label"><Compass size={13} style={{ display: 'inline', marginRight: 4 }} /> GPS:</span>
-                                          <span className="sos-sos-val-mono">{sos.coords.lat.toFixed(6)}, {sos.coords.lng.toFixed(6)}</span>
-                                        </div>
-                                      )}
                                       {sos.phone && (
                                         <div className="sos-chat-sos-detail-row">
                                           <span className="sos-sos-label"><Phone size={13} style={{ display: 'inline', marginRight: 4 }} /> Liên hệ:</span>
