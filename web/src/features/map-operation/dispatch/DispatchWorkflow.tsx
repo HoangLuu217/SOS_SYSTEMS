@@ -85,7 +85,7 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
   return R * c;
 }
 
-// Kho vật tư & trang thiết bị PCTT theo khu vực thực tế từ Database
+  // Kho vật tư & trang thiết bị PCTT theo khu vực thực tế từ Database
   const [areaSupplies, setAreaSupplies] = useState<EquipmentItem[]>([]);
   const [isLoadingSupplies, setIsLoadingSupplies] = useState<boolean>(false);
 
@@ -402,7 +402,7 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
         {onToggleCollapse && (
           <button
             type="button"
-            className="btn-feed-collapse"
+            className="sos-btn sos-btn--ghost sos-btn--icon-xs"
             onClick={onToggleCollapse}
             style={{
               position: 'absolute',
@@ -410,6 +410,7 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
               right: 12,
             }}
             title="Thu gọn bảng tác chiến để mở rộng bản đồ"
+            aria-label="Thu gọn bảng tác chiến"
           >
             <ChevronRight size={16} />
           </button>
@@ -482,7 +483,7 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
         }}
       >
         {/* Header Sự Cố */}
-        <div style={{ padding: '9px 12px 6px 12px' }}>
+        <div style={{ padding: '7px 10px 5px 10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
               <span
@@ -554,31 +555,20 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
               {onToggleCollapse && (
                 <button
                   type="button"
-                  className="btn-feed-collapse"
+                  className="sos-btn sos-btn--ghost sos-btn--icon-xs"
                   onClick={onToggleCollapse}
                   title="Thu gọn bảng tác chiến để mở rộng bản đồ"
+                  aria-label="Thu gọn bảng tác chiến"
                 >
                   <ChevronRight size={16} />
                 </button>
               )}
             </div>
           </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>
-            <h2 style={{ fontSize: 17, fontWeight: 900, color: '#0f172a', margin: 0, letterSpacing: '-0.3px' }}>
-              {selectedSos.sosCode}
-            </h2>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#0369a1', background: '#f0f9ff', border: '1.5px solid #bae6fd', padding: '1px 6px', borderRadius: 4 }}>
-              {selectedSos.emergencyType}
-            </span>
-            <span style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600 }}>
-              • {selectedSos.timeAgo || 'Vừa xong'}
-            </span>
-          </div>
         </div>
 
         {/* Khung Thông Tin Nạn Nhân / Hiện Trường (CỐ ĐỊNH Ở VÙNG 1) */}
-        <div style={{ padding: '0 12px 8px 12px' }}>
+        <div style={{ padding: '0 10px 6px 10px' }}>
           <CitizenDistressProfile
             selectedSos={selectedSos}
             allocatedSupplies={allocatedSupplies}
@@ -652,41 +642,47 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            padding: '10px 12px 0 12px',
+            padding: '6px 10px 0 10px',
           }}
         >
           {/* Header tiêu đề phân công CỐ ĐỊNH (shrink-0) */}
           <div
             style={{
               flexShrink: 0,
-              paddingBottom: 7,
-              borderBottom: '1px solid #f1f5f9',
+              paddingBottom: 6,
+              borderBottom: '1px solid var(--sos-border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+              flexWrap: 'wrap',
             }}
           >
             <div
               style={{
-                fontSize: 12.5,
+                fontSize: 13,
                 fontWeight: 900,
-                color: '#0f172a',
+                color: 'var(--sos-text-primary)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 5,
                 letterSpacing: '-0.1px',
               }}
             >
-              <span style={{ fontSize: 14 }}>🛟</span>
               <span>PHÂN CÔNG ĐỘI CỨU HỘ</span>
             </div>
-            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginTop: 1 }}>
-              {busyTeamsCount === 0
-                ? `(${readyTeamsCount} đội trực chiến sẵn sàng xuất kích)`
-                : readyTeamsCount === 0
-                ? `(Tất cả ${availableTeams.length} đội đang bận nhiệm vụ)`
-                : `(${readyTeamsCount}/${availableTeams.length} đội sẵn sàng xuất kích • ${busyTeamsCount} đội bận)`}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12, color: 'var(--sos-text-muted)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                {busyTeamsCount === 0
+                  ? `${readyTeamsCount} đội sẵn sàng`
+                  : readyTeamsCount === 0
+                  ? `${availableTeams.length} đội đang bận`
+                  : `${readyTeamsCount}/${availableTeams.length} sẵn sàng • ${busyTeamsCount} bận`}
+              </span>
             </div>
           </div>
 
-          {/* DANH SÁCH THẺ ĐỘI CỨU HỘ: DUY NHẤT VÙNG NÀY ĐƯỢC PHÉP CUỘN (flex-1 min-h-0 overflow-y-auto) */}
+          {/* DANH SÁCH THẺ ĐỘI CỨU HỘ: CUỘN DỌC */}
           <div className="dispatch-teams-scroll-list">
             {availableTeams.length === 0 ? (
               <div
@@ -697,7 +693,7 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
                   borderRadius: 8,
                   border: '1px dashed #cbd5e1',
                   color: '#64748b',
-                  fontSize: 12,
+                  fontSize: 12.5,
                 }}
               >
                 Chưa có đội cứu hộ nào thuộc địa bàn {activeOfficer?.jurisdictionAreaName || 'quản lý'}.
@@ -708,8 +704,10 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
                 const teamVeh = vehicles.find((v) => v.teamId === team.id) || vehicles[0];
                 const isRecommended = index === 0;
 
+                const capacityRaw = String(teamVeh?.capacity || '4').trim();
+                const capacityLabel = /người/i.test(capacityRaw) ? capacityRaw : `${capacityRaw} người`;
                 const vehicleSpec = teamVeh
-                  ? `${teamVeh.name || 'Ca-nô'}${teamVeh.plate ? ` (${teamVeh.plate})` : ''} • Sức chứa: ${teamVeh.capacity || '4'} người`
+                  ? `${teamVeh.name || 'Ca-nô'}${teamVeh.plate ? ` (${teamVeh.plate})` : ''} • Sức chứa: ${capacityLabel}`
                   : (team.id === 'team-water-alpha'
                     ? 'Ca-nô 50HP + Bán tải (Sức chứa: 5 người)'
                     : team.id === 'team-qr-bravo'
@@ -768,13 +766,10 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
         <div
           style={{
             flexShrink: 0,
-            padding: '10px 14px 12px 14px',
+            padding: '8px 10px',
             borderTop: '1px solid var(--sos-border)',
             background: 'var(--sos-surface)',
-            boxShadow: '0 -4px 14px rgba(0,0,0,0.06)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 5,
+            boxShadow: '0 -4px 12px rgba(0,0,0,0.05)',
           }}
         >
           <button
@@ -783,26 +778,26 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
             onClick={() => setIsConfirmModalOpen(true)}
             style={{
               width: '100%',
-              padding: '11px 16px',
+              padding: '9px 14px',
               background:
                 activeSelectedTeamIds.length === 0
                   ? '#94a3b8'
-                  : '#dc2626', // Màu đỏ khẩn cấp theo yêu cầu
+                  : '#dc2626',
               color: '#ffffff',
               border: 'none',
               borderRadius: 8,
-              fontSize: 13,
-              fontWeight: 900,
+              fontSize: 12.5,
+              fontWeight: 800,
               cursor: activeSelectedTeamIds.length === 0 ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: 8,
-              letterSpacing: '0.4px',
+              gap: 6,
+              letterSpacing: '0.35px',
               boxShadow:
                 activeSelectedTeamIds.length === 0
                   ? 'none'
-                  : '0 3px 12px rgba(220, 38, 38, 0.35)',
+                  : '0 3px 10px rgba(220, 38, 38, 0.3)',
               transition: 'all 0.15s ease',
             }}
           >
@@ -812,9 +807,6 @@ function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: nu
                 : '⚡ XÁC NHẬN PHÂN CÔNG'}
             </span>
           </button>
-          <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 600, color: 'var(--sos-text-muted)' }}>
-            Lệnh phân công sẽ truyền tức thời đến máy bộ đàm &amp; App cứu hộ viên
-          </div>
         </div>
       )}
 
