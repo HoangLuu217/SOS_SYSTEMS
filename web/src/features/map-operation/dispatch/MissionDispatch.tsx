@@ -172,11 +172,11 @@ export const MissionDispatch = ({
             className="floating-incident-overlay-card"
             style={{
               position: 'absolute',
-              top: 14,
-              left: 14,
-              maxHeight: 'calc(100% - 28px)',
-              width: 365,
-              maxWidth: 'calc(100% - 28px)',
+              top: 10,
+              left: 10,
+              maxHeight: 'calc(100% - 20px)',
+              width: 392,
+              maxWidth: 'calc(100% - 20px)',
               zIndex: 450,
               display: 'flex',
               flexDirection: 'column',

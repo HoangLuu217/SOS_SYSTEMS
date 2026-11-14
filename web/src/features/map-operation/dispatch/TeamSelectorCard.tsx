@@ -55,28 +55,28 @@ export const TeamSelectorCard: React.FC<Props> = ({
       onClick={handleClick}
       title={isBusy ? `Đội đang thực hiện nhiệm vụ${busyMissionCode ? ` (${busyMissionCode})` : ''}. Vui lòng chờ hoàn thành.` : undefined}
       style={{
-        padding: '9px 12px',
+        padding: '10px 11px',
         borderRadius: 9,
         border: isBusy
           ? '1.5px dashed #cbd5e1'
           : isSelected
           ? '2px solid #0284c7'
-          : '1.5px solid #e2e8f0',
+          : '1px solid #e2e8f0',
         background: isBusy ? '#f8fafc' : isSelected ? '#f0f9ff' : '#ffffff',
         opacity: isBusy ? 0.65 : 1,
-        boxShadow: isSelected && !isBusy ? '0 3px 12px -2px rgba(2, 132, 199, 0.2)' : '0 1px 3px rgba(0,0,0,0.04)',
+        boxShadow: isSelected && !isBusy ? '0 2px 10px -2px rgba(2, 132, 199, 0.2)' : '0 1px 2px rgba(0,0,0,0.04)',
         cursor: isBusy ? 'not-allowed' : 'pointer',
         transition: 'all 0.15s ease',
         display: 'flex',
         alignItems: 'flex-start',
-        gap: 8,
+        gap: 9,
       }}
     >
       {/* CỘT TRÁI: Checkbox chọn đội */}
       <div
         style={{
-          width: 18,
-          height: 18,
+          width: 19,
+          height: 19,
           borderRadius: 4,
           border: `2px solid ${isBusy ? '#cbd5e1' : isSelected ? '#0284c7' : '#94a3b8'}`,
           display: 'flex',
@@ -95,9 +95,9 @@ export const TeamSelectorCard: React.FC<Props> = ({
       {/* CỘT PHẢI: TOÀN BỘ NỘI DUNG CĂN THẲNG HÀNG BÊN PHẢI CHECKBOX */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
         {/* HÀNG 1: TÊN ĐỘI + CODE TAG + KHUYẾN NGHỊ + TRẠNG THÁI */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, fontWeight: 900, color: '#0f172a', lineHeight: 1.35 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 7 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, rowGap: 4, minWidth: 0, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 14.5, fontWeight: 800, color: '#0f172a', lineHeight: 1.28 }}>
               {cleanTeamName}
             </span>
             {codeTag && (
@@ -105,9 +105,9 @@ export const TeamSelectorCard: React.FC<Props> = ({
                 style={{
                   background: '#f1f5f9',
                   color: '#475569',
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 800,
-                  padding: '1px 5px',
+                  padding: '2px 6px',
                   borderRadius: 4,
                   border: '1px solid #e2e8f0',
                   whiteSpace: 'nowrap',
@@ -122,9 +122,9 @@ export const TeamSelectorCard: React.FC<Props> = ({
                   background: '#fef3c7',
                   color: '#b45309',
                   border: '1px solid #fde68a',
-                  fontSize: 9.5,
+                  fontSize: 10.5,
                   fontWeight: 800,
-                  padding: '1px 5px',
+                  padding: '2px 6px',
                   borderRadius: 4,
                   letterSpacing: '0.2px',
                   whiteSpace: 'nowrap',
@@ -139,12 +139,12 @@ export const TeamSelectorCard: React.FC<Props> = ({
           {isBusy ? (
             <span
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 800,
                 background: '#fee2e2',
                 color: '#dc2626',
                 border: '1px solid #fca5a5',
-                padding: '2px 6px',
+                padding: '2px 7px',
                 borderRadius: 4,
                 letterSpacing: '0.2px',
                 whiteSpace: 'nowrap',
@@ -156,12 +156,12 @@ export const TeamSelectorCard: React.FC<Props> = ({
           ) : (
             <span
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 800,
                 background: '#dcfce7',
                 color: '#15803d',
                 border: '1px solid #86efac',
-                padding: '2px 6px',
+                padding: '2px 7px',
                 borderRadius: 4,
                 letterSpacing: '0.2px',
                 whiteSpace: 'nowrap',
@@ -173,28 +173,27 @@ export const TeamSelectorCard: React.FC<Props> = ({
           )}
         </div>
 
-        {/* HÀNG 2: THÔNG SỐ TÁC CHIẾN - KHOẢNG CÁCH (ETA) & PHƯƠNG TIỆN */}
+        {/* HÀNG 2: ETA + PHƯƠNG TIỆN (gọn trên ít dòng nhất) */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
+            gap: 6,
             flexWrap: 'wrap',
             rowGap: 4,
           }}
         >
-          {/* Hộp chỉ số thời gian & khoảng cách nổi bật */}
           <div
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 4,
+              gap: 3,
               background: '#eff6ff',
               border: '1px solid #bfdbfe',
               padding: '2px 7px',
               borderRadius: 5,
               color: '#0369a1',
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: 800,
               flexShrink: 0,
             }}
@@ -203,20 +202,16 @@ export const TeamSelectorCard: React.FC<Props> = ({
             <span>{etaText}</span>
           </div>
 
-          {/* Phương tiện & Biển số xe - Hiển thị toàn bộ, căn trái liền mạch */}
           <div
             style={{
-              fontSize: 11.5,
+              fontSize: 12.5,
               color: '#334155',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              flexWrap: 'wrap',
               lineHeight: 1.35,
+              minWidth: 0,
             }}
             title={vehicleSpec}
           >
-            <span style={{ color: '#64748b' }}>Phương tiện:</span>
+            <span style={{ color: '#64748b' }}>Phương tiện: </span>
             <strong style={{ color: '#0f172a', fontWeight: 700 }}>{vehicleSpec}</strong>
           </div>
         </div>
@@ -228,16 +223,16 @@ export const TeamSelectorCard: React.FC<Props> = ({
             alignItems: 'center',
             justifyContent: 'space-between',
             borderTop: '1px dashed #e2e8f0',
-            paddingTop: 5,
-            fontSize: 11,
+            paddingTop: 6,
+            fontSize: 12,
             color: '#64748b',
             gap: 6,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-            <span>Chỉ huy:</span>
+          <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+            <span>Chỉ huy: </span>
             <strong style={{ color: '#1e293b', fontWeight: 700 }}>{leadRescuer?.name || 'Trưởng đội'}</strong>
-            <span style={{ color: '#64748b' }}>• {memberCount} chiến sĩ</span>
+            <span style={{ color: '#64748b' }}> • {memberCount} chiến sĩ</span>
           </div>
 
           <button
@@ -250,21 +245,21 @@ export const TeamSelectorCard: React.FC<Props> = ({
               background: 'rgba(2, 132, 199, 0.08)',
               border: '1px solid rgba(2, 132, 199, 0.25)',
               borderRadius: 5,
-              padding: '2px 7px',
+              padding: '2px 8px',
               color: '#0284c7',
-              fontSize: 10.5,
+              fontSize: 11.5,
               fontWeight: 700,
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 3,
+              gap: 4,
               flexShrink: 0,
               transition: 'all 0.15s ease',
             }}
             onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(2, 132, 199, 0.18)')}
             onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(2, 132, 199, 0.08)')}
           >
-            <Users size={11} />
+            <Users size={12} />
             <span>Thành viên ({memberCount})</span>
           </button>
         </div>

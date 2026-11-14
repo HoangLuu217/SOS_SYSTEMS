@@ -1793,65 +1793,45 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
             </div>
 
             {/* Footer Quick Action Buttons */}
-            <div className="sos-panel-footer">
-              <span className="sos-panel-footer-meta">
-                ID: <code>{selectedSosDetail._id}</code>
-              </span>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {getEffectiveStatus(selectedSosDetail) === 'CANCELLED' ? (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '8px 14px',
-                      borderRadius: 8,
-                      background: '#f1f5f9',
-                      border: '1px solid #cbd5e1',
-                      color: '#475569',
-                      fontSize: 12.5,
-                      fontWeight: 700,
-                    }}
-                  >
-                    <XCircle size={16} color="#64748b" />
-                    <span>Đã hủy / Tự an toàn</span>
-                  </div>
-                ) : getEffectiveStatus(selectedSosDetail) === 'COMPLETED' ? (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '8px 14px',
-                      borderRadius: 8,
-                      background: '#f0fdf4',
-                      border: '1px solid #bbf7d0',
-                      color: '#166534',
-                      fontSize: 12.5,
-                      fontWeight: 700,
-                    }}
-                  >
-                    <CheckCircle2 size={16} color="#16a34a" />
-                    <span>Đã hoàn tất &amp; Lưu trữ</span>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn-panel-action primary"
-                    onClick={() => {
-                      const targetId = selectedSosDetail._id;
-                      setSelectedSosDetail(null);
-                      onOpenMap(targetId);
-                    }}
-                    title="Mở ngay trên Bản đồ tác chiến"
-                  >
-                    <Compass size={15} />
-                    <span>Bản đồ tác chiến</span>
-                  </button>
-                )}
+            {getEffectiveStatus(selectedSosDetail) !== 'COMPLETED' && (
+              <div className="sos-panel-footer">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {getEffectiveStatus(selectedSosDetail) === 'CANCELLED' ? (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '8px 14px',
+                        borderRadius: 8,
+                        background: '#f1f5f9',
+                        border: '1px solid #cbd5e1',
+                        color: '#475569',
+                        fontSize: 12.5,
+                        fontWeight: 700,
+                      }}
+                    >
+                      <XCircle size={16} color="#64748b" />
+                      <span>Đã hủy / Tự an toàn</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn-panel-action primary"
+                      onClick={() => {
+                        const targetId = selectedSosDetail._id;
+                        setSelectedSosDetail(null);
+                        onOpenMap(targetId);
+                      }}
+                      title="Mở ngay trên Bản đồ tác chiến"
+                    >
+                      <Compass size={15} />
+                      <span>Bản đồ tác chiến</span>
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </aside>
         </>
       )}
