@@ -190,7 +190,14 @@ export const SafetyCheckModal: React.FC<SafetyCheckModalProps> = ({
           coordinates: [coords.longitude, coords.latitude],
         };
       }
-      void safetyCheckApi.respondToSafetyCheck(safetyCheck._id, payload);
+      safetyCheckApi
+        .respondToSafetyCheck(safetyCheck._id, payload)
+        .then((res) => {
+          if (res?.success) {
+            DeviceEventEmitter.emit('safety_check:updated');
+          }
+        })
+        .catch(() => {});
     }
 
     // 2. Đóng SafetyCheckModal

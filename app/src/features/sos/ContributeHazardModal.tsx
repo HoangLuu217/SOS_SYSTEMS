@@ -70,10 +70,10 @@ const HAZARD_TYPES = [
 ];
 
 const SEVERITIES = [
-  { key: 'LOW', label: 'Thấp', color: '#10B981' },
-  { key: 'MEDIUM', label: 'Trung bình', color: '#F59E0B' },
-  { key: 'HIGH', label: 'Cao', color: '#F97316' },
-  { key: 'CRITICAL', label: 'Nguy hiểm', color: '#EF4444' },
+  { key: 'LOW', label: 'Thấp' },
+  { key: 'MEDIUM', label: 'Trung bình' },
+  { key: 'HIGH', label: 'Cao' },
+  { key: 'CRITICAL', label: 'Nguy hiểm' },
 ];
 
 export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
@@ -97,10 +97,14 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
   // Form Fields
   const [title, setTitle] = useState('');
   const [hazardType, setHazardType] = useState('FLOOD');
+  const [showHazardTypeDropdown, setShowHazardTypeDropdown] = useState(false);
   const [customHazardType, setCustomHazardType] = useState('');
   const [severity, setSeverity] = useState('HIGH');
   const [address, setAddress] = useState('');
   const [description, setDescription] = useState('');
+
+  const selectedHazardTypeMeta =
+    HAZARD_TYPES.find((t) => t.key === hazardType) || HAZARD_TYPES[0];
 
   // Danh sách nhiều ảnh hiện trường (Hỗ trợ upload lên Cloudinary)
   const [selectedImages, setSelectedImages] = useState<LocalHazardImage[]>([]);
@@ -613,7 +617,7 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
               <Feather
                 name={modalTab === 'CREATE' ? 'alert-triangle' : 'clock'}
                 size={20}
-                color="#EA580C"
+                color="#0066FF"
               />
             </View>
             <View>
@@ -711,33 +715,76 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
               />
             </View>
 
-            {/* 2. Loại rủi ro / nguy hiểm */}
+            {/* 2. Loại rủi ro / nguy hiểm (dạng list chọn) */}
             <View style={styles.formGroup}>
               <Text style={styles.label}>
                 Loại nguy hiểm thiên tai <Text style={styles.required}>*</Text>
               </Text>
-              <View style={styles.typeGrid}>
-                {HAZARD_TYPES.map((t) => {
-                  const isSelected = hazardType === t.key;
-                  return (
-                    <TouchableOpacity
-                      key={t.key}
-                      style={[styles.typeButton, isSelected && styles.typeButtonSelected]}
-                      onPress={() => setHazardType(t.key)}
-                      activeOpacity={0.75}
-                    >
-                      <MaterialCommunityIcons
-                        name={t.icon as any}
-                        size={20}
-                        color={isSelected ? '#FFFFFF' : '#475569'}
-                      />
-                      <Text style={[styles.typeText, isSelected && styles.typeTextSelected]}>
-                        {t.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.dropdownTrigger,
+                  showHazardTypeDropdown && styles.dropdownTriggerActive,
+                ]}
+                onPress={() => setShowHazardTypeDropdown((prev) => !prev)}
+                activeOpacity={0.75}
+              >
+                <View style={styles.dropdownTriggerLeft}>
+                  <MaterialCommunityIcons
+                    name={selectedHazardTypeMeta.icon as any}
+                    size={19}
+                    color="#0066FF"
+                  />
+                  <Text style={styles.dropdownTriggerText}>
+                    {selectedHazardTypeMeta.label}
+                  </Text>
+                </View>
+                <Feather
+                  name={showHazardTypeDropdown ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color="#64748B"
+                />
+              </TouchableOpacity>
+
+              {showHazardTypeDropdown && (
+                <View style={styles.dropdownList}>
+                  {HAZARD_TYPES.map((t, idx) => {
+                    const isSelected = hazardType === t.key;
+                    return (
+                      <TouchableOpacity
+                        key={t.key}
+                        style={[
+                          styles.dropdownOption,
+                          idx > 0 && styles.dropdownOptionDivider,
+                          isSelected && styles.dropdownOptionSelected,
+                        ]}
+                        onPress={() => {
+                          setHazardType(t.key);
+                          setShowHazardTypeDropdown(false);
+                        }}
+                        activeOpacity={0.75}
+                      >
+                        <View style={styles.dropdownOptionLeft}>
+                          <MaterialCommunityIcons
+                            name={t.icon as any}
+                            size={18}
+                            color={isSelected ? '#0066FF' : '#64748B'}
+                          />
+                          <Text
+                            style={[
+                              styles.dropdownOptionText,
+                              isSelected && styles.dropdownOptionTextSelected,
+                            ]}
+                          >
+                            {t.label}
+                          </Text>
+                        </View>
+                        {isSelected && <Feather name="check" size={16} color="#0066FF" />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
 
               {/* Điểm nguy hiểm khác thì cho nhập tay */}
               {hazardType === 'OTHER' && (
@@ -770,7 +817,7 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
                       key={s.key}
                       style={[
                         styles.severityButton,
-                        isSelected && { backgroundColor: s.color, borderColor: s.color },
+                        isSelected && styles.severityButtonSelected,
                       ]}
                       onPress={() => setSeverity(s.key)}
                       activeOpacity={0.75}
@@ -778,7 +825,7 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
                       <Text
                         style={[
                           styles.severityText,
-                          isSelected && { color: '#FFFFFF', fontWeight: '700' },
+                          isSelected && styles.severityTextSelected,
                         ]}
                       >
                         {s.label}
@@ -792,7 +839,7 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
             {/* 4. Tọa độ hiện trường: Hỗ trợ lấy GPS hoặc Mở Google Maps chọn ghim */}
             <View style={styles.formGroup}>
               <View style={styles.gpsLabelRow}>
-                <Text style={styles.label}>
+                <Text style={[styles.label, { marginBottom: 0 }]}>
                   Tọa độ hiện trường <Text style={styles.required}>*</Text>
                 </Text>
                 <View style={styles.gpsActionsRow}>
@@ -831,10 +878,10 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
               </View>
 
               <View style={styles.gpsBox}>
-                <Feather name="map-pin" size={17} color="#EA580C" />
+                <Feather name="map-pin" size={15} color="#0F172A" />
                 <Text style={styles.gpsText}>
                   {location
-                    ? `[${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}]`
+                    ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`
                     : 'Đang xác định tọa độ...'}
                 </Text>
               </View>
@@ -1019,7 +1066,7 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
 
             {loadingHistory ? (
               <View style={styles.historyCenter}>
-                <ActivityIndicator size="large" color="#EA580C" />
+                <ActivityIndicator size="large" color="#0066FF" />
                 <Text style={styles.historyLoadingText}>Đang tải danh sách đóng góp...</Text>
               </View>
             ) : filteredMyReports.length === 0 ? (
@@ -1076,7 +1123,7 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
                           <MaterialCommunityIcons
                             name={(hazardMeta?.icon as any) || 'alert-circle'}
                             size={14}
-                            color="#EA580C"
+                            color="#0066FF"
                           />
                           <Text style={styles.typeBadgeText}>{displayType}</Text>
                         </View>
@@ -1291,9 +1338,9 @@ export const ContributeHazardModal: React.FC<ContributeHazardModalProps> = ({
 
           <View style={[styles.mapPickerBottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={styles.mapPickerCoordsRow}>
-              <Feather name="map-pin" size={16} color="#EA580C" />
+              <Feather name="map-pin" size={16} color="#0F172A" />
               <Text style={styles.mapPickerCoordsText}>
-                Tọa độ đã chọn: [{pickerCoords.latitude.toFixed(5)}, {pickerCoords.longitude.toFixed(5)}]
+                Tọa độ đã chọn: {pickerCoords.latitude.toFixed(5)}, {pickerCoords.longitude.toFixed(5)}
               </Text>
             </View>
 
@@ -1337,7 +1384,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#FFEDD5',
+    backgroundColor: '#EFF6FF',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1466,35 +1513,67 @@ const styles = StyleSheet.create({
   textArea: {
     minHeight: 90,
   },
-  typeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  typeButton: {
-    width: '48.5%',
+  dropdownTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 12,
   },
-  typeButtonSelected: {
-    backgroundColor: '#EA580C',
-    borderColor: '#EA580C',
+  dropdownTriggerActive: {
+    borderColor: '#0066FF',
   },
-  typeText: {
-    fontSize: 13,
+  dropdownTriggerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  dropdownTriggerText: {
+    fontSize: 14,
     fontWeight: '600',
+    color: '#0F172A',
+  },
+  dropdownList: {
+    marginTop: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  dropdownOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  dropdownOptionDivider: {
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  dropdownOptionSelected: {
+    backgroundColor: '#EFF6FF',
+  },
+  dropdownOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  dropdownOptionText: {
+    fontSize: 13.5,
+    fontWeight: '500',
     color: '#334155',
   },
-  typeTextSelected: {
-    color: '#FFFFFF',
+  dropdownOptionTextSelected: {
     fontWeight: '700',
+    color: '#0066FF',
   },
   customTypeWrap: {
     marginTop: 10,
@@ -1502,7 +1581,7 @@ const styles = StyleSheet.create({
   customTypeLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#D97706',
+    color: '#334155',
     marginBottom: 6,
   },
   severityRow: {
@@ -1518,10 +1597,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
   },
+  severityButtonSelected: {
+    backgroundColor: '#0066FF',
+    borderColor: '#0066FF',
+  },
   severityText: {
     fontSize: 12,
     fontWeight: '600',
     color: '#64748B',
+  },
+  severityTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
 
   // GPS Row & Buttons
@@ -1555,18 +1642,15 @@ const styles = StyleSheet.create({
   gpsBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FFF7ED',
-    borderWidth: 1,
-    borderColor: '#FFEDD5',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    gap: 6,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
+    paddingVertical: 2,
   },
   gpsText: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '600',
-    color: '#C2410C',
+    color: '#0F172A',
   },
 
   // Image Gallery Styling
@@ -1832,17 +1916,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#FFF7ED',
+    backgroundColor: '#EFF6FF',
     paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#FFEDD5',
+    borderColor: '#BFDBFE',
   },
   typeBadgeText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#C2410C',
+    color: '#0066FF',
   },
   statusBadge: {
     flexDirection: 'row',
@@ -2058,7 +2142,7 @@ const styles = StyleSheet.create({
   mapPickerCoordsText: {
     fontSize: 12.5,
     fontWeight: '600',
-    color: '#C2410C',
+    color: '#0F172A',
   },
   confirmPinButton: {
     backgroundColor: '#0066FF',
