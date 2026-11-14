@@ -2027,10 +2027,11 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                   <div
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(2, 1fr)',
+                      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
                       gap: 10,
                       flex: 1,
                       minHeight: 0,
+                      minWidth: 0,
                     }}
                   >
                     {/* Thẻ 1: Liên hệ trực ban */}
@@ -2044,6 +2045,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                         flexDirection: 'column',
                         justifyContent: 'center',
                         gap: 6,
+                        minWidth: 0,
                       }}
                     >
                       <div style={{ fontSize: '10.5px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -2098,24 +2100,25 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                         flexDirection: 'column',
                         justifyContent: 'center',
                         gap: 6,
+                        minWidth: 0,
                       }}
                     >
                       <div style={{ fontSize: '10.5px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                         Cơ quan & Chức vụ
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '12.5px', color: '#0f172a', fontWeight: 700 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '12.5px', color: '#0f172a', fontWeight: 700, minWidth: 0 }}>
                         <div style={{ width: 20, height: 20, borderRadius: 5, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <Building2 size={11} color="#d97706" />
                         </div>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedMapOfficer.authority?.organizationName || 'UBND / BCH PCTT'}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }} title={selectedMapOfficer.authority?.organizationName || 'UBND / BCH PCTT'}>
                           {selectedMapOfficer.authority?.organizationName || 'UBND / BCH PCTT'}
                         </span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '11.5px', color: '#475569' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '11.5px', color: '#475569', minWidth: 0 }}>
                         <div style={{ width: 20, height: 20, borderRadius: 5, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <Briefcase size={11} color="#64748b" />
                         </div>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
                           {selectedMapOfficer.authority?.position || 'Cán bộ trực ban'}
                         </span>
                       </div>
@@ -2132,6 +2135,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                         flexDirection: 'column',
                         justifyContent: 'center',
                         gap: 6,
+                        minWidth: 0,
                       }}
                     >
                       <div style={{ fontSize: '10.5px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -2193,6 +2197,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                         flexDirection: 'column',
                         justifyContent: 'center',
                         gap: 6,
+                        minWidth: 0,
                       }}
                     >
                       <div style={{ fontSize: '10.5px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
