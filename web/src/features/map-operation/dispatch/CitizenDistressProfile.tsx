@@ -113,16 +113,59 @@ export const CitizenDistressProfile: React.FC<Props> = ({
     <>
       <div
         style={{
-          padding: '10px 12px',
+          padding: '8px 11px',
           background: '#ffffff',
           border: '1px solid #cbd5e1',
           borderRadius: 10,
           display: 'flex',
           flexDirection: 'column',
-          gap: 7,
+          gap: 6,
           boxShadow: '0 1px 4px rgba(15, 23, 42, 0.04)',
         }}
       >
+        {/* Section 0: Mã SOS, loại sự cố & thời gian */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            paddingBottom: 5,
+            borderBottom: '1px dashed #e2e8f0',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flexWrap: 'wrap' }}>
+            <span
+              style={{
+                fontSize: 15,
+                fontWeight: 900,
+                fontFamily: 'var(--sos-font-mono, monospace)',
+                fontVariantNumeric: 'tabular-nums',
+                color: '#0f172a',
+                letterSpacing: '-0.3px',
+              }}
+            >
+              {selectedSos.sosCode}
+            </span>
+            <span
+              style={{
+                fontSize: 10.5,
+                fontWeight: 800,
+                color: 'var(--sos-primary, #0284c7)',
+                background: 'var(--sos-primary-soft, #e0f2fe)',
+                border: '1px solid var(--sos-primary-border, #7dd3fc)',
+                padding: '1px 6px',
+                borderRadius: 4,
+              }}
+            >
+              {selectedSos.emergencyType}
+            </span>
+          </div>
+          <span style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600, flexShrink: 0 }}>
+            • {selectedSos.timeAgo || 'Vừa xong'}
+          </span>
+        </div>
+
         {/* Section 1: Tên người dân & Số điện thoại đường dây nóng trên 1 hàng */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <div style={{ fontWeight: 800, color: '#0f172a', fontSize: 15, letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

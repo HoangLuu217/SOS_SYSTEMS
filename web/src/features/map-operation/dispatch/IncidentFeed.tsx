@@ -1,9 +1,22 @@
-import { useState, useMemo } from 'react';
-import { Search, MapPin, ChevronLeft, Check, X, Package } from 'lucide-react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import {
+  Search,
+  MapPin,
+  ChevronLeft,
+  Check,
+  X,
+  Package,
+  Truck,
+  Zap,
+  ShieldCheck,
+  LifeBuoy,
+  ChevronRight,
+} from 'lucide-react';
 import { domainDService } from '@/services/domainDService';
 import { approveSuppliesApi, rejectSuppliesApi } from '@/api';
 import type { SosRequest, AuthorityOfficer } from '@/types/domainD';
 import { useApp } from '@/context/AppContext';
+import { toast } from '@/components/common/toast';
 
 interface Props {
   sosRequests: SosRequest[];
@@ -12,6 +25,90 @@ interface Props {
   activeOfficer?: AuthorityOfficer;
   onOpenCitizenModal?: () => void;
   onToggleCollapse?: () => void;
+}
+
+const SOS_PER_PAGE = 3;
+const CLOSED_STATUSES = new Set(['COMPLETED', 'RESOLVED', 'CANCELLED', 'REJECTED']);
+const DEPLOYED_STATUSES = new Set([
+  'ASSIGNED',
+  'ACCEPTED',
+  'ON_THE_WAY',
+  'ARRIVED',
+  'RESCUING',
+  'IN_PROGRESS',
+]);
+
+function getRequestedSupplies(sos: SosRequest) {
+  const assign = domainDService.getAssignmentBySosId(sos.id);
+  const items =
+    Array.isArray(sos.requestedSupplies) && sos.requestedSupplies.length > 0
+      ? sos.requestedSupplies
+      : assign?.requestedSupplies || [];
+  return { assign, items };
+}
+
+function resolveIsAssigned(sos: SosRequest): boolean {
+  const st = String(sos.status || '').toUpperCase();
+  const hasActiveShoreRelay = Boolean(
+    sos.shoreHandoff && sos.shoreHandoff.status === 'ASSIGNED' && !sos.shoreHandoff.completedAt
+  );
+  const assign = domainDService.getAssignmentBySosId(sos.id);
+  const hasActiveAssignment = Boolean(
+    assign && !['CANCELLED', 'REJECTED', 'COMPLETED'].includes(String(assign.status || '').toUpperCase())
+  );
+
+  return Boolean(
+    hasActiveAssignment ||
+      (sos.assignmentId && DEPLOYED_STATUSES.has(st)) ||
+      DEPLOYED_STATUSES.has(st) ||
+      hasActiveShoreRelay
+  );
+}
+
+function getEmergencyTypeLabel(sos: SosRequest): string {
+  const desc = sos.description || sos.title || '';
+  if (desc.includes('[Loại yêu cầu:')) {
+    const match = desc.match(/\[Loại yêu cầu:\s*([^\]]+)\]/);
+    if (match?.[1]) return match[1].trim();
+  }
+
+  const typeMap: Record<string, string> = {
+    FLOOD: 'Cứu hộ ngập lụt / Mắc kẹt',
+    FIRE: 'Hỏa hoạn / Cháy nổ',
+    MEDICAL: 'Cấp cứu y tế / Thương tích',
+    RESCUE: 'Cứu nạn sông nước',
+    LANDSLIDE: 'Sạt lở đất đá',
+    STORM: 'Bão lũ thiên tai',
+    ACCIDENT: 'Tai nạn sập đổ / Giao thông',
+    MISSING_PERSON: 'Tìm kiếm người mất tích',
+    POLICE: 'An ninh trật tự',
+    OTHER: 'Cứu hộ khẩn cấp',
+  };
+
+  return typeMap[sos.emergencyType] || sos.emergencyType || 'Cứu hộ ngập lụt / Mắc kẹt';
+}
+
+function getPriorityTargets(sos: SosRequest): string[] {
+  if (Array.isArray(sos.priorityGroups) && sos.priorityGroups.length > 0) {
+    return sos.priorityGroups;
+  }
+  const desc = `${sos.description || ''} ${sos.title || ''}`;
+  if (desc.includes('[Đối tượng ưu tiên:')) {
+    const match = desc.match(/\[Đối tượng ưu tiên:\s*([^\]]+)\]/);
+    if (match?.[1]) {
+      return match[1]
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+  }
+  const keywords: string[] = [];
+  if (/người già|người cao tuổi/i.test(desc)) keywords.push('Người già');
+  if (/trẻ nhỏ|trẻ em|em bé|sơ sinh/i.test(desc)) keywords.push('Trẻ em');
+  if (/mang thai|bầu|thai phụ/i.test(desc)) keywords.push('Phụ nữ có thai');
+  if (/khuyết tật|tàn tật|liệt/i.test(desc)) keywords.push('Người khuyết tật');
+  if (/bệnh nặng|thở oxy|tai biến/i.test(desc)) keywords.push('Bệnh nhân nặng');
+  return keywords;
 }
 
 export const IncidentFeed = ({
@@ -28,27 +125,31 @@ export const IncidentFeed = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [adminDistrictFilter, setAdminDistrictFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'UNASSIGNED' | 'ACTIVE'>('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+  const lastSyncedSelectedIdRef = useRef<string | null>(selectedSos?.id ?? null);
   const [processingSupplyIds, setProcessingSupplyIds] = useState<Set<string>>(new Set());
+  const [confirmRejectSosId, setConfirmRejectSosId] = useState<string | null>(null);
 
   const handleQuickApprove = async (assignmentId?: string | null, sosId?: string) => {
     const targetAssignId = assignmentId || (sosId ? domainDService.getAssignmentBySosId(sosId)?.id : null);
     if (!targetAssignId) {
-      alert('Không tìm thấy thông tin phân công của ca cứu hộ này');
+      toast.error('Không tìm thấy thông tin phân công của ca cứu hộ này.');
       return;
     }
     setProcessingSupplyIds((prev) => new Set(prev).add(targetAssignId));
     try {
       await approveSuppliesApi(targetAssignId);
       const assign = domainDService.getAssignmentBySosId(sosId || '');
-      if (assign && assign.requestedSupplies) {
+      if (assign?.requestedSupplies) {
         assign.requestedSupplies.forEach((s: any) => {
           if (s.status === 'PENDING') s.status = 'APPROVED';
         });
         domainDService.syncRealAssignment(assign);
       }
       window.dispatchEvent(new CustomEvent('sos_data_updated'));
+      toast.success('Đã phê duyệt yêu cầu chi viện vật tư.');
     } catch (err: any) {
-      alert('Lỗi phê duyệt vật tư: ' + (err?.message || 'Vui lòng thử lại'));
+      toast.error('Lỗi phê duyệt vật tư: ' + (err?.message || 'Vui lòng thử lại'));
     } finally {
       setProcessingSupplyIds((prev) => {
         const next = new Set(prev);
@@ -61,23 +162,24 @@ export const IncidentFeed = ({
   const handleQuickReject = async (assignmentId?: string | null, sosId?: string) => {
     const targetAssignId = assignmentId || (sosId ? domainDService.getAssignmentBySosId(sosId)?.id : null);
     if (!targetAssignId) {
-      alert('Không tìm thấy thông tin phân công của ca cứu hộ này');
+      toast.error('Không tìm thấy thông tin phân công của ca cứu hộ này.');
       return;
     }
-    if (!window.confirm('Bạn có chắc muốn từ chối yêu cầu chi viện vật tư này?')) return;
+    setConfirmRejectSosId(null);
     setProcessingSupplyIds((prev) => new Set(prev).add(targetAssignId));
     try {
       await rejectSuppliesApi(targetAssignId);
       const assign = domainDService.getAssignmentBySosId(sosId || '');
-      if (assign && assign.requestedSupplies) {
+      if (assign?.requestedSupplies) {
         assign.requestedSupplies.forEach((s: any) => {
           if (s.status === 'PENDING') s.status = 'REJECTED';
         });
         domainDService.syncRealAssignment(assign);
       }
       window.dispatchEvent(new CustomEvent('sos_data_updated'));
+      toast.info('Đã từ chối yêu cầu chi viện vật tư.');
     } catch (err: any) {
-      alert('Lỗi từ chối vật tư: ' + (err?.message || 'Vui lòng thử lại'));
+      toast.error('Lỗi từ chối vật tư: ' + (err?.message || 'Vui lòng thử lại'));
     } finally {
       setProcessingSupplyIds((prev) => {
         const next = new Set(prev);
@@ -87,121 +189,84 @@ export const IncidentFeed = ({
     }
   };
 
-  // Baseline scoped incidents for this officer (before status/search filter)
   const scopedIncidents = useMemo(() => {
     return sosRequests.filter((s) => {
-      if (!isAdmin) {
-        return true;
-      } else {
-        if (adminDistrictFilter !== 'ALL') {
-          return s.districtId === adminDistrictFilter;
-        }
-        return true;
-      }
+      if (!isAdmin || adminDistrictFilter === 'ALL') return true;
+      return s.districtId === adminDistrictFilter;
     });
   }, [sosRequests, isAdmin, adminDistrictFilter]);
 
-  // Tab counts based on current scoped jurisdiction (chỉ tính các ca đang hoạt động, bỏ hoàn thành & đã hủy)
   const tabCounts = useMemo(() => {
     let unassigned = 0;
-    let urgent = 0;
     let active = 0;
 
     scopedIncidents.forEach((s) => {
-      const st = String(s.status || '').toUpperCase();
-      if (['COMPLETED', 'RESOLVED', 'CANCELLED', 'REJECTED'].includes(st)) return;
-
-      const hasActiveShoreRelay = Boolean(
-        s.shoreHandoff && s.shoreHandoff.status === 'ASSIGNED' && !s.shoreHandoff.completedAt
-      );
-
-      const assign = domainDService.getAssignmentBySosId(s.id);
-      const hasActiveAssignment = Boolean(
-        assign && !['CANCELLED', 'REJECTED', 'COMPLETED'].includes(String(assign.status || '').toUpperCase())
-      );
-
-      // Ca được coi là "Đang cứu" (ACTIVE) khi:
-      // 1. Đã có phân công cứu hộ đang hoạt động (không bị hủy/từ chối/hoàn thành)
-      // 2. HOẶC status của SOS đang ở trạng thái triển khai tác chiến
-      // 3. HOẶC đã có xe đón bờ được giao đang tiếp cận (shoreHandoff.status === 'ASSIGNED')
-      const isAssigned = Boolean(
-        hasActiveAssignment ||
-        (s.assignmentId && ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(st)) ||
-        ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(st) ||
-        hasActiveShoreRelay
-      );
-
-      if (!isAssigned) unassigned++;
-      if (s.priority === 'CRITICAL' || s.priority === 'HIGH') urgent++;
-      if (isAssigned) active++;
+      if (CLOSED_STATUSES.has(String(s.status || '').toUpperCase())) return;
+      if (resolveIsAssigned(s)) active++;
+      else unassigned++;
     });
 
     return {
       all: unassigned + active,
       unassigned,
-      urgent,
       active,
     };
   }, [scopedIncidents]);
 
   const totalPendingSupplyRequests = useMemo(() => {
     return scopedIncidents.filter((s) => {
-      const a = domainDService.getAssignmentBySosId(s.id);
-      const r = (Array.isArray(s.requestedSupplies) && s.requestedSupplies.length > 0)
-        ? s.requestedSupplies
-        : (a?.requestedSupplies || []);
-      return r.some((x: any) => x.status === 'PENDING');
+      const { items } = getRequestedSupplies(s);
+      return items.some((x: any) => x.status === 'PENDING');
     }).length;
   }, [scopedIncidents]);
 
-  // Filter incidents based on search query & selected status tab (chỉ hiển thị các ca đang diễn ra)
   const filteredIncidents = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     return scopedIncidents.filter((s) => {
-      const st = String(s.status || '').toUpperCase();
-      if (['COMPLETED', 'RESOLVED', 'CANCELLED', 'REJECTED'].includes(st)) return false;
+      if (CLOSED_STATUSES.has(String(s.status || '').toUpperCase())) return false;
 
-      const hasActiveShoreRelay = Boolean(
-        s.shoreHandoff && s.shoreHandoff.status === 'ASSIGNED' && !s.shoreHandoff.completedAt
-      );
-
-      // 1. Search query matching
-      const matchSearch =
-        searchQuery.trim() === '' ||
-        s.sosCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.citizenName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.wardName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.locationName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.title.toLowerCase().includes(searchQuery.toLowerCase());
-
-      if (!matchSearch) return false;
-
-      // 2. Status tabs:
-      // "Đang cứu" (ACTIVE): Phải có đội đang cứu hoặc xe đón đang chạy
-      // "Chờ điều phối" (UNASSIGNED): Chưa phân đội nào hoặc đang chờ điều xe đón bờ
-      const assign = domainDService.getAssignmentBySosId(s.id);
-      const hasActiveAssignment = Boolean(
-        assign && !['CANCELLED', 'REJECTED', 'COMPLETED'].includes(String(assign.status || '').toUpperCase())
-      );
-
-      const isAssigned = Boolean(
-        hasActiveAssignment ||
-        (s.assignmentId && ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(st)) ||
-        ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING', 'IN_PROGRESS'].includes(st) ||
-        hasActiveShoreRelay
-      );
-
-      if (statusFilter === 'UNASSIGNED') {
-        return !isAssigned;
-      }
-      if (statusFilter === 'ACTIVE') {
-        return isAssigned;
+      if (q) {
+        const matchSearch =
+          s.sosCode.toLowerCase().includes(q) ||
+          s.citizenName.toLowerCase().includes(q) ||
+          s.wardName.toLowerCase().includes(q) ||
+          s.locationName.toLowerCase().includes(q) ||
+          s.title.toLowerCase().includes(q);
+        if (!matchSearch) return false;
       }
 
+      const assigned = resolveIsAssigned(s);
+      if (statusFilter === 'UNASSIGNED') return !assigned;
+      if (statusFilter === 'ACTIVE') return assigned;
       return true;
     });
   }, [scopedIncidents, searchQuery, statusFilter]);
 
-  // Dynamic district options extracted from incoming SOS requests (plus 'ALL')
+  const totalPages = Math.max(1, Math.ceil(filteredIncidents.length / SOS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, adminDistrictFilter, statusFilter, activeOfficer?.jurisdictionAreaId]);
+
+  useEffect(() => {
+    const nextId = selectedSos?.id ?? null;
+    if (!nextId || lastSyncedSelectedIdRef.current === nextId) {
+      lastSyncedSelectedIdRef.current = nextId;
+      return;
+    }
+    lastSyncedSelectedIdRef.current = nextId;
+    const idx = filteredIncidents.findIndex((item) => item.id === nextId);
+    if (idx >= 0) {
+      setCurrentPage(Math.floor(idx / SOS_PER_PAGE) + 1);
+    }
+  }, [selectedSos?.id, filteredIncidents]);
+
+  const paginatedIncidents = useMemo(() => {
+    const start = (safePage - 1) * SOS_PER_PAGE;
+    return filteredIncidents.slice(start, start + SOS_PER_PAGE);
+  }, [filteredIncidents, safePage]);
+
   const districtOptions = useMemo(() => {
     const list: { id: string; name: string }[] = [
       { id: 'ALL', name: lang === 'vi' ? 'Toàn bộ' : 'All' },
@@ -210,8 +275,7 @@ export const IncidentFeed = ({
     sosRequests.forEach((s) => {
       if (s.districtId && !seen.has(s.districtId)) {
         seen.add(s.districtId);
-        const name = (s as any).districtName || s.districtId;
-        list.push({ id: s.districtId, name });
+        list.push({ id: s.districtId, name: (s as any).districtName || s.districtId });
       }
     });
     return list;
@@ -224,59 +288,43 @@ export const IncidentFeed = ({
         <div className="feed-title-row">
           <div className="feed-title-left">
             <span className="live-radar-dot" />
-            <h2 className="feed-title" title={isAdmin ? 'SOS Toàn TP' : `SOS ${activeOfficer?.jurisdictionAreaName || 'Địa Bàn'}`}>
+            <h2
+              className="feed-title"
+              title={isAdmin ? 'SOS Toàn TP' : `SOS ${activeOfficer?.jurisdictionAreaName || 'Địa Bàn'}`}
+            >
               {isAdmin
-                ? (lang === 'vi' ? 'SOS Toàn TP' : 'City-wide SOS')
-                : (lang === 'vi' ? `SOS ${activeOfficer?.jurisdictionAreaName || 'Địa Bàn'}` : `SOS ${activeOfficer?.jurisdictionAreaName || 'District'}`)}
+                ? lang === 'vi'
+                  ? 'SOS Toàn TP'
+                  : 'City-wide SOS'
+                : `SOS ${activeOfficer?.jurisdictionAreaName || (lang === 'vi' ? 'Địa Bàn' : 'District')}`}
             </h2>
-            <span className="feed-total-pill" title="Tổng số tín hiệu SOS trong địa bàn">
+            <span className="sos-badge critical feed-total-badge" title="Tổng số tín hiệu SOS trong địa bàn">
               {searchQuery ? filteredIncidents.length : tabCounts.all}
             </span>
           </div>
 
-          <div className="feed-title-actions" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            {onToggleCollapse && (
-              <button
-                type="button"
-                className="btn-feed-collapse"
-                onClick={onToggleCollapse}
-                title={lang === 'vi' ? 'Thu gọn danh sách để phóng to bản đồ' : 'Collapse feed'}
-              >
-                <ChevronLeft size={16} />
-              </button>
-            )}
-          </div>
+          {onToggleCollapse && (
+            <button
+              type="button"
+              className="sos-btn sos-btn--ghost sos-btn--icon-xs"
+              onClick={onToggleCollapse}
+              title={lang === 'vi' ? 'Thu gọn danh sách để phóng to bản đồ' : 'Collapse feed'}
+              aria-label={lang === 'vi' ? 'Thu gọn danh sách SOS' : 'Collapse SOS feed'}
+            >
+              <ChevronLeft size={16} />
+            </button>
+          )}
         </div>
 
-        {/* Admin District Selector Tabs (If logged in as Admin and multiple districts exist) */}
+        {/* Admin District Selector Pills */}
         {isAdmin && districtOptions.length > 2 && (
-          <div
-            style={{
-              display: 'flex',
-              gap: 4,
-              overflowX: 'auto',
-              paddingBottom: 4,
-              marginBottom: 8,
-              scrollbarWidth: 'none',
-            }}
-          >
+          <div className="feed-district-pills">
             {districtOptions.map((dist) => (
               <button
                 key={dist.id}
                 type="button"
+                className={`sos-pill feed-district-pill ${adminDistrictFilter === dist.id ? 'is-active' : ''}`}
                 onClick={() => setAdminDistrictFilter(dist.id)}
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  padding: '3px 8px',
-                  borderRadius: 5,
-                  border: '1px solid',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  background: adminDistrictFilter === dist.id ? '#2563eb' : 'var(--sos-surface-subtle)',
-                  color: adminDistrictFilter === dist.id ? '#ffffff' : 'var(--sos-text-secondary)',
-                  borderColor: adminDistrictFilter === dist.id ? '#1d4ed8' : 'var(--sos-border)',
-                }}
               >
                 {dist.name}
               </button>
@@ -289,145 +337,126 @@ export const IncidentFeed = ({
           <Search size={14} className="sos-search-icon" />
           <input
             type="text"
-            placeholder={t('dispatch.searchPlaceholder') || (lang === 'vi' ? 'Tìm mã SOS, vị trí, người dân...' : 'Search SOS code, location, citizen...')}
+            placeholder={
+              t('dispatch.searchPlaceholder') ||
+              (lang === 'vi' ? 'Tìm mã SOS, vị trí, người dân...' : 'Search SOS code, location, citizen...')
+            }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
           {searchQuery && (
             <button
               type="button"
-              className="sos-search-clear"
+              className="sos-btn sos-btn--ghost sos-btn--icon-xs sos-search-clear"
               onClick={() => setSearchQuery('')}
               title="Xóa tìm kiếm"
+              aria-label="Xóa tìm kiếm"
             >
-              ×
+              <X size={13} />
             </button>
           )}
         </div>
 
         {/* Banner cảnh báo nhanh khi có yêu cầu chi viện vật tư đang chờ duyệt */}
         {totalPendingSupplyRequests > 0 && (
-          <div
-            style={{
-              marginTop: 6,
-              padding: '6px 10px',
-              background: '#fffbeb',
-              border: '1.2px solid #f59e0b',
-              borderRadius: 8,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              cursor: 'pointer',
-              boxShadow: '0 2px 5px rgba(245, 158, 11, 0.15)',
-            }}
+          <button
+            type="button"
+            className="feed-supply-alert-banner"
             onClick={() => {
-              const target = scopedIncidents.find((s) => {
-                const a = domainDService.getAssignmentBySosId(s.id);
-                const r = (Array.isArray(s.requestedSupplies) && s.requestedSupplies.length > 0) ? s.requestedSupplies : (a?.requestedSupplies || []);
-                return r.some((x: any) => x.status === 'PENDING');
-              });
+              const target = scopedIncidents.find((s) =>
+                getRequestedSupplies(s).items.some((x: any) => x.status === 'PENDING')
+              );
               if (target) onSelectSos(target);
             }}
             title="Bấm để chuyển tới ca yêu cầu chi viện vật tư"
           >
-            <span style={{ fontSize: 13 }}>📦</span>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#b45309', flex: 1 }}>
+            <Package size={14} className="feed-supply-alert-icon" />
+            <span className="feed-supply-alert-text">
               {totalPendingSupplyRequests} yêu cầu chi viện vật tư chờ duyệt
             </span>
-            <span style={{ fontSize: 10.5, fontWeight: 800, color: '#d97706' }}>Xem →</span>
-          </div>
+            <span className="feed-supply-alert-link">
+              Xem <ChevronRight size={12} />
+            </span>
+          </button>
         )}
 
-        {/* 3. Horizontal Scrollable Filter Tabs */}
-        <div className="feed-filter-tabs-pills">
+        {/* 3. Segmented Filter Tabs (.sos-segmented) */}
+        <div className="sos-segmented feed-segmented-tabs" role="tablist" aria-label="Lọc trạng thái SOS">
           {[
-            { id: 'ALL', label: 'Tất cả', count: tabCounts.all },
-            { id: 'UNASSIGNED', label: lang === 'vi' ? 'Chờ điều phối' : 'Pending', count: tabCounts.unassigned },
-            { id: 'ACTIVE', label: 'Đang cứu', count: tabCounts.active },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={`feed-filter-pill ${statusFilter === tab.id ? 'is-active' : ''} tab-${tab.id.toLowerCase()}`}
-              onClick={() => setStatusFilter(tab.id as any)}
-            >
-              <span>{tab.label}</span>
-              <span className="pill-count">{tab.count}</span>
-            </button>
-          ))}
+            { id: 'ALL', label: lang === 'vi' ? 'Tất cả' : 'All', count: tabCounts.all, tone: 'primary' },
+            {
+              id: 'UNASSIGNED',
+              label: lang === 'vi' ? 'Chờ điều phối' : 'Pending',
+              count: tabCounts.unassigned,
+              tone: 'warning',
+            },
+            { id: 'ACTIVE', label: lang === 'vi' ? 'Đang cứu' : 'Active', count: tabCounts.active, tone: 'primary' },
+          ].map((tab) => {
+            const isActive = statusFilter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                className={`sos-segmented-item feed-segmented-item ${isActive ? 'is-active' : ''} tone-${tab.tone}`}
+                onClick={() => setStatusFilter(tab.id as any)}
+              >
+                <span className="feed-segmented-label">{tab.label}</span>
+                <span className="feed-tab-count">{tab.count}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* 4. Incident Cards List */}
+      {/* 4. Incident Cards List (tối đa 3 SOS / trang để không cắt lửng thẻ) */}
       <div className="feed-card-list">
-        {filteredIncidents.map((sos) => {
+        {paginatedIncidents.map((sos) => {
           const isSelected = selectedSos?.id === sos.id;
-          const priorityClass =
+          const cardSeverityClass =
             sos.priority === 'CRITICAL' ? 'critical' : sos.priority === 'HIGH' ? 'high' : 'medium';
+          const badgeSemanticClass =
+            sos.priority === 'CRITICAL'
+              ? 'critical'
+              : sos.priority === 'HIGH'
+              ? 'high'
+              : sos.priority === 'LOW'
+              ? 'neutral'
+              : 'medium';
+          const priorityLabel =
+            sos.priority === 'CRITICAL'
+              ? 'Nguy cấp'
+              : sos.priority === 'HIGH'
+              ? 'Khẩn cấp'
+              : sos.priority === 'LOW'
+              ? 'Thấp'
+              : 'Trung bình';
 
-          // Chỉ hiển thị Loại yêu cầu cứu trợ (ngắn gọn, chuẩn chỉ, không hiển thị text mô tả dài dòng)
-          const emergencyTypeLabel = (() => {
-            const desc = sos.description || sos.title || '';
-            if (desc.includes('[Loại yêu cầu:')) {
-              const match = desc.match(/\[Loại yêu cầu:\s*([^\]]+)\]/);
-              if (match && match[1]) {
-                return match[1].trim();
-              }
-            }
+          const emergencyTypeLabel = getEmergencyTypeLabel(sos);
+          const priorityList = getPriorityTargets(sos);
 
-            const typeMap: Record<string, string> = {
-              FLOOD: 'Cứu hộ ngập lụt / Mắc kẹt',
-              FIRE: 'Hỏa hoạn / Cháy nổ',
-              MEDICAL: 'Cấp cứu y tế / Thương tích',
-              RESCUE: 'Cứu nạn sông nước',
-              LANDSLIDE: 'Sạt lở đất đá',
-              STORM: 'Bão lũ thiên tai',
-              ACCIDENT: 'Tai nạn sập đổ / Giao thông',
-              MISSING_PERSON: 'Tìm kiếm người mất tích',
-              POLICE: 'An ninh trật tự',
-              OTHER: 'Cứu hộ khẩn cấp',
-            };
-
-            return typeMap[sos.emergencyType] || sos.emergencyType || 'Cứu hộ ngập lụt / Mắc kẹt';
-          })();
-
-          // Danh sách đối tượng ưu tiên
-          const priorityList = (() => {
-            if (Array.isArray(sos.priorityGroups) && sos.priorityGroups.length > 0) {
-              return sos.priorityGroups;
-            }
-            const desc = (sos.description || '') + ' ' + (sos.title || '');
-            if (desc.includes('[Đối tượng ưu tiên:')) {
-              const match = desc.match(/\[Đối tượng ưu tiên:\s*([^\]]+)\]/);
-              if (match && match[1]) {
-                return match[1].split(',').map((s) => s.trim()).filter(Boolean);
-              }
-            }
-            const keywords: string[] = [];
-            if (/người già|người cao tuổi/i.test(desc)) keywords.push('Người già');
-            if (/trẻ nhỏ|trẻ em|em bé|sơ sinh/i.test(desc)) keywords.push('Trẻ em');
-            if (/mang thai|bầu|thai phụ/i.test(desc)) keywords.push('Phụ nữ có thai');
-            if (/khuyết tật|tàn tật|liệt/i.test(desc)) keywords.push('Người khuyết tật');
-            if (/bệnh nặng|thở oxy|tai biến/i.test(desc)) keywords.push('Bệnh nhân nặng');
-            return keywords;
-          })();
+          const { assign, items: reqSupplies } = getRequestedSupplies(sos);
+          const pendingSupplies = reqSupplies.filter((s: any) => s.status === 'PENDING');
+          const approvedSupplies = reqSupplies.filter((s: any) => s.status === 'APPROVED');
+          const targetAssignId = assign?.id || sos.assignmentId;
+          const isProc = processingSupplyIds.has(targetAssignId || sos.id);
+          const isConfirmingReject = confirmRejectSosId === sos.id;
 
           return (
             <div
               key={sos.id}
-              className={`compact-incident-card ${priorityClass} ${isSelected ? 'selected' : ''}`}
+              className={`compact-incident-card ${cardSeverityClass} ${isSelected ? 'selected' : ''}`}
               onClick={() => onSelectSos(sos)}
             >
-              {/* Card Top: Code + Priority Pill + Time Elapsed */}
+              {/* Card Top: Code + Priority Badge + Time */}
               <div className="compact-card-top">
                 <div className="code-beacon-wrapper">
                   <span className="beacon-dot pulse-red" />
-                  <span className="card-code-mono">
-                    {sos.sosCode}
-                  </span>
+                  <span className="card-code-mono">{sos.sosCode}</span>
                   {sos.senderRole === 'RESCUER' && (
                     <span
-                      className="sender-role-badge rescuer"
+                      className="sos-badge medium sender-role-badge"
                       title={
                         lang === 'vi'
                           ? 'Tín hiệu khẩn cấp từ lực lượng cứu hộ hiện trường'
@@ -440,214 +469,114 @@ export const IncidentFeed = ({
                 </div>
 
                 <div className="card-meta-top">
-                  <span className={`compact-priority-badge ${priorityClass}`}>
-                    {sos.priority === 'CRITICAL'
-                      ? 'Nguy cấp'
-                      : sos.priority === 'HIGH'
-                      ? 'Khẩn cấp'
-                      : sos.priority === 'LOW'
-                      ? 'Thấp'
-                      : 'Trung bình'}
-                  </span>
+                  <span className={`sos-badge ${badgeSemanticClass} compact-priority-pill`}>{priorityLabel}</span>
                   <span className="compact-time-ago">{sos.timeAgo}</span>
                 </div>
               </div>
 
-              {/* Cờ hiệu Yêu Cầu Chi Viện Vật Tư (Supply Request Banner) */}
-              {(() => {
-                const assign = domainDService.getAssignmentBySosId(sos.id);
-                const reqSupplies = (Array.isArray(sos.requestedSupplies) && sos.requestedSupplies.length > 0)
-                  ? sos.requestedSupplies
-                  : (assign?.requestedSupplies || []);
-                const pendingSupplies = reqSupplies.filter((s: any) => s.status === 'PENDING');
-                const approvedSupplies = reqSupplies.filter((s: any) => s.status === 'APPROVED');
-                const targetAssignId = assign?.id || sos.assignmentId;
-
-                if (pendingSupplies.length > 0) {
-                  const isProc = processingSupplyIds.has(targetAssignId || sos.id);
-                  return (
-                    <div
-                      style={{
-                        marginTop: 6,
-                        marginBottom: 4,
-                        padding: '7px 9px',
-                        background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
-                        border: '1.5px solid #f59e0b',
-                        borderRadius: 8,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 5,
-                        boxShadow: '0 2px 6px rgba(245, 158, 11, 0.2)',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <Package size={13} color="#b45309" />
-                          <span style={{ fontSize: 11, fontWeight: 900, color: '#b45309', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
-                            YÊU CẦU CHI VIỆN VẬT TƯ
-                          </span>
-                        </div>
-                        <span
-                          style={{
-                            fontSize: 9.5,
-                            fontWeight: 800,
-                            background: '#fef3c7',
-                            color: '#92400e',
-                            padding: '1px 6px',
-                            borderRadius: 4,
-                            border: '1px solid #fcd34d',
-                          }}
-                        >
-                          CHỜ DUYỆT
-                        </span>
-                      </div>
-
-                      <div style={{ fontSize: 11.5, fontWeight: 700, color: '#1e293b', lineHeight: 1.35 }}>
-                        {pendingSupplies.map((it: any) => `${it.name} (${it.quantity} ${it.unit || 'món'})`).join(', ')}
-                      </div>
-
-                      {/* Nút hành động trực tiếp: Duyệt hoặc Từ chối */}
-                      <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
-                        <button
-                          type="button"
-                          disabled={isProc}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleQuickApprove(targetAssignId, sos.id);
-                          }}
-                          style={{
-                            flex: 1,
-                            height: 28,
-                            background: '#16a34a',
-                            border: 'none',
-                            borderRadius: 6,
-                            color: '#ffffff',
-                            fontSize: 11.5,
-                            fontWeight: 800,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 4,
-                            boxShadow: '0 1px 3px rgba(22, 163, 74, 0.3)',
-                          }}
-                        >
-                          <Check size={13} />
-                          <span>{isProc ? 'Đang duyệt...' : 'Duyệt'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isProc}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleQuickReject(targetAssignId, sos.id);
-                          }}
-                          style={{
-                            flex: 1,
-                            height: 28,
-                            background: '#fef2f2',
-                            border: '1px solid #fca5a5',
-                            borderRadius: 6,
-                            color: '#dc2626',
-                            fontSize: 11.5,
-                            fontWeight: 800,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 4,
-                          }}
-                        >
-                          <X size={13} />
-                          <span>Từ chối</span>
-                        </button>
-                      </div>
+              {/* Supply Request Banner (Pending) */}
+              {pendingSupplies.length > 0 && (
+                <div className="feed-supply-box" onClick={(e) => e.stopPropagation()}>
+                  <div className="feed-supply-box-header">
+                    <div className="feed-supply-box-title">
+                      <Package size={13} />
+                      <span>Yêu cầu chi viện vật tư</span>
                     </div>
-                  );
-                }
-
-                if (approvedSupplies.length > 0) {
-                  return (
-                    <div
-                      style={{
-                        marginTop: 4,
-                        marginBottom: 3,
-                        padding: '4px 8px',
-                        background: '#f0fdf4',
-                        border: '1px solid #bbf7d0',
-                        borderRadius: 6,
-                        fontSize: 10.5,
-                        fontWeight: 700,
-                        color: '#15803d',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 5,
-                      }}
-                    >
-                      <Check size={12} color="#16a34a" />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        Đã xuất cấp: {approvedSupplies.map((it: any) => `${it.name} (${it.quantity})`).join(', ')}
-                      </span>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-
-              {/* Cờ hiệu Bàn giao Tiếp vận Đón bờ (Shore Handoff Relay Banner) */}
-              {sos.shoreHandoff && sos.shoreHandoff.status === 'REQUESTED' && (
-                <div
-                  style={{
-                    marginTop: 6,
-                    marginBottom: 4,
-                    padding: '4px 8px',
-                    background: 'linear-gradient(90deg, #fff7ed 0%, #ffedd5 100%)',
-                    border: '1.2px solid #f97316',
-                    borderRadius: 6,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    boxShadow: '0 1px 3px rgba(249, 115, 22, 0.15)',
-                  }}
-                >
-                  <span style={{ fontSize: 13, lineHeight: 1 }}>⚡</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 10.5, fontWeight: 900, color: '#c2410c', textTransform: 'uppercase', letterSpacing: '0.2px' }}>
-                      CẦN XE ĐÓN BỜ: {sos.shoreHandoff.vehicleTypeNeeded === 'AMBULANCE' ? 'XE CỨU THƯƠNG' : 'XE TẢI'}
-                    </div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#9a3412', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {sos.shoreHandoff.landingPoint?.name || 'Bến Cập Bờ'} • {sos.shoreHandoff.peopleCount} người
-                    </div>
+                    <span className="sos-badge pending">Chờ duyệt</span>
                   </div>
+
+                  <div className="feed-supply-items">
+                    {pendingSupplies
+                      .map((it: any) => `${it.name} (${it.quantity} ${it.unit || 'món'})`)
+                      .join(', ')}
+                  </div>
+
+                  {!isConfirmingReject ? (
+                    <div className="feed-supply-actions">
+                      <button
+                        type="button"
+                        disabled={isProc}
+                        className="sos-btn sos-btn--success sos-btn--xs feed-supply-action-btn"
+                        onClick={() => handleQuickApprove(targetAssignId, sos.id)}
+                      >
+                        <Check size={13} />
+                        <span>{isProc ? 'Đang duyệt...' : 'Duyệt'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isProc}
+                        className="sos-btn sos-btn--soft-danger sos-btn--xs feed-supply-action-btn"
+                        onClick={() => setConfirmRejectSosId(sos.id)}
+                      >
+                        <X size={13} />
+                        <span>Từ chối</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="feed-supply-confirm">
+                      <span className="feed-supply-confirm-text">Xác nhận từ chối chi viện?</span>
+                      <div className="feed-supply-actions">
+                        <button
+                          type="button"
+                          disabled={isProc}
+                          className="sos-btn sos-btn--outline sos-btn--xs feed-supply-action-btn"
+                          onClick={() => setConfirmRejectSosId(null)}
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isProc}
+                          className="sos-btn sos-btn--danger sos-btn--xs feed-supply-action-btn"
+                          onClick={() => handleQuickReject(targetAssignId, sos.id)}
+                        >
+                          Xác nhận
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
-              {sos.shoreHandoff && sos.shoreHandoff.status === 'ASSIGNED' && (
-                <div
-                  style={{
-                    marginTop: 6,
-                    marginBottom: 4,
-                    padding: '4px 8px',
-                    background: 'linear-gradient(90deg, #f0fdf4 0%, #dcfce7 100%)',
-                    border: '1.2px solid #22c55e',
-                    borderRadius: 6,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                  }}
-                >
-                  <span style={{ fontSize: 13, lineHeight: 1 }}>🚑</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 10.5, fontWeight: 900, color: '#15803d', textTransform: 'uppercase' }}>
-                      XE ĐANG ĐẾN BẾN ĐÓN
+
+              {pendingSupplies.length === 0 && approvedSupplies.length > 0 && (
+                <div className="feed-supply-approved">
+                  <Check size={12} />
+                  <span>
+                    Đã xuất cấp: {approvedSupplies.map((it: any) => `${it.name} (${it.quantity})`).join(', ')}
+                  </span>
+                </div>
+              )}
+
+              {/* Shore Handoff Banners */}
+              {sos.shoreHandoff?.status === 'REQUESTED' && (
+                <div className="feed-handoff-box is-warning">
+                  <Zap size={13} className="feed-handoff-icon" />
+                  <div className="feed-handoff-content">
+                    <div className="feed-handoff-title">
+                      Cần xe đón bờ:{' '}
+                      {sos.shoreHandoff.vehicleTypeNeeded === 'AMBULANCE' ? 'Xe cứu thương' : 'Xe tải'}
                     </div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#166534', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {sos.shoreHandoff.assignedVehiclePlate || sos.shoreHandoff.assignedVehicleName} ({sos.shoreHandoff.landingPoint?.name})
+                    <div className="feed-handoff-sub">
+                      {sos.shoreHandoff.landingPoint?.name || 'Bến cập bờ'} · {sos.shoreHandoff.peopleCount} người
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Card Middle: Request Type + Priority Targets + (Side Thumbnail) */}
+              {sos.shoreHandoff?.status === 'ASSIGNED' && (
+                <div className="feed-handoff-box is-success">
+                  <Truck size={13} className="feed-handoff-icon" />
+                  <div className="feed-handoff-content">
+                    <div className="feed-handoff-title">Xe đang đến bến đón</div>
+                    <div className="feed-handoff-sub">
+                      {sos.shoreHandoff.assignedVehiclePlate || sos.shoreHandoff.assignedVehicleName} (
+                      {sos.shoreHandoff.landingPoint?.name})
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Card Middle: Request Type + Priority Targets + Side Thumbnail */}
               <div className="compact-card-content">
                 <div className="compact-card-text">
                   <h3 className="compact-card-title" title={emergencyTypeLabel}>
@@ -663,7 +592,6 @@ export const IncidentFeed = ({
                   )}
                 </div>
 
-                {/* Elegant Thumbnail on the right */}
                 {sos.imageUrl && (
                   <div className="compact-card-thumb" title={lang === 'vi' ? 'Ảnh hiện trường' : 'Scene Photo'}>
                     <img src={sos.imageUrl} alt="Hiện trường" />
@@ -671,17 +599,15 @@ export const IncidentFeed = ({
                 )}
               </div>
 
-              {/* Vị trí nằm trọn vẹn bên trên vạch nét đứt */}
+              {/* Location */}
               <div className="compact-card-location" title={sos.locationName}>
-                <MapPin size={11} className="compact-pin-icon" style={{ flexShrink: 0 }} />
+                <MapPin size={12} className="compact-pin-icon" />
                 <span className="compact-location-text">{sos.locationName}</span>
               </div>
 
-              {/* Card Footer: Citizen name & Victim count (Clean, no emojis) */}
+              {/* Card Footer */}
               <div className="compact-card-footer">
-                <span className="compact-citizen-name">
-                  {sos.citizenName}
-                </span>
+                <span className="compact-citizen-name">{sos.citizenName}</span>
                 <span className="compact-affected-count">
                   {sos.affectedPeople} {lang === 'vi' ? 'người cần cứu' : 'victims'}
                 </span>
@@ -691,43 +617,110 @@ export const IncidentFeed = ({
         })}
 
         {filteredIncidents.length === 0 && (
-          <div className="feed-empty-state" style={{ padding: '32px 16px', textAlign: 'center' }}>
-            <div style={{ fontSize: 26, marginBottom: 8 }}>
-              {searchQuery ? '🔍' : statusFilter === 'ACTIVE' ? '🚤' : tabCounts.active > 0 ? '⚡' : '🛡️'}
+          <div className="feed-empty-state">
+            <div className="feed-empty-icon">
+              {searchQuery ? (
+                <Search size={32} />
+              ) : statusFilter === 'ACTIVE' ? (
+                <LifeBuoy size={32} />
+              ) : (
+                <ShieldCheck size={32} />
+              )}
             </div>
-            <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: 13, color: 'var(--sos-text-primary)' }}>
+            <p className="feed-empty-title">
               {searchQuery
-                ? (lang === 'vi' ? 'Không tìm thấy sự cố' : 'No results found')
+                ? lang === 'vi'
+                  ? 'Không tìm thấy sự cố'
+                  : 'No results found'
                 : statusFilter === 'ACTIVE'
-                ? (lang === 'vi' ? 'Chưa có ca cứu nạn đang tác chiến' : 'No active rescue operations')
+                ? lang === 'vi'
+                  ? 'Chưa có ca cứu nạn đang tác chiến'
+                  : 'No active rescue operations'
                 : statusFilter === 'UNASSIGNED' && tabCounts.active > 0
-                ? (lang === 'vi' ? 'Đã phân công toàn bộ' : 'All incidents assigned')
-                : (lang === 'vi' ? 'Địa bàn an toàn' : 'Area is safe')}
+                ? lang === 'vi'
+                  ? 'Đã phân công toàn bộ'
+                  : 'All incidents assigned'
+                : lang === 'vi'
+                ? 'Địa bàn an toàn'
+                : 'Area is safe'}
             </p>
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--sos-text-muted)' }}>
+            <p className="feed-empty-desc">
               {searchQuery
-                ? (lang === 'vi' ? `Không có yêu cầu SOS nào khớp với "${searchQuery}".` : `No incidents match "${searchQuery}".`)
+                ? lang === 'vi'
+                  ? `Không có yêu cầu SOS nào khớp với "${searchQuery}".`
+                  : `No incidents match "${searchQuery}".`
                 : statusFilter === 'ACTIVE'
-                ? (tabCounts.unassigned > 0
-                    ? (lang === 'vi' ? `Hiện chưa có đội cứu hộ nào đang thực hiện cứu nạn tại hiện trường (Đang có ${tabCounts.unassigned} ca chờ điều phối).` : `No rescue teams active. ${tabCounts.unassigned} pending dispatch.`)
-                    : (lang === 'vi' ? 'Hiện không có ca cứu nạn nào đang được triển khai.' : 'No active rescue requests in progress.'))
+                ? tabCounts.unassigned > 0
+                  ? lang === 'vi'
+                    ? `Hiện chưa có đội cứu hộ nào đang thực hiện cứu nạn (Đang có ${tabCounts.unassigned} ca chờ điều phối).`
+                    : `No rescue teams active. ${tabCounts.unassigned} pending dispatch.`
+                  : lang === 'vi'
+                  ? 'Hiện không có ca cứu nạn nào đang được triển khai.'
+                  : 'No active rescue requests in progress.'
                 : statusFilter === 'UNASSIGNED' && tabCounts.active > 0
-                ? (lang === 'vi' ? `Tất cả ${tabCounts.active} ca cứu nạn đều đã được điều động lực lượng.` : `All ${tabCounts.active} incidents have been dispatched.`)
-                : (lang === 'vi' ? 'Hiện không có yêu cầu SOS nào cần xử lý trên địa bàn.' : 'No active rescue requests pending.')}
+                ? lang === 'vi'
+                  ? `Tất cả ${tabCounts.active} ca cứu nạn đều đã được điều động lực lượng.`
+                  : `All ${tabCounts.active} incidents have been dispatched.`
+                : lang === 'vi'
+                ? 'Hiện không có yêu cầu SOS nào cần xử lý trên địa bàn.'
+                : 'No active rescue requests pending.'}
             </p>
+            {(searchQuery || statusFilter !== 'ALL') && (
+              <button
+                type="button"
+                className="sos-btn sos-btn--outline sos-btn--sm"
+                onClick={() => {
+                  setSearchQuery('');
+                  setStatusFilter('ALL');
+                }}
+              >
+                {lang === 'vi' ? 'Xem tất cả sự cố' : 'Show all incidents'}
+              </button>
+            )}
           </div>
         )}
       </div>
 
-      {/* 5. Clean, Professional Footer */}
+      {/* 5. Footer + Pagination (3 SOS / trang) */}
       <div className="feed-footer-summary">
-        <div className="feed-footer-live">
+        <div className="sos-live-pill">
           <span className="live-dot-steady" />
           <span>{lang === 'vi' ? 'Trực ban tác chiến' : 'Live Operations'}</span>
         </div>
-        <span className="feed-footer-count">
-          {filteredIncidents.length} {lang === 'vi' ? 'sự cố' : 'incidents'}
-        </span>
+
+        <div className="feed-footer-right">
+          {totalPages > 1 ? (
+            <div className="feed-pagination" aria-label="Phân trang danh sách SOS">
+              <button
+                type="button"
+                className="sos-btn sos-btn--outline sos-btn--xs feed-page-btn"
+                disabled={safePage <= 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                title={lang === 'vi' ? 'Trang trước' : 'Previous page'}
+                aria-label={lang === 'vi' ? 'Trang trước' : 'Previous page'}
+              >
+                <ChevronLeft size={13} />
+              </button>
+              <span className="feed-page-indicator">
+                {safePage}/{totalPages}
+              </span>
+              <button
+                type="button"
+                className="sos-btn sos-btn--outline sos-btn--xs feed-page-btn"
+                disabled={safePage >= totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                title={lang === 'vi' ? 'Trang sau' : 'Next page'}
+                aria-label={lang === 'vi' ? 'Trang sau' : 'Next page'}
+              >
+                <ChevronRight size={13} />
+              </button>
+            </div>
+          ) : null}
+
+          <span className="feed-footer-count">
+            {filteredIncidents.length} {lang === 'vi' ? 'sự cố' : 'incidents'}
+          </span>
+        </div>
       </div>
     </div>
   );
