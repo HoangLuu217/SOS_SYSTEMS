@@ -233,11 +233,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         let rescuers = rescuerRes.data.users;
 
         const isAdminUser = Boolean(user?.roles?.includes('ADMIN') || (user as any)?.role === 'ADMIN');
-        const isAuthority = !isAdminUser && Boolean(
-          user?.roles?.includes('LOCAL_AUTHORITY') ||
-          user?.roles?.includes('AUTHORITY') ||
-          Boolean(user?.authority?.areaId || user?.authority?.areaName)
-        );
 
         if (!isAdminUser) {
           const activeOfficer = domainDService.getActiveOfficer();

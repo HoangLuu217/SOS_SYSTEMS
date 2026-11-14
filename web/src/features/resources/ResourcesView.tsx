@@ -31,9 +31,8 @@ import {
   History,
   Plane,
   FilterX,
-  RotateCcw,
 } from 'lucide-react';
-import type { VehicleItem, VehicleType, RescueTeamItem, AdministrativeAreaItem } from '@/types/dashboard';
+import type { VehicleItem, VehicleType, RescueTeamItem } from '@/types/dashboard';
 import type { User } from '@/types/auth';
 import {
   fetchVehicles,
@@ -646,7 +645,6 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     wardsLoading,
     selectedAreaId,
     setSelectedAreaId,
-    dbAreas: areas,
     managedArea,
     isTeamInTargetArea,
   } = useAdministrativeFilter({
@@ -666,8 +664,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
   const [supplyTypeFilter, setSupplyTypeFilter] = useState<'ALL' | 'DURABLE' | 'CONSUMABLE'>('ALL');
   const [supplyCategoryFilter, setSupplyCategoryFilter] = useState<string>('ALL');
   const [supplyTeamFilter, setSupplyTeamFilter] = useState<string>('DEPOT');
-  const [consumableCategoryFilter, setConsumableCategoryFilter] = useState<string>('ALL');
-  const [consumableTeamFilter, setConsumableTeamFilter] = useState<string>('DEPOT');
+  // const [consumableCategoryFilter] = useState<string>('ALL');
+  // const [consumableTeamFilter, setConsumableTeamFilter] = useState<string>('DEPOT');
 
   // Tự động nhận diện bộ lọc từ URL (khi được điều hướng từ Sidebar hoặc Quản lý Đội Cứu Hộ)
   useEffect(() => {
@@ -681,7 +679,6 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       if (teamParam) {
         setVehicleTeamFilter(teamParam);
         setSupplyTeamFilter(teamParam);
-        setConsumableTeamFilter(teamParam);
       }
       if (tabParam === 'SUPPLIES' || tabParam === 'supplies' || path.includes('/supplies')) {
         setResourceTab('SUPPLIES');
@@ -881,7 +878,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     try {
       setLoading(true);
       const areaParam = effectiveAreaId !== 'ALL' ? effectiveAreaId : undefined;
-      const [vehRes, teamRes, areasRes] = await Promise.allSettled([
+      const [vehRes, teamRes] = await Promise.allSettled([
         fetchVehicles({ areaId: areaParam, limit: 100 }),
         fetchRescueTeams({ areaId: areaParam, limit: 100 }),
         fetchAdministrativeAreas(),
@@ -1186,10 +1183,10 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     });
   }, [equipments, supplyTypeFilter, supplyTeamFilter, supplyCategoryFilter, searchQuery, isAdmin, selectedAreaId, selectedProvince, rescueTeams, isTeamInTargetArea]);
 
+  /*
   // Filtered consumable supplies
   const filteredConsumables = useMemo(() => {
     return consumableEquipments.filter((eq) => {
-      // 1. Lọc theo kho / đơn vị
       if (consumableTeamFilter !== 'ALL') {
         const tId = typeof eq.teamId === 'object' && eq.teamId ? (eq.teamId as any)._id : eq.teamId;
         if (consumableTeamFilter === 'DEPOT') {
@@ -1199,12 +1196,10 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         }
       }
 
-      // 2. Lọc theo danh mục vật tư tiêu hao
       if (consumableCategoryFilter !== 'ALL') {
         if (eq.category !== consumableCategoryFilter) return false;
       }
 
-      // 3. Tìm kiếm
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const teamName = (typeof eq.teamId === 'object' && eq.teamId ? eq.teamId.name || '' : '').toLowerCase();
@@ -1218,6 +1213,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       return true;
     });
   }, [consumableEquipments, consumableTeamFilter, consumableCategoryFilter, searchQuery]);
+  */
 
   // Danh sách các Đội cứu hộ đang Hoạt động / Sẵn sàng (ACTIVE) VÀ thuộc khu vực quản lý
   const activeRescueTeams = useMemo(() => {
@@ -2303,11 +2299,6 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     return filteredEquipments.slice(start, start + pageSize);
   }, [filteredEquipments, currentPage, pageSize]);
 
-  const totalConsumablePages = Math.max(1, Math.ceil(filteredConsumables.length / pageSize));
-  const paginatedConsumables = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredConsumables.slice(start, start + pageSize);
-  }, [filteredConsumables, currentPage, pageSize]);
 
   const renderVehicleStatusBadge = (status?: string) => {
     const s = (status || 'READY').toUpperCase();
