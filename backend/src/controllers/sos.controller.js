@@ -1,6 +1,8 @@
 const sosService = require('../services/sos.service');
 const fileService = require('../services/file.service');
 const auditService = require('../services/audit.service');
+const smartDispatchService = require('../services/smartDispatch.service');
+const sosTriageService = require('../services/sosTriage.service');
 const { SosAssignment, RescueTeam } = require('../models');
 const { emitSosCreated, emitSosUpdated, emitSosDeleted } = require('../socket');
 
@@ -19,12 +21,13 @@ const createSos = async (req, res, next) => {
       entityId: newSos._id,
       areaId: newSos.areaId || null,
       metadata: {
-        severityLevel: newSos.severityLevel,
+        priority: newSos.priority,
+        riskScore: newSos.riskScore,
         description: newSos.description,
         contactPhone: newSos.contactPhone || req.user.phone,
         secondaryPhone: newSos.secondaryPhone || null,
-        victimCount: newSos.victimCount,
-        address: newSos.location?.address,
+        people: newSos.people,
+        address: newSos.address,
       },
     });
 
@@ -195,9 +198,12 @@ const verifySos = async (req, res, next) => {
       entityId: req.params.id,
       areaId: verifiedSos?.areaId || req.user.authority?.areaId || null,
       metadata: {
-        priorityLevel: req.body.priorityLevel,
+        priority: verifiedSos.priority,
+        riskScore: verifiedSos.riskScore,
+        suggestedPriority: verifiedSos.riskAssessment?.suggestedPriority,
+        ruleVersion: verifiedSos.riskAssessment?.ruleVersion,
         status: verifiedSos.status,
-        verificationNotes: req.body.verificationNotes,
+        verificationNote: req.body.note,
       },
     });
 
@@ -339,6 +345,34 @@ const completeShoreHandoff = async (req, res, next) => {
   }
 };
 
+const getDispatchRecommendations = async (req, res, next) => {
+  try {
+    const includeAiAdvisor = String(req.query.ai || '').toLowerCase() === 'true';
+    const forceRefresh = String(req.query.forceRefresh || '').toLowerCase() === 'true';
+    const officerAreaId = req.query.areaId || req.user?.authority?.areaId || null;
+    const data = await smartDispatchService.getDispatchRecommendations(req.params.id, {
+      includeAiAdvisor,
+      forceRefresh,
+      officerAreaId,
+    });
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const reanalyzeSosAi = async (req, res, next) => {
+  try {
+    const updated = await sosTriageService.runAiTriageNow(req.params.id, {
+      emitSocket: true,
+    });
+    const finalSos = updated || (await sosService.getSosRequestById(req.params.id));
+    res.status(200).json({ success: true, data: finalSos });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createSos,
   getSosRequests,
@@ -349,6 +383,8 @@ module.exports = {
   getSosHistory,
   verifySos,
   getSosFiles,
+  getDispatchRecommendations,
+  reanalyzeSosAi,
 
   requestShoreHandoff,
   assignShoreHandoff,

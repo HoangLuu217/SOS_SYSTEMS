@@ -137,7 +137,7 @@ export interface SosAssignmentData {
       coordinates: [number, number]; // [lng, lat]
     };
     emergencyType: string;
-    priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    priority: 'UNASSESSED' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
     people: number;
     description?: string;
     contactPhone?: string;
@@ -215,6 +215,12 @@ export interface SosAssignmentData {
   cancelReason?: string;
   note?: string;
   missionType?: 'SOS_RESCUE' | 'RELIEF_DISPATCH' | 'SHORE_HANDOFF';
+  dispatchCode?: string;
+  areaId?: string;
+  location?: {
+    type?: string;
+    coordinates?: [number, number];
+  };
   destination?: string;
   recipientName?: string;
   supplies?: Array<{
