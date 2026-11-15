@@ -315,6 +315,15 @@ export function isPointInAreaBoundary(
   return true;
 }
 
+function extractAreaKeyword(rawName?: string): string {
+  return (rawName || '')
+    .split(',')[0]
+    .split('(')[0]
+    .toLowerCase()
+    .replace(/^(phường|quận|huyện|xã|thị xã|thị trấn|tp\.|tp|tỉnh|thành phố)\s+/i, '')
+    .trim();
+}
+
 /**
  * Strictly check if an SOS request belongs to the local officer's jurisdiction
  * (Ward name/ID match AND spatial boundary check)
@@ -342,27 +351,11 @@ export function isSosInOfficerJurisdiction(
     }
   }
 
-  // 2. Fallback / complementary check: check administrative area name and keywords in ward, district, address
-  const areaKeyword = (officer.jurisdictionAreaName || officer.districtName || managedArea?.name || '')
-    .split(',')[0]
-    .split('(')[0]
-    .toLowerCase()
-    .replace(/^(phường|quận|huyện|xã|thị xã|thị trấn|tp\.|tp|thành phố)\s+/i, '')
-    .trim();
-
-  if (areaKeyword) {
+  // 2. Fallback / complementary check: check administrative area name dynamically from DB
+  const areaKeyword = extractAreaKeyword(officer.jurisdictionAreaName || officer.districtName || managedArea?.name);
+  if (areaKeyword.length >= 2) {
     const fullText = `${sos.wardName || ''} ${sos.districtName || ''} ${sos.locationName || ''} ${sos.title || ''}`.toLowerCase();
-    const keywords = [areaKeyword];
-    if (areaKeyword.includes('ngũ hành sơn')) {
-      keywords.push('mỹ an', 'khuê mỹ', 'hòa quý', 'hòa hải');
-    } else if (areaKeyword.includes('liên chiểu')) {
-      keywords.push('hòa khánh', 'hòa minh', 'hòa hiệp');
-    } else if (areaKeyword.includes('thanh khê')) {
-      keywords.push('an khê', 'xuân hà', 'thạc gián', 'chính gián', 'tân chính', 'vĩnh trung', 'tam thuận', 'hòa khê');
-    } else if (areaKeyword.includes('điện bàn')) {
-      keywords.push('điện bàn');
-    }
-    if (keywords.some((kw) => kw.length >= 2 && fullText.includes(kw))) {
+    if (fullText.includes(areaKeyword)) {
       return true;
     }
   }
@@ -372,8 +365,8 @@ export function isSosInOfficerJurisdiction(
 
 /**
  * Kiểm tra xem một đội cứu hộ có thuộc địa bàn quản lý của cán bộ hay không.
+ * Dựa 100% vào dữ liệu DB (areaId, parentId, tên phường/quận và ranh giới GeoJSON).
  * Nếu là ADMIN: được quyền xem tất cả.
- * Nếu là Cán bộ địa phương: chỉ các đội thuộc khu vực phụ trách mới được hiển thị GPS.
  */
 export function isTeamInOfficerJurisdiction(
   team: RescueTeam,
@@ -387,7 +380,7 @@ export function isTeamInOfficerJurisdiction(
   const teamWardId = team.wardId || (team as any).areaId;
   const teamDistrictId = team.districtId;
 
-  // 1. Khớp mã định danh địa bàn
+  // 1. Khớp mã định danh địa bàn từ DB (bao gồm cả wardId và districtId/parentId)
   if (officerAreaId) {
     if (teamWardId && (teamWardId === officerAreaId || teamWardId === `area-${officerAreaId}`)) return true;
     if (managedArea && (teamWardId === managedArea.id || teamWardId === managedArea.code)) return true;
@@ -396,39 +389,36 @@ export function isTeamInOfficerJurisdiction(
     }
   }
 
-  // 2. Khớp theo tên địa bàn phụ trách
-  const areaNameTarget = (officer.jurisdictionAreaName || managedArea?.name || '')
-    .toLowerCase()
-    .replace(/^(phường|xã|quận|huyện|thị trấn|tp|thành phố)\s+/i, '')
-    .trim();
-
-  if (areaNameTarget) {
-    const teamNameLower = (team.name || '').toLowerCase();
-    const teamWardName = ((team as any).wardName || '').toLowerCase();
-    const teamDistrictName = ((team as any).districtName || '').toLowerCase();
-    if (
-      teamNameLower.includes(areaNameTarget) ||
-      teamWardName.includes(areaNameTarget) ||
-      teamDistrictName.includes(areaNameTarget)
-    ) {
+  // 2. Khớp theo ranh giới địa lý GeoJSON (chỉ dùng fallback khi đội chưa được gán địa bàn cụ thể trong DB)
+  if (!teamWardId && !(team as any).wardName && managedArea?.boundary?.coordinates) {
+    const teamCoords = team.rescuers?.find(
+      (r) => r.coordinates && typeof r.coordinates.lat === 'number' && typeof r.coordinates.lng === 'number'
+    )?.coordinates;
+    if (teamCoords && isPointInAreaBoundary(teamCoords, managedArea)) {
       return true;
     }
   }
 
-  // 3. Khớp tên quận/huyện của cán bộ
-  const districtKeyword = (officer.districtName || '')
-    .toLowerCase()
-    .replace(/^(quận|huyện|thành phố|thị xã)\s+/i, '')
-    .trim();
+  const teamSearchText = `${team.name || ''} ${(team as any).wardName || ''} ${(team as any).districtName || ''}`.toLowerCase();
 
-  if (districtKeyword && districtKeyword !== 'toàn quốc') {
-    const teamNameLower = (team.name || '').toLowerCase();
+  // 3. Khớp động theo tên địa bàn phụ trách trong DB (wardName / districtName / tên đội)
+  const areaKeyword = extractAreaKeyword(officer.jurisdictionAreaName || managedArea?.name);
+  if (areaKeyword.length >= 2 && teamSearchText.includes(areaKeyword)) {
+    return true;
+  }
+
+  // 4. Khớp tên quận/huyện của cán bộ (bỏ qua tên cấp tỉnh/thành phố rộng để không lẫn các quận khác)
+  const rawDistrict = (officer.districtName || '').toLowerCase().trim();
+  const isProvinceOrCityScope = /^(toàn quốc|việt nam|tỉnh\s|thành phố\s|tp\.?\s)/.test(rawDistrict);
+  if (rawDistrict && !isProvinceOrCityScope) {
+    const districtKeyword = extractAreaKeyword(officer.districtName);
     const teamDistrictIdLower = (team.districtId || '').toLowerCase();
     const teamDistrictNameLower = (((team as any).districtName || '') as string).toLowerCase();
     if (
-      teamNameLower.includes(districtKeyword) ||
-      teamDistrictNameLower.includes(districtKeyword) ||
-      (teamDistrictIdLower && teamDistrictIdLower.includes(districtKeyword))
+      districtKeyword.length >= 2 &&
+      ((team.name || '').toLowerCase().includes(districtKeyword) ||
+        teamDistrictNameLower.includes(districtKeyword) ||
+        (teamDistrictIdLower && teamDistrictIdLower.includes(districtKeyword)))
     ) {
       return true;
     }

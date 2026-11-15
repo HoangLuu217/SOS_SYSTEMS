@@ -8,6 +8,7 @@ import {
   fetchAdministrativeAreas,
   findRootProvinceId,
   getDaNangAreaScope,
+  getSelectedWardValue,
   subscribeNotificationEvents,
   fetchSafeLocations,
   fetchHazardReports,
@@ -16,6 +17,7 @@ import {
   type BroadcastItem,
 } from '@/api';
 import { useGlobalModals } from '@/hooks/useGlobalModals';
+import { SearchableSelect } from '@/components/common/SearchableSelect';
 import './AlertsView.css';
 
 export interface AlertsViewProps {
@@ -123,7 +125,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
     (user?.roles?.includes('LOCAL_AUTHORITY') || user?.roles?.includes('AUTHORITY')) && !isAdmin
   );
 
-  const { areaById, daNangProvince, daNangProvinceId } = useMemo(
+  const { areaById, daNangProvince, daNangProvinceId, daNangWards, daNangWardIds, canonicalAreaIdMap } = useMemo(
     () => getDaNangAreaScope(areas),
     [areas]
   );
@@ -138,41 +140,92 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
     }
   }, [isAuthority, daNangProvinceId, alertForm.areaId]);
 
-  const renderTargetAreaBadge = () => (
-    <div
-      style={{
-        width: '100%',
-        padding: '6px 10px',
-        borderRadius: '6px',
-        border: '1px solid #cbd5e1',
-        background: '#f8fafc',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        boxSizing: 'border-box',
-        minHeight: '34px',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <i className="bi bi-geo-alt" style={{ fontSize: '13px', color: '#64748b' }}></i>
-        <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#0f172a' }}>
-          {isAuthority ? authorityAreaName : daNangProvince?.name || 'Thành phố Đà Nẵng'}
-        </span>
-      </div>
-      <span style={{ fontSize: '11px', color: '#475569', background: '#e2e8f0', padding: '1px 6px', borderRadius: '4px' }}>
-        {isAuthority ? 'Địa bàn phụ trách' : 'Khu vực cố định'}
-      </span>
-    </div>
-  );
-
   const currentArea =
-    areas.find((a) => a._id === alertForm.areaId || a._id === user?.authority?.areaId) || areas[0];
-  const authorityAreaName =
-    user?.authority?.areaName ||
-    currentArea?.name ||
-    (user?.authority?.department
-      ? user.authority.department.replace(/^Ban Chỉ Huy PCTT\s*/i, '').replace(/\(.*?\)/g, '').trim()
-      : 'Khu vực quản lý của bạn');
+    areas.find((a) => a._id === (isAuthority ? user?.authority?.areaId : alertForm.areaId)) ||
+    areas.find((a) => a._id === daNangProvinceId) ||
+    daNangProvince ||
+    areas[0];
+  const authorityAreaName = isAuthority
+    ? user?.authority?.areaName ||
+      currentArea?.name ||
+      (user?.authority?.department
+        ? user.authority.department.replace(/^Ban Chỉ Huy PCTT\s*/i, '').replace(/\(.*?\)/g, '').trim()
+        : 'Khu vực quản lý của bạn')
+    : areaById.get(alertForm.areaId)?.name || daNangProvince?.name || 'Thành phố Đà Nẵng';
+
+  const renderTargetAreaSelector = () => {
+    if (isAuthority) {
+      return (
+        <div
+          style={{
+            width: '100%',
+            padding: '6px 10px',
+            borderRadius: '6px',
+            border: '1px solid #cbd5e1',
+            background: '#f8fafc',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxSizing: 'border-box',
+            minHeight: '34px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <i className="bi bi-geo-alt" style={{ fontSize: '13px', color: '#64748b' }}></i>
+            <span style={{ fontSize: '12.5px', fontWeight: 600, color: '#0f172a' }}>
+              {authorityAreaName}
+            </span>
+          </div>
+          <span style={{ fontSize: '11px', color: '#475569', background: '#e2e8f0', padding: '1px 6px', borderRadius: '4px' }}>
+            Địa bàn phụ trách
+          </span>
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        <SearchableSelect
+          className="sos-form-select"
+          ariaLabel="Chọn Phường / Xã phát thông báo"
+          searchPlaceholder="Tìm nhanh Phường / Xã hoặc mã..."
+          value={getSelectedWardValue(alertForm.areaId, daNangWardIds, canonicalAreaIdMap)}
+          onChange={(wardId) => {
+            setAlertForm((prev) => ({
+              ...prev,
+              areaId: wardId || daNangProvinceId || 'ALL',
+            }));
+          }}
+          triggerStyle={{
+            width: '100%',
+            padding: '7px 10px',
+            borderRadius: '6px',
+            border: '1px solid #cbd5e1',
+            background: '#ffffff',
+            color: '#0f172a',
+            fontSize: '12.5px',
+            fontWeight: 500,
+          }}
+          options={[
+            {
+              value: '',
+              label: `Toàn ${daNangProvince?.name || 'Thành phố Đà Nẵng'} (${daNangWards.length} Phường/Xã)`,
+              keywords: 'tat ca toan thanh pho da nang',
+            },
+            ...daNangWards.map((ward) => ({
+              value: ward._id,
+              label: `${ward.name}${ward.code ? ` [${ward.code}]` : ''}`,
+              badgeText: ward.code || undefined,
+              keywords: `${ward.name} ${ward.code || ''}`,
+            })),
+          ]}
+        />
+        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+          Phạm vi nhận tin: <strong>{authorityAreaName}</strong>
+        </div>
+      </div>
+    );
+  };
 
   // Tải danh sách thông báo và các khu vực hành chính
   useEffect(() => {
@@ -370,7 +423,9 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
           if (!areaId || areaId === 'ALL') return true;
           const pointAreaKey = typeof pointAreaId === 'string' ? pointAreaId : pointAreaId?._id;
           if (!pointAreaKey) return true;
-          if (String(pointAreaKey) === String(areaId)) return true;
+          const pointCanonical = canonicalAreaIdMap.get(String(pointAreaKey)) || String(pointAreaKey);
+          const selectedCanonical = canonicalAreaIdMap.get(String(areaId)) || String(areaId);
+          if (pointCanonical === selectedCanonical) return true;
           const pointArea = areaById.get(pointAreaKey);
           if (selectedArea?.type === 'PROVINCE' && pointArea) {
             return getProvinceId(pointArea) === selectedArea._id;
@@ -1786,24 +1841,32 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                             <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
                               Chọn bản tin Thời tiết đã duyệt từ CSDL <span style={{ color: '#dc2626' }}>*</span>
                             </label>
-                            <select
+                            <SearchableSelect
                               value={selectedPointId}
-                              onChange={(e) => {
-                                setSelectedPointId(e.target.value);
+                              onChange={(val) => {
+                                setSelectedPointId(val);
                                 setCreateErrors((prev) => ({ ...prev, general: undefined }));
                               }}
                               className="sos-form-select"
-                              style={{ width: '100%', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', fontSize: '12.5px', boxSizing: 'border-box' }}
-                            >
-                              <option value="">
-                                {loadingPoints ? 'Đang tải bản tin từ DB...' : `-- Chọn bản tin thời tiết đã duyệt (${weatherOptions.length} bản tin) --`}
-                              </option>
-                              {weatherOptions.map((item) => (
-                                <option key={item._id} value={item._id}>
-                                  [{getWeatherCategoryLabel(item.category)}] {item.title}
-                                </option>
-                              ))}
-                            </select>
+                              ariaLabel="Chọn bản tin Thời tiết đã duyệt từ CSDL"
+                              searchPlaceholder="Tìm nhanh bản tin thời tiết..."
+                              triggerStyle={{ width: '100%', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', fontSize: '12.5px' }}
+                              options={[
+                                {
+                                  value: '',
+                                  label: loadingPoints ? 'Đang tải bản tin từ DB...' : `-- Chọn bản tin thời tiết đã duyệt (${weatherOptions.length} bản tin) --`,
+                                },
+                                ...weatherOptions.map((item) => {
+                                  const catLabel = getWeatherCategoryLabel(item.category);
+                                  return {
+                                    value: item._id,
+                                    label: `[${catLabel}] ${item.title}`,
+                                    badgeText: catLabel,
+                                    keywords: `${catLabel} ${item.title}`,
+                                  };
+                                }),
+                              ]}
+                            />
                             {!loadingPoints && weatherOptions.length === 0 && (
                               <small style={{ color: '#b45309', display: 'block', marginTop: '3px' }}>
                                 Chưa có bản tin thời tiết nào được duyệt (APPROVED / ACTIVE) trong cơ sở dữ liệu. Vui lòng duyệt bản tin tại mục Quản lý thời tiết trước khi phát thông báo.
@@ -1817,28 +1880,33 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                             <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
                               Chọn Điểm an toàn từ DB <span style={{ color: '#dc2626' }}>*</span>
                             </label>
-                            <select
+                            <SearchableSelect
                               value={selectedPointId}
-                              onChange={(e) => {
-                                setSelectedPointId(e.target.value);
+                              onChange={(val) => {
+                                setSelectedPointId(val);
                                 setCreateErrors((prev) => ({ ...prev, general: undefined }));
                               }}
                               className="sos-form-select"
-                              style={{ width: '100%', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', fontSize: '12.5px', boxSizing: 'border-box' }}
-                            >
-                              <option value="">
-                                {loadingPoints ? 'Đang tải điểm an toàn từ DB...' : `-- Chọn điểm an toàn (${safeLocationOptions.length} điểm) --`}
-                              </option>
-                              {safeLocationOptions.map((point) => {
-                                const coords = point.location?.coordinates;
-                                const gpsStr = coords ? `[GPS: ${coords[1]?.toFixed(4)}, ${coords[0]?.toFixed(4)}]` : '';
-                                return (
-                                  <option key={point._id} value={point._id}>
-                                    {point.name} {gpsStr} — {point.address}
-                                  </option>
-                                );
-                              })}
-                            </select>
+                              ariaLabel="Chọn Điểm an toàn từ DB"
+                              searchPlaceholder="Tìm điểm an toàn theo tên hoặc địa chỉ..."
+                              triggerStyle={{ width: '100%', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', fontSize: '12.5px' }}
+                              options={[
+                                {
+                                  value: '',
+                                  label: loadingPoints ? 'Đang tải điểm an toàn từ DB...' : `-- Chọn điểm an toàn (${safeLocationOptions.length} điểm) --`,
+                                },
+                                ...safeLocationOptions.map((point) => {
+                                  const coords = point.location?.coordinates;
+                                  const gpsStr = coords ? `[GPS: ${coords[1]?.toFixed(4)}, ${coords[0]?.toFixed(4)}]` : '';
+                                  return {
+                                    value: point._id,
+                                    label: `${point.name}${point.address ? ` — ${point.address}` : ''}`,
+                                    subLabel: gpsStr || undefined,
+                                    keywords: `${point.name} ${point.address || ''} ${gpsStr}`,
+                                  };
+                                }),
+                              ]}
+                            />
                             {!loadingPoints && safeLocationOptions.length === 0 && (
                               <small style={{ color: '#b45309', display: 'block', marginTop: '3px' }}>
                                 Chưa có điểm an toàn hoạt động nào có GPS hợp lệ trên địa bàn quản lý.
@@ -1852,28 +1920,35 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                             <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#334155', marginBottom: '4px' }}>
                               Chọn Điểm nguy hiểm từ DB <span style={{ color: '#dc2626' }}>*</span>
                             </label>
-                            <select
+                            <SearchableSelect
                               value={selectedPointId}
-                              onChange={(e) => {
-                                setSelectedPointId(e.target.value);
+                              onChange={(val) => {
+                                setSelectedPointId(val);
                                 setCreateErrors((prev) => ({ ...prev, general: undefined }));
                               }}
                               className="sos-form-select"
-                              style={{ width: '100%', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', fontSize: '12.5px', boxSizing: 'border-box' }}
-                            >
-                              <option value="">
-                                {loadingPoints ? 'Đang tải điểm nguy hiểm từ DB...' : `-- Chọn điểm nguy hiểm (${hazardOptions.length} điểm) --`}
-                              </option>
-                              {hazardOptions.map((point) => {
-                                const coords = point.location?.coordinates;
-                                const gpsStr = coords ? `[GPS: ${coords[1]?.toFixed(4)}, ${coords[0]?.toFixed(4)}]` : '';
-                                return (
-                                  <option key={point._id} value={point._id}>
-                                    [{point.severity || 'HIGH'}] {point.title} {gpsStr} — {point.address}
-                                  </option>
-                                );
-                              })}
-                            </select>
+                              ariaLabel="Chọn Điểm nguy hiểm từ DB"
+                              searchPlaceholder="Tìm điểm nguy hiểm theo tên hoặc địa chỉ..."
+                              triggerStyle={{ width: '100%', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#fff', fontSize: '12.5px' }}
+                              options={[
+                                {
+                                  value: '',
+                                  label: loadingPoints ? 'Đang tải điểm nguy hiểm từ DB...' : `-- Chọn điểm nguy hiểm (${hazardOptions.length} điểm) --`,
+                                },
+                                ...hazardOptions.map((point) => {
+                                  const coords = point.location?.coordinates;
+                                  const gpsStr = coords ? `[GPS: ${coords[1]?.toFixed(4)}, ${coords[0]?.toFixed(4)}]` : '';
+                                  const sev = point.severity || 'HIGH';
+                                  return {
+                                    value: point._id,
+                                    label: `[${sev}] ${point.title}${point.address ? ` — ${point.address}` : ''}`,
+                                    subLabel: gpsStr || undefined,
+                                    badgeText: sev,
+                                    keywords: `${sev} ${point.title} ${point.address || ''} ${gpsStr}`,
+                                  };
+                                }),
+                              ]}
+                            />
                             {!loadingPoints && hazardOptions.length === 0 && (
                               <small style={{ color: '#b45309', display: 'block', marginTop: '3px' }}>
                                 Chưa có điểm nguy hiểm được duyệt nào trên địa bàn đã chọn.
@@ -1887,7 +1962,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                           <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
                             Địa bàn phát thông báo <span style={{ color: '#dc2626' }}>*</span>
                           </label>
-                          {renderTargetAreaBadge()}
+                          {renderTargetAreaSelector()}
                         </div>
 
                         {/* Hộp chỉ dẫn lấy trực tiếp từ DB */}
@@ -1919,7 +1994,7 @@ export const AlertsView: React.FC<AlertsViewProps> = ({
                           <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>
                             Địa bàn nhận tin <span style={{ color: '#dc2626' }}>*</span>
                           </label>
-                          {renderTargetAreaBadge()}
+                          {renderTargetAreaSelector()}
                         </div>
 
                         {/* Mẫu nhanh */}

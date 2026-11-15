@@ -12,7 +12,7 @@ import {
   Users,
   AlertCircle,
 } from 'lucide-react';
-import type { SosRequest, RescueTeam, Vehicle } from '@/types/domainD';
+import type { SosRequest, RescueTeam, Vehicle, DispatchSuggestedSupply } from '@/types/domainD';
 import { FALLBACK_SUPPLIES } from '@/constants';
 import type { EquipmentItem } from '@/api/equipment.api';
 
@@ -23,6 +23,7 @@ interface Props {
   vehicles: Vehicle[];
   allocatedSupplies?: Record<string, number>;
   areaSupplies?: EquipmentItem[];
+  suggestedSupplies?: DispatchSuggestedSupply[];
   onClose: () => void;
   onConfirm: () => void;
 }
@@ -34,6 +35,7 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
   vehicles,
   allocatedSupplies,
   areaSupplies = [],
+  suggestedSupplies = [],
   onClose,
   onConfirm,
 }) => {
@@ -45,18 +47,22 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
 
   // Tính ETA tiếp cận dự kiến thực tế
   const estimatedEtaText = (() => {
-    const sosLat = selectedSos?.coordinates?.lat ?? (selectedSos as any)?.location?.coordinates?.[1];
-    const sosLng = selectedSos?.coordinates?.lng ?? (selectedSos as any)?.location?.coordinates?.[0];
+    const sosWithGeo = selectedSos as SosRequest & { location?: { coordinates?: [number, number] } };
+    const sosLat = selectedSos?.coordinates?.lat ?? sosWithGeo?.location?.coordinates?.[1];
+    const sosLng = selectedSos?.coordinates?.lng ?? sosWithGeo?.location?.coordinates?.[0];
     if (typeof sosLat === 'number' && typeof sosLng === 'number') {
       const firstTeam = selectedTeams[0];
-      const lead = firstTeam?.rescuers?.find((r) => r.coordinates?.lat && r.coordinates?.lng);
-      if (lead?.coordinates) {
+      const lead = firstTeam?.rescuers?.find(
+        (r) => typeof r.coordinates?.lat === 'number' && typeof r.coordinates?.lng === 'number'
+      );
+      const origin = lead?.coordinates ?? firstTeam?.baseCoordinates;
+      if (origin && typeof origin.lat === 'number' && typeof origin.lng === 'number') {
         const R = 6371;
-        const dLat = ((sosLat - lead.coordinates.lat) * Math.PI) / 180;
-        const dLon = ((sosLng - lead.coordinates.lng) * Math.PI) / 180;
+        const dLat = ((sosLat - origin.lat) * Math.PI) / 180;
+        const dLon = ((sosLng - origin.lng) * Math.PI) / 180;
         const a =
           Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-          Math.cos((lead.coordinates.lat * Math.PI) / 180) *
+          Math.cos((origin.lat * Math.PI) / 180) *
             Math.cos((sosLat * Math.PI) / 180) *
             Math.sin(dLon / 2) *
             Math.sin(dLon / 2);
@@ -326,8 +332,29 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7, maxHeight: 180, overflowY: 'auto' }}>
               {selectedTeams.map((team, idx) => {
                 const lead = team.rescuers?.[0];
-                const veh = vehicles.find((v) => v.teamId === team.id || v.id === (team as any).vehicleId) || vehicles[0];
-                const vehName = veh ? `${veh.name}${veh.plate ? ` (${veh.plate})` : ''}` : 'Phương tiện chuyên dụng';
+                const teamVehs = (() => {
+                  const matched = vehicles.filter((v) => v.teamId === team.id || v.id === (team as any).vehicleId);
+                  const fromTeam = Array.isArray(team.vehicles) ? team.vehicles : [];
+                  if (matched.length === 0) return fromTeam;
+                  const byId = new Map<string, Vehicle>();
+                  for (const v of [...matched, ...fromTeam]) {
+                    if (v?.id && !byId.has(v.id)) byId.set(v.id, v);
+                  }
+                  return Array.from(byId.values());
+                })();
+                const vehName =
+                  teamVehs.length > 0
+                    ? teamVehs
+                        .map((v) => {
+                          const rawName = (v.name || 'Phương tiện').trim();
+                          const plate = (v.plate || '').trim();
+                          return plate && !rawName.toUpperCase().includes(plate.toUpperCase())
+                            ? `${rawName} (${plate})`
+                            : rawName;
+                        })
+                        .join(', ')
+                    : 'Chưa gán phương tiện';
+                const memberCount = team.rescuers?.length ?? team.availableRescuersCount ?? 0;
 
                 return (
                   <div
@@ -343,9 +370,9 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
                       <span style={{ color: '#0f172a', fontWeight: 800, fontSize: 13 }}>
                         {selectedTeams.length > 1 ? `${idx + 1}. ` : ''}{team.name}
                       </span>
-                      {(team as any).code && (
+                      {team.code && (
                         <span style={{ fontSize: 10.5, fontWeight: 700, color: '#0f172a', background: '#ffffff', padding: '1px 6px', borderRadius: 4, border: '1px solid #e2e8f0' }}>
-                          {(team as any).code}
+                          {team.code}
                         </span>
                       )}
                     </div>
@@ -354,7 +381,7 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Users size={12} style={{ color: '#0f172a' }} />
                         <span>
-                          Chỉ huy: <strong style={{ fontWeight: 700, color: '#0f172a' }}>{lead?.name || 'Trưởng đội'}</strong> ({team.availableRescuersCount || team.rescuers?.length || 4} chiến sĩ)
+                          Chỉ huy: <strong style={{ fontWeight: 700, color: '#0f172a' }}>{lead?.name || 'Trưởng đội'}</strong> ({memberCount} chiến sĩ)
                         </span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -408,9 +435,11 @@ export const ConfirmDispatchModal: React.FC<Props> = ({
             {totalSupplyUnits > 0 ? (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {activeSupplies.map(([id, qty]) => {
-                  const item = areaSupplies?.find((s) => s._id === id || (s as any).id === id) || FALLBACK_SUPPLIES.find((s) => s.id === id);
-                  const name = item?.name || 'Vật tư cứu hộ';
-                  const unit = item?.unit || 'món';
+                  const areaItem = areaSupplies?.find((s) => s._id === id || (s as any).id === id);
+                  const suggestedItem = suggestedSupplies?.find((s) => s.supplyId === id || s.name === id);
+                  const fallbackItem = FALLBACK_SUPPLIES.find((s) => s.id === id);
+                  const name = areaItem?.name || suggestedItem?.name || fallbackItem?.name || 'Vật tư cứu hộ';
+                  const unit = areaItem?.unit || suggestedItem?.unit || fallbackItem?.unit || 'món';
 
                   return (
                     <div

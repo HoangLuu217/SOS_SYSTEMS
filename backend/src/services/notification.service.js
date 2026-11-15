@@ -3,7 +3,12 @@ const { Notification, User, AdministrativeArea, SafeLocation, HazardReport, Weat
 const ApiError = require('../utils/apiError');
 const { sendExpoPushNotification, collectExpoPushTargets } = require('../utils/expoPush');
 const eventBus = require('./eventBus');
-const { checkPointInAuthorityJurisdiction, findAreaByCoordinates } = require('../utils/geoUtils');
+const {
+  checkPointInAuthorityJurisdiction,
+  findAreaByCoordinates,
+  getDescendantAreaIds,
+  resolveTargetScopeForArea,
+} = require('../utils/geoUtils');
 
 class NotificationService {
   /**
@@ -328,9 +333,9 @@ class NotificationService {
       if (!targetAreaDoc) {
         throw new ApiError(404, 'Không tìm thấy khu vực quản lý của cán bộ.');
       }
-      scope = targetAreaDoc.type === 'WARD' ? 'WARD' : 'PROVINCE';
+      scope = await resolveTargetScopeForArea(targetAreaDoc, AdministrativeArea);
     } else {
-      // Admin: Chọn từ Tỉnh/Thành phố (PROVINCE) -> Phường/Xã (WARD) hoặc Toàn hệ thống (ALL)
+      // Admin: Chọn từ Tỉnh/Thành phố (PROVINCE) -> Phường/Xã / Đặc khu (WARD) hoặc Toàn hệ thống (ALL)
       if (data.areaId && data.areaId !== 'ALL') {
         if (!mongoose.Types.ObjectId.isValid(data.areaId)) {
           throw new ApiError(400, 'Mã khu vực không hợp lệ.');
@@ -340,7 +345,7 @@ class NotificationService {
           throw new ApiError(404, 'Khu vực hành chính mục tiêu không tồn tại.');
         }
         targetAreaId = targetAreaDoc._id;
-        scope = targetAreaDoc.type === 'WARD' ? 'WARD' : 'PROVINCE';
+        scope = await resolveTargetScopeForArea(targetAreaDoc, AdministrativeArea);
       } else {
         // Gửi toàn hệ thống (ALL)
         targetAreaDoc = null;
@@ -519,24 +524,8 @@ class NotificationService {
           $or: geoConditions,
         };
       } else {
-        // Cấp Tỉnh/Thành phố (PROVINCE): Gom các Phường/Xã con trực thuộc và kiểm tra cả ranh giới GPS
-        const childAreas = await AdministrativeArea.find({ status: 'ACTIVE' })
-          .select('_id parentId boundary')
-          .lean();
-        const selectedIds = new Set([targetAreaDoc._id.toString()]);
-        let foundChild = true;
-        while (foundChild) {
-          foundChild = false;
-          childAreas.forEach((area) => {
-            const parentId = area.parentId?.toString();
-            if (parentId && selectedIds.has(parentId) && !selectedIds.has(area._id.toString())) {
-              selectedIds.add(area._id.toString());
-              foundChild = true;
-            }
-          });
-        }
-
-        const areaIds = [...selectedIds];
+        // Cấp Tỉnh/Thành phố (PROVINCE): Gom toàn bộ các cấp con (bao gồm cây PROVINCE cùng tên) và kiểm tra ranh giới GPS
+        const { areaIds, boundedAreas } = await getDescendantAreaIds(targetAreaDoc._id, AdministrativeArea);
         const provinceConditions = [
           { 'authority.areaId': { $in: areaIds } },
           { 'citizen.areaId': { $in: areaIds } },
@@ -564,26 +553,19 @@ class NotificationService {
           );
         }
 
-        childAreas.forEach((area) => {
-          if (
-            selectedIds.has(area._id.toString()) &&
-            area.boundary?.type &&
-            Array.isArray(area.boundary.coordinates) &&
-            area.boundary.coordinates.length > 0
-          ) {
-            provinceConditions.push(
-              {
-                currentLocation: {
-                  $geoWithin: { $geometry: area.boundary },
-                },
+        boundedAreas.forEach((area) => {
+          provinceConditions.push(
+            {
+              currentLocation: {
+                $geoWithin: { $geometry: area.boundary },
               },
-              {
-                'citizen.currentLocation': {
-                  $geoWithin: { $geometry: area.boundary },
-                },
-              }
-            );
-          }
+            },
+            {
+              'citizen.currentLocation': {
+                $geoWithin: { $geometry: area.boundary },
+              },
+            }
+          );
         });
 
         userFilter = {

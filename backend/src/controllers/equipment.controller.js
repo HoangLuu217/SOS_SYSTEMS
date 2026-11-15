@@ -64,8 +64,21 @@ class EquipmentController {
   async consumeEquipment(req, res, next) {
     try {
       const { quantity, destination, note } = req.body;
-      const result = await equipmentService.consumeEquipment(req.params.id, { quantity, destination, note });
+      const result = await equipmentService.consumeEquipment(req.params.id, {
+        quantity,
+        destination,
+        note,
+        user: req.user,
+      });
       return sendSuccess(res, 200, 'Xuất cấp cứu trợ / Tiêu hao vật tư thành công', result);
+    } catch (error) { next(error); }
+  }
+
+  /** GET /equipments/dispatch-history */
+  async getDispatchHistory(req, res, next) {
+    try {
+      const result = await equipmentService.getDispatchHistory(req.query, req.user);
+      return sendSuccess(res, 200, 'Lấy lịch sử phiếu xuất kho & điều phối thành công', result);
     } catch (error) { next(error); }
   }
 

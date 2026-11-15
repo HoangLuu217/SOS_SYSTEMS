@@ -24,6 +24,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { io } from 'socket.io-client';
 import { ENV } from '@/config/env';
 import { backendApi } from '@/api';
+import { FullScreenImageViewer } from '@/components';
 import { useAuth } from '@/context/AuthContext';
 import { SosAssignmentData, SosAssignmentStatus, TabName } from '@/types';
 import { SosScreen, RescuerMissionWorkspaceModal } from '@/features/sos';
@@ -64,6 +65,11 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
     sentiment: 'SATISFIED' | 'NEUTRAL' | 'NEEDS_IMPROVEMENT';
     comment: string;
     submittedAt?: string;
+  } | null>(null);
+  const [imagePreview, setImagePreview] = useState<{
+    images: string[];
+    index: number;
+    insideModal?: boolean;
   } | null>(null);
 
   // Thông tin Đội cứu hộ & Phương tiện tác chiến
@@ -184,86 +190,103 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
   }, [fetchMissions]);
 
   // Tải thông tin Đội cứu hộ và Phương tiện cơ động của Cứu hộ viên
-  useEffect(() => {
-    let isMounted = true;
-    const fetchTeamInfo = async () => {
-      try {
-        const teamsRes = await backendApi.getRescueTeams({ limit: 100 });
-        const teams = Array.isArray(teamsRes.data)
-          ? teamsRes.data
-          : (teamsRes.data as any)?.teams || [];
-        const currentUserId = (user?._id || (user as any)?.id)?.toString();
-        const currentUserPhone = user?.phone;
-        const currentUserEmail = user?.email?.toLowerCase();
+  const fetchTeamInfo = useCallback(async () => {
+    try {
+      const teamsRes = await backendApi.getRescueTeams({ limit: 100 });
+      const teams = Array.isArray(teamsRes.data)
+        ? teamsRes.data
+        : (teamsRes.data as any)?.teams || [];
+      const currentUserId = (user?._id || (user as any)?.id)?.toString();
+      const currentUserPhone = user?.phone;
+      const currentUserEmail = user?.email?.toLowerCase();
 
-        const myTeam = teams.find((t: any) => {
-          const leaderIdStr = (t.leaderId?._id || t.leaderId)?.toString();
-          const leaderPhone = t.leaderId?.phone;
-          const leaderEmail = t.leaderId?.email?.toLowerCase();
-          const isLeader =
-            (currentUserId && leaderIdStr === currentUserId) ||
-            (currentUserPhone && leaderPhone === currentUserPhone) ||
-            (currentUserEmail && leaderEmail === currentUserEmail);
+      const myTeam = teams.find((t: any) => {
+        if (t.status === 'INACTIVE') return false;
+        const leaderIdStr = (t.leaderId?._id || t.leaderId)?.toString();
+        const leaderPhone = t.leaderId?.phone;
+        const leaderEmail = t.leaderId?.email?.toLowerCase();
+        const isLeader =
+          (currentUserId && leaderIdStr === currentUserId) ||
+          (currentUserPhone && leaderPhone === currentUserPhone) ||
+          (currentUserEmail && leaderEmail === currentUserEmail);
 
-          const isMember =
-            Array.isArray(t.members) &&
-            t.members.some((m: any) => {
-              const r = m.rescuerId;
-              const rId = (r?._id || r)?.toString();
-              const rPhone = r?.phone;
-              const rEmail = r?.email?.toLowerCase();
-              const matchesUser =
-                (currentUserId && rId === currentUserId) ||
-                (currentUserPhone && rPhone === currentUserPhone) ||
-                (currentUserEmail && rEmail === currentUserEmail);
-              return matchesUser && m.status !== 'REJECTED';
-            });
-          return isLeader || isMember;
-        });
-
-        if (myTeam && isMounted) {
-          const leaderIdStr = (myTeam.leaderId?._id || myTeam.leaderId)?.toString();
-          const isLeaderOfTeam =
-            (currentUserId && leaderIdStr === currentUserId) ||
-            (currentUserPhone && myTeam.leaderId?.phone === currentUserPhone) ||
-            (currentUserEmail && myTeam.leaderId?.email?.toLowerCase() === currentUserEmail);
-          setIsTeamLeader(Boolean(isLeaderOfTeam));
-          myTeamIdRef.current = (myTeam._id || myTeam.id)?.toString() || null;
-          let vehiclePlate = 'Chưa phân bổ';
-          let vehicleType = 'AMBULANCE';
-
-          if (Array.isArray(myTeam.vehicles) && myTeam.vehicles.length > 0) {
-            vehiclePlate = myTeam.vehicles[0].plateNumber;
-            vehicleType = myTeam.vehicles[0].type;
-          } else {
-            try {
-              const vehRes = await backendApi.getVehicles({ teamId: myTeam._id });
-              const vList = Array.isArray(vehRes.data) ? vehRes.data : [];
-              if (vList.length > 0 && isMounted) {
-                vehiclePlate = vList[0].plateNumber;
-                vehicleType = vList[0].type;
-              }
-            } catch {
-              // ignore
-            }
-          }
-
-          setUnitInfo({
-            teamName: myTeam.name,
-            vehiclePlate,
-            vehicleType,
+        const isMember =
+          Array.isArray(t.members) &&
+          t.members.some((m: any) => {
+            const r = m.rescuerId;
+            const rId = (r?._id || r)?.toString();
+            const rPhone = r?.phone;
+            const rEmail = r?.email?.toLowerCase();
+            const matchesUser =
+              (currentUserId && rId === currentUserId) ||
+              (currentUserPhone && rPhone === currentUserPhone) ||
+              (currentUserEmail && rEmail === currentUserEmail);
+            return matchesUser && m.status !== 'REJECTED';
           });
-        }
-      } catch {
-        // Giữ fallback mặc định
-      }
-    };
+        return isLeader || isMember;
+      });
 
+      if (myTeam) {
+        const leaderIdStr = (myTeam.leaderId?._id || myTeam.leaderId)?.toString();
+        const isLeaderOfTeam =
+          (currentUserId && leaderIdStr === currentUserId) ||
+          (currentUserPhone && myTeam.leaderId?.phone === currentUserPhone) ||
+          (currentUserEmail && myTeam.leaderId?.email?.toLowerCase() === currentUserEmail);
+        setIsTeamLeader(Boolean(isLeaderOfTeam));
+        myTeamIdRef.current = (myTeam._id || myTeam.id)?.toString() || null;
+        let vehiclePlate = 'Chưa phân bổ';
+        let vehicleType = 'AMBULANCE';
+
+        if (Array.isArray(myTeam.vehicles) && myTeam.vehicles.length > 0) {
+          vehiclePlate = myTeam.vehicles[0].plateNumber;
+          vehicleType = myTeam.vehicles[0].type;
+        } else {
+          try {
+            const vehRes = await backendApi.getVehicles({ teamId: myTeam._id });
+            const vList = Array.isArray(vehRes.data) ? vehRes.data : [];
+            if (vList.length > 0) {
+              vehiclePlate = vList[0].plateNumber;
+              vehicleType = vList[0].type;
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        setUnitInfo({
+          teamName: myTeam.name,
+          vehiclePlate,
+          vehicleType,
+        });
+      } else {
+        setIsTeamLeader(false);
+        myTeamIdRef.current = null;
+        setUnitInfo({
+          teamName: 'Chưa thuộc đội',
+          vehiclePlate: 'Chưa phân bổ',
+          vehicleType: 'AMBULANCE',
+        });
+      }
+    } catch {
+      // Giữ fallback mặc định
+    }
+  }, [user?._id, user?.phone, user?.email]);
+
+  useEffect(() => {
     fetchTeamInfo();
+    const subTeam = DeviceEventEmitter.addListener('team:membership_updated', () => {
+      fetchTeamInfo();
+      fetchMissions({ isSilent: true });
+    });
+    const subTeamsUpdated = DeviceEventEmitter.addListener('rescue_teams_updated', () => {
+      fetchTeamInfo();
+      fetchMissions({ isSilent: true });
+    });
     return () => {
-      isMounted = false;
+      subTeam.remove();
+      subTeamsUpdated.remove();
     };
-  }, [user?._id]);
+  }, [fetchTeamInfo, fetchMissions]);
 
   // Kết nối Socket.IO realtime để nhận lệnh điều động & hủy điều động tức thời 100%
   useEffect(() => {
@@ -1087,11 +1110,17 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
 
             return (
               <View key={item._id} style={styles.missionCard}>
-                {/* Top Card: SOS Code & Priority */}
+                {/* Top Card: Dispatch / SOS Code & Priority */}
                 <View style={styles.cardHeaderRow}>
                   <View style={styles.codeRow}>
-                    <Text style={styles.codePrefix}>MÃ SOS:</Text>
-                    <Text style={styles.codeText}>{sos?.sosCode || 'SOS-KHẨN'}</Text>
+                    <Text style={styles.codePrefix}>{isReliefMission ? 'MÃ LỆNH:' : 'MÃ SOS:'}</Text>
+                    <Text style={styles.codeText}>
+                      {item.dispatchCode ||
+                        sos?.sosCode ||
+                        (isReliefMission
+                          ? `LP-${String(item._id).slice(-4).toUpperCase()}`
+                          : 'SOS-KHẨN')}
+                    </Text>
                   </View>
                   <View style={styles.cardHeaderRight}>
                     {item.status === 'COMPLETED' && sos?.citizenFeedback?.submittedAt ? (
@@ -1547,7 +1576,13 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                           {cardProofList.map((imgUrl: string, imgIdx: number) => (
                             <TouchableOpacity
                               key={imgIdx}
-                              onPress={() => setPreviewImageUri(imgUrl)}
+                              onPress={() =>
+                                setImagePreview({
+                                  images: cardProofList,
+                                  index: imgIdx,
+                                  insideModal: false,
+                                })
+                              }
                               activeOpacity={0.8}
                               style={styles.cardProofThumbWrap}
                             >
@@ -1790,16 +1825,16 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
               </Text>
             </View>
             <Text style={styles.queueNoticeDesc}>
-              Đội đang ưu tiên xử lý ca {currentActiveMission?.sosRequestId?.sosCode || 'hiện tại'}. Theo quy tắc tác chiến, nhiệm vụ kế tiếp sẽ tự động kích hoạt ngay sau khi hoàn thành ca này.
+              Đội đang ưu tiên xử lý ca {currentActiveMission?.dispatchCode || currentActiveMission?.sosRequestId?.sosCode || 'hiện tại'}. Theo quy tắc tác chiến, nhiệm vụ kế tiếp sẽ tự động kích hoạt ngay sau khi hoàn thành ca này.
             </Text>
             {queuedMissions.map((qm: SosAssignmentData) => (
               <View key={qm._id} style={styles.queuedItemRow}>
                 <View style={styles.queuedBullet} />
                 <Text style={styles.queuedCode}>
-                  {qm.sosRequestId?.sosCode || 'SOS-KHẨN'}
+                  {qm.dispatchCode || qm.sosRequestId?.sosCode || 'SOS-KHẨN'}
                 </Text>
                 <Text style={styles.queuedAddr} numberOfLines={1}>
-                  • {qm.sosRequestId?.address || 'Điểm cứu hộ kế tiếp'}
+                  • {qm.destination || qm.sosRequestId?.address || 'Điểm cứu hộ kế tiếp'}
                 </Text>
                 <View style={styles.queuedLockTag}>
                   <Feather name="lock" size={10} color="#64748B" />
@@ -1854,7 +1889,9 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                           ? 'Xác nhận và lưu vết minh bạch cấp phát cứu trợ cho ca '
                           : 'Xác nhận đã hoàn tất cứu hộ cho ca '}
                         <Text style={{ fontWeight: '700' }}>
-                          {selectedMission?.sosRequestId?.sosCode}
+                          {selectedMission?.dispatchCode ||
+                            selectedMission?.sosRequestId?.sosCode ||
+                            (selectedMission?._id ? `LP-${String(selectedMission._id).slice(-4).toUpperCase()}` : '')}
                         </Text>
                       </Text>
                     </View>
@@ -1962,7 +1999,15 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
                         >
                           {proofPhotos.map((photo, pIdx) => (
                             <View key={pIdx} style={styles.proofThumbWrap}>
-                              <TouchableOpacity onPress={() => setPreviewImageUri(photo.uri)}>
+                              <TouchableOpacity
+                                onPress={() =>
+                                  setImagePreview({
+                                    images: proofPhotos.map((p) => p.uri),
+                                    index: pIdx,
+                                    insideModal: true,
+                                  })
+                                }
+                              >
                                 <Image source={{ uri: photo.uri }} style={styles.proofThumbImg} />
                               </TouchableOpacity>
                               <TouchableOpacity
@@ -2038,32 +2083,25 @@ export const RescuerMissionScreen: React.FC<RescuerMissionScreenProps> = ({
               })()}
             </ScrollView>
           </View>
+
+          <FullScreenImageViewer
+            visible={Boolean(imagePreview?.insideModal)}
+            images={imagePreview?.images || []}
+            initialIndex={imagePreview?.index || 0}
+            onClose={() => setImagePreview(null)}
+            useModal={false}
+          />
         </View>
       </Modal>
 
-      {/* Modal phóng to xem ảnh bằng chứng bàn giao */}
-      <Modal
-        visible={Boolean(previewImageUri)}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPreviewImageUri(null)}
-      >
-        <View style={styles.imagePreviewOverlay}>
-          <TouchableOpacity
-            style={styles.imagePreviewCloseBtn}
-            onPress={() => setPreviewImageUri(null)}
-          >
-            <Feather name="x" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          {previewImageUri && (
-            <Image
-              source={{ uri: previewImageUri }}
-              style={styles.imagePreviewFull}
-              resizeMode="contain"
-            />
-          )}
-        </View>
-      </Modal>
+      {/* Phóng to xem ảnh bằng chứng bàn giao (từ thẻ nhiệm vụ) */}
+      <FullScreenImageViewer
+        visible={Boolean(imagePreview && !imagePreview.insideModal)}
+        images={imagePreview?.images || []}
+        initialIndex={imagePreview?.index || 0}
+        onClose={() => setImagePreview(null)}
+        useModal={true}
+      />
 
       {/* 4.5 Modal xem đánh giá của người dân cho từng nhiệm vụ */}
       <Modal

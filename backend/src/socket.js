@@ -123,6 +123,14 @@ const initSocket = (httpServer) => {
     // Luồng hiệp đồng 2 giai đoạn: Ca-nô yêu cầu xe đường bộ đón bờ
     socket.on('rescuer:request_shore_handoff', (data) => {
       if (data) {
+        const handoff = data.shoreHandoff;
+        if (handoff && handoff.rescueTeamId && typeof handoff.rescueTeamId === 'object') {
+          const teamObj = handoff.rescueTeamId;
+          handoff.rescueTeamId = String(teamObj._id || teamObj.id || '');
+          if ((!handoff.rescueTeamName || handoff.rescueTeamName === 'Đội Cứu Hộ') && teamObj.name) {
+            handoff.rescueTeamName = teamObj.name;
+          }
+        }
         console.log(`⚡ [Socket.IO] Nhận yêu cầu xe đón bờ từ Ca-nô:`, data);
         io.emit('sos:shore_handoff_requested', data);
       }

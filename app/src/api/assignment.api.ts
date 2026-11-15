@@ -9,6 +9,7 @@ export interface RescuerAssignmentItem {
   rescueTeamId?: any;
   rescuerId?: any;
   vehicleId?: any;
+  assignedBy?: any;
   priority?: string;
   status:
     | 'PENDING'
@@ -28,6 +29,12 @@ export interface RescuerAssignmentItem {
   completedAt?: string;
   note?: string;
   missionType?: string;
+  dispatchCode?: string;
+  areaId?: string;
+  location?: {
+    type?: string;
+    coordinates?: [number, number];
+  };
   recipientName?: string;
   destination?: string;
 }

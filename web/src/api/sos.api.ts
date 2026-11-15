@@ -43,7 +43,7 @@ export async function completeSosRequest(sosId: string): Promise<{ success: bool
 export async function assignSosApi(sosId: string, payload: {
   authorityOrganizationId?: string;
   rescueTeamId: string;
-  rescuerId: string;
+  rescuerId?: string;
   vehicleId?: string;
   note?: string;
   supplies?: Array<{
@@ -130,5 +130,27 @@ export async function clearCancelledSosApi(sosIds?: string[]): Promise<{ success
   return fetchWithAuth('/sos/clear-cancelled', {
     method: 'DELETE',
     body: JSON.stringify({ sosIds: sosIds || [] }),
+  });
+}
+
+export async function fetchDispatchRecommendationsApi(
+  sosId: string,
+  params: { ai?: boolean; areaId?: string; areaName?: string; forceRefresh?: boolean } = {}
+): Promise<{ success: boolean; data: import('@/types/domainD').DispatchRecommendationsData }> {
+  const qs = new URLSearchParams();
+  if (params.ai) qs.set('ai', 'true');
+  if (params.areaId) qs.set('areaId', params.areaId);
+  if (params.areaName) qs.set('areaName', params.areaName);
+  if (params.forceRefresh) qs.set('forceRefresh', 'true');
+  const query = qs.toString();
+  return fetchWithAuth(`/sos/${sosId}/dispatch-recommendations${query ? `?${query}` : ''}`, {
+    method: 'GET',
+  });
+}
+
+export async function reanalyzeSosAiApi(sosId: string): Promise<{ success: boolean; data: SosRequestItem }> {
+  return fetchWithAuth(`/sos/${sosId}/reanalyze-ai`, {
+    method: 'POST',
+    body: JSON.stringify({}),
   });
 }

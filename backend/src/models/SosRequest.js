@@ -98,10 +98,37 @@ const sosRequestSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Mức độ ưu tiên là bắt buộc'],
       enum: {
-        values: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
+        values: ['UNASSESSED', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
         message: 'Mức độ ưu tiên {VALUE} không hợp lệ',
       },
-      default: 'MEDIUM',
+      default: 'UNASSESSED',
+    },
+    citizenReportedPriority: {
+      type: String,
+      enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL', null],
+      default: null,
+    },
+    priorityLockedByAuthority: {
+      type: Boolean,
+      default: false,
+    },
+    riskScore: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: null,
+    },
+    riskBreakdown: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    riskAssessment: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    aiAssessment: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
     },
     people: {
       type: Number,
@@ -262,6 +289,7 @@ sosRequestSchema.index({ status: 1 });
 sosRequestSchema.index({ priority: 1 });
 sosRequestSchema.index({ createdAt: -1 });
 sosRequestSchema.index({ areaId: 1, status: 1, priority: 1, createdAt: -1 });
+sosRequestSchema.index({ areaId: 1, status: 1, riskScore: -1, createdAt: -1 });
 
 // Tự động gán resolvedAt khi chuyển sang trạng thái kết thúc
 sosRequestSchema.pre('save', function () {

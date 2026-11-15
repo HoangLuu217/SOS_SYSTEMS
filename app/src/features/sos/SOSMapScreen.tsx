@@ -850,7 +850,6 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
 
     setSending(true);
     try {
-      const selectedTypeObj = REQUEST_TYPES.find((t) => t.id === requestType);
       const priorityLabels = selectedPriorities;
 
       // Địa chỉ tổng hợp
@@ -860,17 +859,6 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
       } else if (gpsAddress && !gpsAddress.includes('Không thể') && !gpsAddress.includes('Chưa')) {
         finalAddress = `${finalAddress} (${gpsAddress})`;
       }
-
-      // Đánh giá mức độ khẩn cấp
-      const textForAnalysis = `${description} ${priorityLabels.join(' ')}`.toLowerCase();
-      const isCritical =
-        selectedPriorities.length > 0 ||
-        requestType === 'MEDICAL' ||
-        textForAnalysis.includes('mái nhà') ||
-        textForAnalysis.includes('nóc nhà') ||
-        textForAnalysis.includes('chảy xiết') ||
-        textForAnalysis.includes('nguy kịch') ||
-        textForAnalysis.includes('ngang ngực');
 
       const selectedTypeObjs = REQUEST_TYPES.filter((t) => requestTypes.includes(t.id));
       const requestTypeLabels = selectedTypeObjs.map((t) => t.label).join(', ');
@@ -883,7 +871,6 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
             : [108.26054, 15.96836],
         },
         address: finalAddress,
-        priority: isCritical ? 'CRITICAL' : 'HIGH',
         emergencyType: requestTypes[0] || 'FLOOD',
         emergencyTypes: requestTypes,
         description: description.trim() || null,
@@ -1082,6 +1069,19 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
                 {successData.address}
               </Text>
             </View>
+            {(() => {
+              const p = successData.rawSosData?.priority;
+              const label = p && p !== 'UNASSESSED' ? `AI đề xuất: ${p}` : 'AI đang phân tích';
+              const color = p === 'CRITICAL' ? '#DC2626' : p === 'HIGH' ? '#EA580C' : '#3730A3';
+              return (
+                <View style={styles.successDetailRow}>
+                  <Text style={styles.successDetailLabel}>Phân loại mức độ:</Text>
+                  <Text style={[styles.successDetailValue, { color, fontWeight: '800' }]}>
+                    {label}
+                  </Text>
+                </View>
+              );
+            })()}
           </View>
 
           <View style={{ flexDirection: 'row', gap: 10, width: '100%', marginTop: 18 }}>

@@ -18,6 +18,33 @@ export async function safeParseResponse(res: Response): Promise<any> {
 }
 
 let refreshPromise: Promise<string | null> | null = null;
+let hasDispatchedAuthExpired = false;
+
+function notifySessionExpired(message?: string) {
+  const hadSession = Boolean(
+    localStorage.getItem('sos_auth_user') || localStorage.getItem('sos_access_token')
+  );
+  localStorage.removeItem('sos_auth_user');
+  localStorage.removeItem('sos_access_token');
+  localStorage.removeItem('sos_refresh_token');
+  localStorage.removeItem('sos_active_portal');
+
+  if (hadSession && !hasDispatchedAuthExpired && typeof window !== 'undefined') {
+    hasDispatchedAuthExpired = true;
+    window.dispatchEvent(
+      new CustomEvent('sos_auth_expired', {
+        detail: {
+          message:
+            message ||
+            'Phiên đăng nhập đã hết hạn hoặc không còn hợp lệ. Vui lòng đăng nhập lại.',
+        },
+      })
+    );
+    setTimeout(() => {
+      hasDispatchedAuthExpired = false;
+    }, 1500);
+  }
+}
 
 export async function refreshAccessToken(): Promise<string | null> {
   const refreshToken = localStorage.getItem('sos_refresh_token');
@@ -83,11 +110,13 @@ export async function fetchWithAuth<T>(
     credentials: 'include',
   };
 
+  const isAuthEndpoint = endpoint.startsWith('/auth/');
+
   try {
     let res = await fetch(`${API_BASE}${endpoint}`, mergedOptions);
 
     // Xử lý khi Token hết hạn (HTTP 401): Tự động làm mới bằng Refresh Token mà không gián đoạn người dùng
-    if (!res.ok && res.status === 401 && endpoint !== '/auth/refresh' && endpoint !== '/auth/login') {
+    if (!res.ok && res.status === 401 && !isAuthEndpoint) {
       if (!refreshPromise) {
         refreshPromise = refreshAccessToken().finally(() => {
           refreshPromise = null;
@@ -106,6 +135,9 @@ export async function fetchWithAuth<T>(
 
     const data = await safeParseResponse(res);
     if (!res.ok) {
+      if (res.status === 401 && !isAuthEndpoint) {
+        notifySessionExpired(data?.message);
+      }
       throw new Error(data.message || 'Lỗi xử lý yêu cầu máy chủ');
     }
     return data;
@@ -124,10 +156,25 @@ export async function fetchWithAuth<T>(
       const directRes = await fetch(`${DIRECT_BACKEND}${endpoint}`, mergedOptions);
       const directData = await safeParseResponse(directRes);
       if (!directRes.ok) {
+        if (directRes.status === 401 && !isAuthEndpoint) {
+          notifySessionExpired(directData?.message);
+        }
         throw new Error(directData.message || 'Lỗi xử lý yêu cầu máy chủ', { cause: err });
       }
       return directData;
     }
     throw err;
   }
+}
+
+/**
+ * Tải lên tệp hình ảnh/media lên máy chủ thông qua endpoint `/files`
+ */
+export async function uploadMediaFile(file: File): Promise<{ success: boolean; url: string; data?: any }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return fetchWithAuth<{ success: boolean; url: string; data?: any }>('/files', {
+    method: 'POST',
+    body: formData,
+  });
 }

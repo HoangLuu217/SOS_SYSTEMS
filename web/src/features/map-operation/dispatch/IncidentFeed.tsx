@@ -17,6 +17,7 @@ import { approveSuppliesApi, rejectSuppliesApi } from '@/api';
 import type { SosRequest, AuthorityOfficer } from '@/types/domainD';
 import { useApp } from '@/context/AppContext';
 import { toast } from '@/components/common/toast';
+import { getShoreHandoffVehicleStatusMeta, formatCompactLandingPointName } from '@/utils/shoreHandoffStatus';
 
 interface Props {
   sosRequests: SosRequest[];
@@ -220,9 +221,11 @@ export const IncidentFeed = ({
     }).length;
   }, [scopedIncidents]);
 
+  // Filter incidents based on search query & selected status tab (chỉ hiển thị các ca đang diễn ra)
+  // Ưu tiên SOS chưa được AI phân loại để cán bộ kiểm tra, sau đó theo mức AI/authority đã gán.
   const filteredIncidents = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return scopedIncidents.filter((s) => {
+    const filtered = scopedIncidents.filter((s) => {
       if (CLOSED_STATUSES.has(String(s.status || '').toUpperCase())) return false;
 
       if (q) {
@@ -239,6 +242,12 @@ export const IncidentFeed = ({
       if (statusFilter === 'UNASSIGNED') return !assigned;
       if (statusFilter === 'ACTIVE') return assigned;
       return true;
+    });
+
+    const priorityOrder: Record<string, number> = { UNASSESSED: 0, CRITICAL: 1, HIGH: 2, MEDIUM: 3, LOW: 4 };
+    return [...filtered].sort((a, b) => {
+      const orderDiff = (priorityOrder[a.priority] ?? 0) - (priorityOrder[b.priority] ?? 0);
+      return orderDiff || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
   }, [scopedIncidents, searchQuery, statusFilter]);
 
@@ -415,7 +424,13 @@ export const IncidentFeed = ({
         {paginatedIncidents.map((sos) => {
           const isSelected = selectedSos?.id === sos.id;
           const cardSeverityClass =
-            sos.priority === 'CRITICAL' ? 'critical' : sos.priority === 'HIGH' ? 'high' : 'medium';
+            sos.priority === 'UNASSESSED'
+              ? 'unassessed'
+              : sos.priority === 'CRITICAL'
+              ? 'critical'
+              : sos.priority === 'HIGH'
+              ? 'high'
+              : 'medium';
           const badgeSemanticClass =
             sos.priority === 'CRITICAL'
               ? 'critical'
@@ -431,6 +446,8 @@ export const IncidentFeed = ({
               ? 'Khẩn cấp'
               : sos.priority === 'LOW'
               ? 'Thấp'
+              : sos.priority === 'UNASSESSED'
+              ? 'Chờ phân loại'
               : 'Trung bình';
 
           const emergencyTypeLabel = getEmergencyTypeLabel(sos);
@@ -469,6 +486,22 @@ export const IncidentFeed = ({
                 </div>
 
                 <div className="card-meta-top">
+                  {sos.priority === 'UNASSESSED' && (
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 900,
+                        padding: '1.5px 5px',
+                        borderRadius: 4,
+                        background: '#fff7ed',
+                        color: '#c2410c',
+                        border: '1px solid #fed7aa',
+                      }}
+                      title="AI chưa phân loại; cán bộ cần xem xét"
+                    >
+                      {sos.aiAssessment?.status === 'PENDING' ? 'AI đang phân tích' : 'Cần phân loại'}
+                    </span>
+                  )}
                   <span className={`sos-badge ${badgeSemanticClass} compact-priority-pill`}>{priorityLabel}</span>
                   <span className="compact-time-ago">{sos.timeAgo}</span>
                 </div>
@@ -557,24 +590,31 @@ export const IncidentFeed = ({
                       {sos.shoreHandoff.vehicleTypeNeeded === 'AMBULANCE' ? 'Xe cứu thương' : 'Xe tải'}
                     </div>
                     <div className="feed-handoff-sub">
-                      {sos.shoreHandoff.landingPoint?.name || 'Bến cập bờ'} · {sos.shoreHandoff.peopleCount} người
+                      {formatCompactLandingPointName(sos.shoreHandoff.landingPoint?.name)} · {sos.shoreHandoff.peopleCount} người
                     </div>
                   </div>
                 </div>
               )}
 
-              {sos.shoreHandoff?.status === 'ASSIGNED' && (
+              {sos.shoreHandoff?.status === 'ASSIGNED' && (() => {
+                const handoffMeta = getShoreHandoffVehicleStatusMeta(
+                  sos.shoreHandoff?.status,
+                  sos.shoreHandoffAssignment?.status
+                );
+                const landingLabel = formatCompactLandingPointName(sos.shoreHandoff.landingPoint?.name, '');
+                return (
                 <div className="feed-handoff-box is-success">
                   <Truck size={13} className="feed-handoff-icon" />
                   <div className="feed-handoff-content">
-                    <div className="feed-handoff-title">Xe đang đến bến đón</div>
+                    <div className="feed-handoff-title">{handoffMeta.feedTitle}</div>
                     <div className="feed-handoff-sub">
-                      {sos.shoreHandoff.assignedVehiclePlate || sos.shoreHandoff.assignedVehicleName} (
-                      {sos.shoreHandoff.landingPoint?.name})
+                      {sos.shoreHandoff.assignedVehiclePlate || sos.shoreHandoff.assignedVehicleName}
+                      {landingLabel ? ` (${landingLabel})` : ''}
                     </div>
                   </div>
                 </div>
-              )}
+                );
+              })()}
 
               {/* Card Middle: Request Type + Priority Targets + Side Thumbnail */}
               <div className="compact-card-content">

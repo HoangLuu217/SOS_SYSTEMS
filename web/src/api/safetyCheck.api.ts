@@ -139,8 +139,9 @@ export async function fetchSafetyCheckResponsesApi(
   data: {
     safetyCheck: { _id: string; title: string; status: string; scope?: string; stats: SafetyCheckStats };
     responses: SafetyCheckResponseItem[];
+    pagination?: { total: number; page: number; limit: number; totalPages: number };
   };
-  pagination: { total: number; page: number; limit: number; totalPages: number };
+  pagination?: { total: number; page: number; limit: number; totalPages: number };
 }> {
   const params = new URLSearchParams();
   if (query?.status) params.append('status', query.status);

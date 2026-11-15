@@ -107,6 +107,17 @@ const rescueTeamSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    baseLocation: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number],
+        default: undefined,
+      },
+    },
     operationalStatus: {
       type: String,
       enum: {
@@ -123,6 +134,15 @@ const rescueTeamSchema = new mongoose.Schema(
       },
       default: 'ACTIVE',
     },
+    autoDeactivatedByLeaderSos: {
+      type: Boolean,
+      default: false,
+    },
+    autoDeactivatedSosIds: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: 'SosRequest',
+      default: [],
+    },
   },
   {
     timestamps: true,
@@ -136,5 +156,6 @@ rescueTeamSchema.index({ areaId: 1 });
 rescueTeamSchema.index({ leaderId: 1 });
 rescueTeamSchema.index({ 'members.rescuerId': 1 });
 rescueTeamSchema.index({ status: 1 });
+rescueTeamSchema.index({ baseLocation: '2dsphere' }, { sparse: true });
 
 module.exports = mongoose.model('RescueTeam', rescueTeamSchema);

@@ -22,81 +22,48 @@ async function seedNguHanhSon() {
     const defaultPasswordHash = await bcrypt.hash('Password@123', 10);
 
     // ========================================================
-    // 1. KIỂM TRA & TẠO KHU VỰC HÀNH CHÍNH QUẬN/PHƯỜNG NGŨ HÀNH SƠN
+    // 1. DÙNG KHU VỰC HÀNH CHÍNH CHUẨN HIỆN CÓ TRONG DB (KHÔNG TẠO THÊM BẢN GHI CŨ GÂY PHÌNH 95 -> 195)
     // ========================================================
-    console.log('\n--- 1. Đồng bộ Khu Vực Hành Chính Quận Ngũ Hành Sơn ---');
+    console.log('\n--- 1. Lấy Khu Vực Hành Chính Chuẩn Đà Nẵng & Ngũ Hành Sơn ---');
 
-    let danang = await AdministrativeArea.findOne({ code: 'DANANG' });
+    let danang = await AdministrativeArea.findOne({
+      type: 'PROVINCE',
+      $or: [{ code: 'VN-48' }, { name: /^Thành phố Đà Nẵng$/i }, { code: 'DANANG' }],
+    });
     if (!danang) {
       danang = await AdministrativeArea.create({
         name: 'Thành phố Đà Nẵng',
-        code: 'DANANG',
+        code: 'VN-48',
         type: 'PROVINCE',
         status: 'ACTIVE',
       });
     }
 
-    let districtNHS = await AdministrativeArea.findOne({
-      $or: [{ code: 'DAD-NHS' }, { name: /Ngũ Hành Sơn/i, type: 'DISTRICT' }],
+    let wardNguHanhSon = await AdministrativeArea.findOne({
+      $or: [
+        { code: 'VN48-20285' },
+        { name: /^Phường Ngũ Hành Sơn$/i, type: 'WARD' },
+        { code: 'DAD-NHS-01' },
+        { code: 'DAD-NHS' },
+      ],
     });
-
-    if (!districtNHS) {
-      districtNHS = await AdministrativeArea.create({
-        name: 'Quận Ngũ Hành Sơn',
-        code: 'DAD-NHS',
-        type: 'DISTRICT',
+    if (!wardNguHanhSon) {
+      wardNguHanhSon = await AdministrativeArea.create({
+        name: 'Phường Ngũ Hành Sơn',
+        code: 'VN48-20285',
+        type: 'WARD',
         parentId: danang._id,
         status: 'ACTIVE',
       });
-      console.log('➕ Đã tạo Quận Ngũ Hành Sơn:', districtNHS.name);
-    } else {
-      districtNHS.code = 'DAD-NHS';
-      districtNHS.status = 'ACTIVE';
-      await districtNHS.save();
-      console.log('✔ Đã có Quận Ngũ Hành Sơn:', districtNHS.name, `(${districtNHS.code})`);
     }
+    console.log('✔ Dùng địa bàn chuẩn:', wardNguHanhSon.name, `(${wardNguHanhSon.code})`);
 
-    // Các phường của Ngũ Hành Sơn (Giữ DAD-NHS-01 là Phường Ngũ Hành Sơn để đồng bộ với các tài khoản cán bộ hiện có)
-    const wardsConfig = [
-      { name: 'Phường Ngũ Hành Sơn', code: 'DAD-NHS-01' },
-      { name: 'Phường Khuê Mỹ', code: 'DAD-NHS-02' },
-      { name: 'Phường Hòa Quý', code: 'DAD-NHS-03' },
-      { name: 'Phường Hòa Hải', code: 'DAD-NHS-04' },
-      { name: 'Phường Mỹ An', code: 'DAD-NHS-05' },
-    ];
-
-    const wardDocs = {};
-    for (const w of wardsConfig) {
-      let ward = await AdministrativeArea.findOne({
-        $or: [
-          { code: w.code },
-          { name: new RegExp(`^${w.name}$`, 'i'), parentId: districtNHS._id },
-        ],
-      });
-      if (!ward) {
-        ward = await AdministrativeArea.create({
-          name: w.name,
-          code: w.code,
-          type: 'WARD',
-          parentId: districtNHS._id,
-          status: 'ACTIVE',
-        });
-        console.log(`➕ Đã tạo ${w.name} (${w.code})`);
-      } else {
-        ward.name = w.name;
-        ward.parentId = districtNHS._id;
-        ward.status = 'ACTIVE';
-        await ward.save();
-        console.log(`✔ Đã có ${ward.name} (${ward.code})`);
-      }
-      wardDocs[w.code] = ward;
-    }
-
-    const wardNguHanhSon = wardDocs['DAD-NHS-01'];
-    const wardKhueMy = wardDocs['DAD-NHS-02'];
-    const wardHoaQuy = wardDocs['DAD-NHS-03'];
-    const wardHoaHai = wardDocs['DAD-NHS-04'];
-    const wardMyAn = wardDocs['DAD-NHS-05'];
+    // Giữ tương thích các biến trong script mà không chèn thêm 4 phường cũ / quận cũ vào administrative_areas
+    const districtNHS = wardNguHanhSon;
+    const wardKhueMy = wardNguHanhSon;
+    const wardHoaQuy = wardNguHanhSon;
+    const wardHoaHai = wardNguHanhSon;
+    const wardMyAn = wardNguHanhSon;
 
     // ========================================================
     // 2. TẠO CƠ QUAN QUẢN LÝ / BAN CHỈ HUY QUẬN NGŨ HÀNH SƠN
@@ -199,7 +166,7 @@ async function seedNguHanhSon() {
 
     if (!leCuuNan) {
       leCuuNan = await User.create({
-        fullName: 'Lê Cứu Nạn',
+        fullName: 'Đông Cứu Nạn',
         phone: '0903000003',
         email: 'rescuer@sos.vn',
         passwordHash: defaultPasswordHash,
@@ -223,7 +190,8 @@ async function seedNguHanhSon() {
       });
       console.log('➕ Đã tạo Cứu hộ viên Lê Cứu Nạn (Đội trưởng):', leCuuNan.fullName, '| SĐT: 0903000003');
     } else {
-      leCuuNan.fullName = 'Lê Cứu Nạn';
+      // Giữ nguyên fullName hiện tại của tài khoản trong DB nếu đã tồn tại
+      if (!leCuuNan.fullName) leCuuNan.fullName = 'Đông Cứu Nạn';
       if (!leCuuNan.roles.includes('RESCUER')) leCuuNan.roles.push('RESCUER');
       if (!leCuuNan.roles.includes('CITIZEN')) leCuuNan.roles.push('CITIZEN');
       leCuuNan.status = 'ACTIVE';
@@ -242,7 +210,7 @@ async function seedNguHanhSon() {
         areaName: 'Quận Ngũ Hành Sơn',
       };
       await leCuuNan.save();
-      console.log('✔ Đã cập nhật Cứu hộ viên Lê Cứu Nạn (0903000003) - Đội trưởng Ngũ Hành Sơn');
+      console.log(`✔ Đã cập nhật Cứu hộ viên ${leCuuNan.fullName} (0903000003) - Đội trưởng Ngũ Hành Sơn`);
     }
 
     // 3.3. Đội phó cứu hộ Đặng Văn Long
@@ -509,9 +477,6 @@ async function seedNguHanhSon() {
 
     const teamMembers = [
       { rescuerId: leCuuNan._id, role: 'LEADER', joinedAt: new Date(), status: 'APPROVED' },
-      { rescuerId: leaderUser._id, role: 'MEMBER', joinedAt: new Date(), status: 'APPROVED' },
-      { rescuerId: rescuer1._id, role: 'MEMBER', joinedAt: new Date(), status: 'APPROVED' },
-      { rescuerId: rescuer2._id, role: 'MEMBER', joinedAt: new Date(), status: 'APPROVED' },
     ];
 
     if (!teamNHS) {
@@ -536,7 +501,50 @@ async function seedNguHanhSon() {
       teamNHS.description = 'Đội chuyên trách ca-nô cao tốc & xuồng máy lội nước, tác chiến các điểm xung yếu ven sông Cổ Cò, trũng thấp Khuê Mỹ, Mỹ An và Quận Ngũ Hành Sơn.';
       teamNHS.members = teamMembers;
       await teamNHS.save();
-      console.log('✔ Đã cập nhật Đội cứu hộ:', teamNHS.name, '(Đội trưởng: Lê Cứu Nạn)');
+      console.log('✔ Đã cập nhật Đội cứu hộ:', teamNHS.name, '(Đội trưởng:', `${leCuuNan.fullName})`);
+    }
+
+    // Tách đội Sông Hàn (Hải Châu) khỏi tài khoản 0903000003 để không trùng chỉ huy giữa 2 đội
+    const teamSongHan = await RescueTeam.findOne({ name: /Sông Hàn/i });
+    if (
+      teamSongHan &&
+      teamSongHan._id.toString() !== teamNHS._id.toString() &&
+      (String(teamSongHan.leaderId) === String(leCuuNan._id) ||
+        (teamSongHan.members || []).some((m) => String(m.rescuerId) === String(leCuuNan._id)))
+    ) {
+      let songHanLeader = await User.findOne({ $or: [{ phone: '0905114002' }, { email: 'trandinhhung.haichau@sos.vn' }] });
+      if (!songHanLeader) {
+        songHanLeader = await User.create({
+          fullName: 'Trần Đình Hùng',
+          phone: '0905114002',
+          email: 'trandinhhung.haichau@sos.vn',
+          passwordHash: defaultPasswordHash,
+          roles: ['RESCUER', 'CITIZEN'],
+          status: 'ACTIVE',
+          isPhoneVerified: true,
+          isVerified: true,
+          address: 'Phường Hải Châu, TP Đà Nẵng',
+          currentLocation: { type: 'Point', coordinates: [108.221, 16.068] },
+          rescuer: {
+            idNumber: '048091004455',
+            skills: ['Chỉ huy ca-nô cứu nạn', 'Cứu hộ vùng ngập sâu sông Hàn'],
+            experience: '6 năm kinh nghiệm cứu hộ sông Hàn - Hải Châu',
+            vehicleType: 'BOAT',
+            verificationStatus: 'VERIFIED',
+            availabilityStatus: 'AVAILABLE',
+          },
+        });
+      }
+      const otherMembers = (teamSongHan.members || []).filter(
+        (m) => String(m.rescuerId) !== String(leCuuNan._id) && String(m.rescuerId) !== String(songHanLeader._id)
+      );
+      teamSongHan.leaderId = songHanLeader._id;
+      teamSongHan.members = [
+        { rescuerId: songHanLeader._id, role: 'LEADER', joinedAt: new Date(), status: 'APPROVED' },
+        ...otherMembers,
+      ];
+      await teamSongHan.save();
+      console.log('✔ Đã tách chỉ huy riêng cho Đội Sông Hàn:', songHanLeader.fullName);
     }
 
     // ========================================================

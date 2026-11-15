@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Tooltip, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import {
@@ -8,6 +8,7 @@ import {
   RotateCcw,
   ExternalLink,
   LogOut,
+  Layers,
   Shield,
   AlertTriangle,
 } from 'lucide-react';
@@ -18,11 +19,15 @@ import type { User } from '@/types/auth';
 import type { HazardReportItem, SafeLocationItem, SosRequestItem } from '@/types/dashboard';
 import { fetchHazardReports } from '@/api/hazard.api';
 import { fetchSafeLocations } from '@/api/shelter.api';
+import { getShelterOccupancyMetrics } from '@/features/shelters/shelterConstants';
 import {
   extractPolygonLatLngRings,
   fetchGeoapifyBoundaries,
   fetchProvinceBoundaryFromApi,
+  fetchProvinceMapBundleFromDb,
   getCachedProvinceBoundarySync,
+  getCachedProvinceMapBundleSync,
+  HOANG_SA_ISLAND_AREA,
 } from '@/services/geoapifyBoundariesService';
 import {
   getSocket,
@@ -32,6 +37,7 @@ import {
   onAssignmentUpdated,
 } from '@/services/socketService';
 import type { AdministrativeArea } from '@/types/domainD';
+import { PhotoLightboxModal, type PhotoLightboxState } from '@/components/common/PhotoLightboxModal';
 import {
   AdminMapHud,
   AdminMapContent,
@@ -41,7 +47,118 @@ import {
   type AdminSosItem,
   type AdminSosFilterMode,
 } from './AdminMapLayers';
+import { AdminPointDetailPanel, type SelectedAdminPoint } from './AdminPointDetailPanel';
 import './RescueSos.css';
+
+const escapePinHtml = (val: string): string =>
+  val
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const getFirstImageUrl = (images?: string[]): string => {
+  if (!Array.isArray(images)) return '';
+  const found = images.find((u) => typeof u === 'string' && u.trim().length > 0);
+  return found ? found.trim() : '';
+};
+
+const buildAdminLocationDivIcon = ({
+  className,
+  label,
+  color,
+  symbol,
+  imageUrl,
+  isSelected = false,
+  pulse = false,
+}: {
+  className: string;
+  label: string;
+  color: string;
+  symbol: string;
+  imageUrl?: string;
+  isSelected?: boolean;
+  pulse?: boolean;
+}): L.DivIcon => {
+  const safeLabel = escapePinHtml(label || '');
+  const safeUrl = imageUrl ? escapePinHtml(imageUrl) : '';
+  const hasPhoto = Boolean(safeUrl);
+  const circleSize = hasPhoto ? (isSelected ? 38 : 34) : isSelected ? 30 : 26;
+  const labelBg = isSelected ? '#0f172a' : color;
+  const ringShadow = isSelected
+    ? `0 0 0 3px ${color}55, 0 4px 12px rgba(15,23,42,0.38)`
+    : hasPhoto
+      ? `0 0 0 2px ${color}, 0 3px 9px rgba(15,23,42,0.32)`
+      : `0 0 10px ${color}cc`;
+
+  return L.divIcon({
+    className,
+    iconSize: [130, 62],
+    iconAnchor: [65, 58],
+    html: `
+      <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;position:relative;">
+        <div style="
+          background:${labelBg};
+          color:#ffffff;
+          font-size:10px;
+          font-weight:800;
+          padding:1.5px 6px;
+          border-radius:4px;
+          box-shadow:0 2px 6px rgba(0,0,0,0.3);
+          white-space:nowrap;
+          margin-bottom:3px;
+          max-width:126px;
+          overflow:hidden;
+          text-overflow:ellipsis;
+          border:1px solid rgba(255,255,255,0.45);
+          position:relative;
+          z-index:3;
+        ">${safeLabel}</div>
+        <div style="position:relative;width:${circleSize}px;height:${circleSize}px;display:flex;align-items:center;justify-content:center;">
+          ${pulse ? `
+            <div style="
+              position:absolute;
+              width:${circleSize + 10}px;
+              height:${circleSize + 10}px;
+              border-radius:50%;
+              background:${color};
+              opacity:0.35;
+              animation:pulse-beacon 1.5s infinite;
+              z-index:1;
+            "></div>
+          ` : ''}
+          <div style="
+            position:relative;
+            width:${circleSize}px;
+            height:${circleSize}px;
+            background:${color};
+            border-radius:50%;
+            border:${isSelected ? '3px' : '2.5px'} solid #ffffff;
+            box-shadow:${ringShadow};
+            overflow:hidden;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            z-index:2;
+          ">
+            ${hasPhoto ? `
+              <img
+                src="${safeUrl}"
+                alt=""
+                style="width:100%;height:100%;object-fit:cover;display:block;"
+                onerror="this.style.display='none';if(this.nextElementSibling){this.nextElementSibling.style.display='flex';}"
+              />
+              <span style="display:none;width:100%;height:100%;align-items:center;justify-content:center;font-size:13px;">${symbol}</span>
+            ` : `
+              <span style="font-size:12px;line-height:1;">${symbol}</span>
+            `}
+          </div>
+        </div>
+      </div>
+    `,
+  });
+};
 
 interface Props {
   user?: User | null;
@@ -52,38 +169,73 @@ interface Props {
 
 const FALLBACK_DANANG_BOUNDS: L.LatLngBoundsExpression = [
   [14.94, 107.18],
-  [16.25, 108.78],
+  [16.34, 109.05],
 ];
 
-// Controller component điều khiển Leaflet map và khóa phạm vi zoom/kéo trong khu vực Đà Nẵng
+const DANANG_WITH_HOANG_SA_BOUNDS: L.LatLngBoundsExpression = [
+  [14.7, 107.0],
+  [17.7, 113.45],
+];
+
+const filterAdminDaNangWards = (rawWards: AdministrativeArea[]): AdministrativeArea[] =>
+  rawWards
+    .filter((w) => {
+      const name = (w.name || '').trim();
+      if (!name) return false;
+      if (/mở\s*rộng|lân\s*cận|geoapify/i.test(name)) return false;
+      if (/^(thành\s*phố\s*|tp\.?\s*)?đà\s*nẵng$/i.test(name)) return false;
+      if (/hoàng\s*sa|đặc\s*khu/i.test(name)) return true;
+      if (/^(quận|huyện|thị\s*xã)\s+/i.test(name)) return false;
+      return /^(phường|xã|thị\s*trấn)\s+/i.test(name);
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+
+// Controller component điều khiển Leaflet map, cho phép kéo xem cả Đà Nẵng đất liền lẫn Đặc khu Hoàng Sa
 const MapController = ({
   onMount,
   boundaryArea,
+  hoangSaArea,
 }: {
   onMount?: (map: L.Map) => void;
   boundaryArea: AdministrativeArea | null;
+  hoangSaArea?: AdministrativeArea | null;
 }) => {
   const map = useMap();
 
   const applyDanangBoundsLock = useCallback(() => {
-    const rings = extractPolygonLatLngRings(boundaryArea?.boundary);
-    const points = rings.flat();
-    const coreBounds =
-      points.length >= 3 ? L.latLngBounds(points) : L.latLngBounds(FALLBACK_DANANG_BOUNDS);
-    // Đệm nhẹ 5% quanh ranh giới để không bị cắt mất nhãn/ghim ở sát mép Đà Nẵng
-    const lockedBounds = coreBounds.pad(0.05);
+    const mainlandPoints = extractPolygonLatLngRings(boundaryArea?.boundary).flat();
+    const hoangSaPoints = extractPolygonLatLngRings(
+      (hoangSaArea || HOANG_SA_ISLAND_AREA).boundary
+    ).flat();
 
-    map.options.maxBoundsViscosity = 1.0;
+    const coreBounds =
+      mainlandPoints.length >= 3
+        ? L.latLngBounds(mainlandPoints)
+        : L.latLngBounds(FALLBACK_DANANG_BOUNDS);
+
+    const combinedBounds = L.latLngBounds(
+      coreBounds.getSouthWest(),
+      coreBounds.getNorthEast()
+    );
+    if (hoangSaPoints.length >= 3) {
+      combinedBounds.extend(L.latLngBounds(hoangSaPoints));
+    } else {
+      combinedBounds.extend(DANANG_WITH_HOANG_SA_BOUNDS);
+    }
+
+    // Đệm nhẹ quanh toàn vùng Đà Nẵng + Hoàng Sa để kéo xem ngoài khơi mượt mà
+    const lockedBounds = combinedBounds.pad(0.06);
+
+    map.options.maxBoundsViscosity = 0.9;
     map.setMaxBounds(lockedBounds);
 
-    const fitZoom = map.getBoundsZoom(coreBounds, false, L.point(24, 24));
-    const minZoom = Number.isFinite(fitZoom) ? Math.max(9, fitZoom) : 9.5;
+    const minZoom = 7.5;
     map.setMinZoom(minZoom);
 
     if (map.getZoom() < minZoom) {
       map.setZoom(minZoom);
     }
-  }, [map, boundaryArea]);
+  }, [map, boundaryArea, hoangSaArea]);
 
   useEffect(() => {
     if (onMount) onMount(map);
@@ -111,11 +263,9 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
   const defaultCenter: [number, number] = [16.0544, 108.2022];
   const defaultZoom = 12;
 
-  // Ghim Điểm An Toàn & Điểm Nguy Hiểm
+  // Danh sách Điểm An Toàn & Điểm Nguy Hiểm (hiển thị đồng bộ khi lọc tab "Tất cả")
   const [hazards, setHazards] = useState<HazardReportItem[]>([]);
   const [shelters, setShelters] = useState<SafeLocationItem[]>([]);
-  const [showHazards, setShowHazards] = useState<boolean>(true);
-  const [showShelters, setShowShelters] = useState<boolean>(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -180,55 +330,23 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
     };
   }, []);
 
-  const createShelterDivIcon = (shelter: SafeLocationItem) => {
+  const createShelterDivIcon = (shelter: SafeLocationItem, isSelected = false) => {
     const isFull = shelter.status === 'FULL' || (shelter.capacity > 0 && (shelter.currentOccupancy || 0) >= shelter.capacity);
     const isMaintenance = shelter.status === 'MAINTENANCE' || shelter.status === 'INACTIVE';
     const color = isMaintenance ? '#64748b' : isFull ? '#ea580c' : '#10b981';
     const symbol = shelter.type === 'HOSPITAL' ? '🏥' : shelter.type === 'EVACUATION_CENTER' ? '🏫' : '🛡️';
 
-    return L.divIcon({
+    return buildAdminLocationDivIcon({
       className: 'tactical-shelter-beacon',
-      html: `
-        <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;">
-          <div style="
-            background:${color};
-            color:#ffffff;
-            font-size:10px;
-            font-weight:800;
-            padding:1.5px 6px;
-            border-radius:4px;
-            box-shadow:0 2px 6px rgba(0,0,0,0.3);
-            white-space:nowrap;
-            margin-bottom:2px;
-            max-width:125px;
-            overflow:hidden;
-            text-overflow:ellipsis;
-            border:1px solid rgba(255,255,255,0.4);
-          ">
-            ${shelter.name}
-          </div>
-          <div style="
-            width:26px;
-            height:26px;
-            background:${color};
-            border-radius:50%;
-            border:2.5px solid #ffffff;
-            box-shadow:0 0 10px ${color}bb;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            font-size:12px;
-          ">
-            ${symbol}
-          </div>
-        </div>
-      `,
-      iconSize: [125, 46],
-      iconAnchor: [62, 42],
+      label: shelter.name,
+      color,
+      symbol,
+      imageUrl: getFirstImageUrl(shelter.images),
+      isSelected,
     });
   };
 
-  const createHazardDivIcon = (hazard: HazardReportItem) => {
+  const createHazardDivIcon = (hazard: HazardReportItem, isSelected = false) => {
     const isCritical = hazard.severity === 'CRITICAL';
     const color = isCritical ? '#dc2626' : hazard.severity === 'HIGH' ? '#ea580c' : hazard.severity === 'MEDIUM' ? '#d97706' : '#64748b';
     const symbol =
@@ -238,93 +356,82 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
       hazard.hazardType === 'ELECTRICAL' ? '⚡' :
       hazard.hazardType === 'ROAD_DAMAGE' ? '🚧' : '⚠️';
 
-    return L.divIcon({
+    return buildAdminLocationDivIcon({
       className: 'tactical-hazard-beacon',
-      html: `
-        <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;position:relative;">
-          ${isCritical ? `
-            <div style="
-              position:absolute;
-              top:13px;
-              width:34px;
-              height:34px;
-              border-radius:50%;
-              background:${color};
-              opacity:0.35;
-              animation:pulse-beacon 1.5s infinite;
-            "></div>
-          ` : ''}
-          <div style="
-            background:${color};
-            color:#ffffff;
-            font-size:10px;
-            font-weight:800;
-            padding:1.5px 6px;
-            border-radius:4px;
-            box-shadow:0 2px 6px rgba(0,0,0,0.3);
-            white-space:nowrap;
-            margin-bottom:2px;
-            max-width:125px;
-            overflow:hidden;
-            text-overflow:ellipsis;
-            border:1px solid rgba(255,255,255,0.4);
-            position:relative;
-            z-index:2;
-          ">
-            ${hazard.title}
-          </div>
-          <div style="
-            width:26px;
-            height:26px;
-            background:${color};
-            border-radius:50%;
-            border:2.5px solid #ffffff;
-            box-shadow:0 0 10px ${color}cc;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            font-size:12px;
-            position:relative;
-            z-index:2;
-          ">
-            ${symbol}
-          </div>
-        </div>
-      `,
-      iconSize: [125, 46],
-      iconAnchor: [62, 42],
+      label: hazard.title,
+      color,
+      symbol,
+      imageUrl: getFirstImageUrl(hazard.images),
+      isSelected,
+      pulse: isCritical,
     });
   };
 
-  const [boundaryArea, setBoundaryArea] = useState<AdministrativeArea | null>(() =>
-    getCachedProvinceBoundarySync(TARGET_PROVINCE_NAME)
+  const initialMapBundle = useMemo(
+    () => getCachedProvinceMapBundleSync(TARGET_PROVINCE_NAME),
+    []
   );
-  const [wardAreas, setWardAreas] = useState<AdministrativeArea[]>([]);
+
+  const [boundaryArea, setBoundaryArea] = useState<AdministrativeArea | null>(
+    () => initialMapBundle?.province || getCachedProvinceBoundarySync(TARGET_PROVINCE_NAME)
+  );
+  const [wardAreas, setWardAreas] = useState<AdministrativeArea[]>(() =>
+    initialMapBundle?.wards ? filterAdminDaNangWards(initialMapBundle.wards) : []
+  );
   const [selectedWardId, setSelectedWardId] = useState<string | null>(null);
   const [showWardBoundaries, setShowWardBoundaries] = useState(false);
   const [wardsLoading, setWardsLoading] = useState(false);
 
   const [rawSosList, setRawSosList] = useState<SosRequestItem[]>([]);
+  const [sosLoadError, setSosLoadError] = useState<string | null>(null);
   const [filterMode, setFilterMode] = useState<AdminSosFilterMode>('ACTIVE');
   const [selectedSosId, setSelectedSosId] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState<{ lat: number; lng: number; seq: number } | null>(null);
 
+  const hoangSaArea = useMemo(
+    () => wardAreas.find((w) => /hoàng\s*sa/i.test(w.name || '')) || HOANG_SA_ISLAND_AREA,
+    [wardAreas]
+  );
+
+  const [showShelters, setShowShelters] = useState(false);
+  const [showHazards, setShowHazards] = useState(false);
+  const [selectedPointRef, setSelectedPointRef] = useState<{ kind: 'SHELTER' | 'HAZARD'; id: string } | null>(null);
+  const [hudCollapsed, setHudCollapsed] = useState(false);
+  const [sosDrawerOpen, setSosDrawerOpen] = useState(false);
+  const [photoLightbox, setPhotoLightbox] = useState<PhotoLightboxState | null>(null);
+
+  const selectedPoint = useMemo<SelectedAdminPoint | null>(() => {
+    if (!selectedPointRef) return null;
+    if (selectedPointRef.kind === 'SHELTER') {
+      const sh = shelters.find((s) => s._id === selectedPointRef.id);
+      return sh ? { kind: 'SHELTER', shelter: sh } : null;
+    }
+    const hz = hazards.find((h) => h._id === selectedPointRef.id);
+    return hz ? { kind: 'HAZARD', hazard: hz } : null;
+  }, [selectedPointRef, shelters, hazards]);
+
   const loadDaNangWards = useCallback(async () => {
     setWardsLoading(true);
     try {
+      // 1. Ưu tiên đọc đồng thời ranh giới tỉnh + xã/phường/đặc khu từ CSDL MongoDB cho tốc độ mở trang nhanh
+      const dbBundle = await fetchProvinceMapBundleFromDb(TARGET_PROVINCE_NAME);
+      if (dbBundle?.province?.boundary) {
+        setBoundaryArea(dbBundle.province);
+      }
+      if (dbBundle?.wards && dbBundle.wards.length > 0) {
+        setWardAreas(filterAdminDaNangWards(dbBundle.wards));
+        return;
+      }
+
+      // 2. Fallback sang Geoapify / API riêng lẻ chỉ khi DB bundle chưa có đủ dữ liệu
+      if (!dbBundle?.province?.boundary) {
+        const fallbackProv = await fetchProvinceBoundaryFromApi(TARGET_PROVINCE_NAME);
+        if (fallbackProv?.boundary) {
+          setBoundaryArea(fallbackProv);
+        }
+      }
       const rawWards = await fetchGeoapifyBoundaries();
-      const mainlandWards = rawWards
-        .filter((w) => {
-          const name = (w.name || '').trim();
-          if (!name) return false;
-          if (w.id === 'area-hs' || /hoàng\s*sa/i.test(name)) return false;
-          if (/mở\s*rộng|lân\s*cận|geoapify/i.test(name)) return false;
-          if (/^(thành\s*phố\s*|tp\.?\s*)?đà\s*nẵng$/i.test(name)) return false;
-          if (/^(quận|huyện|thị\s*xã)\s+/i.test(name)) return false;
-          return /^(phường|xã|thị\s*trấn)\s+/i.test(name);
-        })
-        .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
-      setWardAreas(mainlandWards);
+      setWardAreas(filterAdminDaNangWards(rawWards));
     } catch (err) {
       console.warn('Không thể tải ranh giới xã/phường từ API:', err);
     } finally {
@@ -337,29 +444,22 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
       const res = await fetchSosRequests({});
       if (res?.success && Array.isArray(res.data)) {
         setRawSosList(res.data);
+        setSosLoadError(null);
+      } else {
+        setSosLoadError('Không thể tải danh sách SOS từ máy chủ.');
       }
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Không thể tải danh sách SOS từ máy chủ.';
       console.warn(`Không thể tải danh sách SOS tại ${TARGET_PROVINCE_NAME}:`, err);
+      setSosLoadError(message);
     }
   }, []);
 
   // Tải boundary khu vực mục tiêu, danh sách xã/phường Đà Nẵng & danh sách SOS ban đầu
   useEffect(() => {
-    let mounted = true;
-    if (!boundaryArea?.boundary) {
-      fetchProvinceBoundaryFromApi(TARGET_PROVINCE_NAME)
-        .then((area) => {
-          if (mounted && area?.boundary) {
-            setBoundaryArea(area);
-          }
-        });
-    }
     loadAreaSos();
     loadDaNangWards();
-    return () => {
-      mounted = false;
-    };
-  }, [loadAreaSos, loadDaNangWards, boundaryArea?.boundary]);
+  }, [loadAreaSos, loadDaNangWards]);
 
   // Đồng bộ dữ liệu SOS thời gian thực qua Socket.IO (chỉ xem)
   useEffect(() => {
@@ -547,120 +647,126 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
           selectedSos={selectedSos}
           onSelectSos={handleSelectSos}
           onFocusSos={handleFocusSos}
-          showWardBoundaries={showWardBoundaries}
-          onToggleWardBoundaries={handleToggleWardBoundaries}
           wardsLoading={wardsLoading}
           wardAreas={wardAreas}
           selectedWard={selectedWard}
           onSelectWard={handleSelectWard}
           wardSosCountMap={wardSosCountMap}
+          hudCollapsed={hudCollapsed}
+          onHudCollapsedChange={setHudCollapsed}
+          drawerOpen={sosDrawerOpen}
+          onDrawerOpenChange={(open) => {
+            setSosDrawerOpen(open);
+            if (open) {
+              setSelectedPointRef(null);
+            }
+          }}
         />
 
-        {/* Thanh điều khiển nổi góc trên phải: Bật/tắt Trú ẩn, Nguy hiểm và nút cổng/đăng xuất (khi độc lập) */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 16,
-            right: 16,
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            background: theme === 'dark' ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(8px)',
-            border: '1px solid var(--sos-border)',
-            borderRadius: 8,
-            padding: 3,
-            gap: 3,
-            boxShadow: '0 4px 16px rgba(15, 23, 42, 0.15), 0 1px 3px rgba(0, 0, 0, 0.05)',
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setShowShelters((prev) => !prev)}
+        {sosLoadError && (
+          <div
+            role="alert"
             style={{
+              position: 'absolute',
+              top: 14,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 1100,
               display: 'flex',
               alignItems: 'center',
-              gap: 5,
-              padding: '5px 10px',
-              borderRadius: 6,
-              border: `1px solid ${showShelters ? '#059669' : '#cbd5e1'}`,
-              background: showShelters ? '#10b981' : 'transparent',
-              color: showShelters ? '#ffffff' : 'var(--sos-text-secondary)',
-              fontWeight: 700,
-              fontSize: 11.5,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
+              gap: 10,
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              color: '#991b1b',
+              borderRadius: 10,
+              padding: '8px 14px',
+              fontSize: 12.5,
+              fontWeight: 600,
+              boxShadow: '0 6px 18px rgba(15, 23, 42, 0.14)',
             }}
-            title={showShelters ? 'Ẩn điểm trú ẩn' : 'Hiện điểm trú ẩn'}
           >
-            <Shield size={13} />
-            <span>Trú ẩn ({shelters.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowHazards((prev) => !prev)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-              padding: '5px 10px',
-              borderRadius: 6,
-              border: `1px solid ${showHazards ? '#b91c1c' : '#cbd5e1'}`,
-              background: showHazards ? '#dc2626' : 'transparent',
-              color: showHazards ? '#ffffff' : 'var(--sos-text-secondary)',
-              fontWeight: 700,
-              fontSize: 11.5,
-              cursor: 'pointer',
-              transition: 'all 0.15s ease',
-            }}
-            title={showHazards ? 'Ẩn điểm nguy hiểm' : 'Hiện điểm nguy hiểm'}
-          >
-            <AlertTriangle size={13} />
-            <span>Nguy hiểm ({hazards.length})</span>
-          </button>
-
-          {!embedded && onSwitchToAuthor && (
+            <AlertTriangle size={15} />
+            <span>Lỗi tải SOS: {sosLoadError}</span>
             <button
               type="button"
-              onClick={onSwitchToAuthor}
+              onClick={loadAreaSos}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-                background: 'rgba(220, 38, 38, 0.08)',
-                border: '1px solid rgba(220, 38, 38, 0.3)',
-                color: '#dc2626',
+                background: '#dc2626',
+                color: '#ffffff',
+                border: 'none',
                 borderRadius: 6,
-                padding: '5px 10px',
-                fontSize: 11.5,
+                padding: '4px 10px',
+                fontSize: 12,
                 fontWeight: 600,
                 cursor: 'pointer',
               }}
             >
-              <span>🛡️ Cổng Địa Phương</span>
-              <ExternalLink size={12} />
+              Thử lại
             </button>
-          )}
+          </div>
+        )}
 
-          {!embedded && onLogout && (
-            <button
-              type="button"
-              onClick={onLogout}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--sos-text-muted)',
-                cursor: 'pointer',
-                padding: 6,
-              }}
-              title="Đăng xuất"
-            >
-              <LogOut size={16} />
-            </button>
-          )}
-        </div>
-        {/* Nút điều khiển Zoom và Về trung tâm */}
+        {/* Thanh điều khiển nổi góc trên phải: Nút chuyển cổng / đăng xuất (khi chạy độc lập) */}
+        {!embedded && (onSwitchToAuthor || onLogout) && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 16,
+              right: 16,
+              zIndex: 1000,
+              display: 'flex',
+              alignItems: 'center',
+              background: theme === 'dark' ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(8px)',
+              border: '1px solid var(--sos-border)',
+              borderRadius: 8,
+              padding: 3,
+              gap: 3,
+              boxShadow: '0 4px 16px rgba(15, 23, 42, 0.15), 0 1px 3px rgba(0, 0, 0, 0.05)',
+            }}
+          >
+            {onSwitchToAuthor && (
+              <button
+                type="button"
+                onClick={onSwitchToAuthor}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  background: 'rgba(220, 38, 38, 0.08)',
+                  border: '1px solid rgba(220, 38, 38, 0.3)',
+                  color: '#dc2626',
+                  borderRadius: 6,
+                  padding: '5px 10px',
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <span>🛡️ Cổng Địa Phương</span>
+                <ExternalLink size={12} />
+              </button>
+            )}
+
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--sos-text-muted)',
+                  cursor: 'pointer',
+                  padding: 6,
+                }}
+                title="Đăng xuất"
+              >
+                <LogOut size={16} />
+              </button>
+            )}
+          </div>
+        )}
+        {/* Cụm nút điều khiển bản đồ góc dưới phải: Bật/tắt lớp (Ranh giới xã/phường, Trú ẩn, Nguy hiểm) + Zoom & Về trung tâm */}
         <div
           style={{
             position: 'absolute',
@@ -669,78 +775,183 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
             zIndex: 1000,
             display: 'flex',
             flexDirection: 'column',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-            borderRadius: 8,
-            overflow: 'hidden',
+            gap: 8,
           }}
         >
-          <button
-            type="button"
-            onClick={() => handleZoom(1)}
+          <div
             style={{
-              width: 36,
-              height: 36,
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
-              borderBottom: 'none',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: '#334155',
+              flexDirection: 'column',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              borderRadius: 8,
+              overflow: 'hidden',
             }}
-            title="Phóng to"
           >
-            <Plus size={18} />
-          </button>
-          <button
-            type="button"
-            onClick={() => handleZoom(-1)}
+            <button
+              type="button"
+              onClick={handleToggleWardBoundaries}
+              style={{
+                width: 36,
+                height: 36,
+                background: showWardBoundaries ? '#2563eb' : '#ffffff',
+                border: `1px solid ${showWardBoundaries ? '#1d4ed8' : '#e2e8f0'}`,
+                borderBottom: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: showWardBoundaries ? '#ffffff' : '#334155',
+                opacity: wardsLoading ? 0.65 : 1,
+                transition: 'all 0.15s ease',
+              }}
+              title={
+                wardsLoading
+                  ? 'Đang tải ranh giới các xã/phường...'
+                  : `Ranh giới Xã/Phường — ${showWardBoundaries ? 'Bấm để ẩn' : 'Bấm để hiện'}`
+              }
+              aria-label="Bật/tắt ranh giới các xã/phường"
+              aria-pressed={showWardBoundaries}
+            >
+              <Layers size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setShowShelters((prev) => {
+                  const next = !prev;
+                  if (!next && selectedPointRef?.kind === 'SHELTER') {
+                    setSelectedPointRef(null);
+                  }
+                  return next;
+                })
+              }
+              style={{
+                width: 36,
+                height: 36,
+                background: showShelters ? '#10b981' : '#ffffff',
+                border: `1px solid ${showShelters ? '#059669' : '#e2e8f0'}`,
+                borderBottom: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: showShelters ? '#ffffff' : '#334155',
+                transition: 'all 0.15s ease',
+              }}
+              title={`Trú ẩn (${shelters.length}) — ${showShelters ? 'Bấm để ẩn điểm an toàn' : 'Bấm để hiện điểm an toàn'}`}
+              aria-label={`Trú ẩn (${shelters.length})`}
+              aria-pressed={showShelters}
+            >
+              <Shield size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setShowHazards((prev) => {
+                  const next = !prev;
+                  if (!next && selectedPointRef?.kind === 'HAZARD') {
+                    setSelectedPointRef(null);
+                  }
+                  return next;
+                })
+              }
+              style={{
+                width: 36,
+                height: 36,
+                background: showHazards ? '#dc2626' : '#ffffff',
+                border: `1px solid ${showHazards ? '#b91c1c' : '#e2e8f0'}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: showHazards ? '#ffffff' : '#334155',
+                transition: 'all 0.15s ease',
+              }}
+              title={`Nguy hiểm (${hazards.length}) — ${showHazards ? 'Bấm để ẩn điểm nguy hiểm' : 'Bấm để hiện điểm nguy hiểm'}`}
+              aria-label={`Nguy hiểm (${hazards.length})`}
+              aria-pressed={showHazards}
+            >
+              <AlertTriangle size={16} />
+            </button>
+          </div>
+
+          <div
             style={{
-              width: 36,
-              height: 36,
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
-              borderBottom: 'none',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: '#334155',
+              flexDirection: 'column',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              borderRadius: 8,
+              overflow: 'hidden',
             }}
-            title="Thu nhỏ"
           >
-            <Minus size={18} />
-          </button>
-          <button
-            type="button"
-            onClick={handleReset}
-            style={{
-              width: 36,
-              height: 36,
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: '#334155',
-            }}
-            title="Đưa về toàn cảnh bản đồ Đà Nẵng"
-          >
-            <RotateCcw size={15} />
-          </button>
+            <button
+              type="button"
+              onClick={() => handleZoom(1)}
+              style={{
+                width: 36,
+                height: 36,
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderBottom: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#334155',
+              }}
+              title="Phóng to"
+            >
+              <Plus size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleZoom(-1)}
+              style={{
+                width: 36,
+                height: 36,
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderBottom: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#334155',
+              }}
+              title="Thu nhỏ"
+            >
+              <Minus size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={handleReset}
+              style={{
+                width: 36,
+                height: 36,
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#334155',
+              }}
+              title="Đưa về toàn cảnh bản đồ Đà Nẵng"
+            >
+              <RotateCcw size={15} />
+            </button>
+          </div>
         </div>
 
         <MapContainer
           center={defaultCenter}
           zoom={defaultZoom}
-          minZoom={9}
+          minZoom={7}
           maxZoom={20}
           zoomSnap={0.5}
           zoomDelta={0.5}
-          maxBounds={FALLBACK_DANANG_BOUNDS}
-          maxBoundsViscosity={1.0}
+          maxBounds={DANANG_WITH_HOANG_SA_BOUNDS}
+          maxBoundsViscosity={0.9}
           preferCanvas={true}
           zoomControl={false}
           attributionControl={false}
@@ -755,6 +966,7 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
           />
           <MapController
             boundaryArea={boundaryArea}
+            hoangSaArea={hoangSaArea}
             onMount={(m) => {
               mapRef.current = m;
             }}
@@ -765,9 +977,11 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
             wardAreas={wardAreas}
             selectedWard={selectedWard}
             showWardBoundaries={showWardBoundaries}
+            theme={theme}
             sosList={filteredSosList}
             selectedSos={selectedSos}
             onSelectSos={handleSelectSos}
+            onClearPointSelection={() => setSelectedPointRef(null)}
             focusRequest={focusRequest}
           />
 
@@ -778,62 +992,34 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
               if (!Array.isArray(coords) || coords.length < 2) return null;
               const [lng, lat] = coords;
               if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) return null;
-              const remaining = Math.max(0, (sh.capacity || 0) - (sh.currentOccupancy || 0));
+              const isSelected = selectedPointRef?.kind === 'SHELTER' && selectedPointRef.id === sh._id;
+              const metrics = getShelterOccupancyMetrics(sh.currentOccupancy, sh.capacity);
+              const hasPhoto = Array.isArray(sh.images) && sh.images.some((u) => typeof u === 'string' && u.trim().length > 0);
 
               return (
                 <Marker
-                  key={`admin-sh-${sh._id}`}
+                  key={`admin-sh-${sh._id}-${isSelected ? 'sel' : 'std'}-${hasPhoto ? 'img' : 'ico'}`}
                   position={[lat, lng]}
-                  icon={createShelterDivIcon(sh)}
-                  zIndexOffset={500}
+                  icon={createShelterDivIcon(sh, isSelected)}
+                  zIndexOffset={isSelected ? 950 : 500}
+                  eventHandlers={{
+                    click: (e) => {
+                      L.DomEvent.stopPropagation(e as unknown as Event);
+                      setSosDrawerOpen(false);
+                      setSelectedPointRef({ kind: 'SHELTER', id: sh._id });
+                    },
+                  }}
                 >
-                  <Popup>
-                    <div style={{ fontFamily: 'inherit', padding: '3px 2px', minWidth: '220px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                        <span style={{ fontSize: 16 }}>🛡️</span>
-                        <div style={{ fontWeight: 800, fontSize: '13px', color: '#0f172a' }}>
-                          {sh.name}
-                        </div>
-                      </div>
-                      <div style={{ fontSize: '11.5px', color: '#475569', marginBottom: 6 }}>
-                        📍 {sh.address || 'Chưa cập nhật địa chỉ'}
-                      </div>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: '1fr 1fr',
-                          gap: 4,
-                          background: '#f8fafc',
-                          padding: '6px',
-                          borderRadius: 6,
-                          border: '1px solid #e2e8f0',
-                          fontSize: '11px',
-                          marginBottom: 6,
-                        }}
-                      >
-                        <div>Sức chứa: <strong>{sh.capacity || 0}</strong></div>
-                        <div>Đang ở: <strong>{sh.currentOccupancy || 0}</strong></div>
-                        <div
-                          style={{
-                            gridColumn: 'span 2',
-                            color: remaining > 0 ? '#16a34a' : '#dc2626',
-                            fontWeight: 700,
-                          }}
-                        >
-                          {remaining > 0 ? `Còn trống: ${remaining} chỗ` : 'Đã kín chỗ'}
-                        </div>
-                      </div>
-                      <div
-                        style={{
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          color: sh.status === 'ACTIVE' ? '#16a34a' : '#64748b',
-                        }}
-                      >
-                        Trạng thái: {sh.status === 'ACTIVE' ? '✓ Đang mở cửa tiếp nhận' : sh.status === 'FULL' ? '● Đã đầy' : '● Tạm ngưng'}
-                      </div>
+                  <Tooltip direction="top" offset={[0, -48]} opacity={0.96}>
+                    <div style={{ fontSize: 11.5, fontWeight: 700, color: '#0f172a' }}>
+                      {sh.name} •{' '}
+                      {metrics.isOverloaded
+                        ? `Quá tải (${metrics.percent}%)`
+                        : metrics.remaining > 0
+                          ? `Còn ${metrics.remaining} chỗ`
+                          : 'Đã đầy'}
                     </div>
-                  </Popup>
+                  </Tooltip>
                 </Marker>
               );
             })}
@@ -845,80 +1031,46 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
               if (!Array.isArray(coords) || coords.length < 2) return null;
               const [lng, lat] = coords;
               if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) return null;
+              const isSelected = selectedPointRef?.kind === 'HAZARD' && selectedPointRef.id === hz._id;
+              const hasPhoto = Array.isArray(hz.images) && hz.images.some((u) => typeof u === 'string' && u.trim().length > 0);
 
               return (
                 <Marker
-                  key={`admin-hz-${hz._id}`}
+                  key={`admin-hz-${hz._id}-${isSelected ? 'sel' : 'std'}-${hasPhoto ? 'img' : 'ico'}`}
                   position={[lat, lng]}
-                  icon={createHazardDivIcon(hz)}
-                  zIndexOffset={600}
+                  icon={createHazardDivIcon(hz, isSelected)}
+                  zIndexOffset={isSelected ? 950 : 600}
+                  eventHandlers={{
+                    click: (e) => {
+                      L.DomEvent.stopPropagation(e as unknown as Event);
+                      setSosDrawerOpen(false);
+                      setSelectedPointRef({ kind: 'HAZARD', id: hz._id });
+                    },
+                  }}
                 >
-                  <Popup>
-                    <div style={{ fontFamily: 'inherit', padding: '3px 2px', minWidth: '220px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                        <span style={{ fontSize: 16 }}>⚠️</span>
-                        <div style={{ fontWeight: 800, fontSize: '13px', color: '#dc2626' }}>
-                          {hz.title}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-                        <span
-                          style={{
-                            fontSize: '10px',
-                            fontWeight: 800,
-                            padding: '1px 6px',
-                            borderRadius: 4,
-                            background: hz.severity === 'CRITICAL' ? '#fef2f2' : '#fff7ed',
-                            color: hz.severity === 'CRITICAL' ? '#b91c1c' : '#c2410c',
-                            border: `1px solid ${hz.severity === 'CRITICAL' ? '#fca5a5' : '#fed7aa'}`,
-                          }}
-                        >
-                          {hz.severity === 'CRITICAL' ? 'NGUY CẤP' : hz.severity === 'HIGH' ? 'KHẨN CẤP' : hz.severity === 'MEDIUM' ? 'TRUNG BÌNH' : 'THẤP'}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: '10px',
-                            fontWeight: 700,
-                            padding: '1px 6px',
-                            borderRadius: 4,
-                            background: '#f1f5f9',
-                            color: '#334155',
-                          }}
-                        >
-                          {hz.hazardType}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '11.5px', color: '#475569', marginBottom: 4 }}>
-                        📍 {hz.address || 'Chưa cập nhật địa chỉ'}
-                      </div>
-                      {hz.description && (
-                        <div
-                          style={{
-                            fontSize: '11px',
-                            color: '#1e293b',
-                            fontStyle: 'italic',
-                            marginBottom: 6,
-                            lineHeight: 1.35,
-                          }}
-                        >
-                          "{hz.description}"
-                        </div>
-                      )}
-                      {Array.isArray(hz.images) && hz.images.length > 0 && (
-                        <div style={{ borderRadius: 6, overflow: 'hidden', height: 80, marginBottom: 4 }}>
-                          <img
-                            src={hz.images[0]}
-                            alt="Hiện trường"
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                          />
-                        </div>
-                      )}
+                  <Tooltip direction="top" offset={[0, -48]} opacity={0.96}>
+                    <div style={{ fontSize: 11.5, fontWeight: 700, color: '#dc2626' }}>
+                      {hz.title}
                     </div>
-                  </Popup>
+                  </Tooltip>
                 </Marker>
               );
             })}
         </MapContainer>
+
+        {/* Bảng chi tiết Điểm trú ẩn / Điểm nguy hiểm hiển thị bên trái đè lên bản đồ */}
+        <AdminPointDetailPanel
+          point={selectedPoint}
+          hudCollapsed={hudCollapsed}
+          onClose={() => setSelectedPointRef(null)}
+          onOpenPhoto={(state) => setPhotoLightbox(state)}
+        />
+
+        {/* Lightbox phóng to ảnh địa điểm / hiện trường có Next / Back */}
+        <PhotoLightboxModal
+          state={photoLightbox}
+          onClose={() => setPhotoLightbox(null)}
+        />
       </main>
     </div>
   );

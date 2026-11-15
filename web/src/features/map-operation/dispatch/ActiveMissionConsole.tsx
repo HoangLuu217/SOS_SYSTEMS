@@ -15,7 +15,9 @@ import {
 import type { SosRequest, SosAssignment, RescueTeam, Vehicle, AuthorityOfficer, AdministrativeArea } from '@/types/domainD';
 import { assignShoreHandoffApi, cancelShoreHandoffApi, approveSuppliesApi, rejectSuppliesApi } from '@/api';
 import { isTeamInOfficerJurisdiction } from '@/services/mapGeoService';
+import { domainDService } from '@/services/domainDService';
 import { toast } from '@/components/common/toast';
+import { getShoreHandoffVehicleStatusMeta } from '@/utils/shoreHandoffStatus';
 
 interface Props {
   assignment: SosAssignment | null;
@@ -52,8 +54,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
   const effectiveRequestedSupplies = (assignment?.requestedSupplies && assignment.requestedSupplies.length > 0)
     ? assignment.requestedSupplies
     : (selectedSos?.requestedSupplies && selectedSos.requestedSupplies.length > 0)
-    ? selectedSos.requestedSupplies
-    : [];
+      ? selectedSos.requestedSupplies
+      : [];
 
   const pendingSupplies = useMemo(() => {
     return effectiveRequestedSupplies.filter((s: any) => s.status === 'PENDING');
@@ -82,7 +84,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     }
   };
 
-    const handleRejectSupplies = () => {
+  const handleRejectSupplies = () => {
     setIsRejectSuppliesModalOpen(true);
   };
 
@@ -154,13 +156,33 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     };
   }, [selectedSos, activeOfficer]);
 
-  // 2. Lọc phương tiện thuộc đúng địa bàn / phường đang làm việc
+  // 2. Lọc phương tiện thuộc đúng địa bàn / khu vực quản lý (ưu tiên đúng phường/quận trước, mở rộng sang các đội trong cùng TP/tỉnh)
   const inAreaRoadVehicles = useMemo(() => {
     const allRoad = vehicles.filter((v) => v.type === 'Ambulance' || v.type === 'Tactical Truck');
 
     const norm = (s?: string) => (s || '').toLowerCase().trim();
     const targetLabel = norm(targetAreaInfo.label);
     const targetDistId = norm(targetAreaInfo.districtId);
+    const areaIdSet = new Set((areas || []).map((a) => norm(a.id)));
+
+    const isSameKeywordArea = (teamName: string, teamDistId: string, vehName: string, vehPlate: string) => {
+      if (!targetLabel || targetLabel === 'toàn quốc' || targetLabel === 'khu vực quản lý') return false;
+      if (teamName.includes(targetLabel) || vehName.includes(targetLabel)) return true;
+      if (
+        targetLabel.includes('ngũ hành sơn') &&
+        ['nhs', 'ngũ hành sơn', 'mỹ an', 'khuê mỹ', 'hòa quý', 'hòa hải', 'sông hàn', 'đông cứu nạn'].some(
+          (kw) => teamName.includes(kw) || vehName.includes(kw) || vehPlate.includes(kw) || teamDistId.includes(kw)
+        )
+      ) {
+        return true;
+      }
+      if (targetLabel.includes('liên chiểu') && (teamName.includes('lc') || vehPlate.includes('lc') || teamDistId.includes('lc'))) return true;
+      if (targetLabel.includes('hải châu') && (teamName.includes('hc') || teamName.includes('sông hàn') || vehPlate.includes('hc') || teamDistId.includes('hc'))) return true;
+      if (targetLabel.includes('cẩm lệ') && (teamName.includes('cl') || vehPlate.includes('cl') || teamDistId.includes('cl'))) return true;
+      if (targetLabel.includes('sơn trà') && (teamName.includes('st') || vehPlate.includes('st') || teamDistId.includes('st'))) return true;
+      if (targetLabel.includes('thanh khê') && (teamName.includes('tk') || vehPlate.includes('tk') || teamDistId.includes('tk'))) return true;
+      return false;
+    };
 
     const inArea: Vehicle[] = [];
 
@@ -168,30 +190,26 @@ export const ActiveMissionConsole: React.FC<Props> = ({
       const team = rescueTeams.find((t) => t.id === v.teamId);
       const teamName = norm(team?.name || v.teamName);
       const teamDistId = norm(team?.districtId || v.districtId);
+      const teamWardId = norm(team?.wardId || (v as any).areaId);
       const vehName = norm(v.name);
       const vehPlate = norm(v.plate);
 
       let matched = false;
 
-      // 1. Khớp theo districtId chuẩn
-      if (targetDistId && (teamDistId === targetDistId || teamDistId.includes(targetDistId))) {
+      // 1. Khớp theo districtId / wardId hoặc phạm vi areas của cán bộ
+      if (
+        targetDistId &&
+        (teamDistId === targetDistId ||
+          teamDistId.includes(targetDistId) ||
+          teamWardId === targetDistId ||
+          (areaIdSet.size > 0 && (areaIdSet.has(teamDistId) || areaIdSet.has(teamWardId))))
+      ) {
         matched = true;
       }
 
-      // 2. Khớp theo từ khóa quận/huyện / phường
-      if (!matched && targetLabel && targetLabel !== 'toàn quốc' && targetLabel !== 'khu vực quản lý') {
-        if (
-          teamName.includes(targetLabel) ||
-          vehName.includes(targetLabel) ||
-          (targetLabel.includes('ngũ hành sơn') && (teamName.includes('nhs') || vehPlate.includes('nhs') || teamDistId.includes('nhs'))) ||
-          (targetLabel.includes('liên chiểu') && (teamName.includes('lc') || vehPlate.includes('lc') || teamDistId.includes('lc'))) ||
-          (targetLabel.includes('hải châu') && (teamName.includes('hc') || vehPlate.includes('hc') || teamDistId.includes('hc'))) ||
-          (targetLabel.includes('cẩm lệ') && (teamName.includes('cl') || vehPlate.includes('cl') || teamDistId.includes('cl'))) ||
-          (targetLabel.includes('sơn trà') && (teamName.includes('st') || vehPlate.includes('st') || teamDistId.includes('st'))) ||
-          (targetLabel.includes('thanh khê') && (teamName.includes('tk') || vehPlate.includes('tk') || teamDistId.includes('tk')))
-        ) {
-          matched = true;
-        }
+      // 2. Khớp theo từ khóa quận/huyện / phường / đội cùng địa bàn Đà Nẵng
+      if (!matched && isSameKeywordArea(teamName, teamDistId, vehName, vehPlate)) {
+        matched = true;
       }
 
       // 3. Khớp theo thẩm quyền cán bộ
@@ -206,31 +224,123 @@ export const ActiveMissionConsole: React.FC<Props> = ({
       }
     });
 
-    return inArea;
+    // Fallback an toàn: nếu không có xe nào khớp hẹp (ví dụ SOS ở vùng giáp ranh), hiển thị toàn bộ xe đường bộ hiện có
+    return inArea.length > 0 ? inArea : allRoad;
   }, [vehicles, rescueTeams, targetAreaInfo, activeOfficer, areas]);
 
-  // Nhóm xe hiển thị: Chỉ lấy xe thuộc đúng khu vực / phường đang làm việc
+  // Nhóm xe hiển thị
   const displayPool = useMemo(() => {
     return inAreaRoadVehicles;
   }, [inAreaRoadVehicles]);
 
-  // Lọc theo tìm kiếm và tab loại xe
-  const filteredRoadVehicles = useMemo(() => {
-    return displayPool.filter((v) => {
-      if (vehicleTypeFilter === 'AMBULANCE' && v.type !== 'Ambulance') return false;
-      if (vehicleTypeFilter === 'TRUCK' && v.type !== 'Tactical Truck') return false;
+  // Bản đồ nhận diện các ĐỘI đang trực tiếp thực hiện nhiệm vụ cứu nạn (đang đi cứu) -> khóa toàn bộ xe của đội đó
+  const busyTeamMissionMap = useMemo(() => {
+    const map = new Map<string, string>();
+    const normTeam = (s?: string) => (s || '').toLowerCase().trim();
+    const closedStatuses = ['COMPLETED', 'CANCELLED', 'REJECTED', 'RESOLVED'];
 
-      if (vehicleSearchQuery.trim()) {
-        const q = vehicleSearchQuery.toLowerCase().trim();
-        const name = (v.name || '').toLowerCase();
-        const plate = (v.plate || '').toLowerCase();
-        const team = rescueTeams.find((t) => t.id === v.teamId);
-        const teamName = (team?.name || v.teamName || '').toLowerCase();
-        return name.includes(q) || plate.includes(q) || teamName.includes(q);
+    const extractTeamRefId = (ref: any): string => {
+      if (!ref) return '';
+      if (typeof ref === 'object') return String(ref._id || ref.id || '');
+      return String(ref);
+    };
+
+    const addBusyTeam = (teamRef?: any, code?: string) => {
+      const refStr = extractTeamRefId(teamRef);
+      if (!refStr) return;
+      const label = code || 'nhiệm vụ cứu nạn';
+      refStr
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean)
+        .forEach((id) => {
+          if (!map.has(id)) map.set(id, label);
+        });
+    };
+
+    // 1. Đội đang đi cứu chính ca SOS hiện tại (nếu đội đó chưa hoàn thành nhiệm vụ của mình)
+    const currentStatus = String(selectedSos?.status || '').toUpperCase();
+    const currentAssignStatus = String(assignment?.status || '').toUpperCase();
+    const isCurrentPrimaryFinished = closedStatuses.includes(currentAssignStatus);
+    const currentCode =
+      selectedSos?.sosCode ||
+      (selectedSos as any)?.code ||
+      (selectedSos?.id ? `#${selectedSos.id.slice(-4).toUpperCase()}` : 'ca này');
+
+    if (!closedStatuses.includes(currentStatus) && !isCurrentPrimaryFinished) {
+      if (selectedSos?.shoreHandoff?.rescueTeamId) {
+        addBusyTeam(String(selectedSos.shoreHandoff.rescueTeamId), currentCode);
       }
-      return true;
+      if (selectedSos?.shoreHandoff?.rescueTeamName) {
+        const key = `name:${normTeam(selectedSos.shoreHandoff.rescueTeamName)}`;
+        if (!map.has(key)) map.set(key, currentCode);
+      }
+      if (
+        assignment?.rescueTeamId &&
+        (assignment as any).missionType !== 'SHORE_HANDOFF'
+      ) {
+        addBusyTeam(assignment.rescueTeamId, currentCode);
+      }
+    }
+
+    // 2. Các đội đang đi cứu ở bất kỳ ca SOS nào khác đang hoạt động (từ domainDService & allSos)
+    const sosById = new Map<string, SosRequest>();
+    (allSos || []).forEach((s) => {
+      const sId = String(s.id || (s as any)._id || '');
+      if (sId) sosById.set(sId, s);
+
+      const st = String(s.status || '').toUpperCase();
+      if (closedStatuses.includes(st)) return;
+
+      const linkedAssign =
+        (s as any).assignment || (sId ? domainDService.getAssignmentBySosId(sId) : null);
+      const linkedAssignStatus = String(linkedAssign?.status || '').toUpperCase();
+      const isPrimaryDoneOnSos = closedStatuses.includes(linkedAssignStatus);
+
+      const sCode = s.sosCode || (s as any).code || (sId ? `#${sId.slice(-4).toUpperCase()}` : 'ca khác');
+      if (s.shoreHandoff?.rescueTeamId && !s.shoreHandoff?.completedAt && !isPrimaryDoneOnSos) {
+        addBusyTeam(String(s.shoreHandoff.rescueTeamId), sCode);
+      }
+      if ((s as any).assignedTeamId && !isPrimaryDoneOnSos) {
+        addBusyTeam(String((s as any).assignedTeamId), sCode);
+      }
+      if ((s as any).assignment?.rescueTeamId && (s as any).assignment?.missionType !== 'SHORE_HANDOFF') {
+        const aStatus = String((s as any).assignment?.status || '').toUpperCase();
+        if (!closedStatuses.includes(aStatus)) {
+          addBusyTeam(String((s as any).assignment.rescueTeamId), sCode);
+        }
+      }
     });
-  }, [displayPool, vehicleTypeFilter, vehicleSearchQuery, rescueTeams]);
+
+    domainDService.getAssignments().forEach((a) => {
+      const aStatus = String(a.status || '').toUpperCase();
+      if (closedStatuses.includes(aStatus)) return;
+      if ((a as any).missionType === 'SHORE_HANDOFF') return;
+
+      const relSos = sosById.get(String(a.sosRequestId));
+      if (relSos && closedStatuses.includes(String(relSos.status || '').toUpperCase())) return;
+
+      const sosLabel =
+        relSos?.sosCode ||
+        (relSos as any)?.code ||
+        (a.sosRequestId ? `#${String(a.sosRequestId).slice(-4).toUpperCase()}` : 'ca đang cứu');
+      addBusyTeam(a.rescueTeamId, sosLabel);
+    });
+
+    return map;
+  }, [selectedSos, assignment, allSos]);
+
+  const getTeamBusyRescueMission = (v: Vehicle): string | null => {
+    if (v.teamId && busyTeamMissionMap.has(String(v.teamId))) {
+      return busyTeamMissionMap.get(String(v.teamId)) || null;
+    }
+    const team = rescueTeams.find((t) => t.id === v.teamId);
+    const tName = (team?.name || v.teamName || '').toLowerCase().trim();
+    if (tName && busyTeamMissionMap.has(`name:${tName}`)) {
+      return busyTeamMissionMap.get(`name:${tName}`) || null;
+    }
+    return null;
+  };
 
   // Bản đồ nhận diện các xe đang bận đón bờ ở ca SOS khác đang diễn ra
   const busyVehicleMissionMap = useMemo(() => {
@@ -283,10 +393,48 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     return false;
   };
 
-  // Danh sách xe khả dụng (loại trừ xe đang phục vụ hiện tại VÀ xe đang bận nhiệm vụ khác)
+  const isVehicleDisabledForHandoff = (v: Vehicle) => {
+    const isCurrent = isVehicleCurrentlyAssigned(v);
+    const isBusyHandoff = Boolean(getVehicleBusyMission(v));
+    const isTeamRescuing = Boolean(getTeamBusyRescueMission(v));
+    const isInMission = !isCurrent && v.status === 'In Mission';
+    return isCurrent || isBusyHandoff || isTeamRescuing || isInMission;
+  };
+
+  // Lọc theo tìm kiếm, tab loại xe và ưu tiên xe khả dụng lên trên xe đang bận/đang đi cứu
+  const filteredRoadVehicles = useMemo(() => {
+    const matched = displayPool.filter((v) => {
+      if (vehicleTypeFilter === 'AMBULANCE' && v.type !== 'Ambulance') return false;
+      if (vehicleTypeFilter === 'TRUCK' && v.type !== 'Tactical Truck') return false;
+
+      if (vehicleSearchQuery.trim()) {
+        const q = vehicleSearchQuery.toLowerCase().trim();
+        const name = (v.name || '').toLowerCase();
+        const plate = (v.plate || '').toLowerCase();
+        const team = rescueTeams.find((t) => t.id === v.teamId);
+        const teamName = (team?.name || v.teamName || '').toLowerCase();
+        const leaderNames = (team?.rescuers || []).map((r) => (r.name || '').toLowerCase()).join(' ');
+        return name.includes(q) || plate.includes(q) || teamName.includes(q) || leaderNames.includes(q);
+      }
+      return true;
+    });
+
+    const targetLabel = (targetAreaInfo.label || '').toLowerCase().trim();
+    const scoreVehicle = (v: Vehicle) => {
+      const disabled = isVehicleDisabledForHandoff(v);
+      const team = rescueTeams.find((t) => t.id === v.teamId);
+      const tName = (team?.name || v.teamName || '').toLowerCase();
+      const localMatch = targetLabel && tName.includes(targetLabel) ? 0 : 1;
+      return (disabled ? 10 : 0) + localMatch;
+    };
+
+    return [...matched].sort((a, b) => scoreVehicle(a) - scoreVehicle(b));
+  }, [displayPool, vehicleTypeFilter, vehicleSearchQuery, rescueTeams, targetAreaInfo.label, busyTeamMissionMap, busyVehicleMissionMap, selectedSos?.shoreHandoff]);
+
+  // Danh sách xe khả dụng (loại trừ xe hiện tại, xe đang bận đón ca khác, xe đang làm nhiệm vụ VÀ xe của đội đang đi cứu)
   const selectableVehicles = useMemo(() => {
-    return filteredRoadVehicles.filter((v) => !isVehicleCurrentlyAssigned(v) && !getVehicleBusyMission(v));
-  }, [filteredRoadVehicles, selectedSos?.shoreHandoff, busyVehicleMissionMap]);
+    return filteredRoadVehicles.filter((v) => !isVehicleDisabledForHandoff(v));
+  }, [filteredRoadVehicles, selectedSos?.shoreHandoff, busyVehicleMissionMap, busyTeamMissionMap]);
 
   // Tự động chọn xe khả dụng đầu tiên khi mở modal hoặc danh sách đổi
   useEffect(() => {
@@ -331,9 +479,9 @@ export const ActiveMissionConsole: React.FC<Props> = ({
     }
   };
   const handleAssignRoadVehicle = async () => {
-    const veh = filteredRoadVehicles.find((v) => v.id === selectedRoadVehId);
+    const veh = selectableVehicles.find((v) => v.id === selectedRoadVehId);
     if (!veh) {
-      toast.error('Vui lòng chọn một phương tiện khả dụng trong danh sách');
+      toast.error('Vui lòng chọn một phương tiện khả dụng (không thuộc đội đang đi cứu)');
       return;
     }
     const targetSosId = selectedSos?.id || (selectedSos as any)?._id;
@@ -368,9 +516,33 @@ export const ActiveMissionConsole: React.FC<Props> = ({
   const statusInfo = useMemo(() => {
     const aStatus = String(assignment?.status || '').toUpperCase();
     const sStatus = String(selectedSos?.status || '').toUpperCase();
+    const handoffStatus = String(selectedSos?.shoreHandoff?.status || '').toUpperCase();
+    const hasPendingShoreHandoff = Boolean(
+      selectedSos?.shoreHandoff &&
+      ['REQUESTED', 'ASSIGNED'].includes(handoffStatus) &&
+      !selectedSos.shoreHandoff.completedAt
+    );
 
-    // 1. Hoàn thành
-    if (aStatus === 'COMPLETED' || sStatus === 'COMPLETED') {
+    // 1a. Đội cứu hộ đã xong phần việc & sẵn sàng nhận ca khác, nhưng đang chờ xe tiếp vận hoàn thành
+    if (aStatus === 'COMPLETED' && sStatus !== 'COMPLETED' && sStatus !== 'RESOLVED' && hasPendingShoreHandoff) {
+      return {
+        statusHeading: 'ĐỘI CỨU HỘ ĐÃ XONG • CHỜ XE TIẾP VẬN',
+        badgeText: '🛟 ĐỘI CỨU HỘ ĐÃ XONG • CHỜ XE TIẾP VẬN',
+        subText:
+          handoffStatus === 'ASSIGNED'
+            ? 'Đội cứu hộ đã rảnh (sẵn sàng ca mới) • Chờ xe tiếp vận xác nhận đưa nạn nhân tới nơi an toàn.'
+            : 'Đội cứu hộ đã rảnh (sẵn sàng ca mới) • Vui lòng điều xe tiếp vận đón nạn nhân.',
+        bg: '#fffbeb',
+        border: '#fcd34d',
+        textColor: '#b45309',
+        dotColor: '#f59e0b',
+        isCompleted: false,
+        showEta: false,
+      };
+    }
+
+    // 1b. Hoàn thành hoàn toàn
+    if (sStatus === 'COMPLETED' || sStatus === 'RESOLVED' || (aStatus === 'COMPLETED' && !hasPendingShoreHandoff)) {
       return {
         statusHeading: 'HOÀN TẤT CỨU HỘ',
         badgeText: '✓ ĐÃ HOÀN TẤT NHIỆM VỤ',
@@ -471,7 +643,12 @@ export const ActiveMissionConsole: React.FC<Props> = ({
       isCompleted: false,
       showEta: true,
     };
-  }, [assignment?.status, selectedSos?.status]);
+  }, [
+    assignment?.status,
+    selectedSos?.status,
+    selectedSos?.shoreHandoff?.status,
+    selectedSos?.shoreHandoff?.completedAt,
+  ]);
 
   return (
     <div
@@ -595,7 +772,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
           </div>
         </div>
 
-                {/* 1. Hộp Yêu Cầu Chi Viện Vật Tư Khẩn Cấp (CHỜ DUYỆT) */}
+        {/* 1. Hộp Yêu Cầu Chi Viện Vật Tư Khẩn Cấp (CHỜ DUYỆT) */}
         {pendingSupplies.length > 0 && (
           <div
             style={{
@@ -799,171 +976,172 @@ export const ActiveMissionConsole: React.FC<Props> = ({
           </div>
         )}
 
-          {/* Thông tin Chỉ huy cứu hộ */}
-          <div
-            style={{
-              padding: '12px 14px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
-              <div
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: '50%',
-                  background: '#0f172a',
-                  color: '#ffffff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 16,
-                  fontWeight: 800,
-                  flexShrink: 0,
-                  boxShadow: '0 2px 6px rgba(15, 23, 42, 0.25)',
-                }}
-              >
-                {assignment?.rescuerName ? assignment.rescuerName.charAt(0).toUpperCase() : 'C'}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 15.5, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.2px' }}>
-                  {assignment?.rescuerName || 'Cứu Hộ Viên'}
-                </div>
-                <div style={{ fontSize: 12.5, color: '#334155', marginTop: 2, fontWeight: 700, lineHeight: 1.35 }}>
-                  <span style={{ color: '#0284c7' }}>{assignment?.rescuerRole || 'CỨU HỘ VIÊN'}</span>
-                  <span> • </span>
-                  <span>{assignment?.rescueTeamName || 'Đội Cứu Hộ'}</span>
-                  {rescuerPhone && rescuerPhone !== 'Chưa cập nhật' && (
-                    <span style={{ color: '#475569', fontWeight: 600 }}> • SĐT: <strong>{rescuerPhone}</strong></span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-
-          </div>
-
-          {/* Divider */}
-          <div style={{ height: 1, background: '#e2e8f0' }} />
-
-          {/* 2B: Assigned Vehicle Specs */}
-          <div
-            style={{
-              padding: '12px 14px',
-              background: '#f8fafc',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-            }}
-          >
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 900, color: '#0f172a' }}>
-                {assignment?.vehicleName || 'Ca-nô cứu hộ'}
-              </div>
-              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginTop: 2 }}>
-                Sức chứa:{' '}
-                <strong style={{ color: '#334155' }}>
-                  {String(assignment?.vehicleCapacity || '6').includes('chiến sĩ') ||
-                  String(assignment?.vehicleCapacity || '6').includes('người')
-                    ? assignment?.vehicleCapacity
-                    : `${assignment?.vehicleCapacity || '6'} người`}
-                </strong>
-              </div>
-            </div>
-
+        {/* Thông tin Chỉ huy cứu hộ */}
+        <div
+          style={{
+            padding: '12px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
             <div
               style={{
-                padding: '4px 10px',
-                borderRadius: 6,
-                background: '#ffffff',
-                border: '1.5px solid #cbd5e1',
-                color: '#0f172a',
-                fontWeight: 900,
-                fontFamily: 'monospace',
-                fontSize: 13.5,
-                letterSpacing: '0.5px',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                width: 44,
+                height: 44,
+                borderRadius: '50%',
+                background: '#0f172a',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 16,
+                fontWeight: 800,
+                flexShrink: 0,
+                boxShadow: '0 2px 6px rgba(15, 23, 42, 0.25)',
               }}
             >
-              {vehiclePlate}
+              {assignment?.rescuerName ? assignment.rescuerName.charAt(0).toUpperCase() : 'C'}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 15.5, fontWeight: 900, color: '#0f172a', letterSpacing: '-0.2px' }}>
+                {assignment?.rescuerName || 'Cứu Hộ Viên'}
+              </div>
+              <div style={{ fontSize: 12.5, color: '#334155', marginTop: 2, fontWeight: 700, lineHeight: 1.35 }}>
+                <span style={{ color: '#0284c7' }}>{assignment?.rescuerRole || 'CỨU HỘ VIÊN'}</span>
+                <span> • </span>
+                <span>{assignment?.rescueTeamName || 'Đội Cứu Hộ'}</span>
+                {rescuerPhone && rescuerPhone !== 'Chưa cập nhật' && (
+                  <span style={{ color: '#475569', fontWeight: 600 }}> • SĐT: <strong>{rescuerPhone}</strong></span>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Divider */}
-          <div style={{ height: 1, background: '#e2e8f0' }} />
 
+        </div>
 
+        {/* Divider */}
+        <div style={{ height: 1, background: '#e2e8f0' }} />
 
-          {/* Divider */}
-          <div style={{ height: 1, background: '#e2e8f0' }} />
+        {/* 2B: Assigned Vehicle Specs */}
+        <div
+          style={{
+            padding: '12px 14px',
+            background: '#f8fafc',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 900, color: '#0f172a' }}>
+              {assignment?.vehicleName || 'Ca-nô cứu hộ'}
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600, marginTop: 2 }}>
+              Sức chứa:{' '}
+              <strong style={{ color: '#334155' }}>
+                {String(assignment?.vehicleCapacity || '6').includes('chiến sĩ') ||
+                  String(assignment?.vehicleCapacity || '6').includes('người')
+                  ? assignment?.vehicleCapacity
+                  : `${assignment?.vehicleCapacity || '6'} người`}
+              </strong>
+            </div>
+          </div>
 
-          {/* 2C: Tactical Route Stepper (Point A -> Point B) */}
           <div
             style={{
-              padding: '13px 14px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 10,
+              padding: '4px 10px',
+              borderRadius: 6,
+              background: '#ffffff',
+              border: '1.5px solid #cbd5e1',
+              color: '#0f172a',
+              fontWeight: 900,
+              fontFamily: 'monospace',
+              fontSize: 13.5,
+              letterSpacing: '0.5px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
             }}
           >
-            {/* Point A: Base Station */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 16 }}>
-                <div
-                  style={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: '50%',
-                    background: '#10b981',
-                    border: '2.5px solid #ffffff',
-                    boxShadow: '0 0 0 2px #10b981',
-                  }}
-                />
-                <div style={{ width: 2, height: 32, background: '#cbd5e1', margin: '3px 0' }} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ color: '#64748b', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
-                  Điểm Xuất Phát (Trạm Cứu Hộ):
-                </div>
-                <div style={{ fontWeight: 800, color: '#0f172a', fontSize: 13.5, marginTop: 2 }}>
-                  {assignment?.authorityOrganizationName || 'Ban Chỉ Huy PCTT & TKCN'}
-                </div>
-              </div>
-            </div>
+            {vehiclePlate}
+          </div>
+        </div>
 
-            {/* Point B: Destination (Victim Distress Location) */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-              <div style={{ width: 16, display: 'flex', justifyContent: 'center' }}>
-                <div
-                  style={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: '50%',
-                    background: '#ef4444',
-                    border: '2.5px solid #ffffff',
-                    boxShadow: '0 0 0 2px #ef4444',
-                  }}
-                />
+        {/* Divider */}
+        <div style={{ height: 1, background: '#e2e8f0' }} />
+
+
+
+        {/* Divider */}
+        <div style={{ height: 1, background: '#e2e8f0' }} />
+
+        {/* 2C: Tactical Route Stepper (Point A -> Point B) */}
+        <div
+          style={{
+            padding: '13px 14px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}
+        >
+          {/* Point A: Base Station */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 16 }}>
+              <div
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                  background: '#10b981',
+                  border: '2.5px solid #ffffff',
+                  boxShadow: '0 0 0 2px #10b981',
+                }}
+              />
+              <div style={{ width: 2, height: 32, background: '#cbd5e1', margin: '3px 0' }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ color: '#64748b', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                Điểm Xuất Phát (Trạm Cứu Hộ):
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ color: '#dc2626', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
-                  Điểm Cứu Nạn (Vị Trí Gặp Nạn):
-                </div>
-                <div style={{ fontWeight: 900, color: '#dc2626', fontSize: 14, marginTop: 2, lineHeight: 1.4 }}>
-                  {selectedSos.locationName}
-                </div>
-                <div style={{ fontSize: 12.5, color: '#334155', marginTop: 3, fontWeight: 700 }}>
-                  Nạn nhân: <strong style={{ color: '#0f172a' }}>{selectedSos.citizenName}</strong> • {selectedSos.citizenPhone} (<span style={{ color: '#dc2626' }}>{selectedSos.affectedPeople} người</span>)
-                </div>
+              <div style={{ fontWeight: 800, color: '#0f172a', fontSize: 13.5, marginTop: 2 }}>
+                {assignment?.authorityOrganizationName || 'Ban Chỉ Huy PCTT & TKCN'}
               </div>
             </div>
+          </div>
+
+          {/* Point B: Destination (Victim Distress Location) */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <div style={{ width: 16, display: 'flex', justifyContent: 'center' }}>
+              <div
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                  background: '#ef4444',
+                  border: '2.5px solid #ffffff',
+                  boxShadow: '0 0 0 2px #ef4444',
+                }}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ color: '#dc2626', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                Điểm Cứu Nạn (Vị Trí Gặp Nạn):
+              </div>
+              <div style={{ fontWeight: 900, color: '#dc2626', fontSize: 14, marginTop: 2, lineHeight: 1.4 }}>
+                {selectedSos.locationName}
+              </div>
+              <div style={{ fontSize: 12.5, color: '#334155', marginTop: 3, fontWeight: 700 }}>
+                Nạn nhân: <strong style={{ color: '#0f172a' }}>{selectedSos.citizenName}</strong> • {selectedSos.citizenPhone} (<span style={{ color: '#dc2626' }}>{selectedSos.affectedPeople} người</span>)
+              </div>
+            </div>
+          </div>
 
             {/* Point C: Bến cập bờ bàn giao tiếp vận (nếu có yêu cầu đón bờ) */}
-            {selectedSos.shoreHandoff && selectedSos.shoreHandoff.status !== 'NONE' && (
+            {selectedSos.shoreHandoff &&
+              !['NONE', 'CANCELLED'].includes(String(selectedSos.shoreHandoff.status || '').toUpperCase()) && (
               <>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 16 }}>
@@ -994,202 +1172,224 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                   </div>
                 </div>
 
-                {/* Khối Tác Chiến: Điều Phối Tiếp Vận Bờ */}
-                <div
-                  style={{
-                    marginTop: 4,
-                    borderRadius: 8,
-                    border: selectedSos.shoreHandoff.status === 'ASSIGNED' ? '1px solid #86efac' : '1.5px solid #fdba74',
-                    background: selectedSos.shoreHandoff.status === 'ASSIGNED' ? '#f0fdf4' : '#fff7ed',
-                    padding: selectedSos.shoreHandoff.status === 'ASSIGNED' ? '6px 8px' : '10px 12px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: selectedSos.shoreHandoff.status === 'ASSIGNED' ? 4 : 8,
-                  }}
-                >
-                  {selectedSos.shoreHandoff.status === 'ASSIGNED' ? (
-                    <>
-                      {/* Dòng 1: Tiêu đề + Huy hiệu + Nút thao tác (gộp 1 hàng ngang tối ưu diện tích) */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-                          <span style={{ fontSize: 13, flexShrink: 0 }}>🚑</span>
-                          <span
-                            style={{
-                              fontSize: 11.5,
-                              fontWeight: 800,
-                              color: '#15803d',
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.2px',
-                              whiteSpace: 'nowrap',
-                              flexShrink: 0,
-                            }}
-                          >
-                            Xe đón
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 9.5,
-                              fontWeight: 800,
-                              padding: '1.5px 6px',
-                              borderRadius: 4,
-                              background: '#dcfce7',
-                              color: '#166534',
-                              whiteSpace: 'nowrap',
-                              flexShrink: 0,
-                            }}
-                          >
-                            ĐÃ ĐIỀU ĐỘNG
-                          </span>
+              {/* Khối Tác Chiến: Điều Phối Tiếp Vận Bờ */}
+              {(() => {
+                const handoff = selectedSos.shoreHandoff!;
+                const isHandoffAssignedOrDone =
+                  handoff.status === 'ASSIGNED' ||
+                  handoff.status === 'COMPLETED' ||
+                  Boolean(handoff.assignedVehiclePlate || handoff.assignedVehicleId);
+                const handoffStatusMeta = getShoreHandoffVehicleStatusMeta(
+                  handoff.status,
+                  selectedSos.shoreHandoffAssignment?.status
+                );
+                const isHandoffCompleted = handoffStatusMeta.isDone;
+                return (
+                  <div
+                    style={{
+                      marginTop: 4,
+                      borderRadius: 8,
+                      border: isHandoffAssignedOrDone ? '1px solid #86efac' : '1.5px solid #fdba74',
+                      background: isHandoffAssignedOrDone ? '#f0fdf4' : '#fff7ed',
+                      padding: isHandoffAssignedOrDone ? '6px 8px' : '10px 12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: isHandoffAssignedOrDone ? 4 : 8,
+                    }}
+                  >
+                    {isHandoffAssignedOrDone ? (
+                      <>
+                        {/* Dòng 1: Tiêu đề + Huy hiệu + Nút thao tác (gộp 1 hàng ngang tối ưu diện tích) */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                            <span style={{ fontSize: 13, flexShrink: 0 }}>🚑</span>
+                            <span
+                              style={{
+                                fontSize: 11.5,
+                                fontWeight: 800,
+                                color: '#15803d',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.2px',
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                              }}
+                            >
+                              Xe đón
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 9.5,
+                                fontWeight: 800,
+                                padding: '1.5px 6px',
+                                borderRadius: 4,
+                                background: handoffStatusMeta.bg,
+                                color: handoffStatusMeta.color,
+                                border: `1px solid ${handoffStatusMeta.borderColor}`,
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                              }}
+                            >
+                              {handoffStatusMeta.label}
+                            </span>
+                          </div>
+
+                          {/* Các nút thao tác nhỏ gọn (chỉ hiện khi chưa hoàn tất bàn giao) */}
+                          {!isHandoffCompleted && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                              <button
+                                type="button"
+                                title="Đổi sang phương tiện khác"
+                                onClick={() => setIsRoadModalOpen(true)}
+                                style={{
+                                  padding: '2px 6px',
+                                  background: '#ffffff',
+                                  border: '1px solid #93c5fd',
+                                  borderRadius: 4,
+                                  color: '#1d4ed8',
+                                  fontWeight: 800,
+                                  fontSize: 10.5,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Đổi xe
+                              </button>
+                              <button
+                                type="button"
+                                title="Hủy điều xe này"
+                                onClick={() => setIsCancelRoadModalOpen(true)}
+                                disabled={isCancellingRoad}
+                                style={{
+                                  padding: '2px 6px',
+                                  background: '#ffffff',
+                                  border: '1px solid #fca5a5',
+                                  borderRadius: 4,
+                                  color: '#b91c1c',
+                                  fontWeight: 800,
+                                  fontSize: 10.5,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {isCancellingRoad ? '...' : 'Hủy'}
+                              </button>
+                            </div>
+                          )}
                         </div>
 
-                        {/* Các nút thao tác nhỏ gọn */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                          <button
-                            type="button"
-                            title="Đổi sang phương tiện khác"
-                            onClick={() => setIsRoadModalOpen(true)}
-                            style={{
-                              padding: '2px 6px',
-                              background: '#ffffff',
-                              border: '1px solid #93c5fd',
-                              borderRadius: 4,
-                              color: '#1d4ed8',
-                              fontWeight: 800,
-                              fontSize: 10.5,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            Đổi xe
-                          </button>
-                          <button
-                            type="button"
-                            title="Hủy điều xe này"
-                            onClick={() => setIsCancelRoadModalOpen(true)}
-                            disabled={isCancellingRoad}
-                            style={{
-                              padding: '2px 6px',
-                              background: '#ffffff',
-                              border: '1px solid #fca5a5',
-                              borderRadius: 4,
-                              color: '#b91c1c',
-                              fontWeight: 800,
-                              fontSize: 10.5,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            {isCancellingRoad ? '...' : 'Hủy'}
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Dòng 2: Chi tiết phương tiện & Tài xế */}
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          background: '#ffffff',
-                          border: '1px solid #bbf7d0',
-                          borderRadius: 6,
-                          padding: '3px 8px',
-                          fontSize: 11,
-                          flexWrap: 'wrap',
-                        }}
-                      >
-                        <span style={{ fontWeight: 800, color: '#0f172a' }}>
-                          {cleanVehicleName(selectedSos.shoreHandoff.assignedVehicleName)}
-                        </span>
-                        {selectedSos.shoreHandoff.assignedVehiclePlate && (
-                          <span
-                            style={{
-                              fontSize: 10,
-                              fontWeight: 800,
-                              padding: '1px 4px',
-                              borderRadius: 3,
-                              background: '#f1f5f9',
-                              border: '1px solid #cbd5e1',
-                              color: '#1e293b',
-                            }}
-                          >
-                            {selectedSos.shoreHandoff.assignedVehiclePlate}
-                          </span>
-                        )}
-                        <span style={{ color: '#64748b', fontSize: 10.5, fontWeight: 600 }}>
-                          • 👤 {selectedSos.shoreHandoff.assignedDriverName || 'Tài xế'}
-                          {selectedSos.shoreHandoff.assignedDriverPhone ? ` (${selectedSos.shoreHandoff.assignedDriverPhone})` : ''}
-                        </span>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 15 }}>⚡</span>
-                          <span
-                            style={{
-                              fontSize: 12,
-                              fontWeight: 900,
-                              color: '#c2410c',
-                              textTransform: 'uppercase',
-                            }}
-                          >
-                            Yêu Cầu Xe Đón Nạn Nhân
-                          </span>
-                        </div>
-                        <span
+                        {/* Dòng 2: Chi tiết phương tiện, Đội & Tài xế */}
+                        <div
                           style={{
-                            fontSize: 10.5,
-                            fontWeight: 800,
-                            padding: '2px 7px',
-                            borderRadius: 5,
-                            background: '#fed7aa',
-                            color: '#9a3412',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            background: '#ffffff',
+                            border: '1px solid #bbf7d0',
+                            borderRadius: 6,
+                            padding: '3px 8px',
+                            fontSize: 11,
+                            flexWrap: 'wrap',
                           }}
                         >
-                          CHỜ ĐIỀU XE
-                        </span>
-                      </div>
-                      <div style={{ fontSize: 12, color: '#334155', lineHeight: 1.45 }}>
-                        <div>
-                          • <strong>Cần xe:</strong> {selectedSos.shoreHandoff.vehicleTypeNeeded === 'AMBULANCE' ? '01 Xe Cứu Thương Dã Chiến' : '01 Xe Tải / Bán Tải'} ({selectedSos.shoreHandoff.peopleCount} người)
+                          <span style={{ fontWeight: 800, color: '#0f172a' }}>
+                            {cleanVehicleName(handoff.assignedVehicleName)}
+                          </span>
+                          {handoff.assignedVehiclePlate && (
+                            <span
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 800,
+                                padding: '1px 4px',
+                                borderRadius: 3,
+                                background: '#f1f5f9',
+                                border: '1px solid #cbd5e1',
+                                color: '#1e293b',
+                              }}
+                            >
+                              {handoff.assignedVehiclePlate}
+                            </span>
+                          )}
+                          {handoff.assignedRoadTeamName && (
+                            <span style={{ color: '#475569', fontSize: 10.5, fontWeight: 700 }}>
+                              • {handoff.assignedRoadTeamName}
+                            </span>
+                          )}
+                          <span style={{ color: '#64748b', fontSize: 10.5, fontWeight: 600 }}>
+                            • 👤 {handoff.assignedDriverName || 'Tài xế'}
+                            {handoff.assignedDriverPhone ? ` (${handoff.assignedDriverPhone})` : ''}
+                          </span>
                         </div>
-                        {selectedSos.shoreHandoff.notes && (
-                          <div style={{ marginTop: 2, fontStyle: 'italic', color: '#475569' }}>
-                            • <strong>Ghi chú:</strong> "{selectedSos.shoreHandoff.notes}"
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 15 }}>⚡</span>
+                            <span
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 900,
+                                color: '#c2410c',
+                                textTransform: 'uppercase',
+                              }}
+                            >
+                              Yêu Cầu Xe Đón Nạn Nhân
+                            </span>
                           </div>
-                        )}
-                      </div>
+                          <span
+                            style={{
+                              fontSize: 10.5,
+                              fontWeight: 800,
+                              padding: '2px 7px',
+                              borderRadius: 5,
+                              background: '#fed7aa',
+                              color: '#9a3412',
+                            }}
+                          >
+                            CHỜ ĐIỀU XE
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#334155', lineHeight: 1.45 }}>
+                          <div>
+                            • <strong>Cần xe:</strong> {selectedSos.shoreHandoff.vehicleTypeNeeded === 'AMBULANCE' ? '01 Xe Cứu Thương Dã Chiến' : '01 Xe Tải / Bán Tải'} ({selectedSos.shoreHandoff.peopleCount} người)
+                          </div>
+                          {selectedSos.shoreHandoff.notes && (
+                            <div style={{ marginTop: 2, fontStyle: 'italic', color: '#475569' }}>
+                              • <strong>Ghi chú:</strong> "{selectedSos.shoreHandoff.notes}"
+                            </div>
+                          )}
+                        </div>
 
-                      <button
-                        type="button"
-                        onClick={() => setIsRoadModalOpen(true)}
-                        style={{
-                          width: '100%',
-                          height: 38,
-                          background: '#ea580c',
-                          border: 'none',
-                          borderRadius: 8,
-                          color: '#ffffff',
-                          fontSize: 13,
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: 7,
-                          boxShadow: '0 2px 4px rgba(234, 88, 12, 0.25)',
-                        }}
-                      >
-                        <Ambulance size={16} />
-                        <span>Điều xe cứu thương / tải đến bến đón</span>
-                      </button>
-                    </>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsRoadModalOpen(true)}
+                          style={{
+                            width: '100%',
+                            height: 38,
+                            background: '#ea580c',
+                            border: 'none',
+                            borderRadius: 8,
+                            color: '#ffffff',
+                            fontSize: 13,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 7,
+                            boxShadow: '0 2px 4px rgba(234, 88, 12, 0.25)',
+                          }}
+                        >
+                          <Ambulance size={16} />
+                          <span>Điều xe cứu thương / tải đến bến đón</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+            </>
+          )}
         </div>
+      </div>
 
       {/* Modal Phân Công Xe Đón Bờ (Shore Handoff Dispatch Modal) */}
       {isRoadModalOpen && (
@@ -1559,10 +1759,20 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     {filteredRoadVehicles.map((v) => {
                       const isCurrentAssigned = isVehicleCurrentlyAssigned(v);
                       const busyMissionLabel = getVehicleBusyMission(v);
+                      const teamBusyMissionLabel = getTeamBusyRescueMission(v);
                       const isBusyOther = !isCurrentAssigned && Boolean(busyMissionLabel);
-                      const isDisabled = isCurrentAssigned || isBusyOther;
+                      const isTeamBusyRescuing = !isCurrentAssigned && !isBusyOther && Boolean(teamBusyMissionLabel);
+                      const isVehicleInMission =
+                        !isCurrentAssigned && !isBusyOther && !isTeamBusyRescuing && v.status === 'In Mission';
+                      const isDisabled = isCurrentAssigned || isBusyOther || isTeamBusyRescuing || isVehicleInMission;
                       const isSelected = selectedRoadVehId === v.id && !isDisabled;
                       const team = rescueTeams.find((t) => t.id === v.teamId);
+                      const teamLeader =
+                        team?.rescuers?.find(
+                          (r) =>
+                            String(r.role || '').toLowerCase().includes('trưởng') ||
+                            String(r.role || '').toUpperCase() === 'LEADER'
+                        ) || team?.rescuers?.[0];
                       const capacityNum = parseInt(v.capacity, 10) || 4;
                       const peopleCount = selectedSos.shoreHandoff?.peopleCount ?? 0;
                       const isEnough = capacityNum >= peopleCount;
@@ -1579,28 +1789,32 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                             isCurrentAssigned
                               ? 'Xe này đang được phân công cho điểm này, không thể chọn lại'
                               : isBusyOther
-                              ? `Xe này đang bận đón bờ cho ${busyMissionLabel}, chưa thể điều động!`
-                              : undefined
+                                ? `Xe này đang bận đón bờ cho ${busyMissionLabel}, chưa thể điều động!`
+                                : isTeamBusyRescuing
+                                  ? `Đội của xe này đang trực tiếp đi cứu nạn (${teamBusyMissionLabel}), không thể chọn!`
+                                  : isVehicleInMission
+                                    ? 'Xe này đang thực hiện nhiệm vụ khác'
+                                    : undefined
                           }
                           style={{
                             padding: '10px 14px',
                             borderRadius: 10,
                             border: isCurrentAssigned
                               ? '1.5px dashed #cbd5e1'
-                              : isBusyOther
-                              ? '1.5px dashed #fca5a5'
-                              : isSelected
-                              ? '2px solid #0284c7'
-                              : '1.5px solid #e2e8f0',
+                              : isBusyOther || isTeamBusyRescuing || isVehicleInMission
+                                ? '1.5px dashed #fca5a5'
+                                : isSelected
+                                  ? '2px solid #0284c7'
+                                  : '1.5px solid #e2e8f0',
                             background: isCurrentAssigned
                               ? '#f8fafc'
-                              : isBusyOther
-                              ? '#fff5f5'
-                              : isSelected
-                              ? '#f0f9ff'
-                              : '#ffffff',
+                              : isBusyOther || isTeamBusyRescuing || isVehicleInMission
+                                ? '#fff5f5'
+                                : isSelected
+                                  ? '#f0f9ff'
+                                  : '#ffffff',
                             cursor: isDisabled ? 'not-allowed' : 'pointer',
-                            opacity: isDisabled ? 0.6 : 1,
+                            opacity: isDisabled ? 0.58 : 1,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
@@ -1617,18 +1831,18 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                 borderRadius: 8,
                                 background: isCurrentAssigned
                                   ? '#f1f5f9'
-                                  : isBusyOther
-                                  ? '#fee2e2'
-                                  : v.type === 'Ambulance'
-                                  ? '#eff6ff'
-                                  : '#fffbeb',
+                                  : isBusyOther || isTeamBusyRescuing || isVehicleInMission
+                                    ? '#fee2e2'
+                                    : v.type === 'Ambulance'
+                                      ? '#eff6ff'
+                                      : '#fffbeb',
                                 border: isCurrentAssigned
                                   ? '1px solid #cbd5e1'
-                                  : isBusyOther
-                                  ? '1px solid #fecaca'
-                                  : v.type === 'Ambulance'
-                                  ? '1px solid #bfdbfe'
-                                  : '1px solid #fef3c7',
+                                  : isBusyOther || isTeamBusyRescuing || isVehicleInMission
+                                    ? '1px solid #fecaca'
+                                    : v.type === 'Ambulance'
+                                      ? '1px solid #bfdbfe'
+                                      : '1px solid #fef3c7',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -1689,10 +1903,57 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                                     ⏳ Đang bận đón ({busyMissionLabel})
                                   </span>
                                 )}
+                                {isTeamBusyRescuing && (
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: 800,
+                                      padding: '1px 6px',
+                                      borderRadius: 4,
+                                      background: '#fee2e2',
+                                      color: '#b91c1c',
+                                      border: '1px solid #fecaca',
+                                    }}
+                                  >
+                                    🚑 Đội đang đi cứu ({teamBusyMissionLabel})
+                                  </span>
+                                )}
+                                {isVehicleInMission && (
+                                  <span
+                                    style={{
+                                      fontSize: 10,
+                                      fontWeight: 800,
+                                      padding: '1px 6px',
+                                      borderRadius: 4,
+                                      background: '#fee2e2',
+                                      color: '#b91c1c',
+                                      border: '1px solid #fecaca',
+                                    }}
+                                  >
+                                    ⛔ Xe đang làm nhiệm vụ
+                                  </span>
+                                )}
                               </div>
 
-                              <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
-                                Đơn vị: <strong style={{ color: '#334155' }}>{team?.name || v.teamName || 'Đội Phản Ứng Nhanh'}</strong>
+                              <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <span>
+                                  Đội: <strong style={{ color: isDisabled ? '#64748b' : '#0f172a' }}>{team?.name || v.teamName || 'Đội Phản Ứng Nhanh'}</strong>
+                                </span>
+                                {teamLeader?.name && (
+                                  <span
+                                    style={{
+                                      fontSize: 10.5,
+                                      fontWeight: 700,
+                                      padding: '1px 6px',
+                                      borderRadius: 4,
+                                      background: isDisabled ? '#f1f5f9' : '#eff6ff',
+                                      color: isDisabled ? '#64748b' : '#1d4ed8',
+                                      border: isDisabled ? '1px solid #cbd5e1' : '1px solid #bfdbfe',
+                                    }}
+                                  >
+                                    Đội trưởng: {teamLeader.name}
+                                  </span>
+                                )}
                               </div>
 
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
@@ -1761,6 +2022,36 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                               >
                                 Đang bận
                               </div>
+                            ) : isTeamBusyRescuing ? (
+                              <div
+                                title={`Đội đang đi cứu nạn (${teamBusyMissionLabel})`}
+                                style={{
+                                  padding: '3px 8px',
+                                  borderRadius: 6,
+                                  background: '#fee2e2',
+                                  border: '1px solid #fecaca',
+                                  fontSize: 10.5,
+                                  fontWeight: 800,
+                                  color: '#b91c1c',
+                                }}
+                              >
+                                Đang đi cứu
+                              </div>
+                            ) : isVehicleInMission ? (
+                              <div
+                                title="Xe đang làm nhiệm vụ"
+                                style={{
+                                  padding: '3px 8px',
+                                  borderRadius: 6,
+                                  background: '#fee2e2',
+                                  border: '1px solid #fecaca',
+                                  fontSize: 10.5,
+                                  fontWeight: 800,
+                                  color: '#b91c1c',
+                                }}
+                              >
+                                Bận nhiệm vụ
+                              </div>
                             ) : isSelected ? (
                               <CheckCircle2 size={20} color="#0284c7" />
                             ) : (
@@ -1812,7 +2103,10 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                 Đóng
               </button>
               {(() => {
-                const canSubmit = !isSubmittingRoad && Boolean(selectedRoadVehId);
+                const canSubmit =
+                  !isSubmittingRoad &&
+                  Boolean(selectedRoadVehId) &&
+                  selectableVehicles.some((v) => v.id === selectedRoadVehId);
                 return (
                   <button
                     type="button"
@@ -1842,7 +2136,7 @@ export const ActiveMissionConsole: React.FC<Props> = ({
         </div>
       )}
 
-      
+
       {/* Modal Xác nhận từ chối yêu cầu chi viện vật tư */}
       {isRejectSuppliesModalOpen && (
         <div
@@ -2273,8 +2567,8 @@ export const ActiveMissionConsole: React.FC<Props> = ({
 
       {/* 3. TACTICAL ACTION BUTTON (Hủy điều động) - CHỈ HIỂN THỊ KHI CHƯA HOÀN TẤT */}
       {!statusInfo.isCompleted &&
-      !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(String(assignment?.status || '').toUpperCase()) &&
-      !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(String(selectedSos?.status || '').toUpperCase()) ? (
+        !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(String(assignment?.status || '').toUpperCase()) &&
+        !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(String(selectedSos?.status || '').toUpperCase()) ? (
         <div style={{ flexShrink: 0, paddingTop: 4 }}>
           <button
             type="button"
@@ -2327,6 +2621,30 @@ export const ActiveMissionConsole: React.FC<Props> = ({
           >
             <CheckCircle2 size={18} color="#16a34a" />
             <span>Đã hoàn tất cứu hộ</span>
+          </div>
+        </div>
+      ) : String(assignment?.status || '').toUpperCase() === 'COMPLETED' ? (
+        <div style={{ flexShrink: 0, paddingTop: 4 }}>
+          <div
+            style={{
+              width: '100%',
+              minHeight: 44,
+              padding: '8px 14px',
+              background: '#fffbeb',
+              border: '1.5px solid #fcd34d',
+              borderRadius: 10,
+              color: '#b45309',
+              fontSize: 12.5,
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              textAlign: 'center',
+              gap: 8,
+              boxShadow: '0 2px 4px rgba(245,158,11,0.08)',
+            }}
+          >
+            <span>Đội cứu hộ đã rảnh (có thể nhận ca mới) • Chờ xe tiếp vận hoàn thành</span>
           </div>
         </div>
       ) : null}

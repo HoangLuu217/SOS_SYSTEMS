@@ -1,10 +1,12 @@
 const mongoose = require('mongoose');
 const { AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
+const { normalizeAreaName, getEquivalentProvinceIds } = require('../utils/geoUtils');
 
 class AdministrativeAreaService {
   constructor() {
     this.boundaryMemoryCache = new Map();
+    this.mapBundleCache = new Map();
   }
   /**
    * Kiểm tra tính hợp lệ của phân cấp hành chính (Hierarchy Validation)
@@ -61,20 +63,20 @@ class AdministrativeAreaService {
   }
 
   /**
-   * Kiểm tra định dạng GeoJSON Polygon của boundary
+   * Kiểm tra định dạng GeoJSON Polygon / MultiPolygon của boundary
    */
   validateBoundary(boundary) {
     if (!boundary) return;
 
-    if (boundary.type !== 'Polygon') {
-      throw new ApiError(400, "GeoJSON boundary phải có type là 'Polygon'");
+    if (boundary.type !== 'Polygon' && boundary.type !== 'MultiPolygon') {
+      throw new ApiError(400, "GeoJSON boundary phải có type là 'Polygon' hoặc 'MultiPolygon'");
     }
 
     if (!Array.isArray(boundary.coordinates) || boundary.coordinates.length === 0) {
-      throw new ApiError(400, 'GeoJSON Polygon coordinates phải là mảng các linear ring');
+      throw new ApiError(400, 'GeoJSON coordinates phải là mảng các linear ring');
     }
 
-    for (const ring of boundary.coordinates) {
+    const validateRing = (ring) => {
       if (!Array.isArray(ring) || ring.length < 4) {
         throw new ApiError(
           400,
@@ -109,6 +111,17 @@ class AdministrativeAreaService {
             `Tọa độ [${lng}, ${lat}] không hợp lệ. Longitude [-180, 180], Latitude [-90, 90]`
           );
         }
+      }
+    };
+
+    if (boundary.type === 'Polygon') {
+      for (const ring of boundary.coordinates) validateRing(ring);
+    } else {
+      for (const poly of boundary.coordinates) {
+        if (!Array.isArray(poly) || poly.length === 0) {
+          throw new ApiError(400, 'Mỗi phần tử MultiPolygon phải là mảng linear ring');
+        }
+        for (const ring of poly) validateRing(ring);
       }
     }
   }
@@ -155,6 +168,7 @@ class AdministrativeAreaService {
       boundary: boundary || undefined,
     });
 
+    this.mapBundleCache.clear();
     return area;
   }
 
@@ -169,10 +183,12 @@ class AdministrativeAreaService {
     }
 
     if (query.provinceId && mongoose.Types.ObjectId.isValid(query.provinceId)) {
-      // Lấy toàn bộ các quận/huyện trực thuộc tỉnh này
-      const districts = await AdministrativeArea.find({ parentId: query.provinceId, status: 'ACTIVE' }).select('_id');
+      // Mở rộng sang các bản ghi PROVINCE cùng tên (VD: VN-48 và DANANG) và lấy toàn bộ quận/huyện/phường trực thuộc
+      const provinceIds = await getEquivalentProvinceIds(query.provinceId, AdministrativeArea);
+      const rootIds = provinceIds.length > 0 ? provinceIds : [query.provinceId];
+      const districts = await AdministrativeArea.find({ parentId: { $in: rootIds }, status: 'ACTIVE' }).select('_id');
       const districtIds = districts.map((d) => d._id);
-      filter.parentId = { $in: [query.provinceId, ...districtIds] };
+      filter.parentId = { $in: [...rootIds, ...districtIds] };
     } else if (query.parentId !== undefined) {
       if (query.parentId === 'null' || query.parentId === null) {
         filter.parentId = null;
@@ -284,12 +300,14 @@ class AdministrativeAreaService {
       { returnDocument: 'after', runValidators: true }
     ).populate('parentId', 'name code type');
 
+    this.mapBundleCache.clear();
+    this.boundaryMemoryCache.clear();
     return updatedArea;
   }
 
   /**
    * Đồng bộ tự động các đơn vị hành chính lấy trực tiếp từ API vào CSDL MongoDB
-   * Tuyệt đối không cần chạy script seed thủ công
+   * Luôn ưu tiên khớp theo tên trong cùng tỉnh (hoặc code nếu cùng tên) để không bao giờ ghi đè nhầm tên lên _id cũ.
    */
   async syncAreasFromApi(data) {
     const { provinceName, provinceCode, units } = data;
@@ -297,14 +315,26 @@ class AdministrativeAreaService {
       return { success: false, message: 'Dữ liệu không đủ để đồng bộ' };
     }
 
-    // 1. Tìm hoặc tạo Province
-    let provinceDoc = await AdministrativeArea.findOne({
-      $or: [
-        { code: `VN-${provinceCode}` },
-        { name: provinceName },
-        { code: String(provinceCode || '') }
-      ]
+    const normalizeNameKey = (val) => normalizeAreaName(val);
+
+    // 1. Tìm hoặc tạo Province (ưu tiên mã chuẩn VN-XX trước khi fallback tên / DANANG)
+    const candidateCodes = [`VN-${provinceCode}`, String(provinceCode || '')].filter(Boolean);
+    if (String(provinceCode) === '48' || normalizeNameKey(provinceName).includes('da nang')) {
+      candidateCodes.push('DANANG');
+    }
+    const candidateProvs = await AdministrativeArea.find({
+      type: 'PROVINCE',
+      code: { $in: candidateCodes },
     });
+    let provinceDoc =
+      candidateProvs.find((p) => p.code === `VN-${provinceCode}`) ||
+      candidateProvs[0] ||
+      null;
+    if (!provinceDoc) {
+      const allProvs = await AdministrativeArea.find({ type: 'PROVINCE', status: 'ACTIVE' });
+      const targetProvNorm = normalizeNameKey(provinceName);
+      provinceDoc = allProvs.find((p) => normalizeNameKey(p.name) === targetProvNorm) || null;
+    }
 
     if (!provinceDoc) {
       provinceDoc = await AdministrativeArea.create({
@@ -315,55 +345,230 @@ class AdministrativeAreaService {
       });
     }
 
+    // Lấy toàn bộ đơn vị hiện có thuộc các cây tỉnh cùng tên (VD: VN-48 + DANANG) và prefix VN<provinceCode>- để tránh tạo bản ghi trùng
+    const equivalentProvIds = await getEquivalentProvinceIds(provinceDoc, AdministrativeArea);
+    const existingChildren = await AdministrativeArea.find({
+      parentId: { $in: equivalentProvIds },
+    }).lean();
+    const childIds = existingChildren.map((c) => c._id);
+    const existingGrandChildren =
+      childIds.length > 0
+        ? await AdministrativeArea.find({ parentId: { $in: childIds } }).lean()
+        : [];
+    const prefixRegex = provinceCode ? new RegExp(`^VN${provinceCode}-`, 'i') : null;
+    const existingByPrefix = prefixRegex
+      ? await AdministrativeArea.find({ code: prefixRegex, type: { $ne: 'PROVINCE' } }).lean()
+      : [];
+    const provinceAreasMap = new Map();
+    [...existingChildren, ...existingGrandChildren, ...existingByPrefix].forEach((doc) => {
+      if (doc && doc._id) provinceAreasMap.set(String(doc._id), doc);
+    });
+    const codePriority = (code) => {
+      const upper = String(code || '').trim().toUpperCase();
+      if (/^VN\d+-\d{4,}$/i.test(upper)) return 3;
+      if (/^VN\d+-W\d{1,3}$/i.test(upper)) return 1;
+      return 2;
+    };
+    const provinceAreas = Array.from(provinceAreasMap.values()).sort((a, b) => {
+      const priorityDiff = codePriority(b.code) - codePriority(a.code);
+      if (priorityDiff !== 0) return priorityDiff;
+      const aHasBound = a.boundary?.coordinates?.length ? 1 : 0;
+      const bHasBound = b.boundary?.coordinates?.length ? 1 : 0;
+      return bHasBound - aHasBound;
+    });
+
+    const byName = new Map();
+    const byCode = new Map();
+    for (const doc of provinceAreas) {
+      const nKey = normalizeNameKey(doc.name);
+      if (nKey && !byName.has(nKey)) byName.set(nKey, doc);
+      if (doc.code) byCode.set(String(doc.code).toUpperCase(), doc);
+    }
+
     // 2. Map lưu trữ ObjectId các District
     const districtMap = new Map();
+
+    // Helper upsert an toàn: ưu tiên khớp đúng tên trong tỉnh; chỉ khớp theo code nếu code thuộc về chính tên đó
+    const upsertUnitSafely = async (unit, unitType, parentId, fallbackPrefix) => {
+      const unitName = String(unit.name || '').trim();
+      if (!unitName) return null;
+
+      const nameKey = normalizeNameKey(unitName);
+      const cleanCode = (unit.code || `VN-${provinceCode}-${fallbackPrefix}-${unitName}`).toUpperCase();
+
+      const matchedByName = byName.get(nameKey);
+      const matchedByCode = byCode.get(cleanCode);
+
+      if (matchedByName) {
+        // Không hạ cấp code chuẩn dạng VN48-20285 hoặc DAD-NHS-* về mã tuần tự VN48-W10
+        const codeOccupiedByOther =
+          matchedByCode && String(matchedByCode._id) !== String(matchedByName._id);
+        const isExistingCanonicalCode = !/^VN\d+-W\d{1,3}$/i.test(matchedByName.code || '');
+        const isIncomingLegacySeqCode = /^VN\d+-W\d{1,3}$/i.test(cleanCode);
+        const nextCode =
+          codeOccupiedByOther || (isExistingCanonicalCode && isIncomingLegacySeqCode)
+            ? matchedByName.code
+            : cleanCode;
+
+        const updated = await AdministrativeArea.findByIdAndUpdate(
+          matchedByName._id,
+          {
+            $set: {
+              name: unitName,
+              code: nextCode,
+              type: unitType,
+              parentId: matchedByName.parentId || parentId,
+              status: 'ACTIVE',
+            },
+          },
+          { returnDocument: 'after' }
+        );
+        if (updated) {
+          byName.set(nameKey, updated);
+          if (updated.code) byCode.set(String(updated.code).toUpperCase(), updated);
+        }
+        return updated;
+      }
+
+      // Nếu không tìm thấy theo tên, chỉ dùng doc trùng code nếu tên của doc đó trùng (tránh tráo _id của xã/phường khác)
+      if (matchedByCode && normalizeNameKey(matchedByCode.name) !== nameKey) {
+        // Code cũ bị trùng với 1 đơn vị khác tên -> cấp code riêng theo tên để tránh ghi đè nhầm
+        const safeFallbackCode = `VN${provinceCode}-${fallbackPrefix}-${Buffer.from(nameKey).toString('hex').slice(0, 8).toUpperCase()}`;
+        const created = await AdministrativeArea.findOneAndUpdate(
+          { code: safeFallbackCode },
+          {
+            $set: {
+              name: unitName,
+              code: safeFallbackCode,
+              type: unitType,
+              parentId,
+              status: 'ACTIVE',
+            },
+          },
+          { upsert: true, returnDocument: 'after' }
+        );
+        if (created) {
+          byName.set(nameKey, created);
+          if (created.code) byCode.set(String(created.code).toUpperCase(), created);
+        }
+        return created;
+      }
+
+      const upserted = await AdministrativeArea.findOneAndUpdate(
+        { code: cleanCode },
+        {
+          $set: {
+            name: unitName,
+            code: cleanCode,
+            type: unitType,
+            parentId,
+            status: 'ACTIVE',
+          },
+        },
+        { upsert: true, returnDocument: 'after' }
+      );
+      if (upserted) {
+        byName.set(nameKey, upserted);
+        if (upserted.code) byCode.set(String(upserted.code).toUpperCase(), upserted);
+      }
+      return upserted;
+    };
 
     // 3. Upsert các District
     const districts = units.filter(u => u.type === 'DISTRICT');
     for (const d of districts) {
-      const cleanCode = (d.code || `VN-${provinceCode}-D-${d.name}`).toUpperCase();
-      const doc = await AdministrativeArea.findOneAndUpdate(
-        { code: cleanCode },
-        {
-          $set: {
-            name: d.name,
-            code: cleanCode,
-            type: 'DISTRICT',
-            parentId: provinceDoc._id,
-            status: 'ACTIVE'
-          }
-        },
-        { upsert: true, returnDocument: 'after' }
-      );
-      districtMap.set(d.name, doc._id);
-      districtMap.set(cleanCode, doc._id);
+      const doc = await upsertUnitSafely(d, 'DISTRICT', provinceDoc._id, 'D');
+      if (doc) {
+        districtMap.set(d.name, doc._id);
+        districtMap.set(doc.code, doc._id);
+      }
     }
 
     // 4. Upsert các Ward
     const wards = units.filter(u => u.type !== 'DISTRICT');
     for (const w of wards) {
-      const cleanCode = (w.code || `VN-${provinceCode}-W-${w.name}`).toUpperCase();
       const parentId = (w.parentName && districtMap.get(w.parentName)) || provinceDoc._id;
-      await AdministrativeArea.findOneAndUpdate(
-        { code: cleanCode },
-        {
-          $set: {
-            name: w.name,
-            code: cleanCode,
-            type: 'WARD',
-            parentId,
-            status: 'ACTIVE'
-          }
-        },
-        { upsert: true, returnDocument: 'after' }
-      );
+      await upsertUnitSafely(w, 'WARD', parentId, 'W');
     }
+
+    this.mapBundleCache.clear();
+    this.boundaryMemoryCache.clear();
 
     return {
       success: true,
       syncedCount: units.length,
       province: provinceDoc.name
     };
+  }
+
+  /**
+   * Trả về ranh giới cấp tỉnh và toàn bộ xã/phường/đặc khu trực thuộc từ MongoDB (có memory cache)
+   * Giúp bản đồ Admin mở lên là có ranh giới ngay, không cần chờ gọi Geoapify bên ngoài.
+   */
+  async getProvinceMapBundle(provinceName = 'Thành phố Đà Nẵng') {
+    const cleanName = String(provinceName || 'Thành phố Đà Nẵng').trim();
+    const cacheKey = cleanName.toLowerCase();
+    if (this.mapBundleCache.has(cacheKey)) {
+      return this.mapBundleCache.get(cacheKey);
+    }
+
+    const stripped = cleanName.replace(/^(thành phố|tỉnh|tp\.?)\s+/i, '').trim();
+    const isDaNang = cacheKey.includes('đà nẵng') || cacheKey.includes('da nang');
+
+    const provinceQuery = isDaNang
+      ? {
+          type: 'PROVINCE',
+          $or: [
+            { code: 'VN-48' },
+            { name: cleanName },
+            { name: { $regex: 'đà nẵng', $options: 'i' } },
+          ],
+        }
+      : {
+          type: 'PROVINCE',
+          $or: [
+            { name: cleanName },
+            { name: { $regex: stripped || cleanName, $options: 'i' } },
+          ],
+        };
+
+    const province = await AdministrativeArea.findOne(provinceQuery)
+      .select('_id name code type parentId status boundary')
+      .lean();
+
+    if (!province) {
+      return { province: null, wards: [], source: 'NOT_FOUND' };
+    }
+
+    const directChildren = await AdministrativeArea.find({
+      parentId: province._id,
+      status: 'ACTIVE',
+    })
+      .select('_id name code type parentId status boundary')
+      .lean();
+
+    const districtIds = directChildren.filter((c) => c.type === 'DISTRICT').map((c) => c._id);
+    const grandChildren =
+      districtIds.length > 0
+        ? await AdministrativeArea.find({ parentId: { $in: districtIds }, status: 'ACTIVE' })
+            .select('_id name code type parentId status boundary')
+            .lean()
+        : [];
+
+    const wards = [...directChildren, ...grandChildren].sort((a, b) =>
+      String(a.name || '').localeCompare(String(b.name || ''), 'vi')
+    );
+
+    const payload = {
+      province,
+      wards,
+      source: 'DATABASE_CACHE',
+    };
+
+    if (province.boundary?.coordinates?.length && wards.length > 0) {
+      this.mapBundleCache.set(cacheKey, payload);
+    }
+    return payload;
   }
 
   /**

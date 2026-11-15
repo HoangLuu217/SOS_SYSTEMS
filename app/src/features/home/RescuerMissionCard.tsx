@@ -208,11 +208,18 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
     const citizenName = isReliefMission
       ? (recipientName || citizen.fullName || 'Đầu mối tiếp nhận cứu trợ')
       : (citizen.fullName || 'Người dân gặp nạn');
-    const citizenPhone = citizen.phone || sos.contactPhone || '';
+    const citizenPhone =
+      citizen.phone ||
+      sos.contactPhone ||
+      activeAssignment.assignedBy?.phone ||
+      '';
     const address = activeAssignment.destination || sos.address || 'Hiện trường cứu hộ';
     const description = activeAssignment.note || sos.description || 'Cần hỗ trợ khẩn cấp tại hiện trường';
     const peopleCount = sos.people || 1;
-    const sosCode = sos.sosCode || 'SOS';
+    const sosCode =
+      activeAssignment.dispatchCode ||
+      sos.sosCode ||
+      (activeAssignment._id ? `LP-${String(activeAssignment._id).slice(-4).toUpperCase()}` : 'SOS');
     const currentStatus = activeAssignment.status;
 
     // Helper render thanh tiến trình
@@ -235,11 +242,28 @@ export const RescuerMissionCard: React.FC<RescuerMissionCardProps> = ({ onMissio
                 {isReliefMission ? 'CỨU TRỢ • ' + sosCode : sosCode}
               </Text>
             </View>
-            <View style={[styles.priorityBadge, isReliefMission && { backgroundColor: '#FEF3C7' }]}>
-              <Text style={[styles.priorityBadgeText, isReliefMission && { color: '#B45309' }]}>
-                {sos.priority === 'CRITICAL' ? 'NGUY CẤP' : sos.priority === 'HIGH' ? 'KHẨN CẤP' : sos.priority === 'LOW' ? 'THẤP' : 'TRUNG BÌNH'}
-              </Text>
-            </View>
+            {(() => {
+              const p = sos.priority || 'UNASSESSED';
+              const badgeColor =
+                isReliefMission
+                  ? '#FEF3C7'
+                  : p === 'CRITICAL'
+                    ? '#DC2626'
+                    : p === 'HIGH'
+                      ? '#EA580C'
+                      : p === 'LOW'
+                        ? '#0284C7'
+                        : '#CA8A04';
+              const label =
+                p === 'CRITICAL' ? 'NGUY CẤP' : p === 'HIGH' ? 'KHẨN CẤP' : p === 'LOW' ? 'THẤP' : p === 'UNASSESSED' ? 'CHỜ PHÂN LOẠI' : 'TRUNG BÌNH';
+              return (
+                <View style={[styles.priorityBadge, { backgroundColor: badgeColor }]}>
+                  <Text style={[styles.priorityBadgeText, isReliefMission && { color: '#B45309' }]}>
+                    {label}
+                  </Text>
+                </View>
+              );
+            })()}
           </View>
 
           <TouchableOpacity

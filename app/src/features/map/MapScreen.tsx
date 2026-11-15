@@ -21,11 +21,12 @@ import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { backendApi } from '@/api';
+import { FullScreenImageViewer, type ImagePreviewState } from '@/components';
 import { ContributeHazardModal } from '@/features/sos';
 import { CitizenSosTrackingModal } from '@/features/profile/CitizenSosTrackingModal';
 import { formatDateTime } from '@/utils';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 import type { MapFilterType } from '@/types';
 export type { MapFilterType };
@@ -176,7 +177,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({
   // Modal Chi tiết điểm (Detail Bottom Sheet / Modal)
   const [selectedDetail, setSelectedDetail] = useState<SelectedDetailItem | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<ImagePreviewState | null>(null);
 
   // Danh sách ca SOS cứu nạn đang kích hoạt & Modal theo dõi hành trình
   const [activeSosList, setActiveSosList] = useState<any[]>([]);
@@ -1504,6 +1505,40 @@ export const MapScreen: React.FC<MapScreenProps> = ({
   const suppliesCount = reliefLocations.filter(r => r.type !== 'RESCUE_STATION').length;
   const medicalCount = reliefLocations.filter(r => r.type === 'RESCUE_STATION').length;
 
+  const renderDetailImageGallery = (item: any, label: string) => {
+    const rawList: string[] = [
+      ...(Array.isArray(item?.images) ? item.images : []),
+      ...(Array.isArray(item?.photos) ? item.photos : []),
+      ...(typeof item?.imageUrl === 'string' ? [item.imageUrl] : []),
+      ...(typeof item?.image === 'string' ? [item.image] : []),
+    ];
+    const uniqueImages = Array.from(
+      new Set(rawList.filter((u): u is string => typeof u === 'string' && u.trim().length > 0).map((u) => u.trim()))
+    );
+    if (uniqueImages.length === 0) return null;
+
+    return (
+      <View>
+        <Text style={styles.sectionLabel}>
+          {label} ({uniqueImages.length}):
+        </Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+          <View style={styles.imageGallery}>
+            {uniqueImages.map((imgUrl, idx) => (
+              <TouchableOpacity
+                key={`${imgUrl}-${idx}`}
+                activeOpacity={0.8}
+                onPress={() => setImagePreview({ images: uniqueImages, index: idx })}
+              >
+                <Image source={{ uri: imgUrl }} style={styles.detailThumbnail} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
@@ -1655,13 +1690,22 @@ export const MapScreen: React.FC<MapScreenProps> = ({
         visible={showDetailModal && !!selectedDetail}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowDetailModal(false)}
+        onRequestClose={() => {
+          if (imagePreview) {
+            setImagePreview(null);
+            return;
+          }
+          setShowDetailModal(false);
+        }}
       >
         <View style={styles.modalBackdrop}>
           <TouchableOpacity
             style={styles.modalDismissArea}
             activeOpacity={1}
-            onPress={() => setShowDetailModal(false)}
+            onPress={() => {
+              setImagePreview(null);
+              setShowDetailModal(false);
+            }}
           />
 
           <View style={[styles.detailSheetContainer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
@@ -1680,7 +1724,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({
                   )}
                   {selectedDetail.category === 'SAFE' && (
                     <View style={styles.detailCategoryBadgeSafe}>
-                      <Text style={styles.detailCategoryBadgeSafeText}>🛡️ ĐIỂM AN TOÀN</Text>
+                      <Feather name="shield" size={13} color="#0F172A" />
+                      <Text style={styles.detailCategoryBadgeSafeText}>ĐIỂM AN TOÀN</Text>
                     </View>
                   )}
                   {selectedDetail.category === 'RELIEF' && (
@@ -1761,26 +1806,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({
                         ) : null}
 
                         {/* Hình ảnh đính kèm */}
-                        {Array.isArray(h.images) && h.images.length > 0 && (
-                          <View>
-                            <Text style={styles.sectionLabel}>
-                              Hình ảnh hiện trường ({h.images.length}):
-                            </Text>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-                              <View style={styles.imageGallery}>
-                                {h.images.map((imgUrl: string, idx: number) => (
-                                  <TouchableOpacity
-                                    key={idx}
-                                    activeOpacity={0.8}
-                                    onPress={() => setPreviewImage(imgUrl)}
-                                  >
-                                    <Image source={{ uri: imgUrl }} style={styles.detailThumbnail} />
-                                  </TouchableOpacity>
-                                ))}
-                              </View>
-                            </ScrollView>
-                          </View>
-                        )}
+                        {renderDetailImageGallery(h, 'Hình ảnh hiện trường')}
 
                         {/* Người báo & Thời gian */}
                         <View style={styles.metaBox}>
@@ -1815,20 +1841,27 @@ export const MapScreen: React.FC<MapScreenProps> = ({
                   {selectedDetail.category === 'SAFE' && (() => {
                     const s = selectedDetail.data;
                     const typeLabel = s.type === 'HOSPITAL'
-                      ? '🏥 Bệnh viện - Cấp cứu y tế'
-                      : (s.type === 'SHELTER' ? '🛡️ Khu trú ẩn an toàn' : '🛡️ Trung tâm sơ tán khẩn cấp');
+                      ? 'Bệnh viện - Cấp cứu y tế'
+                      : (s.type === 'SHELTER' ? 'Khu trú ẩn an toàn' : 'Trung tâm sơ tán khẩn cấp');
+                    const typeIconName = s.type === 'HOSPITAL' ? 'activity' : 'shield';
 
                     return (
                       <View style={{ gap: 14 }}>
                         <View style={styles.tagRow}>
-                          <View style={[styles.hazardTypePill, { backgroundColor: '#ECFDF5' }]}>
-                            <Text style={[styles.hazardTypePillText, { color: '#059669' }]}>{typeLabel}</Text>
+                          <View
+                            style={[
+                              styles.hazardTypePill,
+                              { backgroundColor: 'transparent', paddingHorizontal: 0, paddingVertical: 0 },
+                            ]}
+                          >
+                            <Feather name={typeIconName} size={14} color="#475569" />
+                            <Text style={[styles.hazardTypePillText, { color: '#334155' }]}>{typeLabel}</Text>
                           </View>
                         </View>
 
                         <View style={styles.infoBox}>
                           <View style={styles.infoBoxIcon}>
-                            <Feather name="map-pin" size={16} color="#059669" />
+                            <Feather name="map-pin" size={16} color="#475569" />
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={styles.infoBoxLabel}>Địa chỉ an toàn:</Text>
@@ -1845,13 +1878,43 @@ export const MapScreen: React.FC<MapScreenProps> = ({
                             </View>
                             <View style={styles.capacityDivider} />
                             <View style={styles.capacityCol}>
-                              <Text style={[styles.capacityNum, { color: '#059669' }]}>
+                              <Text style={styles.capacityNum}>
                                 {s.currentOccupancy || 0}
                               </Text>
                               <Text style={styles.capacityText}>Đang tiếp nhận</Text>
                             </View>
                           </View>
+                          {(s.capacity || 0) > 0 && (() => {
+                            const cap = s.capacity || 0;
+                            const occ = s.currentOccupancy || 0;
+                            const exact = (occ / cap) * 100;
+                            const pct =
+                              occ > cap
+                                ? exact % 1 === 0
+                                  ? exact
+                                  : exact < 101
+                                    ? Number(exact.toFixed(1))
+                                    : Math.round(exact)
+                                : Math.round(exact);
+                            const isOver = occ > cap;
+                            const isFull = occ === cap;
+                            return (
+                              <Text
+                                style={{
+                                  marginTop: 8,
+                                  textAlign: 'center',
+                                  fontSize: 12.5,
+                                  fontWeight: '700',
+                                  color: isOver ? '#B91C1C' : isFull ? '#C2410C' : '#0284C7',
+                                }}
+                              >
+                                Tỷ lệ sử dụng: {pct}%{isOver ? ' • Quá tải' : isFull ? ' • Đã đầy' : ''}
+                              </Text>
+                            );
+                          })()}
                         </View>
+
+                        {renderDetailImageGallery(s, 'Hình ảnh địa điểm')}
 
                         {(s.contactPerson || s.contactPhone) && (
                           <View style={styles.metaBox}>
@@ -1868,7 +1931,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({
                               >
                                 <Text style={styles.metaLabel}>Hotline liên hệ:</Text>
                                 <Text style={[styles.metaVal, { color: '#0284C7', fontWeight: '700' }]}>
-                                  📞 {s.contactPhone}
+                                  {s.contactPhone}
                                 </Text>
                               </TouchableOpacity>
                             )}
@@ -1915,6 +1978,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({
                           </View>
                         </View>
 
+                        {renderDetailImageGallery(r, 'Hình ảnh địa điểm')}
+
                         {(r.contactPerson || r.contactPhone) && (
                           <View style={styles.metaBox}>
                             {r.contactPerson && (
@@ -1954,7 +2019,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({
 
                   <TouchableOpacity
                     style={styles.closeSheetBtn}
-                    onPress={() => setShowDetailModal(false)}
+                    onPress={() => {
+                      setImagePreview(null);
+                      setShowDetailModal(false);
+                    }}
                     activeOpacity={0.8}
                   >
                     <Text style={styles.closeSheetBtnText}>Đóng</Text>
@@ -1963,30 +2031,15 @@ export const MapScreen: React.FC<MapScreenProps> = ({
               </>
             )}
           </View>
-        </View>
-      </Modal>
 
-      {/* Modal Phóng to xem ảnh full size */}
-      <Modal
-        visible={!!previewImage}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPreviewImage(null)}
-      >
-        <View style={styles.previewImageBackdrop}>
-          <TouchableOpacity
-            style={styles.previewCloseBtn}
-            onPress={() => setPreviewImage(null)}
-          >
-            <Feather name="x" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          {previewImage && (
-            <Image
-              source={{ uri: previewImage }}
-              style={styles.previewFullImage}
-              resizeMode="contain"
-            />
-          )}
+          {/* Xem ảnh full size ngay trong Modal chi tiết để iOS không bị chặn bởi Modal lồng nhau */}
+          <FullScreenImageViewer
+            visible={!!imagePreview}
+            images={imagePreview?.images || []}
+            initialIndex={imagePreview?.index || 0}
+            onClose={() => setImagePreview(null)}
+            useModal={false}
+          />
         </View>
       </Modal>
 
@@ -2816,16 +2869,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   detailCategoryBadgeSafe: {
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
+    paddingVertical: 2,
   },
   detailCategoryBadgeSafeText: {
-    color: '#059669',
-    fontSize: 11,
+    color: '#0F172A',
+    fontSize: 11.5,
     fontWeight: '800',
     letterSpacing: 0.4,
   },
@@ -2985,9 +3038,9 @@ const styles = StyleSheet.create({
     color: '#1E293B',
   },
   capacityCard: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: '#E2E8F0',
     padding: 12,
     borderRadius: 10,
     alignItems: 'center',
@@ -2995,7 +3048,7 @@ const styles = StyleSheet.create({
   capacityCardTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#065F46',
+    color: '#475569',
     marginBottom: 8,
   },
   capacityRow: {
@@ -3062,22 +3115,5 @@ const styles = StyleSheet.create({
     color: '#475569',
     fontSize: 13.5,
     fontWeight: '700',
-  },
-  previewImageBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.92)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  previewCloseBtn: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    zIndex: 10,
-    padding: 8,
-  },
-  previewFullImage: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT * 0.75,
   },
 });

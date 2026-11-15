@@ -10,7 +10,10 @@ interface Props {
 export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
   if (!team) return null;
 
-  const totalMembers = team.rescuers?.length || team.availableRescuersCount || 4;
+  const uniqueRescuers = Array.from(
+    new Map((team.rescuers || []).map((r, idx) => [String(r.id || `${r.name}-${r.phone || idx}`), r])).values()
+  );
+  const totalMembers = uniqueRescuers.length || team.availableRescuersCount || 0;
 
   return (
     <div
@@ -76,10 +79,20 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#0f172a' }}>
                 {team.name}
               </h3>
-              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span>Đơn vị trực thuộc cứu hộ khẩn cấp</span>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span>{team.authorityName || team.description || 'Đội cứu hộ trực thuộc hệ thống'}</span>
+                {(team.wardName || team.districtName) && (
+                  <>
+                    <span>•</span>
+                    <span style={{ color: '#0369a1', fontWeight: 600 }}>
+                      {[team.wardName, team.districtName && team.districtName !== team.wardName ? team.districtName : ''].filter(Boolean).join(', ')}
+                    </span>
+                  </>
+                )}
                 <span>•</span>
-                <span style={{ color: '#16a34a', fontWeight: 700 }}>Trực chiến 24/7</span>
+                <span style={{ color: team.status === 'Available' ? '#16a34a' : team.status === 'Off-duty' ? '#64748b' : '#dc2626', fontWeight: 700 }}>
+                  {team.status === 'Available' ? 'Sẵn sàng' : team.status === 'Off-duty' ? 'Ngừng trực' : 'Đang nhiệm vụ'}
+                </span>
               </div>
             </div>
           </div>
@@ -124,16 +137,36 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>TRẠNG THÁI TRỰC</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#16a34a', marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} />
-                <span>Sẵn sàng</span>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>TRẠNG THÁI ĐỘI</div>
+              <div
+                style={{
+                  fontSize: 15,
+                  fontWeight: 800,
+                  color: team.status === 'Available' ? '#16a34a' : team.status === 'Off-duty' ? '#64748b' : '#dc2626',
+                  marginTop: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: team.status === 'Available' ? '#16a34a' : team.status === 'Off-duty' ? '#94a3b8' : '#dc2626',
+                    display: 'inline-block',
+                  }}
+                />
+                <span>{team.status === 'Available' ? 'Sẵn sàng' : team.status === 'Off-duty' ? 'Ngừng trực' : 'Đang nhiệm vụ'}</span>
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>THỜI GIAN ĐÁP ỨNG</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#0284c7', marginTop: 2 }}>
-                ~5 - 7 phút
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>PHƯƠNG TIỆN TRỰC THUỘC</div>
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: '#0284c7', marginTop: 2 }}>
+                {team.vehicles && team.vehicles.length > 0
+                  ? team.vehicles.map((v) => v.plate || v.name).join(', ')
+                  : 'Chưa gán phương tiện'}
               </div>
             </div>
           </div>
@@ -157,8 +190,8 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {team.rescuers && team.rescuers.length > 0 ? (
-                    team.rescuers.map((rescuer, idx) => {
+                  {uniqueRescuers.length > 0 ? (
+                    uniqueRescuers.map((rescuer, idx) => {
                       const isLeader =
                         idx === 0 ||
                         rescuer.role.toLowerCase().includes('trưởng') ||
@@ -168,7 +201,7 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
                         <tr
                           key={rescuer.id || idx}
                           style={{
-                            borderBottom: idx !== team.rescuers.length - 1 ? '1px solid #f1f5f9' : 'none',
+                            borderBottom: idx !== uniqueRescuers.length - 1 ? '1px solid #f1f5f9' : 'none',
                             background: isLeader ? 'rgba(2, 132, 199, 0.03)' : '#ffffff',
                           }}
                         >
@@ -199,25 +232,29 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
                             {rescuer.role}
                           </td>
                           <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
-                            <a
-                              href={`tel:${rescuer.phone}`}
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 5,
-                                color: '#0284c7',
-                                fontWeight: 700,
-                                textDecoration: 'none',
-                                background: 'rgba(2, 132, 199, 0.08)',
-                                padding: '3px 8px',
-                                borderRadius: 4,
-                                fontSize: 12,
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              <Phone size={12} />
-                              <span>{rescuer.phone}</span>
-                            </a>
+                            {rescuer.phone ? (
+                              <a
+                                href={`tel:${rescuer.phone}`}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 5,
+                                  color: '#0284c7',
+                                  fontWeight: 700,
+                                  textDecoration: 'none',
+                                  background: 'rgba(2, 132, 199, 0.08)',
+                                  padding: '3px 8px',
+                                  borderRadius: 4,
+                                  fontSize: 12,
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                <Phone size={12} />
+                                <span>{rescuer.phone}</span>
+                              </a>
+                            ) : (
+                              <span style={{ color: '#94a3b8', fontSize: 12 }}>Chưa cập nhật</span>
+                            )}
                           </td>
                           <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
                             {rescuer.coordinates ? (
@@ -256,7 +293,7 @@ export const TeamMembersModal: React.FC<Props> = ({ team, onClose }) => {
                                 }}
                               >
                                 <MapPin size={11} color="#94a3b8" />
-                                <span>Trực chiến tại xe</span>
+                                <span>Chưa cập nhật GPS</span>
                               </div>
                             )}
                           </td>

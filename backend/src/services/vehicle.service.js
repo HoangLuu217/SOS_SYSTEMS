@@ -6,7 +6,7 @@ class VehicleService {
    * Đăng ký phương tiện cứu hộ mới
    */
   async createVehicle(data) {
-    const { teamId, type, plateNumber, capacity, status, description } = data;
+    const { teamId, type, plateNumber, capacity, status, description, terrainCapabilities } = data;
 
     let validTeamId = null;
     if (teamId) {
@@ -31,6 +31,7 @@ class VehicleService {
       capacity: capacity !== undefined ? Number(capacity) : 1,
       status: status || 'AVAILABLE',
       description,
+      terrainCapabilities: Array.isArray(terrainCapabilities) ? terrainCapabilities : [],
     });
 
     return vehicle.populate('teamId', 'name type areaId status');
@@ -110,7 +111,11 @@ class VehicleService {
           select: 'name type areaId status leaderId',
           populate: [
             { path: 'leaderId', select: 'fullName phone email' },
-            { path: 'areaId', select: 'name code' },
+            {
+              path: 'areaId',
+              select: 'name code type parentId',
+              populate: { path: 'parentId', select: 'name code type' },
+            },
           ],
         })
         .sort({ createdAt: -1 })
@@ -182,6 +187,12 @@ class VehicleService {
 
     if (updateData.type !== undefined) vehicle.type = updateData.type;
     if (updateData.capacity !== undefined) vehicle.capacity = Number(updateData.capacity);
+    if (updateData.terrainCapabilities !== undefined) {
+      if (!Array.isArray(updateData.terrainCapabilities)) {
+        throw new ApiError(400, 'terrainCapabilities phải là danh sách khả năng địa hình');
+      }
+      vehicle.terrainCapabilities = updateData.terrainCapabilities;
+    }
     if (updateData.description !== undefined) vehicle.description = updateData.description;
     if (updateData.status !== undefined) vehicle.status = updateData.status;
 

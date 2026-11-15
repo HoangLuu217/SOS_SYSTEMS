@@ -36,11 +36,13 @@ const seed = async () => {
     }
 
     // 1. Đảm bảo có Khu vực hành chính (Đà Nẵng)
-    let area = await AdministrativeArea.findOne({ code: 'DANANG' });
+    let area = await AdministrativeArea.findOne({
+      $or: [{ code: 'VN-48' }, { name: 'Thành phố Đà Nẵng', type: 'PROVINCE' }, { code: 'DANANG' }],
+    });
     if (!area) {
       area = await AdministrativeArea.create({
         name: 'Thành phố Đà Nẵng',
-        code: 'DANANG',
+        code: 'VN-48',
         type: 'PROVINCE',
         parentId: null,
         status: 'ACTIVE',
@@ -276,10 +278,18 @@ const seed = async () => {
         {
           teamId: team._id,
           type: 'AMBULANCE',
-          plateNumber: '43A-115.99',
+          plateNumber: '43A-115.68',
           capacity: 4,
           status: 'AVAILABLE',
-          description: 'Xe cấp cứu chuyên dụng dã chiến túc trực bến sông',
+          description: 'Xe cứu thương dã chiến đội Đông Cứu Nạn túc trực ven sông Hàn',
+        },
+        {
+          teamId: team._id,
+          type: 'TRUCK',
+          plateNumber: '43C-668.88',
+          capacity: 6,
+          status: 'AVAILABLE',
+          description: 'Xe bán tải cứu hộ lội nước đội Đông Cứu Nạn',
         },
       ]);
       console.log('✅ Đã tạo 3 phương tiện cứu trợ mẫu');

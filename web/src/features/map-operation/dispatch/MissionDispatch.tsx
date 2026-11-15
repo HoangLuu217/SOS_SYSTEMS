@@ -101,9 +101,9 @@ export const MissionDispatch = ({
     }
   }, [selectedSos?.id, assignment?.rescueTeamId]);
 
-  // Right Panel Slide & Collapsible state (Cố định 420px chuẩn UX, không cho kéo dãn tự do)
+  // Right Panel Slide & Collapsible state (480px để hiển thị đầy đủ tên đội, lý do AI & cỡ chữ dễ đọc)
   const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
-  const RIGHT_PANEL_WIDTH = 420;
+  const RIGHT_PANEL_WIDTH = 480;
 
   const toggleRightPanel = () => {
     setIsRightPanelOpen((prev) => !prev);

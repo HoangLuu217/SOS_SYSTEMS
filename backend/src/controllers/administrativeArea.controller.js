@@ -115,6 +115,19 @@ class AdministrativeAreaController {
   }
 
   /**
+   * GET /administrative-areas/map-bundle
+   */
+  async getProvinceMapBundle(req, res, next) {
+    try {
+      const province = req.query.province || 'Thành phố Đà Nẵng';
+      const data = await administrativeAreaService.getProvinceMapBundle(province);
+      return sendSuccess(res, 200, 'Lấy dữ liệu ranh giới bản đồ từ CSDL thành công', data);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * GET /administrative-areas/managers
    */
   async getAreaManagers(req, res, next) {

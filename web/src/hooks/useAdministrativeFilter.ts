@@ -29,8 +29,10 @@ export function useAdministrativeFilter(options: {
   isAdmin: boolean;
   userAreaId?: string;
   userAreaName?: string;
+  /** Giới hạn danh sách xã/phường mặc định về 1 Tỉnh/TP (vd: 'Đà Nẵng') khi selectedProvince === 'ALL' */
+  wardsScopeProvince?: string;
 }) {
-  const { isAdmin, userAreaId, userAreaName } = options;
+  const { isAdmin, userAreaId, userAreaName, wardsScopeProvince } = options;
 
   // 1. Dữ liệu từ API Open-API Vietnam & Database MongoDB
   const [provinces, setProvinces] = useState<VietnamProvinceItem[]>([]);
@@ -131,13 +133,51 @@ export function useAdministrativeFilter(options: {
     [areaMap]
   );
 
-  // Khi chọn Tỉnh/Thành phố khác: TỰ ĐỘNG GỌI API LẤY CÁC XÃ, PHƯỜNG CỦA TỈNH ĐÓ
+  const scopedProvinceObj = useMemo(() => {
+    if (!wardsScopeProvince) return null;
+    const normScope = normalizeStr(cleanAreaName(wardsScopeProvince));
+    return (
+      provinces.find((p) => {
+        const normP = normalizeStr(cleanAreaName(p.name));
+        return (
+          (normScope.includes('da nang') && p.isDaNang) ||
+          normP === normScope ||
+          normP.includes(normScope) ||
+          normScope.includes(normP)
+        );
+      }) || null
+    );
+  }, [provinces, wardsScopeProvince]);
+
+  const isAreaInProvince = useCallback(
+    (dbA: AdministrativeAreaItem, targetProv: string, targetCode?: number): boolean => {
+      if (dbA.type === 'PROVINCE') return false;
+      if (targetCode && dbA.code?.startsWith(`VN${targetCode}-`)) return true;
+      const normTarget = normalizeStr(cleanAreaName(targetProv));
+      const provName = getProvinceOfArea(dbA._id);
+      if (provName) {
+        const normP = normalizeStr(cleanAreaName(provName));
+        if (normP === normTarget || normP.includes(normTarget) || normTarget.includes(normP)) {
+          return true;
+        }
+      }
+      return Boolean(dbA.name && normalizeStr(targetProv).includes(normalizeStr(dbA.name)));
+    },
+    [getProvinceOfArea]
+  );
+
+  // Khi chọn Tỉnh/Thành phố khác (hoặc có wardsScopeProvince cố định): TỰ ĐỘNG GỌI API LẤY CÁC XÃ, PHƯỜNG CỦA TỈNH ĐÓ
   useEffect(() => {
     let isMounted = true;
 
     async function loadWardsForProvince() {
-      // 1. Nếu chọn 'ALL' (Tất cả Tỉnh/TP): Lấy toàn bộ xã/phường từ DB
-      if (selectedProvince === 'ALL') {
+      const effectiveProvinceName =
+        selectedProvince !== 'ALL'
+          ? selectedProvince
+          : wardsScopeProvince || null;
+
+      // 1. Nếu chọn 'ALL' và không giới hạn tỉnh mặc định: Lấy toàn bộ xã/phường từ DB
+      if (!effectiveProvinceName) {
         const defaultWards: WardOption[] = dbAreas
           .filter((a) => a.type !== 'PROVINCE')
           .map((a) => ({
@@ -152,59 +192,71 @@ export function useAdministrativeFilter(options: {
         return;
       }
 
-      // 2. Nếu chọn một Tỉnh/TP cụ thể: Gọi API fetchProvinceSubUnitsService
+      // 2. Lấy xã/phường của Tỉnh/TP mục tiêu: Gọi API fetchProvinceSubUnitsService
+      const provObj =
+        selectedProvince !== 'ALL'
+          ? provinces.find((p) => p.name === selectedProvince)
+          : scopedProvinceObj;
+      const provCode =
+        provObj?.code ??
+        (normalizeStr(cleanAreaName(effectiveProvinceName)).includes('da nang') ? 48 : undefined);
+      const resolvedProvName = provObj?.name || effectiveProvinceName;
+      const placeId = provObj?.placeId || (provCode ? `prov-${provCode}` : '');
+
       setWardsLoading(true);
       try {
-        const provObj = provinces.find((p) => p.name === selectedProvince);
-        const placeId = provObj?.placeId || `prov-${provObj?.code || ''}`;
-        const provCode = provObj?.code;
-
         // Gọi trực tiếp API Wards của Tỉnh từ Open-API Vietnam
         const apiUnits: ProvinceSubUnitItem[] = await fetchProvinceSubUnitsService(
           placeId,
-          selectedProvince,
+          resolvedProvName,
           provCode
         );
 
         if (!isMounted) return;
 
-        // Chuẩn hóa danh sách xã/phường từ API
-        const wardList: WardOption[] = apiUnits.map((u) => ({
-          id: u.name, // Dùng tên xã/phường làm định danh lọc thống nhất
-          name: u.name,
-          code: u.code,
-          type: u.type,
-        }));
+        // Chuẩn hóa danh sách xã/phường chuẩn từ API (không trộn thêm các đơn vị cũ/hết hiệu lực trong DB)
+        const seenNames = new Set<string>();
+        const wardList: WardOption[] = [];
 
-        const seenNames = new Set(wardList.map((w) => normalizeStr(cleanAreaName(w.name))));
-
-        // Hợp nhất thêm các xã/phường có trong DB của Tỉnh này (đảm bảo không sót dữ liệu nghiệp vụ)
-        dbAreas.forEach((dbA) => {
-          if (dbA.type === 'PROVINCE') return;
-          const provName = getProvinceOfArea(dbA._id);
-          const isBelong = provName === selectedProvince || (selectedProvince && dbA.name && selectedProvince.includes(dbA.name));
-          if (isBelong) {
-            const cleanKey = normalizeStr(cleanAreaName(dbA.name));
-            if (!seenNames.has(cleanKey)) {
-              seenNames.add(cleanKey);
-              wardList.push({
-                id: String(dbA._id),
-                name: dbA.name,
-                code: dbA.code,
-                type: dbA.type,
-              });
-            }
-          }
+        apiUnits.forEach((u) => {
+          const cleanKey = normalizeStr(cleanAreaName(u.name));
+          if (cleanKey && seenNames.has(cleanKey)) return;
+          if (cleanKey) seenNames.add(cleanKey);
+          wardList.push({
+            id: u.name, // Dùng tên xã/phường làm định danh lọc thống nhất
+            name: u.name,
+            code: u.code,
+            type: u.type,
+          });
         });
+
+        // Chỉ fallback sang DB nếu API hành chính không trả về dữ liệu
+        if (wardList.length === 0) {
+          dbAreas.forEach((dbA) => {
+            if (isAreaInProvince(dbA, resolvedProvName, provCode)) {
+              const cleanKey = normalizeStr(cleanAreaName(dbA.name));
+              if (!seenNames.has(cleanKey)) {
+                seenNames.add(cleanKey);
+                wardList.push({
+                  id: String(dbA._id),
+                  name: dbA.name,
+                  code: dbA.code,
+                  type: dbA.type,
+                });
+              }
+            }
+          });
+        }
 
         wardList.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
         setWards(wardList);
       } catch (err) {
-        console.warn(`Lỗi khi gọi API xã/phường cho ${selectedProvince}:`, err);
+        console.warn(`Lỗi khi gọi API xã/phường cho ${resolvedProvName}:`, err);
         // Fallback lấy từ DB
         const fallback = dbAreas
-          .filter((a) => a.type !== 'PROVINCE' && getProvinceOfArea(a._id) === selectedProvince)
-          .map((a) => ({ id: String(a._id), name: a.name, code: a.code, type: a.type }));
+          .filter((a) => isAreaInProvince(a, resolvedProvName, provCode))
+          .map((a) => ({ id: String(a._id), name: a.name, code: a.code, type: a.type }))
+          .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
         setWards(fallback);
       } finally {
         if (isMounted) {
@@ -217,7 +269,7 @@ export function useAdministrativeFilter(options: {
     return () => {
       isMounted = false;
     };
-  }, [selectedProvince, provinces, dbAreas, getProvinceOfArea]);
+  }, [selectedProvince, provinces, dbAreas, wardsScopeProvince, scopedProvinceObj, isAreaInProvince]);
 
   // Đổi Tỉnh/Thành phố thì tự động reset xã/phường về 'ALL'
   const handleSelectProvince = useCallback((provName: string) => {
