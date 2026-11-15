@@ -27,6 +27,7 @@ import {
 } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
+import { io, Socket } from 'socket.io-client';
 import { useAuth } from '@/context/AuthContext';
 import { backendApi, ChatMessageItem, LocalAuthorityInfo } from '@/api';
 import { FullScreenImageViewer } from '@/components';
@@ -233,7 +234,7 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
   } | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
-  const socketRef = useRef<{ disconnect: () => void } | null>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   // Tải lịch sử tin nhắn của kênh địa phương
   const loadChatHistory = async (channel: string) => {
@@ -255,121 +256,96 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
     }
   };
 
-  // Kết nối SSE Realtime (/api/chat/stream) thay cho Socket.IO
+  // Kết nối Socket.IO thời gian thực
   const initRealtimeSocket = async (channel: string) => {
     try {
       const baseUrl = await backendApi.getBaseUrl();
-      const streamUrl = `${baseUrl.replace(/\/+$/, '')}/chat/stream`;
+      const socketUrl = baseUrl.replace(/\/api\/?$/, '');
 
       if (socketRef.current) {
         socketRef.current.disconnect();
       }
 
-      let isDisposed = false;
-      let currentXhr: XMLHttpRequest | null = null;
-      let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-
-      const connectStream = async () => {
-        if (isDisposed) return;
-
-        const xhr = new XMLHttpRequest();
-        currentXhr = xhr;
-        xhr.open('GET', streamUrl, true);
-        xhr.setRequestHeader('Accept', 'text/event-stream');
-        xhr.setRequestHeader('Cache-Control', 'no-cache');
-
-        try {
-          const accessToken = await backendApi.getAccessToken();
-          if (accessToken) {
-            xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
-          }
-        } catch {}
-
-        let lastIndex = 0;
-        let pendingText = '';
-
-        const processChunks = () => {
-          if (isDisposed || currentXhr !== xhr) return;
-          setIsConnected(true);
-
-          const text = xhr.responseText || '';
-          if (text.length <= lastIndex) return;
-
-          const newChunk = text.slice(lastIndex);
-          lastIndex = text.length;
-
-          const lines = (pendingText + newChunk).split('\n');
-          pendingText = lines.pop() || '';
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith('data:')) continue;
-            try {
-              const payload = JSON.parse(trimmed.replace(/^data:\s*/, ''));
-              if (payload?.action === 'NEW_MESSAGE' && payload?.data) {
-                const newMsg: ChatMessageItem = payload.data;
-                if (newMsg.channel === channel) {
-                  setMessages((prev) => {
-                    if (prev.some((m) => m._id === newMsg._id)) return prev;
-
-                    const tempIdx = prev.findIndex(
-                      (m) => m._id.startsWith('temp_') && m.content === newMsg.content
-                    );
-                    if (tempIdx !== -1) {
-                      const clone = [...prev];
-                      clone[tempIdx] = newMsg;
-                      return clone;
-                    }
-
-                    return [...prev, newMsg];
-                  });
-                  setTimeout(() => {
-                    flatListRef.current?.scrollToEnd({ animated: true });
-                  }, 100);
-                }
-              }
-            } catch {}
-          }
-        };
-
-        xhr.onprogress = processChunks;
-        xhr.onreadystatechange = () => {
-          if (xhr.readyState === 3 || xhr.readyState === 4) {
-            processChunks();
-          }
-        };
-
-        const scheduleReconnect = () => {
-          if (isDisposed || currentXhr !== xhr) return;
-          setIsConnected(false);
-          if (reconnectTimer) clearTimeout(reconnectTimer);
-          reconnectTimer = setTimeout(() => {
-            if (!isDisposed) connectStream();
-          }, 3000);
-        };
-
-        xhr.onerror = scheduleReconnect;
-        xhr.onloadend = scheduleReconnect;
-        xhr.send();
-      };
-
-      socketRef.current = {
-        disconnect: () => {
-          isDisposed = true;
-          if (reconnectTimer) clearTimeout(reconnectTimer);
-          if (currentXhr) {
-            try {
-              currentXhr.abort();
-            } catch {}
-            currentXhr = null;
-          }
-          setIsConnected(false);
+      const socket = io(socketUrl, {
+        transports: ['polling', 'websocket'],
+        extraHeaders: {
+          'Bypass-Tunnel-Reminder': 'true',
         },
+      });
+
+      socketRef.current = socket;
+
+      socket.on('connect', () => {
+        setIsConnected(true);
+        socket.emit('join_channel', channel);
+        if (user?._id) {
+          socket.emit('register_user', user._id);
+        }
+      });
+
+      socket.on('disconnect', () => {
+        setIsConnected(false);
+      });
+
+      // Nhận tin nhắn mới từ Cán bộ địa phương theo thời gian thực
+      socket.on('new_message', (newMsg: ChatMessageItem) => {
+        if (newMsg && newMsg.channel === channel) {
+          setMessages((prev) => {
+            if (prev.some((m) => m._id === newMsg._id)) return prev;
+
+            const tempIdx = prev.findIndex(
+              (m) => m._id.startsWith('temp_') && m.content === newMsg.content
+            );
+            if (tempIdx !== -1) {
+              const clone = [...prev];
+              clone[tempIdx] = newMsg;
+              return clone;
+            }
+
+            return [...prev, newMsg];
+          });
+          setTimeout(() => {
+            flatListRef.current?.scrollToEnd({ animated: true });
+          }, 100);
+        }
+      });
+
+      // Lắng nghe cập nhật trạng thái SOS từ Socket.IO hệ thống
+      const handleSocketSosUpdate = (sosData: any) => {
+        if (!sosData) return;
+        const id = sosData._id || sosData.id;
+        const code = sosData.sosCode;
+        const st = sosData.status;
+        if (id || code) {
+          const entry: Record<string, string> = {};
+          if (id) entry[String(id)] = st;
+          if (code) entry[String(code)] = st;
+          updateSosStatusMap(entry);
+        }
+        if (['COMPLETED', 'RESOLVED', 'CANCELLED', 'REJECTED'].includes(st)) {
+          setActiveSos((prev: any) => {
+            if (!prev) return null;
+            const prevId = String(prev._id || prev.id || '');
+            if (prevId === String(id) || (code && prev.sosCode === code)) {
+              return null;
+            }
+            return prev;
+          });
+          setShowSosPopup(false);
+          setSelectedSosDetail((prev: any) => {
+            if (!prev) return null;
+            if (String(prev.sosId) === String(id) || (code && prev.sosCode === code)) {
+              return { ...prev, status: st };
+            }
+            return prev;
+          });
+        }
       };
 
-      connectStream();
+      socket.on('sos:updated', handleSocketSosUpdate);
+      socket.on('sos:status_changed', handleSocketSosUpdate);
     } catch (err) {
-      console.warn('[ChatSSE Init Error]:', err);
+      console.warn('[Socket Init Error]:', err);
     }
   };
 

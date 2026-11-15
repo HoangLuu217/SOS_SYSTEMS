@@ -367,7 +367,7 @@ class AdminService {
     let emailError = null;
     if (email && email.trim()) {
       try {
-        const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+        const clientUrl = (process.env.CLIENT_URL || 'https://www.cuuhocuunan.io.vn').replace(/\/+$/, '');
         const changePasswordUrl = `${clientUrl}/login?view=reset&account=${encodeURIComponent(cleanPhone)}`;
         const loginUrl = `${clientUrl}/login`;
 
