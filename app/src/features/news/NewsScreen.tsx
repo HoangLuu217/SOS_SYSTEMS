@@ -177,18 +177,6 @@ export const NewsScreen: React.FC<NewsScreenProps> = ({ isActive = false }) => {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.headerTitle}>Tin tức thời tiết</Text>
-          <View style={styles.statusRow}>
-            <View
-              style={[
-                styles.statusIndicator,
-                { backgroundColor: isRealtimeConnected ? '#10B981' : '#F59E0B' },
-              ]}
-            />
-            <Text style={styles.statusText}>
-              {isRealtimeConnected ? 'Trực tuyến' : 'Đang kết nối'}
-              {weatherArticles.length > 0 ? ` • ${weatherArticles.length} bài viết` : ''}
-            </Text>
-          </View>
         </View>
       </View>
 

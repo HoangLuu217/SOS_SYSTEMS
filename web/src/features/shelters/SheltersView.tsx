@@ -17,8 +17,14 @@ import {
   Edit,
   RotateCcw,
   EyeOff,
-  Download
+  FileSpreadsheet
 } from 'lucide-react';
+import {
+  exportWorkbookSheets,
+  buildSheetFormHeader,
+  appendDataTable,
+  formatDateVi,
+} from '@/features/admin/exportReportsExcel';
 import type { User } from '@/types/auth';
 import type { SafeLocationItem, AdministrativeAreaItem } from '@/types/dashboard';
 import {
@@ -663,11 +669,11 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       setShelterPage(1);
     };
 
-    const handleExportSheltersCsv = () => {
-      const escapeCsvCell = (val: unknown): string => {
-        const str = val === null || val === undefined ? '' : String(val);
-        return `"${str.replace(/"/g, '""')}"`;
-      };
+    const handleExportSheltersExcel = () => {
+      if (sortedShelters.length === 0) {
+        showToast('Chưa có điểm trú ẩn nào để xuất file Excel!', 'error');
+        return;
+      }
 
       const headers = [
         'STT',
@@ -679,46 +685,93 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
         'Chỗ trống khả dụng',
         'Khu vực / Địa phương',
         'Địa chỉ chi tiết',
-        'Vĩ độ (Lat)',
-        'Kinh độ (Lng)',
+        'Link GPS Google Maps',
+        'Link ảnh địa điểm',
         'Thời gian cập nhật',
       ];
 
-      const rows = sortedShelters.map((sh, idx) => {
+      let totalOccupancy = 0;
+      let totalCapacity = 0;
+      let totalAvailable = 0;
+      let activeCount = 0;
+
+      const dataMatrix = sortedShelters.map((sh, idx) => {
         const statusInfo = getShelterStatusBadge(sh.status, sh.currentOccupancy, sh.capacity);
         const cap = sh.capacity || 0;
         const occ = sh.currentOccupancy || 0;
         const avail = Math.max(0, cap - occ);
         const coords = sh.location?.coordinates;
+        const mapsLink =
+          Array.isArray(coords) && coords.length === 2
+            ? `https://www.google.com/maps/search/?api=1&query=${Number(coords[1]).toFixed(6)},${Number(coords[0]).toFixed(6)}`
+            : '—';
+        const imageList =
+          Array.isArray(sh.images) && sh.images.length > 0
+            ? sh.images.filter(Boolean)
+            : sh.imageUrl
+            ? [sh.imageUrl]
+            : [];
+        const imageLinks = imageList.length > 0 ? imageList.join('\n') : '—';
+
+        totalOccupancy += occ;
+        totalCapacity += cap;
+        totalAvailable += avail;
+        if (sh.status === 'OPEN' || sh.status === 'LIMITED') activeCount += 1;
+
         return [
-          idx + 1,
-          sh.name || '',
-          getShelterTypeLabel(sh.type),
-          statusInfo.label,
-          occ,
-          cap,
-          avail,
-          getShelterDistrictName(sh),
-          sh.address || '',
-          Array.isArray(coords) && coords.length === 2 ? coords[1] : '',
-          Array.isArray(coords) && coords.length === 2 ? coords[0] : '',
-          formatShelterTime(sh.createdAt),
+          { v: idx + 1, align: 'center' as const },
+          { v: sh.name || '—', align: 'left' as const },
+          { v: getShelterTypeLabel(sh.type), align: 'center' as const },
+          { v: statusInfo.label, align: 'center' as const },
+          { v: occ, align: 'right' as const },
+          { v: cap, align: 'right' as const },
+          { v: avail, align: 'right' as const },
+          { v: getShelterDistrictName(sh), align: 'left' as const },
+          { v: sh.address || '—', align: 'left' as const },
+          { v: mapsLink, align: 'left' as const },
+          { v: imageLinks, align: 'left' as const },
+          { v: formatDateVi(sh.createdAt), align: 'center' as const },
         ];
       });
 
-      const csvContent =
-        '\uFEFF' +
-        [headers.map(escapeCsvCell).join(','), ...rows.map((r) => r.map(escapeCsvCell).join(','))].join('\r\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Danh_sach_diem_tru_an_${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      showToast(`Đã xuất ${sortedShelters.length} điểm trú ẩn an toàn ra file CSV!`, 'success');
+      const { rows, merges } = buildSheetFormHeader(
+        'BÁO CÁO DANH SÁCH ĐIỂM TRÚ ẨN & CƠ SỞ AN TOÀN — HỆ THỐNG CỨU HỘ KHẨN CẤP (SOS)',
+        `Thời gian xuất: ${formatDateVi(new Date().toISOString())} | Tổng số điểm trú ẩn: ${sortedShelters.length}`,
+        headers.length,
+        [
+          ['Đơn vị xuất báo cáo', user?.fullName || 'Quản trị viên SOS', 'Tổng số điểm trú ẩn', sortedShelters.length],
+          ['Tổng đang lưu trú (người)', totalOccupancy, 'Tổng sức chứa tối đa (người)', totalCapacity],
+          ['Tổng chỗ trống khả dụng', totalAvailable, 'Số điểm đang hoạt động', activeCount],
+        ]
+      );
+
+      appendDataTable(rows, headers, dataMatrix, [
+        'TỔNG',
+        `${sortedShelters.length} điểm trú ẩn`,
+        '',
+        '',
+        totalOccupancy,
+        totalCapacity,
+        totalAvailable,
+        '',
+        '',
+        '',
+        '',
+        '',
+      ]);
+
+      exportWorkbookSheets(
+        [
+          {
+            name: 'Diem tru an an toan',
+            colWidths: [7, 30, 18, 18, 16, 18, 16, 22, 32, 46, 46, 20],
+            rows,
+            merges,
+          },
+        ],
+        `Bao_cao_diem_tru_an_${new Date().toISOString().slice(0, 10)}.xlsx`
+      );
+      showToast(`Đã xuất ${sortedShelters.length} điểm trú ẩn an toàn ra file Excel!`, 'success');
     };
 
     const renderSortIcon = (field: typeof shelterSortField) => {
@@ -1401,21 +1454,25 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         <button
           type="button"
-          className="sos-btn-flat"
-          onClick={handleExportSheltersCsv}
+          onClick={handleExportSheltersExcel}
           style={{
-            padding: '8px 14px',
+            padding: '7px 12px',
+            borderRadius: 8,
+            border: '1px solid #bbf7d0',
+            background: '#f0fdf4',
+            color: '#15803d',
             fontSize: '13px',
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
             gap: '6px',
             fontWeight: 600,
             cursor: 'pointer',
+            whiteSpace: 'nowrap',
           }}
-          title="Xuất danh sách điểm trú ẩn đang lọc ra file CSV"
+          title="Xuất danh sách điểm trú ẩn đang lọc ra file Excel có biểu mẫu"
         >
-          <Download size={15} />
-          <span>Xuất CSV</span>
+          <FileSpreadsheet size={15} />
+          <span>Xuất Excel</span>
         </button>
 
         <button

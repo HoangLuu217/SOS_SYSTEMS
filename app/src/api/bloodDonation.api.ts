@@ -16,6 +16,7 @@ export interface BloodDonationRegistrationItem {
   fullName: string;
   phone: string;
   bloodType: string;
+  donatedVolumeMl?: number | null;
   weightKg?: number | null;
   lastDonationDate?: string;
   healthNote?: string;
@@ -91,6 +92,19 @@ export interface RespondBloodEventPayload {
   address?: string;
 }
 
+export interface BloodDonationHistoryItem extends Omit<BloodDonationRegistrationItem, 'eventId'> {
+  eventId?: {
+    _id: string;
+    title: string;
+    locationName: string;
+    address?: string;
+    eventDate: string;
+    startTime: string;
+    endTime: string;
+    organizerName?: string;
+  } | null;
+}
+
 export class BloodDonationApi {
   constructor(private client: ApiClient = apiClient) {}
 
@@ -98,6 +112,7 @@ export class BloodDonationApi {
     ApiResponse<{
       myPreRegistration: BloodDonationRegistrationItem | null;
       activeEvents: BloodDonationEventItem[];
+      donationHistory?: BloodDonationHistoryItem[];
       unrespondedCount: number;
       provinces?: ProvinceAreaItem[];
     }>

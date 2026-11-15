@@ -18,6 +18,7 @@ import * as Location from 'expo-location';
 import {
   bloodDonationApi,
   BloodDonationEventItem,
+  BloodDonationHistoryItem,
   BloodDonationRegistrationItem,
   ProvinceAreaItem,
 } from '@/api/bloodDonation.api';
@@ -51,6 +52,7 @@ export function BloodDonationModal({
   const [myPreRegistration, setMyPreRegistration] =
     useState<BloodDonationRegistrationItem | null>(null);
   const [activeEvents, setActiveEvents] = useState<BloodDonationEventItem[]>([]);
+  const [donationHistory, setDonationHistory] = useState<BloodDonationHistoryItem[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<BloodDonationEventItem | null>(null);
   const [provinces, setProvinces] = useState<ProvinceAreaItem[]>([]);
 
@@ -112,6 +114,7 @@ export function BloodDonationModal({
       if (res.success && res.data) {
         const pre = res.data.myPreRegistration;
         const events = Array.isArray(res.data.activeEvents) ? res.data.activeEvents : [];
+        const history = Array.isArray(res.data.donationHistory) ? res.data.donationHistory : [];
         const fromAreaApi = Array.isArray(areaRes?.data) ? areaRes!.data : [];
         const provList =
           fromAreaApi.length > 0
@@ -122,6 +125,7 @@ export function BloodDonationModal({
 
         setMyPreRegistration(pre);
         setActiveEvents(events);
+        setDonationHistory(history);
         setProvinces(provList);
 
         // Điền thông tin form từ hồ sơ đã đăng ký hoặc từ user
@@ -444,42 +448,6 @@ export function BloodDonationModal({
               </View>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <TouchableOpacity
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 4,
-                  paddingHorizontal: 10,
-                  paddingVertical: 6,
-                  borderRadius: 999,
-                  backgroundColor: activeTab === 'PRE_REGISTER' ? '#EFF6FF' : '#F1F5F9',
-                  borderWidth: 1,
-                  borderColor: activeTab === 'PRE_REGISTER' ? '#BFDBFE' : '#E2E8F0',
-                }}
-                onPress={() => {
-                  setActiveTab((prev) => (prev === 'PRE_REGISTER' ? 'EVENTS' : 'PRE_REGISTER'));
-                  setFeedbackBanner(null);
-                }}
-                activeOpacity={0.75}
-              >
-                <Ionicons
-                  name="settings-outline"
-                  size={16}
-                  color={activeTab === 'PRE_REGISTER' ? '#0284C7' : '#475569'}
-                />
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: '700',
-                    color: activeTab === 'PRE_REGISTER' ? '#0284C7' : '#475569',
-                  }}
-                >
-                  Cài đặt
-                </Text>
-                {myPreRegistration?.status === 'PENDING' && (
-                  <View style={styles.pendingDot} />
-                )}
-              </TouchableOpacity>
               <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
                 <Ionicons name="close" size={22} color="#64748B" />
               </TouchableOpacity>
@@ -540,8 +508,8 @@ export function BloodDonationModal({
                     }}
                     activeOpacity={0.7}
                   >
-                    <Ionicons name="arrow-back" size={16} color="#0284C7" />
-                    <Text style={styles.backToListBtnText}>Danh sách các sự kiện hiến máu</Text>
+                    <Ionicons name="arrow-back" size={14} color="#0284C7" />
+                    <Text style={styles.backToListBtnText}>Quay lại</Text>
                   </TouchableOpacity>
 
                   {/* 1. Chọn Tỉnh / Thành phố từ Area (Dropdown gọn) */}
@@ -685,116 +653,252 @@ export function BloodDonationModal({
                     </View>
                   </View>
 
-                  <TouchableOpacity
-                    style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
-                    onPress={handlePreRegister}
-                    disabled={submitting}
-                  >
-                    {submitting ? (
-                      <ActivityIndicator color="#FFFFFF" size="small" />
-                    ) : (
-                      <>
-                        <Ionicons name="notifications" size={18} color="#FFFFFF" />
-                        <Text style={styles.submitBtnText}>
-                          {myPreRegistration
-                            ? 'CẬP NHẬT ĐK NHẬN THÔNG BÁO'
-                            : 'ĐK NHẬN THÔNG BÁO ĐỢT HIẾN'}
+                  <View style={styles.preRegActionRow}>
+                    {myPreRegistration && (
+                      <TouchableOpacity
+                        style={[
+                          styles.cancelOutlineBtn,
+                          styles.preRegActionBtn,
+                          submitting && { opacity: 0.7 },
+                        ]}
+                        onPress={handleCancelPreRegister}
+                        disabled={submitting}
+                      >
+                        <Ionicons name="close-circle-outline" size={17} color="#DC2626" />
+                        <Text style={styles.cancelOutlineBtnText} numberOfLines={1}>
+                          HỦY ĐĂNG KÝ
                         </Text>
-                      </>
+                      </TouchableOpacity>
                     )}
-                  </TouchableOpacity>
 
-                  {myPreRegistration && (
                     <TouchableOpacity
-                      style={[styles.cancelOutlineBtn, submitting && { opacity: 0.7 }]}
-                      onPress={handleCancelPreRegister}
+                      style={[
+                        styles.submitBtn,
+                        styles.preRegActionBtn,
+                        submitting && { opacity: 0.7 },
+                      ]}
+                      onPress={handlePreRegister}
                       disabled={submitting}
                     >
-                      <Ionicons name="close-circle-outline" size={18} color="#DC2626" />
-                      <Text style={styles.cancelOutlineBtnText}>HỦY ĐĂNG KÝ HIẾN MÁU</Text>
+                      {submitting ? (
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                      ) : (
+                        <>
+                          <Ionicons name="notifications" size={17} color="#FFFFFF" />
+                          <Text style={styles.submitBtnText} numberOfLines={1}>
+                            {myPreRegistration
+                              ? 'CẬP NHẬT'
+                              : 'ĐK NHẬN THÔNG BÁO ĐỢT HIẾN'}
+                          </Text>
+                        </>
+                      )}
                     </TouchableOpacity>
-                  )}
+                  </View>
                 </View>
               ) : (
                 /* ================= TAB 2: SỰ KIỆN HIẾN MÁU & XÁC NHẬN THAM GIA ================= */
                 <View>
-                  {activeEvents.length === 0 ? (
-                    <View style={styles.emptyBox}>
-                      <Ionicons name="calendar-clear-outline" size={44} color="#94A3B8" />
-                      <Text style={styles.emptyTitle}>
-                        Chưa có đợt hiến máu nào đang mở
-                      </Text>
-                      <Text style={styles.emptySubtitle}>
-                        Bạn có thể bấm nút "Cài đặt" ở góc trên để đăng ký nhận thông báo ngay
-                        khi địa phương tổ chức sự kiện hiến máu mới.
-                      </Text>
+                  {!selectedEvent ? (() => {
+                    const upcomingEvents = activeEvents.filter(
+                      (ev) => ev.myResponse?.status !== 'COMPLETED'
+                    );
+                    const historyItems =
+                      donationHistory.length > 0
+                        ? donationHistory
+                        : activeEvents
+                            .filter((ev) => ev.myResponse?.status === 'COMPLETED')
+                            .map((ev) => ({
+                              ...(ev.myResponse as BloodDonationRegistrationItem),
+                              eventId: {
+                                _id: ev._id,
+                                title: ev.title,
+                                locationName: ev.locationName,
+                                address: ev.address,
+                                eventDate: ev.eventDate,
+                                startTime: ev.startTime,
+                                endTime: ev.endTime,
+                                organizerName: ev.organizerName,
+                              },
+                            }));
+
+                    return (
+                    <View>
+                      {/* Cài đặt thông báo gọn gàng nằm trên */}
+                      <TouchableOpacity
+                        style={styles.notifSettingsBtn}
+                        onPress={() => {
+                          setActiveTab('PRE_REGISTER');
+                          setFeedbackBanner(null);
+                        }}
+                        activeOpacity={0.75}
+                      >
+                        <View style={styles.notifSettingsIconBox}>
+                          <Ionicons name="notifications-outline" size={16} color="#0284C7" />
+                        </View>
+                        <Text style={styles.notifSettingsTitle} numberOfLines={1}>
+                          Cài đặt thông báo
+                        </Text>
+                        {myPreRegistration?.status === 'PENDING' && (
+                          <View style={styles.notifActivePill}>
+                            <View style={styles.pendingDot} />
+                            <Text style={styles.notifActivePillText}>Đã bật</Text>
+                          </View>
+                        )}
+                        <Ionicons name="chevron-forward" size={16} color="#64748B" />
+                      </TouchableOpacity>
+
+                      {upcomingEvents.length === 0 ? (
+                        historyItems.length === 0 ? (
+                          <View style={styles.emptyBox}>
+                            <Ionicons name="calendar-clear-outline" size={44} color="#94A3B8" />
+                            <Text style={styles.emptyTitle}>
+                              Chưa có đợt hiến máu nào đang mở
+                            </Text>
+                            <Text style={styles.emptySubtitle}>
+                              Bạn có thể cài đặt thông báo ở trên để nhận tin ngay khi địa phương
+                              tổ chức sự kiện hiến máu mới.
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={styles.noUpcomingBox}>
+                            <Ionicons name="calendar-outline" size={16} color="#64748B" />
+                            <Text style={styles.noUpcomingText}>
+                              Hiện không còn đợt hiến máu mới đang mở.
+                            </Text>
+                          </View>
+                        )
+                      ) : (
+                        /* 1. CHỈ HIỂN THỊ DANH SÁCH CÁC ĐỢT HIẾN MÁU CHƯA HIẾN */
+                        <>
+                          <Text style={styles.sectionLabel}>
+                            Chọn sự kiện hiến máu để xem chi tiết ({upcomingEvents.length}):
+                          </Text>
+                          <View style={styles.eventListBox}>
+                            {upcomingEvents.map((ev) => {
+                              const respStatus = ev.myResponse?.status;
+                              return (
+                                <TouchableOpacity
+                                  key={ev._id}
+                                  style={styles.eventSelectorItem}
+                                  onPress={() => {
+                                    selectEventItem(ev, myPreRegistration);
+                                    setFeedbackBanner(null);
+                                  }}
+                                  activeOpacity={0.7}
+                                >
+                                  <View style={{ flex: 1 }}>
+                                    <Text
+                                      style={styles.eventSelectorTitle}
+                                      numberOfLines={1}
+                                    >
+                                      {ev.title}
+                                    </Text>
+                                    <Text style={styles.eventSelectorMeta} numberOfLines={1}>
+                                      📍 {ev.locationName} • 🗓️ {formatDate(ev.eventDate)} ({ev.startTime} - {ev.endTime})
+                                    </Text>
+                                  </View>
+                                  <View
+                                    style={[
+                                      styles.eventRespBadge,
+                                      respStatus === 'CONFIRMED'
+                                        ? styles.badgeConfirmed
+                                        : respStatus === 'DECLINED'
+                                          ? styles.badgeDeclined
+                                          : styles.badgeUnresponded,
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.eventRespBadgeText,
+                                        respStatus === 'CONFIRMED'
+                                          ? { color: '#15803D' }
+                                          : respStatus === 'DECLINED'
+                                            ? { color: '#64748B' }
+                                            : { color: '#D97706' },
+                                      ]}
+                                    >
+                                      {respStatus === 'CONFIRMED'
+                                        ? 'Đã đăng ký'
+                                        : respStatus === 'DECLINED'
+                                          ? 'Từ chối'
+                                          : 'Chưa xác nhận'}
+                                    </Text>
+                                  </View>
+                                  <Ionicons name="chevron-forward" size={17} color="#94A3B8" />
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        </>
+                      )}
+
+                      {/* 2. LỊCH SỬ HIẾN MÁU (HIỂN THỊ CÁC ĐỢT ĐÃ HIẾN KÈM LƯỢNG MÁU) */}
+                      {historyItems.length > 0 && (
+                        <View style={{ marginTop: 14 }}>
+                          <Text style={styles.sectionLabel}>
+                            Lịch sử hiến máu ({historyItems.length}):
+                          </Text>
+                          <View style={styles.eventListBox}>
+                            {historyItems.map((item) => {
+                              const evInfo =
+                                typeof item.eventId === 'object' && item.eventId
+                                  ? item.eventId
+                                  : null;
+                              const matchingActiveEvent = evInfo?._id
+                                ? activeEvents.find((e) => e._id === evInfo._id)
+                                : undefined;
+
+                              return (
+                                <TouchableOpacity
+                                  key={item._id}
+                                  style={styles.eventSelectorItem}
+                                  disabled={!matchingActiveEvent}
+                                  onPress={() => {
+                                    if (matchingActiveEvent) {
+                                      selectEventItem(matchingActiveEvent, myPreRegistration);
+                                      setFeedbackBanner(null);
+                                    }
+                                  }}
+                                  activeOpacity={matchingActiveEvent ? 0.7 : 1}
+                                >
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={styles.eventSelectorTitle} numberOfLines={1}>
+                                      {evInfo?.title || 'Đợt hiến máu tình nguyện'}
+                                    </Text>
+                                    <Text style={styles.eventSelectorMeta} numberOfLines={1}>
+                                      📍 {evInfo?.locationName || item.areaName || '—'} • 🗓️{' '}
+                                      {formatDate(evInfo?.eventDate || item.respondedAt || item.createdAt)}
+                                    </Text>
+                                    <View style={styles.historyMetaRow}>
+                                      {item.bloodType && item.bloodType !== 'UNKNOWN' && (
+                                        <View style={styles.historyBloodChip}>
+                                          <Text style={styles.historyBloodChipText}>
+                                            Nhóm {item.bloodType}
+                                          </Text>
+                                        </View>
+                                      )}
+                                      {item.donatedVolumeMl ? (
+                                        <View style={styles.historyVolChip}>
+                                          <Text style={styles.historyVolChipText}>
+                                            {item.donatedVolumeMl} ml
+                                          </Text>
+                                        </View>
+                                      ) : null}
+                                      <Text style={styles.historyDoneText}>✓ Đã hiến máu</Text>
+                                    </View>
+                                  </View>
+                                  {matchingActiveEvent && (
+                                    <Ionicons name="chevron-forward" size={17} color="#94A3B8" />
+                                  )}
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      )}
                     </View>
-                  ) : !selectedEvent ? (
-                    /* 1. CHỈ HIỂN THỊ DANH SÁCH CÁC ĐỢT HIẾN MÁU */
-                    <>
-                      <Text style={styles.sectionLabel}>
-                        Chọn sự kiện hiến máu để xem chi tiết ({activeEvents.length}):
-                      </Text>
-                      <View style={styles.eventListBox}>
-                        {activeEvents.map((ev) => {
-                          const respStatus = ev.myResponse?.status;
-                          return (
-                            <TouchableOpacity
-                              key={ev._id}
-                              style={styles.eventSelectorItem}
-                              onPress={() => {
-                                selectEventItem(ev, myPreRegistration);
-                                setFeedbackBanner(null);
-                              }}
-                              activeOpacity={0.7}
-                            >
-                              <View style={{ flex: 1 }}>
-                                <Text
-                                  style={styles.eventSelectorTitle}
-                                  numberOfLines={1}
-                                >
-                                  {ev.title}
-                                </Text>
-                                <Text style={styles.eventSelectorMeta} numberOfLines={1}>
-                                  📍 {ev.locationName} • 🗓️ {formatDate(ev.eventDate)} ({ev.startTime} - {ev.endTime})
-                                </Text>
-                              </View>
-                              <View
-                                style={[
-                                  styles.eventRespBadge,
-                                  respStatus === 'CONFIRMED' || respStatus === 'COMPLETED'
-                                    ? styles.badgeConfirmed
-                                    : respStatus === 'DECLINED'
-                                      ? styles.badgeDeclined
-                                      : styles.badgeUnresponded,
-                                ]}
-                              >
-                                <Text
-                                  style={[
-                                    styles.eventRespBadgeText,
-                                    respStatus === 'CONFIRMED' || respStatus === 'COMPLETED'
-                                      ? { color: '#15803D' }
-                                      : respStatus === 'DECLINED'
-                                        ? { color: '#64748B' }
-                                        : { color: '#D97706' },
-                                  ]}
-                                >
-                                  {respStatus === 'COMPLETED'
-                                    ? '✓ Đã hiến máu'
-                                    : respStatus === 'CONFIRMED'
-                                      ? 'Đã đăng ký'
-                                      : respStatus === 'DECLINED'
-                                        ? 'Từ chối'
-                                        : 'Chưa xác nhận'}
-                                </Text>
-                              </View>
-                              <Ionicons name="chevron-forward" size={17} color="#94A3B8" />
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                    </>
-                  ) : (
+                    );
+                  })() : (
                     /* 2. NHẤN VÀO MỚI MỞ TRONG: CHI TIẾT & FORM XÁC NHẬN */
                     <View>
                       <TouchableOpacity
@@ -805,8 +909,8 @@ export function BloodDonationModal({
                         }}
                         activeOpacity={0.7}
                       >
-                        <Ionicons name="arrow-back" size={16} color="#0284C7" />
-                        <Text style={styles.backToListBtnText}>Danh sách các đợt hiến máu</Text>
+                        <Ionicons name="arrow-back" size={14} color="#0284C7" />
+                        <Text style={styles.backToListBtnText}>Quay lại</Text>
                       </TouchableOpacity>
 
                       <View style={styles.eventDetailCard}>
@@ -969,6 +1073,9 @@ export function BloodDonationModal({
                                   {selectedEvent.myResponse.bloodType === 'UNKNOWN'
                                     ? 'Chưa rõ'
                                     : selectedEvent.myResponse.bloodType}
+                                  {selectedEvent.myResponse?.donatedVolumeMl
+                                    ? ` • Lượng máu đã hiến: ${selectedEvent.myResponse.donatedVolumeMl} ml`
+                                    : ''}
                                 </Text>
                               )}
                             </View>
@@ -1604,20 +1711,123 @@ const styles = StyleSheet.create({
   backToListBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    gap: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 999,
     backgroundColor: '#F0F9FF',
     alignSelf: 'flex-start',
-    marginBottom: 10,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#BAE6FD',
   },
   backToListBtnText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '700',
     color: '#0284C7',
+  },
+  preRegActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 8,
+  },
+  preRegActionBtn: {
+    flex: 1,
+    marginTop: 0,
+    paddingHorizontal: 10,
+  },
+  notifSettingsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+    marginBottom: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 11,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  notifSettingsIconBox: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notifSettingsTitle: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  notifActivePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  notifActivePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  noUpcomingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  noUpcomingText: {
+    fontSize: 12.5,
+    color: '#64748B',
+  },
+  historyMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+  },
+  historyBloodChip: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  historyBloodChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  historyVolChip: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  historyVolChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  historyDoneText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#16A34A',
   },
 });
 
