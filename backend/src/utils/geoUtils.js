@@ -303,9 +303,141 @@ async function checkPointInAuthorityJurisdiction(
   };
 }
 
+/**
+ * Normalize Vietnamese administrative area names for accent-insensitive matching.
+ */
+function normalizeAreaName(value) {
+  return String(value || '')
+    .replace(/đ/gi, 'd')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Resolve all active PROVINCE ObjectIds sharing the same normalized province name
+ * (e.g. legacy `DANANG` and official `VN-48` for Thành phố Đà Nẵng).
+ */
+async function getEquivalentProvinceIds(areaOrId, AdministrativeAreaModel) {
+  if (!areaOrId) return [];
+  const doc =
+    typeof areaOrId === 'object' && areaOrId.type && areaOrId.name
+      ? areaOrId
+      : await AdministrativeAreaModel.findById(areaOrId).select('_id type name').lean();
+  if (!doc) return [];
+  if (doc.type !== 'PROVINCE' || !doc.name) return [doc._id];
+
+  const targetNorm = normalizeAreaName(doc.name);
+  const provinces = await AdministrativeAreaModel.find({ type: 'PROVINCE', status: 'ACTIVE' })
+    .select('_id name')
+    .lean();
+  const matched = provinces.filter((p) => normalizeAreaName(p.name) === targetNorm).map((p) => p._id);
+  if (!matched.some((id) => String(id) === String(doc._id))) {
+    matched.push(doc._id);
+  }
+  return matched;
+}
+
+/**
+ * Walk up parentId from any area to find its root PROVINCE and any equivalent sibling PROVINCE IDs.
+ */
+async function getRootProvinceIdsForArea(areaId, AdministrativeAreaModel) {
+  if (!areaId) return { rootProvinceId: null, equivalentProvinceIds: [], areaDoc: null };
+  let current = await AdministrativeAreaModel.findById(areaId)
+    .select('_id name code type parentId')
+    .lean();
+  const areaDoc = current;
+  let hops = 0;
+  while (current && hops < 5) {
+    if (current.type === 'PROVINCE') {
+      const equivalentProvinceIds = await getEquivalentProvinceIds(current, AdministrativeAreaModel);
+      return { rootProvinceId: current._id, equivalentProvinceIds, areaDoc };
+    }
+    if (!current.parentId) break;
+    current = await AdministrativeAreaModel.findById(current.parentId)
+      .select('_id name code type parentId')
+      .lean();
+    hops += 1;
+  }
+  return { rootProvinceId: null, equivalentProvinceIds: [], areaDoc };
+}
+
+/**
+ * Collect all descendant area ObjectIds (BFS) starting from an area, optionally merging
+ * sibling PROVINCE trees with the same normalized province name.
+ */
+async function getDescendantAreaIds(rootAreaId, AdministrativeAreaModel, { includeEquivalentProvinces = true } = {}) {
+  if (!rootAreaId) return { areaIds: [], boundedAreas: [] };
+  const rootDoc = await AdministrativeAreaModel.findById(rootAreaId)
+    .select('_id name type boundary')
+    .lean();
+  if (!rootDoc) return { areaIds: [rootAreaId], boundedAreas: [] };
+
+  const seedIds =
+    includeEquivalentProvinces && rootDoc.type === 'PROVINCE'
+      ? await getEquivalentProvinceIds(rootDoc, AdministrativeAreaModel)
+      : [rootDoc._id];
+
+  const allAreas = await AdministrativeAreaModel.find({ status: 'ACTIVE' })
+    .select('_id parentId boundary')
+    .lean();
+
+  const selectedIds = new Set(seedIds.map((id) => id.toString()));
+  const areaIds = [...seedIds];
+  let foundChild = true;
+  while (foundChild) {
+    foundChild = false;
+    for (const area of allAreas) {
+      const parentId = area.parentId?.toString();
+      const idStr = area._id.toString();
+      if (parentId && selectedIds.has(parentId) && !selectedIds.has(idStr)) {
+        selectedIds.add(idStr);
+        areaIds.push(area._id);
+        foundChild = true;
+      }
+    }
+  }
+
+  const boundedAreas = allAreas.filter(
+    (area) =>
+      selectedIds.has(area._id.toString()) &&
+      area.boundary?.type &&
+      Array.isArray(area.boundary.coordinates) &&
+      area.boundary.coordinates.length > 0
+  );
+
+  return { areaIds, boundedAreas };
+}
+
+/**
+ * Resolve target broadcast/check scope ('PROVINCE' | 'WARD' | 'ALL') for an AdministrativeArea.
+ * Leaf DISTRICT records with no child WARDs (e.g. "Đặc khu Hoàng Sa") act as single-unit scope ('WARD').
+ */
+async function resolveTargetScopeForArea(areaDoc, AdministrativeAreaModel) {
+  if (!areaDoc) return 'ALL';
+  if (areaDoc.type === 'PROVINCE') return 'PROVINCE';
+  if (areaDoc.type === 'WARD') return 'WARD';
+  if (areaDoc.type === 'DISTRICT') {
+    const hasChildWards = await AdministrativeAreaModel.exists({
+      parentId: areaDoc._id,
+      type: 'WARD',
+      status: 'ACTIVE',
+    });
+    return hasChildWards ? 'PROVINCE' : 'WARD';
+  }
+  return 'PROVINCE';
+}
+
 module.exports = {
   isPointInRing,
   isPointInPolygonGeometry,
   findAreaByCoordinates,
   checkPointInAuthorityJurisdiction,
+  normalizeAreaName,
+  getEquivalentProvinceIds,
+  getRootProvinceIdsForArea,
+  getDescendantAreaIds,
+  resolveTargetScopeForArea,
 };

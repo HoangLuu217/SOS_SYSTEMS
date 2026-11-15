@@ -3,18 +3,16 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { Search, MapPin, Navigation, ExternalLink, Loader2, X } from 'lucide-react';
 import { getAreaCoordinates } from '@/features/authorities/AreaPreviewMap';
+import {
+  reverseGeocodeCoords,
+  searchGeocodeSuggestions,
+  type GeocodeSearchResult,
+} from '@/utils/geocode';
 
 export interface BloodEventMapPickerProps {
   mapUrl?: string;
   onLocationSelected: (lat: number, lng: number, googleMapsUrl: string, address?: string) => void;
   selectedProvinceName?: string;
-}
-
-interface SearchResultItem {
-  place_id: number | string;
-  display_name: string;
-  lat: string;
-  lon: string;
 }
 
 /**
@@ -74,46 +72,19 @@ export const BloodEventMapPicker: React.FC<BloodEventMapPickerProps> = ({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
+  const [searchResults, setSearchResults] = useState<GeocodeSearchResult[]>([]);
   const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [reverseAddress, setReverseAddress] = useState<string>('');
   const [searchFeedback, setSearchFeedback] = useState<string>('');
 
-  // Tra cứu địa chỉ ngược từ tọa độ (Reverse Geocode qua backend proxy để tránh lỗi 403)
-  const doReverseGeocode = useCallback(
-    async (lat: number, lng: number) => {
-      try {
-        const res = await fetch(`/api/blood-donations/geocode/reverse?lat=${lat}&lng=${lng}`);
-        if (res.ok) {
-          const json = await res.json();
-          if (json && json.data) {
-            setReverseAddress(json.data);
-            return json.data;
-          }
-        }
-      } catch {
-        // Fallback Photon reverse nếu backend gặp sự cố
-        try {
-          const fbRes = await fetch(`https://photon.komoot.io/reverse?lon=${lng}&lat=${lat}`);
-          if (fbRes.ok) {
-            const fbData = await fbRes.json();
-            if (fbData.features && fbData.features[0]) {
-              const p = fbData.features[0].properties || {};
-              const addr = [p.name, p.street, p.city, p.state, p.country].filter(Boolean).join(', ');
-              if (addr) {
-                setReverseAddress(addr);
-                return addr;
-              }
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
-      return '';
-    },
-    []
-  );
+  // Tra cứu địa chỉ ngược từ tọa độ qua backend proxy
+  const doReverseGeocode = useCallback(async (lat: number, lng: number) => {
+    const addr = await reverseGeocodeCoords(lat, lng);
+    if (addr) {
+      setReverseAddress(addr);
+    }
+    return addr;
+  }, []);
 
   // Cập nhật vị trí ghim và đồng bộ ra ngoài
   const updateLocation = useCallback(
@@ -275,59 +246,15 @@ export const BloodEventMapPicker: React.FC<BloodEventMapPickerProps> = ({
       return;
     }
 
-    // 2. Tìm kiếm tên địa chỉ qua backend proxy (tránh hoàn toàn lỗi CORS / 403 Forbidden)
+    // 2. Tìm kiếm tên địa chỉ qua backend SerpAPI Google Maps (fallback Nominatim / Photon)
     setIsSearching(true);
     setSearchResults([]);
     try {
-      const fullQuery = selectedProvinceName ? `${q}, ${selectedProvinceName}` : q;
-      const res = await fetch(`/api/blood-donations/geocode/search?q=${encodeURIComponent(fullQuery)}`);
-      let list: SearchResultItem[] = [];
-
-      if (res.ok) {
-        const json = await res.json();
-        list = Array.isArray(json?.data) ? json.data : [];
-      }
-
-      // 3. Fallback: Nếu tìm kèm tỉnh không ra, thử tìm trực tiếp tên địa điểm
-      if (list.length === 0 && selectedProvinceName) {
-        const fbRes = await fetch(`/api/blood-donations/geocode/search?q=${encodeURIComponent(q)}`);
-        if (fbRes.ok) {
-          const fbJson = await fbRes.json();
-          list = Array.isArray(fbJson?.data) ? fbJson.data : [];
-        }
-      }
-
-      // 4. Fallback trực tiếp Photon API nếu backend gặp sự cố
-      if (list.length === 0) {
-        try {
-          const photonRes = await fetch(
-            `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=5`
-          );
-          if (photonRes.ok) {
-            const photonData = await photonRes.json();
-            if (photonData.features && photonData.features.length > 0) {
-              list = photonData.features.map((f: any) => {
-                const props = f.properties || {};
-                const parts = [
-                  props.name,
-                  props.street,
-                  props.city,
-                  props.state,
-                  props.country,
-                ].filter(Boolean);
-                return {
-                  place_id: f.properties.osm_id || Math.random(),
-                  display_name: parts.join(', ') || props.name,
-                  lat: String(f.geometry.coordinates[1]),
-                  lon: String(f.geometry.coordinates[0]),
-                };
-              });
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
+      const list = await searchGeocodeSuggestions(q, {
+        areaBias: selectedProvinceName,
+        lat: currentCoords?.lat,
+        lng: currentCoords?.lng,
+      });
 
       setSearchResults(list);
       if (list.length === 0) {
@@ -345,7 +272,7 @@ export const BloodEventMapPicker: React.FC<BloodEventMapPickerProps> = ({
   };
 
   // Chọn 1 kết quả từ danh sách tìm kiếm
-  const handleSelectSearchResult = (item: SearchResultItem) => {
+  const handleSelectSearchResult = (item: GeocodeSearchResult) => {
     const lat = parseFloat(item.lat);
     const lng = parseFloat(item.lon);
     if (!isNaN(lat) && !isNaN(lng)) {

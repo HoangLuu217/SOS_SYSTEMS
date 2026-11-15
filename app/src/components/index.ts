@@ -7,3 +7,4 @@ export * from './InAppNotificationBanner';
 export * from './LogoSOS';
 export * from './PrimaryButton';
 export * from './FloatingActiveSosWidget';
+export * from './FullScreenImageViewer';

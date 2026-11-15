@@ -359,6 +359,7 @@ export interface SafeLocationItem {
   capacity: number;
   currentOccupancy: number;
   status: 'ACTIVE' | 'INACTIVE' | 'FULL' | 'MAINTENANCE';
+  images?: string[];
   createdBy?: {
     _id: string;
     fullName: string;

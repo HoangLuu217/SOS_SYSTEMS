@@ -1,4 +1,4 @@
-import { fetchWithAuth } from './client';
+import { fetchWithAuth, uploadMediaFile } from './client';
 import type { SafeLocationItem } from '@/types/dashboard';
 
 export async function fetchSafeLocations(params: Record<string, string> = {}): Promise<{ success: boolean; data: SafeLocationItem[] }> {
@@ -19,6 +19,7 @@ export async function createSafeLocation(payload: {
   currentOccupancy?: number;
   status?: string;
   areaId: string;
+  images?: string[];
   location: { type: 'Point'; coordinates: [number, number] };
 }): Promise<{ success: boolean; data: SafeLocationItem; message?: string }> {
   return fetchWithAuth('/safe-locations', {
@@ -37,6 +38,7 @@ export async function updateSafeLocation(
     currentOccupancy: number;
     status: string;
     areaId: string;
+    images: string[];
     location: { type: 'Point'; coordinates: [number, number] };
   }>
 ): Promise<{ success: boolean; data: SafeLocationItem; message?: string }> {
@@ -45,6 +47,8 @@ export async function updateSafeLocation(
     body: JSON.stringify(payload),
   });
 }
+
+export const uploadShelterImage = uploadMediaFile;
 
 export async function deleteSafeLocation(
   id: string

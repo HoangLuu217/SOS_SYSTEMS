@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Tooltip, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import {
@@ -19,6 +19,7 @@ import type { User } from '@/types/auth';
 import type { HazardReportItem, SafeLocationItem, SosRequestItem } from '@/types/dashboard';
 import { fetchHazardReports } from '@/api/hazard.api';
 import { fetchSafeLocations } from '@/api/shelter.api';
+import { getShelterOccupancyMetrics } from '@/features/shelters/shelterConstants';
 import {
   extractPolygonLatLngRings,
   fetchGeoapifyBoundaries,
@@ -36,6 +37,7 @@ import {
   onAssignmentUpdated,
 } from '@/services/socketService';
 import type { AdministrativeArea } from '@/types/domainD';
+import { PhotoLightboxModal, type PhotoLightboxState } from '@/components/common/PhotoLightboxModal';
 import {
   AdminMapHud,
   AdminMapContent,
@@ -45,7 +47,118 @@ import {
   type AdminSosItem,
   type AdminSosFilterMode,
 } from './AdminMapLayers';
+import { AdminPointDetailPanel, type SelectedAdminPoint } from './AdminPointDetailPanel';
 import './RescueSos.css';
+
+const escapePinHtml = (val: string): string =>
+  val
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const getFirstImageUrl = (images?: string[]): string => {
+  if (!Array.isArray(images)) return '';
+  const found = images.find((u) => typeof u === 'string' && u.trim().length > 0);
+  return found ? found.trim() : '';
+};
+
+const buildAdminLocationDivIcon = ({
+  className,
+  label,
+  color,
+  symbol,
+  imageUrl,
+  isSelected = false,
+  pulse = false,
+}: {
+  className: string;
+  label: string;
+  color: string;
+  symbol: string;
+  imageUrl?: string;
+  isSelected?: boolean;
+  pulse?: boolean;
+}): L.DivIcon => {
+  const safeLabel = escapePinHtml(label || '');
+  const safeUrl = imageUrl ? escapePinHtml(imageUrl) : '';
+  const hasPhoto = Boolean(safeUrl);
+  const circleSize = hasPhoto ? (isSelected ? 38 : 34) : isSelected ? 30 : 26;
+  const labelBg = isSelected ? '#0f172a' : color;
+  const ringShadow = isSelected
+    ? `0 0 0 3px ${color}55, 0 4px 12px rgba(15,23,42,0.38)`
+    : hasPhoto
+      ? `0 0 0 2px ${color}, 0 3px 9px rgba(15,23,42,0.32)`
+      : `0 0 10px ${color}cc`;
+
+  return L.divIcon({
+    className,
+    iconSize: [130, 62],
+    iconAnchor: [65, 58],
+    html: `
+      <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;position:relative;">
+        <div style="
+          background:${labelBg};
+          color:#ffffff;
+          font-size:10px;
+          font-weight:800;
+          padding:1.5px 6px;
+          border-radius:4px;
+          box-shadow:0 2px 6px rgba(0,0,0,0.3);
+          white-space:nowrap;
+          margin-bottom:3px;
+          max-width:126px;
+          overflow:hidden;
+          text-overflow:ellipsis;
+          border:1px solid rgba(255,255,255,0.45);
+          position:relative;
+          z-index:3;
+        ">${safeLabel}</div>
+        <div style="position:relative;width:${circleSize}px;height:${circleSize}px;display:flex;align-items:center;justify-content:center;">
+          ${pulse ? `
+            <div style="
+              position:absolute;
+              width:${circleSize + 10}px;
+              height:${circleSize + 10}px;
+              border-radius:50%;
+              background:${color};
+              opacity:0.35;
+              animation:pulse-beacon 1.5s infinite;
+              z-index:1;
+            "></div>
+          ` : ''}
+          <div style="
+            position:relative;
+            width:${circleSize}px;
+            height:${circleSize}px;
+            background:${color};
+            border-radius:50%;
+            border:${isSelected ? '3px' : '2.5px'} solid #ffffff;
+            box-shadow:${ringShadow};
+            overflow:hidden;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            z-index:2;
+          ">
+            ${hasPhoto ? `
+              <img
+                src="${safeUrl}"
+                alt=""
+                style="width:100%;height:100%;object-fit:cover;display:block;"
+                onerror="this.style.display='none';if(this.nextElementSibling){this.nextElementSibling.style.display='flex';}"
+              />
+              <span style="display:none;width:100%;height:100%;align-items:center;justify-content:center;font-size:13px;">${symbol}</span>
+            ` : `
+              <span style="font-size:12px;line-height:1;">${symbol}</span>
+            `}
+          </div>
+        </div>
+      </div>
+    `,
+  });
+};
 
 interface Props {
   user?: User | null;
@@ -217,55 +330,23 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
     };
   }, []);
 
-  const createShelterDivIcon = (shelter: SafeLocationItem) => {
+  const createShelterDivIcon = (shelter: SafeLocationItem, isSelected = false) => {
     const isFull = shelter.status === 'FULL' || (shelter.capacity > 0 && (shelter.currentOccupancy || 0) >= shelter.capacity);
     const isMaintenance = shelter.status === 'MAINTENANCE' || shelter.status === 'INACTIVE';
     const color = isMaintenance ? '#64748b' : isFull ? '#ea580c' : '#10b981';
     const symbol = shelter.type === 'HOSPITAL' ? '🏥' : shelter.type === 'EVACUATION_CENTER' ? '🏫' : '🛡️';
 
-    return L.divIcon({
+    return buildAdminLocationDivIcon({
       className: 'tactical-shelter-beacon',
-      html: `
-        <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;">
-          <div style="
-            background:${color};
-            color:#ffffff;
-            font-size:10px;
-            font-weight:800;
-            padding:1.5px 6px;
-            border-radius:4px;
-            box-shadow:0 2px 6px rgba(0,0,0,0.3);
-            white-space:nowrap;
-            margin-bottom:2px;
-            max-width:125px;
-            overflow:hidden;
-            text-overflow:ellipsis;
-            border:1px solid rgba(255,255,255,0.4);
-          ">
-            ${shelter.name}
-          </div>
-          <div style="
-            width:26px;
-            height:26px;
-            background:${color};
-            border-radius:50%;
-            border:2.5px solid #ffffff;
-            box-shadow:0 0 10px ${color}bb;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            font-size:12px;
-          ">
-            ${symbol}
-          </div>
-        </div>
-      `,
-      iconSize: [125, 46],
-      iconAnchor: [62, 42],
+      label: shelter.name,
+      color,
+      symbol,
+      imageUrl: getFirstImageUrl(shelter.images),
+      isSelected,
     });
   };
 
-  const createHazardDivIcon = (hazard: HazardReportItem) => {
+  const createHazardDivIcon = (hazard: HazardReportItem, isSelected = false) => {
     const isCritical = hazard.severity === 'CRITICAL';
     const color = isCritical ? '#dc2626' : hazard.severity === 'HIGH' ? '#ea580c' : hazard.severity === 'MEDIUM' ? '#d97706' : '#64748b';
     const symbol =
@@ -275,61 +356,14 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
       hazard.hazardType === 'ELECTRICAL' ? '⚡' :
       hazard.hazardType === 'ROAD_DAMAGE' ? '🚧' : '⚠️';
 
-    return L.divIcon({
+    return buildAdminLocationDivIcon({
       className: 'tactical-hazard-beacon',
-      html: `
-        <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;position:relative;">
-          ${isCritical ? `
-            <div style="
-              position:absolute;
-              top:13px;
-              width:34px;
-              height:34px;
-              border-radius:50%;
-              background:${color};
-              opacity:0.35;
-              animation:pulse-beacon 1.5s infinite;
-            "></div>
-          ` : ''}
-          <div style="
-            background:${color};
-            color:#ffffff;
-            font-size:10px;
-            font-weight:800;
-            padding:1.5px 6px;
-            border-radius:4px;
-            box-shadow:0 2px 6px rgba(0,0,0,0.3);
-            white-space:nowrap;
-            margin-bottom:2px;
-            max-width:125px;
-            overflow:hidden;
-            text-overflow:ellipsis;
-            border:1px solid rgba(255,255,255,0.4);
-            position:relative;
-            z-index:2;
-          ">
-            ${hazard.title}
-          </div>
-          <div style="
-            width:26px;
-            height:26px;
-            background:${color};
-            border-radius:50%;
-            border:2.5px solid #ffffff;
-            box-shadow:0 0 10px ${color}cc;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            font-size:12px;
-            position:relative;
-            z-index:2;
-          ">
-            ${symbol}
-          </div>
-        </div>
-      `,
-      iconSize: [125, 46],
-      iconAnchor: [62, 42],
+      label: hazard.title,
+      color,
+      symbol,
+      imageUrl: getFirstImageUrl(hazard.images),
+      isSelected,
+      pulse: isCritical,
     });
   };
 
@@ -361,6 +395,20 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
 
   const [showShelters, setShowShelters] = useState(false);
   const [showHazards, setShowHazards] = useState(false);
+  const [selectedPointRef, setSelectedPointRef] = useState<{ kind: 'SHELTER' | 'HAZARD'; id: string } | null>(null);
+  const [hudCollapsed, setHudCollapsed] = useState(false);
+  const [sosDrawerOpen, setSosDrawerOpen] = useState(false);
+  const [photoLightbox, setPhotoLightbox] = useState<PhotoLightboxState | null>(null);
+
+  const selectedPoint = useMemo<SelectedAdminPoint | null>(() => {
+    if (!selectedPointRef) return null;
+    if (selectedPointRef.kind === 'SHELTER') {
+      const sh = shelters.find((s) => s._id === selectedPointRef.id);
+      return sh ? { kind: 'SHELTER', shelter: sh } : null;
+    }
+    const hz = hazards.find((h) => h._id === selectedPointRef.id);
+    return hz ? { kind: 'HAZARD', hazard: hz } : null;
+  }, [selectedPointRef, shelters, hazards]);
 
   const loadDaNangWards = useCallback(async () => {
     setWardsLoading(true);
@@ -604,6 +652,15 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
           selectedWard={selectedWard}
           onSelectWard={handleSelectWard}
           wardSosCountMap={wardSosCountMap}
+          hudCollapsed={hudCollapsed}
+          onHudCollapsedChange={setHudCollapsed}
+          drawerOpen={sosDrawerOpen}
+          onDrawerOpenChange={(open) => {
+            setSosDrawerOpen(open);
+            if (open) {
+              setSelectedPointRef(null);
+            }
+          }}
         />
 
         {sosLoadError && (
@@ -759,7 +816,15 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
             </button>
             <button
               type="button"
-              onClick={() => setShowShelters((prev) => !prev)}
+              onClick={() =>
+                setShowShelters((prev) => {
+                  const next = !prev;
+                  if (!next && selectedPointRef?.kind === 'SHELTER') {
+                    setSelectedPointRef(null);
+                  }
+                  return next;
+                })
+              }
               style={{
                 width: 36,
                 height: 36,
@@ -781,7 +846,15 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
             </button>
             <button
               type="button"
-              onClick={() => setShowHazards((prev) => !prev)}
+              onClick={() =>
+                setShowHazards((prev) => {
+                  const next = !prev;
+                  if (!next && selectedPointRef?.kind === 'HAZARD') {
+                    setSelectedPointRef(null);
+                  }
+                  return next;
+                })
+              }
               style={{
                 width: 36,
                 height: 36,
@@ -908,6 +981,7 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
             sosList={filteredSosList}
             selectedSos={selectedSos}
             onSelectSos={handleSelectSos}
+            onClearPointSelection={() => setSelectedPointRef(null)}
             focusRequest={focusRequest}
           />
 
@@ -918,62 +992,34 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
               if (!Array.isArray(coords) || coords.length < 2) return null;
               const [lng, lat] = coords;
               if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) return null;
-              const remaining = Math.max(0, (sh.capacity || 0) - (sh.currentOccupancy || 0));
+              const isSelected = selectedPointRef?.kind === 'SHELTER' && selectedPointRef.id === sh._id;
+              const metrics = getShelterOccupancyMetrics(sh.currentOccupancy, sh.capacity);
+              const hasPhoto = Array.isArray(sh.images) && sh.images.some((u) => typeof u === 'string' && u.trim().length > 0);
 
               return (
                 <Marker
-                  key={`admin-sh-${sh._id}`}
+                  key={`admin-sh-${sh._id}-${isSelected ? 'sel' : 'std'}-${hasPhoto ? 'img' : 'ico'}`}
                   position={[lat, lng]}
-                  icon={createShelterDivIcon(sh)}
-                  zIndexOffset={500}
+                  icon={createShelterDivIcon(sh, isSelected)}
+                  zIndexOffset={isSelected ? 950 : 500}
+                  eventHandlers={{
+                    click: (e) => {
+                      L.DomEvent.stopPropagation(e as unknown as Event);
+                      setSosDrawerOpen(false);
+                      setSelectedPointRef({ kind: 'SHELTER', id: sh._id });
+                    },
+                  }}
                 >
-                  <Popup>
-                    <div style={{ fontFamily: 'inherit', padding: '3px 2px', minWidth: '220px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                        <span style={{ fontSize: 16 }}>🛡️</span>
-                        <div style={{ fontWeight: 800, fontSize: '13px', color: '#0f172a' }}>
-                          {sh.name}
-                        </div>
-                      </div>
-                      <div style={{ fontSize: '11.5px', color: '#475569', marginBottom: 6 }}>
-                        📍 {sh.address || 'Chưa cập nhật địa chỉ'}
-                      </div>
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: '1fr 1fr',
-                          gap: 4,
-                          background: '#f8fafc',
-                          padding: '6px',
-                          borderRadius: 6,
-                          border: '1px solid #e2e8f0',
-                          fontSize: '11px',
-                          marginBottom: 6,
-                        }}
-                      >
-                        <div>Sức chứa: <strong>{sh.capacity || 0}</strong></div>
-                        <div>Đang ở: <strong>{sh.currentOccupancy || 0}</strong></div>
-                        <div
-                          style={{
-                            gridColumn: 'span 2',
-                            color: remaining > 0 ? '#16a34a' : '#dc2626',
-                            fontWeight: 700,
-                          }}
-                        >
-                          {remaining > 0 ? `Còn trống: ${remaining} chỗ` : 'Đã kín chỗ'}
-                        </div>
-                      </div>
-                      <div
-                        style={{
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          color: sh.status === 'ACTIVE' ? '#16a34a' : '#64748b',
-                        }}
-                      >
-                        Trạng thái: {sh.status === 'ACTIVE' ? '✓ Đang mở cửa tiếp nhận' : sh.status === 'FULL' ? '● Đã đầy' : '● Tạm ngưng'}
-                      </div>
+                  <Tooltip direction="top" offset={[0, -48]} opacity={0.96}>
+                    <div style={{ fontSize: 11.5, fontWeight: 700, color: '#0f172a' }}>
+                      {sh.name} •{' '}
+                      {metrics.isOverloaded
+                        ? `Quá tải (${metrics.percent}%)`
+                        : metrics.remaining > 0
+                          ? `Còn ${metrics.remaining} chỗ`
+                          : 'Đã đầy'}
                     </div>
-                  </Popup>
+                  </Tooltip>
                 </Marker>
               );
             })}
@@ -985,80 +1031,46 @@ export const AdminPortal = ({ onSwitchToAuthor, onLogout, embedded = false }: Pr
               if (!Array.isArray(coords) || coords.length < 2) return null;
               const [lng, lat] = coords;
               if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) return null;
+              const isSelected = selectedPointRef?.kind === 'HAZARD' && selectedPointRef.id === hz._id;
+              const hasPhoto = Array.isArray(hz.images) && hz.images.some((u) => typeof u === 'string' && u.trim().length > 0);
 
               return (
                 <Marker
-                  key={`admin-hz-${hz._id}`}
+                  key={`admin-hz-${hz._id}-${isSelected ? 'sel' : 'std'}-${hasPhoto ? 'img' : 'ico'}`}
                   position={[lat, lng]}
-                  icon={createHazardDivIcon(hz)}
-                  zIndexOffset={600}
+                  icon={createHazardDivIcon(hz, isSelected)}
+                  zIndexOffset={isSelected ? 950 : 600}
+                  eventHandlers={{
+                    click: (e) => {
+                      L.DomEvent.stopPropagation(e as unknown as Event);
+                      setSosDrawerOpen(false);
+                      setSelectedPointRef({ kind: 'HAZARD', id: hz._id });
+                    },
+                  }}
                 >
-                  <Popup>
-                    <div style={{ fontFamily: 'inherit', padding: '3px 2px', minWidth: '220px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                        <span style={{ fontSize: 16 }}>⚠️</span>
-                        <div style={{ fontWeight: 800, fontSize: '13px', color: '#dc2626' }}>
-                          {hz.title}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
-                        <span
-                          style={{
-                            fontSize: '10px',
-                            fontWeight: 800,
-                            padding: '1px 6px',
-                            borderRadius: 4,
-                            background: hz.severity === 'CRITICAL' ? '#fef2f2' : '#fff7ed',
-                            color: hz.severity === 'CRITICAL' ? '#b91c1c' : '#c2410c',
-                            border: `1px solid ${hz.severity === 'CRITICAL' ? '#fca5a5' : '#fed7aa'}`,
-                          }}
-                        >
-                          {hz.severity === 'CRITICAL' ? 'NGUY CẤP' : hz.severity === 'HIGH' ? 'KHẨN CẤP' : hz.severity === 'MEDIUM' ? 'TRUNG BÌNH' : 'THẤP'}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: '10px',
-                            fontWeight: 700,
-                            padding: '1px 6px',
-                            borderRadius: 4,
-                            background: '#f1f5f9',
-                            color: '#334155',
-                          }}
-                        >
-                          {hz.hazardType}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '11.5px', color: '#475569', marginBottom: 4 }}>
-                        📍 {hz.address || 'Chưa cập nhật địa chỉ'}
-                      </div>
-                      {hz.description && (
-                        <div
-                          style={{
-                            fontSize: '11px',
-                            color: '#1e293b',
-                            fontStyle: 'italic',
-                            marginBottom: 6,
-                            lineHeight: 1.35,
-                          }}
-                        >
-                          "{hz.description}"
-                        </div>
-                      )}
-                      {Array.isArray(hz.images) && hz.images.length > 0 && (
-                        <div style={{ borderRadius: 6, overflow: 'hidden', height: 80, marginBottom: 4 }}>
-                          <img
-                            src={hz.images[0]}
-                            alt="Hiện trường"
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                          />
-                        </div>
-                      )}
+                  <Tooltip direction="top" offset={[0, -48]} opacity={0.96}>
+                    <div style={{ fontSize: 11.5, fontWeight: 700, color: '#dc2626' }}>
+                      {hz.title}
                     </div>
-                  </Popup>
+                  </Tooltip>
                 </Marker>
               );
             })}
         </MapContainer>
+
+        {/* Bảng chi tiết Điểm trú ẩn / Điểm nguy hiểm hiển thị bên trái đè lên bản đồ */}
+        <AdminPointDetailPanel
+          point={selectedPoint}
+          hudCollapsed={hudCollapsed}
+          onClose={() => setSelectedPointRef(null)}
+          onOpenPhoto={(state) => setPhotoLightbox(state)}
+        />
+
+        {/* Lightbox phóng to ảnh địa điểm / hiện trường có Next / Back */}
+        <PhotoLightboxModal
+          state={photoLightbox}
+          onClose={() => setPhotoLightbox(null)}
+        />
       </main>
     </div>
   );

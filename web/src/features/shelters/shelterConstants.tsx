@@ -251,3 +251,82 @@ export const ShelterMiniMap: React.FC<{
     />
   );
 };
+
+export const MAX_SHELTER_OCCUPANCY_PERCENT = 120;
+
+export const getMaxAllowedShelterOccupancy = (capacityInput?: number): number => {
+  const cap = Number(capacityInput);
+  if (!Number.isFinite(cap) || cap <= 0) return 0;
+  return Math.floor((cap * MAX_SHELTER_OCCUPANCY_PERCENT) / 100);
+};
+
+export interface ShelterOccupancyMetrics {
+  capacity: number;
+  occupancy: number;
+  percent: number;
+  barPercent: number;
+  isOverloaded: boolean;
+  isFull: boolean;
+  remaining: number;
+  overloadCount: number;
+}
+
+export const getShelterOccupancyMetrics = (
+  occupancyInput?: number,
+  capacityInput?: number
+): ShelterOccupancyMetrics => {
+  const capacity = Math.max(0, Number(capacityInput) || 0);
+  const occupancy = Math.max(0, Number(occupancyInput) || 0);
+  const isOverloaded = capacity > 0 ? occupancy > capacity : occupancy > 0;
+  const isFull = capacity > 0 && occupancy === capacity;
+
+  let percent = 0;
+  if (capacity > 0) {
+    const exact = (occupancy / capacity) * 100;
+    if (isOverloaded) {
+      percent =
+        exact % 1 === 0
+          ? exact
+          : exact < 101
+            ? Number(exact.toFixed(1))
+            : Math.round(exact);
+    } else {
+      percent = Math.round(exact);
+    }
+  } else if (occupancy > 0) {
+    percent = 100;
+  }
+
+  return {
+    capacity,
+    occupancy,
+    percent,
+    barPercent: Math.min(100, percent),
+    isOverloaded,
+    isFull,
+    remaining: Math.max(0, capacity - occupancy),
+    overloadCount: Math.max(0, occupancy - capacity),
+  };
+};
+
+export const validateShelterOccupancyLimit = (
+  capacityInput: number,
+  occupancyInput: number
+): string | undefined => {
+  const cap = Number(capacityInput);
+  const occ = Number(occupancyInput);
+
+  if (!Number.isFinite(occ) || occ < 0) {
+    return 'Số người đang lưu trú không được là số âm!';
+  }
+  if (!Number.isFinite(cap) || cap <= 0) {
+    return occ > 0
+      ? 'Sức chứa tối đa phải lớn hơn 0 khi có người đang lưu trú!'
+      : undefined;
+  }
+  if (occ * 100 > cap * MAX_SHELTER_OCCUPANCY_PERCENT) {
+    const maxAllowed = getMaxAllowedShelterOccupancy(cap);
+    return `Số người đang lưu trú (${occ.toLocaleString()} người) không được vượt quá 120% sức chứa tối đa (tối đa ${maxAllowed.toLocaleString()} người)!`;
+  }
+  return undefined;
+};

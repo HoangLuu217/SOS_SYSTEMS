@@ -30,6 +30,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '@/context/AuthContext';
 import { backendApi, ChatMessageItem, LocalAuthorityInfo } from '@/api';
+import { FullScreenImageViewer } from '@/components';
 import { CitizenSosTrackingModal } from '../profile';
 
 export const SOS_TYPE_LABELS: Record<string, string> = {
@@ -159,7 +160,11 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
   const [sending, setSending] = useState(false);
   const [sendingGps, setSendingGps] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<{
+    images: string[];
+    index: number;
+    insideSosModal?: boolean;
+  } | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
   // Trạng thái yêu cầu SOS đang hoạt động của người dân
@@ -1290,7 +1295,13 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
                 <TouchableOpacity
                   key={`img_${imgIdx}`}
                   activeOpacity={0.88}
-                  onPress={() => setPreviewImageUrl(img.url)}
+                  onPress={() =>
+                    setImagePreview({
+                      images: imageAttachments.map((att) => att.url),
+                      index: imgIdx,
+                      insideSosModal: false,
+                    })
+                  }
                   style={styles.chatImageWrap}
                 >
                   <Image
@@ -1684,44 +1695,34 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
           </View>
         </KeyboardAvoidingView>
 
-        {/* Modal phóng to ảnh trong chat */}
-        <Modal
-          visible={!!previewImageUrl}
-          transparent={true}
-          animationType="fade"
-          onRequestClose={() => setPreviewImageUrl(null)}
-        >
-          <View style={styles.lightboxContainer}>
-            <StatusBar barStyle="light-content" backgroundColor="#000000" />
-            <TouchableOpacity
-              style={[styles.lightboxCloseBtn, { top: insets.top + 10 }]}
-              onPress={() => setPreviewImageUrl(null)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="close" size={26} color="#FFFFFF" />
-            </TouchableOpacity>
-            {previewImageUrl && (
-              <Image
-                source={{ uri: previewImageUrl }}
-                style={styles.lightboxImage}
-                resizeMode="contain"
-              />
-            )}
-          </View>
-        </Modal>
+        {/* Trình xem ảnh toàn màn hình trong chat (hỗ trợ Next/Back khi nhiều ảnh) */}
+        <FullScreenImageViewer
+          visible={Boolean(imagePreview && !imagePreview.insideSosModal)}
+          images={imagePreview?.images || []}
+          initialIndex={imagePreview?.index || 0}
+          onClose={() => setImagePreview(null)}
+          useModal={false}
+        />
 
         {/* Modal Chi Tiết Ca SOS Khẩn Cấp (Hiện ra khi ấn vào thẻ SOS ngắn gọn) */}
         <Modal
           visible={Boolean(selectedSosDetail)}
           transparent
           animationType="fade"
-          onRequestClose={() => setSelectedSosDetail(null)}
+          onRequestClose={() => {
+            if (imagePreview?.insideSosModal) {
+              setImagePreview(null);
+              return;
+            }
+            setSelectedSosDetail(null);
+          }}
         >
-          <TouchableOpacity
-            style={styles.sosDetailModalBackdrop}
-            activeOpacity={1}
-            onPress={() => setSelectedSosDetail(null)}
-          >
+          <View style={{ flex: 1 }}>
+            <TouchableOpacity
+              style={styles.sosDetailModalBackdrop}
+              activeOpacity={1}
+              onPress={() => setSelectedSosDetail(null)}
+            >
             <TouchableOpacity
               style={styles.sosDetailModalCard}
               activeOpacity={1}
@@ -1831,7 +1832,13 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
                             <TouchableOpacity
                               key={`sos_img_modal_${imgIdx}`}
                               activeOpacity={0.88}
-                              onPress={() => setPreviewImageUrl(imgUrl)}
+                              onPress={() =>
+                                setImagePreview({
+                                  images: selectedSosDetail.images,
+                                  index: imgIdx,
+                                  insideSosModal: true,
+                                })
+                              }
                               style={styles.sosCardImageThumbWrap}
                             >
                               <Image source={{ uri: imgUrl }} style={styles.sosCardImageThumb} resizeMode="cover" />
@@ -1859,6 +1866,14 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
               )}
             </TouchableOpacity>
           </TouchableOpacity>
+          <FullScreenImageViewer
+            visible={Boolean(imagePreview?.insideSosModal)}
+            images={imagePreview?.images || []}
+            initialIndex={imagePreview?.index || 0}
+            onClose={() => setImagePreview(null)}
+            useModal={false}
+          />
+          </View>
         </Modal>
 
         {/* Modal theo dõi tiến độ SOS trực tiếp khi bấm vào thẻ SOS trong chat */}

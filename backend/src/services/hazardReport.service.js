@@ -3,6 +3,7 @@ const { HazardReport, AdministrativeArea } = require('../models');
 const ApiError = require('../utils/apiError');
 const eventBus = require('./eventBus');
 const { findAreaByCoordinates, checkPointInAuthorityJurisdiction } = require('../utils/geoUtils');
+const { sanitizeImages } = require('../utils/validation.util');
 
 class HazardReportService {
   /**
@@ -157,7 +158,7 @@ class HazardReportService {
       areaId: targetAreaId,
       reportedBy: userId,
       reporterRole,
-      images: Array.isArray(images) ? images : [],
+      images: sanitizeImages(images),
       status: finalStatus,
       reviewedBy: isApproved ? userId : undefined,
       reviewedAt: isApproved ? new Date() : undefined,
@@ -355,6 +356,7 @@ class HazardReportService {
       address,
       description,
       location,
+      images,
     } = data;
     const ALLOWED = ['APPROVED', 'REJECTED', 'RESOLVED', 'PENDING'];
     if (!status || !ALLOWED.includes(status)) {
@@ -410,6 +412,9 @@ class HazardReportService {
     }
     if (description !== undefined) {
       report.description = String(description).trim();
+    }
+    if (images !== undefined) {
+      report.images = sanitizeImages(images);
     }
 
     // Nếu cán bộ cập nhật tọa độ GPS, kiểm tra tọa độ mới có nằm trong khu vực quản lý không

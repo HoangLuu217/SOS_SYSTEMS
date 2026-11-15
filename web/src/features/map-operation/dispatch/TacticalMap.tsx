@@ -37,6 +37,7 @@ import { useApp } from '@/context/AppContext';
 import type { HazardReportItem, SafeLocationItem } from '@/types/dashboard';
 import { fetchHazardReports } from '@/api/hazard.api';
 import { fetchSafeLocations } from '@/api/shelter.api';
+import { getShelterOccupancyMetrics } from '@/features/shelters/shelterConstants';
 import { Shield, AlertTriangle } from 'lucide-react';
 
 interface Props {
@@ -1624,7 +1625,7 @@ export const TacticalMap = ({
             if (!Array.isArray(coords) || coords.length < 2) return null;
             const [lng, lat] = coords;
             if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) return null;
-            const remaining = Math.max(0, (sh.capacity || 0) - (sh.currentOccupancy || 0));
+            const metrics = getShelterOccupancyMetrics(sh.currentOccupancy, sh.capacity);
 
             return (
               <Marker
@@ -1662,21 +1663,36 @@ export const TacticalMap = ({
                       <div
                         style={{
                           gridColumn: 'span 2',
-                          color: remaining > 0 ? '#16a34a' : '#dc2626',
+                          color: metrics.remaining > 0 ? '#16a34a' : '#dc2626',
                           fontWeight: 700,
                         }}
                       >
-                        {remaining > 0 ? `Còn trống: ${remaining} chỗ` : 'Đã kín chỗ'}
+                        {metrics.isOverloaded
+                          ? `Quá tải (+${metrics.overloadCount} người • ${metrics.percent}%)`
+                          : metrics.remaining > 0
+                            ? `Còn trống: ${metrics.remaining} chỗ (${metrics.percent}%)`
+                            : 'Đã kín chỗ (100%)'}
                       </div>
                     </div>
                     <div
                       style={{
                         fontSize: '11px',
                         fontWeight: 700,
-                        color: sh.status === 'ACTIVE' ? '#16a34a' : '#64748b',
+                        color: metrics.isOverloaded
+                          ? '#b91c1c'
+                          : sh.status === 'ACTIVE'
+                            ? '#16a34a'
+                            : '#64748b',
                       }}
                     >
-                      Trạng thái: {sh.status === 'ACTIVE' ? '✓ Đang mở cửa tiếp nhận' : sh.status === 'FULL' ? '● Đã đầy' : '● Tạm ngưng'}
+                      Trạng thái:{' '}
+                      {sh.status === 'MAINTENANCE' || sh.status === 'INACTIVE'
+                        ? '● Tạm ngưng'
+                        : metrics.isOverloaded
+                          ? `● Quá tải (${metrics.percent}%)`
+                          : sh.status === 'FULL' || metrics.isFull
+                            ? '● Đã đầy'
+                            : '✓ Đang mở cửa tiếp nhận'}
                     </div>
                   </div>
                 </Popup>
