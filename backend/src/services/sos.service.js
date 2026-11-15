@@ -422,22 +422,54 @@ const getSosRequests = async (query = {}, user = null) => {
 
   if (sosList.length > 0) {
     const sosIds = sosList.map(s => s._id);
-    const assignments = await SosAssignment.find({
-      $or: [
-        { sosRequestId: { $in: sosIds } },
-        { sosId: { $in: sosIds } },
-      ],
-      status: { $nin: ['CANCELLED', 'REJECTED'] },
-    })
-      .populate('rescueTeamId', 'name type areaId status')
-      .populate('rescuerId', 'fullName phone roles')
-      .populate('vehicleId', 'plateNumber type capacity')
-      .populate('authorityOrganizationId', 'name code')
-      .lean();
+    const recentCancelCutoff = new Date(Date.now() - 10 * 60 * 1000);
+    const [assignments, recentCancelledAssignments] = await Promise.all([
+      SosAssignment.find({
+        $or: [
+          { sosRequestId: { $in: sosIds } },
+          { sosId: { $in: sosIds } },
+        ],
+        status: { $nin: ['CANCELLED', 'REJECTED'] },
+      })
+        .populate('rescueTeamId', 'name type areaId status')
+        .populate('rescuerId', 'fullName phone roles')
+        .populate('vehicleId', 'plateNumber type capacity')
+        .populate('authorityOrganizationId', 'name code')
+        .lean(),
+      SosAssignment.find({
+        $or: [
+          { sosRequestId: { $in: sosIds } },
+          { sosId: { $in: sosIds } },
+        ],
+        status: { $in: ['REJECTED', 'CANCELLED'] },
+        updatedAt: { $gte: recentCancelCutoff },
+      })
+        .sort({ cancelledAt: -1, updatedAt: -1 })
+        .populate('rescueTeamId', 'name type areaId status')
+        .populate('rescuerId', 'fullName phone roles')
+        .lean(),
+    ]);
 
     const assignmentMap = new Map();
     const assignmentsListMap = new Map();
     const shoreHandoffAssignMap = new Map();
+    const lastCancelledMap = new Map();
+    recentCancelledAssignments.forEach(ca => {
+      const targetId = (ca.sosRequestId || ca.sosId)?.toString();
+      if (targetId && !lastCancelledMap.has(targetId)) {
+        lastCancelledMap.set(targetId, {
+          _id: ca._id,
+          status: ca.status,
+          missionType: ca.missionType || 'RESCUE',
+          cancelReason: ca.cancelReason || null,
+          cancelledAt: ca.cancelledAt || ca.updatedAt,
+          updatedAt: ca.updatedAt,
+          rescueTeamId: ca.rescueTeamId?._id || ca.rescueTeamId || null,
+          rescueTeamName: ca.rescueTeamId?.name || 'Đội cứu hộ',
+          rescuerName: ca.rescuerId?.fullName || null,
+        });
+      }
+    });
     assignments.forEach(a => {
       const targetId = (a.sosRequestId || a.sosId)?.toString();
       if (targetId) {
@@ -472,6 +504,10 @@ const getSosRequests = async (query = {}, user = null) => {
       const ha = shoreHandoffAssignMap.get(sId);
       if (ha) {
         s.shoreHandoffAssignment = ha;
+      }
+      const lca = lastCancelledMap.get(sId);
+      if (lca) {
+        s.lastCancelledAssignment = lca;
       }
     });
 
