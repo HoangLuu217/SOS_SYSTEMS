@@ -821,7 +821,34 @@ export const LocalAuthorityChatModal: React.FC<LocalAuthorityChatModalProps> = (
       const lng = loc.coords.longitude;
       setCurrentCoords({ lat, lng });
 
-      const locationText = `📍 [Tọa độ GPS khẩn cấp]: ${lat.toFixed(6)}, ${lng.toFixed(6)}\n(Vị trí gần: ${userLocationName})`;
+      let resolvedAddress = '';
+      try {
+        const geoList = await Location.reverseGeocodeAsync({
+          latitude: lat,
+          longitude: lng,
+        });
+        if (geoList && geoList.length > 0) {
+          const geo = geoList[0];
+          const streetLine =
+            geo.streetNumber && geo.street && !geo.street.startsWith(geo.streetNumber)
+              ? `${geo.streetNumber} ${geo.street}`
+              : geo.street || geo.name || '';
+          const parts = [
+            streetLine,
+            geo.district || geo.subregion,
+            geo.city || geo.region,
+          ].filter((p, idx, arr) => Boolean(p) && arr.indexOf(p) === idx);
+          resolvedAddress = parts.join(', ');
+          if (!resolvedAddress && (geo as any).formattedAddress) {
+            resolvedAddress = (geo as any).formattedAddress;
+          }
+        }
+      } catch (geoErr) {
+        console.log('[Reverse Geocode GPS Note]:', geoErr);
+      }
+
+      const displayPlace = resolvedAddress || userLocationName || 'Vị trí GPS hiện tại';
+      const locationText = `📍 [Tọa độ GPS khẩn cấp]: ${lat.toFixed(6)}, ${lng.toFixed(6)}\n(Vị trí gần: ${displayPlace})`;
       await handleSendMessage(locationText);
     } catch {
       Alert.alert('Lỗi định vị', 'Không thể lấy tọa độ GPS thực tế vào lúc này.');
