@@ -32,7 +32,7 @@ import {
 import { isSosInOfficerJurisdiction } from '@/services/mapGeoService';
 import { navigateTo, getCurrentSosIdFromUrl } from '@/services/appRouter';
 import { onSosCreated, onSosUpdated, onAssignmentUpdated, onRescueTeamsUpdated, getSocket } from '@/services/socketService';
-import { EMERGENCY_TYPE_LABELS } from '@/features/hazards';
+import { EMERGENCY_TYPE_LABELS, formatPriorityGroupLabel } from '@/features/hazards';
 import './RescueSos.css';
 
 interface ToastState {
@@ -565,13 +565,13 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
             images: item.images || (item.imageUrl ? [item.imageUrl] : undefined),
             priorityGroups: (() => {
               if (Array.isArray(item.priorityGroups) && item.priorityGroups.length > 0) {
-                return item.priorityGroups;
+                return item.priorityGroups.map(formatPriorityGroupLabel).filter(Boolean);
               }
               const desc = item.description || '';
               if (desc.includes('[Đối tượng ưu tiên:')) {
                 const match = desc.match(/\[Đối tượng ưu tiên:\s*([^\]]+)\]/);
                 if (match && match[1]) {
-                  return match[1].split(',').map((s: string) => s.trim()).filter(Boolean);
+                  return match[1].split(',').map((s: string) => formatPriorityGroupLabel(s)).filter(Boolean);
                 }
               }
               return undefined;

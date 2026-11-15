@@ -94,6 +94,34 @@ const resolveAdministrativeArea = async (address, location, inputAreaId) => {
   return defaultAny ? defaultAny._id : null;
 };
 
+const PRIORITY_GROUP_LABELS = {
+  CHILDREN: 'Trẻ em',
+  CHILD_UNDER_5: 'Trẻ em dưới 5 tuổi',
+  INFANT: 'Trẻ sơ sinh (< 1 tuổi)',
+  ELDERLY: 'Người cao tuổi',
+  PREGNANT: 'Phụ nữ mang thai',
+  INJURED: 'Người bị thương',
+  DISABLED: 'Người khuyết tật',
+  DISABILITY: 'Người khuyết tật / Đi lại khó khăn',
+  SICK_SEVERE: 'Người bệnh nặng',
+  KIDNEY_DIALYSIS: 'Bệnh nhân chạy thận',
+  NON_SWIMMER: 'Người không biết bơi',
+  ISOLATED_ROOF: 'Mắc kẹt trên mái nhà',
+  POOR_HOUSEHOLD: 'Hộ gia đình khó khăn',
+};
+
+/** Chuẩn hóa danh sách đối tượng ưu tiên sang tiếng Việt trước khi lưu CSDL. */
+const normalizePriorityGroups = (groups) => {
+  if (!Array.isArray(groups)) return [];
+  return groups
+    .map((g) => {
+      const trimmed = String(g || '').trim();
+      if (!trimmed) return '';
+      return PRIORITY_GROUP_LABELS[trimmed.toUpperCase()] || trimmed;
+    })
+    .filter(Boolean);
+};
+
 const calculateDistanceMeters = (coord1, coord2) => {
   if (!coord1 || !coord2 || !Array.isArray(coord1) || !Array.isArray(coord2)) return 999999;
   const [lon1, lat1] = coord1;
@@ -191,7 +219,7 @@ const createSosRequest = async (citizenId, sosData) => {
 
   // Lưu SOS trước; AI phân tích bất đồng bộ để không chặn việc gửi tín hiệu.
   const cleanDescription = description ? description.replace(/⚡\s*/g, '').trim() : null;
-  const normalizedGroups = Array.isArray(priorityGroups) ? priorityGroups : [];
+  const normalizedGroups = normalizePriorityGroups(priorityGroups);
   const normalizedPeople = people ? Number(people) : 1;
   const isSecondary = activeSosList.length > 0;
 
@@ -777,7 +805,9 @@ const updateSosRequest = async (id, updateData, userId) => {
   ];
   for (const field of allowedFields) {
     if (updateData[field] !== undefined) {
-      sos[field] = updateData[field];
+      sos[field] = field === 'priorityGroups'
+        ? normalizePriorityGroups(updateData[field])
+        : updateData[field];
     }
   }
 

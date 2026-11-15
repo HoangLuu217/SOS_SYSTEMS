@@ -733,8 +733,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 10px;
+  padding: 9px 11px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
@@ -766,15 +766,14 @@
 .sos-user-profile-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
   flex: 1 1 0%;
   overflow: hidden;
   cursor: pointer;
   border-radius: 8px;
-  padding: 2px 0;
+  padding: 0;
   transition: opacity 0.15s ease;
-  overflow: hidden;
 }
 
 .sos-user-profile-left:hover {
@@ -844,6 +843,7 @@
 .sos-user-meta {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   min-width: 0;
   flex: 1 1 0%;
   gap: 3px;
@@ -855,10 +855,23 @@
   font-size: 13px;
   font-weight: 700;
   color: #0f172a;
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  letter-spacing: -0.15px;
+  letter-spacing: -0.1px;
+  display: block;
+  max-width: 100%;
+}
+
+.sos-user-role {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   display: block;
   max-width: 100%;
 }

@@ -34,7 +34,7 @@ import {
   reanalyzeSosAiApi,
 } from '@/api';
 import { onSosCreated, onSosUpdated, onSosDeleted, getSocket } from '@/services/socketService';
-import { EMERGENCY_TYPE_LABELS } from '@/features/hazards';
+import { EMERGENCY_TYPE_LABELS, formatPriorityGroupLabel } from '@/features/hazards';
 import { toast } from '@/components/common/toast';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
 import { getShoreHandoffVehicleStatusMeta } from '@/utils/shoreHandoffStatus';
@@ -1717,7 +1717,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                     <div className="priority-chips">
                       {selectedSosDetail.priorityGroups.map((grp, idx) => (
                         <span key={idx} className="priority-chip-item" style={{ color: '#0f172a' }}>
-                          {grp}
+                          {formatPriorityGroupLabel(grp)}
                         </span>
                       ))}
                     </div>

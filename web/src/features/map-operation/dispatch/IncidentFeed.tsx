@@ -18,6 +18,7 @@ import type { SosRequest, AuthorityOfficer } from '@/types/domainD';
 import { useApp } from '@/context/AppContext';
 import { toast } from '@/components/common/toast';
 import { getShoreHandoffVehicleStatusMeta, formatCompactLandingPointName } from '@/utils/shoreHandoffStatus';
+import { EMERGENCY_TYPE_LABELS, formatPriorityGroupLabel } from '@/features/hazards';
 
 interface Props {
   sosRequests: SosRequest[];
@@ -73,25 +74,13 @@ function getEmergencyTypeLabel(sos: SosRequest): string {
     if (match?.[1]) return match[1].trim();
   }
 
-  const typeMap: Record<string, string> = {
-    FLOOD: 'Cứu hộ ngập lụt / Mắc kẹt',
-    FIRE: 'Hỏa hoạn / Cháy nổ',
-    MEDICAL: 'Cấp cứu y tế / Thương tích',
-    RESCUE: 'Cứu nạn sông nước',
-    LANDSLIDE: 'Sạt lở đất đá',
-    STORM: 'Bão lũ thiên tai',
-    ACCIDENT: 'Tai nạn sập đổ / Giao thông',
-    MISSING_PERSON: 'Tìm kiếm người mất tích',
-    POLICE: 'An ninh trật tự',
-    OTHER: 'Cứu hộ khẩn cấp',
-  };
-
-  return typeMap[sos.emergencyType] || sos.emergencyType || 'Cứu hộ ngập lụt / Mắc kẹt';
+  const key = String(sos.emergencyType || '').toUpperCase();
+  return EMERGENCY_TYPE_LABELS[key] || sos.emergencyType || 'Cứu hộ ngập lụt / Mắc kẹt';
 }
 
 function getPriorityTargets(sos: SosRequest): string[] {
   if (Array.isArray(sos.priorityGroups) && sos.priorityGroups.length > 0) {
-    return sos.priorityGroups;
+    return sos.priorityGroups.map(formatPriorityGroupLabel).filter(Boolean);
   }
   const desc = `${sos.description || ''} ${sos.title || ''}`;
   if (desc.includes('[Đối tượng ưu tiên:')) {
@@ -99,7 +88,7 @@ function getPriorityTargets(sos: SosRequest): string[] {
     if (match?.[1]) {
       return match[1]
         .split(',')
-        .map((s) => s.trim())
+        .map((s) => formatPriorityGroupLabel(s))
         .filter(Boolean);
     }
   }
