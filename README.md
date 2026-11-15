@@ -294,7 +294,7 @@ Backend phục vụ API dưới cả tiền tố `/api/*` và `/*` tại cổng 
 Frontend được phục vụ ở cổng `3000` trên localhost. Nginx trong container web proxy `/api` và `/socket.io` tới backend, vì vậy Cloudflare Tunnel chỉ cần một Public Hostname trỏ tới `http://localhost:3000`. Không mở cổng web hoặc API trực tiếp ra Internet.
 
 1. Trên máy Linux, cài Docker Engine và Docker Compose plugin, clone repo rồi vào thư mục dự án.
-2. Tạo `backend/.env` từ `backend/.env.example`. Đặt `NODE_ENV=production`, `PORT=5000`, `MONGODB_URI` tới MongoDB Atlas hoặc MongoDB có thể truy cập từ container, các secret JWT dài và ngẫu nhiên, và `CLIENT_URL=https://<domain-cua-ban>`. Điền các khóa dịch vụ mà hệ thống sử dụng. Không dùng các secret mẫu trong `.env.example`.
+2. Tạo `backend/.env` từ `backend/.env.example`. Đặt `NODE_ENV=production`, `PORT=5000`, các secret JWT dài và ngẫu nhiên, và `CLIENT_URL=https://<domain-cua-ban>`. Compose sẽ ghi đè `MONGODB_URI` để backend kết nối MongoDB container nội bộ (`mongodb://mongodb:27017/sos_systems`). Điền các khóa dịch vụ mà hệ thống sử dụng. Không dùng các secret mẫu trong `.env.example`.
 3. Trong Cloudflare Zero Trust, cấu hình hostname cho Tunnel trỏ tới `http://localhost:3000` (hoặc địa chỉ Docker host phù hợp nếu Tunnel chạy trong container).
 4. Khởi động tại thư mục repo:
 
@@ -305,6 +305,8 @@ Frontend được phục vụ ở cổng `3000` trên localhost. Nginx trong con
    ```
 
    Kiểm tra `http://localhost:3000/api/health` trên Linux và sau đó mở hostname HTTPS của bạn.
+
+MongoDB lưu dữ liệu trong Docker volume `mongodb_data`, tồn tại qua các lần cập nhật container. Sao lưu volume này định kỳ. Dữ liệu hiện có trên Atlas không tự động được nhập vào MongoDB container.
 
 Để cập nhật phiên bản, chạy `git pull` rồi `docker compose up -d --build`. Dữ liệu upload nằm trong `backend/uploads`; hãy sao lưu thư mục này nếu ứng dụng lưu file cục bộ. Nếu các file được lưu trên Cloudinary, cấu hình Cloudinary trong backend env và có thể bỏ qua lưu trữ ảnh cục bộ.
 
