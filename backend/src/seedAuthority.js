@@ -31,10 +31,12 @@ async function seedAdminUser() {
 
   console.log('[SEED] Đã khởi tạo thành công tài khoản Quản trị viên (ADMIN: 0905999999 / 123456)');
   console.log('[SEED] Các tài khoản Cán bộ địa phương ảo đã được dọn sạch.');
+  await mongoose.disconnect().catch(() => {});
   process.exit(0);
 }
 
-seedAdminUser().catch((e) => {
+seedAdminUser().catch(async (e) => {
   console.error('SEED_ERROR:', e);
+  await mongoose.disconnect().catch(() => {});
   process.exit(1);
 });

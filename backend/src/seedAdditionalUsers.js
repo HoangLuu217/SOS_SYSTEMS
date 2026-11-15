@@ -411,9 +411,11 @@ const seedAdditionalUsers = async () => {
     console.log(`- Tất cả tài khoản có mật khẩu mặc định: Password@123`);
     console.log('=============================================');
 
+    await mongoose.disconnect().catch(() => {});
     process.exit(0);
   } catch (error) {
     console.error('❌ Lỗi khi seed User:', error);
+    await mongoose.disconnect().catch(() => {});
     process.exit(1);
   }
 };

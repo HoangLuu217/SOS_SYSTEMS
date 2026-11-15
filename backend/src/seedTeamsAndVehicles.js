@@ -430,9 +430,11 @@ const seedTeams = async () => {
     }
 
     console.log('\n🎉 HOÀN THÀNH KHỞI TẠO TẤT CẢ CÁC ĐỘI CỨU HỘ & PHƯƠNG TIỆN TRỰC THUỘC!');
+    await mongoose.disconnect().catch(() => {});
     process.exit(0);
   } catch (error) {
     console.error('❌ Lỗi khi seed Rescue Teams & Vehicles:', error);
+    await mongoose.disconnect().catch(() => {});
     process.exit(1);
   }
 };
