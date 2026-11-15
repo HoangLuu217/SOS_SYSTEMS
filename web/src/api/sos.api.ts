@@ -44,7 +44,7 @@ export async function assignSosApi(sosId: string, payload: {
   authorityOrganizationId?: string;
   rescueTeamId: string;
   rescuerId?: string;
-  vehicleId?: string;
+  vehicleId?: string | null;
   note?: string;
   supplies?: Array<{
     supplyId: string;
