@@ -72,7 +72,6 @@ import {
   STANDARD_VEHICLE_TYPES,
   getVehicleTypeLabel,
   getVehicleIcon,
-  isVehicleMatchingProvince,
   isValidSafeLocationItem,
   getSafeLocationIcon,
   parseEquipmentNote,
@@ -128,10 +127,6 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     '';
 
   const {
-    provinces,
-    provincesLoading,
-    selectedProvince,
-    setSelectedProvince,
     wards,
     wardsLoading,
     selectedAreaId,
@@ -142,6 +137,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     isAdmin,
     userAreaId,
     userAreaName,
+    wardsScopeProvince: 'Đà Nẵng',
   });
 
   const effectiveAreaId = !isAdmin
@@ -623,25 +619,16 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         // Nếu không có đội (Kho tổng dự trữ / Chưa biên chế), luôn cho phép hiển thị để cán bộ địa phương thấy và điều chuyển
       }
 
-      // 1B. Lọc theo địa bàn khi là Admin và đang chọn Tỉnh/TP hoặc 1 địa bàn cụ thể
-      if (isAdmin && (selectedAreaId !== 'ALL' || selectedProvince !== 'ALL')) {
+      // 1B. Lọc theo địa bàn Đà Nẵng khi là Admin và đang chọn 1 địa bàn cụ thể
+      if (isAdmin && selectedAreaId !== 'ALL') {
         const team = v.assignedTeam;
         const hasTeam = Boolean(team || v.teamId);
         if (hasTeam) {
           const t = team || { _id: typeof v.teamId === 'object' ? (v.teamId as any)?._id : v.teamId };
           if (!isTeamInTargetArea(t)) return false;
         } else {
-          // Phương tiện chưa phân công (Kho Tổng / Kho dự trữ)
-          // 1) Nếu chọn Xã/Phường cụ thể: Xe kho tổng không thuộc riêng xã/phường này -> Loại bỏ
-          if (selectedAreaId !== 'ALL') {
-            return false;
-          }
-          // 2) Nếu chọn Tỉnh/TP cụ thể: Chỉ hiển thị xe có đầu biển số hoặc địa bàn thuộc Tỉnh/TP đó
-          if (selectedProvince !== 'ALL') {
-            if (!isVehicleMatchingProvince(v, selectedProvince)) {
-              return false;
-            }
-          }
+          // Phương tiện chưa phân công (Kho Tổng / Kho dự trữ): Nếu chọn Xã/Phường cụ thể -> Loại bỏ
+          return false;
         }
       }
 
@@ -681,7 +668,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       }
       return true;
     });
-  }, [vehiclesWithTeam, vehicleTypeFilter, vehicleTeamFilter, searchQuery, isAdmin, selectedAreaId, selectedProvince, managedArea, userAreaId, userAreaName, isTeamInTargetArea]);
+  }, [vehiclesWithTeam, vehicleTypeFilter, vehicleTeamFilter, searchQuery, isAdmin, selectedAreaId, managedArea, userAreaId, userAreaName, isTeamInTargetArea]);
 
 
   // Durable equipments (Khí tài tác chiến tái sử dụng)
@@ -725,26 +712,15 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       if (supplyTypeFilter === 'DURABLE' && eq.supplyType === 'CONSUMABLE') return false;
       if (supplyTypeFilter === 'CONSUMABLE' && eq.supplyType !== 'CONSUMABLE') return false;
 
-      // 0B. Lọc theo địa bàn khi là Admin và đang chọn Tỉnh/TP hoặc 1 địa bàn cụ thể
-      if (isAdmin && (selectedAreaId !== 'ALL' || selectedProvince !== 'ALL')) {
+      // 0B. Lọc theo địa bàn Đà Nẵng khi là Admin và đang chọn 1 địa bàn cụ thể
+      if (isAdmin && selectedAreaId !== 'ALL') {
         const tId = typeof eq.teamId === 'object' && eq.teamId ? (eq.teamId as any)._id : eq.teamId;
         if (tId) {
           const team = rescueTeams.find((t) => t._id === tId) || eq.teamId;
           if (!isTeamInTargetArea(team)) return false;
-        } else {
-          // Hàng cứu trợ / Thiết bị tại Kho Tổng
-          // Nếu người dùng chủ động chọn xem "Kho Tổng / Dự Trữ" (supplyTeamFilter === 'DEPOT') thì luôn hiển thị
-          if (supplyTeamFilter !== 'DEPOT') {
-            if (selectedAreaId !== 'ALL') {
-              return false;
-            }
-            if (selectedProvince !== 'ALL') {
-              const cleanProv = selectedProvince.toLowerCase().replace(/^(tỉnh|thành phố|tp\.?)\s+/i, '').trim();
-              if (!cleanProv.includes('da nang') && !cleanProv.includes('đà nẵng')) {
-                return false;
-              }
-            }
-          }
+        } else if (supplyTeamFilter !== 'DEPOT') {
+          // Hàng cứu trợ / Thiết bị tại Kho Tổng: Chỉ hiện khi đang xem Kho Tổng
+          return false;
         }
       }
 
@@ -776,7 +752,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       }
       return true;
     });
-  }, [equipments, supplyTypeFilter, supplyTeamFilter, supplyCategoryFilter, searchQuery, isAdmin, selectedAreaId, selectedProvince, rescueTeams, isTeamInTargetArea]);
+  }, [equipments, supplyTypeFilter, supplyTeamFilter, supplyCategoryFilter, searchQuery, isAdmin, selectedAreaId, rescueTeams, isTeamInTargetArea]);
 
   const isTeamBusyOnMission = useCallback((t: RescueTeamItem) => {
     return Boolean(
@@ -811,39 +787,31 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
   // Danh sách các Đội cứu hộ thuộc phạm vi địa bàn đang lọc
   const scopedRescueTeams = useMemo(() => {
-    if (isAdmin && (selectedAreaId !== 'ALL' || selectedProvince !== 'ALL')) {
-      return rescueTeams.filter((t) => isTeamInTargetArea(t));
-    }
-    if (!isAdmin) {
+    if ((isAdmin && selectedAreaId !== 'ALL') || !isAdmin) {
       return rescueTeams.filter((t) => isTeamInTargetArea(t));
     }
     return rescueTeams;
-  }, [rescueTeams, isAdmin, selectedAreaId, selectedProvince, isTeamInTargetArea]);
+  }, [rescueTeams, isAdmin, selectedAreaId, isTeamInTargetArea]);
 
   // Trạng thái và hàm xóa lọc cho Tab Phương tiện (VEHICLES)
   const hasActiveVehicleFilters = Boolean(
-    (isAdmin && (selectedProvince !== 'ALL' || selectedAreaId !== 'ALL')) ||
-    (!isAdmin && selectedAreaId !== 'ALL') ||
+    selectedAreaId !== 'ALL' ||
     vehicleTeamFilter !== 'ALL' ||
     vehicleTypeFilter !== 'ALL' ||
     searchQuery.trim() !== ''
   );
 
   const handleClearVehicleFilters = useCallback(() => {
-    if (isAdmin) {
-      setSelectedProvince('ALL');
-    }
     setSelectedAreaId('ALL');
     setVehicleTeamFilter('ALL');
     setVehicleTypeFilter('ALL');
     setSearchQuery('');
     setCurrentPage(1);
-  }, [isAdmin, setSelectedProvince, setSelectedAreaId]);
+  }, [setSelectedAreaId]);
 
   // Trạng thái và hàm xóa lọc cho Tab Thiết bị & Hàng cứu trợ (SUPPLIES)
   const hasActiveSupplyFilters = Boolean(
-    (isAdmin && (selectedProvince !== 'ALL' || selectedAreaId !== 'ALL')) ||
-    (!isAdmin && selectedAreaId !== 'ALL') ||
+    selectedAreaId !== 'ALL' ||
     supplyTeamFilter !== 'DEPOT' ||
     supplyTypeFilter !== 'ALL' ||
     supplyCategoryFilter !== 'ALL' ||
@@ -851,16 +819,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
   );
 
   const handleClearSupplyFilters = useCallback(() => {
-    if (isAdmin) {
-      setSelectedProvince('ALL');
-    }
     setSelectedAreaId('ALL');
     setSupplyTeamFilter('DEPOT');
     setSupplyTypeFilter('ALL');
     setSupplyCategoryFilter('ALL');
     setSearchQuery('');
     setCurrentPage(1);
-  }, [isAdmin, setSelectedProvince, setSelectedAreaId]);
+  }, [setSelectedAreaId]);
 
   // Tự động chuyển batchTeamId sang đội ACTIVE hợp lệ nếu đội hiện tại không còn active hoặc không thuộc khu vực
   useEffect(() => {
@@ -2132,53 +2097,28 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     });
 
     return (
-      <>
-        <select
-          className="ra-filter-select"
-          value={selectedProvince}
-          onChange={(e) => {
-            setSelectedProvince(e.target.value);
-            onResetTeamFilter();
-            setCurrentPage(1);
-          }}
-          style={{ minWidth: 175, fontWeight: 700, ...activeStyle(selectedProvince !== 'ALL') }}
-          title="Bước 1: Chọn Tỉnh / Thành phố (API)"
-        >
-          <option value="ALL">
-            {provincesLoading ? '⏳ Đang tải Tỉnh / TP...' : `🌐 Tất cả Tỉnh / TP (${provinces.length})`}
+      <select
+        className="ra-filter-select"
+        value={selectedAreaId}
+        onChange={(e) => {
+          setSelectedAreaId(e.target.value);
+          onResetTeamFilter();
+          setCurrentPage(1);
+        }}
+        style={{ minWidth: 195, fontWeight: 700, ...activeStyle(selectedAreaId !== 'ALL') }}
+        title="Lọc theo Quận / Huyện / Xã / Phường tại Đà Nẵng"
+      >
+        <option value="ALL">
+          {wardsLoading
+            ? '⏳ Đang tải địa bàn Đà Nẵng...'
+            : `📍 Tất cả địa bàn Đà Nẵng (${wards.length})`}
+        </option>
+        {wards.map((ward) => (
+          <option key={ward.id} value={ward.id}>
+            {ward.type === 'DISTRICT' ? '🏛️' : '📍'} {ward.name} {ward.code ? `(${ward.code})` : ''}
           </option>
-          {provinces.map((prov) => (
-            <option key={prov.id || prov.name} value={prov.name}>
-              🏙️ {prov.name}
-            </option>
-          ))}
-        </select>
-
-        <select
-          className="ra-filter-select"
-          value={selectedAreaId}
-          onChange={(e) => {
-            setSelectedAreaId(e.target.value);
-            onResetTeamFilter();
-            setCurrentPage(1);
-          }}
-          style={{ minWidth: 185, fontWeight: 700, ...activeStyle(selectedAreaId !== 'ALL') }}
-          title="Bước 2: Chọn Quận / Huyện / Xã / Phường"
-        >
-          <option value="ALL">
-            {wardsLoading
-              ? '⏳ Đang tải xã, phường từ API...'
-              : selectedProvince === 'ALL'
-                ? `📍 Tất cả địa bàn (${wards.length})`
-                : `📍 Tất cả xã / phường (${wards.length})`}
-          </option>
-          {wards.map((ward) => (
-            <option key={ward.id} value={ward.id}>
-              {ward.type === 'DISTRICT' ? '🏛️' : '📍'} {ward.name} {ward.code ? `(${ward.code})` : ''}
-            </option>
-          ))}
-        </select>
-      </>
+        ))}
+      </select>
     );
   };
 
@@ -5216,7 +5156,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     </option>
                     {rescueTeams.map((team) => (
                       <option key={team._id} value={team._id}>
-                        🏢 {team.name} ({typeof team.areaId === 'object' && team.areaId ? (team.areaId as any).name : 'Toàn Tỉnh'})
+                        🏢 {team.name} ({typeof team.areaId === 'object' && team.areaId ? (team.areaId as any).name : 'Đà Nẵng'})
                       </option>
                     ))}
                   </select>
@@ -5705,7 +5645,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     <option value="NONE">📦 Kho tổng dự trữ (Không trực thuộc đội nào)</option>
                     {rescueTeams.map((team) => (
                       <option key={team._id} value={team._id}>
-                        {team.name} ({typeof team.areaId === 'object' && team.areaId ? (team.areaId as any).name : 'Toàn Tỉnh'})
+                        {team.name} ({typeof team.areaId === 'object' && team.areaId ? (team.areaId as any).name : 'Đà Nẵng'})
                       </option>
                     ))}
                   </select>
@@ -5845,7 +5785,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       <option value="">-- Chọn đội cứu hộ tiếp nhận xe --</option>
                       {rescueTeams.map((team) => (
                         <option key={team._id} value={team._id}>
-                          🏢 {team.name} ({typeof team.areaId === 'object' && team.areaId ? (team.areaId as any).name : 'Toàn Tỉnh'})
+                          🏢 {team.name} ({typeof team.areaId === 'object' && team.areaId ? (team.areaId as any).name : 'Đà Nẵng'})
                         </option>
                       ))}
                     </select>
@@ -6211,7 +6151,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       <option value="">-- Chọn đội cứu hộ tiếp nhận bàn giao --</option>
                       {rescueTeams.map((team) => (
                         <option key={team._id} value={team._id}>
-                          🏢 {team.name} ({typeof team.areaId === 'object' && team.areaId ? (team.areaId as any).name : 'Toàn Tỉnh'})
+                          🏢 {team.name} ({typeof team.areaId === 'object' && team.areaId ? (team.areaId as any).name : 'Đà Nẵng'})
                         </option>
                       ))}
                     </select>
