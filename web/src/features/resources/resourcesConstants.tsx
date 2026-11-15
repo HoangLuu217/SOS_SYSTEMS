@@ -158,6 +158,45 @@ export interface VehicleTypeOption {
   subLabel?: string;
 }
 
+export const MAX_VEHICLE_CAPACITY = 50;
+export const MAX_EQUIPMENT_QUANTITY = 99999;
+export const MAX_EQUIPMENT_THRESHOLD = 9999;
+
+export function getMinVehicleCapacity(type?: string): number {
+  return type === 'DRONE' ? 0 : 1;
+}
+
+/** Validate giá trị số nguyên trong khoảng [min, max] */
+export function validateIntegerRange(
+  rawValue: string,
+  options: { min: number; max: number; label: string; unitLabel?: string }
+): string | null {
+  const { min, max, label, unitLabel } = options;
+  const suffix = unitLabel ? ` ${unitLabel}` : '';
+  const trimmed = rawValue.trim();
+  if (!trimmed) {
+    return `Vui lòng nhập ${label} (${min}–${max}${suffix})`;
+  }
+  if (!/^\d+$/.test(trimmed)) {
+    return `${label} phải là số nguyên từ ${min} đến ${max}${suffix}`;
+  }
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
+    return `${label} phải từ ${min} đến ${max}${suffix}`;
+  }
+  return null;
+}
+
+/** Validate sức chở tối đa của phương tiện (trả về thông báo lỗi hoặc null nếu hợp lệ) */
+export function validateVehicleCapacity(rawValue: string, type?: string): string | null {
+  return validateIntegerRange(rawValue, {
+    min: getMinVehicleCapacity(type),
+    max: MAX_VEHICLE_CAPACITY,
+    label: 'Sức chở tối đa',
+    unitLabel: 'người',
+  });
+}
+
 export const STANDARD_VEHICLE_TYPES: VehicleTypeOption[] = [
   { value: 'BOAT', label: 'Xuồng máy', group: 'Phương tiện thủy cứu nạn', defaultCapacity: 8, subLabel: 'Động cơ gắn ngoài' },
   { value: 'COMPOSITE_BOAT', label: 'Xuồng composite gắn máy', group: 'Phương tiện thủy cứu nạn', defaultCapacity: 6, subLabel: 'Vỏ composite gia cường' },

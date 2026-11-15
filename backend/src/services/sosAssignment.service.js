@@ -15,6 +15,64 @@ const ApiError = require('../utils/apiError');
 const auditService = require('./audit.service');
 const rescueTeamService = require('./rescueTeam.service');
 
+async function reserveDispatchSupplies(supplies, authorityId) {
+  if (!Array.isArray(supplies) || supplies.length === 0) return [];
+  const requested = new Map();
+  for (const item of supplies) {
+    const supplyId = String(item?.supplyId || item?.equipmentId || '').trim();
+    const quantity = Math.floor(Number(item?.quantity));
+    if (!mongoose.Types.ObjectId.isValid(supplyId) || !Number.isFinite(quantity) || quantity <= 0) {
+      throw new ApiError(400, 'Vật tư điều động không hợp lệ; hãy tải lại đề xuất và chọn lại vật tư.');
+    }
+    requested.set(supplyId, (requested.get(supplyId) || 0) + quantity);
+  }
+
+  const reserved = [];
+  try {
+    for (const [supplyId, quantity] of requested) {
+      const updated = await Equipment.findOneAndUpdate(
+        {
+          _id: supplyId,
+          providedBy: authorityId,
+          teamId: null,
+          status: 'AVAILABLE',
+          quantity: { $gte: quantity },
+        },
+        { $inc: { quantity: -quantity } },
+        { new: true }
+      );
+      if (!updated) {
+        throw new ApiError(409, 'Vật tư đã hết, không thuộc kho địa phương hoặc tồn kho không đủ. Hãy cập nhật tồn kho trước khi điều động.');
+      }
+      reserved.push({
+        supplyId: String(updated._id),
+        name: updated.name,
+        category: updated.category,
+        quantity,
+        unit: updated.unit || 'cái',
+      });
+      if (Number(updated.quantity) === 0) {
+        await Equipment.updateOne({ _id: updated._id, quantity: 0 }, { $set: { status: 'OUT_OF_STOCK' } });
+      }
+    }
+    return reserved;
+  } catch (error) {
+    await Promise.all(reserved.map((item) => Equipment.updateOne(
+      { _id: item.supplyId },
+      { $inc: { quantity: item.quantity }, $set: { status: 'AVAILABLE' } }
+    ).catch(() => null)));
+    throw error;
+  }
+}
+
+async function restoreDispatchSupplies(supplies) {
+  if (!Array.isArray(supplies) || supplies.length === 0) return;
+  await Promise.all(supplies.map((item) => Equipment.updateOne(
+    { _id: item.supplyId },
+    { $inc: { quantity: item.quantity }, $set: { status: 'AVAILABLE' } }
+  ).catch(() => null)));
+}
+
 /**
  * Hàm trừ trực tiếp số lượng vật tư / trang thiết bị trong kho (Collection Equipment)
  */
@@ -289,7 +347,7 @@ class SosAssignmentService {
       }
       validVehicleId = vehicle._id;
     }
-    if (!validVehicleId) {
+    if (!validVehicleId && vehicleId !== null) {
       const teamVehicle = await Vehicle.findOne({ teamId: team._id, status: 'AVAILABLE' });
       if (teamVehicle) validVehicleId = teamVehicle._id;
     }
@@ -311,21 +369,28 @@ class SosAssignmentService {
     }
 
     // 6. Tạo Assignment & 7. Set status = PENDING, assignedAt = current time
-    const assignment = await SosAssignment.create({
-      sosRequestId: sos._id,
-      sosId: sos._id,
-      authorityOrganizationId: authority._id,
-      rescueTeamId: team._id,
-      teamId: team._id,
-      rescuerId: rescuer._id,
-      vehicleId: validVehicleId,
-      assignedBy: assignerId,
-      priority: chosenPriority,
-      status: 'PENDING',
-      assignedAt: new Date(),
-      note: note || null,
-      supplies: Array.isArray(supplies) ? supplies : [],
-    });
+    const reservedSupplies = await reserveDispatchSupplies(supplies, authority._id);
+    let assignment;
+    try {
+      assignment = await SosAssignment.create({
+        sosRequestId: sos._id,
+        sosId: sos._id,
+        authorityOrganizationId: authority._id,
+        rescueTeamId: team._id,
+        teamId: team._id,
+        rescuerId: rescuer._id,
+        vehicleId: validVehicleId,
+        assignedBy: assignerId,
+        priority: chosenPriority,
+        status: 'PENDING',
+        assignedAt: new Date(),
+        note: note || null,
+        supplies: reservedSupplies,
+      });
+    } catch (error) {
+      await restoreDispatchSupplies(reservedSupplies);
+      throw error;
+    }
 
     // Cập nhật trạng thái SOS Request sang ASSIGNED nếu SOS đang ở PENDING / VERIFIED
     if (['PENDING', 'VERIFIED'].includes(sos.status)) {
@@ -345,13 +410,14 @@ class SosAssignmentService {
       emitSosUpdated(sos);
     }
 
-    // Trừ kho vật tư ban đầu nếu có cấp khi giao nhiệm vụ
-    if (Array.isArray(supplies) && supplies.length > 0) {
+    // Tồn kho đã được giữ atomically trước khi tạo assignment; phát tín hiệu để làm mới UI.
+    if (reservedSupplies.length > 0) {
       try {
-        await deductSuppliesFromEquipment(supplies, "Giao nhiệm vụ ca " + (sos.sosCode || sos._id));
-      } catch (e) {
-        console.warn("Lỗi trừ kho vật tư khi giao nhiệm vụ:", e);
-      }
+        const { getIO } = require('../socket');
+        const io = getIO();
+        io?.emit('equipment:updated');
+        io?.emit('equipment:change');
+      } catch (_) {}
     }
 
     // Tìm danh sách tất cả cán bộ, chiến sĩ và đội trưởng trong đội để gửi thông báo
@@ -376,6 +442,11 @@ class SosAssignmentService {
         io.emit('assignment:created', assignPayload);
         io.emit('assignment:new', assignPayload);
         io.emit('sos:sync');
+        io.emit('rescue_teams_updated', {
+          action: 'TEAM_ASSIGNMENT_CREATED',
+          teamId: assignment.rescueTeamId ? String(assignment.rescueTeamId) : null,
+          assignmentId: String(assignment._id),
+        });
         for (const uid of targetUserIds) {
           io.to(`user_${uid}`).emit('assignment:assigned', assignPayload);
           io.to(`user_${uid}`).emit('sos:sync');
@@ -492,34 +563,62 @@ class SosAssignmentService {
       throw new ApiError(401, 'Vui lòng đăng nhập để xem nhiệm vụ');
     }
 
-    // Tìm các đội mà user là leader hoặc thành viên
-    let teams = await RescueTeam.find({
+    // Chỉ tìm các đội mà user là đội trưởng hoặc đã được duyệt vào đội (APPROVED)
+    const teams = await RescueTeam.find({
       $or: [
         { leaderId: userId },
-        { 'members.rescuerId': userId },
+        {
+          members: {
+            $elemMatch: {
+              rescuerId: userId,
+              status: { $nin: ['PENDING', 'REJECTED'] },
+            },
+          },
+        },
       ],
-    }).select('_id');
+    })
+      .select('_id leaderId members')
+      .lean();
 
-    // Fallback: nếu tài khoản Rescuer vừa chạy lại seed nên đổi ObjectId tại khu vực đã gán
-    if (teams.length === 0) {
-      const userDoc = await User.findById(userId).select('roles areaId rescuer');
-      const isRescuer =
-        userDoc?.roles?.includes('RESCUER') ||
-        userDoc?.rescuer?.verificationStatus === 'VERIFIED';
-      if (isRescuer && userDoc?.areaId) {
-        teams = await RescueTeam.find({ areaId: userDoc.areaId }).select('_id');
+    const userIdStr = userId.toString();
+    const orConditions = [{ rescuerId: userId }];
+
+    for (const team of teams) {
+      const memberEntry = (team.members || []).find(
+        (m) =>
+          m.rescuerId &&
+          m.rescuerId.toString() === userIdStr &&
+          m.status !== 'PENDING' &&
+          m.status !== 'REJECTED'
+      );
+      const memberSince = memberEntry?.approvedAt || memberEntry?.joinedAt || null;
+
+      const teamMatch = {
+        $or: [{ rescueTeamId: team._id }, { teamId: team._id }],
+      };
+
+      // Không hiển thị lịch sử nhiệm vụ cũ của đội đã kết thúc trước thời điểm thành viên gia nhập đội
+      if (memberSince) {
+        orConditions.push({
+          $and: [
+            teamMatch,
+            {
+              $or: [
+                { status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] } },
+                { createdAt: { $gte: memberSince } },
+                { assignedAt: { $gte: memberSince } },
+                { completedAt: { $gte: memberSince } },
+                { cancelledAt: { $gte: memberSince } },
+              ],
+            },
+          ],
+        });
+      } else {
+        orConditions.push(teamMatch);
       }
     }
 
-    const teamIds = teams.map((t) => t._id);
-
-    const filter = {
-      $or: [
-        { rescuerId: userId },
-        { rescueTeamId: { $in: teamIds } },
-        { teamId: { $in: teamIds } },
-      ],
-    };
+    const filter = { $or: orConditions };
 
     const assignments = await SosAssignment.find(filter)
       .populate({
@@ -548,7 +647,8 @@ class SosAssignmentService {
       .populate('rescuerId', '_id fullName phone email avatarUrl rescuer')
       .populate('vehicleId', 'plateNumber type capacity status')
       .populate('assignedBy', '_id fullName phone email roles')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     return assignments;
   }
@@ -618,7 +718,8 @@ class SosAssignmentService {
       .populate('rescuerId', '_id fullName phone email avatarUrl rescuer')
       .populate('vehicleId', 'plateNumber type capacity status')
       .populate('assignedBy', '_id fullName phone email roles')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     return assignments;
   }
@@ -739,6 +840,11 @@ class SosAssignmentService {
       if (io) {
         io.emit('assignment:status_updated', assignment);
         io.emit('assignment:updated', assignment);
+        io.emit('rescue_teams_updated', {
+          action: 'TEAM_ASSIGNMENT_ACCEPTED',
+          teamId: assignment.rescueTeamId ? String(assignment.rescueTeamId._id || assignment.rescueTeamId) : null,
+          assignmentId: String(assignment._id),
+        });
         if (assignment.missionType === 'RELIEF_DISPATCH' || !sosId) {
           io.emit('sos:sync', {
             type: 'RELIEF_MISSION',
@@ -1149,8 +1255,9 @@ class SosAssignmentService {
         }
       } else {
         const isPrimaryCompleting = targetSosStatus === 'COMPLETED' || targetSosStatus === 'RESOLVED';
+        const isTeamCancellingPrimary = targetStatus === 'REJECTED' || targetStatus === 'CANCELLED';
         const preSaveTasks = [assignment.save()];
-        if ((targetStatus === 'COMPLETED' || targetStatus === 'CANCELLED') && assignment.vehicleId) {
+        if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(targetStatus) && assignment.vehicleId) {
           preSaveTasks.push(Vehicle.findByIdAndUpdate(assignment.vehicleId, { status: 'AVAILABLE' }));
         }
         const activeHandoffPromise = isPrimaryCompleting
@@ -1162,9 +1269,19 @@ class SosAssignmentService {
             }).select('_id status')
           : Promise.resolve(null);
 
-        const [, activeHandoffAssign] = await Promise.all([
+        const remainingPrimaryPromise = isTeamCancellingPrimary
+          ? SosAssignment.countDocuments({
+              _id: { $ne: assignment._id },
+              $or: [{ sosRequestId: sos._id }, { sosId: sos._id }],
+              missionType: { $ne: 'SHORE_HANDOFF' },
+              status: { $nin: ['COMPLETED', 'CANCELLED', 'REJECTED'] },
+            })
+          : Promise.resolve(0);
+
+        const [, activeHandoffAssign, remainingActivePrimary] = await Promise.all([
           preSaveTasks[0],
           activeHandoffPromise,
+          remainingPrimaryPromise,
           ...preSaveTasks.slice(1),
         ]);
 
@@ -1181,6 +1298,11 @@ class SosAssignmentService {
         let handoffVehicleRelease = null;
         if (isPrimaryCompleting && hasPendingShoreHandoff) {
           sos.status = 'RESCUING';
+        } else if (isTeamCancellingPrimary) {
+          // Khi đội cứu hộ từ chối / hủy nhận lệnh, trả ca SOS về VERIFIED (nếu không còn đội khác đang làm) để Ban Chỉ Huy điều phối đội khác
+          if (remainingActivePrimary === 0 && !['COMPLETED', 'CANCELLED'].includes(sos.status)) {
+            sos.status = 'VERIFIED';
+          }
         } else {
           sos.status = targetSosStatus;
           if (isPrimaryCompleting) {
@@ -1210,6 +1332,12 @@ class SosAssignmentService {
           ...(handoffVehicleRelease ? [handoffVehicleRelease] : []),
         ]);
 
+        const cancelTeamLabel =
+          assignment.rescueTeamId?.name ||
+          assignment.rescueTeamId?.teamName ||
+          'Đội cứu hộ';
+        const reasonDetail = assignment.cancelReason ? ` (Lý do: ${assignment.cancelReason})` : '';
+
         void SosStatusHistory.create({
           sosId: sos._id,
           oldStatus,
@@ -1218,7 +1346,9 @@ class SosAssignmentService {
           note:
             isPrimaryCompleting && hasPendingShoreHandoff
               ? note || 'Đội cứu hộ đã giải cứu xong & sẵn sàng nhận ca mới — chờ xe tiếp vận xác nhận đưa nạn nhân tới nơi an toàn'
-              : note || `Cứu hộ viên cập nhật tiến trình: ${targetStatus}`,
+              : isTeamCancellingPrimary
+                ? `${cancelTeamLabel} đã ${targetStatus === 'REJECTED' ? 'từ chối tiếp nhận' : 'hủy'} nhiệm vụ${reasonDetail} — chuyển ca về Đã Xác Minh để điều phối đội khác`
+                : note || `Cứu hộ viên cập nhật tiến trình: ${targetStatus}`,
           images: extraData?.proofImages || [],
         }).catch(() => {});
       }
@@ -1236,7 +1366,11 @@ class SosAssignmentService {
         void rescueTeamService.restoreLeaderTeamsIfNoActiveSos(sos.citizenId, sos._id).catch(() => {});
       }
     } else {
-      await assignment.save();
+      const noSosOps = [assignment.save()];
+      if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(targetStatus) && assignment.vehicleId) {
+        noSosOps.push(Vehicle.findByIdAndUpdate(assignment.vehicleId, { status: 'AVAILABLE' }));
+      }
+      await Promise.all(noSosOps);
       await populateAssignmentPromise();
     }
 
@@ -1244,18 +1378,49 @@ class SosAssignmentService {
       const { getIO } = require('../socket');
       const io = getIO();
       if (io) {
-        io.emit('assignment:status_updated', assignment);
-        io.emit('assignment:updated', assignment);
+        const assignmentPayload = assignment.toObject ? assignment.toObject() : { ...assignment };
+        if (sos?.sosCode) {
+          assignmentPayload.sosCode = sos.sosCode;
+        }
+        if (targetStatus === 'REJECTED' || targetStatus === 'CANCELLED') {
+          assignmentPayload.cancelledByTeam = true;
+        }
+
+        io.emit('assignment:status_updated', assignmentPayload);
+        io.emit('assignment:updated', assignmentPayload);
         if (targetStatus === 'COMPLETED') {
-          io.emit('assignment:completed', assignment);
-        }
-        if (['COMPLETED', 'CANCELLED', 'REJECTED'].includes(targetStatus)) {
-          io.emit('rescue_teams_updated', {
-            teamId: assignment.rescueTeamId?.toString?.() || assignment.rescueTeamId || null,
-            assignmentId: assignment._id.toString(),
+          io.emit('assignment:completed', assignmentPayload);
+        } else if (targetStatus === 'REJECTED' || targetStatus === 'CANCELLED') {
+          const teamCancelPayload = {
+            assignmentId: String(assignment._id),
+            _id: String(assignment._id),
+            sosId: sosId ? String(sosId) : null,
+            sosRequestId: sosId ? String(sosId) : null,
+            sosCode: sos?.sosCode || assignment.dispatchCode || null,
+            areaId: sos?.areaId ? String(sos.areaId._id || sos.areaId) : null,
+            missionType: assignment.missionType || 'RESCUE',
             status: targetStatus,
-          });
+            reason: assignment.cancelReason || note || extraData?.reason || null,
+            cancelReason: assignment.cancelReason || note || extraData?.reason || null,
+            rescueTeamId: assignment.rescueTeamId
+              ? String(assignment.rescueTeamId._id || assignment.rescueTeamId)
+              : null,
+            rescueTeamName:
+              assignment.rescueTeamId?.name ||
+              assignment.rescueTeamId?.teamName ||
+              'Đội cứu hộ',
+            rescuerName: assignment.rescuerId?.fullName || null,
+            cancelledByTeam: true,
+          };
+          io.emit('assignment:rejected', teamCancelPayload);
+          io.emit('assignment:cancelled_by_team', teamCancelPayload);
         }
+        io.emit('rescue_teams_updated', {
+          action: 'TEAM_ASSIGNMENT_STATUS_UPDATED',
+          teamId: assignment.rescueTeamId ? String(assignment.rescueTeamId._id || assignment.rescueTeamId) : null,
+          assignmentId: String(assignment._id),
+          status: targetStatus,
+        });
         if (assignment.missionType === 'RELIEF_DISPATCH' || !sosId) {
           io.emit('sos:sync', {
             type: 'RELIEF_MISSION',
@@ -1374,6 +1539,20 @@ class SosAssignmentService {
         emitSosUpdated(sos);
       }
     }
+
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (io) {
+        io.emit('assignment:updated', assignment);
+        io.emit('sos:sync');
+        io.emit('rescue_teams_updated', {
+          action: 'TEAM_ASSIGNMENT_REASSIGNED',
+          teamId: assignment.rescueTeamId ? String(assignment.rescueTeamId) : null,
+          assignmentId: String(assignment._id),
+        });
+      }
+    } catch (_) {}
 
     return assignment;
   }
@@ -1528,6 +1707,11 @@ class SosAssignmentService {
         io.emit('assignment:deleted', payload);
         io.emit('assignment:updated', payload);
         io.emit('sos:sync');
+        io.emit('rescue_teams_updated', {
+          action: 'TEAM_ASSIGNMENT_CANCELLED',
+          teamId: assignment.rescueTeamId ? String(assignment.rescueTeamId) : null,
+          assignmentId: assignment._id.toString(),
+        });
         if (assignment.rescuerId) {
           io.to(`user_${assignment.rescuerId}`).emit('assignment:cancelled', payload);
           io.to(`user_${assignment.rescuerId}`).emit('sos:sync');

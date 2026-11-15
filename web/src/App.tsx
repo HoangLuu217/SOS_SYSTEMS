@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { LoginPage } from '@/features/auth';
 import { DashboardLayout, DashboardViews, type NavItemKey } from '@/components/layout';
 import { AppProvider } from '@/context/AppContext';
 import { domainDService } from '@/services/domainDService';
+import { getSocket } from '@/services/socketService';
 import { logoutApi } from '@/api';
 import { parseRoute, buildRouteUrl, navigateTo } from '@/services/appRouter';
 import { ToastContainer } from '@/components/common/ToastContainer';
@@ -165,6 +166,73 @@ function MainRouter() {
       window.removeEventListener('sos_auth_expired', handleAuthExpired);
     };
   }, [checkRouteAccess]);
+
+  const isAuthorMapMountedRef = useRef(false);
+  useEffect(() => {
+    const isAuthPortal =
+      Boolean(authUser?.roles?.includes('LOCAL_AUTHORITY')) ||
+      Boolean(authUser?.roles?.includes('AUTHORITY')) ||
+      Boolean(authUser?.authority && Object.keys(authUser.authority).length > 0);
+    const isAdmin = Boolean(authUser?.roles?.includes('ADMIN'));
+    isAuthorMapMountedRef.current = activeNavKey === 'map' && isAuthPortal && !isAdmin;
+  }, [activeNavKey, authUser]);
+
+  // Lắng nghe toàn cục khi đội cứu hộ hủy/từ chối nhận lệnh (hiển thị ngay cả khi không đứng ở tab Bản đồ tác chiến)
+  useEffect(() => {
+    if (!authUser || !hasAuthorizedRole(authUser.roles, authUser.authority)) return;
+    const socket = getSocket();
+    const seenCancelMap = new Map<string, number>();
+
+    const handleGlobalTeamCancelled = (payload: any) => {
+      if (!payload || isAuthorMapMountedRef.current) return;
+      const statusUpper = String(payload.status || '').toUpperCase();
+      if (!['REJECTED', 'CANCELLED'].includes(statusUpper)) return;
+      if (statusUpper === 'CANCELLED' && payload.cancelledByTeam !== true) return;
+
+      const key = `${String(payload.assignmentId || payload._id || payload.sosId || '')}-${statusUpper}`;
+      const now = Date.now();
+      if (key !== `-${statusUpper}` && now - (seenCancelMap.get(key) || 0) < 3000) return;
+      seenCancelMap.set(key, now);
+
+      const teamName =
+        payload.rescueTeamName ||
+        (typeof payload.rescueTeamId === 'object' ? payload.rescueTeamId?.name || payload.rescueTeamId?.teamName : '') ||
+        'Đội cứu hộ';
+      const missionLabel =
+        payload.missionType === 'SHORE_HANDOFF'
+          ? 'lệnh đón bờ'
+          : payload.missionType === 'RELIEF_DISPATCH'
+            ? 'lệnh tiếp tế cứu trợ'
+            : 'yêu cầu cứu hộ';
+      const codeStr = payload.sosCode ? ` ca ${String(payload.sosCode).startsWith('#') ? payload.sosCode : `#${payload.sosCode}`}` : '';
+      const reasonStr = payload.cancelReason || payload.reason ? ` Lý do: ${payload.cancelReason || payload.reason}.` : '';
+
+      toast.error(
+        `Đội ${teamName} đã ${statusUpper === 'REJECTED' ? 'từ chối' : 'hủy'} ${missionLabel}${codeStr}!${reasonStr} Vui lòng kiểm tra và điều phối đội khác.`,
+        '⚠️ Đội cứu hộ hủy nhận lệnh',
+        8000
+      );
+    };
+
+    const handleGlobalAssignmentUpdated = (data: any) => {
+      const st = String(data?.status || '').toUpperCase();
+      if (st === 'REJECTED' || (st === 'CANCELLED' && data?.cancelledByTeam === true)) {
+        handleGlobalTeamCancelled(data);
+      }
+    };
+
+    socket.on('assignment:rejected', handleGlobalTeamCancelled);
+    socket.on('assignment:cancelled_by_team', handleGlobalTeamCancelled);
+    socket.on('assignment:status_updated', handleGlobalAssignmentUpdated);
+    socket.on('assignment:updated', handleGlobalAssignmentUpdated);
+
+    return () => {
+      socket.off('assignment:rejected', handleGlobalTeamCancelled);
+      socket.off('assignment:cancelled_by_team', handleGlobalTeamCancelled);
+      socket.off('assignment:status_updated', handleGlobalAssignmentUpdated);
+      socket.off('assignment:updated', handleGlobalAssignmentUpdated);
+    };
+  }, [authUser]);
 
   const handleLoginSuccess = (user: User) => {
     setAuthUser(user);

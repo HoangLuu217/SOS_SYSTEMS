@@ -263,9 +263,10 @@ class ChatService {
     const messages = await ChatMessage.find(channelQuery)
       .populate('senderId', 'fullName phone email roles authority avatarUrl address citizen')
       .populate('recipientId', 'fullName phone email roles authority avatarUrl address citizen')
-      .populate('sosRequestId')
+      .populate('sosRequestId', 'sosCode status emergencyType priority address people location')
       .sort({ createdAt: 1 })
-      .limit(Math.min(limit, 300));
+      .limit(Math.min(limit, 300))
+      .lean();
 
     // Tự động chuẩn hóa các tin nhắn cũ về targetChannel nếu cần
     if (targetChannel.startsWith('area_') && messages.some((m) => m.channel !== targetChannel)) {
@@ -294,7 +295,9 @@ class ChatService {
             ...(sosIdsToFetch.length > 0 ? [{ _id: { $in: sosIdsToFetch } }] : []),
             ...(sosCodesToFetch.length > 0 ? [{ sosCode: { $in: sosCodesToFetch } }] : []),
           ],
-        }).select('_id sosCode status');
+        })
+          .select('_id sosCode status')
+          .lean();
 
         liveSosList.forEach((s) => {
           liveStatusMap.set(String(s._id), s.status);
@@ -391,7 +394,8 @@ class ChatService {
     const potentialPartners = await User.find(userFilter)
       .select('fullName phone email roles authority avatarUrl status createdAt')
       .sort({ 'roles.0': 1, fullName: 1 })
-      .limit(60);
+      .limit(60)
+      .lean();
 
     const partnerChannelMap = new Map();
     potentialPartners.forEach((p) => {
@@ -463,7 +467,9 @@ class ChatService {
     });
 
     const fetchedUsers = userIdsToFetch.size > 0
-      ? await User.find({ _id: { $in: Array.from(userIdsToFetch) } }).select('fullName phone email roles avatarUrl authority address citizen')
+      ? await User.find({ _id: { $in: Array.from(userIdsToFetch) } })
+          .select('fullName phone email roles avatarUrl authority address citizen')
+          .lean()
       : [];
 
     const userMap = new Map();
@@ -961,12 +967,49 @@ class ChatService {
       'điện bàn': { phone: '02353888999', name: 'Ban Chỉ Huy PCTT & TKCN Khu vực Điện Bàn' },
     };
 
-    let provContact = null;
-    const provLower = (cleanProvince || '').toLowerCase().trim();
-    for (const [key, val] of Object.entries(PROVINCE_HOTLINES)) {
-      if (provLower.includes(key) || key.includes(provLower)) {
-        provContact = val;
+    const WARD_HOTLINES = [
+      { ward: 'Phường Hải Châu', phone: '02363810101' },
+      { ward: 'Phường Thanh Khê', phone: '02363810102' },
+      { ward: 'Phường An Khê', phone: '02363810103' },
+      { ward: 'Phường Hòa Cường', phone: '02363810104' },
+      { ward: 'Phường Sơn Trà', phone: '02363810105' },
+      { ward: 'Phường An Hải', phone: '02363810106' },
+      { ward: 'Phường Ngũ Hành Sơn', phone: '02363810107' },
+      { ward: 'Phường Hải Vân', phone: '02363810108' },
+      { ward: 'Đặc khu Hoàng Sa', phone: '02363810109' },
+      { ward: 'Xã Duy Nghĩa', phone: '02363810110' },
+      { ward: 'Phường Liên Chiểu', phone: '02363810111' },
+      { ward: 'Phường Hòa Khánh', phone: '02363810112' },
+      { ward: 'Phường Cẩm Lệ', phone: '02363810113' },
+      { ward: 'Phường Hòa Xuân', phone: '02363810114' },
+      { ward: 'Phường Điện Bàn', phone: '02363810115' },
+      { ward: 'Xã Hòa Vang', phone: '02363810116' },
+      { ward: 'Xã Hòa Tiến', phone: '02363810117' },
+      { ward: 'Xã Bà Nà', phone: '02363810118' },
+      { ward: 'Phường Hội An', phone: '02363810119' },
+    ];
+
+    let wardDefaultContact = null;
+    const wardTargetLower = `${cleanWard || ''} ${officialAreaName || ''}`.toLowerCase();
+    for (const wh of WARD_HOTLINES) {
+      const key = wh.ward.replace(/^(Phường|Xã|Đặc khu)\s+/i, '').toLowerCase();
+      if (key && wardTargetLower.includes(key)) {
+        wardDefaultContact = {
+          phone: wh.phone,
+          name: `Ban Chỉ Huy PCTT & TKCN ${wh.ward}`,
+        };
         break;
+      }
+    }
+
+    let provContact = wardDefaultContact;
+    if (!provContact) {
+      const provLower = (cleanProvince || '').toLowerCase().trim();
+      for (const [key, val] of Object.entries(PROVINCE_HOTLINES)) {
+        if (provLower.includes(key) || key.includes(provLower)) {
+          provContact = val;
+          break;
+        }
       }
     }
 
@@ -1136,6 +1179,51 @@ class ChatService {
       }
     }
 
+    // 3.5. Đảm bảo mỗi phường/xã/khu vực thuộc TP. Đà Nẵng mới đều có ít nhất 1 chính quyền & 1 SĐT trực ban
+    const WARD_AUTHORITY_DEFAULTS = [
+      { id: 'ward-hai-chau', ward: 'Phường Hải Châu', phone: '02363810101', lat: 16.0678, lng: 108.2208 },
+      { id: 'ward-thanh-khe', ward: 'Phường Thanh Khê', phone: '02363810102', lat: 16.0616, lng: 108.1872 },
+      { id: 'ward-an-khe', ward: 'Phường An Khê', phone: '02363810103', lat: 16.0558, lng: 108.1726 },
+      { id: 'ward-hoa-cuong', ward: 'Phường Hòa Cường', phone: '02363810104', lat: 16.0406, lng: 108.2198 },
+      { id: 'ward-son-tra', ward: 'Phường Sơn Trà', phone: '02363810105', lat: 16.0908, lng: 108.2412 },
+      { id: 'ward-an-hai', ward: 'Phường An Hải', phone: '02363810106', lat: 16.0672, lng: 108.2385 },
+      { id: 'ward-ngu-hanh-son', ward: 'Phường Ngũ Hành Sơn', phone: '02363810107', lat: 16.0024, lng: 108.2625 },
+      { id: 'ward-hai-van', ward: 'Phường Hải Vân', phone: '02363810108', lat: 16.1538, lng: 108.1286 },
+      { id: 'ward-hoang-sa', ward: 'Đặc khu Hoàng Sa', phone: '02363810109', lat: 16.0985, lng: 108.2345 },
+      { id: 'ward-duy-nghia', ward: 'Xã Duy Nghĩa', phone: '02363810110', lat: 15.8442, lng: 108.3746 },
+      { id: 'ward-lien-chieu', ward: 'Phường Liên Chiểu', phone: '02363810111', lat: 16.0748, lng: 108.1516 },
+      { id: 'ward-hoa-khanh', ward: 'Phường Hòa Khánh', phone: '02363810112', lat: 16.0665, lng: 108.1462 },
+      { id: 'ward-cam-le', ward: 'Phường Cẩm Lệ', phone: '02363810113', lat: 16.0172, lng: 108.1965 },
+      { id: 'ward-hoa-xuan', ward: 'Phường Hòa Xuân', phone: '02363810114', lat: 15.9985, lng: 108.2165 },
+      { id: 'ward-dien-ban', ward: 'Phường Điện Bàn', phone: '02363810115', lat: 15.8914, lng: 108.2485 },
+      { id: 'ward-hoa-vang', ward: 'Xã Hòa Vang', phone: '02363810116', lat: 16.0068, lng: 108.1325 },
+      { id: 'ward-hoa-tien', ward: 'Xã Hòa Tiến', phone: '02363810117', lat: 15.9752, lng: 108.1654 },
+      { id: 'ward-ba-na', ward: 'Xã Bà Nà', phone: '02363810118', lat: 16.0026, lng: 108.0532 },
+      { id: 'ward-hoi-an', ward: 'Phường Hội An', phone: '02363810119', lat: 15.8801, lng: 108.3380 },
+    ];
+
+    for (const w of WARD_AUTHORITY_DEFAULTS) {
+      const shortKey = w.ward.replace(/^(Phường|Xã|Đặc khu)\s+/i, '').toLowerCase();
+      const alreadyHasWardContact = results.some((item) => {
+        const text = `${item.name || ''} ${item.department || ''} ${item.address || ''} ${item.areaName || ''}`.toLowerCase();
+        return text.includes(shortKey);
+      });
+      if (!alreadyHasWardContact && !seenPhones.has(w.phone)) {
+        seenPhones.add(w.phone);
+        results.push({
+          id: w.id,
+          name: `Ban Chỉ Huy PCTT & TKCN ${w.ward}`,
+          department: `UBND ${w.ward}, TP. Đà Nẵng`,
+          phone: w.phone,
+          areaName: `${w.ward}, TP. Đà Nẵng`,
+          address: `${w.ward}, Thành phố Đà Nẵng`,
+          type: 'ORGANIZATION',
+          lat: w.lat,
+          lng: w.lng,
+        });
+      }
+    }
+
     // 4. Nếu có từ khóa tìm kiếm (search)
     let filtered = results;
     if (search && String(search).trim()) {
@@ -1160,26 +1248,27 @@ class ChatService {
   async getWardOptions({ search } = {}) {
     const { User, AuthorityOrganization, AdministrativeArea } = require('../models');
 
-    // 1. Danh sách cơ sở mặc định
+    // 1. Danh sách cơ sở mặc định (mỗi phường/xã đều có sẵn 1 chính quyền & 1 SĐT trực ban)
     const defaultWards = [
-      { ward: 'Phường Hải Châu', category: 'Trung tâm', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hải Châu, Thành phố Đà Nẵng' },
-      { ward: 'Phường Thanh Khê', category: 'Trung tâm', province: 'Thành phố Đà Nẵng', fullName: 'Phường Thanh Khê, Thành phố Đà Nẵng' },
-      { ward: 'Phường An Khê', category: 'Trung tâm', province: 'Thành phố Đà Nẵng', fullName: 'Phường An Khê, Thành phố Đà Nẵng' },
-      { ward: 'Phường Hòa Cường', category: 'Trung tâm', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hòa Cường, Thành phố Đà Nẵng' },
-      { ward: 'Phường Sơn Trà', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường Sơn Trà, Thành phố Đà Nẵng' },
-      { ward: 'Phường An Hải', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường An Hải, Thành phố Đà Nẵng' },
-      { ward: 'Phường Ngũ Hành Sơn', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường Ngũ Hành Sơn, Thành phố Đà Nẵng' },
-      { ward: 'Phường Hải Vân', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hải Vân, Thành phố Đà Nẵng' },
-      { ward: 'Đặc khu Hoàng Sa', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Đặc khu Hoàng Sa, Thành phố Đà Nẵng' },
-      { ward: 'Xã Duy Nghĩa', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Xã Duy Nghĩa, Thành phố Đà Nẵng' },
-      { ward: 'Phường Liên Chiểu', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Liên Chiểu, Thành phố Đà Nẵng' },
-      { ward: 'Phường Hòa Khánh', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hòa Khánh, Thành phố Đà Nẵng' },
-      { ward: 'Phường Cẩm Lệ', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Cẩm Lệ, Thành phố Đà Nẵng' },
-      { ward: 'Phường Hòa Xuân', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hòa Xuân, Thành phố Đà Nẵng' },
-      { ward: 'Phường Điện Bàn', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Điện Bàn, Thành phố Đà Nẵng' },
-      { ward: 'Xã Hòa Vang', category: 'Ngoại thành', province: 'Thành phố Đà Nẵng', fullName: 'Xã Hòa Vang, Thành phố Đà Nẵng' },
-      { ward: 'Xã Hòa Tiến', category: 'Ngoại thành', province: 'Thành phố Đà Nẵng', fullName: 'Xã Hòa Tiến, Thành phố Đà Nẵng' },
-      { ward: 'Xã Bà Nà', category: 'Ngoại thành', province: 'Thành phố Đà Nẵng', fullName: 'Xã Bà Nà, Thành phố Đà Nẵng' },
+      { ward: 'Phường Hải Châu', category: 'Trung tâm', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hải Châu, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Phường Hải Châu', phone: '02363810101' },
+      { ward: 'Phường Thanh Khê', category: 'Trung tâm', province: 'Thành phố Đà Nẵng', fullName: 'Phường Thanh Khê, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Phường Thanh Khê', phone: '02363810102' },
+      { ward: 'Phường An Khê', category: 'Trung tâm', province: 'Thành phố Đà Nẵng', fullName: 'Phường An Khê, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Phường An Khê', phone: '02363810103' },
+      { ward: 'Phường Hòa Cường', category: 'Trung tâm', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hòa Cường, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Phường Hòa Cường', phone: '02363810104' },
+      { ward: 'Phường Sơn Trà', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường Sơn Trà, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Phường Sơn Trà', phone: '02363810105' },
+      { ward: 'Phường An Hải', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường An Hải, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Phường An Hải', phone: '02363810106' },
+      { ward: 'Phường Ngũ Hành Sơn', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường Ngũ Hành Sơn, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Phường Ngũ Hành Sơn', phone: '02363810107' },
+      { ward: 'Phường Hải Vân', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hải Vân, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Phường Hải Vân', phone: '02363810108' },
+      { ward: 'Đặc khu Hoàng Sa', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Đặc khu Hoàng Sa, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Đặc khu Hoàng Sa', phone: '02363810109' },
+      { ward: 'Xã Duy Nghĩa', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Xã Duy Nghĩa, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Xã Duy Nghĩa', phone: '02363810110' },
+      { ward: 'Phường Liên Chiểu', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Liên Chiểu, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Phường Liên Chiểu', phone: '02363810111' },
+      { ward: 'Phường Hòa Khánh', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hòa Khánh, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Phường Hòa Khánh', phone: '02363810112' },
+      { ward: 'Phường Cẩm Lệ', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Cẩm Lệ, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Phường Cẩm Lệ', phone: '02363810113' },
+      { ward: 'Phường Hòa Xuân', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hòa Xuân, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Phường Hòa Xuân', phone: '02363810114' },
+      { ward: 'Phường Điện Bàn', category: 'Đô thị mới', province: 'Thành phố Đà Nẵng', fullName: 'Phường Điện Bàn, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Phường Điện Bàn', phone: '02363810115' },
+      { ward: 'Xã Hòa Vang', category: 'Ngoại thành', province: 'Thành phố Đà Nẵng', fullName: 'Xã Hòa Vang, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Xã Hòa Vang', phone: '02363810116' },
+      { ward: 'Xã Hòa Tiến', category: 'Ngoại thành', province: 'Thành phố Đà Nẵng', fullName: 'Xã Hòa Tiến, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Xã Hòa Tiến', phone: '02363810117' },
+      { ward: 'Xã Bà Nà', category: 'Ngoại thành', province: 'Thành phố Đà Nẵng', fullName: 'Xã Bà Nà, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Xã Bà Nà', phone: '02363810118' },
+      { ward: 'Phường Hội An', category: 'Ven biển', province: 'Thành phố Đà Nẵng', fullName: 'Phường Hội An, Thành phố Đà Nẵng', officerName: 'Ban Chỉ Huy PCTT & TKCN Phường Hội An', phone: '02363810119' },
     ];
 
     const results = [];

@@ -105,7 +105,7 @@ export function AuthenticatedApp() {
   const roles = Array.isArray(user?.roles) ? user.roles : [];
   const isRescuer =
     roles.includes('LEADER') ||
-    (roles.includes('RESCUER') && user?.rescuer?.verificationStatus !== 'REJECTED');
+    (roles.includes('RESCUER') && user?.rescuer?.verificationStatus === 'VERIFIED');
 
   const { setNavigateHandler } = useNotifications();
 

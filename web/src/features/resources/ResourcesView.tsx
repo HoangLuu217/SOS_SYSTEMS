@@ -42,7 +42,6 @@ import {
   updateVehicle,
   deleteVehicle,
   fetchRescueTeams,
-  fetchAdministrativeAreas,
   fetchEquipments,
   createEquipment,
   updateEquipment,
@@ -64,7 +63,7 @@ import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import { getSocket } from '@/services/socketService';
 import { toast } from '@/components/common/toast';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
-import { exportSupplyDispatchVoucherPdf } from './printSupplyDispatchVoucher';
+import { exportSupplyDispatchVoucherPdf, formatActualRecipientDisplay } from './printSupplyDispatchVoucher';
 import {
   resolveProofImageSrc,
   ProofImagePreview,
@@ -74,6 +73,12 @@ import {
   getEquipmentCategoryName,
   getVehicleStatusMeta,
   STANDARD_VEHICLE_TYPES,
+  MAX_VEHICLE_CAPACITY,
+  MAX_EQUIPMENT_QUANTITY,
+  MAX_EQUIPMENT_THRESHOLD,
+  getMinVehicleCapacity,
+  validateIntegerRange,
+  validateVehicleCapacity,
   getVehicleTypeLabel,
   getVehicleIcon,
   isValidSafeLocationItem,
@@ -213,7 +218,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
   // New vehicle form state
   const [newPlate, setNewPlate] = useState('');
   const [newType, setNewType] = useState<VehicleType>('BOAT');
-  const [newCapacity, setNewCapacity] = useState<number>(8);
+  const [newCapacity, setNewCapacity] = useState<string>('8');
+  const [newCapacityTouched, setNewCapacityTouched] = useState(false);
   const [newTerrainCapabilities, setNewTerrainCapabilities] = useState<VehicleTerrainCapability[]>([]);
   const [newTeamId, setNewTeamId] = useState<string>('');
   const [newDescription, setNewDescription] = useState('');
@@ -223,7 +229,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
   const [editVehicleTarget, setEditVehicleTarget] = useState<VehicleItem | null>(null);
   const [editVehiclePlate, setEditVehiclePlate] = useState('');
   const [editVehicleType, setEditVehicleType] = useState<VehicleType>('BOAT');
-  const [editVehicleCapacity, setEditVehicleCapacity] = useState<number>(6);
+  const [editVehicleCapacity, setEditVehicleCapacity] = useState<string>('6');
+  const [editCapacityTouched, setEditCapacityTouched] = useState(false);
   const [editVehicleTerrainCapabilities, setEditVehicleTerrainCapabilities] = useState<VehicleTerrainCapability[]>([]);
   const [editVehicleStatus, setEditVehicleStatus] = useState<'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | 'INACTIVE'>('AVAILABLE');
   const [editVehicleTeamId, setEditVehicleTeamId] = useState<string>('');
@@ -253,10 +260,12 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
   const [eqCategory, setEqCategory] = useState<string>('LIFE_VEST');
   const [eqSupplyType, setEqSupplyType] = useState<'DURABLE' | 'CONSUMABLE'>('DURABLE');
   const [eqSerialNumber, setEqSerialNumber] = useState<string>('');
-  const [eqQuantity, setEqQuantity] = useState<number>(1);
+  const [eqQuantity, setEqQuantity] = useState<string>('1');
+  const [eqQuantityTouched, setEqQuantityTouched] = useState(false);
   const [eqUnit, setEqUnit] = useState<string>('chiếc');
   const [eqReceivedAt, setEqReceivedAt] = useState<string>(() => new Date().toISOString().split('T')[0]);
-  const [eqMinThreshold, setEqMinThreshold] = useState<number>(20);
+  const [eqMinThreshold, setEqMinThreshold] = useState<string>('20');
+  const [eqMinThresholdTouched, setEqMinThresholdTouched] = useState(false);
   const [eqNote, setEqNote] = useState<string>('');
   const [isSubmittingEquipment, setIsSubmittingEquipment] = useState(false);
 
@@ -419,7 +428,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
   // Edit Equipment Modal State
   const [editEquipmentTarget, setEditEquipmentTarget] = useState<EquipmentItem | null>(null);
-  const [editEqQuantity, setEditEqQuantity] = useState<number>(1);
+  const [editEqQuantity, setEditEqQuantity] = useState<string>('1');
+  const [editEqQuantityTouched, setEditEqQuantityTouched] = useState(false);
   const [editEqStatus, setEditEqStatus] = useState<string>('AVAILABLE');
   const [editEqSerialNumber, setEditEqSerialNumber] = useState<string>('');
   const [editEqReceivedAt, setEditEqReceivedAt] = useState<string>('');
@@ -438,11 +448,12 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      setEquipmentsLoading(true);
       const areaParam = effectiveAreaId !== 'ALL' ? effectiveAreaId : undefined;
-      const [vehRes, teamRes] = await Promise.allSettled([
+      const [vehRes, teamRes, eqRes] = await Promise.allSettled([
         fetchVehicles({ areaId: areaParam, limit: 100 }),
-        fetchRescueTeams({ areaId: areaParam, limit: 100 }),
-        fetchAdministrativeAreas(),
+        fetchRescueTeams({ areaId: areaParam, limit: 100, light: true }),
+        fetchEquipments(areaParam ? { areaId: areaParam, limit: '200' } : { limit: '200' }),
       ]);
 
       // Khu vực hành chính đã được nạp và quản lý tập trung trong useAdministrativeFilter
@@ -456,27 +467,17 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       } else {
         setRescueTeams([]);
       }
-    } catch (e) {
-      console.warn('Loi tai tai nguyen:', e);
-      setVehicles([]);
-    } finally {
-      setLoading(false);
-    }
-
-    // Load equipment rieng biet (khong block vehicles)
-    try {
-      setEquipmentsLoading(true);
-      const areaParam = effectiveAreaId !== 'ALL' ? effectiveAreaId : undefined;
-      const eqRes = await fetchEquipments(areaParam ? { areaId: areaParam, limit: '200' } : { limit: '200' });
-      if (eqRes.success && Array.isArray(eqRes.data)) {
-        setEquipments(eqRes.data);
+      if (eqRes.status === 'fulfilled' && eqRes.value.success && Array.isArray(eqRes.value.data)) {
+        setEquipments(eqRes.value.data);
       } else {
         setEquipments([]);
       }
     } catch (e) {
-      console.warn('Loi tai vat tu:', e);
+      console.warn('Loi tai tai nguyen:', e);
+      setVehicles([]);
       setEquipments([]);
     } finally {
+      setLoading(false);
       setEquipmentsLoading(false);
     }
   }, [effectiveAreaId]);
@@ -887,6 +888,11 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
 
 
+  const newCapacityError = validateVehicleCapacity(newCapacity, newType);
+  const showNewCapacityError = Boolean(newCapacityError && (newCapacityTouched || newCapacity.trim().length > 0));
+  const editCapacityError = validateVehicleCapacity(editVehicleCapacity, editVehicleType);
+  const showEditCapacityError = Boolean(editCapacityError && (editCapacityTouched || editVehicleCapacity.trim().length > 0));
+
   // Handle Add Vehicle
   const handleCreateVehicle = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -894,6 +900,13 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       toast.warning('Vui lòng nhập biển số / định danh phương tiện');
       return;
     }
+
+    setNewCapacityTouched(true);
+    if (newCapacityError) {
+      toast.warning(newCapacityError);
+      return;
+    }
+    const parsedCapacity = Number.parseInt(newCapacity.trim(), 10);
 
     const matchedTeam = rescueTeams.find((t) => t._id === newTeamId);
 
@@ -903,7 +916,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         teamId: matchedTeam ? matchedTeam._id : undefined,
         type: newType,
         plateNumber: newPlate.toUpperCase().trim(),
-        capacity: Number(newCapacity) || 4,
+        capacity: parsedCapacity,
         terrainCapabilities: newTerrainCapabilities,
         description: newDescription.trim() || 'Phương tiện cứu nạn biên chế mới',
         status: 'AVAILABLE',
@@ -916,7 +929,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
           _id: `veh-${Date.now()}`,
           plateNumber: newPlate.toUpperCase().trim(),
           type: newType,
-          capacity: Number(newCapacity) || 4,
+          capacity: parsedCapacity,
           terrainCapabilities: newTerrainCapabilities,
           status: 'AVAILABLE',
           description: newDescription.trim() || 'Phương tiện cứu nạn biên chế mới',
@@ -931,6 +944,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
 
       setIsCreateVehicleOpen(false);
       setNewPlate('');
+      setNewCapacityTouched(false);
       setNewDescription('');
       setNewTerrainCapabilities([]);
       refreshData();
@@ -952,7 +966,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     setEditVehicleTarget(v);
     setEditVehiclePlate(v.plateNumber);
     setEditVehicleType(v.type);
-    setEditVehicleCapacity(v.capacity);
+    setEditVehicleCapacity(v.capacity != null ? String(v.capacity) : '1');
+    setEditCapacityTouched(false);
     setEditVehicleTerrainCapabilities(v.terrainCapabilities || []);
     setEditVehicleStatus(v.status || 'AVAILABLE');
     setEditVehicleTeamId(
@@ -971,6 +986,12 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       toast.warning('Vui lòng nhập biển số / định danh phương tiện');
       return;
     }
+    setEditCapacityTouched(true);
+    if (editCapacityError) {
+      toast.warning(editCapacityError);
+      return;
+    }
+    const parsedCapacity = Number.parseInt(editVehicleCapacity.trim(), 10);
 
     try {
       setIsUpdatingVehicle(true);
@@ -979,7 +1000,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       const res = await updateVehicle(editVehicleTarget._id, {
         plateNumber: cleanPlate,
         type: editVehicleType,
-        capacity: Number(editVehicleCapacity) || 1,
+        capacity: parsedCapacity,
         terrainCapabilities: editVehicleTerrainCapabilities,
         status: editVehicleStatus,
         teamId: targetTeamId,
@@ -1195,6 +1216,34 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     }
   };
 
+  const eqQuantityError = validateIntegerRange(eqQuantity, {
+    min: 1,
+    max: MAX_EQUIPMENT_QUANTITY,
+    label: 'Số lượng nhập',
+    unitLabel: eqUnit.trim() || undefined,
+  });
+  const showEqQuantityError = Boolean(eqQuantityError && (eqQuantityTouched || eqQuantity.trim().length > 0));
+
+  const eqMinThresholdError = validateIntegerRange(eqMinThreshold, {
+    min: 1,
+    max: MAX_EQUIPMENT_THRESHOLD,
+    label: 'Ngưỡng báo động tồn kho',
+    unitLabel: eqUnit.trim() || undefined,
+  });
+  const showEqMinThresholdError = Boolean(
+    eqMinThresholdError && (eqMinThresholdTouched || eqMinThreshold.trim().length > 0)
+  );
+
+  const editEqQuantityError = validateIntegerRange(editEqQuantity, {
+    min: 0,
+    max: MAX_EQUIPMENT_THRESHOLD,
+    label: 'Số lượng',
+    unitLabel: editEquipmentTarget?.unit || undefined,
+  });
+  const showEditEqQuantityError = Boolean(
+    editEqQuantityError && (editEqQuantityTouched || editEqQuantity.trim().length > 0)
+  );
+
   // Handle Create / Dispatch Equipment
   const handleCreateEquipment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1204,6 +1253,22 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       return;
     }
 
+    setEqQuantityTouched(true);
+    if (eqQuantityError) {
+      toast.warning(eqQuantityError);
+      return;
+    }
+
+    if (eqSupplyType === 'CONSUMABLE') {
+      setEqMinThresholdTouched(true);
+      if (eqMinThresholdError) {
+        toast.warning(eqMinThresholdError);
+        return;
+      }
+    }
+
+    const parsedEqQuantity = Number.parseInt(eqQuantity.trim(), 10);
+    const parsedEqThreshold = eqSupplyType === 'CONSUMABLE' ? Number.parseInt(eqMinThreshold.trim(), 10) : undefined;
     const matchedTeam = rescueTeams.find((t) => t._id === eqTeamId);
 
     try {
@@ -1213,9 +1278,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         name: finalName,
         category: eqCategory,
         supplyType: eqSupplyType,
-        minThreshold: eqSupplyType === 'CONSUMABLE' ? Number(eqMinThreshold) || 20 : undefined,
+        minThreshold: parsedEqThreshold,
         serialNumber: eqSerialNumber.trim() ? eqSerialNumber.trim().toUpperCase() : undefined,
-        quantity: Number(eqQuantity) || 1,
+        quantity: parsedEqQuantity,
         unit: eqUnit.trim() || 'chiếc',
         status: 'AVAILABLE',
         receivedAt: eqReceivedAt ? new Date(eqReceivedAt).toISOString() : new Date().toISOString(),
@@ -1237,7 +1302,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
         setEqSerialNumber('');
         setEqNote('');
         setEqReceivedAt(new Date().toISOString().split('T')[0]);
-        setEqQuantity(1);
+        setEqQuantity('1');
+        setEqQuantityTouched(false);
+        setEqMinThresholdTouched(false);
       } else {
         toast.error(res.message || 'Không thể thêm trang thiết bị mới');
       }
@@ -1796,7 +1863,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
   // Open Edit Equipment Modal
   const handleOpenEditEquipment = (eq: EquipmentItem) => {
     setEditEquipmentTarget(eq);
-    setEditEqQuantity(eq.quantity);
+    setEditEqQuantity(eq.quantity != null ? String(eq.quantity) : '0');
+    setEditEqQuantityTouched(false);
     setEditEqStatus(eq.status);
     setEditEqSerialNumber(eq.serialNumber || '');
     setEditEqReceivedAt(eq.receivedAt ? eq.receivedAt.split('T')[0] : eq.createdAt ? eq.createdAt.split('T')[0] : '');
@@ -1808,10 +1876,17 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
     e.preventDefault();
     if (!editEquipmentTarget) return;
 
+    setEditEqQuantityTouched(true);
+    if (editEqQuantityError) {
+      toast.warning(editEqQuantityError);
+      return;
+    }
+    const parsedEditQuantity = Number.parseInt(editEqQuantity.trim(), 10);
+
     try {
       setIsUpdatingEquipment(true);
       const res = await updateEquipment(editEquipmentTarget._id, {
-        quantity: Number(editEqQuantity) || 1,
+        quantity: parsedEditQuantity,
         status: editEqStatus,
         serialNumber: editEqSerialNumber.trim() ? editEqSerialNumber.trim().toUpperCase() : undefined,
         receivedAt: editEqReceivedAt ? new Date(editEqReceivedAt).toISOString() : undefined,
@@ -2285,7 +2360,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                 onClick={() => {
                   setNewPlate('');
                   setNewType('BOAT');
-                  setNewCapacity(8);
+                  setNewCapacity('8');
+                  setNewCapacityTouched(false);
                   setNewTeamId(
                     vehicleTeamFilter !== 'ALL' && vehicleTeamFilter !== 'UNASSIGNED'
                       ? vehicleTeamFilter
@@ -2367,7 +2443,10 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                     setEqCategory(STANDARD_EQUIPMENT_CATALOG[0].category);
                     setEqUnit(STANDARD_EQUIPMENT_CATALOG[0].unit);
                     setCustomEqName('');
-                    setEqQuantity(1);
+                    setEqQuantity('1');
+                    setEqQuantityTouched(false);
+                    setEqMinThreshold('20');
+                    setEqMinThresholdTouched(false);
                     setEqSerialNumber(generateRandomEquipmentSerial(STANDARD_EQUIPMENT_CATALOG[0].category));
                     setEqNote('');
                     setIsCreateEquipmentOpen(true);
@@ -4113,7 +4192,9 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       {rec.actualRecipient && (
                         <div>
                           <span style={{ fontSize: 11.5, color: '#047857' }}>Ký nhận thực tế: </span>
-                          <strong style={{ fontSize: 12.5, color: '#047857' }}>{rec.actualRecipient}</strong>
+                          <strong style={{ fontSize: 12.5, color: '#047857' }}>
+                            {formatActualRecipientDisplay(rec.actualRecipient, rec.status)}
+                          </strong>
                         </div>
                       )}
                     </div>
@@ -4320,7 +4401,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                 </div>
                 {proofPreviewModal.actualRecipient && (
                   <div style={{ fontSize: 12.5, color: '#047857', fontWeight: 600, marginTop: 2 }}>
-                    Người ký nhận thực tế: {proofPreviewModal.actualRecipient}
+                    Người ký nhận thực tế: {formatActualRecipientDisplay(proofPreviewModal.actualRecipient, 'COMPLETED')}
                   </div>
                 )}
               </div>
@@ -4872,15 +4953,29 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   </div>
 
                   <div className="executive-modal-field">
-                    <label className="executive-modal-label">Sức chở tối đa (Người)</label>
+                    <label className="executive-modal-label">Sức chở tối đa (Người) (*)</label>
                     <input
-                      type="number"
-                      min={1}
-                      max={50}
-                      className="executive-modal-input"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="VD: 6"
+                      className={`executive-modal-input${showEditCapacityError ? ' executive-modal-input-error' : ''}`}
                       value={editVehicleCapacity}
-                      onChange={(e) => setEditVehicleCapacity(Number(e.target.value))}
+                      onChange={(e) => setEditVehicleCapacity(e.target.value.replace(/\D/g, ''))}
+                      onBlur={() => setEditCapacityTouched(true)}
                     />
+                    <span
+                      style={{
+                        fontSize: 11.5,
+                        color: showEditCapacityError ? '#dc2626' : '#64748b',
+                        fontWeight: showEditCapacityError ? 500 : 400,
+                        marginTop: 4,
+                        display: 'block',
+                      }}
+                    >
+                      {showEditCapacityError
+                        ? editCapacityError
+                        : `Cho phép ${getMinVehicleCapacity(editVehicleType)}–${MAX_VEHICLE_CAPACITY} người`}
+                    </span>
                   </div>
                 </div>
 
@@ -5001,7 +5096,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         setNewType(nextType as any);
                         const matched = STANDARD_VEHICLE_TYPES.find((v) => v.value === nextType);
                         if (matched) {
-                          setNewCapacity(matched.defaultCapacity);
+                          setNewCapacity(String(matched.defaultCapacity));
                         }
                       }}
                     >
@@ -5010,15 +5105,29 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   </div>
 
                   <div className="executive-modal-field">
-                    <label className="executive-modal-label">Sức chở tối đa (Người)</label>
+                    <label className="executive-modal-label">Sức chở tối đa (Người) (*)</label>
                     <input
-                      type="number"
-                      min={0}
-                      max={50}
-                      className="executive-modal-input"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="VD: 8"
+                      className={`executive-modal-input${showNewCapacityError ? ' executive-modal-input-error' : ''}`}
                       value={newCapacity}
-                      onChange={(e) => setNewCapacity(Number(e.target.value))}
+                      onChange={(e) => setNewCapacity(e.target.value.replace(/\D/g, ''))}
+                      onBlur={() => setNewCapacityTouched(true)}
                     />
+                    <span
+                      style={{
+                        fontSize: 11.5,
+                        color: showNewCapacityError ? '#dc2626' : '#64748b',
+                        fontWeight: showNewCapacityError ? 500 : 400,
+                        marginTop: 4,
+                        display: 'block',
+                      }}
+                    >
+                      {showNewCapacityError
+                        ? newCapacityError
+                        : `Cho phép ${getMinVehicleCapacity(newType)}–${MAX_VEHICLE_CAPACITY} người`}
+                    </span>
                   </div>
                 </div>
 
@@ -5123,7 +5232,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       setEqCategory(STANDARD_EQUIPMENT_CATALOG[0].category);
                       setEqUnit(STANDARD_EQUIPMENT_CATALOG[0].unit);
                       setCustomEqName('');
-                      setEqQuantity(1);
+                      setEqQuantity('1');
+                      setEqQuantityTouched(false);
                       setEqSerialNumber(generateRandomEquipmentSerial(STANDARD_EQUIPMENT_CATALOG[0].category));
                     }}
                     style={{
@@ -5155,8 +5265,10 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       setEqCategory(STANDARD_CONSUMABLE_CATALOG[0].category);
                       setEqUnit(STANDARD_CONSUMABLE_CATALOG[0].unit);
                       setCustomEqName('');
-                      setEqQuantity(10);
-                      setEqMinThreshold(STANDARD_CONSUMABLE_CATALOG[0].minThreshold);
+                      setEqQuantity('10');
+                      setEqQuantityTouched(false);
+                      setEqMinThreshold(String(STANDARD_CONSUMABLE_CATALOG[0].minThreshold));
+                      setEqMinThresholdTouched(false);
                       setEqSerialNumber(`LÔ-VT-${Date.now().toString().slice(-4)}`);
                     }}
                     style={{
@@ -5185,7 +5297,7 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                 {/* 1. Chọn đội tiếp nhận hoặc Kho tổng */}
                 <div className="executive-modal-field">
                   <label className="executive-modal-label">
-                    {eqSupplyType === 'CONSUMABLE' ? 'Kho lưu trữ / Đơn vị phụ trách xuất cấp (*)' : 'Đơn vị tiếp nhận &amp; chịu trách nhiệm (*)'}
+                    {eqSupplyType === 'CONSUMABLE' ? 'Kho lưu trữ / Đơn vị phụ trách xuất cấp (*)' : 'Đơn vị tiếp nhận & chịu trách nhiệm (*)'}
                   </label>
                   <select
                     className="executive-modal-select"
@@ -5194,8 +5306,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   >
                     <option value="">
                       {eqSupplyType === 'CONSUMABLE'
-                        ? '📦 Kho tổng dự trữ (Mặc định - Trung tâm Tiếp nhận &amp; Điều phối)'
-                        : '📦 Kho tổng dự trữ (Trung tâm Tiếp nhận &amp; Bàn giao trang thiết bị)'}
+                        ? '📦 Kho tổng dự trữ (Mặc định - Trung tâm Tiếp nhận & Điều phối)'
+                        : '📦 Kho tổng dự trữ (Trung tâm Tiếp nhận & Bàn giao trang thiết bị)'}
                     </option>
                     {rescueTeams.map((team) => (
                       <option key={team._id} value={team._id}>
@@ -5227,7 +5339,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         if (matched) {
                           setEqCategory(matched.category);
                           setEqUnit(matched.unit);
-                          setEqMinThreshold(matched.minThreshold);
+                          setEqMinThreshold(String(matched.minThreshold));
+                          setEqMinThresholdTouched(false);
                           setEqSerialNumber(`LÔ-VT-${Date.now().toString().slice(-4)}`);
                         }
                       }}
@@ -5320,14 +5433,27 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                       Số lượng nhập {eqUnit ? `(${eqUnit})` : ''} (*)
                     </label>
                     <input
-                      type="number"
-                      min={1}
-                      max={99999}
-                      required
-                      className="executive-modal-input"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder={eqSupplyType === 'CONSUMABLE' ? 'VD: 10' : 'VD: 20'}
+                      className={`executive-modal-input${showEqQuantityError ? ' executive-modal-input-error' : ''}`}
                       value={eqQuantity}
-                      onChange={(e) => setEqQuantity(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                      onChange={(e) => setEqQuantity(e.target.value.replace(/\D/g, ''))}
+                      onBlur={() => setEqQuantityTouched(true)}
                     />
+                    <span
+                      style={{
+                        fontSize: 11.5,
+                        color: showEqQuantityError ? '#dc2626' : '#64748b',
+                        fontWeight: showEqQuantityError ? 500 : 400,
+                        marginTop: 4,
+                        display: 'block',
+                      }}
+                    >
+                      {showEqQuantityError
+                        ? eqQuantityError
+                        : `Từ 1 đến ${MAX_EQUIPMENT_QUANTITY.toLocaleString('vi-VN')} ${eqUnit.trim() || 'đơn vị'}`}
+                    </span>
                   </div>
 
                   {eqSupplyType === 'CONSUMABLE' ? (
@@ -5336,16 +5462,28 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                         Ngưỡng báo động tồn kho (Min) (*)
                       </label>
                       <input
-                        type="number"
-                        min={1}
-                        max={9999}
-                        required
-                        className="executive-modal-input"
+                        type="text"
+                        inputMode="numeric"
+                        className={`executive-modal-input${showEqMinThresholdError ? ' executive-modal-input-error' : ''}`}
                         value={eqMinThreshold}
-                        onChange={(e) => setEqMinThreshold(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                        onChange={(e) => setEqMinThreshold(e.target.value.replace(/\D/g, ''))}
+                        onBlur={() => setEqMinThresholdTouched(true)}
                         placeholder="VD: 20"
                         title="Hệ thống cảnh báo đỏ khi lượng tồn dưới mức này"
                       />
+                      <span
+                        style={{
+                          fontSize: 11.5,
+                          color: showEqMinThresholdError ? '#dc2626' : '#64748b',
+                          fontWeight: showEqMinThresholdError ? 500 : 400,
+                          marginTop: 4,
+                          display: 'block',
+                        }}
+                      >
+                        {showEqMinThresholdError
+                          ? eqMinThresholdError
+                          : `Từ 1 đến ${MAX_EQUIPMENT_THRESHOLD.toLocaleString('vi-VN')} ${eqUnit.trim() || 'đơn vị'}`}
+                      </span>
                     </div>
                   ) : (
                     <div className="executive-modal-field">
@@ -5896,7 +6034,8 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                             setIsAssignVehicleModalOpen(false);
                             setNewPlate('');
                             setNewType('BOAT');
-                            setNewCapacity(8);
+                            setNewCapacity('8');
+                            setNewCapacityTouched(false);
                             setNewTeamId(assignTargetTeamId || '');
                             setNewDescription('');
                             setIsCreateVehicleOpen(true);
@@ -7475,14 +7614,27 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
                   <div className="executive-modal-field">
                     <label className="executive-modal-label">Số lượng ({editEquipmentTarget.unit}) (*)</label>
                     <input
-                      type="number"
-                      min={0}
-                      max={9999}
-                      required
-                      className="executive-modal-input"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="VD: 10"
+                      className={`executive-modal-input${showEditEqQuantityError ? ' executive-modal-input-error' : ''}`}
                       value={editEqQuantity}
-                      onChange={(e) => setEditEqQuantity(Number(e.target.value))}
+                      onChange={(e) => setEditEqQuantity(e.target.value.replace(/\D/g, ''))}
+                      onBlur={() => setEditEqQuantityTouched(true)}
                     />
+                    <span
+                      style={{
+                        fontSize: 11.5,
+                        color: showEditEqQuantityError ? '#dc2626' : '#64748b',
+                        fontWeight: showEditEqQuantityError ? 500 : 400,
+                        marginTop: 4,
+                        display: 'block',
+                      }}
+                    >
+                      {showEditEqQuantityError
+                        ? editEqQuantityError
+                        : `Cho phép 0–${MAX_EQUIPMENT_THRESHOLD.toLocaleString('vi-VN')} ${editEquipmentTarget.unit}`}
+                    </span>
                   </div>
 
                   <div className="executive-modal-field">

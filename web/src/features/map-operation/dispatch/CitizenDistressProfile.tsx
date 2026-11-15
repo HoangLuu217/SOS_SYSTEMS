@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Phone, MapPin, Maximize2, X, ChevronDown, ChevronUp, MessageSquareText, Package, Plus, Minus, Users } from 'lucide-react';
 import type { SosRequest } from '@/types/domainD';
 import type { EquipmentItem } from '@/api/equipment.api';
+import { formatPriorityGroupLabel } from '@/features/hazards';
 
 interface Props {
   selectedSos: SosRequest;
@@ -64,13 +65,13 @@ export const CitizenDistressProfile: React.FC<Props> = ({
   // Xác định danh sách đối tượng ưu tiên từ dữ liệu thực tế của ca SOS
   const priorityList = (() => {
     if (Array.isArray(selectedSos.priorityGroups) && selectedSos.priorityGroups.length > 0) {
-      return selectedSos.priorityGroups;
+      return selectedSos.priorityGroups.map(formatPriorityGroupLabel).filter(Boolean);
     }
     const desc = (selectedSos.description || "") + " " + (selectedSos.title || "");
     if (desc.includes("[Đối tượng ưu tiên:")) {
       const match = desc.match(/\[Đối tượng ưu tiên:\s*([^\]]+)\]/);
       if (match && match[1]) {
-        return match[1].split(",").map((s) => s.trim()).filter(Boolean);
+        return match[1].split(",").map((s) => formatPriorityGroupLabel(s)).filter(Boolean);
       }
     }
     const keywords: string[] = [];
@@ -157,42 +158,58 @@ export const CitizenDistressProfile: React.FC<Props> = ({
       >
               {/* Hàng 1: Tên người dân + Loại sự cố & Địa điểm (trái) | Nút SĐT đường dây nóng (phải) */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-              <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontWeight: 800,
+                      color: '#0f172a',
+                      fontSize: 17,
+                      letterSpacing: '-0.2px',
+                      lineHeight: 1.3,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      maxWidth: '100%',
+                    }}
+                    title={selectedSos.citizenName}
+                  >
+                    {selectedSos.citizenName}
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: '#0369a1',
+                      background: '#e0f2fe',
+                      border: '1px solid #bae6fd',
+                      padding: '2px 9px',
+                      borderRadius: 999,
+                      lineHeight: 1.35,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {emergencyTypeViLabel}
+                  </span>
+                </div>
+
                 <div
                   style={{
-                    fontWeight: 800,
-                    color: '#0f172a',
-                    fontSize: 15.5,
-                    letterSpacing: '-0.2px',
-                    lineHeight: 1.25,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                  title={selectedSos.citizenName}
-                >
-            {selectedSos.citizenName}
-          </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', fontSize: 12.5, color: '#475569' }}>
-                <span style={{ fontWeight: 700, color: '#334155' }}>{emergencyTypeViLabel}</span>
-                <span style={{ color: '#cbd5e1', fontSize: 11 }}>•</span>
-                <span
-                  style={{
-                    display: 'inline-flex',
+                    display: 'flex',
                     alignItems: 'center',
-                    gap: 3.5,
+                    gap: 5,
+                    fontSize: 13.5,
                     fontWeight: 600,
-                    color: '#475569',
+                    color: '#334155',
+                    lineHeight: 1.35,
                     minWidth: 0,
                   }}
                   title={cleanLocationName}
                 >
-                  <MapPin size={13} style={{ color: '#64748b', flexShrink: 0 }} />
-                  <span>{cleanLocationName}</span>
-                </span>
+                  <MapPin size={14} style={{ color: '#0284c7', flexShrink: 0 }} />
+                  <span style={{ minWidth: 0 }}>{cleanLocationName}</span>
+                </div>
               </div>
-            </div>
 
             <a
               href={`tel:${selectedSos.citizenPhone}`}

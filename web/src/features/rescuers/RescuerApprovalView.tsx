@@ -20,7 +20,7 @@ import {
   FilterX,
 } from 'lucide-react';
 import type { User } from '@/types/auth';
-import { fetchAdminUsers, verifyRescuer, fetchAdministrativeAreas } from '@/api';
+import { fetchAdminUsers, verifyRescuer } from '@/api';
 import { domainDService } from '@/services/domainDService';
 import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import { toast } from '@/components/common/toast';
@@ -240,7 +240,6 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
       setLoading(true);
       const [usersRes] = await Promise.allSettled([
         fetchAdminUsers({ role: 'RESCUER', limit: '100' }),
-        fetchAdministrativeAreas(),
       ]);
 
       // Dữ liệu khu vực hành chính được quản lý tập trung qua useAdministrativeFilter
@@ -347,6 +346,11 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
 
         // 100% dữ liệu thật từ DB, không mock, không fallback
         setApplicants(transformed);
+        setSelectedApplicant((prev) => {
+          if (!prev) return prev;
+          const updated = transformed.find((a) => a.id === prev.id);
+          return updated ? { ...prev, ...updated, history: prev.history } : prev;
+        });
       } else {
         setApplicants([]);
       }

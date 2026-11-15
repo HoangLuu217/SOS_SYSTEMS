@@ -31,6 +31,7 @@ import { SOSMapScreen, ContributeHazardModal } from '@/features/sos';
 import { LocalAuthorityChatModal } from './LocalAuthorityChatModal';
 import { SafetyCheckModal } from './SafetyCheckModal';
 import { EmergencyDirectoryModal } from '@/features/auth/EmergencyDirectoryModal';
+import { findWardAuthorityByAddress, stripWardPrefix } from '@/constants/wardAuthorities';
 import { TabName } from '@/types';
 import { backendApi, safetyCheckApi, SafetyCheckItem, bloodDonationApi } from '@/api';
 
@@ -558,12 +559,24 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       });
 
       if (res.success && res.data?.authority) {
-        const authData = {
-          name: res.data.authority.name || 'Cán bộ trực ban',
-          department: res.data.authority.department || `UBND ${res.data.areaName || queryArea || 'Địa phương'}`,
-          phone: res.data.authority.phone || '',
-          areaName: res.data.areaName || queryArea || 'Địa chỉ của bạn',
-        };
+        const matchedWardDefault = findWardAuthorityByAddress(user?.address || queryWard || queryArea);
+        const rawDept = `${res.data.authority.department || ''} ${res.data.authority.name || ''}`.toLowerCase();
+        const wardKey = matchedWardDefault ? stripWardPrefix(matchedWardDefault.ward) : '';
+        const serverMatchesWard = !wardKey || rawDept.includes(wardKey);
+
+        const authData = serverMatchesWard
+          ? {
+              name: res.data.authority.name || 'Cán bộ trực ban',
+              department: res.data.authority.department || `UBND ${res.data.areaName || queryArea || 'Địa phương'}`,
+              phone: res.data.authority.phone || '',
+              areaName: res.data.areaName || queryArea || 'Địa chỉ của bạn',
+            }
+          : {
+              name: `Ban Chỉ Huy PCTT & TKCN ${matchedWardDefault!.ward}`,
+              department: `Ban Chỉ Huy PCTT & TKCN ${matchedWardDefault!.ward}`,
+              phone: matchedWardDefault!.phone,
+              areaName: matchedWardDefault!.ward,
+            };
         setNearestAuthority(authData);
         if (user?.address) {
           setProfileAuthority(authData);
@@ -617,12 +630,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             areaName: detectedCity,
           });
           if (resGps.success && resGps.data?.authority) {
-            setGpsAuthority({
-              name: resGps.data.authority.name || 'Ban chỉ huy PCTT & TKCN địa phương',
-              department: resGps.data.authority.department || `UBND ${resGps.data.areaName || detectedCity}`,
-              phone: resGps.data.authority.phone || '112',
-              areaName: resGps.data.areaName || detectedCity || 'Vị trí hiện tại',
-            });
+            const gpsMatchedWard = findWardAuthorityByAddress(resGps.data.areaName || detectedCity);
+            const gpsRawDept = `${resGps.data.authority.department || ''} ${resGps.data.authority.name || ''}`.toLowerCase();
+            const gpsWardKey = gpsMatchedWard ? stripWardPrefix(gpsMatchedWard.ward) : '';
+            const gpsMatchesWard = !gpsWardKey || gpsRawDept.includes(gpsWardKey);
+
+            setGpsAuthority(
+              gpsMatchesWard
+                ? {
+                    name: resGps.data.authority.name || 'Ban chỉ huy PCTT & TKCN địa phương',
+                    department: resGps.data.authority.department || `UBND ${resGps.data.areaName || detectedCity}`,
+                    phone: resGps.data.authority.phone || '112',
+                    areaName: resGps.data.areaName || detectedCity || 'Vị trí hiện tại',
+                  }
+                : {
+                    name: `Ban Chỉ Huy PCTT & TKCN ${gpsMatchedWard!.ward}`,
+                    department: `Ban Chỉ Huy PCTT & TKCN ${gpsMatchedWard!.ward}`,
+                    phone: gpsMatchedWard!.phone,
+                    areaName: gpsMatchedWard!.ward,
+                  }
+            );
           }
         } catch {}
       }
@@ -787,7 +814,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         const isAuthority =
           user?.roles?.includes('ADMIN') ||
           user?.roles?.includes('LOCAL_AUTHORITY') ||
-          user?.roles?.includes('RESCUER');
+          (user?.roles?.includes('RESCUER') && user?.rescuer?.verificationStatus === 'VERIFIED');
         if (isAuthority) {
           setConfirmModal({
             visible: true,
@@ -894,14 +921,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                 </View>
               </View>
 
-              {/* Logo & Tiêu đề: HỖ TRỢ CỨU NẠN */}
+              {/* Logo & Tiêu đề: CỨU HỘ CỨU NẠN */}
               <View style={styles.brandRow}>
                 <View style={styles.logoBadge}>
                   <LogoSOS style={styles.logoImage} resizeMode="contain" />
                 </View>
 
                 <View style={styles.brandTextColumn}>
-                  <Text style={styles.brandTitle}>HỖ TRỢ CỨU NẠN</Text>
+                  <Text style={styles.brandTitle}>CỨU HỘ CỨU NẠN</Text>
                   <Text style={styles.brandSubtitle}>
                     Không ai phải đối mặt với thiên tai một mình
                   </Text>

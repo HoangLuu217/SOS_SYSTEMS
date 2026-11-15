@@ -235,18 +235,26 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     const verificationStatus =
       incoming.data?.verificationStatus || (incoming as any).verificationStatus || 'VERIFIED';
+    const verificationDedupeKey = isRescuerVerification
+      ? String(
+          incoming.data?.broadcastId ||
+            (incoming.data?.timestamp
+              ? `rescuer_ver_${verificationStatus}_${incoming.data.timestamp}`
+              : `rescuer_ver_${verificationStatus}_${incoming._id}`)
+        )
+      : '';
 
     // Bỏ qua nếu đã từng xử lý thông báo này (Deduplicate nhất quán giữa Remote Push, SSE và Polling)
     if (
       hasSeenNotification(incoming) ||
-      (isRescuerVerification && seenIdsRef.current.has(`rescuer_ver_${verificationStatus}`))
+      (isRescuerVerification && verificationDedupeKey && seenIdsRef.current.has(verificationDedupeKey))
     ) {
       return;
     }
 
     markSeenNotification(incoming);
-    if (isRescuerVerification) {
-      seenIdsRef.current.add(`rescuer_ver_${verificationStatus}`);
+    if (isRescuerVerification && verificationDedupeKey) {
+      seenIdsRef.current.add(verificationDedupeKey);
     }
 
     // Đồng bộ nhiệm vụ tức thời nếu thông báo có liên quan tới SOS / Assignment

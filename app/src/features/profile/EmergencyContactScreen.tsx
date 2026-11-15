@@ -17,7 +17,7 @@ import {
   Modal,
   DeviceEventEmitter,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
@@ -236,6 +236,7 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
   onBack,
   onContactSaved,
 }) => {
+  const insets = useSafeAreaInsets();
   // Suggested relationship chips
   const relationshipSuggestions = ['Mẹ', 'Cha', 'Vợ/Chồng', 'Người yêu', 'Bạn thân', 'Anh/Chị/Em', 'Khác'];
 
@@ -1127,13 +1128,22 @@ export const EmergencyContactScreen: React.FC<EmergencyContactScreenProps> = ({
       <Modal
         visible={showMapModal}
         animationType="slide"
+        presentationStyle="fullScreen"
         onRequestClose={() => setShowMapModal(false)}
       >
-        <SafeAreaView style={styles.mapModalContainer} edges={['top', 'bottom']}>
+        <SafeAreaView
+          style={styles.mapModalContainer}
+          edges={Platform.OS === 'ios' ? ['bottom'] : ['top', 'bottom']}
+        >
           <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
           {/* Header Modal */}
-          <View style={styles.mapModalHeader}>
+          <View
+            style={[
+              styles.mapModalHeader,
+              Platform.OS === 'ios' && { paddingTop: Math.max(insets.top, 44) + 8 },
+            ]}
+          >
             <TouchableOpacity
               style={styles.mapModalBackBtn}
               onPress={() => setShowMapModal(false)}

@@ -194,7 +194,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
         logsRes,
       ] = await Promise.allSettled([
         fetchSosRequests({ limit: '500', ...areaParam }),
-        fetchRescueTeams(areaParam),
+        fetchRescueTeams({ ...areaParam, light: 'true' }),
         fetchAdminUsers({ role: 'RESCUER', limit: '300' }),
         fetchVehicles(areaParam),
         fetchEquipments(),

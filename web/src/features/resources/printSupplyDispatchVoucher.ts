@@ -62,6 +62,34 @@ function normalizeVoucherArea(areaName?: string | null): string {
   return trimmed;
 }
 
+const GENERIC_RECIPIENT_PLACEHOLDERS = new Set([
+  'đầu mối tiếp nhận cứu trợ',
+  'người nhận tại hiện trường',
+  'chưa xác nhận',
+]);
+
+export function isGenericRecipientLabel(value?: string | null): boolean {
+  const normalized = String(value ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  return !normalized || GENERIC_RECIPIENT_PLACEHOLDERS.has(normalized);
+}
+
+/** Chuẩn hóa tên người ký nhận thực tế: nếu chỉ là chuỗi mặc định thì hiển thị rõ trạng thái chưa ghi tên */
+export function formatActualRecipientDisplay(
+  actualRecipient?: string | null,
+  status?: string | null
+): string {
+  const trimmed = String(actualRecipient ?? '').replace(/\s+/g, ' ').trim();
+  if (!trimmed) {
+    return status === 'COMPLETED'
+      ? 'Đã bàn giao tại điểm tiếp nhận — chưa ghi tên người ký'
+      : 'Chưa xác nhận';
+  }
+  if (isGenericRecipientLabel(trimmed)) {
+    return 'Đã bàn giao tại điểm tiếp nhận — chưa ghi tên người ký';
+  }
+  return trimmed;
+}
+
 function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const normalized = String(text ?? '').replace(/\s+/g, ' ').trim();
   if (!normalized) return ['—'];
@@ -332,7 +360,8 @@ function renderVoucherCanvases(
   const actorLines = wrapText(ctx, rec.actorName || 'Cán bộ điều phối', halfW);
   const destLines = wrapText(ctx, rec.destination || '—', CONTENT_W - cardPadX * 2);
   const recpLines = wrapText(ctx, rec.recipientName || '—', halfW);
-  const actualRecpLines = wrapText(ctx, rec.actualRecipient || 'Chưa xác nhận', halfW);
+  const actualRecpDisplay = formatActualRecipientDisplay(rec.actualRecipient, rec.status);
+  const actualRecpLines = wrapText(ctx, actualRecpDisplay, halfW);
   ctx.font = `500 21px ${FONT_FAMILY}`;
   const noteLines = !isCancelled && readableNote
     ? wrapText(ctx, readableNote, CONTENT_W - cardPadX * 2)
@@ -545,10 +574,15 @@ function renderVoucherCanvases(
     'NGƯỜI TIẾP NHẬN CỨU TRỢ',
   ];
   const sigHints = ['(Ký và ghi rõ họ tên)', '(Ký và ghi rõ họ tên)', '(Ký xác nhận thực tế)'];
+  const signedRecipientName = !isGenericRecipientLabel(rec.actualRecipient)
+    ? String(rec.actualRecipient).trim()
+    : !isGenericRecipientLabel(rec.recipientName)
+      ? String(rec.recipientName).trim()
+      : '';
   const sigNames = [
     rec.actorName || '',
     rec.leaderName || rec.teamName || '',
-    rec.actualRecipient || rec.recipientName || '',
+    signedRecipientName,
   ];
 
   sigRoles.forEach((role, idx) => {

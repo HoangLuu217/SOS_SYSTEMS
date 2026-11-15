@@ -1,7 +1,56 @@
 const { Vehicle, RescueTeam } = require('../models');
 const ApiError = require('../utils/apiError');
 
+const MAX_VEHICLE_CAPACITY = 50;
+
+function normalizeAndValidateCapacity(rawCapacity, vehicleType) {
+  if (rawCapacity === undefined || rawCapacity === null || String(rawCapacity).trim() === '') {
+    throw new ApiError(400, 'Vui lòng nhập sức chở tối đa của phương tiện');
+  }
+  const parsed = typeof rawCapacity === 'number' ? rawCapacity : Number(String(rawCapacity).trim());
+  const minCapacity = vehicleType === 'DRONE' ? 0 : 1;
+  if (!Number.isInteger(parsed) || parsed < minCapacity || parsed > MAX_VEHICLE_CAPACITY) {
+    throw new ApiError(
+      400,
+      `Sức chở tối đa phải là số nguyên từ ${minCapacity} đến ${MAX_VEHICLE_CAPACITY} người`
+    );
+  }
+  return parsed;
+}
+
 class VehicleService {
+  /**
+   * Phát sự kiện realtime khi phương tiện thay đổi để Đội cứu hộ & Kho phương tiện tự cập nhật
+   */
+  _emitVehicleRealtime(vehicle, action = 'UPDATED', previousTeamId = null) {
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (!io) return;
+
+      const rawTeam = vehicle?.teamId;
+      const teamId = rawTeam ? String(rawTeam._id || rawTeam) : null;
+      const prevTeamId = previousTeamId ? String(previousTeamId._id || previousTeamId) : null;
+
+      const payload = {
+        action,
+        vehicleId: vehicle?._id ? String(vehicle._id) : null,
+        teamId,
+        previousTeamId: prevTeamId,
+        vehicle,
+      };
+      io.emit('vehicle:updated', payload);
+      io.emit('rescue_teams_updated', {
+        action: `VEHICLE_${action}`,
+        teamId,
+        previousTeamId: prevTeamId,
+        vehicleId: payload.vehicleId,
+      });
+    } catch (err) {
+      console.warn('Realtime emit error in VehicleService:', err.message);
+    }
+  }
+
   /**
    * Đăng ký phương tiện cứu hộ mới
    */
@@ -18,23 +67,30 @@ class VehicleService {
     }
 
     // Kiểm tra trùng biển số
-    const cleanPlateNumber = String(plateNumber).trim().toUpperCase();
+    const cleanPlateNumber = String(plateNumber || '').trim().toUpperCase();
+    if (!cleanPlateNumber) {
+      throw new ApiError(400, 'Biển kiểm soát / số hiệu phương tiện là bắt buộc');
+    }
     const existingVehicle = await Vehicle.findOne({ plateNumber: cleanPlateNumber });
     if (existingVehicle) {
       throw new ApiError(409, `Biển kiểm soát '${cleanPlateNumber}' đã tồn tại trong hệ thống`);
     }
 
+    const validCapacity = capacity !== undefined ? normalizeAndValidateCapacity(capacity, type) : 1;
+
     const vehicle = await Vehicle.create({
       teamId: validTeamId,
       type,
       plateNumber: cleanPlateNumber,
-      capacity: capacity !== undefined ? Number(capacity) : 1,
+      capacity: validCapacity,
       status: status || 'AVAILABLE',
       description,
       terrainCapabilities: Array.isArray(terrainCapabilities) ? terrainCapabilities : [],
     });
 
-    return vehicle.populate('teamId', 'name type areaId status');
+    const populated = await vehicle.populate('teamId', 'name type areaId status');
+    this._emitVehicleRealtime(populated, 'CREATED');
+    return populated;
   }
 
   /**
@@ -64,18 +120,22 @@ class VehicleService {
       const { AdministrativeArea } = require('../models');
       let targetArea = null;
       if (mongoose.Types.ObjectId.isValid(query.areaId)) {
-        targetArea = await AdministrativeArea.findById(query.areaId);
+        targetArea = await AdministrativeArea.findById(query.areaId)
+          .select('_id name code parentId')
+          .lean();
       }
       if (!targetArea) {
         targetArea = await AdministrativeArea.findOne({
           $or: [{ code: query.areaId }, { name: new RegExp(query.areaId, 'i') }],
-        });
+        })
+          .select('_id name code parentId')
+          .lean();
       }
 
       let areaConditions = [];
       if (targetArea) {
         const relevantAreaIds = [targetArea._id];
-        const childWards = await AdministrativeArea.find({ parentId: targetArea._id }).select('_id');
+        const childWards = await AdministrativeArea.find({ parentId: targetArea._id }).select('_id').lean();
         childWards.forEach((w) => relevantAreaIds.push(w._id));
         if (targetArea.parentId) {
           relevantAreaIds.push(targetArea.parentId);
@@ -93,7 +153,7 @@ class VehicleService {
         areaConditions = [{ areaId: query.areaId }];
       }
 
-      const teamsInArea = await RescueTeam.find({ $or: areaConditions }).select('_id');
+      const teamsInArea = await RescueTeam.find({ $or: areaConditions }).select('_id').lean();
       const teamIds = teamsInArea.map((t) => t._id);
       if (!filter.teamId) {
         filter.$or = [
@@ -120,7 +180,8 @@ class VehicleService {
         })
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       Vehicle.countDocuments(filter),
     ]);
 
@@ -139,14 +200,16 @@ class VehicleService {
    * Lấy chi tiết 1 phương tiện
    */
   async getVehicleById(id) {
-    const vehicle = await Vehicle.findById(id).populate({
-      path: 'teamId',
-      select: 'name type leaderId areaId authorityId status',
-      populate: [
-        { path: 'leaderId', select: 'fullName phone' },
-        { path: 'areaId', select: 'name code' },
-      ],
-    });
+    const vehicle = await Vehicle.findById(id)
+      .populate({
+        path: 'teamId',
+        select: 'name type leaderId areaId authorityId status',
+        populate: [
+          { path: 'leaderId', select: 'fullName phone' },
+          { path: 'areaId', select: 'name code' },
+        ],
+      })
+      .lean();
 
     if (!vehicle) {
       throw new ApiError(404, 'Không tìm thấy thông tin phương tiện');
@@ -163,6 +226,7 @@ class VehicleService {
     if (!vehicle) {
       throw new ApiError(404, 'Không tìm thấy phương tiện cần cập nhật');
     }
+    const previousTeamId = vehicle.teamId ? String(vehicle.teamId) : null;
 
     if (updateData.teamId !== undefined) {
       if (!updateData.teamId || updateData.teamId === 'NONE' || updateData.teamId === 'null') {
@@ -174,8 +238,11 @@ class VehicleService {
       }
     }
 
-    if (updateData.plateNumber) {
-      const cleanPlate = updateData.plateNumber.trim().toUpperCase();
+    if (updateData.plateNumber !== undefined) {
+      const cleanPlate = String(updateData.plateNumber || '').trim().toUpperCase();
+      if (!cleanPlate) {
+        throw new ApiError(400, 'Biển kiểm soát / số hiệu phương tiện không được để trống');
+      }
       if (cleanPlate !== vehicle.plateNumber) {
         const existing = await Vehicle.findOne({ plateNumber: cleanPlate });
         if (existing) {
@@ -185,8 +252,11 @@ class VehicleService {
       }
     }
 
+    const targetType = updateData.type !== undefined ? updateData.type : vehicle.type;
     if (updateData.type !== undefined) vehicle.type = updateData.type;
-    if (updateData.capacity !== undefined) vehicle.capacity = Number(updateData.capacity);
+    if (updateData.capacity !== undefined) {
+      vehicle.capacity = normalizeAndValidateCapacity(updateData.capacity, targetType);
+    }
     if (updateData.terrainCapabilities !== undefined) {
       if (!Array.isArray(updateData.terrainCapabilities)) {
         throw new ApiError(400, 'terrainCapabilities phải là danh sách khả năng địa hình');
@@ -198,7 +268,9 @@ class VehicleService {
 
     await vehicle.save();
 
-    return vehicle.populate('teamId', 'name type areaId status');
+    const populated = await vehicle.populate('teamId', 'name type areaId status');
+    this._emitVehicleRealtime(populated, 'UPDATED', previousTeamId);
+    return populated;
   }
 
   /**
@@ -218,6 +290,7 @@ class VehicleService {
     }
 
     await Vehicle.findByIdAndDelete(id);
+    this._emitVehicleRealtime(vehicle, 'DELETED');
 
     return { message: 'Đã xóa phương tiện cứu hộ thành công' };
   }
@@ -242,7 +315,9 @@ class VehicleService {
     vehicle.status = status;
     await vehicle.save();
 
-    return vehicle.populate('teamId', 'name type areaId status');
+    const populated = await vehicle.populate('teamId', 'name type areaId status');
+    this._emitVehicleRealtime(populated, 'STATUS_UPDATED');
+    return populated;
   }
 }
 

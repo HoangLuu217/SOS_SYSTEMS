@@ -9,6 +9,7 @@ import {
   fetchChatConversations,
   updateUserProfile,
   updateUserAvatar,
+  changeUserPassword,
   sendPhoneOtp,
   verifyPhoneOtp,
 } from '@/api';
@@ -137,98 +138,107 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const flyoutTimerRef = useRef<any>(null);
   const resourcesItemRef = useRef<HTMLDivElement | null>(null);
 
-  // Đồng bộ số liệu thời gian thực
+  const isFetchingCountsRef = useRef(false);
+
+  // Đồng bộ số liệu thời gian thực (chạy song song 3 API, tránh chồng chéo request)
   const fetchRealCounts = useCallback(async () => {
+    if (isFetchingCountsRef.current) return;
+    isFetchingCountsRef.current = true;
+
     try {
       const fetchParams: Record<string, string> = {};
       if (!isAdmin && user?.authority?.areaId) {
         fetchParams.areaId = user.authority.areaId;
       }
-      const res = await fetchSosRequests(fetchParams);
-      if (res.success && Array.isArray(res.data)) {
-        // Số ca chưa được điều phối (bao gồm PENDING mới gửi và VERIFIED đã xác minh nhưng chưa giao đội)
-        const unassigned = res.data.filter((s) => ['PENDING', 'VERIFIED'].includes(s.status)).length;
-        const active = res.data.filter((s) =>
-          ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status)
-        ).length;
-        setSosCounts({ unassigned, active });
-      } else {
-        const fallback = domainDService
-          .getSosRequests()
-          .filter((s) => !s.id?.startsWith('sos-89') && !s.id?.startsWith('sos-dn-'));
-        const unassigned = fallback.filter((s) => ['PENDING', 'VERIFIED'].includes(s.status)).length;
-        const active = fallback.filter((s) =>
-          ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status as any) || !!s.assignmentId
-        ).length;
-        setSosCounts({ unassigned, active });
-      }
-    } catch {
-      // Không ép fallback 6 vụ
-    }
 
-    try {
-      const rescuerRes = await fetchAdminUsers({ role: 'RESCUER', limit: '100' });
-      if (rescuerRes.success && Array.isArray(rescuerRes.data?.users)) {
-        let rescuers = rescuerRes.data.users;
+      const [sosResult, rescuerResult, chatResult] = await Promise.allSettled([
+        fetchSosRequests(fetchParams),
+        fetchAdminUsers({ role: 'RESCUER', limit: '100' }),
+        fetchChatConversations(),
+      ]);
 
-        const isAdminUser = Boolean(user?.roles?.includes('ADMIN') || (user as any)?.role === 'ADMIN');
-
-        if (!isAdminUser) {
-          const activeOfficer = domainDService.getActiveOfficer();
-          const userAreaId =
-            user?.authority?.areaId ||
-            (user?.authority as any)?.administrativeAreaId ||
-            (user?.authority as any)?.jurisdictionAreaId ||
-            activeOfficer?.jurisdictionAreaId;
-
-          const userAreaName =
-            user?.authority?.areaName ||
-            (user?.authority as any)?.jurisdictionAreaName ||
-            activeOfficer?.jurisdictionAreaName ||
-            '';
-
-          const localCommuneName = (userAreaName || '').split(',')[0].trim();
-          const cleanLocalCommune = localCommuneName
-            .replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '')
-            .trim()
-            .toLowerCase();
-
-          if (cleanLocalCommune || userAreaId) {
-            const normalizeStr = (s: string) =>
-              s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-            const normCommune = normalizeStr(cleanLocalCommune);
-
-            rescuers = rescuers.filter((u: any) => {
-              if (userAreaId && (u.authority?.areaId === userAreaId || u.rescuer?.preferredAreaId === userAreaId)) {
-                return true;
-              }
-              const addrStr = typeof u.address === 'string'
-                ? u.address
-                : `${u.address?.street || ''} ${u.address?.communeName || u.address?.ward || ''} ${u.address?.province || ''}`;
-              const target = `${u.rescuer?.targetCommune || ''} ${addrStr}`.toLowerCase();
-              return (cleanLocalCommune && target.includes(cleanLocalCommune)) || (normCommune && normalizeStr(target).includes(normCommune));
-            });
-          }
+      if (sosResult.status === 'fulfilled') {
+        const res = sosResult.value;
+        if (res.success && Array.isArray(res.data)) {
+          const unassigned = res.data.filter((s) => ['PENDING', 'VERIFIED'].includes(s.status)).length;
+          const active = res.data.filter((s) =>
+            ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status)
+          ).length;
+          setSosCounts({ unassigned, active });
+        } else {
+          const fallback = domainDService
+            .getSosRequests()
+            .filter((s) => !s.id?.startsWith('sos-89') && !s.id?.startsWith('sos-dn-'));
+          const unassigned = fallback.filter((s) => ['PENDING', 'VERIFIED'].includes(s.status)).length;
+          const active = fallback.filter((s) =>
+            ['ASSIGNED', 'ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'RESCUING'].includes(s.status as any) || !!s.assignmentId
+          ).length;
+          setSosCounts({ unassigned, active });
         }
-
-        const pendingCount = rescuers.filter(
-          (u: any) => (u.rescuer?.verificationStatus || u.verificationStatus || 'PENDING') === 'PENDING'
-        ).length;
-        setPendingRescuersCount(pendingCount);
       }
-    } catch {
-      // ignore
-    }
 
-    // Đếm số lượng tin nhắn chưa đọc trong Kênh trao đổi
-    try {
-      const chatRes = await fetchChatConversations();
-      if (chatRes.success && Array.isArray(chatRes.data)) {
-        const total = chatRes.data.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
-        setChatUnreadCount(total);
+      if (rescuerResult.status === 'fulfilled') {
+        const rescuerRes = rescuerResult.value;
+        if (rescuerRes.success && Array.isArray(rescuerRes.data?.users)) {
+          let rescuers = rescuerRes.data.users;
+
+          const isAdminUser = Boolean(user?.roles?.includes('ADMIN') || (user as any)?.role === 'ADMIN');
+
+          if (!isAdminUser) {
+            const activeOfficer = domainDService.getActiveOfficer();
+            const userAreaId =
+              user?.authority?.areaId ||
+              (user?.authority as any)?.administrativeAreaId ||
+              (user?.authority as any)?.jurisdictionAreaId ||
+              activeOfficer?.jurisdictionAreaId;
+
+            const userAreaName =
+              user?.authority?.areaName ||
+              (user?.authority as any)?.jurisdictionAreaName ||
+              activeOfficer?.jurisdictionAreaName ||
+              '';
+
+            const localCommuneName = (userAreaName || '').split(',')[0].trim();
+            const cleanLocalCommune = localCommuneName
+              .replace(/^(phường|xã|thị trấn|quận|huyện)\s+/i, '')
+              .trim()
+              .toLowerCase();
+
+            if (cleanLocalCommune || userAreaId) {
+              const normalizeStr = (s: string) =>
+                s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+              const normCommune = normalizeStr(cleanLocalCommune);
+
+              rescuers = rescuers.filter((u: any) => {
+                const rescuerAreaId = u.rescuer?.areaId?._id || u.rescuer?.areaId || u.areaId?._id || u.areaId || u.citizen?.areaId?._id || u.citizen?.areaId;
+                if (userAreaId && (u.authority?.areaId === userAreaId || u.rescuer?.preferredAreaId === userAreaId || String(rescuerAreaId || '') === String(userAreaId))) {
+                  return true;
+                }
+                const addrStr = typeof u.address === 'string'
+                  ? u.address
+                  : `${u.address?.street || ''} ${u.address?.communeName || u.address?.ward || ''} ${u.address?.province || ''}`;
+                const target = `${u.rescuer?.areaName || ''} ${u.rescuer?.targetCommune || ''} ${addrStr}`.toLowerCase();
+                return (cleanLocalCommune && target.includes(cleanLocalCommune)) || (normCommune && normalizeStr(target).includes(normCommune));
+              });
+            }
+          }
+
+          const pendingCount = rescuers.filter(
+            (u: any) => (u.rescuer?.verificationStatus || u.verificationStatus || 'PENDING') === 'PENDING'
+          ).length;
+          setPendingRescuersCount(pendingCount);
+        }
       }
-    } catch {
-      // ignore
+
+      if (chatResult.status === 'fulfilled') {
+        const chatRes = chatResult.value;
+        if (chatRes.success && Array.isArray(chatRes.data)) {
+          const total = chatRes.data.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
+          setChatUnreadCount(total);
+        }
+      }
+    } finally {
+      isFetchingCountsRef.current = false;
     }
   }, [user, isAdmin]);
 
@@ -539,6 +549,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return key === 'rescuers'; // Fallback active cho Đội cứu hộ địa phương
   };
 
+  // Chuẩn hóa chức danh cán bộ (chỉ dùng Chỉ huy cho cấp khu vực)
+  const normalizePosition = (pos?: string | null) => {
+    if (isAdmin) return pos || 'Quản trị viên hệ thống';
+    if (!pos || /phó\s*trưởng|trưởng\s*ban|cán\s*bộ/i.test(pos)) return 'Chỉ huy khu vực';
+    return pos;
+  };
+
   // Thông tin user hiển thị ở Profile Bar & Modal chỉnh sửa Profile
   const [localProfile, setLocalProfile] = useState<{
     fullName: string;
@@ -565,7 +582,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const lng = user?.authority?.longitude ?? fallbackCoords.lng;
     return {
       fullName: user?.fullName || 'Cán Bộ Phụ Trách',
-      position: user?.authority?.position || (isAdmin ? 'Quản trị viên hệ thống' : 'Chỉ huy trực ban cứu hộ'),
+      position: normalizePosition(user?.authority?.position),
       organizationName: user?.authority?.organizationName || 'Ban Chỉ Huy PCTT & TKCN',
       phone: (user as any)?.phoneNumber || (user as any)?.phone || '112',
       email: user?.email || 'canbo@sos.gov.vn',
@@ -582,6 +599,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [profileSuccessMsg, setProfileSuccessMsg] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileErrorMsg, setProfileErrorMsg] = useState<string | null>(null);
+
+  // Trạng thái đổi mật khẩu trong hồ sơ
+  const [showPasswordSection, setShowPasswordSection] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
 
   // Trạng thái đổi ảnh đại diện (Cloudinary)
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -635,7 +661,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       setLocalProfile({
         fullName: user.fullName || 'Cán Bộ Phụ Trách',
-        position: user.authority?.position || (isAdmin ? 'Quản trị viên hệ thống' : 'Chỉ huy trực ban cứu hộ'),
+        position: normalizePosition(user.authority?.position),
         organizationName: user.authority?.organizationName || 'Ban Chỉ Huy PCTT & TKCN',
         phone: p,
         email: user.email || 'canbo@sos.gov.vn',
@@ -860,7 +886,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const rawUserName = localProfile.fullName || user?.fullName || (isAdmin ? 'Quản trị viên' : 'Cán bộ điều phối');
   // Loại bỏ các phần chú thích trong ngoặc đơn như (PCTT Liên Chiểu) để họ tên hiển thị gọn gàng, trọn vẹn
   const displayUserName = rawUserName.replace(/\s*\([^)]*\)/g, '').trim() || rawUserName;
-  const displayUserRole = localProfile.position || user?.authority?.position || (isAdmin ? 'Quản trị viên' : 'Chỉ huy cứu hộ');
+  const displayUserRole = normalizePosition(localProfile.position || user?.authority?.position);
   const displayAvatar = localProfile.avatarUrl || user?.avatarUrl || '';
   const userInitial = (displayUserName || 'U').trim().charAt(0).toUpperCase() || 'U';
 
@@ -873,7 +899,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           1. HEADER / LOGO: SOS SYSTEMS & NÚT THU GỌN
           =================================================================== */}
       <div className="sos-sidebar-header">
-        <div className="sos-brand" title="Hỗ Trợ Cứu Nạn">
+        <div className="sos-brand" title="Cứu Hộ Cứu Nạn">
           <div className="sos-brand-logo-wrap">
             <img src="/logoSOS.png" alt="SOS Logo" className="sos-brand-logo" />
             <span className="sos-brand-pulse" />
@@ -881,7 +907,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {!collapsed && (
             <div className="sos-brand-info">
-              <span className="sos-brand-title">Hỗ Trợ Cứu Nạn</span>
+              <span className="sos-brand-title">Cứu Hộ Cứu Nạn</span>
             </div>
           )}
         </div>
@@ -1019,7 +1045,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="sos-user-name" title={displayUserName}>
                   {displayUserName}
                 </span>
-                <span className="sos-user-role" style={{ fontSize: 11, color: '#64748b', display: 'block', lineHeight: 1.2 }} title={displayUserRole}>
+                <span className="sos-user-role" title={displayUserRole}>
                   {displayUserRole}
                 </span>
               </div>
@@ -1134,7 +1160,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                   {/* Bố cục hai cột độc lập */}
                   <div className="sos-profile-columns-grid">
-                    {/* Cột trái: Họ và tên cán bộ → Cơ quan/Đơn vị công tác → Hòm thư điện tử công vụ */}
+                    {/* Cột trái: Họ và tên cán bộ → Hòm thư điện tử công vụ */}
                     <div className="sos-profile-col sos-profile-col-left">
                       <div className="sos-profile-field sos-field-fullname">
                         <label>
@@ -1147,20 +1173,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           value={localProfile.fullName}
                           onChange={(e) => setLocalProfile({ ...localProfile, fullName: e.target.value })}
                           placeholder="VD: Cán Bộ Điều Hành SOS"
-                        />
-                      </div>
-
-                      <div className="sos-profile-field sos-field-organization">
-                        <label>
-                          <i className="bi bi-building"></i>
-                          <span>Cơ quan / Đơn vị công tác:</span>
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={localProfile.organizationName}
-                          onChange={(e) => setLocalProfile({ ...localProfile, organizationName: e.target.value })}
-                          placeholder="VD: Ban Chỉ Huy PCTT & TKCN Quận Hải Châu"
                         />
                       </div>
 
@@ -1179,21 +1191,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </div>
                     </div>
 
-                    {/* Cột phải: Chức vụ/Vị trí → Số điện thoại trực ban → Khối xác thực OTP */}
+                    {/* Cột phải: Số điện thoại trực ban → Khối xác thực OTP */}
                     <div className="sos-profile-col sos-profile-col-right">
-                      <div className="sos-profile-field sos-field-position">
-                        <label>
-                          <i className="bi bi-shield"></i>
-                          <span>Chức vụ / Vị trí:</span>
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={localProfile.position}
-                          onChange={(e) => setLocalProfile({ ...localProfile, position: e.target.value })}
-                          placeholder="VD: Chuyên viên Điều phối Tác chiến"
-                        />
-                      </div>
 
                       <div className="sos-profile-field sos-field-phone">
                         <div className="sos-phone-label-row">
@@ -1378,6 +1377,184 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       />
                     </div>
                   )}
+
+                  {/* Khu vực Đổi mật khẩu tài khoản */}
+                  <div
+                    style={{
+                      marginTop: 14,
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 12,
+                      background: '#f8fafc',
+                      padding: '12px 14px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: 13.5, color: '#0f172a' }}>
+                        <i className="bi bi-key" style={{ color: '#2563eb' }}></i>
+                        <span>Bảo mật &amp; Đổi mật khẩu</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowPasswordSection((prev) => !prev);
+                          setPasswordError(null);
+                          setPasswordSuccess(null);
+                        }}
+                        style={{
+                          border: '1px solid #cbd5e1',
+                          background: '#ffffff',
+                          color: '#0f172a',
+                          borderRadius: 8,
+                          padding: '5px 12px',
+                          fontSize: 12.5,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {showPasswordSection ? 'Thu gọn' : 'Đổi mật khẩu'}
+                      </button>
+                    </div>
+
+                    {showPasswordSection && (
+                      <div style={{ marginTop: 12, display: 'grid', gap: 10 }}>
+                        <div className="sos-profile-field" style={{ marginBottom: 0 }}>
+                          <label>
+                            <span>Mật khẩu hiện tại:</span>
+                          </label>
+                          <input
+                            type="password"
+                            value={oldPassword}
+                            onChange={(e) => {
+                              setOldPassword(e.target.value);
+                              if (passwordError) setPasswordError(null);
+                            }}
+                            placeholder="Nhập mật khẩu hiện tại..."
+                            autoComplete="current-password"
+                          />
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                          <div className="sos-profile-field" style={{ marginBottom: 0 }}>
+                            <label>
+                              <span>Mật khẩu mới:</span>
+                            </label>
+                            <input
+                              type="password"
+                              value={newPassword}
+                              onChange={(e) => {
+                                setNewPassword(e.target.value);
+                                if (passwordError) setPasswordError(null);
+                              }}
+                              placeholder="Ít nhất 8 ký tự, chữ hoa, số..."
+                              autoComplete="new-password"
+                            />
+                          </div>
+
+                          <div className="sos-profile-field" style={{ marginBottom: 0 }}>
+                            <label>
+                              <span>Xác nhận mật khẩu mới:</span>
+                            </label>
+                            <input
+                              type="password"
+                              value={confirmPassword}
+                              onChange={(e) => {
+                                setConfirmPassword(e.target.value);
+                                if (passwordError) setPasswordError(null);
+                              }}
+                              placeholder="Nhập lại mật khẩu mới..."
+                              autoComplete="new-password"
+                            />
+                          </div>
+                        </div>
+
+                        {passwordError && (
+                          <div className="sos-profile-form-error" style={{ marginTop: 2 }}>
+                            <i className="bi bi-exclamation-triangle"></i> {passwordError}
+                          </div>
+                        )}
+
+                        {passwordSuccess && (
+                          <div
+                            style={{
+                              padding: '8px 12px',
+                              borderRadius: 8,
+                              background: '#ecfdf5',
+                              border: '1px solid #a7f3d0',
+                              color: '#047857',
+                              fontSize: 13,
+                              fontWeight: 500,
+                            }}
+                          >
+                            <i className="bi bi-check-circle-fill" style={{ marginRight: 6 }}></i>
+                            {passwordSuccess}
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                          <button
+                            type="button"
+                            disabled={changingPassword}
+                            onClick={async () => {
+                              setPasswordError(null);
+                              setPasswordSuccess(null);
+
+                              if (!oldPassword.trim()) {
+                                setPasswordError('Vui lòng nhập mật khẩu hiện tại.');
+                                return;
+                              }
+                              if (!newPassword.trim()) {
+                                setPasswordError('Vui lòng nhập mật khẩu mới.');
+                                return;
+                              }
+                              if (newPassword !== confirmPassword) {
+                                setPasswordError('Xác nhận mật khẩu mới không khớp.');
+                                return;
+                              }
+
+                              setChangingPassword(true);
+                              try {
+                                const res = await changeUserPassword({
+                                  oldPassword,
+                                  newPassword,
+                                });
+                                if (res.success) {
+                                  setPasswordSuccess(res.message || 'Đổi mật khẩu thành công!');
+                                  setOldPassword('');
+                                  setNewPassword('');
+                                  setConfirmPassword('');
+                                } else {
+                                  setPasswordError(res.message || 'Không thể đổi mật khẩu.');
+                                }
+                              } catch (err: any) {
+                                setPasswordError(err?.message || 'Lỗi khi đổi mật khẩu.');
+                              } finally {
+                                setChangingPassword(false);
+                              }
+                            }}
+                            style={{
+                              border: 'none',
+                              background: changingPassword ? '#93c5fd' : '#0284c7',
+                              color: '#ffffff',
+                              borderRadius: 8,
+                              padding: '8px 16px',
+                              fontSize: 13,
+                              fontWeight: 600,
+                              cursor: changingPassword ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            {changingPassword ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   {profileErrorMsg && (
                     <div className="sos-profile-form-error">

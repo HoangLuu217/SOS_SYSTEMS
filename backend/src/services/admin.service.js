@@ -17,6 +17,10 @@ const fs = require('fs');
 const ApiError = require('../utils/apiError');
 const { hashToken } = require('../utils/token.util');
 
+const STATS_CACHE_TTL_MS = 15 * 1000;
+let statisticsCache = { data: null, expiresAt: 0 };
+let statisticsInFlight = null;
+
 const getLogoPath = () => {
   const backendAsset = path.join(__dirname, '../../assets/logoSOS.png');
   if (fs.existsSync(backendAsset)) return backendAsset;
@@ -90,7 +94,8 @@ class AdminService {
         .select('-passwordHash')
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       User.countDocuments(filter),
     ]);
 
@@ -183,11 +188,13 @@ class AdminService {
 
       let matchedAreaDoc = null;
       if (newAreaId && mongoose.Types.ObjectId.isValid(newAreaId)) {
-        matchedAreaDoc = await AdministrativeArea.findById(newAreaId);
+        matchedAreaDoc = await AdministrativeArea.findById(newAreaId).select('_id name').lean();
       }
       if (!matchedAreaDoc && newAreaName) {
         const cleanName = newAreaName.replace(/^(Phường|Xã|Quận|Huyện)\s+/i, '').trim();
-        matchedAreaDoc = await AdministrativeArea.findOne({ name: new RegExp(cleanName, 'i') });
+        matchedAreaDoc = await AdministrativeArea.findOne({ name: new RegExp(cleanName, 'i') })
+          .select('_id name')
+          .lean();
       }
 
       const finalAreaId = matchedAreaDoc ? matchedAreaDoc._id : (newAreaId && mongoose.Types.ObjectId.isValid(newAreaId) ? newAreaId : (user.authority?.areaId || new mongoose.Types.ObjectId()));
@@ -320,7 +327,7 @@ class AdminService {
 
       let matchedAreaDoc = null;
       if (inputAreaId && mongoose.Types.ObjectId.isValid(inputAreaId)) {
-        matchedAreaDoc = await AdministrativeArea.findById(inputAreaId);
+        matchedAreaDoc = await AdministrativeArea.findById(inputAreaId).select('_id name').lean();
       }
       if (!matchedAreaDoc && (inputAreaName || inputAreaId)) {
         const cleanName = (inputAreaName || inputAreaId)
@@ -331,10 +338,14 @@ class AdminService {
           .trim();
         matchedAreaDoc = await AdministrativeArea.findOne({
           name: new RegExp(cleanName, 'i'),
-        });
+        })
+          .select('_id name')
+          .lean();
       }
       if (!matchedAreaDoc) {
-        matchedAreaDoc = (await AdministrativeArea.findOne({ name: /Hòa Cường|Cẩm Lệ|Hải Châu/i })) || (await AdministrativeArea.findOne({}));
+        matchedAreaDoc =
+          (await AdministrativeArea.findOne({ name: /Hòa Cường|Cẩm Lệ|Hải Châu/i }).select('_id name').lean()) ||
+          (await AdministrativeArea.findOne({}).select('_id name').lean());
       }
 
       const finalAreaId = matchedAreaDoc ? matchedAreaDoc._id : new mongoose.Types.ObjectId();
@@ -487,42 +498,75 @@ class AdminService {
 
         const apiKey = process.env.RESEND_API_KEY;
         if (apiKey) {
-          try {
-            const transporter = nodemailer.createTransport({
-              host: 'smtp.resend.com',
-              port: 465,
-              secure: true,
-              auth: {
-                user: 'resend',
-                pass: apiKey,
-              },
-            });
-            await transporter.sendMail(mailOptions);
-            emailSent = true;
-            console.log(`[Admin Create User] Đã gửi thông tin tài khoản và mật khẩu tới ${email} qua Resend SMTP`);
-          } catch (smtpErr) {
-            console.warn(`[Admin Create User Resend SMTP fallback to REST API]: ${smtpErr.message}`);
-            const resp = await fetch('https://api.resend.com/emails', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                from: fromAddress,
-                to: [email.trim().toLowerCase()],
-                subject: mailOptions.subject,
-                html: mailOptions.html,
-                text: mailOptions.text,
-              }),
-            });
-            if (resp.ok) {
-              emailSent = true;
-              console.log(`[Admin Create User] Đã gửi thông tin tài khoản tới ${email} qua Resend REST API`);
-            } else {
+          const sendEmailTask = async () => {
+            // 1. ƯU TIÊN 1: Resend REST API HTTPS (port 443) - Cực nhanh (~200ms), 100% không bị firewall Cloud (Render/Railway/Vercel) chặn
+            try {
+              const resp = await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${apiKey}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  from: fromAddress,
+                  to: [email.trim().toLowerCase()],
+                  subject: mailOptions.subject,
+                  html: mailOptions.html,
+                  text: mailOptions.text,
+                }),
+                signal: AbortSignal.timeout(6000),
+              });
+              if (resp.ok) {
+                console.log(`[Admin Create User] Đã gửi thông tin tài khoản tới ${email} qua Resend REST API`);
+                return true;
+              }
               const errBody = await resp.text();
-              throw new Error(`Resend API error: ${errBody}`);
+              console.warn(`[Admin Create User Resend REST API warning]: ${errBody}. Đang thử SMTP...`);
+            } catch (apiErr) {
+              console.warn(`[Admin Create User Resend REST API error]: ${apiErr.message}. Đang thử SMTP...`);
             }
+
+            // 2. Dự phòng Resend SMTP với connectionTimeout ngắn (2500ms) để không bao giờ treo tiến trình trên Cloud
+            try {
+              const transporter = nodemailer.createTransport({
+                host: 'smtp.resend.com',
+                port: 465,
+                secure: true,
+                connectionTimeout: 2500,
+                greetingTimeout: 2500,
+                socketTimeout: 4000,
+                auth: {
+                  user: 'resend',
+                  pass: apiKey,
+                },
+              });
+              await transporter.sendMail(mailOptions);
+              console.log(`[Admin Create User] Đã gửi thông tin tài khoản và mật khẩu tới ${email} qua Resend SMTP`);
+              return true;
+            } catch (smtpErr) {
+              console.error('[Admin Create User Email Error]:', smtpErr.message);
+              return false;
+            }
+          };
+
+          // Chờ tối đa 1.2 giây để lấy kết quả email trước khi trả lời Client;
+          // Nếu sau 1.2s email chưa gửi xong (do mạng chậm), cho chạy ngầm trong background và trả về response ngay để Client không bị treo spinner!
+          try {
+            const emailResult = await Promise.race([
+              sendEmailTask(),
+              new Promise((resolve) => setTimeout(() => resolve('TIMEOUT'), 1200)),
+            ]);
+            if (emailResult === true) {
+              emailSent = true;
+            } else if (emailResult === 'TIMEOUT') {
+              console.log(`[Admin Create User] Email gửi ngầm background tới ${email}`);
+              sendEmailTask().then((ok) => {
+                if (ok) console.log(`[Admin Create User Background] Gửi email thành công tới ${email}`);
+              }).catch((e) => console.warn(`[Admin Create User Background Error]:`, e.message));
+            }
+          } catch (taskErr) {
+            console.error('[Admin Create User Email Task Error]:', taskErr.message);
+            emailError = taskErr.message;
           }
         }
       } catch (err) {
@@ -620,7 +664,8 @@ class AdminService {
         : (reason && reason.trim())
           ? `Tư cách Cứu hộ viên của bạn đã bị chính quyền thu hồi/từ chối. Lý do: ${reason.trim()}`
           : 'Hồ sơ đăng ký Cứu hộ viên của bạn đã bị thu hồi hoặc từ chối bởi Ban chỉ huy địa phương.';
-      const broadcastId = `rescuer_verification_${userIdStr}_${verificationStatus}`;
+      const eventTimestamp = Date.now();
+      const broadcastId = `rescuer_verification_${userIdStr}_${verificationStatus}_${eventTimestamp}`;
 
       const notifDoc = await Notification.create({
         userId: user._id,
@@ -634,7 +679,7 @@ class AdminService {
           verificationStatus,
           userId: userIdStr,
           broadcastId,
-          timestamp: Date.now(),
+          timestamp: eventTimestamp,
         },
       });
 
@@ -704,6 +749,8 @@ class AdminService {
             data: {
               type: 'RESCUER_VERIFICATION',
               verificationStatus,
+              broadcastId,
+              timestamp: eventTimestamp,
             },
           });
         }
@@ -720,86 +767,96 @@ class AdminService {
   // ─────────────────────────────────────────────
 
   /**
-   * Tổng hợp thống kê toàn hệ thống
+   * Tổng hợp thống kê toàn hệ thống (dùng $facet giảm số round-trip Mongo + cache 15s)
    */
   async getStatistics() {
-    const now = new Date();
+    if (statisticsCache.data && Date.now() < statisticsCache.expiresAt) {
+      return statisticsCache.data;
+    }
+    if (statisticsInFlight) {
+      return statisticsInFlight;
+    }
 
-    const [
-      totalUsers,
-      totalCitizens,
-      totalRescuers,
-      totalTeams,
-      totalVehicles,
-      totalSos,
-      sosByStatus,
-      sosByPriority,
-      sosByEmergencyType,
-      completedMissions,
-      activeAlerts,
-    ] = await Promise.all([
-      // Tổng users
-      User.countDocuments(),
+    statisticsInFlight = (async () => {
+      try {
+        const now = new Date();
 
-      // Tổng citizens
-      User.countDocuments({ roles: 'CITIZEN' }),
+        const [
+          userFacetRes,
+          sosFacetRes,
+          totalTeams,
+          totalVehicles,
+          completedMissions,
+          activeAlerts,
+        ] = await Promise.all([
+          User.aggregate([
+            {
+              $facet: {
+                total: [{ $count: 'count' }],
+                citizens: [{ $match: { roles: 'CITIZEN' } }, { $count: 'count' }],
+                rescuers: [{ $match: { roles: 'RESCUER' } }, { $count: 'count' }],
+              },
+            },
+          ]),
+          SosRequest.aggregate([
+            {
+              $facet: {
+                total: [{ $count: 'count' }],
+                byStatus: [
+                  { $group: { _id: '$status', count: { $sum: 1 } } },
+                  { $project: { status: '$_id', count: 1, _id: 0 } },
+                  { $sort: { status: 1 } },
+                ],
+                byPriority: [
+                  { $group: { _id: '$priority', count: { $sum: 1 } } },
+                  { $project: { priority: '$_id', count: 1, _id: 0 } },
+                  { $sort: { priority: 1 } },
+                ],
+                byEmergencyType: [
+                  { $group: { _id: '$emergencyType', count: { $sum: 1 } } },
+                  { $project: { emergencyType: '$_id', count: 1, _id: 0 } },
+                  { $sort: { emergencyType: 1 } },
+                ],
+              },
+            },
+          ]),
+          RescueTeam.countDocuments(),
+          Vehicle.countDocuments(),
+          SosAssignment.countDocuments({ status: 'COMPLETED' }),
+          HazardReport.countDocuments({ status: 'APPROVED' }),
+        ]);
 
-      // Tổng rescuers
-      User.countDocuments({ roles: 'RESCUER' }),
+        const userFacet = userFacetRes[0] || {};
+        const sosFacet = sosFacetRes[0] || {};
 
-      // Tổng đội cứu hộ
-      RescueTeam.countDocuments(),
+        const result = {
+          overview: {
+            totalUsers: userFacet.total?.[0]?.count || 0,
+            totalCitizens: userFacet.citizens?.[0]?.count || 0,
+            totalRescuers: userFacet.rescuers?.[0]?.count || 0,
+            totalTeams,
+            totalVehicles,
+            totalSos: sosFacet.total?.[0]?.count || 0,
+            completedMissions,
+            activeAlerts,
+          },
+          sosByStatus: sosFacet.byStatus || [],
+          sosByPriority: sosFacet.byPriority || [],
+          sosByEmergencyType: sosFacet.byEmergencyType || [],
+          generatedAt: now,
+        };
 
-      // Tổng phương tiện
-      Vehicle.countDocuments(),
+        statisticsCache = {
+          data: result,
+          expiresAt: Date.now() + STATS_CACHE_TTL_MS,
+        };
+        return result;
+      } finally {
+        statisticsInFlight = null;
+      }
+    })();
 
-      // Tổng SOS requests
-      SosRequest.countDocuments(),
-
-      // SOS phân theo status
-      SosRequest.aggregate([
-        { $group: { _id: '$status', count: { $sum: 1 } } },
-        { $project: { status: '$_id', count: 1, _id: 0 } },
-        { $sort: { status: 1 } },
-      ]),
-
-      // SOS phân theo priority
-      SosRequest.aggregate([
-        { $group: { _id: '$priority', count: { $sum: 1 } } },
-        { $project: { priority: '$_id', count: 1, _id: 0 } },
-        { $sort: { priority: 1 } },
-      ]),
-
-      // SOS phân theo emergencyType
-      SosRequest.aggregate([
-        { $group: { _id: '$emergencyType', count: { $sum: 1 } } },
-        { $project: { emergencyType: '$_id', count: 1, _id: 0 } },
-        { $sort: { emergencyType: 1 } },
-      ]),
-
-      // Nhiệm vụ hoàn thành (SosAssignment COMPLETED)
-      SosAssignment.countDocuments({ status: 'COMPLETED' }),
-
-      // Điểm nguy hiểm đang hoạt động (APPROVED)
-      HazardReport.countDocuments({ status: 'APPROVED' }),
-    ]);
-
-    return {
-      overview: {
-        totalUsers,
-        totalCitizens,
-        totalRescuers,
-        totalTeams,
-        totalVehicles,
-        totalSos,
-        completedMissions,
-        activeAlerts,
-      },
-      sosByStatus,
-      sosByPriority,
-      sosByEmergencyType,
-      generatedAt: now,
-    };
+    return statisticsInFlight;
   }
 }
 

@@ -111,8 +111,8 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
 
   // Vai trò hệ thống
   const isRescuer =
-    Boolean(user?.roles?.includes('RESCUER')) ||
-    Boolean(user?.roles?.includes('LEADER'));
+    Boolean(user?.roles?.includes('LEADER')) ||
+    Boolean(user?.roles?.includes('RESCUER') && user?.rescuer?.verificationStatus === 'VERIFIED');
   const roleName = isRescuer
     ? (user?.roles?.includes('LEADER') ? 'Đội trưởng cứu hộ' : 'Nhân viên cứu hộ')
     : 'Người dân';
@@ -1431,7 +1431,7 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
             </View>
             <Text style={styles.dialogTitle}>Cập nhật thành công!</Text>
             <Text style={styles.dialogMessage}>
-              Hồ sơ thông tin cá nhân của bạn đã được cập nhật thành công lên hệ thống hỗ trợ cứu nạn.
+              Hồ sơ thông tin cá nhân của bạn đã được cập nhật thành công lên hệ thống cứu hộ cứu nạn.
             </Text>
             <TouchableOpacity
               style={styles.dialogButton}

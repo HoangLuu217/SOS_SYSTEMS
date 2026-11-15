@@ -205,6 +205,10 @@ export const getHazardMarkerHtml = (type: string) => {
 
 export const EMERGENCY_TYPE_LABELS: Record<string, string> = {
   FLOOD: 'Ngập lụt nước dâng',
+  EVACUATION: 'Sơ tán khẩn cấp',
+  FOOD: 'Tiếp tế lương thực',
+  RELIEF: 'Cứu trợ khẩn cấp',
+  WATER: 'Thiếu nước sạch',
   LANDSLIDE: 'Sạt lở đất đá',
   MEDICAL: 'Cấp cứu y tế / Thương tích',
   FIRE: 'Hỏa hoạn / Cháy nổ',
@@ -214,6 +218,29 @@ export const EMERGENCY_TYPE_LABELS: Record<string, string> = {
   MISSING_PERSON: 'Tìm kiếm người mất tích',
   POLICE: 'An ninh trật tự',
   OTHER: 'Tình huống khẩn cấp khác',
+};
+
+export const PRIORITY_GROUP_LABELS: Record<string, string> = {
+  CHILDREN: 'Trẻ em',
+  CHILD_UNDER_5: 'Trẻ em dưới 5 tuổi',
+  INFANT: 'Trẻ sơ sinh (< 1 tuổi)',
+  ELDERLY: 'Người cao tuổi',
+  PREGNANT: 'Phụ nữ mang thai',
+  INJURED: 'Người bị thương',
+  DISABLED: 'Người khuyết tật',
+  DISABILITY: 'Người khuyết tật / Đi lại khó khăn',
+  SICK_SEVERE: 'Người bệnh nặng',
+  KIDNEY_DIALYSIS: 'Bệnh nhân chạy thận',
+  NON_SWIMMER: 'Người không biết bơi',
+  ISOLATED_ROOF: 'Mắc kẹt trên mái nhà',
+  POOR_HOUSEHOLD: 'Hộ gia đình khó khăn',
+};
+
+/** Chuẩn hóa mã nhóm đối tượng ưu tiên (tiếng Anh hoặc tiếng Việt) sang nhãn tiếng Việt. */
+export const formatPriorityGroupLabel = (value: string): string => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return '';
+  return PRIORITY_GROUP_LABELS[trimmed.toUpperCase()] || trimmed;
 };
 
 // Component Bản đồ nhỏ (Mini Map) cho điểm nguy hiểm với khả năng tương tác chọn tọa độ

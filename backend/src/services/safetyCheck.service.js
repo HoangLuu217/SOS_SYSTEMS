@@ -344,7 +344,9 @@ class SafetyCheckService {
       if (query.areaId && query.areaId !== 'ALL' && mongoose.Types.ObjectId.isValid(query.areaId)) {
         const filterArea = await AdministrativeArea.findById(query.areaId).select('_id type').lean();
         if (filterArea && filterArea.type === 'PROVINCE') {
-          const { areaIds } = await getDescendantAreaIds(filterArea._id, AdministrativeArea);
+          const { areaIds } = await getDescendantAreaIds(filterArea._id, AdministrativeArea, {
+            includeBoundaries: false,
+          });
           filter.areaId = { $in: areaIds };
         } else {
           filter.areaId = query.areaId;

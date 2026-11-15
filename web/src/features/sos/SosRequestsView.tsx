@@ -34,7 +34,7 @@ import {
   reanalyzeSosAiApi,
 } from '@/api';
 import { onSosCreated, onSosUpdated, onSosDeleted, getSocket } from '@/services/socketService';
-import { EMERGENCY_TYPE_LABELS } from '@/features/hazards';
+import { EMERGENCY_TYPE_LABELS, formatPriorityGroupLabel } from '@/features/hazards';
 import { toast } from '@/components/common/toast';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
 import { getShoreHandoffVehicleStatusMeta } from '@/utils/shoreHandoffStatus';
@@ -1711,11 +1711,13 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                 {/* Nhóm đối tượng ưu tiên đặc biệt */}
                 {selectedSosDetail.priorityGroups && selectedSosDetail.priorityGroups.length > 0 && (
                   <div className="sos-priority-groups-wrap">
-                    <span className="priority-groups-label">Đối tượng cần ưu tiên đặc biệt:</span>
+                    <span className="priority-groups-label" style={{ color: '#0f172a' }}>
+                      Đối tượng cần ưu tiên đặc biệt:
+                    </span>
                     <div className="priority-chips">
                       {selectedSosDetail.priorityGroups.map((grp, idx) => (
-                        <span key={idx} className="priority-chip-item">
-                          {grp}
+                        <span key={idx} className="priority-chip-item" style={{ color: '#0f172a' }}>
+                          {formatPriorityGroupLabel(grp)}
                         </span>
                       ))}
                     </div>
@@ -1925,7 +1927,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           {/* Nhóm ảnh 1: Đội đi cứu */}
                           <div>
                             <div style={{ fontSize: 11.5, fontWeight: 800, color: '#166534', marginBottom: 5 }}>
-                              🛟 Đội đi cứu: {rescueTeamLabel} ({primarySectionPhotos.length} ảnh)
+                              Đội đi cứu: {rescueTeamLabel} ({primarySectionPhotos.length} ảnh)
                             </div>
                             {primarySectionPhotos.length > 0 ? (
                               <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }}>
@@ -1968,7 +1970,7 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                           {/* Nhóm ảnh 2: Đội xe cứu thương / tiếp vận */}
                           <div style={{ borderTop: '1px dashed #bbf7d0', paddingTop: 8 }}>
                             <div style={{ fontSize: 11.5, fontWeight: 800, color: '#0369a1', marginBottom: 5 }}>
-                              🚑 Đội xe tiếp vận: {handoffTeamLabel}
+                              Đội xe tiếp vận: {handoffTeamLabel}
                               {handoffVehiclePlate ? ` (${handoffVehiclePlate})` : ''} ({handoffTeamPhotos.length} ảnh)
                             </div>
                             {handoffTeamPhotos.length > 0 ? (
@@ -2163,14 +2165,25 @@ export const SosRequestsView: React.FC<SosRequestsViewProps> = ({ onOpenMap, use
                     <div className="sos-panel-card-title" style={{ color: '#475569', marginBottom: 6 }}>
                       <span>ĐIỂM HẸN XE ĐÓN BỜ TIẾP VẬN</span>
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>
-                      {selectedSosDetail.shoreHandoff.landingPoint?.name || 'Điểm đón ven bờ'}
-                    </div>
-                    {selectedSosDetail.shoreHandoff.landingPoint?.address && (
-                      <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
-                        {selectedSosDetail.shoreHandoff.landingPoint.address}
-                      </div>
-                    )}
+                    {(() => {
+                      const landing = selectedSosDetail.shoreHandoff.landingPoint;
+                      const name = (landing?.name || '').trim();
+                      const address = (landing?.address || '').trim();
+                      const isDuplicate = !address || name.toLowerCase() === address.toLowerCase();
+
+                      return (
+                        <>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>
+                            {name || address || 'Điểm đón ven bờ'}
+                          </div>
+                          {!isDuplicate && (
+                            <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>
+                              {address}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                     {(() => {
                       const handoff = selectedSosDetail.shoreHandoff;
                       const hasVehicleAssigned =

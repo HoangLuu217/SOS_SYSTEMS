@@ -261,7 +261,19 @@ async function reverseGeocode(lat, lng) {
     }
   );
   if (res.ok && data?.display_name) {
-    return String(data.display_name);
+    const raw = String(data.display_name);
+    const cleanTokens = raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s && !/^\d{4,6}$/.test(s) && !/^việt\s*nam$/i.test(s));
+
+    const deduped = [];
+    for (const token of cleanTokens) {
+      if (!deduped.some((d) => d.toLowerCase() === token.toLowerCase())) {
+        deduped.push(token);
+      }
+    }
+    return deduped.slice(0, 3).join(', ');
   }
   return '';
 }

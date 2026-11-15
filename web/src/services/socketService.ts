@@ -6,8 +6,14 @@ const joinedChannels = new Set<string>();
 let registeredUserId: string | null = null;
 
 const getSocketUrl = (): string => {
-  if (import.meta.env.VITE_BACKEND_URL) {
-    return import.meta.env.VITE_BACKEND_URL.replace(/\/+$/, '');
+  const isRemoteHost =
+    typeof window !== 'undefined' &&
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1';
+
+  const backendUrl = import.meta.env.VITE_BACKEND_URL;
+  if (backendUrl && !(isRemoteHost && /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(backendUrl))) {
+    return backendUrl.replace(/\/+$/, '');
   }
   const apiUrl = import.meta.env.VITE_API_URL;
   if (apiUrl && /^https?:\/\//i.test(apiUrl)) {
@@ -29,8 +35,8 @@ export const getSocket = (): Socket => {
     const socketUrl = getSocketUrl();
 
     socket = io(socketUrl, {
-      transports: ['websocket', 'polling'],
-      withCredentials: true,
+      transports: ['polling', 'websocket'],
+      withCredentials: false,
       autoConnect: true,
       reconnection: true,
       reconnectionAttempts: 10,
@@ -180,8 +186,23 @@ export const onAssignmentUpdated = (callback: (assignment: any) => void): (() =>
  */
 export const onRescuerApplicationSubmitted = (callback: (newApplicant: any) => void): (() => void) => {
   const s = getSocket();
+  let lastEventTime = 0;
+  let lastEventSignature = '';
+
   const handler = (data: any) => {
-    console.log('📝 [Socket.IO Web] Nhận hồ sơ cứu hộ mới Realtime:', data);
+    const id = data?._id || data?.userId || '';
+    const updatedAt = data?.updatedAt || data?.rescuer?.verificationStatus || '';
+    const signature = `${id}-${updatedAt}`;
+    const now = Date.now();
+
+    // Chống trùng lặp do backend phát đồng thời cả 'rescuer:application_submitted' và 'rescuer:pending_updated'
+    if (signature && signature === lastEventSignature && now - lastEventTime < 1000) {
+      return;
+    }
+    lastEventSignature = signature;
+    lastEventTime = now;
+
+    console.log('📝 [Socket.IO Web] Nhận hồ sơ cứu hộ mới/cập nhật Realtime:', data);
     callback(data);
   };
 
@@ -201,7 +222,22 @@ export const onRescuerApplicationSubmitted = (callback: (newApplicant: any) => v
  */
 export const onRescuerVerificationChanged = (callback: (data: any) => void): (() => void) => {
   const s = getSocket();
+  let lastEventTime = 0;
+  let lastEventSignature = '';
+
   const handler = (data: any) => {
+    const id = data?.userId || data?._id || '';
+    const status = data?.verificationStatus || data?.status || '';
+    const signature = `${id}-${status}`;
+    const now = Date.now();
+
+    // Chống trùng lặp do backend phát đồng thời cả 'rescuer:verification_status_changed' và 'rescuer:verified'
+    if (signature && signature === lastEventSignature && now - lastEventTime < 1000) {
+      return;
+    }
+    lastEventSignature = signature;
+    lastEventTime = now;
+
     console.log('✅ [Socket.IO Web] Trạng thái cứu hộ viên thay đổi Realtime:', data);
     callback(data);
   };
@@ -331,5 +367,40 @@ export const onRescueTeamsUpdated = (callback: (data: any) => void): (() => void
   s.on('rescue_teams_updated', callback);
   return () => {
     s.off('rescue_teams_updated', callback);
+  };
+};
+
+/**
+ * Lắng nghe cập nhật phương tiện cứu hộ theo thời gian thực
+ */
+export const onVehicleUpdated = (callback: (data: any) => void): (() => void) => {
+  const s = getSocket();
+  s.on('vehicle:updated', callback);
+  return () => {
+    s.off('vehicle:updated', callback);
+  };
+};
+
+/**
+ * Lắng nghe cập nhật trang thiết bị / vật tư theo thời gian thực
+ */
+export const onEquipmentUpdated = (callback: (data: any) => void): (() => void) => {
+  const s = getSocket();
+  s.on('equipment:updated', callback);
+  s.on('equipment:change', callback);
+  return () => {
+    s.off('equipment:updated', callback);
+    s.off('equipment:change', callback);
+  };
+};
+
+/**
+ * Lắng nghe nhật ký sự kiện (AuditLog) mới được ghi nhận theo thời gian thực
+ */
+export const onAuditCreated = (callback: (data: any) => void): (() => void) => {
+  const s = getSocket();
+  s.on('audit:created', callback);
+  return () => {
+    s.off('audit:created', callback);
   };
 };

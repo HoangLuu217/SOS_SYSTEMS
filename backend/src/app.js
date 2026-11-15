@@ -3,8 +3,10 @@ if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
   require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 }
 const express = require('express');
+const compression = require('compression');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const mongoose = require('mongoose');
 const routes = require('./routes');
 const errorHandler = require('./middlewares/errorHandler');
 const ApiError = require('./utils/apiError');
@@ -33,7 +35,7 @@ const allowedOrigins = new Set([
   ...envOrigins,
   'https://sos-systems.vercel.app',
   'http://localhost:5173',
-  'http://127.0.0.1:5173',
+  'https://cuuhocuunan.io.vn',
   'http://localhost:3000',
   'http://localhost:8081',
 ]);
@@ -57,6 +59,18 @@ app.use(
       return callback(new ApiError(403, 'Chặn bởi CORS'));
     },
     credentials: true,
+  })
+);
+app.use(
+  compression({
+    threshold: 1024,
+    filter: (req, res) => {
+      // Không nén SSE stream để event gửi xuống client ngay lập tức
+      if (req.path.includes('/notifications/stream') || req.headers.accept === 'text/event-stream') {
+        return false;
+      }
+      return compression.filter(req, res);
+    },
   })
 );
 app.use(cookieParser());
@@ -94,16 +108,11 @@ const SKIP_DB_PATHS = new Set([
   '/favicon.png',
 ]);
 
-app.use(async (req, res, next) => {
-  if (req.method === 'OPTIONS' || SKIP_DB_PATHS.has(req.path)) {
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS' || SKIP_DB_PATHS.has(req.path) || mongoose.connection.readyState === 1) {
     return next();
   }
-  try {
-    await connectDatabase();
-    return next();
-  } catch (err) {
-    return next(err);
-  }
+  connectDatabase().then(() => next()).catch(next);
 });
 
 // API Routes (Hỗ trợ cả tiền tố /api và truy cập trực tiếp theo đặc tả REST)
