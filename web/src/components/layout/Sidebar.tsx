@@ -258,13 +258,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             const normCommune = normalizeStr(cleanLocalCommune);
 
             rescuers = rescuers.filter((u: any) => {
-              if (userAreaId && (u.authority?.areaId === userAreaId || u.rescuer?.preferredAreaId === userAreaId)) {
+              const rescuerAreaId = u.rescuer?.areaId?._id || u.rescuer?.areaId || u.areaId?._id || u.areaId || u.citizen?.areaId?._id || u.citizen?.areaId;
+              if (userAreaId && (u.authority?.areaId === userAreaId || u.rescuer?.preferredAreaId === userAreaId || String(rescuerAreaId || '') === String(userAreaId))) {
                 return true;
               }
               const addrStr = typeof u.address === 'string'
                 ? u.address
                 : `${u.address?.street || ''} ${u.address?.communeName || u.address?.ward || ''} ${u.address?.province || ''}`;
-              const target = `${u.rescuer?.targetCommune || ''} ${addrStr}`.toLowerCase();
+              const target = `${u.rescuer?.areaName || ''} ${u.rescuer?.targetCommune || ''} ${addrStr}`.toLowerCase();
               return (cleanLocalCommune && target.includes(cleanLocalCommune)) || (normCommune && normalizeStr(target).includes(normCommune));
             });
           }

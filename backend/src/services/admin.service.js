@@ -620,7 +620,8 @@ class AdminService {
         : (reason && reason.trim())
           ? `Tư cách Cứu hộ viên của bạn đã bị chính quyền thu hồi/từ chối. Lý do: ${reason.trim()}`
           : 'Hồ sơ đăng ký Cứu hộ viên của bạn đã bị thu hồi hoặc từ chối bởi Ban chỉ huy địa phương.';
-      const broadcastId = `rescuer_verification_${userIdStr}_${verificationStatus}`;
+      const eventTimestamp = Date.now();
+      const broadcastId = `rescuer_verification_${userIdStr}_${verificationStatus}_${eventTimestamp}`;
 
       const notifDoc = await Notification.create({
         userId: user._id,
@@ -634,7 +635,7 @@ class AdminService {
           verificationStatus,
           userId: userIdStr,
           broadcastId,
-          timestamp: Date.now(),
+          timestamp: eventTimestamp,
         },
       });
 
@@ -704,6 +705,8 @@ class AdminService {
             data: {
               type: 'RESCUER_VERIFICATION',
               verificationStatus,
+              broadcastId,
+              timestamp: eventTimestamp,
             },
           });
         }

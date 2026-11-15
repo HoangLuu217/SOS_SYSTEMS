@@ -347,6 +347,11 @@ export const RescuerApprovalView: React.FC<RescuerApprovalViewProps> = ({ user }
 
         // 100% dữ liệu thật từ DB, không mock, không fallback
         setApplicants(transformed);
+        setSelectedApplicant((prev) => {
+          if (!prev) return prev;
+          const updated = transformed.find((a) => a.id === prev.id);
+          return updated ? { ...prev, ...updated, history: prev.history } : prev;
+        });
       } else {
         setApplicants([]);
       }

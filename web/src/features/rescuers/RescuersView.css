@@ -1696,10 +1696,11 @@
 }
 
 .pending-members-section {
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  border-radius: 10px;
-  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f1f5f9;
 }
 
 .pending-members-header {
@@ -1712,50 +1713,52 @@
 
 .drawer-member-card.pending {
   background: #ffffff;
-  border: 1px solid #fde68a;
-  border-left: 3px solid #f59e0b;
+  border: 1px solid #e2e8f0;
 }
 
 .member-role-badge.pending {
-  background: #fef3c7;
+  background: #f8fafc;
   color: #b45309;
-  border: 1px solid #fde68a;
-  font-size: 11px;
+  border: 1px solid #e2e8f0;
+  font-size: 10.5px;
   font-weight: 700;
   padding: 2px 7px;
-  border-radius: 9999px;
+  border-radius: 4px;
+  text-transform: none;
 }
 
 .member-action-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 5px 10px;
-  border-radius: 6px;
-  font-size: 11.5px;
-  font-weight: 700;
+  padding: 6px 11px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   border: 1px solid transparent;
 }
 
 .member-action-btn.approve {
-  background: #16a34a;
+  background: #0284c7;
   color: #ffffff;
 }
 
 .member-action-btn.approve:hover:not(:disabled) {
-  background: #15803d;
+  background: #0369a1;
 }
 
 .member-action-btn.reject {
   background: #ffffff;
-  color: #dc2626;
-  border-color: #fca5a5;
+  color: #64748b;
+  border-color: #e2e8f0;
 }
 
 .member-action-btn.reject:hover:not(:disabled) {
-  background: #fee2e2;
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
 }
 
 .member-action-btn:disabled {

@@ -111,7 +111,6 @@ const rescueTeamSchema = new mongoose.Schema(
       type: {
         type: String,
         enum: ['Point'],
-        default: 'Point',
       },
       coordinates: {
         type: [Number],
@@ -157,5 +156,22 @@ rescueTeamSchema.index({ leaderId: 1 });
 rescueTeamSchema.index({ 'members.rescuerId': 1 });
 rescueTeamSchema.index({ status: 1 });
 rescueTeamSchema.index({ baseLocation: '2dsphere' }, { sparse: true });
+
+rescueTeamSchema.pre('save', async function () {
+  const coords = this.baseLocation?.coordinates;
+  const hasValidCoords =
+    Array.isArray(coords) &&
+    coords.length === 2 &&
+    typeof coords[0] === 'number' &&
+    typeof coords[1] === 'number' &&
+    !Number.isNaN(coords[0]) &&
+    !Number.isNaN(coords[1]);
+
+  if (!hasValidCoords) {
+    this.set('baseLocation', undefined);
+  } else if (!this.baseLocation.type) {
+    this.baseLocation.type = 'Point';
+  }
+});
 
 module.exports = mongoose.model('RescueTeam', rescueTeamSchema);

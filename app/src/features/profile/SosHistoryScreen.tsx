@@ -52,7 +52,10 @@ const TYPE_CONFIG: Record<string, string> = {
 
 export const SosHistoryScreen: React.FC<SosHistoryScreenProps> = ({ onBack, onNavigateToSos }) => {
   const { user } = useAuth();
-  const isRescuer = Array.isArray(user?.roles) && (user.roles.includes('RESCUER') || user.roles.includes('LEADER'));
+  const isRescuer =
+    Array.isArray(user?.roles) &&
+    (user.roles.includes('LEADER') ||
+      (user.roles.includes('RESCUER') && user?.rescuer?.verificationStatus === 'VERIFIED'));
 
   const [sosList, setSosList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

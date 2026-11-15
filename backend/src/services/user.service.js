@@ -203,6 +203,21 @@ class UserService {
 
     await user.save();
 
+    try {
+      const { getIO } = require('../socket');
+      const io = getIO();
+      if (io) {
+        const safeUser = user.toSafeObject();
+        io.to(`user_${user._id}`).emit('user:profile_updated', safeUser);
+        if (Array.isArray(user.roles) && user.roles.includes('RESCUER')) {
+          io.emit('rescue_teams_updated', {
+            action: 'MEMBER_PROFILE_UPDATED',
+            rescuerId: String(user._id),
+          });
+        }
+      }
+    } catch (_) {}
+
     // Ghi audit log thay đổi hồ sơ
     await auditService.log({
       actorId: user._id,

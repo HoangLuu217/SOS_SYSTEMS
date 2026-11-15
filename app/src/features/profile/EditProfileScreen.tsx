@@ -111,8 +111,8 @@ export const EditProfileScreen: React.FC<EditProfileScreenProps> = ({ onBack }) 
 
   // Vai trò hệ thống
   const isRescuer =
-    Boolean(user?.roles?.includes('RESCUER')) ||
-    Boolean(user?.roles?.includes('LEADER'));
+    Boolean(user?.roles?.includes('LEADER')) ||
+    Boolean(user?.roles?.includes('RESCUER') && user?.rescuer?.verificationStatus === 'VERIFIED');
   const roleName = isRescuer
     ? (user?.roles?.includes('LEADER') ? 'Đội trưởng cứu hộ' : 'Nhân viên cứu hộ')
     : 'Người dân';

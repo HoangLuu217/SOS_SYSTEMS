@@ -276,12 +276,12 @@ const styles = StyleSheet.create({
     }),
   },
   missionButtonReady: {
-    backgroundColor: '#10B981', // Màu XANH khi không có nhiệm vụ (sẵn sàng nhận lệnh)
+    backgroundColor: '#0066FF', // Màu xanh chủ đạo của app khi sẵn sàng nhận lệnh
     ...Platform.select({
       ios: {
-        shadowColor: '#10B981',
+        shadowColor: '#0066FF',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.5,
+        shadowOpacity: 0.45,
         shadowRadius: 8,
       },
       android: {

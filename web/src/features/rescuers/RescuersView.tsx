@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Shield,
   Search,
@@ -58,7 +58,15 @@ import { getRolePrefix } from '@/services/appRouter';
 import { toast } from '@/components/common/toast';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
 import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
-import { onRescuerApplicationSubmitted, onRescuerVerificationChanged, onRescueTeamsUpdated } from '@/services/socketService';
+import {
+  onRescuerApplicationSubmitted,
+  onRescuerVerificationChanged,
+  onRescueTeamsUpdated,
+  onAssignmentUpdated,
+  onVehicleUpdated,
+  onEquipmentUpdated,
+  onAuditCreated,
+} from '@/services/socketService';
 import {
   SPECIALIZATION_LABELS,
   OPERATIONAL_STATUS_LABELS,
@@ -650,9 +658,15 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
   }, [isAdmin, managedArea, user?.authority?.areaId, setSelectedAreaId]);
 
 
-  const loadData = useCallback(async () => {
+  const selectedTeamIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    selectedTeamIdRef.current = selectedTeamDetail?._id || null;
+  }, [selectedTeamDetail?._id]);
+
+  const loadData = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = Boolean(options?.silent);
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const areaParam = !isAdmin && effectiveAreaId !== 'ALL' ? effectiveAreaId : undefined;
       const [teamsRes, rescuersRes] = await Promise.allSettled([
         fetchRescueTeams({ areaId: areaParam, limit: 100 }),
@@ -672,9 +686,9 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
       }
     } catch (e) {
       console.warn('Lỗi tải dữ liệu cứu hộ từ DB:', e);
-      setRawTeams([]);
+      if (!silent) setRawTeams([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [isAdmin, effectiveAreaId]);
 
@@ -686,20 +700,43 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
     loadData();
   }, [loadData]);
 
-  // Realtime Socket.IO events
+  // Realtime Socket.IO events (đồng bộ toàn bộ chi tiết đội: tổng quan, thành viên, phương tiện, trang thiết bị, nhiệm vụ, lịch sử)
   useEffect(() => {
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRealtimeRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        loadData({ silent: true });
+      }, 150);
+    };
+
     const unsubApp = onRescuerApplicationSubmitted((newApplicant) => {
       if (newApplicant?._id) {
         setRescuers((prev) => {
           const exists = prev.some((r) => r._id === newApplicant._id);
-          if (exists) return prev;
+          if (exists) {
+            return prev.map((r) =>
+              r._id === newApplicant._id
+                ? {
+                    ...r,
+                    ...newApplicant,
+                    rescuer: {
+                      ...(r.rescuer || {}),
+                      ...(newApplicant.rescuer || {}),
+                    },
+                  }
+                : r
+            );
+          }
           return [newApplicant, ...prev];
         });
         toast.info(
-          `Có hồ sơ đăng ký cứu hộ mới từ: ${newApplicant.fullName || 'Công dân'}`,
-          'Đăng ký mới'
+          `Có hồ sơ đăng ký / nộp lại cứu hộ từ: ${newApplicant.fullName || 'Công dân'}`,
+          'Hồ sơ cứu hộ'
         );
       }
+      scheduleRealtimeRefresh();
     });
 
     const unsubVer = onRescuerVerificationChanged((data) => {
@@ -719,16 +756,44 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
           })
         );
       }
+      scheduleRealtimeRefresh();
     });
 
-    const unsubTeams = onRescueTeamsUpdated(() => {
-      loadData();
+    const unsubTeams = onRescueTeamsUpdated((data) => {
+      if (data?.action === 'TEAM_DELETED' && data?.teamId && selectedTeamIdRef.current === data.teamId) {
+        setSelectedTeamDetail(null);
+        toast.info(`Đội cứu hộ "${data.teamName || ''}" đã bị giải thể / xóa khỏi hệ thống.`);
+      }
+      scheduleRealtimeRefresh();
+    });
+
+    const unsubAssignments = onAssignmentUpdated(() => {
+      scheduleRealtimeRefresh();
+    });
+
+    const unsubVehicles = onVehicleUpdated(() => {
+      scheduleRealtimeRefresh();
+    });
+
+    const unsubEquipments = onEquipmentUpdated(() => {
+      scheduleRealtimeRefresh();
+    });
+
+    const unsubAudit = onAuditCreated((data) => {
+      if (!data?.entityType || data.entityType === 'RescueTeam') {
+        scheduleRealtimeRefresh();
+      }
     });
 
     return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
       unsubApp();
       unsubVer();
       unsubTeams();
+      unsubAssignments();
+      unsubVehicles();
+      unsubEquipments();
+      unsubAudit();
     };
   }, [loadData]);
 
@@ -802,11 +867,18 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
         const memberStatus: 'PENDING' | 'APPROVED' | 'REJECTED' = m.status || 'APPROVED';
         const isVerified = rescuerObj?.rescuer?.verificationStatus === 'VERIFIED' || rescuerObj?.isVerified === true;
 
+        const rawAvailability = String(
+          m.availabilityStatus || rescuerObj?.rescuer?.availabilityStatus || 'AVAILABLE'
+        ).toUpperCase();
         let availabilityStatus: 'AVAILABLE' | 'BUSY' | 'AWAY' = 'AVAILABLE';
-        if (m.availabilityStatus) {
-          availabilityStatus = m.availabilityStatus;
-        } else if (rescuerObj?.rescuer?.availabilityStatus) {
-          availabilityStatus = rescuerObj.rescuer.availabilityStatus === 'BUSY' ? 'BUSY' : 'AVAILABLE';
+        if (rawAvailability === 'BUSY' || rawAvailability === 'ON_MISSION') {
+          availabilityStatus = 'BUSY';
+        } else if (
+          rawAvailability === 'OFFLINE' ||
+          rawAvailability === 'SUSPENDED' ||
+          rawAvailability === 'AWAY'
+        ) {
+          availabilityStatus = 'AWAY';
         }
 
         const rawSkills = rescuerObj?.rescuer?.skills || m.skills || [];
@@ -887,14 +959,14 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
       if (bikeCount > 0) breakdownParts.push(`${bikeCount} xe máy`);
       const vehicleTypeBreakdown = breakdownParts.length > 0 ? breakdownParts.join(', ') : (totalVehiclesCount > 0 ? `${totalVehiclesCount} phương tiện` : 'Chưa có phương tiện');
 
-      // Nhiệm vụ đang chạy (Active missions) chuẩn xác từ DB (nếu có trường assignments gắn kèm trên đội)
+      // Nhiệm vụ của đội (bao gồm lịch sử & đang chạy) chuẩn xác từ DB
       const rawTeamAssignments = Array.isArray((rawTeam as any).assignments)
         ? (rawTeam as any).assignments
         : Array.isArray((rawTeam as any).activeMissions)
           ? (rawTeam as any).activeMissions
           : [];
 
-      const activeMissions: TeamMissionDetail[] = rawTeamAssignments.map((a: any) => ({
+      const allMissions: TeamMissionDetail[] = rawTeamAssignments.map((a: any) => ({
         id: a._id || a.id || '',
         sosCode: a.sosCode || (a.sosRequestId ? `SOS #${String(a.sosRequestId).slice(-4)}` : a._id || ''),
         location: a.location || a.locationName || '',
@@ -904,15 +976,18 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
         description: a.note || a.description || '',
         peopleCount: a.peopleCount ?? a.affectedPeople ?? 0,
       }));
+      const activeMissions: TeamMissionDetail[] = allMissions.filter(
+        (m) => !['COMPLETED', 'CANCELLED', 'REJECTED'].includes(String(m.status).toUpperCase())
+      );
 
       // Tính toán Trạng thái vận hành thực tế
       let operationalStatus: OperationalStatus;
       if (rawTeam.status === 'INACTIVE' || rawTeam.status === 'SUSPENDED') {
         operationalStatus = 'INACTIVE';
+      } else if (activeMissions.length > 0 && (!(rawTeam as any).operationalStatus || (rawTeam as any).operationalStatus === 'READY')) {
+        operationalStatus = 'ON_MISSION';
       } else if ((rawTeam as any).operationalStatus) {
         operationalStatus = (rawTeam as any).operationalStatus;
-      } else if (activeMissions.length > 0) {
-        operationalStatus = 'ON_MISSION';
       } else if (
         (totalMembersCount > 0 && availableMembersCount === 0) ||
         (totalVehiclesCount > 0 && availableVehiclesCount === 0) ||
@@ -965,7 +1040,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
         availableVehiclesCount,
         vehicleTypeBreakdown,
         activeMissions,
-        allMissions: activeMissions,
+        allMissions,
         detailedMembers,
         detailedVehicles,
         activityLogs,
@@ -982,7 +1057,10 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
           notes: e.note || '',
         })),
         totalEquipmentCount: (Array.isArray((rawTeam as any).equipments) ? (rawTeam as any).equipments : []).reduce(
-          (acc: number, curr: any) => acc + (typeof curr.quantity === 'number' ? curr.quantity : parseInt(curr.quantity, 10) || 1),
+          (acc: number, curr: any) =>
+            (curr.status || 'AVAILABLE') === 'AVAILABLE'
+              ? acc + (typeof curr.quantity === 'number' ? curr.quantity : parseInt(curr.quantity, 10) || 1)
+              : acc,
           0
         ),
         readinessScore,
@@ -2309,34 +2387,50 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                     <div className="pending-members-section">
                       <div className="pending-members-header">
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <Clock size={16} color="#D97706" />
-                          <span style={{ fontWeight: 800, fontSize: 13.5, color: '#92400E' }}>
-                            Yêu cầu xin gia nhập đội chờ địa phương phê duyệt (
+                          <span
+                            style={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: '50%',
+                              background: '#F59E0B',
+                              display: 'inline-block',
+                              flexShrink: 0,
+                            }}
+                          />
+                          <span style={{ fontWeight: 700, fontSize: 13, color: '#334155' }}>
+                            Chờ phê duyệt gia nhập (
                             {selectedTeamDetail.detailedMembers.filter((m) => m.status === 'PENDING').length}
                             )
                           </span>
                         </div>
-                        <span style={{ fontSize: 11.5, color: '#B45309', fontWeight: 500 }}>
-                          Cứu hộ viên đã nộp đơn đăng ký tham gia đội này
-                        </span>
                       </div>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {selectedTeamDetail.detailedMembers
                           .filter((m) => m.status === 'PENDING')
                           .map((member) => (
                             <div key={member._id} className="drawer-member-card pending">
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                <div className="applicant-avatar" style={{ width: 42, height: 42, fontSize: 14, background: '#FEF3C7', color: '#B45309', border: '1px solid #FDE68A' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                                <div
+                                  className="applicant-avatar"
+                                  style={{
+                                    width: 40,
+                                    height: 40,
+                                    fontSize: 14,
+                                    background: '#F1F5F9',
+                                    color: '#475569',
+                                    border: '1px solid #E2E8F0',
+                                  }}
+                                >
                                   {member.fullName[0]?.toUpperCase() || 'U'}
                                 </div>
-                                <div>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                                     <span style={{ fontWeight: 800, fontSize: 14, color: '#0F172A' }}>
                                       {member.fullName}
                                     </span>
                                     <span className="member-role-badge pending">
-                                      Ứng tuyển vào đội
+                                      Chờ duyệt
                                     </span>
                                   </div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
@@ -2345,7 +2439,7 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                                       {member.phone || 'Chưa có SĐT'}
                                     </a>
                                     {member.joinedAt && (
-                                      <span style={{ fontSize: 11.5, color: '#94A3B8', marginLeft: 6 }}>
+                                      <span style={{ fontSize: 11.5, color: '#94A3B8', marginLeft: 4 }}>
                                         • Ngày nộp: {member.joinedAt}
                                       </span>
                                     )}
@@ -2354,46 +2448,37 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                                     <span style={{ fontSize: 12, fontWeight: 600, color: '#64748B', whiteSpace: 'nowrap' }}>
                                       Kỹ năng:
                                     </span>
-                                    <span style={{ fontSize: 12, color: '#334155', fontWeight: 500 }}>
+                                    <span style={{ fontSize: 12, color: '#334155', fontWeight: 500, lineHeight: 1.5 }}>
                                       {member.skills && member.skills.length > 0 ? member.skills.join(', ') : 'Chưa cập nhật'}
                                     </span>
                                   </div>
                                 </div>
                               </div>
 
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-                                <span className={`verification-status-pill ${member.isVerified ? 'verified' : 'unverified'}`}>
-                                  <ShieldCheck size={12} />
-                                  <span>{member.isVerified ? 'Cứu hộ viên hợp lệ' : 'Chưa duyệt tư cách'}</span>
-                                </span>
-
-                                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                                  <button
-                                    type="button"
-                                    className="member-action-btn reject"
-                                    onClick={() => handleUpdateMemberStatus(selectedTeamDetail._id, member.rescuerId, 'REJECTED')}
-                                    disabled={actionInProgress === `${selectedTeamDetail._id}-${member.rescuerId}`}
-                                    title="Từ chối yêu cầu gia nhập của cứu hộ viên này"
-                                  >
-                                    <X size={12} />
-                                    <span>Từ chối</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="member-action-btn approve"
-                                    onClick={() => handleUpdateMemberStatus(selectedTeamDetail._id, member.rescuerId, 'APPROVED')}
-                                    disabled={actionInProgress === `${selectedTeamDetail._id}-${member.rescuerId}`}
-                                    title="Chấp thuận kết nạp cứu hộ viên vào đội này"
-                                  >
-                                    <Check size={12} />
-                                    <span>Duyệt vào đội</span>
-                                  </button>
-                                </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                <button
+                                  type="button"
+                                  className="member-action-btn reject"
+                                  onClick={() => handleUpdateMemberStatus(selectedTeamDetail._id, member.rescuerId, 'REJECTED')}
+                                  disabled={actionInProgress === `${selectedTeamDetail._id}-${member.rescuerId}`}
+                                  title="Từ chối yêu cầu gia nhập của cứu hộ viên này"
+                                >
+                                  <X size={12} />
+                                  <span>Từ chối</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="member-action-btn approve"
+                                  onClick={() => handleUpdateMemberStatus(selectedTeamDetail._id, member.rescuerId, 'APPROVED')}
+                                  disabled={actionInProgress === `${selectedTeamDetail._id}-${member.rescuerId}`}
+                                  title="Chấp thuận kết nạp cứu hộ viên vào đội này"
+                                >
+                                  <Check size={12} />
+                                  <span>Duyệt vào đội</span>
+                                </button>
                               </div>
                             </div>
-
                           ))}
-
                       </div>
                     </div>
                   )}
@@ -2466,11 +2551,6 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
 
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                  <span className={`verification-status-pill ${member.isVerified ? 'verified' : 'unverified'}`}>
-                                    <ShieldCheck size={12} />
-                                    <span>{member.isVerified ? 'Đã xác minh' : 'Chưa duyệt'}</span>
-                                  </span>
-
                                   <span className={`availability-status-pill ${member.availabilityStatus.toLowerCase()}`}>
                                     <span className="live-dot" style={{ width: 5, height: 5 }} />
                                     <span>
@@ -2700,23 +2780,36 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                                 </span>
                               </div>
 
-                              <span
-                                style={{
-                                  padding: '3px 9px',
-                                  borderRadius: 9999,
-                                  fontSize: 11.5,
-                                  fontWeight: 700,
-                                  background: '#DCFCE7',
-                                  color: '#166534',
-                                  border: '1px solid #BBF7D0',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                }}
-                              >
-                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16A34A' }} />
-                                Sẵn sàng
-                              </span>
+                              {(() => {
+                                const eqStatus = String(eq.status || 'AVAILABLE').toUpperCase();
+                                const statusStyle =
+                                  eqStatus === 'AVAILABLE'
+                                    ? { bg: '#DCFCE7', color: '#166534', border: '#BBF7D0', dot: '#16A34A', label: 'Sẵn sàng' }
+                                    : eqStatus === 'IN_USE' || eqStatus === 'BORROWED'
+                                      ? { bg: '#FEF3C7', color: '#92400E', border: '#FDE68A', dot: '#D97706', label: 'Đang sử dụng' }
+                                      : eqStatus === 'MAINTENANCE'
+                                        ? { bg: '#FFEDD5', color: '#9A3412', border: '#FED7AA', dot: '#EA580C', label: 'Đang bảo trì' }
+                                        : { bg: '#FEE2E2', color: '#991B1B', border: '#FECACA', dot: '#DC2626', label: eqStatus === 'LOST' ? 'Thất lạc' : eqStatus === 'EXPIRED' ? 'Hết hạn' : 'Hư hỏng' };
+                                return (
+                                  <span
+                                    style={{
+                                      padding: '3px 9px',
+                                      borderRadius: 9999,
+                                      fontSize: 11.5,
+                                      fontWeight: 700,
+                                      background: statusStyle.bg,
+                                      color: statusStyle.color,
+                                      border: `1px solid ${statusStyle.border}`,
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 4,
+                                    }}
+                                  >
+                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusStyle.dot }} />
+                                    {statusStyle.label}
+                                  </span>
+                                );
+                              })()}
                             </div>
                           </div>
                         );
@@ -2944,10 +3037,23 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
                               </span>
                             </div>
                             <span
-                              className={`operational-status-pill ${mission.status === 'COMPLETED' ? 'ready' : 'on_mission'
-                                }`}
+                              className={`operational-status-pill ${
+                                mission.status === 'COMPLETED'
+                                  ? 'ready'
+                                  : mission.status === 'CANCELLED' || mission.status === 'REJECTED'
+                                    ? 'inactive'
+                                    : 'on_mission'
+                              }`}
                             >
-                              {mission.status === 'COMPLETED' ? 'Đã hoàn thành' : 'Đang tác chiến'}
+                              {mission.status === 'COMPLETED'
+                                ? 'Đã hoàn thành'
+                                : mission.status === 'CANCELLED'
+                                  ? 'Đã hủy'
+                                  : mission.status === 'REJECTED'
+                                    ? 'Đã từ chối'
+                                    : mission.status === 'PENDING'
+                                      ? 'Chờ tiếp nhận'
+                                      : 'Đang tác chiến'}
                             </span>
                           </div>
 
@@ -3014,7 +3120,10 @@ export const RescuersView: React.FC<RescuersViewProps> = ({
             {/* Drawer Footer */}
             <div className="team-drawer-footer">
               <span style={{ fontSize: 12, color: '#64748B', fontWeight: 600 }}>
-                Mã đội: {selectedTeamDetail._id} • Cập nhật lúc {new Date().toLocaleTimeString('vi-VN')}
+                Mã đội: {selectedTeamDetail._id} • Cập nhật lúc{' '}
+                {selectedTeamDetail.updatedAt
+                  ? new Date(selectedTeamDetail.updatedAt).toLocaleTimeString('vi-VN')
+                  : new Date().toLocaleTimeString('vi-VN')}
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {selectedTeamDetail.status === 'ACTIVE' ? (
