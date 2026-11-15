@@ -110,14 +110,18 @@ class EquipmentService {
 
     // Loc theo khu vuc (areaId) -> tim tat ca cac doi va vat tu trong dia ban
     if (query.areaId && query.areaId !== 'ALL') {
-      const areaMatches = [];
-      if (mongoose.Types.ObjectId.isValid(query.areaId)) {
-        const byId = await AdministrativeArea.findById(query.areaId);
-        if (byId) areaMatches.push(byId);
-      }
-      const byOther = await AdministrativeArea.find({
-        $or: [{ code: query.areaId }, { name: new RegExp(String(query.areaId).trim(), 'i') }],
-      });
+      const [byId, byOther] = await Promise.all([
+        mongoose.Types.ObjectId.isValid(query.areaId)
+          ? AdministrativeArea.findById(query.areaId).select('_id name code parentId').lean()
+          : Promise.resolve(null),
+        AdministrativeArea.find({
+          $or: [{ code: query.areaId }, { name: new RegExp(String(query.areaId).trim(), 'i') }],
+        })
+          .select('_id name code parentId')
+          .lean(),
+      ]);
+
+      const areaMatches = byId ? [byId] : [];
       byOther.forEach((a) => {
         if (!areaMatches.some((m) => String(m._id) === String(a._id))) areaMatches.push(a);
       });
@@ -125,23 +129,29 @@ class EquipmentService {
       if (areaMatches.length > 0) {
         const relevantAreaIds = new Set();
         const cleanNames = [];
+        const matchIds = areaMatches.map((a) => a._id);
+        const parentIds = areaMatches.map((a) => a.parentId).filter(Boolean);
 
-        for (const a of areaMatches) {
+        const [parents, allChildren] = await Promise.all([
+          parentIds.length > 0
+            ? AdministrativeArea.find({ _id: { $in: parentIds } }).select('_id name').lean()
+            : Promise.resolve([]),
+          AdministrativeArea.find({ parentId: { $in: matchIds } }).select('_id name').lean(),
+        ]);
+
+        areaMatches.forEach((a) => {
           relevantAreaIds.add(String(a._id));
-          if (a.parentId) {
-            relevantAreaIds.add(String(a.parentId));
-            const parent = await AdministrativeArea.findById(a.parentId);
-            if (parent?.name) {
-              const pName = parent.name.replace(/^(phường|xã|quận|huyện|thành phố|thị xã)\s+/i, '').trim();
-              if (pName.length >= 3) cleanNames.push(pName);
-            }
-          }
-          const children = await AdministrativeArea.find({ parentId: a._id }).select('_id name');
-          children.forEach((c) => relevantAreaIds.add(String(c._id)));
-
+          if (a.parentId) relevantAreaIds.add(String(a.parentId));
           const cName = (a.name || '').replace(/^(phường|xã|quận|huyện|thành phố|thị xã)\s+/i, '').trim();
           if (cName.length >= 3) cleanNames.push(cName);
-        }
+        });
+        parents.forEach((parent) => {
+          if (parent?.name) {
+            const pName = parent.name.replace(/^(phường|xã|quận|huyện|thành phố|thị xã)\s+/i, '').trim();
+            if (pName.length >= 3) cleanNames.push(pName);
+          }
+        });
+        allChildren.forEach((c) => relevantAreaIds.add(String(c._id)));
 
         const areaConditions = [
           { areaId: { $in: Array.from(relevantAreaIds).map((id) => new mongoose.Types.ObjectId(id)) } },
@@ -150,7 +160,7 @@ class EquipmentService {
           if (cn.length >= 3) areaConditions.push({ name: new RegExp(cn, 'i') });
         });
 
-        const teamsInArea = await RescueTeam.find({ $or: areaConditions }).select('_id');
+        const teamsInArea = await RescueTeam.find({ $or: areaConditions }).select('_id').lean();
         const teamIds = teamsInArea.map((t) => t._id);
         if (!filter.teamId) {
           filter.$or = [
@@ -168,7 +178,8 @@ class EquipmentService {
         .populate({ path: 'providedBy', select: 'name shortName type' })
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
       Equipment.countDocuments(filter),
     ]);
 
@@ -184,7 +195,8 @@ class EquipmentService {
   async getEquipmentById(id) {
     const equipment = await Equipment.findById(id)
       .populate({ path: 'teamId', select: 'name type areaId status leaderId', populate: { path: 'areaId', select: 'name code' } })
-      .populate({ path: 'providedBy', select: 'name shortName type' });
+      .populate({ path: 'providedBy', select: 'name shortName type' })
+      .lean();
 
     if (!equipment) throw new ApiError(404, 'Khong tim thay vat tu');
     return equipment;

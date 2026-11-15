@@ -510,7 +510,9 @@ class SosAssignmentService {
           },
         },
       ],
-    }).select('_id leaderId members');
+    })
+      .select('_id leaderId members')
+      .lean();
 
     const userIdStr = userId.toString();
     const orConditions = [{ rescuerId: userId }];
@@ -579,7 +581,8 @@ class SosAssignmentService {
       .populate('rescuerId', '_id fullName phone email avatarUrl rescuer')
       .populate('vehicleId', 'plateNumber type capacity status')
       .populate('assignedBy', '_id fullName phone email roles')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     return assignments;
   }
@@ -649,7 +652,8 @@ class SosAssignmentService {
       .populate('rescuerId', '_id fullName phone email avatarUrl rescuer')
       .populate('vehicleId', 'plateNumber type capacity status')
       .populate('assignedBy', '_id fullName phone email roles')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     return assignments;
   }

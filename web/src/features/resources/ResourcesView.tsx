@@ -42,7 +42,6 @@ import {
   updateVehicle,
   deleteVehicle,
   fetchRescueTeams,
-  fetchAdministrativeAreas,
   fetchEquipments,
   createEquipment,
   updateEquipment,
@@ -438,11 +437,12 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      setEquipmentsLoading(true);
       const areaParam = effectiveAreaId !== 'ALL' ? effectiveAreaId : undefined;
-      const [vehRes, teamRes] = await Promise.allSettled([
+      const [vehRes, teamRes, eqRes] = await Promise.allSettled([
         fetchVehicles({ areaId: areaParam, limit: 100 }),
-        fetchRescueTeams({ areaId: areaParam, limit: 100 }),
-        fetchAdministrativeAreas(),
+        fetchRescueTeams({ areaId: areaParam, limit: 100, light: true }),
+        fetchEquipments(areaParam ? { areaId: areaParam, limit: '200' } : { limit: '200' }),
       ]);
 
       // Khu vực hành chính đã được nạp và quản lý tập trung trong useAdministrativeFilter
@@ -456,27 +456,17 @@ export const ResourcesView: React.FC<ResourcesViewProps> = ({
       } else {
         setRescueTeams([]);
       }
-    } catch (e) {
-      console.warn('Loi tai tai nguyen:', e);
-      setVehicles([]);
-    } finally {
-      setLoading(false);
-    }
-
-    // Load equipment rieng biet (khong block vehicles)
-    try {
-      setEquipmentsLoading(true);
-      const areaParam = effectiveAreaId !== 'ALL' ? effectiveAreaId : undefined;
-      const eqRes = await fetchEquipments(areaParam ? { areaId: areaParam, limit: '200' } : { limit: '200' });
-      if (eqRes.success && Array.isArray(eqRes.data)) {
-        setEquipments(eqRes.data);
+      if (eqRes.status === 'fulfilled' && eqRes.value.success && Array.isArray(eqRes.value.data)) {
+        setEquipments(eqRes.value.data);
       } else {
         setEquipments([]);
       }
     } catch (e) {
-      console.warn('Loi tai vat tu:', e);
+      console.warn('Loi tai tai nguyen:', e);
+      setVehicles([]);
       setEquipments([]);
     } finally {
+      setLoading(false);
       setEquipmentsLoading(false);
     }
   }, [effectiveAreaId]);

@@ -422,14 +422,28 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
 }
 
   // Đồng bộ SOS thực tế từ cơ sở dữ liệu MongoDB (từ ứng dụng mobile app người dân)
+  const sosSyncInFlightRef = useRef<Promise<void> | null>(null);
+  const sosSyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const syncRealSosFromApi = useCallback(async (officer: AuthorityOfficer) => {
-    try {
-      const fetchParams: Record<string, string> = {};
-      if (officer.role !== 'ADMIN' && officer.jurisdictionAreaId) {
-        fetchParams.areaId = officer.jurisdictionAreaId;
-      }
-      const res = await fetchSosRequests(fetchParams);
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+    if (sosSyncInFlightRef.current) {
+      return sosSyncInFlightRef.current;
+    }
+
+    const run = (async () => {
+      try {
+        const fetchParams: Record<string, string> = {};
+        if (officer.role !== 'ADMIN' && officer.jurisdictionAreaId) {
+          fetchParams.areaId = officer.jurisdictionAreaId;
+        }
+        const [sosSettled, teamsSettled, vehiclesSettled] = await Promise.allSettled([
+          fetchSosRequests(fetchParams),
+          fetchRescueTeams({ limit: '100', light: 'true' }),
+          fetchVehicles({ limit: '100' }),
+        ]);
+
+        const res = sosSettled.status === 'fulfilled' ? sosSettled.value : null;
+        if (res?.success && Array.isArray(res.data) && res.data.length > 0) {
         const realMapped: SosRequest[] = res.data.map((item: any) => {
           const lng = item.location?.coordinates?.[0] ?? 108.2178;
           const lat = item.location?.coordinates?.[1] ?? 16.0465;
@@ -678,10 +692,10 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         }
       }
 
-      // Đồng bộ danh sách Đội cứu hộ thật từ MongoDB
+      // Đồng bộ danh sách Đội cứu hộ thật từ kết quả Promise.allSettled
       let syncedTeamVehicles: Vehicle[] = [];
       try {
-        const teamsRes = await fetchRescueTeams({ limit: '100' });
+        const teamsRes = teamsSettled.status === 'fulfilled' ? teamsSettled.value : null;
         const rawTeams = Array.isArray(teamsRes?.data)
           ? teamsRes.data
           : (teamsRes?.data as any)?.teams || [];
@@ -695,9 +709,9 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         console.warn('Lỗi đồng bộ đội cứu hộ từ API:', err);
       }
 
-      // Đồng bộ danh sách Phương tiện cứu hộ thật từ MongoDB
+      // Đồng bộ danh sách Phương tiện cứu hộ thật từ kết quả Promise.allSettled
       try {
-        const vehRes = await fetchVehicles({ limit: '100' });
+        const vehRes = vehiclesSettled.status === 'fulfilled' ? vehiclesSettled.value : null;
         const rawVehs = Array.isArray(vehRes?.data)
           ? vehRes.data
           : (vehRes?.data as any)?.vehicles || [];
@@ -722,10 +736,26 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         }
         console.warn('Lỗi đồng bộ phương tiện từ API:', err);
       }
-    } catch (err) {
-      console.warn('Lỗi đồng bộ dữ liệu SOS từ server:', err);
-    }
+      } catch (err) {
+        console.warn('Lỗi đồng bộ dữ liệu SOS từ server:', err);
+      } finally {
+        sosSyncInFlightRef.current = null;
+      }
+    })();
+
+    sosSyncInFlightRef.current = run;
+    return run;
   }, [announceTeamCancelled]);
+
+  const scheduleSyncRealSos = useCallback((officer: AuthorityOfficer, delayMs = 350) => {
+    if (sosSyncDebounceRef.current) {
+      clearTimeout(sosSyncDebounceRef.current);
+    }
+    sosSyncDebounceRef.current = setTimeout(() => {
+      sosSyncDebounceRef.current = null;
+      syncRealSosFromApi(officer);
+    }, delayMs);
+  }, [syncRealSosFromApi]);
 
   // Đồng bộ điểm nguy hiểm (Hazards) và nơi trú ẩn an toàn (Shelters) từ MongoDB lên bản đồ tác chiến
   const syncMapPointsFromApi = useCallback(async () => {
@@ -760,7 +790,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
 
     // Lắng nghe sự kiện Realtime Socket.IO khi có người dân bấm gửi SOS trên App
     const unsubCreated = onSosCreated((newSos) => {
-      syncRealSosFromApi(activeOfficer);
+      scheduleSyncRealSos(activeOfficer);
       const citizenName =
         typeof newSos?.citizenId === 'object' && newSos.citizenId?.fullName
           ? newSos.citizenId.fullName
@@ -810,7 +840,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         }
         setSosRequests([...domainDService.getSosRequests()]);
       }
-      syncRealSosFromApi(activeOfficer);
+      scheduleSyncRealSos(activeOfficer);
     });
 
     const notifyTeamCancelledAssignment = (payload: any) => {
@@ -933,7 +963,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       }
 
       window.dispatchEvent(new CustomEvent('sos_dispatch_refresh'));
-      syncRealSosFromApi(activeOfficer);
+      scheduleSyncRealSos(activeOfficer);
     };
 
     const unsubAssignment = onAssignmentUpdated(handleAssignmentRealtime);
@@ -942,11 +972,11 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         const name = data?.teamName ? `"${data.teamName}"` : 'cứu hộ';
         showToast(`⚠️ Đội ${name} đã tạm ngưng hoạt động do Đội trưởng rời đội.`, 'error');
       }
-      syncRealSosFromApi(activeOfficer);
+      scheduleSyncRealSos(activeOfficer);
     });
 
     const socket = getSocket();
-    const handleRealtimeSync = () => syncRealSosFromApi(activeOfficer);
+    const handleRealtimeSync = () => scheduleSyncRealSos(activeOfficer);
 
     const handleShoreHandoffRequested = (data: any) => {
       if (!data) return;
@@ -957,7 +987,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       const people = data.shoreHandoff?.peopleCount || 1;
       showToast(`⚡ YÊU CẦU XE ĐÓN TỪ ${team} • Bến: ${landing} • Cần: ${veh} (${people} nạn nhân)`, 'success');
 
-      syncRealSosFromApi(activeOfficer);
+      scheduleSyncRealSos(activeOfficer);
       if (data.sosId) {
         setSelectedSosId(data.sosId);
       }
@@ -968,7 +998,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       const plate = data.shoreHandoff?.assignedVehiclePlate || data.assignedVehiclePlate || 'Xe cứu hộ';
       showToast(`🚑 Đã điều động xe ${plate} đến bến đón nạn nhân!`, 'success');
       window.dispatchEvent(new CustomEvent('sos_dispatch_refresh'));
-      syncRealSosFromApi(activeOfficer);
+      scheduleSyncRealSos(activeOfficer);
     };
 
     const handleShoreHandoffCompleted = (data: any) => {
@@ -986,7 +1016,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         'success'
       );
       window.dispatchEvent(new CustomEvent('sos_dispatch_refresh'));
-      syncRealSosFromApi(activeOfficer);
+      scheduleSyncRealSos(activeOfficer);
     };
 
     const handleShoreHandoffCancelled = (data: any) => {
@@ -997,7 +1027,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         setSosRequests([...domainDService.getSosRequests()]);
       }
       window.dispatchEvent(new CustomEvent('sos_dispatch_refresh'));
-      syncRealSosFromApi(activeOfficer);
+      scheduleSyncRealSos(activeOfficer);
     };
 
     socket.on('connect', handleRealtimeSync);
@@ -1027,17 +1057,17 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       const team = data.teamName || 'Đội cứu hộ';
       const code = data.sosCode ? `#${data.sosCode}` : 'Hiện trường';
       showToast(`📦 CHI VIỆN VẬT TƯ: ${team} (${code}) yêu cầu cấp thêm vật tư!`, 'error');
-      syncRealSosFromApi(activeOfficer);
+      scheduleSyncRealSos(activeOfficer);
     };
 
     const handleSupplyApproved = () => {
       showToast('✓ Đã xuất cấp vật tư chi viện thành công!', 'success');
-      syncRealSosFromApi(activeOfficer);
+      scheduleSyncRealSos(activeOfficer);
     };
 
     const handleSupplyRejected = () => {
       showToast('Đã từ chối yêu cầu chi viện vật tư.', 'error');
-      syncRealSosFromApi(activeOfficer);
+      scheduleSyncRealSos(activeOfficer);
     };
 
     socket.on('assignment:supply_requested', handleSupplyRequested);
@@ -1050,19 +1080,25 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     socket.on('shelter:sync', syncMapPointsFromApi);
     socket.on('shelter:event', syncMapPointsFromApi);
 
-    // Định kỳ 4 giây dự phòng kiểm tra lại tín hiệu SOS và bản đồ từ server đảm bảo Realtime liên tục
-    const interval = setInterval(() => {
+    // Dự phòng kiểm tra lại khi mất gói socket: SOS/Đội 12 giây, điểm nguy hiểm/trú ẩn 30 giây
+    const sosInterval = setInterval(() => {
       syncRealSosFromApi(activeOfficer);
+    }, 12000);
+    const mapPointsInterval = setInterval(() => {
       syncMapPointsFromApi();
-    }, 4000);
+    }, 30000);
 
     const handleUpdateEvent = () => {
-      syncRealSosFromApi(activeOfficer);
+      scheduleSyncRealSos(activeOfficer, 150);
       syncMapPointsFromApi();
     };
     window.addEventListener('sos_data_updated', handleUpdateEvent);
 
     return () => {
+      if (sosSyncDebounceRef.current) {
+        clearTimeout(sosSyncDebounceRef.current);
+        sosSyncDebounceRef.current = null;
+      }
       unsubCreated();
       unsubUpdated();
       unsubAssignment();
@@ -1094,11 +1130,12 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
       socket.off('hazard:event', syncMapPointsFromApi);
       socket.off('shelter:sync', syncMapPointsFromApi);
       socket.off('shelter:event', syncMapPointsFromApi);
-      clearInterval(interval);
+      clearInterval(sosInterval);
+      clearInterval(mapPointsInterval);
       window.removeEventListener('sos_data_updated', handleUpdateEvent);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeOfficer.id, activeOfficer, syncRealSosFromApi, syncMapPointsFromApi]);
+  }, [activeOfficer.id, activeOfficer, syncRealSosFromApi, scheduleSyncRealSos, syncMapPointsFromApi]);
 
   // Lắng nghe URL pathname để đồng bộ SOS được chọn (ví dụ: /localauthor/map/sos-8924)
   useEffect(() => {
