@@ -162,6 +162,19 @@ export async function updateUserProfile(payload: {
 }
 
 /**
+ * Đổi mật khẩu tài khoản đang đăng nhập
+ */
+export async function changeUserPassword(payload: {
+  oldPassword?: string;
+  newPassword: string;
+}): Promise<{ success: boolean; message?: string }> {
+  return fetchWithAuth<{ success: boolean; message?: string }>('/users/me/password', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
  * Tải ảnh đại diện lên Cloudinary và cập nhật cho tài khoản người dùng
  */
 export async function updateUserAvatar(
