@@ -43,6 +43,7 @@ import {
 } from '@/services/geoapifyBoundariesService';
 import { AreaPreviewMap, getAreaCoordinates } from './AreaPreviewMap';
 import { toast } from '@/components/common/toast';
+import { useAdministrativeFilter } from '@/hooks/useAdministrativeFilter';
 import '@/features/sos/SosRequestsView.css';
 import './AuthoritiesView.css';
 
@@ -478,6 +479,15 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
   // State bộ lọc danh sách Cán bộ địa phương
   const [authSearchQuery, setAuthSearchQuery] = useState('');
   const [authStatusFilter, setAuthStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const {
+    wards: areaFilterWards,
+    wardsLoading: areaFilterWardsLoading,
+    selectedAreaId: authAreaFilter,
+    setSelectedAreaId: setAuthAreaFilter,
+  } = useAdministrativeFilter({
+    isAdmin: true,
+    wardsScopeProvince: 'Đà Nẵng',
+  });
 
   // State phục vụ Slide-Over Drawer xem chi tiết & chỉnh sửa Cán bộ + Bản đồ
   const [detailAuthority, setDetailAuthority] = useState<any | null>(null);
@@ -775,13 +785,54 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
   const activeOfficersCount = authorities.filter((a) => a.status === 'ACTIVE').length;
   const inactiveOfficersCount = authorities.length - activeOfficersCount;
 
+  const normalizeUnitKey = useCallback((raw?: string | null): string => {
+    if (!raw) return '';
+    return String(raw)
+      .split(',')[0]
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/gi, 'd')
+      .toLowerCase()
+      .replace(/^(phuong|xa|dac khu|thi tran|quan|huyen|thi xa)\s+/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }, []);
+
   const filteredAuthorities = useMemo(() => {
+    const selectedWardObj =
+      authAreaFilter !== 'ALL'
+        ? areaFilterWards.find(
+          (w) => w.id === authAreaFilter || w.code === authAreaFilter || w.name === authAreaFilter
+        )
+        : null;
+    const targetUnitKey = selectedWardObj
+      ? normalizeUnitKey(selectedWardObj.name)
+      : authAreaFilter !== 'ALL'
+        ? normalizeUnitKey(authAreaFilter)
+        : '';
+
     return authorities.filter((a) => {
       // 1. Lọc theo trạng thái
       if (authStatusFilter === 'ACTIVE' && a.status !== 'ACTIVE') return false;
       if (authStatusFilter === 'INACTIVE' && a.status === 'ACTIVE') return false;
 
-      // 2. Lọc theo ô tìm kiếm
+      // 2. Lọc theo xã / phường (94 đơn vị chuẩn Đà Nẵng)
+      if (authAreaFilter !== 'ALL') {
+        const authAreaId =
+          typeof a.authority?.areaId === 'object' && a.authority?.areaId
+            ? a.authority.areaId._id
+            : a.authority?.areaId;
+        const matchId = Boolean(
+          selectedWardObj &&
+          authAreaId &&
+          (String(authAreaId) === String(selectedWardObj.id) || authAreaId === selectedWardObj.code)
+        );
+        const officerUnitKey = normalizeUnitKey(a.authority?.areaName || a.authority?.districtName || '');
+        const matchName = Boolean(targetUnitKey && officerUnitKey && officerUnitKey === targetUnitKey);
+        if (!matchId && !matchName) return false;
+      }
+
+      // 3. Lọc theo ô tìm kiếm
       if (authSearchQuery.trim()) {
         const q = authSearchQuery.toLowerCase();
         const matchName = (a.fullName || '').toLowerCase().includes(q);
@@ -794,7 +845,7 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
       }
       return true;
     });
-  }, [authorities, authStatusFilter, authSearchQuery]);
+  }, [authorities, authStatusFilter, authAreaFilter, areaFilterWards, normalizeUnitKey, authSearchQuery]);
 
   return (
     <div className="authorities-executive-container">
@@ -827,6 +878,24 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <select
+              className="authority-area-filter-select"
+              value={authAreaFilter}
+              onChange={(e) => setAuthAreaFilter(e.target.value)}
+              title="Lọc cán bộ theo xã / phường / đặc khu"
+            >
+              <option value="ALL">
+                {areaFilterWardsLoading
+                  ? '📍 Đang tải địa bàn Đà Nẵng...'
+                  : `📍 Tất cả địa bàn Đà Nẵng (${areaFilterWards.length})`}
+              </option>
+              {areaFilterWards.map((ward) => (
+                <option key={ward.id || ward.code} value={ward.id}>
+                  {ward.name}
+                </option>
+              ))}
+            </select>
+
             <div className="executive-search-input-wrap">
               <Search size={16} className="search-icon" />
               <input
@@ -1302,13 +1371,13 @@ export const AuthoritiesView: React.FC<AuthoritiesViewProps> = ({
                               options={[
                                 ...(editAuthForm.areaName
                                   ? [
-                                      {
-                                        id: editAuthForm.areaId,
-                                        label: editAuthForm.areaName,
-                                        badgeText: 'Địa bàn hiện tại',
-                                        isCurrent: true,
-                                      },
-                                    ]
+                                    {
+                                      id: editAuthForm.areaId,
+                                      label: editAuthForm.areaName,
+                                      badgeText: 'Địa bàn hiện tại',
+                                      isCurrent: true,
+                                    },
+                                  ]
                                   : []),
                                 ...modalProvinceSubUnits
                                   .filter((ar) => ar.id !== editAuthForm.areaId)

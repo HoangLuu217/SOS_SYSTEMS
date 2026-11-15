@@ -214,31 +214,39 @@ export function useAdministrativeFilter(options: {
 
         if (!isMounted) return;
 
-        // Chuẩn hóa danh sách xã/phường từ API
-        const wardList: WardOption[] = apiUnits.map((u) => ({
-          id: u.name, // Dùng tên xã/phường làm định danh lọc thống nhất
-          name: u.name,
-          code: u.code,
-          type: u.type,
-        }));
+        // Chuẩn hóa danh sách xã/phường chuẩn từ API (không trộn thêm các đơn vị cũ/hết hiệu lực trong DB)
+        const seenNames = new Set<string>();
+        const wardList: WardOption[] = [];
 
-        const seenNames = new Set(wardList.map((w) => normalizeStr(cleanAreaName(w.name))));
-
-        // Hợp nhất thêm các xã/phường có trong DB của Tỉnh này (đảm bảo không sót dữ liệu nghiệp vụ)
-        dbAreas.forEach((dbA) => {
-          if (isAreaInProvince(dbA, resolvedProvName, provCode)) {
-            const cleanKey = normalizeStr(cleanAreaName(dbA.name));
-            if (!seenNames.has(cleanKey)) {
-              seenNames.add(cleanKey);
-              wardList.push({
-                id: String(dbA._id),
-                name: dbA.name,
-                code: dbA.code,
-                type: dbA.type,
-              });
-            }
-          }
+        apiUnits.forEach((u) => {
+          const cleanKey = normalizeStr(cleanAreaName(u.name));
+          if (cleanKey && seenNames.has(cleanKey)) return;
+          if (cleanKey) seenNames.add(cleanKey);
+          wardList.push({
+            id: u.name, // Dùng tên xã/phường làm định danh lọc thống nhất
+            name: u.name,
+            code: u.code,
+            type: u.type,
+          });
         });
+
+        // Chỉ fallback sang DB nếu API hành chính không trả về dữ liệu
+        if (wardList.length === 0) {
+          dbAreas.forEach((dbA) => {
+            if (isAreaInProvince(dbA, resolvedProvName, provCode)) {
+              const cleanKey = normalizeStr(cleanAreaName(dbA.name));
+              if (!seenNames.has(cleanKey)) {
+                seenNames.add(cleanKey);
+                wardList.push({
+                  id: String(dbA._id),
+                  name: dbA.name,
+                  code: dbA.code,
+                  type: dbA.type,
+                });
+              }
+            }
+          });
+        }
 
         wardList.sort((a, b) => a.name.localeCompare(b.name, 'vi'));
         setWards(wardList);
