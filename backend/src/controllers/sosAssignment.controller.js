@@ -83,7 +83,8 @@ class SosAssignmentController {
     try {
       const assignment = await sosAssignmentService.acceptAssignment(req.params.id, req.user);
 
-      await auditService.log({
+      // Ghi audit log bất đồng bộ để không làm chậm phản hồi thao tác trên app cứu hộ
+      void auditService.log({
         actorId: req.user?._id || assignment.rescuerId,
         actorRole: 'RESCUER',
         action: 'RESCUER_ACCEPT_MISSION',
@@ -95,7 +96,7 @@ class SosAssignmentController {
           status: 'ACCEPTED',
           acceptedAt: assignment.acceptedAt,
         },
-      });
+      }).catch(() => {});
 
       return sendSuccess(res, 200, 'Chấp nhận phân công thành công', assignment);
     } catch (error) {
@@ -129,7 +130,7 @@ class SosAssignmentController {
       );
 
       const actorRole = req.user?.roles?.includes('RESCUER') ? 'RESCUER' : (req.user?.roles?.[0] || 'RESCUER');
-      await auditService.log({
+      void auditService.log({
         actorId: req.user?._id || assignment.rescuerId,
         actorRole,
         action: `RESCUER_${status}_MISSION`,
@@ -142,7 +143,7 @@ class SosAssignmentController {
           proofImagesCount: finalProofImages.length,
           actualRecipient,
         },
-      });
+      }).catch(() => {});
 
       return sendSuccess(res, 200, 'Cập nhật trạng thái phân công thành công', assignment);
     } catch (error) {
@@ -192,7 +193,7 @@ class SosAssignmentController {
       );
 
       const actorRole = req.user?.roles?.includes('RESCUER') ? 'RESCUER' : (req.user?.roles?.[0] || 'RESCUER');
-      await auditService.log({
+      void auditService.log({
         actorId: req.user?._id || null,
         actorRole,
         action: `RESCUER_${status}_MISSION`,
@@ -204,7 +205,7 @@ class SosAssignmentController {
           proofImagesCount: finalProofImages.length,
           actualRecipient,
         },
-      });
+      }).catch(() => {});
 
       return sendSuccess(res, 200, 'Cập nhật tiến trình tác chiến thành công', result);
     } catch (error) {

@@ -1194,6 +1194,10 @@ const assignShoreHandoff = async (id, data, _user) => {
     const io = getIO();
     if (io) {
       io.emit('sos:updated', populated || sos);
+      io.emit('rescue_teams_updated', {
+        sosId: sos._id.toString(),
+        status: sos.status,
+      });
     }
   } catch (_) {}
 
@@ -1256,6 +1260,10 @@ const cancelShoreHandoff = async (id, _user) => {
     const io = getIO();
     if (io) {
       io.emit('sos:updated', populated || sos);
+      io.emit('rescue_teams_updated', {
+        sosId: sos._id.toString(),
+        status: sos.status,
+      });
     }
   } catch (_) {}
 
@@ -1308,8 +1316,14 @@ const completeShoreHandoff = async (id, _user, proofImages = []) => {
         const { getIO } = require('../socket');
         const io = getIO();
         if (io) {
+          io.emit('assignment:status_updated', handoffAssignment);
           io.emit('assignment:updated', handoffAssignment);
           io.emit('assignment:completed', handoffAssignment);
+          io.emit('rescue_teams_updated', {
+            teamId: handoffAssignment.rescueTeamId?.toString?.() || handoffAssignment.rescueTeamId || null,
+            assignmentId: handoffAssignment._id.toString(),
+            status: 'COMPLETED',
+          });
         }
       }
     } catch (assignErr) {
@@ -1364,6 +1378,10 @@ const completeShoreHandoff = async (id, _user, proofImages = []) => {
     const io = getIO();
     if (io) {
       io.emit('sos:updated', populated || sos);
+      io.emit('rescue_teams_updated', {
+        sosId: sos._id.toString(),
+        status: sos.status,
+      });
     }
   } catch (_) {}
 

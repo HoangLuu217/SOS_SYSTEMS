@@ -155,12 +155,26 @@ export function AuthenticatedApp() {
       DeviceEventEmitter.emit('rescue_teams_updated', payload);
     };
 
+    const onSupplyApproved = (payload?: any) => {
+      DeviceEventEmitter.emit('assignment:supply_approved', payload);
+      onSignal(payload);
+    };
+
+    const onSupplyRejected = (payload?: any) => {
+      DeviceEventEmitter.emit('assignment:supply_rejected', payload);
+      onSignal(payload);
+    };
+
     s.on('assignment:new', onSignal);
     s.on('assignment:created', onSignal);
     s.on('assignment:assigned', onSignal);
     s.on('assignment:cancelled', onSignal);
     s.on('assignment:deleted', onSignal);
     s.on('assignment:updated', onSignal);
+    s.on('assignment:status_updated', onSignal);
+    s.on('assignment:supply_requested', onSignal);
+    s.on('assignment:supply_approved', onSupplyApproved);
+    s.on('assignment:supply_rejected', onSupplyRejected);
     s.on('sos:created', onSignal);
     s.on('sos:updated', onSignal);
     s.on('sos:status_changed', onSignal);
@@ -170,6 +184,8 @@ export function AuthenticatedApp() {
 
     return () => {
       sub.remove();
+      s.off('assignment:supply_approved', onSupplyApproved);
+      s.off('assignment:supply_rejected', onSupplyRejected);
       s.off('team:membership_updated', onTeamSignal);
       s.off('rescue_teams_updated', onTeamSignal);
       s.disconnect();
