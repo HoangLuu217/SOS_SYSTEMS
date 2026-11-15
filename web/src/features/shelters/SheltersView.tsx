@@ -1956,10 +1956,10 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
                     return (
                       <tr
                         key={sh._id}
+                        className={`ra-clickable-row ${detailShelter?._id === sh._id || selectedShelterIds.includes(sh._id) ? 'row-selected' : ''}`}
                         onClick={() => setDetailShelter(sh)}
                         title="Nhấn để xem chi tiết điểm trú ẩn"
                         style={{
-                          backgroundColor: selectedShelterIds.includes(sh._id) ? '#f0fdf4' : undefined,
                           cursor: 'pointer',
                         }}
                       >

@@ -119,13 +119,15 @@ interface SheetSpec {
 }
 
 function xmlEscape(str: string): string {
+  // eslint-disable-next-line no-control-regex
+  const ctrlRegex = /[\x00-\x08\x0B\x0C\x0E-\x1F]/g;
   return str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;')
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+    .replace(ctrlRegex, '');
 }
 
 function colLetter(colIdx0: number): string {
@@ -1148,8 +1150,32 @@ function createZipArchive(files: { name: string; content: string }[]): Uint8Arra
   return out;
 }
 
-export function exportDashboardWorkbook(rawData: ReportsRawData): void {
-  const sheets = buildAllSheets(rawData);
+function sanitizeExcelSheetNames(rawNames: string[]): string[] {
+  const used = new Set<string>();
+  return rawNames.map((raw, idx) => {
+    const cleaned = String(raw || `Sheet ${idx + 1}`)
+      .replace(/[/\\?*:[\]]/g, '-')
+      .replace(/[\r\n\t]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/^'+|'+$/g, '')
+      .trim();
+    const base = (cleaned || `Sheet ${idx + 1}`).slice(0, 31).trim();
+    let candidate = base;
+    let suffixIdx = 2;
+    while (used.has(candidate.toLowerCase())) {
+      const suffix = ` (${suffixIdx})`;
+      const maxBaseLen = Math.max(1, 31 - suffix.length);
+      candidate = `${base.slice(0, maxBaseLen).trim()}${suffix}`;
+      suffixIdx += 1;
+    }
+    used.add(candidate.toLowerCase());
+    return candidate;
+  });
+}
+
+export function exportWorkbookSheets(sheets: SheetSpec[], fileName: string): void {
+  if (!sheets || sheets.length === 0) return;
+  const safeSheetNames = sanitizeExcelSheetNames(sheets.map((s) => s.name));
 
   const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -1175,8 +1201,8 @@ export function exportDashboardWorkbook(rawData: ReportsRawData): void {
   <sheets>
     ${sheets
       .map(
-        (s, i) =>
-          `<sheet name="${xmlEscape(s.name.slice(0, 31))}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`
+        (_, i) =>
+          `<sheet name="${xmlEscape(safeSheetNames[i])}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`
       )
       .join('\n    ')}
   </sheets>
@@ -1215,9 +1241,20 @@ export function exportDashboardWorkbook(rawData: ReportsRawData): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `Bao_Cao_Thong_Ke_SOS_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  link.download = fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+export function exportDashboardWorkbook(rawData: ReportsRawData): void {
+  const sheets = buildAllSheets(rawData);
+  exportWorkbookSheets(
+    sheets,
+    `Bao_Cao_Thong_Ke_SOS_${new Date().toISOString().slice(0, 10)}.xlsx`
+  );
+}
+
+export { formatDateVi, buildSheetFormHeader, appendDataTable };
+export type { StyleId, CellSpec, RowSpec, SheetSpec };

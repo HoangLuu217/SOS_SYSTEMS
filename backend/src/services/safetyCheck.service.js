@@ -285,7 +285,7 @@ class SafetyCheckService {
    */
   async getSafetyChecks(currentUser, query = {}) {
     const page = Math.max(1, parseInt(query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
+    const limit = Math.min(5000, Math.max(1, parseInt(query.limit, 10) || 20));
     const skip = (page - 1) * limit;
 
     const isAdmin = Boolean(currentUser.roles && currentUser.roles.includes('ADMIN'));
@@ -614,7 +614,7 @@ class SafetyCheckService {
     }
 
     const page = Math.max(1, parseInt(query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
+    const limit = Math.min(5000, Math.max(1, parseInt(query.limit, 10) || 20));
     const skip = (page - 1) * limit;
 
     const filter = { safetyCheckId };

@@ -18,6 +18,13 @@ import {
 import { toast } from '@/components/common/toast';
 import { SearchableSelect } from '@/components/common/SearchableSelect';
 import {
+  exportWorkbookSheets,
+  buildSheetFormHeader,
+  appendDataTable,
+  formatDateVi,
+  type SheetSpec,
+} from '@/features/admin/exportReportsExcel';
+import {
   ShieldCheck,
   CheckCircle2,
   Plus,
@@ -27,7 +34,6 @@ import {
   MapPin,
   Square,
   Download,
-  Eye,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -242,7 +248,7 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
 
     // Sắp xếp
     result.sort((a, b) => {
-      let cmp = 0;
+      let cmp: number;
       switch (sortField) {
         case 'title':
           cmp = (a.title || '').localeCompare(b.title || '');
@@ -393,6 +399,33 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
     }
   };
 
+  const [exportingAllChecks, setExportingAllChecks] = useState(false);
+  const [exportingSingleCheckId, setExportingSingleCheckId] = useState<string | null>(null);
+
+  // Tải toàn bộ danh sách phản hồi của 1 đợt kiểm tra (hỗ trợ phân trang nếu vượt giới hạn trang)
+  const fetchAllResponsesForCheck = useCallback(async (checkId: string): Promise<SafetyCheckResponseItem[]> => {
+    const firstRes = await fetchSafetyCheckResponsesApi(checkId, { page: 1, limit: 5000 });
+    if (!firstRes.success || !firstRes.data?.responses) {
+      return [];
+    }
+    const collected = [...firstRes.data.responses];
+    const pag = firstRes.data.pagination || firstRes.pagination;
+    const totalPagesCount = pag?.totalPages || 1;
+    const pageLimit = pag?.limit || 100;
+    if (totalPagesCount > 1) {
+      const remainingPages = Array.from({ length: totalPagesCount - 1 }, (_, i) => i + 2);
+      const moreResults = await Promise.all(
+        remainingPages.map((p) => fetchSafetyCheckResponsesApi(checkId, { page: p, limit: pageLimit }))
+      );
+      moreResults.forEach((r) => {
+        if (r.success && Array.isArray(r.data?.responses)) {
+          collected.push(...r.data.responses);
+        }
+      });
+    }
+    return collected;
+  }, []);
+
   // Mở drawer xem chi tiết phản hồi người dân
   const handleOpenResponses = async (check: SafetyCheckItem) => {
     setViewingCheck(check);
@@ -402,10 +435,8 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
     setResponsePage(1);
     setResponseJumpInput('1');
     try {
-      const res = await fetchSafetyCheckResponsesApi(check._id, { limit: 300 });
-      if (res.success && res.data?.responses) {
-        setResponses(res.data.responses);
-      }
+      const allResp = await fetchAllResponsesForCheck(check._id);
+      setResponses(allResp);
     } catch (err: any) {
       toast.error('Không thể tải danh sách phản hồi: ' + err.message);
     } finally {
@@ -437,105 +468,202 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
   const responseStartIndex = (safeResponsePage - 1) * RESPONSE_PAGE_SIZE;
   const paginatedResponses = filteredResponses.slice(responseStartIndex, responseStartIndex + RESPONSE_PAGE_SIZE);
 
-  const escapeCsvCell = (val: unknown): string => {
-    const str = val === null || val === undefined ? '' : String(val);
-    return `"${str.replace(/"/g, '""')}"`;
-  };
+  // Dựng 1 tab Excel chuẩn biểu mẫu cho 1 đợt kiểm tra an toàn kèm danh sách đầy đủ người phản hồi
+  const buildSafetyCheckSheet = (
+    check: SafetyCheckItem,
+    checkResponses: SafetyCheckResponseItem[],
+    tabPrefix = ''
+  ): SheetSpec => {
+    const dInfo = getDisasterTypeInfo(check.disasterType);
+    const scopeLabel =
+      check.scope === 'WARD' ? 'Phường / Xã' : check.scope === 'PROVINCE' ? 'Tỉnh / Thành phố' : 'Toàn hệ thống';
+    const areaDisplay = check.areaName || 'Toàn hệ thống';
+    const statusDisplay = check.status === 'ACTIVE' ? 'Đang mở (Đang diễn ra)' : 'Đã kết thúc';
 
-  // Xuất CSV danh sách đợt kiểm tra an toàn
-  const handleExportChecksCsv = () => {
+    const safeCount =
+      checkResponses.length > 0
+        ? checkResponses.filter((r) => r.status === 'SAFE').length
+        : check.stats?.safeCount || 0;
+    const needHelpCount =
+      checkResponses.length > 0
+        ? checkResponses.filter((r) => r.status === 'NEED_HELP').length
+        : check.stats?.needHelpCount || 0;
+    const totalCount =
+      checkResponses.length > 0 ? checkResponses.length : check.stats?.totalResponses || 0;
+    const totalPeopleCount = checkResponses.reduce((sum, r) => sum + (Number(r.peopleCount) || 1), 0);
+
     const headers = [
       'STT',
-      'Tên đợt kiểm tra an toàn',
-      'Loại hình thiên tai',
-      'Nội dung hướng dẫn',
-      'Phạm vi',
-      'Khu vực',
-      'Người phát động',
-      'Trạng thái',
-      'Số người An toàn',
-      'Số người Cần cứu hộ',
-      'Tổng phản hồi',
-      'Thời gian tạo',
-    ];
-    const rows = filteredAndSortedChecks.map((c, idx) => [
-      idx + 1,
-      c.title || '',
-      getDisasterTypeInfo(c.disasterType).label,
-      c.description || '',
-      c.scope === 'WARD' ? 'Phường / Xã' : c.scope === 'PROVINCE' ? 'Tỉnh / TP' : 'Toàn hệ thống',
-      c.areaName || 'Toàn hệ thống',
-      c.createdBy?.fullName || 'Hệ thống',
-      c.status === 'ACTIVE' ? 'Đang mở' : 'Đã đóng',
-      c.stats?.safeCount || 0,
-      c.stats?.needHelpCount || 0,
-      c.stats?.totalResponses || 0,
-      new Date(c.createdAt).toLocaleString('vi-VN'),
-    ]);
-    const csvContent =
-      '\uFEFF' +
-      [headers.map(escapeCsvCell).join(','), ...rows.map((r) => r.map(escapeCsvCell).join(','))].join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `Danh_sach_kiem_tra_an_toan_${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast.success(`Đã xuất ${filteredAndSortedChecks.length} đợt kiểm tra an toàn ra file CSV.`);
-  };
-
-  // Xuất CSV danh sách phản hồi của đợt đang xem
-  const handleExportResponsesCsv = () => {
-    if (!viewingCheck) return;
-    const headers = [
-      'STT',
-      'Đợt kiểm tra an toàn',
-      'Địa bàn',
       'Họ và tên người dân',
       'Số điện thoại',
       'Trạng thái an toàn',
       'Số người',
-      'Tình hình / Lời nhắn',
-      'Vĩ độ (Lat)',
-      'Kinh độ (Lng)',
-      'Địa chỉ',
+      'Tình hình / Lời nhắn ghi chú',
+      'Địa chỉ ghi nhận',
+      'Tọa độ GPS (Lat, Lng)',
+      'Mã SOS liên kết',
       'Thời gian phản hồi',
     ];
-    const rows = filteredResponses.map((item, idx) => [
-      idx + 1,
-      viewingCheck.title || '',
-      viewingCheck.areaName || '',
-      item.userFullName || item.userId?.fullName || 'Người dân',
-      item.userPhone || item.userId?.phone || '',
-      item.status === 'SAFE' ? 'An toàn' : 'Cần cứu hộ',
-      item.peopleCount || 1,
-      item.message || (item.status === 'SAFE' ? 'Đã an toàn' : 'Cần hỗ trợ'),
-      item.location?.coordinates ? item.location.coordinates[1] : '',
-      item.location?.coordinates ? item.location.coordinates[0] : '',
-      item.address || '',
-      new Date(item.respondedAt).toLocaleString('vi-VN'),
+
+    const { rows, merges } = buildSheetFormHeader(
+      'BIỂU MẪU BÁO CÁO ĐỢT KIỂM TRA AN TOÀN NGƯỜI DÂN — HỆ THỐNG CỨU HỘ KHẨN CẤP (SOS)',
+      `Đợt kiểm tra: ${check.title || '—'}  |  Địa bàn: ${areaDisplay}  |  Trạng thái: ${statusDisplay}`,
+      headers.length,
+      [
+        ['Tên đợt kiểm tra an toàn', check.title || '—', 'Trạng thái đợt kiểm tra', statusDisplay],
+        ['Loại hình thiên tai / Sự cố', dInfo.label, 'Phạm vi & Địa bàn áp dụng', `${scopeLabel} — ${areaDisplay}`],
+        ['Người phát động', check.createdBy?.fullName || 'Quản trị viên', 'Thời gian phát động', formatDateVi(check.createdAt)],
+        ['Tổng số người dân phản hồi', totalCount, 'Thời gian xuất biểu mẫu', formatDateVi(new Date().toISOString())],
+        ['Số người xác nhận AN TOÀN', safeCount, 'Số người báo CẦN CỨU HỘ', needHelpCount],
+        [
+          'Nội dung hướng dẫn người dân',
+          check.description || '—',
+          'Thời gian kết thúc đợt',
+          check.endTime ? formatDateVi(check.endTime) : 'Đang duy trì',
+        ],
+      ]
+    );
+
+    const dataMatrix =
+      checkResponses.length > 0
+        ? checkResponses.map((item, idx) => {
+            const fullName = item.userFullName || item.userId?.fullName || 'Người dân';
+            const phone = item.userPhone || item.userId?.phone || '—';
+            const isSafe = item.status === 'SAFE';
+            const statusText = isSafe ? 'An toàn' : 'CẦN CỨU HỘ KHẨN CẤP';
+            const peopleCount = Number(item.peopleCount) || 1;
+            const note = item.message || (isSafe ? 'Đã xác nhận an toàn' : 'Cần hỗ trợ cứu hộ khẩn cấp');
+            const address = item.address || '—';
+            const coords =
+              Array.isArray(item.location?.coordinates) && item.location.coordinates.length >= 2
+                ? `${Number(item.location.coordinates[1]).toFixed(6)}, ${Number(item.location.coordinates[0]).toFixed(6)}`
+                : '—';
+            const sosCode =
+              typeof item.sosRequestId === 'object' && item.sosRequestId?.sosCode
+                ? item.sosRequestId.sosCode
+                : typeof item.sosRequestId === 'string' && item.sosRequestId
+                ? item.sosRequestId
+                : '—';
+            return [
+              { v: idx + 1, align: 'center' as const },
+              { v: fullName, align: 'left' as const },
+              { v: phone, align: 'center' as const },
+              { v: statusText, align: 'center' as const },
+              { v: peopleCount, align: 'right' as const },
+              { v: note, align: 'left' as const },
+              { v: address, align: 'left' as const },
+              { v: coords, align: 'center' as const },
+              { v: sosCode, align: 'center' as const },
+              { v: formatDateVi(item.respondedAt), align: 'center' as const },
+            ];
+          })
+        : [
+            [
+              { v: '—', align: 'center' as const },
+              { v: 'Chưa có người dân phản hồi trong đợt kiểm tra an toàn này', align: 'left' as const },
+              { v: '—', align: 'center' as const },
+              { v: '—', align: 'center' as const },
+              { v: 0, align: 'right' as const },
+              { v: '—', align: 'left' as const },
+              { v: '—', align: 'left' as const },
+              { v: '—', align: 'center' as const },
+              { v: '—', align: 'center' as const },
+              { v: '—', align: 'center' as const },
+            ],
+          ];
+
+    appendDataTable(rows, headers, dataMatrix, [
+      '',
+      'TỔNG CỘNG PHẢN HỒI ĐỢT NÀY',
+      `${checkResponses.length} người phản hồi`,
+      `An toàn: ${safeCount} | Cần cứu hộ: ${needHelpCount}`,
+      totalPeopleCount,
+      '',
+      '',
+      '',
+      '',
+      '',
     ]);
-    const csvContent =
-      '\uFEFF' +
-      [headers.map(escapeCsvCell).join(','), ...rows.map((r) => r.map(escapeCsvCell).join(','))].join('\r\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const safeTitle = (viewingCheck.title || 'kiem_tra_an_toan')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-zA-Z0-9_-]+/g, '_')
-      .slice(0, 45);
-    link.href = url;
-    link.download = `Phan_hoi_an_toan_${safeTitle}_${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast.success(`Đã xuất ${filteredResponses.length} phản hồi người dân ra file CSV.`);
+
+    const rawTabName = `${tabPrefix}${check.title || 'Kiểm tra an toàn'}`;
+    return {
+      name: rawTabName,
+      colWidths: [7, 25, 16, 22, 12, 35, 34, 24, 18, 20],
+      rows,
+      merges,
+    };
+  };
+
+  // Xuất file Excel toàn bộ các đợt kiểm tra an toàn (mỗi đợt 1 tab Excel kèm đủ danh sách người phản hồi)
+  const handleExportChecksCsv = async () => {
+    if (filteredAndSortedChecks.length === 0) {
+      toast.warning('Không có đợt kiểm tra an toàn nào để xuất.');
+      return;
+    }
+    setExportingAllChecks(true);
+    try {
+      const responsesByCheck = await Promise.all(
+        filteredAndSortedChecks.map((c) => fetchAllResponsesForCheck(c._id))
+      );
+
+      const sheets: SheetSpec[] = filteredAndSortedChecks.map((check, idx) =>
+        buildSafetyCheckSheet(
+          check,
+          responsesByCheck[idx] || [],
+          filteredAndSortedChecks.length > 1 ? `Đợt ${idx + 1} - ` : ''
+        )
+      );
+
+      const fileName = `Bao_cao_kiem_tra_an_toan_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      exportWorkbookSheets(sheets, fileName);
+      toast.success(
+        `Đã xuất biểu mẫu Excel gồm ${sheets.length} tab đợt kiểm tra an toàn kèm đầy đủ danh sách người phản hồi.`
+      );
+    } catch (err: any) {
+      toast.error('Lỗi khi xuất biểu mẫu kiểm tra an toàn: ' + (err.message || 'Không xác định'));
+    } finally {
+      setExportingAllChecks(false);
+    }
+  };
+
+  // Xuất riêng 1 đợt kiểm tra an toàn (chỉ 1 tab Excel duy nhất cho đợt đó kèm đầy đủ người phản hồi)
+  const handleExportSingleCheckExcel = async (
+    check: SafetyCheckItem,
+    preloadedResponses?: SafetyCheckResponseItem[]
+  ) => {
+    setExportingSingleCheckId(check._id);
+    try {
+      const checkResponses =
+        preloadedResponses !== undefined ? preloadedResponses : await fetchAllResponsesForCheck(check._id);
+      const sheet = buildSafetyCheckSheet(check, checkResponses, '');
+      const safeTitle = (check.title || 'kiem_tra_an_toan')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D')
+        .replace(/[^a-zA-Z0-9_-]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 45);
+      const fileName = `Dot_kiem_tra_an_toan_${safeTitle || 'chi_tiet'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      exportWorkbookSheets([sheet], fileName);
+      toast.success(
+        `Đã xuất biểu mẫu đợt "${check.title}" (1 tab Excel, ${checkResponses.length} người phản hồi).`
+      );
+    } catch (err: any) {
+      toast.error('Lỗi khi xuất đợt kiểm tra an toàn: ' + (err.message || 'Không xác định'));
+    } finally {
+      setExportingSingleCheckId(null);
+    }
+  };
+
+  // Xuất riêng đợt đang xem trong Drawer
+  const handleExportResponsesCsv = async () => {
+    if (!viewingCheck) return;
+    const hasActiveDrawerFilter = responseStatusFilter !== 'ALL' || Boolean(responseSearch.trim());
+    await handleExportSingleCheckExcel(
+      viewingCheck,
+      hasActiveDrawerFilter ? filteredResponses : responses.length > 0 ? responses : undefined
+    );
   };
 
   return (
@@ -567,10 +695,11 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
             type="button"
             className="sos-btn-flat"
             onClick={handleExportChecksCsv}
-            title="Xuất danh sách đợt kiểm tra an toàn ra file CSV"
+            disabled={exportingAllChecks || filteredAndSortedChecks.length === 0}
+            title="Xuất biểu mẫu Excel: mỗi đợt kiểm tra an toàn là 1 tab kèm đầy đủ người phản hồi"
           >
-            <Download size={14} />
-            <span>Xuất CSV</span>
+            {exportingAllChecks ? <RefreshCw size={14} className="fa-spin" /> : <Download size={14} />}
+            <span>{exportingAllChecks ? 'Đang xuất...' : 'Xuất CSV'}</span>
           </button>
 
           <button
@@ -909,20 +1038,19 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                     {renderSortIcon('status')}
                   </div>
                 </th>
-                <th style={{ width: '14%', textAlign: 'center' }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '48px 20px', color: '#64748b' }}>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '48px 20px', color: '#64748b' }}>
                     <RefreshCw size={28} className="fa-spin" style={{ margin: '0 auto 10px auto', color: '#0284c7' }} />
                     <div style={{ fontSize: '13.5px', fontWeight: 600 }}>Đang tải danh sách đợt kiểm tra an toàn...</div>
                   </td>
                 </tr>
               ) : totalItems === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: '48px 20px', color: '#64748b' }}>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '48px 20px', color: '#64748b' }}>
                     <ShieldCheck size={36} color="#94a3b8" style={{ margin: '0 auto 10px auto' }} />
                     <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b', marginBottom: 4 }}>
                       Chưa có đợt kiểm tra an toàn nào phù hợp
@@ -953,9 +1081,10 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                   return (
                     <tr
                       key={check._id}
-                      style={{
-                        backgroundColor: viewingCheck?._id === check._id ? '#f0f9ff' : undefined,
-                      }}
+                      className={`ra-clickable-row ${viewingCheck?._id === check._id ? 'row-selected' : ''}`}
+                      onClick={() => handleOpenResponses(check)}
+                      style={{ cursor: 'pointer' }}
+                      title="Nhấn để xem chi tiết phản hồi người dân"
                     >
                       {/* 0. STT */}
                       <td style={{ textAlign: 'center', width: '45px', color: '#64748b', fontWeight: 600 }}>
@@ -984,14 +1113,11 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div
-                              onClick={() => handleOpenResponses(check)}
-                              title="Nhấn để xem chi tiết phản hồi người dân"
                               style={{
                                 fontWeight: 700,
                                 color: '#2563eb',
                                 fontSize: '13.5px',
                                 lineHeight: '1.4',
-                                cursor: 'pointer',
                               }}
                             >
                               {check.title}
@@ -1012,10 +1138,6 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                                 }}
                               >
                                 {disasterInfo.label}
-                              </span>
-                              <span style={{ fontSize: '11.5px', color: '#64748b' }}>
-                                • Do {check.createdBy?.fullName || 'Hệ thống'} (
-                                {check.creatorRole === 'ADMIN' ? 'Quản trị viên' : 'Cán bộ Xã'})
                               </span>
                             </div>
                           </div>
@@ -1112,33 +1234,6 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                           />
                           {check.status === 'ACTIVE' ? 'Đang mở' : 'Đã kết thúc'}
                         </span>
-                      </td>
-
-                      {/* 6. Thao tác */}
-                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'inline-flex', gap: '6px', alignItems: 'center', justifyContent: 'center' }}>
-                          <button
-                            type="button"
-                            className="sos-btn-flat"
-                            onClick={() => handleOpenResponses(check)}
-                            title="Xem chi tiết danh sách phản hồi người dân"
-                          >
-                            <Eye size={13} />
-                            <span>Chi tiết</span>
-                          </button>
-
-                          {check.status === 'ACTIVE' && (
-                            <button
-                              type="button"
-                              className="sos-btn-flat danger"
-                              onClick={() => handleCloseCheck(check)}
-                              title="Kết thúc đợt kiểm tra an toàn này"
-                            >
-                              <Square size={12} />
-                              <span>Đóng đợt</span>
-                            </button>
-                          )}
-                        </div>
                       </td>
                     </tr>
                   );
@@ -1334,10 +1429,17 @@ export const SafetyCheckView: React.FC<SafetyCheckViewProps> = ({ user }) => {
                   type="button"
                   className="sos-btn-flat"
                   onClick={handleExportResponsesCsv}
-                  title="Xuất danh sách phản hồi người dân ra CSV"
+                  disabled={exportingSingleCheckId === viewingCheck._id}
+                  title="Xuất riêng biểu mẫu đợt kiểm tra này (1 tab Excel kèm đầy đủ người phản hồi)"
                 >
-                  <Download size={13} />
-                  <span>Xuất CSV phản hồi</span>
+                  {exportingSingleCheckId === viewingCheck._id ? (
+                    <RefreshCw size={13} className="fa-spin" />
+                  ) : (
+                    <Download size={13} />
+                  )}
+                  <span>
+                    {exportingSingleCheckId === viewingCheck._id ? 'Đang xuất...' : 'Xuất CSV phản hồi'}
+                  </span>
                 </button>
 
                 {viewingCheck.status === 'ACTIVE' && (

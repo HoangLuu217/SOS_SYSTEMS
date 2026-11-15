@@ -1948,10 +1948,10 @@ export const HazardReportsView: React.FC<HazardReportsViewProps> = ({
                     return (
                       <tr
                         key={r._id}
+                        className={`ra-clickable-row ${detailHazard?._id === r._id || selectedHazardIds.includes(r._id) ? 'row-selected' : ''}`}
                         onClick={() => setDetailHazard(r)}
                         title="Nhấn để xem chi tiết điểm nguy hiểm"
                         style={{
-                          backgroundColor: selectedHazardIds.includes(r._id) ? '#fff5f5' : undefined,
                           cursor: 'pointer',
                         }}
                       >
