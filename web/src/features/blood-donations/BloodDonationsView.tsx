@@ -13,7 +13,6 @@ import {
   Building2,
   User as UserIcon,
   Activity,
-  Download,
   ExternalLink,
   CheckCircle2,
   Bell,
@@ -840,11 +839,6 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
     }
   };
 
-  const escapeCsvCell = (val: unknown): string => {
-    const str = val === null || val === undefined ? '' : String(val);
-    return `"${str.replace(/"/g, '""')}"`;
-  };
-
   // Xuất Excel có biểu mẫu cho từng đợt hiến máu cụ thể
   const handleExportEventParticipantsExcel = async (
     ev: BloodDonationEvent,
@@ -868,99 +862,6 @@ export const BloodDonationsView: React.FC<BloodDonationsViewProps> = ({ user }) 
       );
     } catch (err: any) {
       showToast('error', err.message || 'Không thể xuất file Excel cho đợt hiến máu này');
-    }
-  };
-
-  // Xuất CSV danh sách trên thanh công cụ (theo tab hiện tại)
-  const handleExportToolbarCsv = () => {
-    if (activeTab === 'REGISTRATIONS') {
-      const headers = [
-        'STT',
-        'Họ và tên',
-        'Số điện thoại',
-        'Email',
-        'Nhóm máu',
-        'Cân nặng (kg)',
-        'Loại đăng ký',
-        'Trạng thái',
-        'Đợt hiến máu phản hồi',
-        'Khu vực / Tỉnh TP',
-        'Địa chỉ',
-        'Ghi chú',
-        'Thời gian đăng ký',
-      ];
-      const rows = filteredRegistrations.map((r, idx) => [
-        idx + 1,
-        r.fullName || r.userId?.fullName || '',
-        r.phone || r.userId?.phone || '',
-        r.userId?.email || '',
-        r.bloodType === 'UNKNOWN' ? 'Chưa rõ' : r.bloodType || '',
-        r.weightKg ?? '',
-        r.registrationType === 'PRE_REGISTRATION' ? 'ĐK nhận thông báo đợt hiến' : 'Xác nhận theo đợt',
-        getStatusLabelText(r.status),
-        r.eventId?.title || '—',
-        r.provinceName || r.areaName || '',
-        r.address || r.userId?.address || '',
-        r.note || '',
-        formatDateTime(r.respondedAt || r.createdAt),
-      ]);
-      const csvContent =
-        '\uFEFF' +
-        [headers.map(escapeCsvCell).join(','), ...rows.map((row) => row.map(escapeCsvCell).join(','))].join('\r\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Danh_sach_dang_ky_hien_mau_${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      showToast('success', `Đã xuất ${filteredRegistrations.length} hồ sơ đăng ký hiến máu ra CSV.`);
-    } else {
-      const headers = [
-        'STT',
-        'Tên đợt hiến máu',
-        'Địa điểm',
-        'Địa chỉ',
-        'Khu vực',
-        'Ngày tổ chức',
-        'Khung giờ',
-        'Nhóm máu cần',
-        'Số người xác nhận',
-        'Chỉ tiêu dự kiến',
-        'Đơn vị tổ chức',
-        'SĐT liên hệ',
-        'Trạng thái',
-      ];
-      const rows = filteredEvents.map((ev, idx) => [
-        idx + 1,
-        ev.title || '',
-        ev.locationName || '',
-        ev.address || '',
-        ev.areaName || 'Toàn hệ thống',
-        formatDate(ev.eventDate),
-        `${ev.startTime || ''} - ${ev.endTime || ''}`,
-        !ev.neededBloodTypes || ev.neededBloodTypes.includes('ALL') ? 'Tất cả' : ev.neededBloodTypes.join(', '),
-        ev.stats?.confirmedCount || 0,
-        ev.targetDonors || 0,
-        ev.organizerName || '',
-        ev.contactPhone || '',
-        ev.status === 'ACTIVE' ? 'Đang mở' : 'Đã đóng',
-      ]);
-      const csvContent =
-        '\uFEFF' +
-        [headers.map(escapeCsvCell).join(','), ...rows.map((row) => row.map(escapeCsvCell).join(','))].join('\r\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Danh_sach_dot_hien_mau_${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      showToast('success', `Đã xuất ${filteredEvents.length} đợt hiến máu ra CSV.`);
     }
   };
 

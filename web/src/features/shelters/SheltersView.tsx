@@ -705,18 +705,19 @@ export const SheltersView: React.FC<SheltersViewProps> = ({
           Array.isArray(coords) && coords.length === 2
             ? `https://www.google.com/maps/search/?api=1&query=${Number(coords[1]).toFixed(6)},${Number(coords[0]).toFixed(6)}`
             : '—';
+        const legacyImageUrl = (sh as { imageUrl?: string }).imageUrl;
         const imageList =
           Array.isArray(sh.images) && sh.images.length > 0
             ? sh.images.filter(Boolean)
-            : sh.imageUrl
-            ? [sh.imageUrl]
+            : legacyImageUrl
+            ? [legacyImageUrl]
             : [];
         const imageLinks = imageList.length > 0 ? imageList.join('\n') : '—';
 
         totalOccupancy += occ;
         totalCapacity += cap;
         totalAvailable += avail;
-        if (sh.status === 'OPEN' || sh.status === 'LIMITED') activeCount += 1;
+        if (sh.status === 'ACTIVE') activeCount += 1;
 
         return [
           { v: idx + 1, align: 'center' as const },
