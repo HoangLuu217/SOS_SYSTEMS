@@ -17,6 +17,7 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { backendApi, EmergencyAuthorityContact } from '@/api';
+import { DANANG_WARD_AUTHORITIES } from '@/constants/wardAuthorities';
 
 const EMERGENCY_DIRECTORY_CACHE_KEY = 'sos_emergency_directory_offline_v1';
 
@@ -81,6 +82,17 @@ const DANANG_FALLBACK_DIRECTORY: EmergencyAuthorityContact[] = [
     address: 'Hỗ trợ cấp cứu y tế khẩn cấp 24/7',
     type: 'PROVINCE',
   },
+  ...DANANG_WARD_AUTHORITIES.map((w) => ({
+    id: w.id,
+    name: `Ban Chỉ Huy PCTT & TKCN ${w.ward}`,
+    department: `UBND ${w.ward}, TP. Đà Nẵng`,
+    phone: w.phone,
+    areaName: `${w.ward}, TP. Đà Nẵng`,
+    address: `${w.ward}, Thành phố Đà Nẵng`,
+    type: 'ORGANIZATION' as const,
+    lat: w.lat,
+    lng: w.lng,
+  })),
 ];
 
 interface EmergencyDirectoryModalProps {
@@ -88,6 +100,39 @@ interface EmergencyDirectoryModalProps {
   onClose: () => void;
   userAddress?: string;
   initialMode?: 'GPS' | 'PROFILE' | 'ALL';
+}
+
+function mergeWithFallbackDirectory(
+  remoteList: EmergencyAuthorityContact[]
+): EmergencyAuthorityContact[] {
+  const merged = [...remoteList];
+  const seenPhones = new Set(
+    merged.map((item) => (item.phone || '').replace(/[^0-9+]/g, '')).filter(Boolean)
+  );
+
+  for (const fallbackItem of DANANG_FALLBACK_DIRECTORY) {
+    const cleanPhone = (fallbackItem.phone || '').replace(/[^0-9+]/g, '');
+    if (cleanPhone && seenPhones.has(cleanPhone)) continue;
+
+    // Nếu là đầu mối cấp phường/xã (id bắt đầu bằng "ward-"), kiểm tra xem đã có đầu mối nào thuộc phường đó chưa
+    if (fallbackItem.id.startsWith('ward-')) {
+      const shortKey = fallbackItem.areaName
+        .split(',')[0]
+        .replace(/^(Phường|Xã|Đặc khu)\s+/i, '')
+        .trim()
+        .toLowerCase();
+      const alreadyExists = merged.some((item) => {
+        const text = `${item.name || ''} ${item.department || ''} ${item.address || ''} ${item.areaName || ''}`.toLowerCase();
+        return shortKey ? text.includes(shortKey) : false;
+      });
+      if (alreadyExists) continue;
+    }
+
+    if (cleanPhone) seenPhones.add(cleanPhone);
+    merged.push(fallbackItem);
+  }
+
+  return merged;
 }
 
 // Hàm tính khoảng cách giữa 2 toạ độ GPS (km) theo công thức Haversine
@@ -132,7 +177,7 @@ export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = (
       if (cachedRaw) {
         const parsed = JSON.parse(cachedRaw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setDirectory(parsed);
+          setDirectory(mergeWithFallbackDirectory(parsed));
           hasCached = true;
         }
       }
@@ -145,9 +190,10 @@ export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = (
     try {
       const res = await backendApi.getEmergencyDirectory();
       if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        setDirectory(res.data);
+        const merged = mergeWithFallbackDirectory(res.data);
+        setDirectory(merged);
         setIsOfflineMode(false);
-        await AsyncStorage.setItem(EMERGENCY_DIRECTORY_CACHE_KEY, JSON.stringify(res.data));
+        await AsyncStorage.setItem(EMERGENCY_DIRECTORY_CACHE_KEY, JSON.stringify(merged));
       } else {
         setIsOfflineMode(true);
       }
@@ -180,23 +226,35 @@ export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = (
         return;
       }
 
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const lat = loc.coords.latitude;
-      const lng = loc.coords.longitude;
-      setUserCoords({ lat, lng });
+      let loc = await Location.getLastKnownPositionAsync();
+      if (!loc) {
+        loc = await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low }),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
+        ]);
+      }
 
-      // Dịch ngược địa danh
-      try {
-        const geoList = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-        if (geoList && geoList.length > 0) {
-          const g = geoList[0];
-          const name = g.district || g.subregion || g.city || g.region || '';
-          setDetectedLocationName(name);
-          if (name) {
-            setSearchText(name);
+      if (loc) {
+        const lat = loc.coords.latitude;
+        const lng = loc.coords.longitude;
+        setUserCoords({ lat, lng });
+
+        // Dịch ngược địa danh (giới hạn 3 giây để không treo nút GPS)
+        try {
+          const geoList = await Promise.race([
+            Location.reverseGeocodeAsync({ latitude: lat, longitude: lng }),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+          ]);
+          if (geoList && geoList.length > 0) {
+            const g = geoList[0];
+            const name = g.district || g.subregion || g.city || g.region || '';
+            setDetectedLocationName(name);
+            if (name) {
+              setSearchText(name);
+            }
           }
-        }
-      } catch {}
+        } catch {}
+      }
     } catch (err) {
       console.log('Lỗi định vị:', err);
     } finally {
@@ -347,7 +405,22 @@ export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = (
                 activeOpacity={0.75}
               >
                 {isLocating ? (
-                  <ActivityIndicator size="small" color={activeSourceMode === 'GPS' ? '#FFFFFF' : '#0066FF'} />
+                  <>
+                    <ActivityIndicator
+                      size="small"
+                      color={activeSourceMode === 'GPS' && userCoords ? '#FFFFFF' : '#0066FF'}
+                    />
+                    <Text
+                      style={[
+                        styles.locateBtnText,
+                        { fontSize: 12 },
+                        activeSourceMode === 'GPS' && userCoords ? styles.locateBtnTextActive : null,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      Đang định vị...
+                    </Text>
+                  </>
                 ) : (
                   <>
                     <Ionicons
@@ -413,7 +486,12 @@ export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = (
               activeOpacity={0.75}
             >
               {isLocating ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <>
+                  <ActivityIndicator size="small" color={userCoords ? '#FFFFFF' : '#0066FF'} />
+                  <Text style={[styles.locateBtnText, userCoords ? styles.locateBtnTextActive : null]}>
+                    Đang định vị...
+                  </Text>
+                </>
               ) : (
                 <>
                   <Ionicons
@@ -445,7 +523,13 @@ export const EmergencyDirectoryModal: React.FC<EmergencyDirectoryModalProps> = (
               return (
                 <TouchableOpacity
                   style={[styles.tagChip, active ? styles.tagChipActive : null]}
-                  onPress={() => setSelectedTag(item)}
+                  onPress={() => {
+                    setSelectedTag(item);
+                    if (activeSourceMode !== 'ALL' || searchText.trim()) {
+                      setSearchText('');
+                      setActiveSourceMode('ALL');
+                    }
+                  }}
                   activeOpacity={0.7}
                 >
                   <Text style={[styles.tagChipText, active ? styles.tagChipTextActive : null]}>

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -9,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { assignmentApi, type RescuerAssignmentItem } from '@/api';
 
@@ -47,6 +48,7 @@ export const RescuerFeedbackHistoryModal: React.FC<RescuerFeedbackHistoryModalPr
   visible,
   onClose,
 }) => {
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [entries, setEntries] = useState<FeedbackEntry[]>([]);
@@ -140,10 +142,28 @@ export const RescuerFeedbackHistoryModal: React.FC<RescuerFeedbackHistoryModalPr
   }, [entries, filter]);
 
   return (
-    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.headerIconBtn} onPress={onClose} activeOpacity={0.7}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={onClose}
+    >
+      <SafeAreaView
+        style={styles.container}
+        edges={Platform.OS === 'ios' ? ['bottom'] : ['top', 'bottom']}
+      >
+        <View
+          style={[
+            styles.header,
+            Platform.OS === 'ios' && { paddingTop: Math.max(insets.top, 44) + 8 },
+          ]}
+        >
+          <TouchableOpacity
+            style={styles.headerIconBtn}
+            onPress={onClose}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Feather name="arrow-left" size={20} color="#0F172A" />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
