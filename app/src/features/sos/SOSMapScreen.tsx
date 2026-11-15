@@ -204,6 +204,61 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
   } | null>(null);
   const [updateSuccessData, setUpdateSuccessData] = useState<any | null>(null);
 
+  // Tự động cập nhật kết quả phân tích AI trên màn hình ĐÃ ĐĂNG TIN THÀNH CÔNG
+  useEffect(() => {
+    const sosId = successData?.sosId;
+    if (!sosId) return;
+
+    const currentPrio = successData?.rawSosData?.priority;
+    const currentAiStatus = successData?.rawSosData?.aiAssessment?.status;
+    const isStillPending =
+      (!currentPrio || currentPrio === 'UNASSESSED') &&
+      (!currentAiStatus || currentAiStatus === 'PENDING');
+
+    const syncSub = DeviceEventEmitter.addListener('sos:sync', (updatedSos: any) => {
+      if (updatedSos?._id === sosId) {
+        setSuccessData((prev) => (prev ? { ...prev, rawSosData: updatedSos } : prev));
+      }
+    });
+
+    if (!isStillPending) {
+      return () => syncSub.remove();
+    }
+
+    let cancelled = false;
+    let attempts = 0;
+    const timer = setInterval(async () => {
+      if (cancelled) return;
+      attempts += 1;
+      try {
+        const res = await backendApi.get(`/sos/${sosId}`);
+        if (!cancelled && res.success && res.data) {
+          const nextPrio = res.data.priority;
+          const nextAiStatus = res.data.aiAssessment?.status;
+          if ((nextPrio && nextPrio !== 'UNASSESSED') || (nextAiStatus && nextAiStatus !== 'PENDING')) {
+            setSuccessData((prev) => (prev ? { ...prev, rawSosData: res.data } : prev));
+            DeviceEventEmitter.emit('sos:sync', res.data);
+            clearInterval(timer);
+            return;
+          }
+        }
+      } catch {}
+      if (attempts >= 10) {
+        clearInterval(timer);
+      }
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      syncSub.remove();
+    };
+  }, [
+    successData?.sosId,
+    successData?.rawSosData?.priority,
+    successData?.rawSosData?.aiAssessment?.status,
+  ]);
+
   const handleConfirmUpdateSuccess = () => {
     const updated = updateSuccessData;
     setUpdateSuccessData(null);
@@ -419,7 +474,15 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
 
   // Tăng giảm số người
   const handleAdjustPeople = (delta: number) => {
-    handleSetPeople(peopleCount + delta);
+    const next = peopleCount + delta;
+    if (delta < 0 && selectedPriorities.length > 0 && next < selectedPriorities.length) {
+      setValidationMessage(
+        `Bạn đã chọn ${selectedPriorities.length} đối tượng ưu tiên nên số người cần cứu ít nhất phải là ${selectedPriorities.length} người. Vui lòng kiểm tra lại số lượng người!`
+      );
+      setValidationModalVisible(true);
+      return;
+    }
+    handleSetPeople(next);
   };
 
   // Mở modal bản đồ chọn vị trí
@@ -725,12 +788,16 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
     }
   };
 
-  // Xử lý đối tượng ưu tiên
+  // Xử lý đối tượng ưu tiên (đồng bộ tăng số người ít nhất bằng số đối tượng ưu tiên)
   const handleAddCustomPriority = (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
     if (!selectedPriorities.includes(trimmed)) {
-      setSelectedPriorities((prev) => [...prev, trimmed]);
+      const next = [...selectedPriorities, trimmed];
+      setSelectedPriorities(next);
+      if (next.length > peopleCount) {
+        handleSetPeople(next.length);
+      }
     }
     setPrioritySearchText('');
   };
@@ -739,7 +806,11 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
     if (selectedPriorities.includes(label)) {
       setSelectedPriorities((prev) => prev.filter((p) => p !== label));
     } else {
-      setSelectedPriorities((prev) => [...prev, label]);
+      const next = [...selectedPriorities, label];
+      setSelectedPriorities(next);
+      if (next.length > peopleCount) {
+        handleSetPeople(next.length);
+      }
     }
   };
 
@@ -844,6 +915,15 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
     const hasAddress = detailedAddress.trim() || (gpsAddress && !gpsAddress.includes('Đang định vị') && !gpsAddress.includes('Chưa cấp quyền'));
     if (!hasAddress) {
       setValidationMessage('Vui lòng nhập số nhà, tên đường hoặc bật định vị GPS để xác định nơi cần cứu!');
+      setValidationModalVisible(true);
+      return;
+    }
+
+    // 4. Kiểm tra logic số người vs số đối tượng ưu tiên đã chọn
+    if (selectedPriorities.length > peopleCount) {
+      setValidationMessage(
+        `Bạn đã chọn ${selectedPriorities.length} nhóm đối tượng ưu tiên nhưng số người cần cứu đang là ${peopleCount}. Vui lòng kiểm tra lại số lượng người!`
+      );
       setValidationModalVisible(true);
       return;
     }
@@ -1071,8 +1151,27 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
             </View>
             {(() => {
               const p = successData.rawSosData?.priority;
-              const label = p && p !== 'UNASSESSED' ? `AI đề xuất: ${p}` : 'AI đang phân tích';
-              const color = p === 'CRITICAL' ? '#DC2626' : p === 'HIGH' ? '#EA580C' : '#3730A3';
+              const aiStatus = successData.rawSosData?.aiAssessment?.status;
+              const prioVnMap: Record<string, string> = {
+                CRITICAL: 'Nguy cấp (CRITICAL)',
+                HIGH: 'Khẩn cấp (HIGH)',
+                MEDIUM: 'Trung bình (MEDIUM)',
+                LOW: 'Mức thấp (LOW)',
+              };
+              const label =
+                p && p !== 'UNASSESSED'
+                  ? `AI đề xuất: ${prioVnMap[p] || p}`
+                  : aiStatus === 'FAILED' || aiStatus === 'UNAVAILABLE'
+                    ? 'Chờ cán bộ phân loại'
+                    : 'AI đang phân tích...';
+              const color =
+                p === 'CRITICAL'
+                  ? '#DC2626'
+                  : p === 'HIGH'
+                    ? '#EA580C'
+                    : p && p !== 'UNASSESSED'
+                      ? '#0284C7'
+                      : '#3730A3';
               return (
                 <View style={styles.successDetailRow}>
                   <Text style={styles.successDetailLabel}>Phân loại mức độ:</Text>
@@ -1259,9 +1358,16 @@ export const SOSMapScreen: React.FC<SOSMapScreenProps> = ({
                       }
                     }}
                     onBlur={() => {
-                      if (!peopleInput || parseInt(peopleInput, 10) < 1) {
-                        setPeopleInput('1');
-                        setPeopleCount(1);
+                      const minRequired = Math.max(1, selectedPriorities.length);
+                      if (!peopleInput || parseInt(peopleInput, 10) < minRequired) {
+                        if (selectedPriorities.length > 0 && peopleInput && parseInt(peopleInput, 10) < minRequired) {
+                          setValidationMessage(
+                            `Bạn đã chọn ${selectedPriorities.length} đối tượng ưu tiên nên số người cần cứu ít nhất phải là ${minRequired} người. Vui lòng kiểm tra lại số lượng người!`
+                          );
+                          setValidationModalVisible(true);
+                        }
+                        setPeopleInput(String(minRequired));
+                        setPeopleCount(minRequired);
                       } else {
                         const parsed = Math.min(999, parseInt(peopleInput, 10));
                         setPeopleInput(String(parsed));
