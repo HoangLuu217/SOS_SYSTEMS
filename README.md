@@ -291,7 +291,7 @@ Backend phục vụ API dưới cả tiền tố `/api/*` và `/*` tại cổng 
 
 ### Triển khai production bằng Docker trên Linux + Cloudflare Tunnel
 
-Frontend được phục vụ ở cổng `5000` trên localhost. Nginx trong container web proxy `/api` và `/socket.io` tới backend, vì vậy Cloudflare Tunnel chỉ cần một Public Hostname trỏ tới `http://localhost:5000`. Không mở cổng web hoặc API trực tiếp ra Internet.
+Frontend được phục vụ ở cổng `5173` trên localhost. Nginx trong container web proxy `/api` và `/socket.io` tới backend, vì vậy Cloudflare Tunnel chỉ cần một Public Hostname trỏ tới `http://localhost:5173`. Không mở cổng web hoặc API trực tiếp ra Internet.
 
 1. Trên máy Linux, cài Docker Engine và Docker Compose plugin, clone repo rồi vào thư mục dự án.
 2. Tạo `backend/.env` từ `backend/.env.example`. Đặt `NODE_ENV=production`, `PORT=5000`, các secret JWT dài và ngẫu nhiên, và `CLIENT_URL=https://<domain-cua-ban>`. Compose sẽ ghi đè `MONGODB_URI` để backend kết nối MongoDB container nội bộ (`mongodb://mongodb:27017/sos_systems`). Điền các khóa dịch vụ mà hệ thống sử dụng. Không dùng các secret mẫu trong `.env.example`.
@@ -304,7 +304,7 @@ Frontend được phục vụ ở cổng `5000` trên localhost. Nginx trong con
    docker compose logs -f
    ```
 
-   Kiểm tra `http://localhost:5000/api/health` trên Linux và sau đó mở hostname HTTPS của bạn.
+   Kiểm tra `http://localhost:5173/api/health` trên Linux và sau đó mở hostname HTTPS của bạn.
 
 MongoDB lưu dữ liệu trong Docker volume `mongodb_data`, tồn tại qua các lần cập nhật container. Sao lưu volume này định kỳ. Dữ liệu hiện có trên Atlas không tự động được nhập vào MongoDB container.
 
