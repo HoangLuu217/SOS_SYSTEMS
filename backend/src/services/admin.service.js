@@ -498,42 +498,75 @@ class AdminService {
 
         const apiKey = process.env.RESEND_API_KEY;
         if (apiKey) {
-          try {
-            const transporter = nodemailer.createTransport({
-              host: 'smtp.resend.com',
-              port: 465,
-              secure: true,
-              auth: {
-                user: 'resend',
-                pass: apiKey,
-              },
-            });
-            await transporter.sendMail(mailOptions);
-            emailSent = true;
-            console.log(`[Admin Create User] Đã gửi thông tin tài khoản và mật khẩu tới ${email} qua Resend SMTP`);
-          } catch (smtpErr) {
-            console.warn(`[Admin Create User Resend SMTP fallback to REST API]: ${smtpErr.message}`);
-            const resp = await fetch('https://api.resend.com/emails', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                from: fromAddress,
-                to: [email.trim().toLowerCase()],
-                subject: mailOptions.subject,
-                html: mailOptions.html,
-                text: mailOptions.text,
-              }),
-            });
-            if (resp.ok) {
-              emailSent = true;
-              console.log(`[Admin Create User] Đã gửi thông tin tài khoản tới ${email} qua Resend REST API`);
-            } else {
+          const sendEmailTask = async () => {
+            // 1. ƯU TIÊN 1: Resend REST API HTTPS (port 443) - Cực nhanh (~200ms), 100% không bị firewall Cloud (Render/Railway/Vercel) chặn
+            try {
+              const resp = await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${apiKey}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  from: fromAddress,
+                  to: [email.trim().toLowerCase()],
+                  subject: mailOptions.subject,
+                  html: mailOptions.html,
+                  text: mailOptions.text,
+                }),
+                signal: AbortSignal.timeout(6000),
+              });
+              if (resp.ok) {
+                console.log(`[Admin Create User] Đã gửi thông tin tài khoản tới ${email} qua Resend REST API`);
+                return true;
+              }
               const errBody = await resp.text();
-              throw new Error(`Resend API error: ${errBody}`);
+              console.warn(`[Admin Create User Resend REST API warning]: ${errBody}. Đang thử SMTP...`);
+            } catch (apiErr) {
+              console.warn(`[Admin Create User Resend REST API error]: ${apiErr.message}. Đang thử SMTP...`);
             }
+
+            // 2. Dự phòng Resend SMTP với connectionTimeout ngắn (2500ms) để không bao giờ treo tiến trình trên Cloud
+            try {
+              const transporter = nodemailer.createTransport({
+                host: 'smtp.resend.com',
+                port: 465,
+                secure: true,
+                connectionTimeout: 2500,
+                greetingTimeout: 2500,
+                socketTimeout: 4000,
+                auth: {
+                  user: 'resend',
+                  pass: apiKey,
+                },
+              });
+              await transporter.sendMail(mailOptions);
+              console.log(`[Admin Create User] Đã gửi thông tin tài khoản và mật khẩu tới ${email} qua Resend SMTP`);
+              return true;
+            } catch (smtpErr) {
+              console.error('[Admin Create User Email Error]:', smtpErr.message);
+              return false;
+            }
+          };
+
+          // Chờ tối đa 1.2 giây để lấy kết quả email trước khi trả lời Client;
+          // Nếu sau 1.2s email chưa gửi xong (do mạng chậm), cho chạy ngầm trong background và trả về response ngay để Client không bị treo spinner!
+          try {
+            const emailResult = await Promise.race([
+              sendEmailTask(),
+              new Promise((resolve) => setTimeout(() => resolve('TIMEOUT'), 1200)),
+            ]);
+            if (emailResult === true) {
+              emailSent = true;
+            } else if (emailResult === 'TIMEOUT') {
+              console.log(`[Admin Create User] Email gửi ngầm background tới ${email}`);
+              sendEmailTask().then((ok) => {
+                if (ok) console.log(`[Admin Create User Background] Gửi email thành công tới ${email}`);
+              }).catch((e) => console.warn(`[Admin Create User Background Error]:`, e.message));
+            }
+          } catch (taskErr) {
+            console.error('[Admin Create User Email Task Error]:', taskErr.message);
+            emailError = taskErr.message;
           }
         }
       } catch (err) {

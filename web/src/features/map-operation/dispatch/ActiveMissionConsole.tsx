@@ -1161,14 +1161,25 @@ export const ActiveMissionConsole: React.FC<Props> = ({
                     <div style={{ color: '#d97706', fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.3px' }}>
                       Điểm Hẹn Bến Cập Bờ (Tiếp Vận):
                     </div>
-                    <div style={{ fontWeight: 900, color: '#b45309', fontSize: 13.5, marginTop: 2, lineHeight: 1.35 }}>
-                      🚗 {selectedSos.shoreHandoff.landingPoint?.name || selectedSos.shoreHandoff.landingPoint?.address || 'Điểm đón ven bờ'}
-                    </div>
-                    {selectedSos.shoreHandoff.landingPoint?.address && (
-                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, fontWeight: 600 }}>
-                        {selectedSos.shoreHandoff.landingPoint.address}
-                      </div>
-                    )}
+                    {(() => {
+                      const landing = selectedSos.shoreHandoff.landingPoint;
+                      const name = (landing?.name || '').trim();
+                      const address = (landing?.address || '').trim();
+                      const isDuplicate = !address || name.toLowerCase() === address.toLowerCase();
+
+                      return (
+                        <>
+                          <div style={{ fontWeight: 900, color: '#b45309', fontSize: 13.5, marginTop: 2, lineHeight: 1.35 }}>
+                            🚗 {name || address || 'Điểm đón ven bờ'}
+                          </div>
+                          {!isDuplicate && (
+                            <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, fontWeight: 600 }}>
+                              {address}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
 

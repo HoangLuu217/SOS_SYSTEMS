@@ -38,3 +38,33 @@ export const formatDistance = (distanceInMeters: number): string => {
   const km = (distanceInMeters / 1000).toFixed(1);
   return `${km} km`;
 };
+
+/**
+ * Chuẩn hóa địa chỉ hành chính từ danh sách token Geocoder (Native/Apple Maps/OSM)
+ * - Tự động khử trùng lặp token (không phân biệt hoa thường)
+ * - Lọc bỏ mã bưu chính (4-6 chữ số) và từ khóa quốc gia 'Việt Nam'
+ * - Giữ lại các thành phần địa chỉ ngắn gọn, tự nhiên
+ */
+export const sanitizeVietnamAddress = (tokens: (string | null | undefined)[]): string => {
+  const rawTokens: string[] = [];
+  for (const t of tokens) {
+    if (!t) continue;
+    const subTokens = String(t).split(',').map((x) => x.trim()).filter(Boolean);
+    for (const st of subTokens) {
+      if (/^\d{4,6}$/.test(st) || /^việt\s*nam$/i.test(st)) continue;
+      rawTokens.push(st);
+    }
+  }
+
+  // Khử trùng lặp tổng quát (case-insensitive)
+  const deduped: string[] = [];
+  for (const token of rawTokens) {
+    const lower = token.toLowerCase();
+    const isAlreadyCovered = deduped.some((existing) => existing.toLowerCase() === lower);
+    if (!isAlreadyCovered) {
+      deduped.push(token);
+    }
+  }
+
+  return deduped.slice(0, 3).join(', ');
+};

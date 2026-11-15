@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import * as Location from 'expo-location';
+import { sanitizeVietnamAddress } from '@/utils';
 
 export interface LocationCoords {
   latitude: number;
@@ -51,14 +52,14 @@ export const useLocation = (options: UseLocationOptions = {}) => {
     try {
       const [geo] = await Location.reverseGeocodeAsync({ latitude, longitude });
       if (geo) {
-        const parts = [
-          geo.streetNumber,
-          geo.street,
-          geo.subregion,
-          geo.district,
-          geo.city || geo.region,
-        ].filter(Boolean);
-        return parts.length > 0 ? parts.join(', ') : `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+        const streetPart = [geo.streetNumber, geo.street || geo.name].filter(Boolean).join(' ').trim();
+        const rawDistrict = geo.district || geo.subregion || '';
+        const rawCity = geo.city || geo.region || '';
+        const parts = [streetPart, rawDistrict, rawCity].filter(Boolean);
+        if (parts.length > 0) {
+          const sanitized = sanitizeVietnamAddress(parts);
+          if (sanitized) return sanitized;
+        }
       }
     } catch {
       // Bỏ qua lỗi reverse geocode

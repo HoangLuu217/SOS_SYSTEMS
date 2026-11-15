@@ -30,6 +30,7 @@ import { io, Socket } from 'socket.io-client';
 import { backendApi } from '@/api';
 import { ENV } from '@/config/env';
 import { useAuth } from '@/context/AuthContext';
+import { sanitizeVietnamAddress } from '@/utils';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -534,6 +535,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   const [zoomPhotoVisible, setZoomPhotoVisible] = useState<boolean>(false);
 
   const webViewRef = useRef<WebView>(null);
+  const isMapReadyRef = useRef<boolean>(false);
+  const lastOsrmFetchOriginRef = useRef<{ lat: number; lng: number; destLat: number; destLng: number } | null>(null);
+  const teamLocationRef = useRef(teamLocation);
+  const roadMetricsRef = useRef(roadMetrics);
+  const syncMapStateToWebViewRef = useRef<(() => void) | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const assignmentRef = useRef<any>(assignment);
   const sosRef = useRef<any>(sos);
@@ -543,6 +549,22 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   const missionStateRef = useRef<RescuerMissionState>(missionState);
   const isRefreshingAssignmentRef = useRef<boolean>(false);
   const lastSupplyNoticeSigRef = useRef<string>('');
+  const handleMissionCancelledRef = useRef<((data?: any) => void) | null>(null);
+
+  useEffect(() => {
+    teamLocationRef.current = teamLocation;
+  }, [teamLocation]);
+
+  useEffect(() => {
+    roadMetricsRef.current = roadMetrics;
+  }, [roadMetrics]);
+
+  useEffect(() => {
+    if (!visible) {
+      isMapReadyRef.current = false;
+      lastOsrmFetchOriginRef.current = null;
+    }
+  }, [visible]);
 
   useEffect(() => {
     assignmentRef.current = assignment;
@@ -594,7 +616,10 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   const handleWebViewMessage = useCallback((event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'MAP_DRAGGED') {
+      if (data.type === 'MAP_READY') {
+        isMapReadyRef.current = true;
+        syncMapStateToWebViewRef.current?.();
+      } else if (data.type === 'MAP_DRAGGED') {
         setIsHeadingLocked(false);
       } else if (data.type === 'LANDING_PIN_MOVED' || data.type === 'LANDING_PIN_DRAGGED') {
         if (typeof data.lat === 'number' && typeof data.lng === 'number') {
@@ -604,17 +629,41 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     } catch (err) { }
   }, []);
 
-  // Đồng bộ Mission State từ Assignment Status
-  const syncStateFromStatus = (status?: string) => {
+  // Định nghĩa thứ bậc trạng thái để ngăn polling/socket với dữ liệu cũ làm lùi trạng thái tác chiến
+  const STATE_RANK: Record<string, number> = {
+    ASSIGNED_PENDING_ACCEPTANCE: 1,
+    EN_ROUTE: 2,
+    ON_SCENE_RESCUING: 3,
+    COMPLETED: 4,
+  };
+
+  // Đồng bộ Mission State từ Assignment Status với cơ chế State Rank chống stale regression
+  const syncStateFromStatus = (status?: string, force = false) => {
     const s = String(status || '').toUpperCase();
+    let nextState: RescuerMissionState | null = null;
     if (['PENDING', 'ASSIGNED'].includes(s)) {
-      setMissionState('ASSIGNED_PENDING_ACCEPTANCE');
+      nextState = 'ASSIGNED_PENDING_ACCEPTANCE';
     } else if (['ACCEPTED', 'DISPATCHED', 'EN_ROUTE', 'ON_THE_WAY'].includes(s)) {
-      setMissionState('EN_ROUTE');
+      nextState = 'EN_ROUTE';
     } else if (['ARRIVED', 'IN_PROGRESS', 'RESCUING'].includes(s)) {
-      setMissionState('ON_SCENE_RESCUING');
+      nextState = 'ON_SCENE_RESCUING';
     } else if (['COMPLETED', 'RESOLVED'].includes(s)) {
-      setMissionState('COMPLETED');
+      nextState = 'COMPLETED';
+    }
+
+    if (!nextState) return;
+
+    if (force) {
+      setMissionState(nextState);
+      missionStateRef.current = nextState;
+      return;
+    }
+
+    const currentRank = STATE_RANK[missionStateRef.current] || 0;
+    const nextRank = STATE_RANK[nextState] || 0;
+    if (nextRank >= currentRank) {
+      setMissionState(nextState);
+      missionStateRef.current = nextState;
     }
   };
 
@@ -645,9 +694,16 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       }
 
       if (targetAssign) {
+        if (['CANCELLED', 'REJECTED'].includes(targetAssign.status)) {
+          handleMissionCancelledRef.current?.({
+            assignmentId: targetAssign._id,
+            reason: targetAssign.cancelReason,
+          });
+          return;
+        }
         setCapturedPhotos([]);
         setAssignment(targetAssign);
-        syncStateFromStatus(targetAssign.status);
+        syncStateFromStatus(targetAssign.status, true);
         if (Array.isArray(targetAssign.requestedSupplies)) {
           setRequestedSuppliesList(targetAssign.requestedSupplies);
         }
@@ -687,7 +743,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         if (initialSosData.shoreHandoff) {
           setShoreHandoffData(initialSosData.shoreHandoff);
         }
-        syncStateFromStatus(initialSosData.status);
+        syncStateFromStatus(initialSosData.status, true);
       }
     } catch (err) {
       console.warn('[Rescuer Workspace Load Error]:', err);
@@ -709,6 +765,13 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     try {
       const assignRes = await backendApi.get(`/assignments/${targetId}`);
       if (assignRes.success && assignRes.data) {
+        if (['CANCELLED', 'REJECTED'].includes(assignRes.data.status)) {
+          handleMissionCancelledRef.current?.({
+            assignmentId: targetId,
+            reason: assignRes.data.cancelReason,
+          });
+          return;
+        }
         setAssignment(assignRes.data);
         if (Array.isArray(assignRes.data.requestedSupplies)) {
           setRequestedSuppliesList(assignRes.data.requestedSupplies);
@@ -748,11 +811,12 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             setTeamLocation(initialLoc);
 
             if (socketRef.current && socketRef.current.connected) {
+              const curAssign = assignmentRef.current;
               socketRef.current.emit('rescuer:location_update', {
                 rescuerId: user?._id,
                 phone: user?.phone,
-                assignmentId: assignment?._id,
-                teamId: assignment?.rescueTeamId?._id || assignment?.rescueTeamId,
+                assignmentId: curAssign?._id,
+                teamId: curAssign?.rescueTeamId?._id || curAssign?.rescueTeamId,
                 location: initialLoc,
                 coords: { lat: initialLoc.lat, lng: initialLoc.lng },
               });
@@ -777,11 +841,12 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
                 // Phát telemetry GPS thực tế lên Socket.IO
                 if (socketRef.current && socketRef.current.connected) {
+                  const curAssign = assignmentRef.current;
                   socketRef.current.emit('rescuer:location_update', {
                     rescuerId: user?._id,
                     phone: user?.phone,
-                    assignmentId: assignment?._id,
-                    teamId: assignment?.rescueTeamId?._id || assignment?.rescueTeamId,
+                    assignmentId: curAssign?._id,
+                    teamId: curAssign?.rescueTeamId?._id || curAssign?.rescueTeamId,
                     location: newLoc,
                     coords: { lat: newLoc.lat, lng: newLoc.lng },
                   });
@@ -789,13 +854,14 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
                 // Cập nhật vị trí lên WebView
                 if (webViewRef.current) {
+                  const curMetrics = roadMetricsRef.current;
                   webViewRef.current.postMessage(
                     JSON.stringify({
                       type: 'UPDATE_TEAM_GPS',
                       lat: newLoc.lat,
                       lng: newLoc.lng,
                       heading: newLoc.heading,
-                      etaText: `${roadMetrics.durationMin} • ${roadMetrics.distanceKm}`,
+                      etaText: `${curMetrics.durationMin} • ${curMetrics.distanceKm}`,
                     })
                   );
                 }
@@ -815,7 +881,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         locationSubRef.current = null;
       }
     };
-  }, [visible, user?._id, assignment?._id]);
+  }, [visible, user?._id]);
 
   // 4. Kết nối Realtime Socket.IO & Đồng bộ trạng thái vật tư/nhiệm vụ
   useEffect(() => {
@@ -848,7 +914,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         .filter(Boolean)
         .map(String);
 
-      const incomingAssignId = data.assignmentId?._id || data.assignmentId || data._id;
+      const incomingAssignId = data.assignmentId?._id || data.assignmentId || data._id || data.id;
       const incomingSosId = data.sosId?._id || data.sosId || data.sosRequestId?._id || data.sosRequestId;
 
       if (incomingAssignId && candidateAssignIds.includes(String(incomingAssignId))) {
@@ -861,15 +927,16 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     };
 
     const handleMissionCancelled = (data?: any) => {
-      const assignId = assignmentRef.current?._id || assignmentIdRef.current || initialAssignmentRef.current?._id;
-      const currentSosId = sosRef.current?._id || initialSosRef.current?._id;
-      const isMatched =
-        !data ||
-        (!data.assignmentId && !data.sosId) ||
-        (assignId && String(data.assignmentId) === String(assignId)) ||
-        (currentSosId && String(data.sosId) === String(currentSosId));
+      const isMatched = !data || (!data.assignmentId && !data.sosId && !data._id && !data.id) || isMatchingMissionEvent(data);
 
       if (isMatched) {
+        setShoreHandoffModalVisible(false);
+        setArriveConfirmModalVisible(false);
+        setRejectModalVisible(false);
+        setSupplyRequestModalVisible(false);
+        setLaunchSuccessModalVisible(false);
+        setIsPickingLandingLocation(false);
+
         Alert.alert(
           '⚠️ ĐIỀU ĐỘNG ĐÃ HỦY',
           data?.reason
@@ -880,6 +947,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         onClose();
       }
     };
+    handleMissionCancelledRef.current = handleMissionCancelled;
 
     const handleSosUpdated = (updatedSos: any) => {
       const currentSosId = sosRef.current?._id || initialSosRef.current?._id;
@@ -965,7 +1033,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     };
 
     const handleAssignmentRealtimeSync = (data?: any) => {
-      if (data && (data.assignmentId || data.sosId) && !isMatchingMissionEvent(data)) {
+      if (data && (data.assignmentId || data.sosId || data._id) && !isMatchingMissionEvent(data)) {
+        return;
+      }
+      if (data && (data.status === 'CANCELLED' || data.status === 'REJECTED')) {
+        handleMissionCancelled(data);
         return;
       }
       if (data && isMatchingMissionEvent(data)) {
@@ -990,6 +1062,10 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       refreshAssignmentSilently();
     };
 
+    const subMissionCancelled = DeviceEventEmitter.addListener(
+      'assignment:cancelled',
+      handleMissionCancelled
+    );
     const subTeamWorkspace = DeviceEventEmitter.addListener(
       'team:membership_updated',
       handleTeamChangedInWorkspace
@@ -1039,6 +1115,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         });
 
         socket.on('assignment:cancelled', handleMissionCancelled);
+        socket.on('assignment:deleted', handleMissionCancelled);
         socket.on('sos:updated', handleSosUpdated);
         socket.on('assignment:supply_approved', handleSupplyApproved);
         socket.on('assignment:supply_rejected', handleSupplyRejected);
@@ -1071,11 +1148,13 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       clearInterval(syncInterval);
       appStateSub.remove();
       subTeamWorkspace.remove();
+      subMissionCancelled.remove();
       subSupplyApproved.remove();
       subSupplyRejected.remove();
       subSosSync.remove();
       if (activeSocket) {
         activeSocket.off('assignment:cancelled', handleMissionCancelled);
+        activeSocket.off('assignment:deleted', handleMissionCancelled);
         activeSocket.off('sos:updated', handleSosUpdated);
         activeSocket.off('sos:shore_handoff_assigned');
         activeSocket.off('assignment:supply_approved', handleSupplyApproved);
@@ -1100,7 +1179,7 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   }, [visible, loadWorkspaceData]);
 
   // Tọa độ điểm đến (ưu tiên từ SOS nếu là ca cứu nạn, hoặc từ SosAssignment nếu là Lệnh tiếp tế xuất kho độc lập)
-  const victimCoords = useMemo(() => {
+  const { victimLat, victimLng } = useMemo(() => {
     let rawLng = 108.1400;
     let rawLat = 16.0800;
 
@@ -1121,18 +1200,46 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
 
     // Tự động đảo tọa độ nếu bị ngược
     if (Math.abs(rawLat) > 90 || (rawLng < 50 && rawLat > 50)) {
-      return { lat: rawLng, lng: rawLat };
+      return { victimLat: Number(rawLng), victimLng: Number(rawLat) };
     }
-    return { lat: rawLat, lng: rawLng };
-  }, [sos, assignment?.location, initialAssignmentData?.location]);
+    return { victimLat: Number(rawLat), victimLng: Number(rawLng) };
+  }, [
+    sos?.location?.coordinates?.[0],
+    sos?.location?.coordinates?.[1],
+    sos?.coordinates?.lat,
+    sos?.coordinates?.lng,
+    assignment?.location?.coordinates?.[0],
+    assignment?.location?.coordinates?.[1],
+    initialAssignmentData?.location?.coordinates?.[0],
+    initialAssignmentData?.location?.coordinates?.[1],
+  ]);
+
+  const victimCoords = useMemo(() => ({ lat: victimLat, lng: victimLng }), [victimLat, victimLng]);
 
   // 6. Tính toán tuyến đường thực tế qua OSRM API (Lái xe ô tô theo Google Maps) & Tạo Turn-by-Turn chuẩn
   const fetchOsrmRoute = useCallback(async () => {
-    if (!teamLocation.lat || !victimCoords.lat) return;
+    const curTeam = teamLocationRef.current;
+    if (!curTeam.lat || !victimCoords.lat) return;
+
+    const prevOrigin = lastOsrmFetchOriginRef.current;
+    if (prevOrigin) {
+      const destMoved = Math.abs(prevOrigin.destLat - victimCoords.lat) > 0.0001 || Math.abs(prevOrigin.destLng - victimCoords.lng) > 0.0001;
+      const teamMoved = Math.abs(prevOrigin.lat - curTeam.lat) > 0.0014 || Math.abs(prevOrigin.lng - curTeam.lng) > 0.0014;
+      if (!destMoved && !teamMoved) {
+        return;
+      }
+    }
+
+    lastOsrmFetchOriginRef.current = {
+      lat: curTeam.lat,
+      lng: curTeam.lng,
+      destLat: victimCoords.lat,
+      destLng: victimCoords.lng,
+    };
 
     try {
-      const startLng = teamLocation.lng;
-      const startLat = teamLocation.lat;
+      const startLng = curTeam.lng;
+      const startLat = curTeam.lat;
       const endLng = victimCoords.lng;
       const endLat = victimCoords.lat;
 
@@ -1206,11 +1313,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     }
 
     // FALLBACK THÔNG MINH: Tính khoảng cách đường bộ & Tạo Turn-by-Turn bám đường (không bao giờ cắt qua biển)
-    const dLat = (victimCoords.lat - teamLocation.lat) * (Math.PI / 180);
-    const dLon = (victimCoords.lng - teamLocation.lng) * (Math.PI / 180);
+    const dLat = (victimCoords.lat - curTeam.lat) * (Math.PI / 180);
+    const dLon = (victimCoords.lng - curTeam.lng) * (Math.PI / 180);
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(teamLocation.lat * (Math.PI / 180)) *
+      Math.cos(curTeam.lat * (Math.PI / 180)) *
       Math.cos(victimCoords.lat * (Math.PI / 180)) *
       Math.sin(dLon / 2) *
       Math.sin(dLon / 2);
@@ -1220,14 +1327,14 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     const distStr = carKm < 1 ? `${Math.round(carKm * 1000)} m` : `${carKm.toFixed(1)} km`;
     const carMins = Math.max(2, Math.round(carKm * 2.2));
 
-    const corridorCoords = generateRoadCorridorPoints(teamLocation, victimCoords);
+    const corridorCoords = generateRoadCorridorPoints(curTeam, victimCoords);
     setRoadMetrics({
       distanceKm: distStr,
       durationMin: `${carMins} phút`,
       roadCoordinates: corridorCoords,
     });
 
-    const fallbackSteps = generateFallbackSteps(teamLocation, victimCoords, carKm * 1000, incidentAddress);
+    const fallbackSteps = generateFallbackSteps(curTeam, victimCoords, carKm * 1000, incidentAddress);
     setNavigationSteps(fallbackSteps);
     navigationStepsRef.current = fallbackSteps;
     setActiveStepIndex(0);
@@ -1244,13 +1351,13 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
         })
       );
     }
-  }, [teamLocation, victimCoords, incidentAddress]);
+  }, [victimCoords, incidentAddress]);
 
   useEffect(() => {
     if (visible && victimCoords.lat) {
       fetchOsrmRoute();
     }
-  }, [visible, victimCoords, fetchOsrmRoute]);
+  }, [visible, victimCoords, teamLocation.lat, teamLocation.lng, fetchOsrmRoute]);
 
   // 7. Xử lý Chấp Nhận & Xuất Kích (State 1 -> State 2)
   const handleAcceptMission = async () => {
@@ -1262,54 +1369,69 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       );
       return;
     }
-    try {
-      setActionLoading(true);
 
+    const prevMissionState = missionStateRef.current;
+    const prevAssignment = assignmentRef.current;
+
+    // OPTIMISTIC UPDATE: Phản hồi tức thì 0ms, không đợi round-trip HTTP
+    missionStateRef.current = 'EN_ROUTE';
+    setMissionState('EN_ROUTE');
+    setAssignment((prev: any) =>
+      prev
+        ? {
+          ...prev,
+          status: 'EN_ROUTE',
+          acceptedAt: prev.acceptedAt || new Date().toISOString(),
+        }
+        : prev
+    );
+
+    // Kích hoạt ngay rung phản hồi & phát sự kiện đồng bộ
+    Vibration.vibrate([0, 150, 100, 150]);
+    DeviceEventEmitter.emit('sos:sync');
+    onMissionUpdated?.('EN_ROUTE', assignment?._id);
+
+    // Kích hoạt ngay chế độ điều hướng 3D Camera theo chuẩn Google Maps / Grab
+    setIsNavigating(true);
+    setIsHeadingLocked(true);
+    setIsSheetCollapsed(true);
+    if (webViewRef.current) {
+      webViewRef.current.postMessage(
+        JSON.stringify({
+          type: 'START_INAPP_NAVIGATION',
+          lat: teamLocation.lat,
+          lng: teamLocation.lng,
+          heading: teamLocation.heading,
+        })
+      );
+    }
+
+    // Hiển thị ngay modal xuất kích thành công không cần chờ mạng
+    setLaunchSuccessModalVisible(true);
+
+    // Đồng bộ ngầm lên máy chủ (Non-blocking background sync)
+    try {
       if (assignment?._id) {
         await backendApi.updateAssignmentStatus(assignment._id, 'EN_ROUTE');
       } else if (sos?._id) {
         await backendApi.updateSosMissionStatus(sos._id, 'ON_THE_WAY', 'Đội đã tiếp nhận và đang trên đường tới');
       }
-
-      setMissionState('EN_ROUTE');
-      setAssignment((prev: any) =>
-        prev
-          ? {
-            ...prev,
-            status: 'EN_ROUTE',
-            acceptedAt: prev.acceptedAt || new Date().toISOString(),
-          }
-          : prev
-      );
-      Vibration.vibrate([0, 150, 100, 150]);
-      DeviceEventEmitter.emit('sos:sync');
-      onMissionUpdated?.('EN_ROUTE', assignment?._id);
-
-      // Kích hoạt ngay chế độ điều hướng 3D Camera theo chuẩn Google Maps / Grab
-      setIsNavigating(true);
-      setIsHeadingLocked(true);
-      setIsSheetCollapsed(true);
-      if (webViewRef.current) {
-        webViewRef.current.postMessage(
-          JSON.stringify({
-            type: 'START_INAPP_NAVIGATION',
-            lat: teamLocation.lat,
-            lng: teamLocation.lng,
-            heading: teamLocation.heading,
-          })
-        );
-      }
-
-      setLaunchSuccessModalVisible(true);
     } catch (err: any) {
+      console.warn('[handleAcceptMission] Lỗi đồng bộ ngầm:', err);
+      // Rollback trạng thái nếu máy chủ báo lỗi nghiêm trọng
+      missionStateRef.current = prevMissionState;
+      setMissionState(prevMissionState);
+      setAssignment(prevAssignment);
+      setLaunchSuccessModalVisible(false);
+      setIsNavigating(false);
+      setIsSheetCollapsed(false);
+
       setCustomNotice({
         visible: true,
         type: 'error',
-        title: 'Lỗi tiếp nhận',
-        message: err?.message || 'Không thể cập nhật trạng thái nhiệm vụ.',
+        title: 'Lỗi đồng bộ',
+        message: err?.message || 'Không thể đồng bộ trạng thái lên máy chủ. Vui lòng kiểm tra lại kết nối mạng.',
       });
-    } finally {
-      setActionLoading(false);
     }
   };
 
@@ -1323,30 +1445,35 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       );
       return;
     }
-    try {
-      setActionLoading(true);
-      const finalReason = rejectCustomNote.trim() ? `${rejectReason} - ${rejectCustomNote.trim()}` : rejectReason;
 
+    const prevAssignment = assignmentRef.current;
+    const finalReason = rejectCustomNote.trim() ? `${rejectReason} - ${rejectCustomNote.trim()}` : rejectReason;
+
+    // OPTIMISTIC UPDATE: Đóng form từ chối và hiện popup thông báo thành công tức thì
+    setRejectModalVisible(false);
+    setAssignment((prev: any) => (prev ? { ...prev, status: 'REJECTED' } : prev));
+    DeviceEventEmitter.emit('sos:sync');
+    onMissionUpdated?.('REJECTED', assignment?._id);
+    setRejectSuccessModalVisible(true);
+
+    // Đồng bộ ngầm lên máy chủ
+    try {
       if (assignment?._id) {
         await backendApi.updateAssignmentStatus(assignment._id, 'REJECTED', finalReason);
       } else if (sos?._id) {
         await backendApi.updateSosMissionStatus(sos._id, 'VERIFIED', `Đội không thể nhận: ${finalReason}`);
       }
-
-      setRejectModalVisible(false);
-      setAssignment((prev: any) => (prev ? { ...prev, status: 'REJECTED' } : prev));
-      DeviceEventEmitter.emit('sos:sync');
-      onMissionUpdated?.('REJECTED', assignment?._id);
-      setRejectSuccessModalVisible(true);
     } catch (err: any) {
+      console.warn('[handleConfirmReject] Lỗi đồng bộ ngầm:', err);
+      // Rollback nếu có lỗi
+      setAssignment(prevAssignment);
+      setRejectSuccessModalVisible(false);
       setCustomNotice({
         visible: true,
         type: 'error',
         title: 'Lỗi báo cáo',
-        message: err?.message || 'Không thể gửi phản hồi từ chối.',
+        message: err?.message || 'Không thể gửi phản hồi từ chối lên máy chủ.',
       });
-    } finally {
-      setActionLoading(false);
     }
   };
 
@@ -1364,24 +1491,37 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
   };
 
   const executeArriveAtScene = async () => {
+    const prevMissionState = missionStateRef.current;
+    const prevAssignment = assignmentRef.current;
+
+    // OPTIMISTIC UPDATE: Đóng modal xác nhận và chuyển trạng thái tức thì 0ms
+    setArriveConfirmModalVisible(false);
+    missionStateRef.current = 'ON_SCENE_RESCUING';
+    setMissionState('ON_SCENE_RESCUING');
+    setAssignment((prev: any) => (prev ? { ...prev, status: 'ARRIVED' } : prev));
+    Vibration.vibrate(300);
+    DeviceEventEmitter.emit('sos:sync');
+    onMissionUpdated?.('ARRIVED', assignment?._id);
+
+    // Đồng bộ ngầm lên máy chủ
     try {
-      setActionLoading(true);
       if (assignment?._id) {
         await backendApi.updateAssignmentStatus(assignment._id, 'ARRIVED');
       } else if (sos?._id) {
         await backendApi.updateSosMissionStatus(sos._id, 'ARRIVED', 'Đã tiếp cận hiện trường');
       }
-
-      setMissionState('ON_SCENE_RESCUING');
-      setAssignment((prev: any) => (prev ? { ...prev, status: 'ARRIVED' } : prev));
-      setArriveConfirmModalVisible(false);
-      Vibration.vibrate(300);
-      DeviceEventEmitter.emit('sos:sync');
-      onMissionUpdated?.('ARRIVED', assignment?._id);
     } catch (err: any) {
-      console.warn('Lỗi cập nhật đến hiện trường:', err);
-    } finally {
-      setActionLoading(false);
+      console.warn('[executeArriveAtScene] Lỗi đồng bộ ngầm:', err);
+      // Rollback nếu có lỗi
+      missionStateRef.current = prevMissionState;
+      setMissionState(prevMissionState);
+      setAssignment(prevAssignment);
+      setCustomNotice({
+        visible: true,
+        type: 'error',
+        title: 'Lỗi xác nhận đến hiện trường',
+        message: err?.message || 'Không thể đồng bộ với máy chủ. Vui lòng thử lại.',
+      });
     }
   };
 
@@ -1664,8 +1804,28 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
     }
   };
 
-  // 12. Helper tra cứu địa chỉ từ toạ độ (Reverse Geocode hoặc tọa độ thực tế)
+  // 12. Helper tra cứu địa chỉ từ toạ độ (Ưu tiên Reverse Geocode Native từ Google/Apple Maps, fallback Nominatim kèm chuẩn hóa địa giới)
   const fetchAddressFromCoords = async (lat: number, lng: number): Promise<string> => {
+    // 1. Thử qua Native Location Geocoder của thiết bị (Android dùng Google Play Services, iOS dùng Apple Maps)
+    try {
+      const geoList = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+      if (Array.isArray(geoList) && geoList.length > 0) {
+        const geo = geoList[0];
+        const streetPart = [geo.streetNumber, geo.street || geo.name].filter(Boolean).join(' ').trim();
+        const rawDistrict = geo.district || geo.subregion || '';
+        const rawCity = geo.city || geo.region || '';
+        const parts = [streetPart, rawDistrict, rawCity].filter(Boolean);
+
+        if (parts.length > 0) {
+          const sanitized = sanitizeVietnamAddress(parts);
+          if (sanitized) return sanitized;
+        }
+      }
+    } catch {
+      // Fallback sang OpenStreetMap Nominatim nếu Geocoder thiết bị chưa sẵn sàng
+    }
+
+    // 2. Fallback sang OpenStreetMap Nominatim kèm bộ lọc làm sạch ranh giới hành chính
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
@@ -1673,8 +1833,8 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       );
       const data = await res.json();
       if (data && data.display_name) {
-        const parts = data.display_name.split(',').slice(0, 3).join(',').trim();
-        return parts;
+        const sanitized = sanitizeVietnamAddress(String(data.display_name).split(','));
+        if (sanitized) return sanitized;
       }
     } catch { }
     return `Bến cập bờ tại tọa độ (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
@@ -2193,8 +2353,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
       });
   }, [victimCoords, incidentAddress, sosCode]);
 
-  // Sinh mã HTML Leaflet tương tác toàn màn hình (Grab-Style Map Canvas & Turn-by-Turn Navigation)
+  // Sinh mã HTML Leaflet tương tác toàn màn hình (Khởi tạo 1 lần khi mở Modal, mọi cập nhật sau đó qua postMessage để không bao giờ reload trắng màn hình)
   const mapHtml = useMemo(() => {
+    if (!visible) return '';
     return `
       <!DOCTYPE html>
       <html>
@@ -2400,17 +2561,21 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           setTileLayer('${mapLayer}');
 
           // 1. SOS Incident / Relief Dispatch Marker
-          var sosIcon = L.divIcon({
-            className: 'sos-marker-div',
-            html: ${JSON.stringify(
-      isReliefMission
-        ? `<div class="sos-beacon-container"><div class="sos-floating-pill relief">📦 ${sosCode} • Điểm tiếp tế</div><div class="sos-beacon-wave relief"></div><div class="sos-beacon-core relief">📦</div></div>`
-        : `<div class="sos-beacon-container"><div class="sos-floating-pill">📍 ${sosCode} • Điểm cứu hộ</div><div class="sos-beacon-wave"></div><div class="sos-beacon-core">🆘</div></div>`
-    )},
-            iconSize: [50, 50],
-            iconAnchor: [25, 25]
-          });
-          var sosMarker = L.marker([${victimCoords.lat}, ${victimCoords.lng}], { icon: sosIcon, zIndexOffset: 2000 }).addTo(map);
+          function buildSosIcon(code, isRelief) {
+            var safeCode = code || 'SOS';
+            var html = isRelief
+              ? '<div class="sos-beacon-container"><div class="sos-floating-pill relief">📦 ' + safeCode + ' • Điểm tiếp tế</div><div class="sos-beacon-wave relief"></div><div class="sos-beacon-core relief">📦</div></div>'
+              : '<div class="sos-beacon-container"><div class="sos-floating-pill">📍 ' + safeCode + ' • Điểm cứu hộ</div><div class="sos-beacon-wave"></div><div class="sos-beacon-core">🆘</div></div>';
+            return L.divIcon({
+              className: 'sos-marker-div',
+              html: html,
+              iconSize: [50, 50],
+              iconAnchor: [25, 25]
+            });
+          }
+          var currentSosCode = ${JSON.stringify(sosCode)};
+          var currentIsRelief = ${Boolean(isReliefMission)};
+          var sosMarker = L.marker([${victimCoords.lat}, ${victimCoords.lng}], { icon: buildSosIcon(currentSosCode, currentIsRelief), zIndexOffset: 2000 }).addTo(map);
 
           // 2. Grab & Google Maps Driver Navigation Puck Marker (Ghim hướng xoay & Bong bóng khoảng cách)
           var rescuerIcon = L.divIcon({
@@ -2672,9 +2837,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             if (passedPolyline) map.removeLayer(passedPolyline);
             if (directWaterwayLine) map.removeLayer(directWaterwayLine);
 
+            var teamLL = rescuerMarker.getLatLng();
+            var sosLL = sosMarker.getLatLng();
             var directPoints = [
-              [${teamLocation.lat}, ${teamLocation.lng}],
-              [${victimCoords.lat}, ${victimCoords.lng}]
+              [teamLL.lat, teamLL.lng],
+              [sosLL.lat, sosLL.lng]
             ];
 
             directWaterwayLine = L.polyline(directPoints, {
@@ -2705,6 +2872,8 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
             shelterGroup.addTo(map);
           }
 
+          var currentWaterwayMode = ${Boolean(isWaterwayMode)};
+
           // Initial Render
           ${isWaterwayMode ? 'renderDirectWaterwayMode();' : (roadMetrics.roadCoordinates ? `renderRoadSnappedRoute(${JSON.stringify(roadMetrics.roadCoordinates)});` : 'renderDirectWaterwayMode();')}
 
@@ -2731,9 +2900,11 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           });
 
           // Message Bridge từ React Native
-          window.addEventListener('message', function(e) {
+          function handleMapMessage(rawData) {
             try {
-              var msg = JSON.parse(e.data);
+              var msg = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+              if (!msg || !msg.type) return;
+
               if (msg.type === 'START_INAPP_NAVIGATION') {
                 inAppNavActive = true;
                 trackingLocked = true;
@@ -2766,10 +2937,90 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                   map.panTo(offsetTarget, { animate: true, duration: 0.8 });
                 }
               } else if (msg.type === 'SET_ROAD_ROUTE') {
-                renderRoadSnappedRoute(msg.coordinates);
+                if (!currentWaterwayMode && Array.isArray(msg.coordinates) && msg.coordinates.length >= 2) {
+                  renderRoadSnappedRoute(msg.coordinates);
+                }
                 var etaPill = document.getElementById('rescuerEtaPill');
                 if (etaPill && msg.distance && msg.duration) {
                   etaPill.innerText = msg.duration + ' • ' + msg.distance;
+                }
+              } else if (msg.type === 'UPDATE_SOS_MARKER') {
+                var sosChanged = false;
+                if (typeof msg.lat === 'number' && typeof msg.lng === 'number') {
+                  var curSosLL = sosMarker.getLatLng();
+                  if (Math.abs(curSosLL.lat - msg.lat) > 0.00001 || Math.abs(curSosLL.lng - msg.lng) > 0.00001) {
+                    sosMarker.setLatLng([msg.lat, msg.lng]);
+                    sosChanged = true;
+                  }
+                }
+                if (msg.sosCode !== undefined || typeof msg.isReliefMission === 'boolean') {
+                  var nextCode = msg.sosCode || currentSosCode;
+                  var nextRelief = typeof msg.isReliefMission === 'boolean' ? msg.isReliefMission : currentIsRelief;
+                  if (nextCode !== currentSosCode || nextRelief !== currentIsRelief) {
+                    currentSosCode = nextCode;
+                    currentIsRelief = nextRelief;
+                    sosMarker.setIcon(buildSosIcon(currentSosCode, currentIsRelief));
+                  }
+                }
+                if (sosChanged && !inAppNavActive) {
+                  if (currentWaterwayMode) renderDirectWaterwayMode();
+                  fitRouteOverview(false);
+                }
+              } else if (msg.type === 'TOGGLE_SHELTERS') {
+                if (msg.show) {
+                  if (!map.hasLayer(shelterGroup)) shelterGroup.addTo(map);
+                } else {
+                  if (map.hasLayer(shelterGroup)) map.removeLayer(shelterGroup);
+                }
+              } else if (msg.type === 'SET_WATERWAY_MODE') {
+                currentWaterwayMode = Boolean(msg.isWaterwayMode);
+                if (currentWaterwayMode) {
+                  renderDirectWaterwayMode();
+                } else if (Array.isArray(msg.roadCoordinates) && msg.roadCoordinates.length >= 2) {
+                  renderRoadSnappedRoute(msg.roadCoordinates);
+                }
+              } else if (msg.type === 'SYNC_MAP_STATE') {
+                var needFit = false;
+                if (typeof msg.victimLat === 'number' && typeof msg.victimLng === 'number') {
+                  var oldSosLL = sosMarker.getLatLng();
+                  if (Math.abs(oldSosLL.lat - msg.victimLat) > 0.00001 || Math.abs(oldSosLL.lng - msg.victimLng) > 0.00001) {
+                    sosMarker.setLatLng([msg.victimLat, msg.victimLng]);
+                    needFit = true;
+                  }
+                }
+                if (msg.sosCode || typeof msg.isReliefMission === 'boolean') {
+                  var sCode = msg.sosCode || currentSosCode;
+                  var sRelief = typeof msg.isReliefMission === 'boolean' ? msg.isReliefMission : currentIsRelief;
+                  if (sCode !== currentSosCode || sRelief !== currentIsRelief) {
+                    currentSosCode = sCode;
+                    currentIsRelief = sRelief;
+                    sosMarker.setIcon(buildSosIcon(currentSosCode, currentIsRelief));
+                  }
+                }
+                if (typeof msg.teamLat === 'number' && typeof msg.teamLng === 'number') {
+                  rescuerMarker.setLatLng([msg.teamLat, msg.teamLng]);
+                }
+                if (typeof msg.showSafeShelters === 'boolean') {
+                  if (msg.showSafeShelters) {
+                    if (!map.hasLayer(shelterGroup)) shelterGroup.addTo(map);
+                  } else {
+                    if (map.hasLayer(shelterGroup)) map.removeLayer(shelterGroup);
+                  }
+                }
+                if (msg.mapLayer) {
+                  setTileLayer(msg.mapLayer);
+                }
+                currentWaterwayMode = Boolean(msg.isWaterwayMode);
+                if (currentWaterwayMode) {
+                  renderDirectWaterwayMode();
+                } else if (Array.isArray(msg.roadCoordinates) && msg.roadCoordinates.length >= 2) {
+                  renderRoadSnappedRoute(msg.roadCoordinates);
+                } else if (needFit && !inAppNavActive) {
+                  fitRouteOverview(false);
+                }
+                var syncEtaPill = document.getElementById('rescuerEtaPill');
+                if (syncEtaPill && msg.distance && msg.duration) {
+                  syncEtaPill.innerText = msg.duration + ' • ' + msg.distance;
                 }
               } else if (msg.type === 'RECENTER_TEAM') {
                 trackingLocked = true;
@@ -2848,7 +3099,13 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
                 }
               }
             } catch(err) {}
-          });
+          }
+
+          function onBridgeEvent(e) {
+            if (e && e.data) handleMapMessage(e.data);
+          }
+          window.addEventListener('message', onBridgeEvent);
+          document.addEventListener('message', onBridgeEvent);
 
           map.on('click', function(ev) {
             if (window.landingPickerMarker) {
@@ -2862,11 +3119,71 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               }
             }
           });
+
+          if (window.ReactNativeWebView) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'MAP_READY' }));
+          }
         </script>
       </body>
       </html>
     `;
-  }, [victimCoords, mapLayer, showSafeShelters, isWaterwayMode, roadMetrics.roadCoordinates, sosCode, isReliefMission]);
+  }, [visible]);
+
+  const webViewSource = useMemo(() => ({ html: mapHtml }), [mapHtml]);
+
+  // Đồng bộ toàn bộ trạng thái mới nhất vào WebView đã sẵn sàng mà không reload HTML
+  const syncMapStateToWebView = useCallback(() => {
+    if (!webViewRef.current || !isMapReadyRef.current) return;
+    const curTeam = teamLocationRef.current;
+    const curMetrics = roadMetricsRef.current;
+    webViewRef.current.postMessage(
+      JSON.stringify({
+        type: 'SYNC_MAP_STATE',
+        victimLat: victimCoords.lat,
+        victimLng: victimCoords.lng,
+        sosCode,
+        isReliefMission,
+        teamLat: curTeam.lat,
+        teamLng: curTeam.lng,
+        mapLayer,
+        showSafeShelters,
+        isWaterwayMode,
+        roadCoordinates: curMetrics.roadCoordinates,
+        distance: curMetrics.distanceKm,
+        duration: curMetrics.durationMin,
+      })
+    );
+  }, [victimCoords.lat, victimCoords.lng, sosCode, isReliefMission, mapLayer, showSafeShelters, isWaterwayMode]);
+
+  useEffect(() => {
+    syncMapStateToWebViewRef.current = syncMapStateToWebView;
+  }, [syncMapStateToWebView]);
+
+  useEffect(() => {
+    if (visible && isMapReadyRef.current) {
+      webViewRef.current?.postMessage(
+        JSON.stringify({
+          type: 'UPDATE_SOS_MARKER',
+          lat: victimCoords.lat,
+          lng: victimCoords.lng,
+          sosCode,
+          isReliefMission,
+        })
+      );
+    }
+  }, [visible, victimCoords.lat, victimCoords.lng, sosCode, isReliefMission]);
+
+  useEffect(() => {
+    if (visible && isMapReadyRef.current) {
+      webViewRef.current?.postMessage(
+        JSON.stringify({
+          type: 'SET_WATERWAY_MODE',
+          isWaterwayMode,
+          roadCoordinates: roadMetricsRef.current.roadCoordinates,
+        })
+      );
+    }
+  }, [visible, isWaterwayMode]);
 
   if (!visible) return null;
 
@@ -2882,11 +3199,15 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
           <WebView
             ref={webViewRef}
             originWhitelist={['*']}
-            source={{ html: mapHtml }}
+            source={webViewSource}
             style={StyleSheet.absoluteFill}
             javaScriptEnabled={true}
             domStorageEnabled={true}
             scrollEnabled={false}
+            onLoadEnd={() => {
+              isMapReadyRef.current = true;
+              syncMapStateToWebView();
+            }}
             onMessage={handleWebViewMessage}
           />
         </View>
@@ -3920,9 +4241,9 @@ export const RescuerMissionWorkspaceModal: React.FC<RescuerMissionWorkspaceModal
               {/* Primary Action Button to, rõ, full width giống Grab */}
               <View style={styles.grabPrimaryBtnContainer}>
                 {actionLoading ? (
-                  <View style={styles.loadingActionBar}>
-                    <ActivityIndicator size="small" color="#0284C7" />
-                    <Text style={styles.loadingActionText}>Đang xử lý đồng bộ...</Text>
+                  <View style={[styles.grabBigGreenBtn, { backgroundColor: '#0284C7', opacity: 0.95 }]}>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={[styles.grabBigBtnText, { marginLeft: 8 }]}>Đang đồng bộ dữ liệu...</Text>
                   </View>
                 ) : (
                   <>
