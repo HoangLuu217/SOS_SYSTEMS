@@ -289,6 +289,27 @@ Backend phục vụ API dưới cả tiền tố `/api/*` và `/*` tại cổng 
 
 ## 🚀 8. Hướng dẫn cài đặt & Khởi chạy
 
+### Triển khai production bằng Docker trên Linux + Cloudflare Tunnel
+
+Frontend được phục vụ ở cổng `3000` trên localhost. Nginx trong container web proxy `/api` và `/socket.io` tới backend, vì vậy Cloudflare Tunnel chỉ cần một Public Hostname trỏ tới `http://localhost:3000`. Không mở cổng web hoặc API trực tiếp ra Internet.
+
+1. Trên máy Linux, cài Docker Engine và Docker Compose plugin, clone repo rồi vào thư mục dự án.
+2. Tạo `backend/.env` từ `backend/.env.example`. Đặt `NODE_ENV=production`, `PORT=5000`, `MONGODB_URI` tới MongoDB Atlas hoặc MongoDB có thể truy cập từ container, các secret JWT dài và ngẫu nhiên, và `CLIENT_URL=https://<domain-cua-ban>`. Điền các khóa dịch vụ mà hệ thống sử dụng. Không dùng các secret mẫu trong `.env.example`.
+3. Trong Cloudflare Zero Trust, cấu hình hostname cho Tunnel trỏ tới `http://localhost:3000` (hoặc địa chỉ Docker host phù hợp nếu Tunnel chạy trong container).
+4. Khởi động tại thư mục repo:
+
+   ```bash
+   docker compose up -d --build
+   docker compose ps
+   docker compose logs -f
+   ```
+
+   Kiểm tra `http://localhost:3000/api/health` trên Linux và sau đó mở hostname HTTPS của bạn.
+
+Để cập nhật phiên bản, chạy `git pull` rồi `docker compose up -d --build`. Dữ liệu upload nằm trong `backend/uploads`; hãy sao lưu thư mục này nếu ứng dụng lưu file cục bộ. Nếu các file được lưu trên Cloudinary, cấu hình Cloudinary trong backend env và có thể bỏ qua lưu trữ ảnh cục bộ.
+
+**Lưu ý:** URL web dùng `/api` và `/socket.io` cùng origin, nên không cần khai báo IP/domain public lúc build frontend. Mobile app là client riêng; khi phát hành app, đặt `EXPO_PUBLIC_API_URL` thành `https://<domain-cua-ban>/api` và build lại app.
+
 ### Yêu cầu môi trường
 - **Node.js** `>= 20.x` và **npm**
 - **MongoDB** (cài đặt cục bộ hoặc **MongoDB Atlas**)
