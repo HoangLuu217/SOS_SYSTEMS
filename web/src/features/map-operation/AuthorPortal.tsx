@@ -1319,6 +1319,7 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
     rescuerName: string;
     rescuerRole: string;
     vehicleId: string;
+    vehicleIdsByTeam: Record<string, string | null>;
     vehicleName: string;
     vehicleCapacity: string;
     supplies?: import('@/types/domainD').AssignedSupplyItem[];
@@ -1337,31 +1338,27 @@ function mapBackendVehicleToDomain(v: any): Vehicle {
         return;
       }
 
+      const selectedTeamRecords = selectedIds.map((teamId) => rescueTeams.find((team) => team.id === teamId));
+      if (selectedTeamRecords.some((team) => !team?.id || team.id.startsWith('team-'))) {
+        showToast('Có đội được chọn chưa đồng bộ từ máy chủ. Chưa gửi lệnh điều động nào.', 'error');
+        return;
+      }
+
       try {
         for (let idx = 0; idx < selectedIds.length; idx++) {
           const teamIdItem = selectedIds[idx];
-          const foundTeam = rescueTeams.find((t) => t.id === teamIdItem);
-          const realTeamId = foundTeam?.id && !foundTeam.id.startsWith('team-') ? foundTeam.id : '';
-
-          if (!realTeamId) {
-            showToast('Đội cứu hộ được chọn chưa đồng bộ từ máy chủ hoặc không tồn tại!', 'error');
-            return;
-          }
+          const foundTeam = selectedTeamRecords[idx]!;
+          const realTeamId = foundTeam.id;
 
           const realRescuerId =
             idx === 0 && params.rescuerId && !params.rescuerId.startsWith('rescuer-')
               ? params.rescuerId
               : foundTeam?.rescuers?.find((r) => r.id && !r.id.startsWith('rescuer-'))?.id;
 
-          const teamVehicle =
-            vehicles.find((v) => v.teamId === teamIdItem && v.status === 'Available') ||
-            vehicles.find((v) => v.teamId === teamIdItem);
-          const realVehicleId =
-            idx === 0 && params.vehicleId && !params.vehicleId.startsWith('veh-')
-              ? params.vehicleId
-              : teamVehicle?.id && !teamVehicle.id.startsWith('veh-')
-                ? teamVehicle.id
-                : undefined;
+          const requestedVehicleId = params.vehicleIdsByTeam?.[teamIdItem] ?? (idx === 0 ? params.vehicleId : null);
+          const realVehicleId = requestedVehicleId && !requestedVehicleId.startsWith('veh-')
+            ? requestedVehicleId
+            : null;
 
           await assignSosApi(selectedSos.id, {
             authorityOrganizationId:

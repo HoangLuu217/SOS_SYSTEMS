@@ -57,6 +57,7 @@ interface Props {
     rescuerName: string;
     rescuerRole: string;
     vehicleId: string;
+    vehicleIdsByTeam: Record<string, string | null>;
     vehicleName: string;
     vehicleCapacity: string;
     supplies?: import('@/types/domainD').AssignedSupplyItem[];
@@ -500,7 +501,18 @@ export const DispatchWorkflow = ({
 
     const primaryTeam = selectedTeams[0];
     const primaryRescuer = primaryTeam.rescuers[0];
-    const primaryVehicle = getVehiclesForTeam(primaryTeam)[0];
+    const vehicleIdsByTeam = Object.fromEntries(selectedTeams.map((team) => {
+      const candidate = candidateByTeamId.get(team.id);
+      const teamVehicles = getVehiclesForTeam(team).filter((vehicle) => vehicle.status === 'Available');
+      const candidateVehicleId = candidate?.primaryVehicle?.id;
+      const selectedVehicle = candidateVehicleId
+        ? teamVehicles.find((vehicle) => vehicle.id === candidateVehicleId)
+        : [...teamVehicles].sort((a, b) => (Number(b.capacity) || 0) - (Number(a.capacity) || 0))[0];
+      return [team.id, selectedVehicle?.id || null];
+    }));
+    const primaryVehicle = getVehiclesForTeam(primaryTeam).find(
+      (vehicle) => vehicle.id === vehicleIdsByTeam[primaryTeam.id]
+    );
 
     const supplyList = Object.entries(allocatedSupplies)
       .filter(([_, qty]) => qty > 0)
@@ -524,9 +536,10 @@ export const DispatchWorkflow = ({
       rescuerName: selectedTeams.map((t) => t.rescuers[0]?.name).filter(Boolean).join(', ') || 'Chỉ huy trưởng',
       rescuerRole: primaryRescuer?.role || 'Chỉ Huy Đội',
       vehicleId: primaryVehicle?.id || '',
+      vehicleIdsByTeam,
       vehicleName:
         selectedTeams
-          .flatMap((t) => getVehiclesForTeam(t))
+          .flatMap((team) => getVehiclesForTeam(team).filter((vehicle) => vehicle.id === vehicleIdsByTeam[team.id]))
           .map((v) => formatVehicleDisplay(v, false))
           .filter(Boolean)
           .join(' + ') || 'Chưa gán phương tiện',

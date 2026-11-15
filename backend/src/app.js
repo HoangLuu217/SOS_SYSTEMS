@@ -35,7 +35,7 @@ const allowedOrigins = new Set([
   ...envOrigins,
   'https://sos-systems.vercel.app',
   'http://localhost:5173',
-  'http://127.0.0.1:5173',
+  'https://cuuhocuunan.io.vn',
   'http://localhost:3000',
   'http://localhost:8081',
 ]);

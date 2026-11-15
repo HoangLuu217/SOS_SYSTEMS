@@ -15,6 +15,64 @@ const ApiError = require('../utils/apiError');
 const auditService = require('./audit.service');
 const rescueTeamService = require('./rescueTeam.service');
 
+async function reserveDispatchSupplies(supplies, authorityId) {
+  if (!Array.isArray(supplies) || supplies.length === 0) return [];
+  const requested = new Map();
+  for (const item of supplies) {
+    const supplyId = String(item?.supplyId || item?.equipmentId || '').trim();
+    const quantity = Math.floor(Number(item?.quantity));
+    if (!mongoose.Types.ObjectId.isValid(supplyId) || !Number.isFinite(quantity) || quantity <= 0) {
+      throw new ApiError(400, 'Vật tư điều động không hợp lệ; hãy tải lại đề xuất và chọn lại vật tư.');
+    }
+    requested.set(supplyId, (requested.get(supplyId) || 0) + quantity);
+  }
+
+  const reserved = [];
+  try {
+    for (const [supplyId, quantity] of requested) {
+      const updated = await Equipment.findOneAndUpdate(
+        {
+          _id: supplyId,
+          providedBy: authorityId,
+          teamId: null,
+          status: 'AVAILABLE',
+          quantity: { $gte: quantity },
+        },
+        { $inc: { quantity: -quantity } },
+        { new: true }
+      );
+      if (!updated) {
+        throw new ApiError(409, 'Vật tư đã hết, không thuộc kho địa phương hoặc tồn kho không đủ. Hãy cập nhật tồn kho trước khi điều động.');
+      }
+      reserved.push({
+        supplyId: String(updated._id),
+        name: updated.name,
+        category: updated.category,
+        quantity,
+        unit: updated.unit || 'cái',
+      });
+      if (Number(updated.quantity) === 0) {
+        await Equipment.updateOne({ _id: updated._id, quantity: 0 }, { $set: { status: 'OUT_OF_STOCK' } });
+      }
+    }
+    return reserved;
+  } catch (error) {
+    await Promise.all(reserved.map((item) => Equipment.updateOne(
+      { _id: item.supplyId },
+      { $inc: { quantity: item.quantity }, $set: { status: 'AVAILABLE' } }
+    ).catch(() => null)));
+    throw error;
+  }
+}
+
+async function restoreDispatchSupplies(supplies) {
+  if (!Array.isArray(supplies) || supplies.length === 0) return;
+  await Promise.all(supplies.map((item) => Equipment.updateOne(
+    { _id: item.supplyId },
+    { $inc: { quantity: item.quantity }, $set: { status: 'AVAILABLE' } }
+  ).catch(() => null)));
+}
+
 /**
  * Hàm trừ trực tiếp số lượng vật tư / trang thiết bị trong kho (Collection Equipment)
  */
@@ -289,7 +347,7 @@ class SosAssignmentService {
       }
       validVehicleId = vehicle._id;
     }
-    if (!validVehicleId) {
+    if (!validVehicleId && vehicleId !== null) {
       const teamVehicle = await Vehicle.findOne({ teamId: team._id, status: 'AVAILABLE' });
       if (teamVehicle) validVehicleId = teamVehicle._id;
     }
@@ -311,21 +369,28 @@ class SosAssignmentService {
     }
 
     // 6. Tạo Assignment & 7. Set status = PENDING, assignedAt = current time
-    const assignment = await SosAssignment.create({
-      sosRequestId: sos._id,
-      sosId: sos._id,
-      authorityOrganizationId: authority._id,
-      rescueTeamId: team._id,
-      teamId: team._id,
-      rescuerId: rescuer._id,
-      vehicleId: validVehicleId,
-      assignedBy: assignerId,
-      priority: chosenPriority,
-      status: 'PENDING',
-      assignedAt: new Date(),
-      note: note || null,
-      supplies: Array.isArray(supplies) ? supplies : [],
-    });
+    const reservedSupplies = await reserveDispatchSupplies(supplies, authority._id);
+    let assignment;
+    try {
+      assignment = await SosAssignment.create({
+        sosRequestId: sos._id,
+        sosId: sos._id,
+        authorityOrganizationId: authority._id,
+        rescueTeamId: team._id,
+        teamId: team._id,
+        rescuerId: rescuer._id,
+        vehicleId: validVehicleId,
+        assignedBy: assignerId,
+        priority: chosenPriority,
+        status: 'PENDING',
+        assignedAt: new Date(),
+        note: note || null,
+        supplies: reservedSupplies,
+      });
+    } catch (error) {
+      await restoreDispatchSupplies(reservedSupplies);
+      throw error;
+    }
 
     // Cập nhật trạng thái SOS Request sang ASSIGNED nếu SOS đang ở PENDING / VERIFIED
     if (['PENDING', 'VERIFIED'].includes(sos.status)) {
@@ -345,13 +410,14 @@ class SosAssignmentService {
       emitSosUpdated(sos);
     }
 
-    // Trừ kho vật tư ban đầu nếu có cấp khi giao nhiệm vụ
-    if (Array.isArray(supplies) && supplies.length > 0) {
+    // Tồn kho đã được giữ atomically trước khi tạo assignment; phát tín hiệu để làm mới UI.
+    if (reservedSupplies.length > 0) {
       try {
-        await deductSuppliesFromEquipment(supplies, "Giao nhiệm vụ ca " + (sos.sosCode || sos._id));
-      } catch (e) {
-        console.warn("Lỗi trừ kho vật tư khi giao nhiệm vụ:", e);
-      }
+        const { getIO } = require('../socket');
+        const io = getIO();
+        io?.emit('equipment:updated');
+        io?.emit('equipment:change');
+      } catch (_) {}
     }
 
     // Tìm danh sách tất cả cán bộ, chiến sĩ và đội trưởng trong đội để gửi thông báo
